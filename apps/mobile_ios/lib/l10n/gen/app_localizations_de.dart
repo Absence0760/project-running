@@ -6932,6 +6932,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runSocialDelete => 'Löschen';
 
   @override
+  String get runSocialReportComment => 'Kommentar melden';
+
+  @override
+  String get runSocialReportReply => 'Antwort melden';
+
+  @override
   String get runSocialDeleteCommentTitle => 'Diesen Kommentar löschen?';
 
   @override
@@ -7576,6 +7582,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Route melden';
+
+  @override
+  String get reportTitleComment => 'Kommentar melden';
 
   @override
   String get reportTitlePost => 'Beitrag melden';

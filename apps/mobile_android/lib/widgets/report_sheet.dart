@@ -7,9 +7,9 @@ import '../rate_limit_errors.dart';
 import 'top_banner.dart';
 
 /// Modal report sheet — entry point for the moderation flow on
-/// profiles, clubs, and routes. Mirrors the web `submitReport`
-/// surface. The user picks a reason from a fixed list + optional
-/// free-text notes, then taps Submit.
+/// profiles, clubs, routes, comments, club posts, and runs. Mirrors
+/// the web `submitReport` surface. The user picks a reason from a
+/// fixed list + optional free-text notes, then taps Submit.
 ///
 /// Errors are surfaced inline:
 ///   - 23505 (duplicate pending report) → "You already have a
@@ -231,6 +231,8 @@ class _ReportSheetState extends State<_ReportSheet> {
         return l10n.reportTitleClub;
       case 'route':
         return l10n.reportTitleRoute;
+      case 'comment':
+        return l10n.reportTitleComment;
       case 'club_post':
         return l10n.reportTitlePost;
       case 'run':

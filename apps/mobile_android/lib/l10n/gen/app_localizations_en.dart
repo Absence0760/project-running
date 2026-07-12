@@ -6853,6 +6853,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runSocialDelete => 'Delete';
 
   @override
+  String get runSocialReportComment => 'Report comment';
+
+  @override
+  String get runSocialReportReply => 'Report reply';
+
+  @override
   String get runSocialDeleteCommentTitle => 'Delete this comment?';
 
   @override
@@ -7492,6 +7498,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Report route';
+
+  @override
+  String get reportTitleComment => 'Report comment';
 
   @override
   String get reportTitlePost => 'Report post';

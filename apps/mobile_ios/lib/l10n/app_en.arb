@@ -9246,6 +9246,14 @@
   "@runSocialDelete": {
     "description": "Button to delete a comment"
   },
+  "runSocialReportComment": "Report comment",
+  "@runSocialReportComment": {
+    "description": "Accessibility label / tooltip on the flag button of another user's comment"
+  },
+  "runSocialReportReply": "Report reply",
+  "@runSocialReportReply": {
+    "description": "Accessibility label / tooltip on the flag button of another user's reply"
+  },
   "runSocialDeleteCommentTitle": "Delete this comment?",
   "@runSocialDeleteCommentTitle": {
     "description": "Confirm dialog title before deleting a run comment"
@@ -10141,6 +10149,10 @@
   "reportTitleRoute": "Report route",
   "@reportTitleRoute": {
     "description": "Report sheet title when reporting a route"
+  },
+  "reportTitleComment": "Report comment",
+  "@reportTitleComment": {
+    "description": "Report sheet title when reporting a run comment"
   },
   "reportTitlePost": "Report post",
   "@reportTitlePost": {

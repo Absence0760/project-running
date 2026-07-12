@@ -6923,6 +6923,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runSocialDelete => 'Eliminar';
 
   @override
+  String get runSocialReportComment => 'Denunciar comentario';
+
+  @override
+  String get runSocialReportReply => 'Denunciar respuesta';
+
+  @override
   String get runSocialDeleteCommentTitle => '¿Eliminar este comentario?';
 
   @override
@@ -7571,6 +7577,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Denunciar ruta';
+
+  @override
+  String get reportTitleComment => 'Denunciar comentario';
 
   @override
   String get reportTitlePost => 'Denunciar publicación';
