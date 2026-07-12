@@ -5780,6 +5780,24 @@ abstract class AppLocalizations {
   /// **'your run'**
   String get profileNotifYourRun;
 
+  /// Actor name for a collapsed notification group (Alice and 4 others)
+  ///
+  /// In en, this message translates to:
+  /// **'{name} and {count} others'**
+  String profileNotifNameAndOthers(String name, int count);
+
+  /// Expand toggle label for a collapsed notification group
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} others'**
+  String profileNotifAndOthers(int count);
+
+  /// Collapse toggle label for an expanded notification group
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get profileNotifShowLess;
+
   /// Notification text for a kudos
   ///
   /// In en, this message translates to:

@@ -3461,6 +3461,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileNotifYourRun => 'deinen Lauf';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name und $count weitere';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'und $count weitere';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Weniger anzeigen';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name hat deinem $dist Kudos gegeben';
   }

@@ -3448,6 +3448,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileNotifYourRun => 'tu carrera';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name y $count más';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'y $count más';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Mostrar menos';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name dio kudos a tu $dist';
   }
