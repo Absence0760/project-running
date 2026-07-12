@@ -68,14 +68,16 @@ over-claiming when the position is stale** (the personas' core complaint).
    cut-off" — name, distance to go, projected arrival, a green/amber/red margin
    chip. Gated on: the live run is linked to a route that has cutoff markers.
    Honour staleness (show "last known" + suppress the verdict when stale). The
-   suppressed (`unknown`) state now distinguishes its two causes on web: a
-   **stale** fix reads the amber-delayed `live.cutoffSignalLost` copy ("Signal
-   lost — can't project arrival") with the card border in the DELAYED amber,
-   while a merely still-connecting fix (a fresh single ping, no pace yet) keeps
-   the neutral `live.cutoffWaitingSignal` line — so a runner who went dark
-   mid-race is never mislabelled as still starting up. Mobile mirror of this
-   copy split is an open follow-up (`liveCutoffWaitingSignal` is still shared
-   across both causes on `live_spectator_screen.dart`).
+   suppressed (`unknown`) state distinguishes its two causes on both platforms:
+   a **stale** fix reads the amber-delayed `live.cutoffSignalLost` copy
+   ("Signal lost — can't project arrival") — web adds the DELAYED-amber card
+   border, mobile renders the line amber w700 matching its Delayed freshness
+   treatment — while a merely still-connecting fix (a fresh single ping, no
+   pace yet) keeps the neutral `live.cutoffWaitingSignal` /
+   `liveCutoffWaitingSignal` line, so a runner who went dark mid-race is never
+   mislabelled as still starting up. (Mobile mirror shipped 2026-07-11 —
+   `_CutoffCard.stale` on `live_spectator_screen.dart` + the
+   `liveCutoffSignalLost` ARB key in all seven catalogues.)
 3. **Pace source:** recent average over the last N pings (decide N), or
    effort-adjusted (GAP) remaining distance for a better hill estimate.
 
