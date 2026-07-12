@@ -794,6 +794,22 @@ test('predictionConfidence: low + limited with no qualifying runs', () => {
 	assert.equal(q.reason, 'limited');
 });
 
+test('predictionConfidence: a >60d anchor stays low even when the distance gap is also far', () => {
+	// A close+stale(75d) anchor is already graded low/stale (test above). Adding
+	// a second degrading factor (a far distance gap) must NOT improve confidence
+	// to moderate — a two-month-old effort is too stale to anchor at all,
+	// regardless of the extrapolation distance. Guards against a confidence
+	// inversion where a doubly-bad prediction outranks a singly-bad one.
+	const q = predictionConfidence({
+		knownDistanceM: TEN_K,
+		targetDistanceM: 21097, // 2.1x — past the close band, within the 4x cap
+		daysSinceBest: 75,
+		qualifyingRunCount: 5,
+	});
+	assert.equal(q.confidence, 'low');
+	assert.equal(q.reason, 'stale');
+});
+
 test('fmtHms — zero/null/negative render the em-dash placeholder', () => {
 	assert.equal(fmtHms(0), '—');
 	assert.equal(fmtHms(null), '—');
