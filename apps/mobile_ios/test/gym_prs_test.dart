@@ -24,6 +24,12 @@ void main() {
       expect(estimatedOneRepMax(100, 0), 0);
       expect(estimatedOneRepMax(-5, 5), 0);
     });
+
+    test('fractional reps keep the fraction (not truncated to int)', () {
+      // 100 × 5.5 → 100 · (1 + 5.5/30) = 118.333…, distinct from 100 × 5.
+      expect((estimatedOneRepMax(100, 5.5) - 118.3333).abs() < 0.001, isTrue);
+      expect(estimatedOneRepMax(100, 5.5), isNot(estimatedOneRepMax(100, 5)));
+    });
   });
 
   group('normaliseExerciseName', () {
@@ -84,6 +90,14 @@ void main() {
       ]);
       expect(prs['row']!.heaviestWeightKg, 60);
       expect(prs['row']!.bestVolumeKg, 480);
+    });
+
+    test('a fractional-rep set produces matching volume and e1rm across platforms', () {
+      // reps 5.5 must feed BOTH the volume and the e1rm path unrounded, so the
+      // two Dart metrics agree with each other and with the TS twin.
+      final prs = computeExercisePrs([_set('Bench', 5.5, 100)]);
+      expect(prs['bench']!.bestVolumeKg, 550);
+      expect(prs['bench']!.bestEst1RmKg, 118.3);
     });
   });
 

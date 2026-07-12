@@ -34,6 +34,12 @@ test('estimatedOneRepMax: non-positive inputs return 0', () => {
 	assert.equal(estimatedOneRepMax(-5, 5), 0);
 });
 
+test('estimatedOneRepMax: fractional reps keep the fraction (not truncated to int)', () => {
+	// 100 × 5.5 → 100 · (1 + 5.5/30) = 118.333…, distinct from 100 × 5.
+	assert.ok(Math.abs(estimatedOneRepMax(100, 5.5) - 118.3333) < 0.001);
+	assert.notEqual(estimatedOneRepMax(100, 5.5), estimatedOneRepMax(100, 5));
+});
+
 test('normaliseExerciseName: case, trim, whitespace collapse', () => {
 	assert.equal(normaliseExerciseName('  Bench  Press '), 'bench press');
 	assert.equal(normaliseExerciseName('bench press'), 'bench press');
@@ -92,6 +98,14 @@ test('computeExercisePrs: numeric strings from jsonb/string columns are parsed',
 	]);
 	assert.equal(prs.get('row')?.heaviestWeightKg, 60);
 	assert.equal(prs.get('row')?.bestVolumeKg, 480);
+});
+
+test('computeExercisePrs: a fractional-rep set produces matching volume and e1rm across platforms', () => {
+	// reps 5.5 must feed BOTH the volume and the e1rm path unrounded, so the
+	// two metrics agree with each other and with the Dart twin.
+	const prs = computeExercisePrs([set('Bench', 5.5, 100)]);
+	assert.equal(prs.get('bench')?.bestVolumeKg, 550);
+	assert.equal(prs.get('bench')?.bestEst1RmKg, 118.3);
 });
 
 test('workoutPrs: first time an exercise is logged, every metric is a PR', () => {
