@@ -3978,6 +3978,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveCutoffWaitingSignal => '到着予想のため最新の信号を待っています';
 
   @override
+  String get liveCutoffSignalLost => '信号が途絶えました — 到着予測できません';
+
+  @override
   String get plansTitle => 'トレーニングプラン';
 
   @override
