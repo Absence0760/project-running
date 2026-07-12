@@ -85,6 +85,58 @@ test('parses create_report bucket with "filing reports" verb', () => {
 	assert.equal(msg, "You're filing reports too quickly — please wait 10 minutes and try again.");
 });
 
+test('clone_plan_template + clone_public_plan buckets use "adopting plans"', () => {
+	// The training-plan adopt flows (clonePlanTemplate from a club template,
+	// clonePublicPlan from the public library) both go through
+	// enforce_create_rate_limit — pin the shared verb so a rate-limited
+	// adopt reads "adopting plans too quickly" rather than the generic
+	// "doing that" or the raw postgres exception.
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for clone_plan_template, retry in 300s',
+		}),
+		"You're adopting plans too quickly — please wait 5 minutes and try again.",
+	);
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for clone_public_plan, retry in 45s',
+		}),
+		"You're adopting plans too quickly — please wait 45 seconds and try again.",
+	);
+});
+
+test('clone_session_template bucket uses "adopting session plans"', () => {
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for clone_session_template, retry in 30s',
+		}),
+		"You're adopting session plans too quickly — please wait 30 seconds and try again.",
+	);
+});
+
+test('clone_gym_routine_template bucket uses "adopting gym routines"', () => {
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for clone_gym_routine_template, retry in 30s',
+		}),
+		"You're adopting gym routines too quickly — please wait 30 seconds and try again.",
+	);
+});
+
+test('publish_gym_routine_as_template bucket uses "publishing routines"', () => {
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for publish_gym_routine_as_template, retry in 120s',
+		}),
+		"You're publishing routines too quickly — please wait 2 minutes and try again.",
+	);
+});
+
 test('zero / negative seconds defaults to "a few seconds"', () => {
 	const msg = rateLimitErrorMessage({
 		code: 'P0001',

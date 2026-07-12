@@ -32,6 +32,10 @@ export function rateLimitErrorMessage(err: { code?: string; message?: string } |
 		bucket === 'create_club' ? 'creating clubs' :
 		bucket === 'create_route' ? 'creating routes' :
 		bucket === 'create_report' ? 'filing reports' :
+		bucket === 'clone_plan_template' || bucket === 'clone_public_plan' ? 'adopting plans' :
+		bucket === 'clone_session_template' ? 'adopting session plans' :
+		bucket === 'clone_gym_routine_template' ? 'adopting gym routines' :
+		bucket === 'publish_gym_routine_as_template' ? 'publishing routines' :
 		'doing that';
 	return `You're ${verb} too quickly — please wait ${wait} and try again.`;
 }
