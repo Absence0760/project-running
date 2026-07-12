@@ -19,7 +19,7 @@ function r(partial: {
 	started_at: string;
 	distance_m: number;
 	duration_s: number;
-	source?: Run['source'];
+	source?: string;
 	metadata?: Record<string, unknown> | null;
 }): Run {
 	return {
