@@ -6,10 +6,13 @@ import { USER_A } from '../fixtures/users';
 /**
  * /runs/[id] → Save as route — CRUD from a tracked run to a saved route.
  *
- * `handleSaveAsRoute` calls `window.prompt('Name this route', defaultName)`,
- * then `saveRunAsRoute(runId, name, simplifiedTrack)`, then `goto`s to
- * `/routes/<new-id>`. The interesting bits are:
- *   - the prompt → Playwright's `dialog` event
+ * `handleSaveAsRoute` opens the in-app name modal (Modal + text input,
+ * the create-flow shape) pre-filled with the run title (or its ISO
+ * date), then `confirmSaveAsRoute` calls `saveRunAsRoute(runId, name,
+ * simplifiedTrack)` and `goto`s to `/routes/<new-id>`. Replaces the old
+ * `window.prompt`, which some webviews suppress. The interesting bits:
+ *   - the styled modal (not a native dialog)
+ *   - non-empty name validation gating the Save button
  *   - the simplified-track upload (no separate Storage write — routes
  *     store waypoints inline as jsonb)
  *   - the post-create navigation
@@ -25,6 +28,18 @@ test.describe('/runs/[id] — Save as route', () => {
 
 	let runId: string | null = null;
 	let routeId: string | null = null;
+
+	// Multi-point track far enough apart that simplifyTrack (10 m
+	// epsilon, see saveRunAsRoute) keeps every point. Coordinates
+	// in central Sydney — outside runner's Melbourne privacy zone
+	// so the share guardrail from batch 10 doesn't fire.
+	const track = [
+		{ lat: -33.8688, lng: 151.2093, ele: 12 },
+		{ lat: -33.87, lng: 151.21, ele: 14 },
+		{ lat: -33.871, lng: 151.211, ele: 16 },
+		{ lat: -33.872, lng: 151.212, ele: 18 },
+		{ lat: -33.873, lng: 151.213, ele: 20 }
+	];
 
 	test.afterEach(async () => {
 		if (routeId) {
@@ -45,21 +60,9 @@ test.describe('/runs/[id] — Save as route', () => {
 		}
 	});
 
-	test('Save-as-route round-trip: prompt → save → navigate to /routes/[id] with the chosen name', async ({
+	test('Save-as-route round-trip: modal → edit name → save → navigate to /routes/[id]', async ({
 		page
 	}) => {
-		// Multi-point track far enough apart that simplifyTrack (10 m
-		// epsilon, see saveRunAsRoute) keeps every point. Coordinates
-		// in central Sydney — outside runner's Melbourne privacy zone
-		// so the share guardrail from batch 10 doesn't fire.
-		const track = [
-			{ lat: -33.8688, lng: 151.2093, ele: 12 },
-			{ lat: -33.87, lng: 151.21, ele: 14 },
-			{ lat: -33.871, lng: 151.211, ele: 16 },
-			{ lat: -33.872, lng: 151.212, ele: 18 },
-			{ lat: -33.873, lng: 151.213, ele: 20 }
-		];
-
 		runId = await insertRun({
 			user_id: USER_A.id,
 			started_at: new Date('2026-04-30T11:00:00Z').toISOString(),
@@ -82,28 +85,62 @@ test.describe('/runs/[id] — Save as route', () => {
 		const saveButton = page.locator('button[title="Save as route"]');
 		await expect(saveButton).toBeEnabled({ timeout: 10_000 });
 
-		// Hook the prompt handler BEFORE the click. Playwright's
-		// dialog event fires once and you must accept(text) or
-		// dismiss() — leaving it hanging blocks the page.
-		const routeName = `e2e-savedroute-${Date.now()}`;
-		page.once('dialog', async (dialog) => {
-			expect(dialog.type()).toBe('prompt');
-			await dialog.accept(routeName);
-		});
-
-		// Click → prompt fires → accept → saveRunAsRoute → goto.
+		// Click opens the styled modal — no native dialog fires.
 		await saveButton.click();
+		const dialog = page.getByTestId('name-route-dialog');
+		await expect(dialog).toBeVisible();
 
-		// `goto` lands on /routes/<new-id>; capture the id for cleanup.
+		// Pre-filled with the run's title, per the default-name behaviour.
+		const nameInput = page.getByTestId('name-route-input');
+		await expect(nameInput).toHaveValue('e2e save-as-route');
+
+		const routeName = `e2e-savedroute-${Date.now()}`;
+		await nameInput.fill(routeName);
+		await page.getByTestId('name-route-save').click();
+
+		// confirmSaveAsRoute → saveRunAsRoute → goto lands on
+		// /routes/<new-id>; capture the id for cleanup.
 		await page.waitForURL(/\/routes\/[0-9a-f-]+$/, { timeout: 10_000 });
 		const m = page.url().match(/\/routes\/([0-9a-f-]+)$/);
 		expect(m).not.toBeNull();
 		routeId = m![1];
 
 		// /routes/[id] renders the route name as h1 — proves the row
-		// landed with the prompt's value, not the default placeholder.
+		// landed with the modal's value, not the default placeholder.
 		await expect(
 			page.getByRole('heading', { level: 1, name: routeName })
 		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Save button is disabled when the name is blank (non-empty validation)', async ({
+		page
+	}) => {
+		runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date('2026-05-01T11:00:00Z').toISOString(),
+			duration_s: 1800,
+			distance_m: 5000,
+			is_public: false,
+			metadata: { activity_type: 'run', title: 'e2e blank-name' },
+			track
+		});
+
+		await page.goto(`/runs/${runId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({
+			timeout: 10_000
+		});
+
+		const saveButton = page.locator('button[title="Save as route"]');
+		await expect(saveButton).toBeEnabled({ timeout: 10_000 });
+		await saveButton.click();
+
+		await expect(page.getByTestId('name-route-dialog')).toBeVisible();
+		const confirm = page.getByTestId('name-route-save');
+		await expect(confirm).toBeEnabled();
+
+		// Clearing the name (or leaving only whitespace) disables Save —
+		// the modal can validate where window.prompt could not.
+		await page.getByTestId('name-route-input').fill('   ');
+		await expect(confirm).toBeDisabled();
 	});
 });
