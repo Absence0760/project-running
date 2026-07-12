@@ -105,7 +105,9 @@ Not sim/hardware-verified — Renode tooling is absent on the dev machine. The `
 - **UI / controls** — terminal Stop guarded behind a 4 s confirm double-press (`StopGuard`); the 31-page run cycle reversible via BTN3 long-press (`Page::prev`); secondary time rows widened `99h → 999h` (a 112 h cutoff was clamping); the idle GNSS battery figure relabelled `EST` (unmeasured tier-2 projection).
 - **Route simplify** — `simplify_track` runs a priority Douglas-Peucker over the whole line to the point budget instead of truncating the tail past 256 points.
 
-Owed follow-ups: **wave 2** (supervised, wire-format-touching) — QNH sea-level recalibration reachable on-device + via the settings frame, desert fuel-cadence config, GNSS-mode persistence across reboot, phantom-vert from slow barometric drift; plus surfacing the 253-point flash cap on the wrist (a `record::Snapshot` field + face render, deferred because `Snapshot` is literal-constructed across several files). Persona triage notes live under `reviews/persona-watch-*.md`. A `decisions.md` § entry for this batch is owed.
+**Wave 2 (supervised) — first item landed.** Phantom-vert now gates cumulative-vert accumulation on the runner moving (`elevation::VertAccumulator::push`'s `moving` flag, fed by the `baro` task from `state::RECORD`): a barometric weather-front / thermal drift while stopped (aid station, sleep, waiting out weather on a col) re-bases the reference and banks nothing. The remaining residual — drift *while moving* on flat ground — needs GPS-baro fusion and stays owed.
+
+Owed follow-ups: the rest of **wave 2** (wire-format-touching) — QNH sea-level recalibration reachable on-device + via the settings frame, desert fuel-cadence config, GNSS-mode persistence across reboot, phantom-vert-while-moving (GPS-baro fusion); plus surfacing the 253-point flash cap on the wrist (a `record::Snapshot` field + face render, deferred because `Snapshot` is literal-constructed across several files). Persona triage notes live under `reviews/persona-watch-*.md`. A `decisions.md` § entry for this batch is owed.
 
 ## Layout
 
