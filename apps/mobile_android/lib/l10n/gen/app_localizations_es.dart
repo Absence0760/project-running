@@ -2553,6 +2553,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailReportRoute => 'Denunciar ruta';
 
   @override
+  String get routeDetailReportReview => 'Denunciar reseña';
+
+  @override
   String get routeDetailTransferToClub => 'Transferir a un club';
 
   @override
@@ -7629,6 +7632,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Denunciar carrera';
+
+  @override
+  String get reportTitleReview => 'Denunciar reseña';
 
   @override
   String get reportTitleContent => 'Denunciar contenido';

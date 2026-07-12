@@ -129,6 +129,7 @@
 
 	let isOwner = $derived(route !== null && auth.user?.id === route.user_id);
 	let showReportDialog = $state(false);
+	let reportReviewId = $state<string | null>(null);
 
 	// "Describe this route" affordance. The templated description is the
 	// always-works baseline (computed locally, no network); Pro users can
@@ -768,6 +769,17 @@
 								{#if review.created_at}
 									<span class="review-date">{new Date(review.created_at).toLocaleDateString()}</span>
 								{/if}
+								{#if auth.loggedIn && auth.user?.id !== review.user_id}
+									<button
+										type="button"
+										class="review-report-btn"
+										aria-label={m('routeDetail.reportReview')}
+										title={m('routeDetail.reportReview')}
+										onclick={() => (reportReviewId = review.id)}
+									>
+										<span class="material-symbols" aria-hidden="true">flag</span>
+									</button>
+								{/if}
 							</div>
 							{#if review.comment}
 								<p class="review-comment">{review.comment}</p>
@@ -823,6 +835,12 @@
 		targetId={route.id}
 		targetLabel={route.name ?? undefined}
 		onclose={() => (showReportDialog = false)}
+	/>
+	<ReportDialog
+		open={reportReviewId !== null}
+		targetKind="route_review"
+		targetId={reportReviewId ?? ''}
+		onclose={() => (reportReviewId = null)}
 	/>
 {/if}
 
@@ -1307,6 +1325,27 @@
 		margin-inline-start: var(--space-sm);
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
+	}
+
+	.review-report-btn {
+		margin-inline-start: auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.15rem;
+		border: none;
+		background: none;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		border-radius: var(--radius-sm);
+	}
+
+	.review-report-btn:hover {
+		color: var(--color-danger);
+	}
+
+	.review-report-btn .material-symbols {
+		font-size: 1rem;
 	}
 
 	.review-comment {
