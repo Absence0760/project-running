@@ -46,6 +46,8 @@
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import RacePredictorCard from '$lib/components/RacePredictorCard.svelte';
 	import ConsistencyCard from '$lib/components/ConsistencyCard.svelte';
+	import IntensityBalanceCard from '$lib/components/IntensityBalanceCard.svelte';
+	import TrendDeltasCard from '$lib/components/TrendDeltasCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -1173,6 +1175,14 @@
 		     calendar. Pure derivation in lib/training/current_week.ts. -->
 		<ThisWeekStrip activities={filteredRuns} weekStart={weekStartDay} {now} />
 
+		<!-- Week-over-week + month-over-month trend deltas on the summary
+		     stats (distance / time / runs). Compares each period-to-date
+		     against the same to-date slice of the prior period so a mid-week
+		     glance is honest. Scoped to filteredRuns + week_start_day so it
+		     agrees with the stat grid above. Self-hides with no activity.
+		     Pure derivation in lib/training/trend_deltas.ts. Backlog #11. -->
+		<TrendDeltasCard runs={filteredRuns} weekStart={weekStartDay} {now} />
+
 		<!-- Self-hiding challenges strip: renders nothing when the user is in
 		     no live challenge (data-presence self-hide, matching the gym /
 		     nutrition cards). challenges.md. -->
@@ -1398,6 +1408,15 @@
 		     strip + streak card. Self-hides with < 2 active weeks. Backlog #11
 		     (advanced analytics polish). -->
 		<ConsistencyCard activities={filteredRuns} weekStart={weekStartDay} {now} />
+
+		<!-- Easy / hard intensity balance — the time-weighted easy vs hard
+		     split against the ~80/20 polarised-training guideline, with a
+		     verdict (on guideline / too hard / all easy). Classifies each run
+		     by pace against the runner's own VDOT-derived threshold (same
+		     anchor as the load trio). Self-hides when no threshold derives or
+		     the sample is too small. Pure derivation in
+		     lib/training/intensity.ts. Backlog #11. -->
+		<IntensityBalanceCard runs={filteredRuns} />
 
 		<!-- Mileage chart -->
 		<section class="card-elevated">
