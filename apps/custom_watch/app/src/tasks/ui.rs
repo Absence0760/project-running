@@ -171,6 +171,7 @@ pub async fn screen_task(
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut course_rx = unwrap!(state::COURSE.receiver());
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
@@ -190,6 +191,11 @@ pub async fn screen_task(
     // same `alert` stream the face already receives — no extra cross-task wire.
     let mut fuel_overdue = alerts::FuelOverdueTracker::new();
     let mut nav = NavView::NoCourse;
+    // A phone-pushed course (state::COURSE) drives the Nav map's drawn polyline;
+    // a pushed course takes over from the boot/sim course, mirroring what the nav
+    // task follows for the status. Owned (the buffer lives here), so drawing uses
+    // `pushed_course.as_ref().or(course)`.
+    let mut pushed_course: Option<Course> = None;
     // A long course auto-zooms to a window around the runner, so the map's fit
     // now depends on the live fix and is recomputed each frame (`nav_fit`) — not
     // once. The panel's whole live pixel state is (runner tracking key, whether
@@ -228,6 +234,11 @@ pub async fn screen_task(
         }
         if let Some(v) = nav_rx.try_changed() {
             nav = v;
+        }
+        if let Some(c) = course_rx.try_changed() {
+            pushed_course = c;
+            // The drawn course changed — force the Nav panel to repaint next frame.
+            last_panel = None;
         }
         if let Some(v) = tb_rx.try_changed() {
             tb = Some(v);
@@ -283,7 +294,8 @@ pub async fn screen_task(
         // lines whose bytes actually changed go dirty.
         let nav_alert = face::nav_alert_row(nav);
         let nav_draw = if page == Page::Nav && face::run_view(rec.as_ref()) {
-            course.map(|c| {
+            // Prefer a phone-pushed course over the boot/sim one for the drawn map.
+            pushed_course.as_ref().or(course).map(|c| {
                 let runner = latest.as_ref().map(|f| (f.lat_deg, f.lon_deg));
                 let (fit, windowed) = nav_fit(c, runner, sharp_mip::WIDTH as u32, PANEL_H_PX);
                 // Marker: drawn only when the runner's fix falls with its whole

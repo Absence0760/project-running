@@ -64,10 +64,11 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// Pushed breadcrumb course (README course-push path): the `ble` task decodes a
 /// chunked phone write into a `course_store` frame, builds a `Course`, and
 /// publishes it here; the `nav` task swaps its active course to the pushed one
-/// (from `NoCourse`, or over the boot/sim course). `None` means nothing pushed
-/// yet. One receiver (the `nav` task). The 4 KiB value is the course's point
-/// buffer — held once here so a re-push replaces it cleanly, no static-cell reuse.
-pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 1> = Watch::new();
+/// (from `NoCourse`, or over the boot/sim course), and the `ui` task draws the
+/// pushed course's polyline on the Nav map. `None` means nothing pushed yet. Two
+/// receivers (`nav`, `ui`). The 4 KiB value is the course's point buffer — held
+/// once here so a re-push replaces it cleanly, no static-cell reuse.
+pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track
