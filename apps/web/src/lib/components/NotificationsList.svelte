@@ -480,7 +480,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.item-wrap.sub {
-		margin-left: 1.75rem;
+		margin-inline-start: 1.75rem;
 		background: var(--color-bg-secondary, var(--color-surface));
 	}
 	.group-unread {
