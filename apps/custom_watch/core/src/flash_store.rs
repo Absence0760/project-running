@@ -41,6 +41,63 @@ pub const fn slot_offset(region_offset: u32, slot: usize) -> u32 {
     region_offset + (slot as u32) * (SLOT_LEN as u32)
 }
 
+/// One nRF52840 erase page reserved for the tiny persisted-config record, sat
+/// immediately BELOW the run-store region (its absolute offset is one page under
+/// [`crate::run_flash::REGION_OFFSET`] — see `app/src/run_flash::CONFIG_OFFSET`).
+/// A dedicated page keeps a config rewrite — a single page erase — from ever
+/// touching a run slot, and leaves every run-store slot offset undisturbed.
+/// MUST match the config carve-out in BOTH `app/memory.x` and `app/memory-ble.x`.
+pub const CONFIG_LEN: usize = SLOT_LEN;
+
+/// Length of the fixed config record written at the base of the config page. A
+/// multiple of the NVMC 4-byte write word, so it commits in one write.
+pub const CONFIG_RECORD_LEN: usize = 12;
+
+/// Version of the config-record wire format. Bumped only if the field layout
+/// after the magic changes; an unrecognised version reads as "no saved config".
+pub const CONFIG_VERSION: u8 = 1;
+
+/// Magic prefixing a valid config record — distinguishes a written record from
+/// an erased (all-`0xFF`) or zeroed page.
+const CONFIG_MAGIC: [u8; 4] = *b"CFG1";
+
+/// Encode the persisted-config record — `magic | version | gnss_mode | 0 0 |
+/// crc32` — for the flash config page. The CRC covers every byte before it, so a
+/// torn, erased, or garbage page fails [`decode_config`] and the caller falls
+/// back to defaults (same fail-closed rule as [`recover_slot`]).
+pub fn encode_config(gnss_mode: u8) -> [u8; CONFIG_RECORD_LEN] {
+    let mut buf = [0u8; CONFIG_RECORD_LEN];
+    buf[0..4].copy_from_slice(&CONFIG_MAGIC);
+    buf[4] = CONFIG_VERSION;
+    buf[5] = gnss_mode;
+    // buf[6..8] reserved, left zero (still CRC-covered).
+    let crc = crc32(&buf[0..8]);
+    buf[8..12].copy_from_slice(&crc.to_le_bytes());
+    buf
+}
+
+/// Decode the persisted-config record, returning the stored `gnss_mode` byte, or
+/// `None` when the bytes are too short, carry the wrong magic or version, or fail
+/// the CRC — an erased or corrupt page reads as "no saved config". The mode byte
+/// itself is validated by the caller ([`crate::gnss_mode::GnssMode::from_byte`]),
+/// so a CRC-valid but unknown byte still falls back to the default.
+pub fn decode_config(bytes: &[u8]) -> Option<u8> {
+    if bytes.len() < CONFIG_RECORD_LEN {
+        return None;
+    }
+    if bytes[0..4] != CONFIG_MAGIC {
+        return None;
+    }
+    if bytes[4] != CONFIG_VERSION {
+        return None;
+    }
+    let stored = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+    if crc32(&bytes[0..8]) != stored {
+        return None;
+    }
+    Some(bytes[5])
+}
+
 /// Bytes to return for a phone chunk request: the smallest of what is left in
 /// the blob from `offset`, the phone's `requested` length, and the notify
 /// `mtu`. Zero once `offset` reaches (or passes) the blob end, so a request off
@@ -752,6 +809,61 @@ mod tests {
         let dir = SlotDir::from_recovered(recovered);
         assert_eq!(dir.run_count(), 4);
         assert_eq!(dir.next_run_seq(), 31);
+    }
+
+    #[test]
+    fn config_round_trips_every_mode_byte() {
+        for mode in [0u8, 1, 2] {
+            let rec = encode_config(mode);
+            assert_eq!(rec.len(), CONFIG_RECORD_LEN);
+            assert_eq!(decode_config(&rec), Some(mode));
+        }
+    }
+
+    #[test]
+    fn config_record_is_write_word_aligned_and_page_sized() {
+        // NVMC writes a 4-byte word; the record must be a whole number of them,
+        // and it must fit inside the one reserved erase page.
+        assert_eq!(CONFIG_RECORD_LEN % 4, 0);
+        assert!(CONFIG_RECORD_LEN <= CONFIG_LEN);
+        assert_eq!(CONFIG_LEN, SLOT_LEN, "config page is one erase page");
+    }
+
+    #[test]
+    fn decode_config_rejects_an_erased_or_zeroed_page() {
+        assert_eq!(decode_config(&[0xFFu8; CONFIG_LEN]), None);
+        assert_eq!(decode_config(&[0x00u8; CONFIG_LEN]), None);
+    }
+
+    #[test]
+    fn decode_config_rejects_a_corrupt_crc() {
+        // Flip the stored mode byte without recomputing the CRC — exactly a
+        // single-bit flash bit-rot — and the record must read as absent.
+        let mut rec = encode_config(2);
+        rec[5] ^= 0xFF;
+        assert_eq!(decode_config(&rec), None);
+        // Corrupting a CRC-covered reserved byte is caught too.
+        let mut rec = encode_config(1);
+        rec[6] ^= 0x01;
+        assert_eq!(decode_config(&rec), None);
+    }
+
+    #[test]
+    fn decode_config_rejects_wrong_magic_and_version() {
+        let mut rec = encode_config(1);
+        rec[0] = b'X';
+        assert_eq!(decode_config(&rec), None);
+        let mut rec = encode_config(1);
+        rec[4] = CONFIG_VERSION + 1;
+        assert_eq!(decode_config(&rec), None);
+    }
+
+    #[test]
+    fn decode_config_never_reads_out_of_bounds_on_a_short_slice() {
+        assert_eq!(decode_config(&[]), None);
+        assert_eq!(decode_config(&[0xFFu8; 4]), None);
+        let rec = encode_config(0);
+        assert_eq!(decode_config(&rec[..CONFIG_RECORD_LEN - 1]), None);
     }
 
     #[test]
