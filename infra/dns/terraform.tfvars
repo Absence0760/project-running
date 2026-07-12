@@ -48,4 +48,12 @@ email_auth_records = {
   migadu_dkim2      = { name = "key2._domainkey", type = "CNAME", records = ["key2.threkir.com._domainkey.migadu.com."] }
   migadu_dkim3      = { name = "key3._domainkey", type = "CNAME", records = ["key3.threkir.com._domainkey.migadu.com."] }
   migadu_autoconfig = { name = "autoconfig", type = "CNAME", records = ["autoconfig.migadu.com."] }
+
+  # Optional client-autoconfig SRV hints (Thunderbird / Apple Mail / mobile
+  # auto-discovery). Not required for mail delivery — the autoconfig CNAME
+  # above already covers most clients. Value format is "priority weight port
+  # target"; targets are fixed for all Migadu domains.
+  migadu_srv_autodiscover = { name = "_autodiscover._tcp", type = "SRV", records = ["0 1 443 autoconfig.migadu.com."] }
+  migadu_srv_submission   = { name = "_submissions._tcp", type = "SRV", records = ["0 1 465 smtp.migadu.com."] }
+  migadu_srv_imaps        = { name = "_imaps._tcp", type = "SRV", records = ["0 1 993 imap.migadu.com."] }
 }
