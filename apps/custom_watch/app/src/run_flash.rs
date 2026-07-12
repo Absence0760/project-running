@@ -36,6 +36,7 @@ use embassy_sync::mutex::Mutex;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use heapless::Vec;
 use watch_core::flash_store::{self, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
+use watch_core::gnss_mode::GnssMode;
 use watch_core::run_store::{ByteSink, ManifestEntry};
 
 /// Absolute flash offset of the run-store region: the top `REGION_LEN` bytes of
@@ -43,6 +44,15 @@ use watch_core::run_store::{ByteSink, ManifestEntry};
 pub const REGION_OFFSET: u32 = (nvmc::FLASH_SIZE - flash_store::REGION_LEN) as u32;
 
 const _: () = assert!(REGION_OFFSET.is_multiple_of(SLOT_LEN as u32));
+
+/// Absolute flash offset of the persisted-config page: one erase page
+/// immediately BELOW the run-store region. Sitting below the run slots (not
+/// above) keeps [`REGION_OFFSET`] and every run-slot offset byte-identical, so a
+/// config write can never disturb a stored run. Both `memory.x` and
+/// `memory-ble.x` reserve this page alongside the run-store region.
+pub const CONFIG_OFFSET: u32 = REGION_OFFSET - flash_store::CONFIG_LEN as u32;
+
+const _: () = assert!(CONFIG_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u32));
 
 /// nRF52840 NVMC `READY` register (base 0x4001E000, offset 0x400). Bit 0 set
 /// means the controller is present and idle — the probe for a real NVMC vs the
@@ -124,6 +134,48 @@ impl<'d> RunStore<'d> {
     /// can't reuse a recovered run's id. Read once at record-task startup.
     pub fn next_run_seq(&self) -> u32 {
         self.dir.next_run_seq()
+    }
+
+    /// Read the GNSS recording mode persisted by [`persist_gnss_mode`], or `None`
+    /// when flash is unavailable (sim), unreadable, or the config page is
+    /// erased/corrupt — so the boot path falls back to the default. Best-effort /
+    /// L4: a read error only `warn!`s and reads as "no saved mode".
+    pub fn read_gnss_mode(&mut self) -> Option<GnssMode> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; flash_store::CONFIG_RECORD_LEN];
+        if let Err(e) = self.flash.read(CONFIG_OFFSET, &mut buf) {
+            warn!("run_flash: config read failed {:?}", e);
+            return None;
+        }
+        let byte = flash_store::decode_config(&buf)?;
+        GnssMode::from_byte(byte)
+    }
+
+    /// Persist the selected GNSS recording mode so it survives reboot / brown-out
+    /// instead of silently reverting to the Performance default. Best-effort /
+    /// L4: erases the dedicated config page and writes the CRC-checked record;
+    /// any flash error only `warn!`s and returns, never blocking the caller. The
+    /// button task calls this only when the mode actually changes, so the page is
+    /// erased at most once per user mode switch — trivially within flash
+    /// endurance and off the per-tick path.
+    pub fn persist_gnss_mode(&mut self, mode: GnssMode) {
+        if !self.available {
+            return;
+        }
+        let start = CONFIG_OFFSET;
+        let end = start + flash_store::CONFIG_LEN as u32;
+        if let Err(e) = self.flash.erase(start, end) {
+            warn!("run_flash: config erase failed {:?}", e);
+            return;
+        }
+        let rec = flash_store::encode_config(mode.to_byte());
+        if let Err(e) = self.flash.write(start, &rec) {
+            warn!("run_flash: config write failed {:?}", e);
+            return;
+        }
+        info!("run_flash: persisted GNSS mode {}", mode);
     }
 
     /// Persist a finished run's staged blob. Best-effort: any failure warns,

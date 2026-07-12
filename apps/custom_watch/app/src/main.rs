@@ -138,6 +138,22 @@ async fn main(spawner: Spawner) {
         board.flash.nvmc,
     ))));
 
+    // Boot-seed the persisted GNSS recording mode so a deliberate Expedition /
+    // Balanced choice survives reboot / brown-out instead of silently reverting
+    // to the Performance default. Best-effort / L4: no saved (or unreadable)
+    // config reads as `None` and the default stands. Publish it to
+    // `state::GNSS_MODE` for the gps / record / ui consumers, and hand it to the
+    // button task so its BTN3 cycle continues from the restored mode rather than
+    // jumping back to Performance on the first idle press.
+    let boot_mode = {
+        let saved = store.lock().await.read_gnss_mode();
+        if let Some(mode) = saved {
+            state::GNSS_MODE.sender().send(mode);
+            info!("boot: restored GNSS mode {} from flash", mode);
+        }
+        saved.unwrap_or_default()
+    };
+
     // The liveness LED is a debug affordance behind the default-OFF `dev-blink`
     // feature — a free-running 2 Hz waker has no place in the lean build.
     #[cfg(feature = "dev-blink")]
@@ -158,7 +174,9 @@ async fn main(spawner: Spawner) {
         display_cs,
         course
     )));
-    spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3, btn4)));
+    spawner.spawn(unwrap!(tasks::button::run(
+        btn1, btn2, btn3, btn4, boot_mode, store
+    )));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));

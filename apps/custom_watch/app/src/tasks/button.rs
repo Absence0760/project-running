@@ -34,6 +34,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::RecordState;
 
+use crate::run_flash::SharedStore;
 use crate::state;
 
 /// Settle time after an edge before the level is trusted — long enough to ride
@@ -56,13 +57,17 @@ pub async fn run(
     mut btn2: Input<'static>,
     mut btn3: Input<'static>,
     mut btn4: Input<'static>,
+    initial_mode: GnssMode,
+    store: &'static SharedStore,
 ) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
     let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
-    let mut mode = GnssMode::default();
+    // Seed from the mode main restored from flash at boot so the BTN3 cycle
+    // continues from the persisted choice rather than the default.
+    let mut mode = initial_mode;
     let mut stop_guard = StopGuard::new();
     info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
     loop {
@@ -111,6 +116,10 @@ pub async fn run(
                                 mode.battery_est_h()
                             );
                             mode_tx.send(mode);
+                            // Persist so the choice survives reboot / brown-out.
+                            // Best-effort / L4: a flash error only warns; the
+                            // mode switch is never blocked on flash.
+                            store.lock().await.persist_gnss_mode(mode);
                         }
                     }
                 }
@@ -194,6 +203,8 @@ pub async fn run(
     btn2: Input<'static>,
     btn3: Input<'static>,
     btn4: Input<'static>,
+    initial_mode: GnssMode,
+    store: &'static SharedStore,
 ) {
     /// Poll cadence. The `click` macro holds a press ~0.3 s, so any interval
     /// well under that catches the edge; short enough to feel instant.
@@ -204,7 +215,7 @@ pub async fn run(
     let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
-    let mut mode = GnssMode::default();
+    let mut mode = initial_mode;
     let mut stop_guard = StopGuard::new();
 
     // Active-low: pressed pulls the line low. Track the previous level per
@@ -265,6 +276,9 @@ pub async fn run(
                             mode.battery_est_h()
                         );
                         mode_tx.send(mode);
+                        // Persist so the choice survives reboot / brown-out
+                        // (no-ops under the sim, which has no NVMC).
+                        store.lock().await.persist_gnss_mode(mode);
                     }
                 }
                 continue;
