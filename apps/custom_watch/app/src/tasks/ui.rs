@@ -16,7 +16,7 @@ use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::alerts::{self, Alert};
-use watch_core::course::{Course, PanelFit};
+use watch_core::course::{Course, CoursePoint, PanelFit};
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
@@ -58,10 +58,25 @@ const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
 const PANEL_ROWS: core::ops::Range<usize> =
     face::NAV_PANEL_TOP_ROW..face::NAV_PANEL_TOP_ROW + face::NAV_PANEL_ROWS;
 
-// Keep the position marker's 5-px cross inside the panel, so an off-course
-// (or clamped off-panel) marker pins at the edge instead of scribbling on the
-// text rows above and below.
+// Half-length of the position marker's 5-px cross. The marker is drawn only
+// when its centre sits at least this far inside the panel, so the cross never
+// scribbles on the text rows above/below AND a runner whose fix falls off the
+// panel shows no marker at all — honest, since the OFF COURSE banner carries
+// that story — rather than a clamped edge-pinned dot that reads as near-course.
 const MARKER_ARM_PX: i32 = 2;
+
+// Long-course auto-zoom. Fitting a whole 50 km course into the ~168 px panel is
+// ~300 m/px, so its forks collapse to sub-pixel and the map is an unreadable
+// scribble. Once the course bounding box exceeds this span (either axis), the
+// panel stops fitting the whole route and instead windows a fixed real-world
+// span centred on the runner, so the nearest forks stay resolvable; a course
+// that already fits keeps the whole-course overview. The span is expressed in
+// degrees (not metres) so the cos-lat correction stays inside `PanelFit` —
+// `ui.rs` has no trig of its own (`libm` is not an `app` dependency). ~0.0054°
+// latitude ~= 600 m, so the window spans ~1.2 km N-S (~13 m/px on the 96 px-tall
+// panel); the E-W half is doubled so the wider panel isn't letterboxed.
+const WIN_HALF_LAT_DEG: f64 = 0.0054;
+const WIN_HALF_LON_DEG: f64 = 0.0108;
 
 // The ElevationProfile page's mini-profile sparkline: the rows the face leaves
 // blank below its vert-totals context row (rows 3..8), full width with a small
@@ -171,11 +186,12 @@ pub async fn screen_task(
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
     let mut nav = NavView::NoCourse;
-    // The course geometry never changes at tier 1, so its panel fit is computed
-    // once; (marker, alert) is the panel's whole live state — remembering the
-    // last drawn pair lets an unchanged panel skip its redraw entirely.
-    let panel = course.map(|c| (c, PanelFit::fit(c, sharp_mip::WIDTH as u32, PANEL_H_PX)));
-    let mut last_panel: Option<(Option<(i32, i32)>, bool)> = None;
+    // A long course auto-zooms to a window around the runner, so the map's fit
+    // now depends on the live fix and is recomputed each frame (`nav_fit`) — not
+    // once. The panel's whole live pixel state is (runner tracking key, whether
+    // the marker is drawn, whether the off-course banner is shown); remembering
+    // the last drawn triple lets an unchanged panel skip its redraw entirely.
+    let mut last_panel: Option<((i32, i32), bool, bool)> = None;
 
     if let Err(e) = display.clear_all() {
         warn!("ui: display clear failed: {:?}", e);
@@ -244,31 +260,49 @@ pub async fn screen_task(
             mode,
         );
         // The Nav page's map panel: the course polyline plus a position-marker
-        // cross, drawn into the pixel rows the face leaves empty. The panel's
-        // live state is just (marker position, alert shown) — when neither
-        // changed the panel rows are skipped below and their pixels stand, so
-        // a resting Nav page still flushes zero lines. A repaint first lets
-        // draw_text_row blank the rows, then redraws; only lines whose bytes
-        // actually changed go dirty.
-        let nav_panel = if page == Page::Nav && face::run_view(rec.as_ref()) {
-            panel.as_ref()
+        // cross, drawn into the pixel rows the face leaves empty. `nav_fit` picks
+        // the transform per frame — whole-course for a short route, an auto-zoom
+        // window centred on the runner for a long one — so the fit tracks the
+        // fix. The panel's live state is (runner tracking key, marker drawn,
+        // alert shown); when none changed the panel rows are skipped below and
+        // their pixels stand, so a resting Nav page still flushes zero lines. A
+        // repaint first lets draw_text_row blank the rows, then redraws; only
+        // lines whose bytes actually changed go dirty.
+        let nav_alert = face::nav_alert_row(nav);
+        let nav_draw = if page == Page::Nav && face::run_view(rec.as_ref()) {
+            course.map(|c| {
+                let runner = latest.as_ref().map(|f| (f.lat_deg, f.lon_deg));
+                let (fit, windowed) = nav_fit(c, runner, sharp_mip::WIDTH as u32, PANEL_H_PX);
+                // Marker: drawn only when the runner's fix falls with its whole
+                // 5-px cross inside the panel. No clamp — an off-panel (far
+                // off-course, or outside the auto-zoom window) runner shows no
+                // marker rather than a dishonest edge-pinned one; the OFF COURSE
+                // banner is the source of truth. In the auto-zoom window the
+                // runner is the panel centre, so the marker is always shown.
+                let marker = runner.and_then(|(la, lo)| {
+                    let (x, y) = fit.to_px(la, lo);
+                    let (mx, my) = (x, y + PANEL_TOP_PX);
+                    let inside = (MARKER_ARM_PX..sharp_mip::WIDTH as i32 - MARKER_ARM_PX)
+                        .contains(&mx)
+                        && (PANEL_TOP_PX + MARKER_ARM_PX
+                            ..PANEL_TOP_PX + PANEL_H_PX as i32 - MARKER_ARM_PX)
+                            .contains(&my);
+                    inside.then_some((mx, my))
+                });
+                // Repaint tracking key: the runner in a course-anchored ~pixel
+                // grid. In the whole-course fit that is just the marker's pixel;
+                // in the auto-zoom window the marker holds at panel centre, so a
+                // separate world-anchored grid is what advances as the runner
+                // scrolls the map — otherwise a windowed map would freeze.
+                let track = runner.map_or((0, 0), |(la, lo)| track_key(&fit, windowed, la, lo));
+                (c, fit, marker, track)
+            })
         } else {
             None
         };
-        let marker_px = nav_panel.and_then(|(_, fit)| {
-            latest.as_ref().map(|f| {
-                let (x, y) = fit.to_px(f.lat_deg, f.lon_deg);
-                (
-                    x.clamp(MARKER_ARM_PX, sharp_mip::WIDTH as i32 - 1 - MARKER_ARM_PX),
-                    (y + PANEL_TOP_PX).clamp(
-                        PANEL_TOP_PX + MARKER_ARM_PX,
-                        PANEL_TOP_PX + PANEL_H_PX as i32 - 1 - MARKER_ARM_PX,
-                    ),
-                )
-            })
-        });
-        let nav_alert = face::nav_alert_row(nav);
-        let panel_state = nav_panel.map(|_| (marker_px, nav_alert.is_some()));
+        let panel_state = nav_draw
+            .as_ref()
+            .map(|(_, _, marker, track)| (*track, marker.is_some(), nav_alert.is_some()));
         let panel_repaint = panel_state.is_some() && panel_state != last_panel;
         last_panel = panel_state;
         for (row, text) in rows.iter().enumerate() {
@@ -281,13 +315,13 @@ pub async fn screen_task(
             }
         }
         if panel_repaint {
-            let (course, fit) = unwrap!(nav_panel);
+            let (course, fit, marker, _) = unwrap!(nav_draw.as_ref());
             for w in course.points().windows(2) {
                 let (x0, y0) = fit.to_px(w[0].lat_deg, w[0].lon_deg);
                 let (x1, y1) = fit.to_px(w[1].lat_deg, w[1].lon_deg);
                 fb.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
             }
-            if let Some((mx, my)) = marker_px {
+            if let Some(&(mx, my)) = marker.as_ref() {
                 fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
                 fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
             }
@@ -482,5 +516,96 @@ fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: 
         for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
             fb.draw_line(x0, y0, x1, y1, true);
         }
+    }
+}
+
+/// Pure Nav map-fit decision (no framebuffer, no peripherals): pick the
+/// lat/lon -> panel-pixel transform to draw the breadcrumb with, and report
+/// whether it auto-zoomed. A course whose bounding box already fits inside a
+/// window-sized box renders whole (the situational overview, as before); a
+/// larger one — where the whole-course fit would squeeze forks to sub-pixel —
+/// auto-zooms to a fixed span centred on the runner, so the nearest forks stay
+/// resolvable. `runner` None (no fix yet) always fits the whole course.
+///
+/// The auto-zoom window is built as a runner-centred box in *degrees* and fed
+/// through `PanelFit`, so the cos-lat correction (and all the trig) stays in
+/// `watch_core::course` — `ui.rs` has no `libm`. Fitting a box whose centre is
+/// the runner lands the runner at the panel centre.
+///
+/// Not host-tested: the `app` crate is board-only (`[[bin]] test = false`, no
+/// host target, embedded-only deps), and the edit scope for this fix is `ui.rs`
+/// alone — the cos-lat geometry it needs is reachable only through `PanelFit`,
+/// which stays authoritative. Kept a pure function of its inputs so it could be
+/// lifted to a core module (where `cargo test` reaches) if that ever comes into
+/// scope; the windowing decision, marker-in-window, and off-window states are
+/// what such tests would pin.
+fn nav_fit(course: &Course, runner: Option<(f64, f64)>, w: u32, h: u32) -> (PanelFit, bool) {
+    let Some((rlat, rlon)) = runner else {
+        return (PanelFit::fit(course, w, h), false);
+    };
+    let mut min_lat = f64::INFINITY;
+    let mut max_lat = f64::NEG_INFINITY;
+    let mut min_lon = f64::INFINITY;
+    let mut max_lon = f64::NEG_INFINITY;
+    for p in course.points() {
+        min_lat = min_lat.min(p.lat_deg);
+        max_lat = max_lat.max(p.lat_deg);
+        min_lon = min_lon.min(p.lon_deg);
+        max_lon = max_lon.max(p.lon_deg);
+    }
+    // Fits within a window-sized box -> keep the whole-course overview.
+    if (max_lat - min_lat) <= 2.0 * WIN_HALF_LAT_DEG
+        && (max_lon - min_lon) <= 2.0 * WIN_HALF_LON_DEG
+    {
+        return (PanelFit::fit(course, w, h), false);
+    }
+    // Auto-zoom: fit a fixed-span box centred on the runner. `PanelFit` fits the
+    // box's bounding corners, so the runner (the box centre) maps to the panel
+    // centre and the surrounding course renders at a readable scale; points
+    // outside the box clip in `draw_line`. If the two corners somehow fail to
+    // form a course (they never coincide), fall back to the whole-course fit.
+    let corners = [
+        CoursePoint {
+            lat_deg: rlat - WIN_HALF_LAT_DEG,
+            lon_deg: rlon - WIN_HALF_LON_DEG,
+        },
+        CoursePoint {
+            lat_deg: rlat + WIN_HALF_LAT_DEG,
+            lon_deg: rlon + WIN_HALF_LON_DEG,
+        },
+    ];
+    match Course::from_points(&corners) {
+        Some(window) => (PanelFit::fit(&window, w, h), true),
+        None => (PanelFit::fit(course, w, h), false),
+    }
+}
+
+/// The runner's position in a course-anchored integer grid ~1 display pixel per
+/// cell — the Nav panel's repaint trigger. In the whole-course fit the marker's
+/// own pixel already moves with the runner, so `PanelFit::to_px` is the key. In
+/// the auto-zoom window the marker holds at the panel centre (the window
+/// recentres on the runner every fix), so the key instead quantises the raw
+/// position onto a fixed latitude-degree grid sized to one window pixel; it
+/// advances ~1 per pixel of real movement independent of the recentring, and a
+/// resting runner leaves it unchanged (so the panel still flushes zero SPI).
+/// Longitude shares the latitude grid — slightly coarser in ground metres E-W
+/// at high latitude, harmless for a trigger — which keeps this cos-free.
+fn track_key(fit: &PanelFit, windowed: bool, lat: f64, lon: f64) -> (i32, i32) {
+    if windowed {
+        let grid = 2.0 * WIN_HALF_LAT_DEG / PANEL_H_PX as f64;
+        (round_i32(lat / grid), round_i32(lon / grid))
+    } else {
+        fit.to_px(lat, lon)
+    }
+}
+
+/// Round to the nearest `i32` without `libm` (unavailable in the `app` crate):
+/// `as i32` truncates toward zero and saturates out-of-range, so nudging by a
+/// half in the value's own direction first gives round-half-away-from-zero.
+fn round_i32(v: f64) -> i32 {
+    if v >= 0.0 {
+        (v + 0.5) as i32
+    } else {
+        (v - 0.5) as i32
     }
 }
