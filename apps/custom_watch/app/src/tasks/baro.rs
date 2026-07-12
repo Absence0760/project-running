@@ -15,6 +15,7 @@ use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Ticker};
 use embedded_hal::i2c::Operation;
 use watch_core::elevation::{altitude_m, VertAccumulator, STANDARD_SEA_LEVEL_PA};
+use watch_core::record::{RecordState, MIN_MOVING_SPEED_MPS};
 
 use crate::state;
 
@@ -47,15 +48,25 @@ pub async fn run(mut twim: Twim<'static>) {
         return;
     }
     let elevation_tx = state::ELEVATION.sender();
+    let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut vert = VertAccumulator::new();
+    let mut moving = false;
     let mut ticker = Ticker::every(SAMPLE);
     info!("baro: BMP581 streaming");
     loop {
         ticker.next().await;
+        // Pick up the latest recording state without blocking the sample tick;
+        // vert only accumulates while a run is actively moving, so barometric
+        // drift during a stop (aid station, sleep, weather on a col) banks
+        // nothing (watch_core::elevation::VertAccumulator::push).
+        if let Some(snap) = rec_rx.try_changed() {
+            moving = snap.state == RecordState::Recording
+                && snap.current_speed_mps >= MIN_MOVING_SPEED_MPS as f32;
+        }
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
                 let alt = altitude_m(pa, STANDARD_SEA_LEVEL_PA);
-                vert.push(alt);
+                vert.push(alt, moving);
                 let reading = vert.reading(alt);
                 debug!(
                     "baro: alt={}m gain={}m loss={}m",

@@ -28,9 +28,10 @@ pub static FIX: Watch<CriticalSectionRawMutex, Fix, 4> = Watch::new();
 pub static HR: Watch<CriticalSectionRawMutex, HrReading, 2> = Watch::new();
 
 /// Live recording totals: `record` publishes on change, the `ui` face, the
-/// `button` task (for the state its toggle keys off), and the `gps` task (which
-/// de-rates fix publication while no run is active) subscribe.
-pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 3> = Watch::new();
+/// `button` task (for the state its toggle keys off), the `gps` task (which
+/// de-rates fix publication while no run is active), and the `baro` task (which
+/// gates vert accumulation on the runner moving) subscribe.
+pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 4> = Watch::new();
 
 /// Recording control commands: the `button` task sends, `record` receives and
 /// drives its state machine. A small buffer so a quick double-press (e.g.
