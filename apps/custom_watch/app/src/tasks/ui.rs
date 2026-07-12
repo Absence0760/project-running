@@ -185,6 +185,10 @@ pub async fn screen_task(
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
+    // Latches the transient fuel banner into a standing "fuel overdue" marker
+    // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
+    // same `alert` stream the face already receives — no extra cross-task wire.
+    let mut fuel_overdue = alerts::FuelOverdueTracker::new();
     let mut nav = NavView::NoCourse;
     // A long course auto-zooms to a window around the runner, so the map's fit
     // now depends on the live fix and is recomputed each frame (`nav_fit`) — not
@@ -238,7 +242,7 @@ pub async fn screen_task(
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
         let animate = uptime_s.saturating_sub(last_interaction_s) < ANIM_WINDOW_S;
-        let rows = face::page_rows(
+        let mut rows = face::page_rows(
             page,
             latest.as_ref(),
             hr_bpm,
@@ -250,6 +254,15 @@ pub async fn screen_task(
             animate,
             mode,
         );
+        // Persist the fuel reminder past its transient banner: latch the standing
+        // overdue state off the same `alert` value and paint a compact marker.
+        // `run_active` mirrors the alert engine's in-run states (Recording /
+        // Paused); the Fuel glance page being open is the acknowledgement.
+        let alerts_run_active = rec
+            .as_ref()
+            .is_some_and(|s| matches!(s.state, RecordState::Recording | RecordState::Paused));
+        let overdue = fuel_overdue.observe(alert, alerts_run_active, page == Page::Fuel);
+        face::apply_fuel_marker(&mut rows, overdue, page);
         let icons = face::page_icons(
             page,
             latest.as_ref(),

@@ -243,6 +243,87 @@ impl AlertEngine {
     }
 }
 
+/// A standing "fuel overdue" marker, distinct from the transient [`Alert`]
+/// banner. The DK has no vibration motor, so a drink / eat reminder is only an
+/// [`ALERT_TTL_S`]-second banner a heads-down trail runner never sees; this
+/// says which fuel a reminder has fired for so the face can keep a small,
+/// always-visible tag up until the runner acts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum FuelOverdue {
+    #[default]
+    None,
+    Drink,
+    Eat,
+    Both,
+}
+
+/// Latches [`FuelOverdue`] from the transient alert stream the face already
+/// receives on `state::ALERT`, so the persistent marker outlives the 8 s banner.
+///
+/// It rides the display side (`ui.rs` owns one) rather than living in
+/// [`AlertEngine`] because the engine's per-tick verdict reaches the face only
+/// as the single `Option<Alert>` banner — the record task publishes exactly
+/// that and nothing else. Reconstructing the standing state from the banner the
+/// face already sees keeps the whole feature inside that one channel (no second
+/// cross-task signal to plumb) and stays pure + host-tested. It never feeds
+/// [`AlertEngine::on_update`], so it cannot perturb the transient-banner
+/// arbitration (zone still supersedes, fuel still re-queues) or the L4-isolated
+/// recording math.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FuelOverdueTracker {
+    drink: bool,
+    eat: bool,
+}
+
+impl FuelOverdueTracker {
+    pub const fn new() -> Self {
+        Self {
+            drink: false,
+            eat: false,
+        }
+    }
+
+    /// Fold one frame of watch state into the latch and return what to render.
+    ///
+    /// - `active` — the transient banner on screen this frame. A fuel banner
+    ///   means that reminder just fired, so it latches (and re-latches each new
+    ///   interval). A zone banner is ignored: zone supersedes the *banner*,
+    ///   never the standing fuel-overdue marker.
+    /// - `run_active` — false between runs (Idle / Finished). Clears the latch,
+    ///   mirroring [`AlertEngine`]'s own reset so a new run starts clean, and so
+    ///   a reminder that somehow fired outside a run can never latch.
+    /// - `acknowledged` — the runner is attending to fuel (the Fuel glance page
+    ///   is showing). Clears the latch; the next interval's reminder re-latches.
+    pub fn observe(
+        &mut self,
+        active: Option<Alert>,
+        run_active: bool,
+        acknowledged: bool,
+    ) -> FuelOverdue {
+        if !run_active {
+            self.drink = false;
+            self.eat = false;
+            return FuelOverdue::None;
+        }
+        match active {
+            Some(Alert::Drink) => self.drink = true,
+            Some(Alert::Eat) => self.eat = true,
+            Some(Alert::ZoneAbove(_)) | None => {}
+        }
+        if acknowledged {
+            self.drink = false;
+            self.eat = false;
+        }
+        match (self.drink, self.eat) {
+            (true, true) => FuelOverdue::Both,
+            (true, false) => FuelOverdue::Drink,
+            (false, true) => FuelOverdue::Eat,
+            (false, false) => FuelOverdue::None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,5 +710,103 @@ mod tests {
         for a in [Alert::Drink, Alert::Eat, Alert::ZoneAbove(5)] {
             assert!(banner(a).chars().count() * 2 <= crate::face::COLS);
         }
+    }
+
+    #[test]
+    fn fuel_overdue_latches_and_survives_the_banner_ttl() {
+        let mut ov = FuelOverdueTracker::new();
+        // Nothing has fired yet.
+        assert_eq!(ov.observe(None, true, false), FuelOverdue::None);
+        // The drink reminder fires — its banner is on screen this frame.
+        assert_eq!(
+            ov.observe(Some(Alert::Drink), true, false),
+            FuelOverdue::Drink
+        );
+        // Long after the 8 s banner has cleared, the standing marker holds.
+        for _ in 0..100 {
+            assert_eq!(ov.observe(None, true, false), FuelOverdue::Drink);
+        }
+    }
+
+    #[test]
+    fn fuel_overdue_tracks_both_arms_independently() {
+        let mut ov = FuelOverdueTracker::new();
+        assert_eq!(
+            ov.observe(Some(Alert::Drink), true, false),
+            FuelOverdue::Drink
+        );
+        // The eat reminder fires later; both are now standing.
+        assert_eq!(ov.observe(Some(Alert::Eat), true, false), FuelOverdue::Both);
+        // Both persist through frames with no banner.
+        assert_eq!(ov.observe(None, true, false), FuelOverdue::Both);
+    }
+
+    #[test]
+    fn fuel_overdue_clears_on_acknowledge_then_relatches() {
+        let mut ov = FuelOverdueTracker::new();
+        ov.observe(Some(Alert::Drink), true, false);
+        // The runner opens the Fuel page (acknowledged) — the marker clears.
+        assert_eq!(ov.observe(None, true, true), FuelOverdue::None);
+        // It stays clear while nothing new fires.
+        assert_eq!(ov.observe(None, true, false), FuelOverdue::None);
+        // The next interval's reminder re-latches it.
+        assert_eq!(
+            ov.observe(Some(Alert::Drink), true, false),
+            FuelOverdue::Drink
+        );
+    }
+
+    #[test]
+    fn fuel_overdue_clears_when_the_run_ends_and_never_latches_between_runs() {
+        let mut ov = FuelOverdueTracker::new();
+        ov.observe(Some(Alert::Eat), true, false);
+        // Run ends (Idle / Finished -> run_active false): the marker clears.
+        assert_eq!(ov.observe(None, false, false), FuelOverdue::None);
+        // A banner outside a run can never latch the marker.
+        assert_eq!(
+            ov.observe(Some(Alert::Drink), false, false),
+            FuelOverdue::None
+        );
+    }
+
+    #[test]
+    fn zone_banner_leaves_the_fuel_overdue_marker_untouched() {
+        let mut ov = FuelOverdueTracker::new();
+        assert_eq!(
+            ov.observe(Some(Alert::Drink), true, false),
+            FuelOverdue::Drink
+        );
+        // A superseding zone banner takes the slot; the standing marker holds.
+        assert_eq!(
+            ov.observe(Some(Alert::ZoneAbove(5)), true, false),
+            FuelOverdue::Drink
+        );
+        assert_eq!(ov.observe(None, true, false), FuelOverdue::Drink);
+        // A zone banner with no prior fuel reminder latches nothing.
+        let mut ov2 = FuelOverdueTracker::new();
+        assert_eq!(
+            ov2.observe(Some(Alert::ZoneAbove(4)), true, false),
+            FuelOverdue::None
+        );
+    }
+
+    #[test]
+    fn engine_fired_reminder_stays_overdue_past_the_engine_ttl() {
+        // Drive the real engine and feed its published banner into the tracker,
+        // so the "survives the TTL" property is checked end-to-end, not off a
+        // synthetic banner stream.
+        let mut e = AlertEngine::new();
+        let mut ov = FuelOverdueTracker::new();
+        assert_eq!(e.on_update(&rec(899), None, 899), None);
+        assert_eq!(ov.observe(None, true, false), FuelOverdue::None);
+
+        let fired = e.on_update(&rec(900), None, 900);
+        assert_eq!(fired, Some(Alert::Drink));
+        assert_eq!(ov.observe(fired, true, false), FuelOverdue::Drink);
+
+        // The engine banner expires at 900 + ALERT_TTL_S; the marker does not.
+        let expired = e.on_update(&rec(900 + ALERT_TTL_S), None, 900 + ALERT_TTL_S);
+        assert_eq!(expired, None);
+        assert_eq!(ov.observe(expired, true, false), FuelOverdue::Drink);
     }
 }
