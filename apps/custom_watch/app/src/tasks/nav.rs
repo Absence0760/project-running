@@ -67,7 +67,8 @@ pub fn course() -> Option<&'static Course> {
 /// Precompute the turn cues for a course — the run-view TurnCue page source.
 /// Recomputed whenever the active course changes (boot → pushed, or a re-push).
 fn compute_cues(course: &Course) -> heapless::Vec<TurnCue, MAX_TURN_CUES> {
-    let mut waypoints: heapless::Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> = heapless::Vec::new();
+    let mut waypoints: heapless::Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> =
+        heapless::Vec::new();
     for cp in course.points() {
         let _ = waypoints.push(TurnCueWaypoint {
             lat: cp.lat_deg,
@@ -134,11 +135,12 @@ pub async fn run(boot_course: Option<&'static Course>) {
                 } else if was_active && !alert.active() {
                     info!("nav: back on course ({} m along)", p.along_m as u32);
                 }
-                let next_turn = next_turn_ahead(&cues, p.along_m).map(|(c, remaining)| TurnCueView {
-                    direction: direction_code(c.direction),
-                    distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
-                    remaining,
-                });
+                let next_turn =
+                    next_turn_ahead(&cues, p.along_m).map(|(c, remaining)| TurnCueView {
+                        direction: direction_code(c.direction),
+                        distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
+                        remaining,
+                    });
                 sender.send(NavView::Status(NavStatus {
                     off_m: p.off_m,
                     along_m: p.along_m,
