@@ -4270,6 +4270,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Warte auf ein frisches Signal für die Ankunftsprognose';
 
   @override
+  String get liveCutoffSignalLost =>
+      'Signal verloren – Ankunft nicht berechenbar';
+
+  @override
   String get plansTitle => 'Trainingspläne';
 
   @override

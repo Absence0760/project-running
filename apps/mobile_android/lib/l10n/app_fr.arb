@@ -1165,6 +1165,7 @@
   "liveCutoffAhead": "{margin} de marge",
   "liveCutoffBehind": "{margin} de retard",
   "liveCutoffWaitingSignal": "En attente d'un signal récent pour estimer l'arrivée",
+  "liveCutoffSignalLost": "Signal perdu — arrivée impossible à estimer",
   "plansTitle": "Plans d'entraînement",
   "plansNewPlan": "Nouveau plan",
   "plansDeleteTitle": "Supprimer « {name} » ?",

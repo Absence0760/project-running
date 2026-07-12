@@ -4272,6 +4272,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'En attente d\'un signal récent pour estimer l\'arrivée';
 
   @override
+  String get liveCutoffSignalLost =>
+      'Signal perdu — arrivée impossible à estimer';
+
+  @override
   String get plansTitle => 'Plans d\'entraînement';
 
   @override

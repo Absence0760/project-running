@@ -4265,6 +4265,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'À espera de um sinal recente para prever a chegada';
 
   @override
+  String get liveCutoffSignalLost =>
+      'Sinal perdido — não é possível prever a chegada';
+
+  @override
   String get plansTitle => 'Planos de treino';
 
   @override
@@ -15262,6 +15266,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get liveCutoffWaitingSignal =>
       'Aguardando um sinal recente para prever a chegada';
+
+  @override
+  String get liveCutoffSignalLost =>
+      'Sinal perdido — não é possível estimar a chegada';
 
   @override
   String get plansTitle => 'Planos de treino';

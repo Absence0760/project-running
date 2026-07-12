@@ -5782,7 +5782,11 @@
   },
   "liveCutoffWaitingSignal": "Waiting for a fresh signal to project arrival",
   "@liveCutoffWaitingSignal": {
-    "description": "Spectator next-cutoff card — shown instead of a verdict when the position is stale"
+    "description": "Spectator next-cutoff card — shown instead of a verdict while a fresh fix has no pace yet (still connecting)"
+  },
+  "liveCutoffSignalLost": "Signal lost — can't project arrival",
+  "@liveCutoffSignalLost": {
+    "description": "Spectator next-cutoff card — shown instead of a verdict when the last fix is stale (runner went dark)"
   },
   "plansTitle": "Training plans",
   "@plansTitle": {

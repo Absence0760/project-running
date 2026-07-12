@@ -1165,6 +1165,7 @@
   "liveCutoffAhead": "{margin}の余裕",
   "liveCutoffBehind": "{margin}の遅れ",
   "liveCutoffWaitingSignal": "到着予想のため最新の信号を待っています",
+  "liveCutoffSignalLost": "信号が途絶えました — 到着予測できません",
   "plansTitle": "トレーニングプラン",
   "plansNewPlan": "新しいプラン",
   "plansDeleteTitle": "「{name}」を削除しますか？",

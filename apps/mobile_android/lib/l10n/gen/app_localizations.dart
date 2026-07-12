@@ -7094,11 +7094,17 @@ abstract class AppLocalizations {
   /// **'{margin} behind'**
   String liveCutoffBehind(String margin);
 
-  /// Spectator next-cutoff card — shown instead of a verdict when the position is stale
+  /// Spectator next-cutoff card — shown instead of a verdict while a fresh fix has no pace yet (still connecting)
   ///
   /// In en, this message translates to:
   /// **'Waiting for a fresh signal to project arrival'**
   String get liveCutoffWaitingSignal;
+
+  /// Spectator next-cutoff card — shown instead of a verdict when the last fix is stale (runner went dark)
+  ///
+  /// In en, this message translates to:
+  /// **'Signal lost — can\'t project arrival'**
+  String get liveCutoffSignalLost;
 
   /// Plans list AppBar title
   ///

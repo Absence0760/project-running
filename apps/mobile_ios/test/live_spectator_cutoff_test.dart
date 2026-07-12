@@ -164,10 +164,13 @@ void main() {
       });
     });
 
-    testWidgets('a stale fixture suppresses the verdict', (tester) async {
+    testWidgets(
+        'a stale fixture suppresses the verdict with the signal-lost line',
+        (tester) async {
       // The only ping is > 90 s old → freshness is stale → nextCutoffEta
-      // returns `unknown`, so the card shows the checkpoint + distance but
-      // the muted "waiting" line instead of a chip.
+      // returns `unknown`. The suppressed state must read "signal lost"
+      // (amber, mirroring the DELAYED treatment), not the still-connecting
+      // "waiting" copy — a runner who went dark mid-race isn't starting up.
       final api = _FakeApi(
         run: _liveRun('route-1'),
         route: _route('route-1'),
@@ -185,10 +188,41 @@ void main() {
         await tester.pump();
         await tester.pump();
         expect(find.text('Aid 1'), findsOneWidget);
-        expect(find.textContaining('Waiting for a fresh signal'),
-            findsOneWidget);
+        expect(find.textContaining('Signal lost'), findsOneWidget);
+        expect(find.textContaining('Waiting for a fresh signal'), findsNothing);
         expect(find.textContaining('to spare'), findsNothing);
         expect(find.textContaining('behind'), findsNothing);
+        final lost = tester.widget<Text>(
+          find.textContaining('Signal lost'),
+        );
+        expect(lost.style?.color, const Color(0xFFF59E0B));
+        await tester.pumpWidget(const SizedBox());
+      });
+    });
+
+    testWidgets(
+        'a fresh fix with no pace yet keeps the neutral waiting line',
+        (tester) async {
+      // A single just-arrived ping is fresh but yields no recent pace →
+      // nextCutoffEta returns `unknown` for the still-connecting cause, so
+      // the card keeps the muted "waiting" copy — not the signal-lost alarm.
+      final api = _FakeApi(
+        run: _liveRun('route-1'),
+        route: _route('route-1'),
+        markers: [_cutoff(limitS: 3 * 3600)],
+        pings: [
+          _ping(at: DateTime.now(), distanceM: 2000, elapsedS: 600),
+        ],
+      );
+      await tester.runAsync(() async {
+        await _pump(tester, api);
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Aid 1'), findsOneWidget);
+        expect(find.textContaining('Waiting for a fresh signal'),
+            findsOneWidget);
+        expect(find.textContaining('Signal lost'), findsNothing);
+        expect(find.textContaining('to spare'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       });
     });

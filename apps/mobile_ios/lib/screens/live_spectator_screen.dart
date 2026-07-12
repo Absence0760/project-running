@@ -381,7 +381,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                             const SizedBox(height: 12),
                           ],
                           if (cutoff != null) ...[
-                            _CutoffCard(eta: cutoff),
+                            _CutoffCard(eta: cutoff, stale: stale),
                             const SizedBox(height: 16),
                           ],
                           Row(
@@ -531,11 +531,16 @@ class _StatusBadge extends StatelessWidget {
 /// personas actually want ("will my person make it?"). Mirror of the web
 /// `/live/[id]` card: checkpoint label + distance to go, and either a
 /// coloured on/tight/behind margin chip (with projected arrival) when the
-/// position is fresh, or a muted "waiting for a fresh signal" line when the
-/// status is `unknown` (stale / no recent pace) — never an over-claimed ETA.
+/// position is fresh, or a suppressed-verdict line when the status is
+/// `unknown` — never an over-claimed ETA. The suppressed state splits by
+/// cause (mirroring web): a **stale** fix reads the amber "Signal lost"
+/// line (a runner who went dark mid-race must not be mislabelled as still
+/// starting up), while a fresh fix with no pace yet keeps the neutral
+/// "waiting for a fresh signal" line.
 class _CutoffCard extends StatelessWidget {
   final LiveCutoffEta eta;
-  const _CutoffCard({required this.eta});
+  final bool stale;
+  const _CutoffCard({required this.eta, required this.stale});
 
   @override
   Widget build(BuildContext context) {
@@ -597,10 +602,13 @@ class _CutoffCard extends StatelessWidget {
           const SizedBox(height: 10),
           if (unknown)
             Text(
-              l10n.liveCutoffWaitingSignal,
+              stale ? l10n.liveCutoffSignalLost : l10n.liveCutoffWaitingSignal,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
+                color: stale
+                    ? const Color(0xFFF59E0B)
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: stale ? FontWeight.w700 : null,
+                fontStyle: stale ? null : FontStyle.italic,
               ),
             )
           else

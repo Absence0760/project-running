@@ -4225,6 +4225,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Waiting for a fresh signal to project arrival';
 
   @override
+  String get liveCutoffSignalLost => 'Signal lost — can\'t project arrival';
+
+  @override
   String get plansTitle => 'Training plans';
 
   @override

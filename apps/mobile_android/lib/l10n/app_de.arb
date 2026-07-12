@@ -1165,6 +1165,7 @@
   "liveCutoffAhead": "{margin} Puffer",
   "liveCutoffBehind": "{margin} im Rückstand",
   "liveCutoffWaitingSignal": "Warte auf ein frisches Signal für die Ankunftsprognose",
+  "liveCutoffSignalLost": "Signal verloren – Ankunft nicht berechenbar",
   "plansTitle": "Trainingspläne",
   "plansNewPlan": "Neuer Plan",
   "plansDeleteTitle": "\"{name}\" löschen?",

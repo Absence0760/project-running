@@ -4259,6 +4259,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esperando una señal reciente para estimar la llegada';
 
   @override
+  String get liveCutoffSignalLost =>
+      'Señal perdida: no se puede estimar la llegada';
+
+  @override
   String get plansTitle => 'Planes de entrenamiento';
 
   @override
