@@ -10,6 +10,7 @@ use embassy_sync::watch::Watch;
 use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
+use watch_core::course::Course;
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
@@ -19,18 +20,20 @@ use watch_core::record::Snapshot;
 use watch_core::settings::WatchSettings;
 use watch_core::trackback::TrackbackView;
 
-/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, and `nav`
+/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
+/// `baro` (which feeds GPS altitude into the elevation complementary filter)
 /// subscribe.
-pub static FIX: Watch<CriticalSectionRawMutex, Fix, 4> = Watch::new();
+pub static FIX: Watch<CriticalSectionRawMutex, Fix, 5> = Watch::new();
 
 /// Latest heart-rate estimate: `hr` publishes; the `ui` face and `record`
 /// (to stamp each stored track point's bpm) subscribe.
 pub static HR: Watch<CriticalSectionRawMutex, HrReading, 2> = Watch::new();
 
 /// Live recording totals: `record` publishes on change, the `ui` face, the
-/// `button` task (for the state its toggle keys off), and the `gps` task (which
-/// de-rates fix publication while no run is active) subscribe.
-pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 3> = Watch::new();
+/// `button` task (for the state its toggle keys off), the `gps` task (which
+/// de-rates fix publication while no run is active), and the `baro` task (which
+/// gates vert accumulation on the runner moving) subscribe.
+pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 4> = Watch::new();
 
 /// Recording control commands: the `button` task sends, `record` receives and
 /// drives its state machine. A small buffer so a quick double-press (e.g.
@@ -57,6 +60,15 @@ pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 /// `record` reads the distance-along-course it feeds the recorder for the
 /// cut-off ETA. Two receivers (`ui`, `record`).
 pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
+
+/// Pushed breadcrumb course (README course-push path): the `ble` task decodes a
+/// chunked phone write into a `course_store` frame, builds a `Course`, and
+/// publishes it here; the `nav` task swaps its active course to the pushed one
+/// (from `NoCourse`, or over the boot/sim course), and the `ui` task draws the
+/// pushed course's polyline on the Nav map. `None` means nothing pushed yet. Two
+/// receivers (`nav`, `ui`). The 4 KiB value is the course's point buffer — held
+/// once here so a re-push replaces it cleanly, no static-cell reuse.
+pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track
@@ -96,3 +108,11 @@ pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// recorder + alert engine through their settings-sync setters. `None` means
 /// nothing pushed yet. One receiver (the `record` task).
 pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
+
+/// QNH sea-level reference pressure (Pa) for the barometric-altitude
+/// calculation: the `record` task publishes a plausibility-guarded value when a
+/// pushed settings frame carries `sea_level_pa` (the mountain/desert weather-
+/// front recalibration); the `baro` task consumes it and swaps its altitude
+/// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
+/// baro task keeps its default reference. One receiver (the `baro` task).
+pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();

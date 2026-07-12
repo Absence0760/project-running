@@ -17,7 +17,7 @@ use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Ticker};
 use embedded_hal::i2c::Operation;
 use max86177::peak_detect::{PeakDetector, Reading};
-use max86177::{Max86177, I2C_ADDR};
+use max86177::{FifoWord, Max86177, I2C_ADDR, MEAS2_TAG};
 
 use crate::state;
 
@@ -55,12 +55,19 @@ pub async fn run(mut twim: Twim<'static>) {
     let sender = state::HR.sender();
     let mut ticker = Ticker::every(POLL);
     info!("hr: MAX86177 streaming");
+    // Latest ambient (LED-off) count; each PPG (LED-on) sample is corrected
+    // against it so bright-sun ambient bleed can't rail the pulse. Starts at 0
+    // (no subtraction) until the first ambient word arrives — an honest raw read.
+    let mut ambient: i32 = 0;
     loop {
         ticker.next().await;
         let mut latest: Option<Reading> = None;
         loop {
-            match sensor.read_sample() {
-                Ok(Some(raw)) => latest = Some(detector.push(raw as i32)),
+            match sensor.read_tagged_sample() {
+                Ok(Some(FifoWord { tag, value })) if tag == MEAS2_TAG => ambient = value as i32,
+                Ok(Some(FifoWord { value, .. })) => {
+                    latest = Some(detector.push_ambient(value as i32, ambient))
+                }
                 Ok(None) => break,
                 Err(e) => {
                     warn!("hr: read error {:?}", e);

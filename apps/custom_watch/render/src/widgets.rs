@@ -422,6 +422,7 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            track_full: false,
         }
     }
 

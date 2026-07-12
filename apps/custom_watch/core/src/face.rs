@@ -22,6 +22,7 @@
 
 use core::fmt::Write;
 
+use crate::alerts::FuelOverdue;
 use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::elevation;
@@ -125,6 +126,48 @@ pub const NAV_PANEL_ROWS: usize = 6;
 const _: () = assert!(NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS <= ROWS - 2);
 const _: () = assert!(NAV_ALERT_ROW >= NAV_PANEL_TOP_ROW);
 const _: () = assert!(NAV_ALERT_ROW + 2 <= NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS);
+
+/// The row the compact persistent fuel-overdue marker rides — the blank lower
+/// half of the 2x hero band. Row 1 keeps it clear of the row-0 state tag and
+/// every metric row (2..8), and the hero digits sit to its left, so the small
+/// right-anchored tag never collides with them at glanceable elapsed times.
+pub const FUEL_MARKER_ROW: usize = 1;
+
+/// The short right-anchored tag for a standing [`FuelOverdue`], or `None` when
+/// nothing is overdue. A plain 1x tag — deliberately NOT the transient 2x
+/// "! DRINK" banner treatment — kept `<= 5` cells so it sits at the panel's
+/// right edge past the hero. The DK has no haptics, so this lingering tag is the
+/// only way a heads-down runner learns a fuel reminder fired after its banner
+/// expired.
+pub fn fuel_overdue_tag(overdue: FuelOverdue) -> Option<&'static str> {
+    match overdue {
+        FuelOverdue::None => None,
+        FuelOverdue::Drink => Some("DRINK"),
+        FuelOverdue::Eat => Some("EAT"),
+        FuelOverdue::Both => Some("D+E"),
+    }
+}
+
+/// Overlay the compact fuel-overdue marker onto an already-rendered page by
+/// writing it right-anchored into [`FUEL_MARKER_ROW`]. Writing it into the row
+/// text (rather than a separate framebuffer blit) keeps the dirty-line flush
+/// honest — a steady marker re-emits identical bytes, so a resting page still
+/// flushes zero SPI. No-op when nothing is overdue, on the Nav page (whose map
+/// panel owns that row), or if the row is already occupied — so it can only ever
+/// add a glance, never clobber a metric or the map.
+pub fn apply_fuel_marker(rows: &mut [Row; ROWS], overdue: FuelOverdue, page: Page) {
+    if page == Page::Nav {
+        return;
+    }
+    let Some(tag) = fuel_overdue_tag(overdue) else {
+        return;
+    };
+    let row = &mut rows[FUEL_MARKER_ROW];
+    if !row.is_empty() {
+        return;
+    }
+    let _ = write!(row, "{:>width$}", tag, width = COLS);
+}
 
 /// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
 /// rather than the idle status face. The app keys page-specific drawing (the
@@ -394,7 +437,7 @@ pub fn page_hero(
                 let (h, m, s) = hms(pred.rungs[1].predicted_s as u32);
                 let mut row = Row::new();
                 if h > 0 {
-                    let _ = write!(row, "{}:{:02}:{:02}", h.min(99), m, s);
+                    let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
                 } else {
                     let _ = write!(row, "{}:{:02}", m, s);
                 }
@@ -592,7 +635,16 @@ fn glance(
 
     // The metric NOT already up large fills the secondary line.
     match metric {
-        GlanceMetric::Distance => write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km),
+        GlanceMetric::Distance => {
+            write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km);
+            // Row 7 is otherwise free on the Distance page (the Pace page uses it
+            // for GAP): surface an honest warning when the tier-1 flash slot is
+            // full, so the runner knows the STORED GPS track has stopped even
+            // though the distance/time above keep accruing.
+            if snap.track_full {
+                let _ = write!(rows[7], "! TRACK FULL");
+            }
+        }
         GlanceMetric::Pace => {
             let km = (snap.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
@@ -812,7 +864,7 @@ fn pred_row(row: &mut Row, label: &str, rung: &LadderRung) {
     };
     let (h, m, s) = hms(rung.predicted_s as u32);
     if h > 0 {
-        let _ = write!(row, "{:<5}{}:{:02}:{:02} {}", label, h.min(99), m, s, flag);
+        let _ = write!(row, "{:<5}{}:{:02}:{:02} {}", label, h.min(999), m, s, flag);
     } else {
         let _ = write!(row, "{:<5}{}:{:02} {}", label, m, s, flag);
     }
@@ -1086,7 +1138,7 @@ fn roadbook_glance(
                     rows[3 + i],
                     "{:>6.2}K {}:{:02}:{:02} {}",
                     km,
-                    h.min(99),
+                    h.min(999),
                     m,
                     s,
                     cutoff_flag(leg.cutoff)
@@ -2009,9 +2061,13 @@ fn status_face(
     let mut rows: [Row; ROWS] = Default::default();
 
     let _ = write!(rows[0], "THREKIR");
+    // "EST" marks the battery figure as an unmeasured estimate, not a
+    // guaranteed runtime — the tier-1 bench can't measure power at all, so the
+    // number is a tier-2 projection derived in `gnss_mode`. Reading it as a spec
+    // ("~220H") would over-promise; "EST 220H" is honest at a glance.
     let _ = write!(
         rows[1],
-        "MODE {:<5}~{}H",
+        "MODE {:<5}EST {}H",
         mode.label(),
         mode.battery_est_h()
     );
@@ -2261,6 +2317,7 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            track_full: false,
         }
     }
 
@@ -2287,6 +2344,78 @@ mod tests {
         for row in face_rows(Some(&fix()), Some(220), None, Some(&e), 999_999) {
             assert!(row.len() <= COLS, "status row too wide: {:?}", row);
         }
+    }
+
+    #[test]
+    fn fuel_overdue_tag_maps_each_state_and_fits_the_slot() {
+        assert_eq!(fuel_overdue_tag(FuelOverdue::None), None);
+        assert_eq!(fuel_overdue_tag(FuelOverdue::Drink), Some("DRINK"));
+        assert_eq!(fuel_overdue_tag(FuelOverdue::Eat), Some("EAT"));
+        assert_eq!(fuel_overdue_tag(FuelOverdue::Both), Some("D+E"));
+        for o in [FuelOverdue::Drink, FuelOverdue::Eat, FuelOverdue::Both] {
+            assert!(fuel_overdue_tag(o).unwrap().chars().count() <= 5);
+        }
+    }
+
+    #[test]
+    fn apply_fuel_marker_shows_the_tag_only_when_overdue() {
+        let snap = snapshot(RecordState::Recording, 4200.0);
+        let base = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            Some(150),
+            Some(&snap),
+            None,
+            NavView::NoCourse,
+            None,
+            10,
+            false,
+        );
+
+        // Nothing overdue -> the page is untouched.
+        let mut rows = base.clone();
+        apply_fuel_marker(&mut rows, FuelOverdue::None, Page::Dashboard);
+        assert_eq!(rows, base);
+
+        // Overdue -> the compact tag lands right-anchored on the marker row and
+        // no other row (hero digits, metrics) is disturbed.
+        let mut rows = base.clone();
+        apply_fuel_marker(&mut rows, FuelOverdue::Drink, Page::Dashboard);
+        assert!(rows[FUEL_MARKER_ROW].as_str().ends_with("DRINK"));
+        assert!(rows[FUEL_MARKER_ROW].as_str().starts_with(' '));
+        assert!(rows[FUEL_MARKER_ROW].len() <= COLS);
+        for r in 0..ROWS {
+            if r != FUEL_MARKER_ROW {
+                assert_eq!(rows[r], base[r], "row {r} changed");
+            }
+        }
+    }
+
+    #[test]
+    fn apply_fuel_marker_is_a_noop_on_nav_and_over_occupied_rows() {
+        let snap = snapshot(RecordState::Recording, 4200.0);
+        // Nav page: its map panel owns the marker row, so the marker is skipped.
+        let nav = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&snap),
+            None,
+            NavView::NoCourse,
+            None,
+            10,
+            false,
+        );
+        let mut rows = nav.clone();
+        apply_fuel_marker(&mut rows, FuelOverdue::Both, Page::Nav);
+        assert_eq!(rows, nav);
+
+        // An occupied marker row is never overwritten.
+        let mut rows: [Row; ROWS] = Default::default();
+        let _ = write!(rows[FUEL_MARKER_ROW], "BUSY");
+        let before = rows.clone();
+        apply_fuel_marker(&mut rows, FuelOverdue::Drink, Page::Dashboard);
+        assert_eq!(rows, before);
     }
 
     #[test]
@@ -2459,12 +2588,46 @@ mod tests {
     }
 
     #[test]
+    fn secondary_time_rows_render_past_99_hours() {
+        use crate::record::{RoadbookLegView, RoadbookView};
+        // A roadbook checkpoint projected past 99 h is in range for a 112 h
+        // cutoff race. The hero clamps hours at 999; the secondary rows must
+        // match, so the arrival reads the true hour count, not a clamped 99.
+        let mut rec = snapshot(RecordState::Recording, 195_000.0);
+        rec.roadbook = Some(RoadbookView {
+            total: 1,
+            upcoming: [RoadbookLegView {
+                cum_dist_m: 195_000.0,
+                projected_elapsed_s: 105 * 3600 + 12 * 60 + 34,
+                cutoff: Some(CutoffStatus::Safe),
+            }; crate::record::ROADBOOK_WINDOW],
+            upcoming_len: 1,
+        });
+        let rows = page_rows(
+            Page::Roadbook,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert!(
+            rows[3].as_str().contains("105:12:34"),
+            "roadbook arrival clamped instead of rendering >99 h: {:?}",
+            rows[3]
+        );
+    }
+
+    #[test]
     fn idle_renders_the_status_face() {
         let rows = face_rows(Some(&fix()), None, None, None, 42);
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
-        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
@@ -2772,6 +2935,44 @@ mod tests {
         )
         .iter()
         .all(Option::is_none));
+    }
+
+    #[test]
+    fn distance_page_warns_when_the_flash_track_is_full() {
+        let mut rec = snapshot(RecordState::Recording, 42_195.0);
+        rec.track_full = true;
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        // Row 7 (otherwise free on the Distance page) carries the honest warning.
+        assert!(
+            rows[7].as_str().contains("TRACK FULL"),
+            "row7 = {:?}",
+            rows[7].as_str()
+        );
+
+        // Absent when the track isn't full.
+        rec.track_full = false;
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "");
     }
 
     #[test]
@@ -3380,7 +3581,7 @@ mod tests {
             42,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
-        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
     }
 
     #[test]
@@ -3388,9 +3589,9 @@ mod tests {
         // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
         // battery figure, one per mode, in the fixed row-1 slot.
         for (mode, expected) in [
-            (GnssMode::Performance, "MODE PERF ~110H"),
-            (GnssMode::Balanced, "MODE BAL  ~180H"),
-            (GnssMode::Expedition, "MODE EXP  ~220H"),
+            (GnssMode::Performance, "MODE PERF EST 110H"),
+            (GnssMode::Balanced, "MODE BAL  EST 180H"),
+            (GnssMode::Expedition, "MODE EXP  EST 220H"),
         ] {
             let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode);
             assert_eq!(rows[1].as_str(), expected);
@@ -3534,6 +3735,7 @@ mod tests {
             along_m,
             off_m,
             alerting,
+            next_turn: None,
         })
     }
 

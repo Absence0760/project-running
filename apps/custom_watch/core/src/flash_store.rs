@@ -41,6 +41,63 @@ pub const fn slot_offset(region_offset: u32, slot: usize) -> u32 {
     region_offset + (slot as u32) * (SLOT_LEN as u32)
 }
 
+/// One nRF52840 erase page reserved for the tiny persisted-config record, sat
+/// immediately BELOW the run-store region (its absolute offset is one page under
+/// [`crate::run_flash::REGION_OFFSET`] — see `app/src/run_flash::CONFIG_OFFSET`).
+/// A dedicated page keeps a config rewrite — a single page erase — from ever
+/// touching a run slot, and leaves every run-store slot offset undisturbed.
+/// MUST match the config carve-out in BOTH `app/memory.x` and `app/memory-ble.x`.
+pub const CONFIG_LEN: usize = SLOT_LEN;
+
+/// Length of the fixed config record written at the base of the config page. A
+/// multiple of the NVMC 4-byte write word, so it commits in one write.
+pub const CONFIG_RECORD_LEN: usize = 12;
+
+/// Version of the config-record wire format. Bumped only if the field layout
+/// after the magic changes; an unrecognised version reads as "no saved config".
+pub const CONFIG_VERSION: u8 = 1;
+
+/// Magic prefixing a valid config record — distinguishes a written record from
+/// an erased (all-`0xFF`) or zeroed page.
+const CONFIG_MAGIC: [u8; 4] = *b"CFG1";
+
+/// Encode the persisted-config record — `magic | version | gnss_mode | 0 0 |
+/// crc32` — for the flash config page. The CRC covers every byte before it, so a
+/// torn, erased, or garbage page fails [`decode_config`] and the caller falls
+/// back to defaults (same fail-closed rule as [`recover_slot`]).
+pub fn encode_config(gnss_mode: u8) -> [u8; CONFIG_RECORD_LEN] {
+    let mut buf = [0u8; CONFIG_RECORD_LEN];
+    buf[0..4].copy_from_slice(&CONFIG_MAGIC);
+    buf[4] = CONFIG_VERSION;
+    buf[5] = gnss_mode;
+    // buf[6..8] reserved, left zero (still CRC-covered).
+    let crc = crc32(&buf[0..8]);
+    buf[8..12].copy_from_slice(&crc.to_le_bytes());
+    buf
+}
+
+/// Decode the persisted-config record, returning the stored `gnss_mode` byte, or
+/// `None` when the bytes are too short, carry the wrong magic or version, or fail
+/// the CRC — an erased or corrupt page reads as "no saved config". The mode byte
+/// itself is validated by the caller ([`crate::gnss_mode::GnssMode::from_byte`]),
+/// so a CRC-valid but unknown byte still falls back to the default.
+pub fn decode_config(bytes: &[u8]) -> Option<u8> {
+    if bytes.len() < CONFIG_RECORD_LEN {
+        return None;
+    }
+    if bytes[0..4] != CONFIG_MAGIC {
+        return None;
+    }
+    if bytes[4] != CONFIG_VERSION {
+        return None;
+    }
+    let stored = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+    if crc32(&bytes[0..8]) != stored {
+        return None;
+    }
+    Some(bytes[5])
+}
+
 /// Bytes to return for a phone chunk request: the smallest of what is left in
 /// the blob from `offset`, the phone's `requested` length, and the notify
 /// `mtu`. Zero once `offset` reaches (or passes) the blob end, so a request off
@@ -100,6 +157,12 @@ struct SlotMeta {
     run_seq: u32,
     size: u32,
     start_uptime_s: u32,
+    /// The phone has pulled this run's whole blob. Eviction sacrifices a synced
+    /// run before a still-unsynced one, so a finished-but-unsynced run is not
+    /// silently overwritten. RAM-only — not persisted across a reboot (that is a
+    /// wire-format v2 job), so a run recovered from a prior power cycle starts
+    /// unsynced and is protected until the phone re-pulls it.
+    synced: bool,
 }
 
 /// In-RAM index of which slot holds which committed run.
@@ -141,6 +204,7 @@ impl SlotDir {
                 run_seq: r.run_seq,
                 size: r.size,
                 start_uptime_s: r.start_uptime_s,
+                synced: false,
             });
         }
         dir
@@ -169,8 +233,38 @@ impl SlotDir {
             run_seq,
             size,
             start_uptime_s,
+            synced: false,
         });
         slot
+    }
+
+    /// Mark a committed run as fully pulled by the phone, so [`place`](Self::place)
+    /// evicts it before a still-unsynced run. No-op if the id isn't held.
+    pub fn mark_synced(&mut self, run_seq: u32) {
+        for s in self.slots.iter_mut().flatten() {
+            if s.run_seq == run_seq {
+                s.synced = true;
+            }
+        }
+    }
+
+    /// Reserve or reuse the slot holding `run_seq`. If a prior mid-run
+    /// checkpoint already placed this run, reuse ITS slot (updating the recorded
+    /// size) so a checkpoint and the final commit target the same page and the
+    /// commit supersedes the checkpoint; otherwise choose a fresh slot exactly
+    /// like [`place`](Self::place).
+    pub fn place_or_update(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
+        if let Some((slot, _)) = self.find(run_seq) {
+            self.slots[slot] = Some(SlotMeta {
+                run_seq,
+                size,
+                start_uptime_s,
+                synced: false,
+            });
+            slot
+        } else {
+            self.place(run_seq, size, start_uptime_s)
+        }
     }
 
     fn victim(&self) -> usize {
@@ -179,7 +273,25 @@ impl SlotDir {
                 return i;
             }
         }
-        // All full: evict the lowest seq (the oldest committed run).
+        // All full. Evict the oldest SYNCED run (lowest seq the phone has already
+        // pulled) so a finished-but-unsynced run is never silently overwritten
+        // while any synced run still occupies a slot.
+        let mut synced_victim: Option<(usize, u32)> = None;
+        for (i, m) in self
+            .slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.map(|m| (i, m)))
+        {
+            if m.synced && synced_victim.is_none_or(|(_, seq)| m.run_seq < seq) {
+                synced_victim = Some((i, m.run_seq));
+            }
+        }
+        if let Some((i, _)) = synced_victim {
+            return i;
+        }
+        // Nothing synced: fall back to the oldest run overall — the region can't
+        // hold more than SLOT_COUNT, so an unsynced run must go. Best-effort.
         let mut oldest = 0;
         for i in 1..SLOT_COUNT {
             if self.slots[i].map(|m| m.run_seq) < self.slots[oldest].map(|m| m.run_seq) {
@@ -203,12 +315,27 @@ impl SlotDir {
 
     /// Manifest entries for every committed run, in slot order.
     pub fn manifest(&self) -> Vec<ManifestEntry, SLOT_COUNT> {
+        self.manifest_at(u32::MAX)
+    }
+
+    /// Manifest entries with each run's `start_uptime_s` clamped to the current
+    /// `watch_uptime_s`.
+    ///
+    /// The watch has no RTC, so the phone dates a run as
+    /// `now - (watch_uptime_s - start_uptime_s)`. A run recovered from a PRIOR
+    /// power cycle carries a `start_uptime_s` from that boot's epoch, which can
+    /// exceed the current (post-reboot) uptime and date the run in the FUTURE.
+    /// Clamping `start_uptime_s <= watch_uptime_s` makes the offset non-negative,
+    /// so a recovered run reads as "around this power-on" (under-aged) rather than
+    /// in the future. Precise wall-clock dating of a prior-boot run needs the
+    /// phone to fall back to the footer's elapsed time — a phone-side follow-up.
+    pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
         let mut out = Vec::new();
         for s in self.slots.iter().flatten() {
             let _ = out.push(ManifestEntry {
                 run_seq: s.run_seq,
                 size: s.size,
-                start_uptime_s: s.start_uptime_s,
+                start_uptime_s: s.start_uptime_s.min(watch_uptime_s),
             });
         }
         out
@@ -306,6 +433,57 @@ mod tests {
         assert_eq!(dir.find(0), None, "evicted run is gone");
         assert_eq!(dir.find(4), Some((0, 100)));
         assert_eq!(dir.find(1), Some((1, 100)));
+    }
+
+    #[test]
+    fn place_or_update_reuses_the_slot_for_an_existing_run() {
+        // The first checkpoint places the run; later checkpoints + the final
+        // commit must land in the SAME slot so the commit supersedes rather than
+        // leaving a stale checkpoint in another slot.
+        let mut dir = SlotDir::new();
+        let s0 = dir.place_or_update(7, 100, 41);
+        let s1 = dir.place_or_update(7, 260, 41); // grew as more points staged
+        assert_eq!(s0, s1, "same run reuses its slot");
+        assert_eq!(dir.find(7), Some((s0, 260)), "size updated in place");
+        assert_eq!(dir.run_count(), 1, "no second slot consumed");
+
+        // A different run still takes a fresh slot.
+        let s2 = dir.place_or_update(8, 100, 50);
+        assert_ne!(s2, s0);
+        assert_eq!(dir.run_count(), 2);
+    }
+
+    #[test]
+    fn place_or_update_matches_place_for_a_brand_new_run() {
+        let mut a = SlotDir::new();
+        let mut b = SlotDir::new();
+        assert_eq!(a.place_or_update(3, 100, 10), b.place(3, 100, 10));
+        assert_eq!(a.find(3), b.find(3));
+    }
+
+    #[test]
+    fn recover_slot_reads_back_a_checkpoint_blob_as_a_partial_run() {
+        // A mid-run checkpoint (partial track + totals-so-far) written into a
+        // slot and power-cycled recovers exactly like a finished run — the whole
+        // point of checkpointing: a reset mid-run recovers a slightly-stale
+        // partial run instead of nothing.
+        let sink: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 9, 77).expect("start");
+        for t in 0..5 {
+            w.push_point(&a_point(t)).expect("push");
+        }
+        let ckpt = w.checkpoint_blob(321, 200, 210).expect("checkpoint");
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..ckpt.len()].copy_from_slice(&ckpt);
+        assert_eq!(
+            recover_slot(&slot),
+            Some(RecoveredRun {
+                run_seq: 9,
+                size: blob_len(5),
+                start_uptime_s: 77,
+            }),
+            "the partial run recovers with the totals-so-far"
+        );
     }
 
     #[test]
@@ -704,6 +882,61 @@ mod tests {
     }
 
     #[test]
+    fn config_round_trips_every_mode_byte() {
+        for mode in [0u8, 1, 2] {
+            let rec = encode_config(mode);
+            assert_eq!(rec.len(), CONFIG_RECORD_LEN);
+            assert_eq!(decode_config(&rec), Some(mode));
+        }
+    }
+
+    #[test]
+    fn config_record_is_write_word_aligned_and_page_sized() {
+        // NVMC writes a 4-byte word; the record must be a whole number of them,
+        // and it must fit inside the one reserved erase page.
+        assert_eq!(CONFIG_RECORD_LEN % 4, 0);
+        assert!(CONFIG_RECORD_LEN <= CONFIG_LEN);
+        assert_eq!(CONFIG_LEN, SLOT_LEN, "config page is one erase page");
+    }
+
+    #[test]
+    fn decode_config_rejects_an_erased_or_zeroed_page() {
+        assert_eq!(decode_config(&[0xFFu8; CONFIG_LEN]), None);
+        assert_eq!(decode_config(&[0x00u8; CONFIG_LEN]), None);
+    }
+
+    #[test]
+    fn decode_config_rejects_a_corrupt_crc() {
+        // Flip the stored mode byte without recomputing the CRC — exactly a
+        // single-bit flash bit-rot — and the record must read as absent.
+        let mut rec = encode_config(2);
+        rec[5] ^= 0xFF;
+        assert_eq!(decode_config(&rec), None);
+        // Corrupting a CRC-covered reserved byte is caught too.
+        let mut rec = encode_config(1);
+        rec[6] ^= 0x01;
+        assert_eq!(decode_config(&rec), None);
+    }
+
+    #[test]
+    fn decode_config_rejects_wrong_magic_and_version() {
+        let mut rec = encode_config(1);
+        rec[0] = b'X';
+        assert_eq!(decode_config(&rec), None);
+        let mut rec = encode_config(1);
+        rec[4] = CONFIG_VERSION + 1;
+        assert_eq!(decode_config(&rec), None);
+    }
+
+    #[test]
+    fn decode_config_never_reads_out_of_bounds_on_a_short_slice() {
+        assert_eq!(decode_config(&[]), None);
+        assert_eq!(decode_config(&[0xFFu8; 4]), None);
+        let rec = encode_config(0);
+        assert_eq!(decode_config(&rec[..CONFIG_RECORD_LEN - 1]), None);
+    }
+
+    #[test]
     fn eviction_picks_the_lowest_seq_regardless_of_slot_index() {
         // The oldest run (lowest seq) is NOT in slot 0, so this proves eviction
         // keys on seq, not on a slot-0 bias.
@@ -735,5 +968,153 @@ mod tests {
         assert_eq!(dir.place(seq, 200, 5), 3, "evicts slot 3 (seq 0)");
         assert_eq!(dir.find(0), None);
         assert_eq!(dir.find(4), Some((3, 200)));
+    }
+
+    #[test]
+    fn eviction_sacrifices_a_synced_run_before_an_unsynced_one() {
+        // Four runs, seqs 0..=3. The oldest (seq 0) is UNSYNCED; a newer run
+        // (seq 2) has been fully pulled by the phone. A fifth run must evict the
+        // synced seq 2, NOT the older-but-unsynced seq 0.
+        let mut dir = SlotDir::new();
+        dir.place(0, 100, 10);
+        dir.place(1, 100, 11);
+        dir.place(2, 100, 12);
+        dir.place(3, 100, 13);
+        dir.mark_synced(2);
+        assert_eq!(
+            dir.place(4, 100, 14),
+            2,
+            "evicts the synced run, not the oldest"
+        );
+        assert_eq!(dir.find(2), None, "the synced run was the victim");
+        assert_eq!(
+            dir.find(0),
+            Some((0, 100)),
+            "the unsynced oldest run survives"
+        );
+        assert_eq!(dir.find(4), Some((2, 100)));
+    }
+
+    #[test]
+    fn eviction_prefers_the_oldest_synced_run() {
+        // Two synced runs (seqs 1 and 3): eviction picks the lower-seq synced one.
+        let mut dir = SlotDir::new();
+        for seq in 0..4 {
+            dir.place(seq, 100, seq);
+        }
+        dir.mark_synced(3);
+        dir.mark_synced(1);
+        assert_eq!(
+            dir.place(4, 100, 14),
+            1,
+            "lowest-seq synced run is the victim"
+        );
+        assert_eq!(dir.find(1), None);
+        assert_eq!(
+            dir.find(3),
+            Some((3, 100)),
+            "the newer synced run survives this round"
+        );
+    }
+
+    #[test]
+    fn eviction_falls_back_to_oldest_when_nothing_is_synced() {
+        // With no synced run to sacrifice, the region is physically full, so the
+        // oldest (lowest-seq) run must go — the unchanged best-effort fallback.
+        let mut dir = SlotDir::new();
+        for seq in 0..4 {
+            dir.place(seq, 100, seq);
+        }
+        assert_eq!(dir.place(4, 100, 14), 0, "no synced run → evict the oldest");
+        assert_eq!(dir.find(0), None);
+    }
+
+    #[test]
+    fn recovered_runs_start_unsynced_and_are_protected() {
+        // A run recovered from a prior power cycle carries no synced bit, so it
+        // is protected: a fresh run can't evict it while it stays unsynced —
+        // unless every slot is an unsynced recovered run (the fallback).
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 0,
+                size: 100,
+                start_uptime_s: 1,
+            }),
+            Some(RecoveredRun {
+                run_seq: 1,
+                size: 100,
+                start_uptime_s: 2,
+            }),
+            Some(RecoveredRun {
+                run_seq: 2,
+                size: 100,
+                start_uptime_s: 3,
+            }),
+            None,
+        ];
+        let mut dir = SlotDir::from_recovered(recovered);
+        // Slot 3 is free, so a new run fills it — nothing evicted.
+        assert_eq!(dir.place(3, 100, 4), 3);
+        // Now full and all unsynced: the next run falls back to the oldest.
+        assert_eq!(dir.place(4, 100, 5), 0);
+        assert_eq!(dir.find(0), None);
+    }
+
+    #[test]
+    fn mark_synced_ignores_an_unknown_run() {
+        let mut dir = SlotDir::new();
+        dir.place(7, 100, 10);
+        dir.mark_synced(999); // not held — no panic, no effect
+        dir.place(8, 100, 11);
+        dir.mark_synced(8); // 8 is the only synced run
+        dir.place(9, 100, 12);
+        dir.place(10, 100, 13);
+        let slot_of_8 = dir.find(8).expect("8 is held").0;
+        // Full: the synced run (8) is the victim, and the unknown mark_synced(999)
+        // left seq 7 unsynced and therefore protected.
+        assert_eq!(dir.place(11, 100, 14), slot_of_8);
+        assert_eq!(dir.find(8), None);
+        assert_eq!(
+            dir.find(7),
+            Some((0, 100)),
+            "the unsynced oldest run survives"
+        );
+    }
+
+    #[test]
+    fn manifest_at_clamps_a_prior_boot_start_out_of_the_future() {
+        // A run recovered from a prior boot carries start=3600; the post-reboot
+        // uptime is only 100. Unclamped, the phone would date it in the future.
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 5,
+                size: 200,
+                start_uptime_s: 3600,
+            }),
+            None,
+            None,
+            None,
+        ];
+        let dir = SlotDir::from_recovered(recovered);
+        // manifest_at clamps start to the current uptime → never > watch_uptime_s.
+        let clamped = dir.manifest_at(100);
+        assert_eq!(
+            clamped[0].start_uptime_s, 100,
+            "clamped to the current uptime"
+        );
+        // The unclamped manifest still carries the raw (prior-boot) start.
+        assert_eq!(dir.manifest()[0].start_uptime_s, 3600);
+    }
+
+    #[test]
+    fn manifest_at_leaves_a_same_session_start_untouched() {
+        // A run recorded THIS session has start <= uptime, so the clamp is a no-op
+        // and it dates correctly; only the future-dating recovered case is changed.
+        let mut dir = SlotDir::new();
+        dir.place(1, 100, 40);
+        dir.place(2, 100, 900);
+        let m = dir.manifest_at(1000);
+        assert_eq!(m[0].start_uptime_s, 40);
+        assert_eq!(m[1].start_uptime_s, 900);
     }
 }

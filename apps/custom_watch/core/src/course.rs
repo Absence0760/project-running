@@ -11,6 +11,12 @@
 //! jitter. Tests mirror `route_snap.test.ts` + the `distanceAlongRoute` cases
 //! in `route_geometry.test.ts` case-for-case, plus firmware-specific ones.
 //!
+//! [`Course::project_from`] layers a watch-local forward-progress bias on top
+//! of that ported geometry so along-course distance stays monotonic-friendly
+//! on a retracing course (out-and-back / lollipop / parallel legs) instead of
+//! collapsing onto the outbound leg on the return — it is NOT part of the
+//! `snapToPolyline` parity port; the plain `project` math is left untouched.
+//!
 //! [`PanelFit`] is the display half kept host-testable: it fits the course's
 //! bounding box into a pixel panel (longitude scaled by cos(mid-latitude), the
 //! same correction `track_projection.ts` applies so a square loop renders
@@ -38,6 +44,20 @@ pub const OFF_COURSE_REARM_M: f64 = OFF_COURSE_THRESHOLD_M / 2.0;
 
 const R_M: f64 = 6_371_000.0;
 
+/// [`Course::project_from`] biases an overlapping-segment tie toward the one
+/// consistent with forward progress from the last along-distance by charging
+/// each candidate for how far its along-distance sits from the previous one,
+/// in metres of equivalent perpendicular offset. Moving *backward* costs far
+/// more than moving *forward* ([`ALONG_BACK_BIAS_PER_M`] >
+/// [`ALONG_FWD_BIAS_PER_M`]): the heavy backward charge stops the return leg
+/// snapping onto the outbound leg at the turnaround, while the light forward
+/// charge still prefers the nearer of two forward candidates so an early fix
+/// doesn't jump ahead to a far retraced leg (a lollipop's return stem). Both
+/// are small enough that a genuinely closer segment (a real backtrack, offset
+/// gap outweighing the along difference) still wins outright.
+const ALONG_FWD_BIAS_PER_M: f64 = 0.05;
+const ALONG_BACK_BIAS_PER_M: f64 = 0.5;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CoursePoint {
     pub lat_deg: f64,
@@ -62,6 +82,7 @@ pub struct Projection {
 }
 
 /// A compact in-RAM course: a fixed-capacity polyline plus its cached length.
+#[derive(Clone)]
 pub struct Course {
     points: Vec<CoursePoint, MAX_COURSE_POINTS>,
     total_m: f64,
@@ -96,11 +117,44 @@ impl Course {
     /// perpendicular offset. `None` for a non-finite position (a course always
     /// has >= 2 points by construction). Mirrors `snapToPolyline`.
     pub fn project(&self, lat_deg: f64, lon_deg: f64) -> Option<Projection> {
+        self.project_biased(lat_deg, lon_deg, None)
+    }
+
+    /// [`Course::project`] biased toward forward progress along the course.
+    ///
+    /// Same per-segment nearest-perpendicular-foot geometry as `project`, but
+    /// when two segments are near-equally close — an out-and-back / lollipop /
+    /// parallel-leg course whose return leg retraces the outbound line — it
+    /// prefers the segment at or ahead of `prev_along_m` (the last reported
+    /// along-distance) over the earlier one. That keeps along-distance
+    /// monotonic-friendly for a runner physically progressing along the route,
+    /// so the "distance along course" number no longer stalls, reads ~0, or
+    /// jumps backward when the return snaps onto the outbound leg. A genuinely
+    /// closer segment still wins — the perpendicular-offset term dominates the
+    /// small backward penalty — so a real backtrack along the current leg is
+    /// still reported. Watch-local; NOT part of the `snapToPolyline` parity
+    /// port. The off-course offset and snapped point are unchanged; only which
+    /// overlapping segment (and thus the along-distance) is chosen differs.
+    pub fn project_from(
+        &self,
+        lat_deg: f64,
+        lon_deg: f64,
+        prev_along_m: f64,
+    ) -> Option<Projection> {
+        self.project_biased(lat_deg, lon_deg, Some(prev_along_m))
+    }
+
+    fn project_biased(
+        &self,
+        lat_deg: f64,
+        lon_deg: f64,
+        prev_along_m: Option<f64>,
+    ) -> Option<Projection> {
         if !lat_deg.is_finite() || !lon_deg.is_finite() {
             return None;
         }
         let mut best: Option<Projection> = None;
-        let mut best_off = f64::INFINITY;
+        let mut best_cost = f64::INFINITY;
         let mut cumulative = 0.0;
         for i in 0..self.points.len() - 1 {
             let a = self.points[i];
@@ -127,15 +181,31 @@ impl Course {
             let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
             let s_lon = a.lon_deg + (b.lon_deg - a.lon_deg) * t;
             let off = haversine_metres(lat_deg, lon_deg, s_lat, s_lon);
+            let along = cumulative + seg_len * t;
 
-            if off < best_off {
-                best_off = off;
+            // Unbiased (`prev_along_m` is `None`): pure nearest offset, the
+            // strict `<` keeping the earlier segment on a tie — the exact
+            // `snapToPolyline` contract. Biased: add a small forward / large
+            // backward charge on how far this candidate's along-distance sits
+            // from the last one, so an equal-offset retrace overlap resolves to
+            // the segment the runner is actually on instead of snapping onto
+            // the outbound leg, while a clearly-closer segment still wins.
+            let cost = match prev_along_m {
+                Some(prev) => {
+                    off + ALONG_FWD_BIAS_PER_M * (along - prev).max(0.0)
+                        + ALONG_BACK_BIAS_PER_M * (prev - along).max(0.0)
+                }
+                None => off,
+            };
+
+            if cost < best_cost {
+                best_cost = cost;
                 best = Some(Projection {
                     lat_deg: s_lat,
                     lon_deg: s_lon,
                     segment: i,
                     t,
-                    along_m: cumulative + seg_len * t,
+                    along_m: along,
                     off_m: off,
                 });
             }
@@ -186,6 +256,11 @@ pub struct NavStatus {
     pub off_m: f64,
     pub along_m: f64,
     pub alerting: bool,
+    /// The next turn ahead on the course ([`crate::turn_cues`]), carried so the
+    /// `record` task can feed the recorder's TurnCue page without owning the
+    /// course. `None` when there is no upcoming turn (past the last one, or a
+    /// course with no turns).
+    pub next_turn: Option<crate::record::TurnCueView>,
 }
 
 /// Pixels of breathing room the fit keeps inside each panel edge.
@@ -285,6 +360,185 @@ mod tests {
     /// `route_geometry.test.ts`'s distWp fixtures.
     fn dist_pt(m: f64) -> CoursePoint {
         pt(0.0, m / M_PER_DEG)
+    }
+
+    /// A waypoint `east` metres east and `north` metres north of the origin,
+    /// for building out-and-back / lollipop courses whose return retraces the
+    /// outbound line. Longitude carries the cos(lat) correction so `east` is a
+    /// true ground metre at the (small) test latitude.
+    fn en_pt(east_m: f64, north_m: f64) -> CoursePoint {
+        let lat = north_m / M_PER_DEG;
+        pt(lat, east_m / (M_PER_DEG * libm::cos(to_rad(lat))))
+    }
+
+    /// East to 300 m then back to 0 along the same equatorial line: the return
+    /// leg is geometrically coincident with the outbound one (~600 m total).
+    fn out_and_back() -> Course {
+        Course::from_points(&[
+            en_pt(0.0, 0.0),
+            en_pt(100.0, 0.0),
+            en_pt(200.0, 0.0),
+            en_pt(300.0, 0.0),
+            en_pt(200.0, 0.0),
+            en_pt(100.0, 0.0),
+            en_pt(0.0, 0.0),
+        ])
+        .unwrap()
+    }
+
+    /// A 200 m stem out (coincident with the stem back) around a distinct
+    /// rectangular loop — the stem is retraced, the loop is not (~800 m total).
+    fn lollipop() -> Course {
+        Course::from_points(&[
+            en_pt(0.0, 0.0),
+            en_pt(200.0, 0.0),
+            en_pt(200.0, 100.0),
+            en_pt(300.0, 100.0),
+            en_pt(300.0, 0.0),
+            en_pt(200.0, 0.0),
+            en_pt(0.0, 0.0),
+        ])
+        .unwrap()
+    }
+
+    /// An out-and-back whose return leg runs 30 m north of the outbound leg (a
+    /// divided path): the legs are NOT coincident, so offset distinguishes them
+    /// and a genuine backtrack is unambiguous (~630 m total).
+    fn separated_out_and_back() -> Course {
+        Course::from_points(&[
+            en_pt(0.0, 0.0),
+            en_pt(150.0, 0.0),
+            en_pt(300.0, 0.0),
+            en_pt(300.0, 30.0),
+            en_pt(150.0, 30.0),
+            en_pt(0.0, 30.0),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn out_and_back_return_collapses_with_project_but_project_from_stays_forward() {
+        let c = out_and_back();
+        let q = en_pt(150.0, 3.0);
+        // Plain `project` can't tell the return leg from the outbound one, so
+        // it snaps to the earlier segment: along collapses to ~150 m.
+        let plain = c.project(q.lat_deg, q.lon_deg).unwrap();
+        assert!(plain.along_m < 200.0, "plain along {}", plain.along_m);
+        // A runner whose last along was ~460 m (on the return) is kept forward.
+        let biased = c.project_from(q.lat_deg, q.lon_deg, 460.0).unwrap();
+        assert!(biased.along_m > 400.0, "biased along {}", biased.along_m);
+        // The snapped offset is unchanged — only which segment was chosen.
+        assert!((biased.off_m - plain.off_m).abs() < 1.0, "offset moved");
+    }
+
+    #[test]
+    fn project_from_keeps_along_monotonic_walking_an_out_and_back() {
+        let c = out_and_back();
+        let total = c.total_m();
+        let mut easts: std::vec::Vec<f64> = (0..=30).map(|k| k as f64 * 10.0).collect();
+        easts.extend((0..30).rev().map(|k| k as f64 * 10.0));
+        let mut prev = 0.0;
+        for (i, e) in easts.iter().enumerate() {
+            let q = en_pt(*e, 3.0);
+            let p = c.project_from(q.lat_deg, q.lon_deg, prev).unwrap();
+            assert!(
+                p.along_m.is_finite() && p.off_m.is_finite(),
+                "nan at step {}",
+                i
+            );
+            assert!(
+                p.along_m + 1.0 >= prev,
+                "along went back at step {} ({} < {})",
+                i,
+                p.along_m,
+                prev
+            );
+            prev = p.along_m;
+        }
+        // Back near the start, but the along-distance has climbed to the far
+        // end of the course rather than collapsing to ~0.
+        assert!(prev > total - 20.0, "final along {} of {}", prev, total);
+    }
+
+    #[test]
+    fn project_from_keeps_along_monotonic_walking_a_lollipop() {
+        let c = lollipop();
+        let total = c.total_m();
+        // Plain project on the return stem collapses onto the outbound stem.
+        let stem = en_pt(100.0, 0.0);
+        let plain = c.project(stem.lat_deg, stem.lon_deg).unwrap();
+        assert!(plain.along_m < 200.0, "plain stem along {}", plain.along_m);
+
+        // Walk the polyline itself, four sub-steps per segment, threading the
+        // previous along-distance into project_from.
+        let pts = c.points();
+        let mut prev = 0.0;
+        for w in pts.windows(2) {
+            for s in 0..4 {
+                let f = s as f64 / 4.0;
+                let lat = w[0].lat_deg + (w[1].lat_deg - w[0].lat_deg) * f;
+                let lon = w[0].lon_deg + (w[1].lon_deg - w[0].lon_deg) * f;
+                let p = c.project_from(lat, lon, prev).unwrap();
+                assert!(
+                    p.along_m + 2.0 >= prev,
+                    "along regressed to {} from {}",
+                    p.along_m,
+                    prev
+                );
+                prev = p.along_m;
+            }
+        }
+        // Ended on the return stem, not collapsed back to the outbound one.
+        assert!(prev > 600.0, "final along {} of {}", prev, total);
+    }
+
+    #[test]
+    fn project_from_still_reports_a_genuine_backtrack_along_the_current_leg() {
+        let c = separated_out_and_back();
+        // Forward on the return leg to east=200 m (along ~430)...
+        let ahead_q = en_pt(200.0, 30.0);
+        let ahead = c
+            .project_from(ahead_q.lat_deg, ahead_q.lon_deg, 400.0)
+            .unwrap();
+        // ...then the runner genuinely reverses to east=250 m (earlier on the
+        // same return leg). Its offset is clearly smallest, so it still wins
+        // and the along-distance is reported as having gone backward.
+        let back_q = en_pt(250.0, 30.0);
+        let back = c
+            .project_from(back_q.lat_deg, back_q.lon_deg, ahead.along_m)
+            .unwrap();
+        assert!(
+            back.along_m < ahead.along_m,
+            "expected a backtrack: {} !< {}",
+            back.along_m,
+            ahead.along_m
+        );
+        assert!(
+            back.off_m < 5.0,
+            "should still be on the return leg, off {}",
+            back.off_m
+        );
+    }
+
+    #[test]
+    fn project_from_matches_project_on_a_forward_only_course() {
+        // No overlapping segments: the forward bias must not perturb the
+        // result — the uniquely-nearest segment always wins.
+        let c =
+            Course::from_points(&[dist_pt(0.0), dist_pt(100.0), dist_pt(200.0), dist_pt(300.0)])
+                .unwrap();
+        for &(east, prev) in &[(50.0, 0.0), (150.0, 100.0), (250.0, 200.0)] {
+            let lat = 5.0 / M_PER_DEG;
+            let lon = east / M_PER_DEG;
+            let plain = c.project(lat, lon).unwrap();
+            let biased = c.project_from(lat, lon, prev).unwrap();
+            assert_eq!(plain.segment, biased.segment, "segment differs at {}", east);
+            assert!(
+                (plain.along_m - biased.along_m).abs() < 1e-9,
+                "along differs at {}",
+                east
+            );
+        }
     }
 
     #[test]

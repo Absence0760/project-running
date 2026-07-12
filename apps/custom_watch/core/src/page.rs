@@ -152,6 +152,21 @@ impl Page {
             Page::RaceDay => Page::Dashboard,
         }
     }
+
+    /// The previous page in the cycle — the exact inverse of [`Page::next`],
+    /// wrapping from the first page back to the last. With 31 pages a forward-
+    /// only walk needs up to ~30 presses to reach a late page; a reverse
+    /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
+    /// press away. Defined as the inverse of `next` rather than a second hand-
+    /// written chain so the two can't drift.
+    pub fn prev(self) -> Self {
+        let mut p = self;
+        // At most ALL-1 forward steps land on the page whose `next` is `self`.
+        while p.next() != self {
+            p = p.next();
+        }
+        p
+    }
 }
 
 #[cfg(test)]
@@ -233,5 +248,33 @@ mod tests {
             p = p.next();
         }
         assert_eq!(p, Page::default());
+    }
+
+    #[test]
+    fn prev_is_the_exact_inverse_of_next() {
+        for &p in ALL.iter() {
+            assert_eq!(p.next().prev(), p, "next then prev should return to {p:?}");
+            assert_eq!(p.prev().next(), p, "prev then next should return to {p:?}");
+        }
+    }
+
+    #[test]
+    fn prev_reaches_the_last_page_in_one_step_and_wraps() {
+        // The whole point of the reverse traversal: the last page (RaceDay) is
+        // one press back from the default, not ~30 forward.
+        assert_eq!(Page::Dashboard.prev(), Page::RaceDay);
+        assert_eq!(Page::RaceDay.prev(), Page::RouteElev);
+        assert_eq!(Page::Distance.prev(), Page::Dashboard);
+        // Walking `prev` from the default visits every page exactly once and
+        // returns home.
+        let mut p = Page::default();
+        let mut seen = [p; ALL.len()];
+        for slot in seen.iter_mut().skip(1) {
+            p = p.prev();
+            *slot = p;
+        }
+        seen.sort_by_key(|q| *q as u8);
+        assert_eq!(seen, ALL);
+        assert_eq!(p.prev(), Page::default());
     }
 }

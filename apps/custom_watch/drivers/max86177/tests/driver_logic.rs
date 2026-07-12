@@ -4,7 +4,10 @@
 //! -p max86177` from anywhere. These touch no peripheral, only the integer math
 //! that decides a register value.
 
-use max86177::{agc_next_pa, decode_die_temp_milli_c, AgcConfig, LED_PA_MAX};
+use max86177::{
+    agc_next_pa, decode_die_temp_milli_c, decode_fifo_word, AgcConfig, FifoWord, LED_PA_MAX,
+    MEAS1_TAG, MEAS2_TAG,
+};
 
 #[test]
 fn dim_signal_steps_current_up() {
@@ -100,6 +103,47 @@ fn converges_into_the_window_and_holds() {
         pa = agc_next_pa(dc, pa, &cfg);
         assert_eq!(pa, settled, "a settled loop must not oscillate");
     }
+}
+
+#[test]
+fn fifo_word_splits_tag_from_count() {
+    // Low 19 bits are the count; the five bits above carry the measurement tag.
+    // A MEAS1 word (tag 0x01) at 0x12345 counts.
+    let count = 0x1_2345u32;
+    let raw = (u32::from(MEAS1_TAG) << 19) | count;
+    let buf = [(raw >> 16) as u8, (raw >> 8) as u8, raw as u8];
+    assert_eq!(
+        decode_fifo_word(buf),
+        FifoWord {
+            tag: MEAS1_TAG,
+            value: count
+        }
+    );
+}
+
+#[test]
+fn fifo_word_distinguishes_ambient_from_ppg() {
+    let count = 0x7_FFFFu32;
+    let ppg = (u32::from(MEAS1_TAG) << 19) | count;
+    let amb = (u32::from(MEAS2_TAG) << 19) | count;
+    let ppg_buf = [(ppg >> 16) as u8, (ppg >> 8) as u8, ppg as u8];
+    let amb_buf = [(amb >> 16) as u8, (amb >> 8) as u8, amb as u8];
+    assert_eq!(decode_fifo_word(ppg_buf).tag, MEAS1_TAG);
+    assert_eq!(decode_fifo_word(amb_buf).tag, MEAS2_TAG);
+    // Same underlying count, told apart only by the tag.
+    assert_eq!(decode_fifo_word(ppg_buf).value, count);
+    assert_eq!(decode_fifo_word(amb_buf).value, count);
+}
+
+#[test]
+fn fifo_word_masks_the_full_data_field() {
+    // A max-scale count with a tag set must return the count intact, never
+    // letting the tag bleed into the value.
+    let raw = 0xFF_FFFFu32;
+    let buf = [(raw >> 16) as u8, (raw >> 8) as u8, raw as u8];
+    let w = decode_fifo_word(buf);
+    assert_eq!(w.value, 0x7_FFFF, "value is the low 19 bits");
+    assert_eq!(w.tag, 0x1F, "tag is the five bits above");
 }
 
 #[test]

@@ -25,6 +25,13 @@
 //!   `{run_seq, offset, len}`; the watch notifies back exactly that byte slice
 //!   of the run's blob (clamped to the notify MTU and the blob end).
 //!
+//! The course-push path (README course-push) rides the same service via one more
+//! write characteristic:
+//! - `course` (write): the phone WRITES a chunked `course_store` frame
+//!   (`offset(2) | payload`); a per-connection `CourseAssembler` reassembles it,
+//!   `course_store::decode` turns it into a `Course`, and it is published to the
+//!   `nav` task via `state::COURSE`, which switches off `NO COURSE LOADED`.
+//!
 //! Also UNVERIFIED, and additionally: with the SoftDevice enabled, flash
 //! access must be SoftDevice-coordinated — see the `run_flash` hardware caveat
 //! (the NVMC backend must become `nrf_softdevice::Flash` before hardware use).
@@ -45,7 +52,7 @@ mod imp {
     // more than one characteristic. The names are the macro's, not ours.
     #![allow(clippy::enum_variant_names)]
 
-    use core::cell::Cell;
+    use core::cell::{Cell, RefCell};
 
     use defmt::*;
     use embassy_futures::select::{select, Either};
@@ -58,6 +65,7 @@ mod imp {
     };
     use nrf_softdevice::ble::{gatt_server, peripheral};
     use nrf_softdevice::{raw, Softdevice};
+    use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::run_store::{
         ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
     };
@@ -102,6 +110,13 @@ mod imp {
         /// task applies to the recorder + alert engine. Write-only — no readback.
         #[characteristic(uuid = "d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write)]
         settings: Vec<u8, MAX_SETTINGS_LEN>,
+        /// Course push (README course-push path). The phone WRITES chunked
+        /// `course_store` frame bytes (`offset(2, u16 LE) | payload`); the watch
+        /// reassembles them, decodes the `Course`, and publishes it to the nav
+        /// task via `state::COURSE`. Write-only — a fire-and-forget push like
+        /// `settings`; a whole course exceeds one notification, so it is chunked.
+        #[characteristic(uuid = "d1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write)]
+        course: Vec<u8, COURSE_CHUNK_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -167,7 +182,10 @@ mod imp {
     /// Build the manifest characteristic value: header (run count + the watch
     /// uptime anchor) followed by one entry per finished run.
     async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
-        let entries = store.lock().await.manifest();
+        // Clamp each run's start to the current uptime so a run recovered from a
+        // prior power cycle can't advertise a start ahead of `uptime_s` and date
+        // in the future on the phone (run_flash::manifest_at).
+        let entries = store.lock().await.manifest_at(uptime_s);
         let mut buf: Vec<u8, MANIFEST_CAP> = Vec::new();
         let header = ManifestHeader {
             run_count: entries.len() as u8,
@@ -197,6 +215,7 @@ mod imp {
         let mut fix_rx = unwrap!(state::FIX.receiver());
         let mut elev_rx = unwrap!(state::ELEVATION.receiver());
         let settings_sender = state::SETTINGS.sender();
+        let course_sender = state::COURSE.sender();
         let mut latest = None;
         let mut elev = None;
 
@@ -240,6 +259,10 @@ mod imp {
             let notifications = Cell::new(false);
             let manifest_notify = Cell::new(false);
             let chunk_req: Signal<CriticalSectionRawMutex, ChunkRequest> = Signal::new();
+            // Reassembles a chunked course push over this connection. Interior
+            // mutability (RefCell) keeps the GATT handler a plain `Fn`, like the
+            // Cell/Signal above; the single-threaded executor makes it sound.
+            let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
 
             let gatt = gatt_server::run(&conn, server, |e| match e {
                 ServerEvent::Link(e) => match e {
@@ -265,6 +288,37 @@ mod imp {
                         }
                         None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
                     },
+                    LinkServiceEvent::CourseWrite(bytes) => {
+                        // Chunk framing: offset(2, u16 LE) | payload. Feed the
+                        // reassembler; on completion decode + publish the course.
+                        if bytes.len() < 2 {
+                            warn!("ble: short course chunk ({=usize} B)", bytes.len());
+                        } else {
+                            let offset = u16::from_le_bytes([bytes[0], bytes[1]]) as usize;
+                            let mut asm = course_asm.borrow_mut();
+                            match asm.push(offset, &bytes[2..]) {
+                                CoursePush::Complete => match course_store::decode(asm.frame()) {
+                                    Some(course) => {
+                                        info!(
+                                            "ble: course push complete ({} points, {} m)",
+                                            course.points().len(),
+                                            course.total_m() as u32
+                                        );
+                                        course_sender.send(Some(course));
+                                        asm.reset();
+                                    }
+                                    None => {
+                                        warn!("ble: course frame failed to decode");
+                                        asm.reset();
+                                    }
+                                },
+                                CoursePush::More => {}
+                                CoursePush::Rejected => {
+                                    warn!("ble: bad course chunk @ {=usize}", offset)
+                                }
+                            }
+                        }
+                    }
                 },
             });
 
@@ -314,11 +368,21 @@ mod imp {
                             // or past-the-end, so the phone isn't left waiting.
                             let want = (req.len as usize).min(FRAME_CAP);
                             let mut scratch = [0u8; FRAME_CAP];
-                            let n = store.lock().await.read_chunk(
-                                req.run_seq,
-                                req.offset,
-                                &mut scratch[..want],
-                            );
+                            let n = {
+                                let mut guard = store.lock().await;
+                                let n =
+                                    guard.read_chunk(req.run_seq, req.offset, &mut scratch[..want]);
+                                // Reaching the blob end means the phone has pulled
+                                // this whole run: mark it synced so eviction keeps
+                                // a still-unsynced run over it.
+                                if n > 0 {
+                                    guard.mark_synced_if_complete(
+                                        req.run_seq,
+                                        req.offset + n as u32,
+                                    );
+                                }
+                                n
+                            };
                             let mut out: Vec<u8, FRAME_CAP> = Vec::new();
                             let _ = out.extend_from_slice(&scratch[..n]);
                             if let Err(e) = server.link.run_chunk_notify(&conn, &out) {

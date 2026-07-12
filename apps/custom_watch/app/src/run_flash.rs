@@ -29,13 +29,14 @@
 //! Direct NVMC access while the SoftDevice is enabled can fault or assert. This
 //! compiles and is structured for that swap; it has never run on hardware.
 
-use defmt::{info, warn};
+use defmt::{debug, info, warn};
 use embassy_nrf::nvmc::{self, Nvmc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use heapless::Vec;
 use watch_core::flash_store::{self, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
+use watch_core::gnss_mode::GnssMode;
 use watch_core::run_store::{ByteSink, ManifestEntry};
 
 /// Absolute flash offset of the run-store region: the top `REGION_LEN` bytes of
@@ -43,6 +44,15 @@ use watch_core::run_store::{ByteSink, ManifestEntry};
 pub const REGION_OFFSET: u32 = (nvmc::FLASH_SIZE - flash_store::REGION_LEN) as u32;
 
 const _: () = assert!(REGION_OFFSET.is_multiple_of(SLOT_LEN as u32));
+
+/// Absolute flash offset of the persisted-config page: one erase page
+/// immediately BELOW the run-store region. Sitting below the run slots (not
+/// above) keeps [`REGION_OFFSET`] and every run-slot offset byte-identical, so a
+/// config write can never disturb a stored run. Both `memory.x` and
+/// `memory-ble.x` reserve this page alongside the run-store region.
+pub const CONFIG_OFFSET: u32 = REGION_OFFSET - flash_store::CONFIG_LEN as u32;
+
+const _: () = assert!(CONFIG_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u32));
 
 /// nRF52840 NVMC `READY` register (base 0x4001E000, offset 0x400). Bit 0 set
 /// means the controller is present and idle — the probe for a real NVMC vs the
@@ -126,6 +136,48 @@ impl<'d> RunStore<'d> {
         self.dir.next_run_seq()
     }
 
+    /// Read the GNSS recording mode persisted by [`persist_gnss_mode`], or `None`
+    /// when flash is unavailable (sim), unreadable, or the config page is
+    /// erased/corrupt — so the boot path falls back to the default. Best-effort /
+    /// L4: a read error only `warn!`s and reads as "no saved mode".
+    pub fn read_gnss_mode(&mut self) -> Option<GnssMode> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; flash_store::CONFIG_RECORD_LEN];
+        if let Err(e) = self.flash.read(CONFIG_OFFSET, &mut buf) {
+            warn!("run_flash: config read failed {:?}", e);
+            return None;
+        }
+        let byte = flash_store::decode_config(&buf)?;
+        GnssMode::from_byte(byte)
+    }
+
+    /// Persist the selected GNSS recording mode so it survives reboot / brown-out
+    /// instead of silently reverting to the Performance default. Best-effort /
+    /// L4: erases the dedicated config page and writes the CRC-checked record;
+    /// any flash error only `warn!`s and returns, never blocking the caller. The
+    /// button task calls this only when the mode actually changes, so the page is
+    /// erased at most once per user mode switch — trivially within flash
+    /// endurance and off the per-tick path.
+    pub fn persist_gnss_mode(&mut self, mode: GnssMode) {
+        if !self.available {
+            return;
+        }
+        let start = CONFIG_OFFSET;
+        let end = start + flash_store::CONFIG_LEN as u32;
+        if let Err(e) = self.flash.erase(start, end) {
+            warn!("run_flash: config erase failed {:?}", e);
+            return;
+        }
+        let rec = flash_store::encode_config(mode.to_byte());
+        if let Err(e) = self.flash.write(start, &rec) {
+            warn!("run_flash: config write failed {:?}", e);
+            return;
+        }
+        info!("run_flash: persisted GNSS mode {}", mode);
+    }
+
     /// Persist a finished run's staged blob. Best-effort: any failure warns,
     /// forgets the slot so the manifest can't advertise a half-written run, and
     /// returns — the caller ignores the outcome (L4).
@@ -141,7 +193,12 @@ impl<'d> RunStore<'d> {
             );
             return;
         }
-        let slot = self.dir.place(run_seq, blob.len() as u32, start_uptime_s);
+        // Reuse the slot a mid-run checkpoint already reserved for this run (if
+        // any) so the final commit supersedes the checkpoint in place; otherwise
+        // this picks a fresh slot exactly like a checkpoint-free run.
+        let slot = self
+            .dir
+            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
         let start = flash_store::slot_offset(REGION_OFFSET, slot);
         let end = start + SLOT_LEN as u32;
         if let Err(e) = self.flash.erase(start, end) {
@@ -163,11 +220,79 @@ impl<'d> RunStore<'d> {
         );
     }
 
-    /// Manifest entries for every committed run this power cycle. Consumed by
-    /// the BLE run-sync task; unused in the default (non-`ble`) build.
+    /// Best-effort mid-run checkpoint: persist a *recoverable* snapshot of the
+    /// run-so-far to its flash slot so a battery swap or brown-out mid-run
+    /// recovers a slightly-stale partial run instead of losing the entire
+    /// in-progress track (which otherwise only reaches flash at stop). Reserves
+    /// the run's slot on the first checkpoint and rewrites that SAME slot in
+    /// place each time — the eventual [`commit`](Self::commit) lands in the same
+    /// slot and supersedes it. L4 / best-effort: any flash error only warns and
+    /// drops, so recording is never blocked (same contract as `commit`). The
+    /// caller bounds the cadence to keep flash erase cycles within endurance.
+    pub fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+        if !self.available {
+            return;
+        }
+        if blob.len() > SLOT_LEN {
+            warn!(
+                "run_flash: checkpoint blob {=usize} B exceeds slot {=usize} B, dropped",
+                blob.len(),
+                SLOT_LEN
+            );
+            return;
+        }
+        let slot = self
+            .dir
+            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
+        let start = flash_store::slot_offset(REGION_OFFSET, slot);
+        let end = start + SLOT_LEN as u32;
+        if let Err(e) = self.flash.erase(start, end) {
+            warn!(
+                "run_flash: checkpoint erase slot {=usize} failed {:?}",
+                slot, e
+            );
+            self.dir.forget(slot);
+            return;
+        }
+        let mut sink = FlashSink::new(&mut self.flash, start, end);
+        if let Err(e) = sink.write(blob) {
+            warn!(
+                "run_flash: checkpoint write run {=u32} failed {:?}",
+                run_seq, e
+            );
+            self.dir.forget(slot);
+            return;
+        }
+        debug!(
+            "run_flash: checkpointed run {=u32} ({=usize} B) in slot {=usize}",
+            run_seq,
+            blob.len(),
+            slot
+        );
+    }
+
+    /// Manifest entries for every committed run this power cycle, each run's
+    /// `start_uptime_s` clamped to `watch_uptime_s` so a run recovered from a
+    /// prior power cycle can't date in the future (see
+    /// [`SlotDir::manifest_at`]). Consumed by the BLE run-sync task; unused in
+    /// the default (non-`ble`) build.
     #[cfg_attr(not(feature = "ble"), allow(dead_code))]
-    pub fn manifest(&self) -> Vec<ManifestEntry, SLOT_COUNT> {
-        self.dir.manifest()
+    pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
+        self.dir.manifest_at(watch_uptime_s)
+    }
+
+    /// Once the phone has pulled through a run's blob end (`next_offset` is its
+    /// read cursor after the chunk just served), mark the run synced so eviction
+    /// sacrifices it before a still-unsynced run. RAM-only, best-effort (L4):
+    /// the synced bit is not persisted across a reboot. Consumed by the BLE
+    /// run-sync task; unused in the default build.
+    #[cfg_attr(not(feature = "ble"), allow(dead_code))]
+    pub fn mark_synced_if_complete(&mut self, run_seq: u32, next_offset: u32) {
+        if let Some((_, size)) = self.dir.find(run_seq) {
+            if next_offset >= size {
+                self.dir.mark_synced(run_seq);
+            }
+        }
     }
 
     /// Copy up to `buf.len()` bytes of run `run_seq`'s blob starting at

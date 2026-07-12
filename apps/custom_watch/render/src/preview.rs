@@ -80,6 +80,7 @@ fn base_snapshot() -> Snapshot {
         auto_effort: None,
         route_elev: None,
         race_day: None,
+        track_full: false,
     }
 }
 

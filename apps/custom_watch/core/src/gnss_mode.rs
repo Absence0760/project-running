@@ -90,6 +90,31 @@ impl GnssMode {
             GnssMode::Expedition => 220,
         }
     }
+
+    /// The single byte the mode persists as in the flash config record
+    /// ([`crate::flash_store::encode_config`]). This is a stored wire format —
+    /// never renumber an existing variant, or a saved choice decodes as a
+    /// different mode after the firmware update.
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            GnssMode::Performance => 0,
+            GnssMode::Balanced => 1,
+            GnssMode::Expedition => 2,
+        }
+    }
+
+    /// Decode a persisted mode byte, or `None` for an unrecognised value — a
+    /// garbage or future-firmware byte that still passed the config CRC — so the
+    /// boot path falls back to the [default](GnssMode::default), the same
+    /// fail-closed discipline as [`crate::flash_store::recover_slot`].
+    pub const fn from_byte(b: u8) -> Option<Self> {
+        match b {
+            0 => Some(GnssMode::Performance),
+            1 => Some(GnssMode::Balanced),
+            2 => Some(GnssMode::Expedition),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -156,6 +181,35 @@ mod tests {
         ] {
             assert!(!m.label().is_empty());
             assert!(m.label().len() <= 4, "label too wide: {}", m.label());
+        }
+    }
+
+    #[test]
+    fn mode_byte_round_trips_every_variant() {
+        for m in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            assert_eq!(GnssMode::from_byte(m.to_byte()), Some(m));
+        }
+    }
+
+    #[test]
+    fn mode_byte_values_are_pinned() {
+        // These are a persisted wire format; renumbering silently remaps a
+        // saved choice on the next boot. Pin them.
+        assert_eq!(GnssMode::Performance.to_byte(), 0);
+        assert_eq!(GnssMode::Balanced.to_byte(), 1);
+        assert_eq!(GnssMode::Expedition.to_byte(), 2);
+    }
+
+    #[test]
+    fn from_byte_rejects_unknown_values() {
+        // A byte that passed the config CRC but names no mode falls back to the
+        // default via the caller's `unwrap_or_default`.
+        for b in 3u8..=255 {
+            assert_eq!(GnssMode::from_byte(b), None);
         }
     }
 }

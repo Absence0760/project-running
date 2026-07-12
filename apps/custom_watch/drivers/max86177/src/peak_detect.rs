@@ -22,6 +22,16 @@
 //! dark floor or a saturated rail with little AC. A reading is forced invalid
 //! whenever the sensor is off the wrist, so ambient light can never masquerade
 //! as a heart rate.
+//!
+//! In blinding sun the ambient light bleeding into the photodiode rails the
+//! LED-on PPG channel's DC before any of this can help — an honest but useless
+//! `Contact::Saturated`. To *recover* a real pulse there, [`PeakDetector::push_ambient`]
+//! takes the AFE's ambient (LED-off) sample alongside the PPG sample and
+//! subtracts it, so the railing ambient DC is cancelled and the LED-reflected
+//! pulse envelope survives. The honesty contract is unchanged: if even the
+//! ambient-subtracted DC is railed (`Saturated`) or collapses to the dark floor
+//! (`OffWrist`), the reading stays invalid — subtraction recovers a real pulse,
+//! it never fabricates one.
 
 /// DC-baseline EMA shift: alpha = 1/64, ~0.64 s time constant at 100 Hz, a
 /// corner well below the heart-rate band.
@@ -99,15 +109,20 @@ pub struct Reading {
     pub valid: bool,
 }
 
-/// Whether the optical stack is looking at skin (a worn wrist) or nothing
-/// useful (off-wrist floor or ambient-light rail). Gates HR validity so the
-/// detector reports "no contact" rather than a BPM synthesised from ambient
-/// light.
+/// Whether the optical stack is looking at skin (a worn wrist), nothing useful
+/// (off-wrist dark floor), or a rail it cannot see through (ambient-light
+/// saturation). Gates HR validity so the detector reports the reason for "no
+/// contact" rather than a BPM synthesised from ambient light. `Saturated` is
+/// distinct from `OffWrist` so a worn-but-sunlight-blinded wrist is reported
+/// honestly and separately from a bare-off-wrist read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Contact {
     Worn,
     OffWrist,
+    /// The DC baseline is railed near full scale even after ambient
+    /// subtraction — bright ambient the LED cannot out-shine, not a pulse.
+    Saturated,
 }
 
 pub struct PeakDetector {
@@ -159,6 +174,18 @@ impl PeakDetector {
         self.last_interval = 0;
         self.good_beats = 0;
         self.bpm_q8 = 0;
+    }
+
+    /// Feed one PPG (LED-on) count together with the AFE's ambient (LED-off)
+    /// count for the same instant, subtracting the ambient before the DC/AC
+    /// pipeline runs. In bright sun the ambient bleed rails the PPG channel;
+    /// removing it recovers the LED-reflected pulse that would otherwise be lost
+    /// to `Contact::Saturated`. The difference is floored at zero — the LED can
+    /// only *add* reflected light, so a negative net is sensor noise, not a
+    /// signal. With `ambient == 0` this is exactly [`push`](Self::push), so the
+    /// single-channel path is unchanged.
+    pub fn push_ambient(&mut self, ppg: i32, ambient: i32) -> Reading {
+        self.push((ppg - ambient).max(0))
     }
 
     /// Feed one raw photodiode count. Returns the current estimate; `valid` is
@@ -248,16 +275,22 @@ impl PeakDetector {
     }
 
     /// Skin-contact state from the DC baseline + AC envelope the beat detector
-    /// already tracks — no second pass over the samples. `Worn` requires the DC
-    /// to sit inside the plausible band *and* the envelope to clear the pulse
-    /// floor; a fresh detector, a dark floor, a saturated rail, or a flat
-    /// (non-pulsatile) reflector all read `OffWrist`. Fail-closed: uninitialised
+    /// already tracks — no second pass over the samples. When fed via
+    /// [`push_ambient`](Self::push_ambient) the baseline is the ambient-subtracted
+    /// DC, so a bright-sun wrist whose raw PPG would rail can still read `Worn`.
+    /// `Worn` requires the DC to sit inside the plausible band *and* the envelope
+    /// to clear the pulse floor. A DC still railed near full scale after
+    /// subtraction is `Saturated`; a dark floor, a flat (non-pulsatile)
+    /// reflector, or a fresh detector are `OffWrist`. Fail-closed: uninitialised
     /// is `OffWrist`.
     pub fn contact(&self) -> Contact {
-        if self.initialized
-            && (CONTACT_DC_MIN..=CONTACT_DC_MAX).contains(&self.baseline)
-            && self.envelope >= MIN_ENVELOPE
-        {
+        if !self.initialized {
+            return Contact::OffWrist;
+        }
+        if self.baseline > CONTACT_DC_MAX {
+            return Contact::Saturated;
+        }
+        if self.baseline >= CONTACT_DC_MIN && self.envelope >= MIN_ENVELOPE {
             Contact::Worn
         } else {
             Contact::OffWrist
