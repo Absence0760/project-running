@@ -232,6 +232,21 @@ void main() {
       expect(q.confidence, PredictionConfidence.low);
       expect(q.reason, PredictionReason.limited);
     });
+
+    test('>60d anchor stays low even when the distance gap is also far', () {
+      // A close+stale(75d) anchor is already low/stale (test above). Adding a
+      // second degrading factor (a far distance gap) must NOT improve
+      // confidence to moderate — guards against a confidence inversion where a
+      // doubly-bad prediction outranks a singly-bad one.
+      final q = predictionConfidence(
+        knownDistanceM: tenK,
+        targetDistanceM: 21097, // 2.1x — past the close band, within the 4x cap
+        daysSinceBest: 75,
+        qualifyingRunCount: 5,
+      );
+      expect(q.confidence, PredictionConfidence.low);
+      expect(q.reason, PredictionReason.stale);
+    });
   });
 
   group('pacesFromGoalPace', () {

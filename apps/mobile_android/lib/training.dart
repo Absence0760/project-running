@@ -171,6 +171,17 @@ PredictionQuality predictionConfidence({
         PredictionConfidence.low, PredictionReason.extrapolated);
   }
 
+  // A >60d anchor is too stale to anchor a race-day prediction at all, so it
+  // caps confidence at 'low' regardless of the distance gap. Checked before
+  // the distance-gap branch below: otherwise a far-AND-stale prediction fell
+  // through to `!closeDistance` → 'moderate', outranking a close-BUT-stale one
+  // ('low') — a doubly-bad prediction can never be more confident than a
+  // singly-bad one.
+  if (daysSinceBest > 60) {
+    return const PredictionQuality(
+        PredictionConfidence.low, PredictionReason.stale);
+  }
+
   final closeDistance = factor <= 2;
   final recent = daysSinceBest <= 30;
   final wellSampled = qualifyingRunCount >= 3;
@@ -184,12 +195,11 @@ PredictionQuality predictionConfidence({
     return const PredictionQuality(
         PredictionConfidence.moderate, PredictionReason.extrapolated);
   }
+  // 31–60 days: a soft staleness caveat (the harder >60d case already
+  // returned 'low' above).
   if (!recent) {
-    return daysSinceBest > 60
-        ? const PredictionQuality(
-            PredictionConfidence.low, PredictionReason.stale)
-        : const PredictionQuality(
-            PredictionConfidence.moderate, PredictionReason.stale);
+    return const PredictionQuality(
+        PredictionConfidence.moderate, PredictionReason.stale);
   }
   return const PredictionQuality(
       PredictionConfidence.moderate, PredictionReason.limited);

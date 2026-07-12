@@ -138,6 +138,16 @@ export function predictionConfidence(input: {
 		return { confidence: 'low', reason: 'extrapolated' };
 	}
 
+	// A >60d anchor is too stale to anchor a race-day prediction at all, so it
+	// caps confidence at 'low' regardless of the distance gap. Checked before
+	// the distance-gap branch below: otherwise a far-AND-stale prediction fell
+	// through to `!closeDistance` → 'moderate', outranking a close-BUT-stale one
+	// ('low') — a doubly-bad prediction can never be more confident than a
+	// singly-bad one.
+	if (daysSinceBest > 60) {
+		return { confidence: 'low', reason: 'stale' };
+	}
+
 	// A factor up to 2 (5k↔10k, 10k↔half-ish) is the band Riegel handles
 	// well; beyond that error grows fast even within the 4x cap.
 	const closeDistance = factor <= 2;
@@ -151,13 +161,9 @@ export function predictionConfidence(input: {
 	// One or more levers are soft. Report the binding constraint, with
 	// distance gap first (it hurts the prediction most).
 	if (!closeDistance) return { confidence: 'moderate', reason: 'extrapolated' };
-	if (!recent) {
-		// An effort older than two months is too stale to anchor a
-		// race-day prediction at all, not just a soft caveat.
-		return daysSinceBest > 60
-			? { confidence: 'low', reason: 'stale' }
-			: { confidence: 'moderate', reason: 'stale' };
-	}
+	// 31–60 days: a soft staleness caveat (the harder >60d case already
+	// returned 'low' above).
+	if (!recent) return { confidence: 'moderate', reason: 'stale' };
 	// Close + recent but thinly sampled.
 	return { confidence: 'moderate', reason: 'limited' };
 }
