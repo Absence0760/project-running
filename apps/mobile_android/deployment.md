@@ -28,7 +28,7 @@ The release workflow always lands at the **Internal track**. Manual promotion to
 
 ## One-time Play Console setup
 
-1. **Pay the $25 developer registration fee.** One time, per Google account. Use a long-lived account that isn't tied to a single person's identity (e.g. `dev@threkir.com`).
+1. **Pay the $25 developer registration fee.** One time, per Google account. **The login identity is a dedicated Gmail** (e.g. `threkir.app@gmail.com`), **not** a branded `@threkir.com` address — see § Account identity below for why. Set the Play Console *contact* addresses to `google@` / `support@` / `privacy@threkir.com` so the domain still shows up on the operator-facing side.
 2. **Create the app.** Play Console → Create app. Name, default language (en-GB), Type: App, Free.
 3. **Fill the Store listing.** Short description, long description, screenshots (need at least 2 phone screenshots, 1 7"+ tablet, 1 10"+ tablet for newer Play guidelines), feature graphic (1024×500 PNG), app icon (512×512 PNG).
 4. **Privacy policy URL.** Required for any app that touches location. Host at `threkir.com/privacy` — see § Privacy policy below.
@@ -37,6 +37,38 @@ The release workflow always lands at the **Internal track**. Manual promotion to
 7. **Content rating.** Complete the IARC questionnaire. Running app should land at "Everyone".
 8. **Pricing & distribution.** Free, available in target countries.
 9. **Set up the "Internal testing" track.** Add at least 1 internal tester email so the link is live.
+
+---
+
+## Account identity — dedicated Gmail login, threkir.com contact addresses
+
+**Decided 2026-07-12.** The Google account that owns Play Console (and later the
+linked GCP project for the release service account + Firebase for FCM push) uses
+a **dedicated Gmail as the login identity** (e.g. `threkir.app@gmail.com`).
+`@threkir.com` addresses are used only as the **contact / notification
+addresses** configured inside each Google product.
+
+Why not a branded `@threkir.com` login:
+
+- A real `@threkir.com` Google *login* requires **paid Google Workspace**
+  (~$7/user/mo). Google's "create account with existing email" path has been
+  removed for personal accounts, and "For work or my business" funnels straight
+  into the Workspace signup.
+- Worse, the Workspace signup wants to **take over `threkir.com` email** (own the
+  MX, route mail through Gmail) — which **collides with the Migadu inbound setup**
+  (the apex MX/SPF/DKIM in `infra/dns/terraform.tfvars` `email_auth_records`).
+  Adopting Workspace would mean migrating mail off Migadu. Not worth it just to
+  own a Play Console account.
+- A Gmail login is cosmetic-only: all operational contact + notification mail
+  still flows to the Migadu inbox via the `@threkir.com` contact addresses,
+  nothing touches the MX, and it's free. It also avoids gating account creation
+  on `@threkir.com` receiving working (Gmail verifies against itself).
+
+Treat the Gmail as a **role identity**, not a person: two admins on the Play
+Console, 2FA enabled, and **2FA backup codes printed** (see § Disaster recovery
+→ Lost Play Console access). If real `@threkir.com` Google logins are ever
+wanted, that's a deliberate "adopt Workspace + migrate mail off Migadu" project,
+not a default.
 
 ---
 
@@ -266,9 +298,9 @@ This takes 2–7 days. **Keep the keystore in 1Password and in cold storage** (a
 
 The Google account itself becoming inaccessible. Mitigations:
 
-1. The developer account uses a generic team mailbox, not a person.
+1. The developer account login is a dedicated role Gmail (§ Account identity), not a person.
 2. Two admins on the Console — if one's account is locked the other can recover.
-3. The team mailbox itself has 2FA backup codes printed.
+3. The role Gmail has 2FA backup codes printed, and its recovery address points at the Migadu inbox.
 
 ### Account banned
 
