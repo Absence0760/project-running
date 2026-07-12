@@ -50,6 +50,7 @@ pub async fn run(mut twim: Twim<'static>) {
     let elevation_tx = state::ELEVATION.sender();
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut sea_level_rx = unwrap!(state::SEA_LEVEL_PA.receiver());
+    let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut vert = VertAccumulator::new();
     let mut moving = false;
     // QNH reference for the altitude conversion. Defaults to the ISA standard
@@ -75,8 +76,14 @@ pub async fn run(mut twim: Twim<'static>) {
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
                 let alt = altitude_m(pa, sea_level_pa);
-                vert.push(alt, moving);
-                let reading = vert.reading(alt);
+                // Fresh GPS altitude corroborates the barometer against weather
+                // drift (elevation's complementary filter): only a fresh fix
+                // slews the bias, so signal loss freezes it rather than dragging
+                // it toward a stale altitude. Read inside the pressure arm so a
+                // read miss never consumes/drops a fix.
+                let gps_alt = fix_rx.try_changed().and_then(|f| f.alt_m);
+                let corrected = vert.push(alt, moving, gps_alt);
+                let reading = vert.reading(corrected);
                 debug!(
                     "baro: alt={}m gain={}m loss={}m",
                     reading.alt_m, reading.gain_m, reading.loss_m

@@ -19,9 +19,10 @@ use watch_core::record::Snapshot;
 use watch_core::settings::WatchSettings;
 use watch_core::trackback::TrackbackView;
 
-/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, and `nav`
+/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
+/// `baro` (which feeds GPS altitude into the elevation complementary filter)
 /// subscribe.
-pub static FIX: Watch<CriticalSectionRawMutex, Fix, 4> = Watch::new();
+pub static FIX: Watch<CriticalSectionRawMutex, Fix, 5> = Watch::new();
 
 /// Latest heart-rate estimate: `hr` publishes; the `ui` face and `record`
 /// (to stamp each stored track point's bpm) subscribe.
