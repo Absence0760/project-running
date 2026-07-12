@@ -455,6 +455,12 @@ pub struct Snapshot {
     pub route_elev: Option<RouteElevView>,
     /// The race-day countdown + feasibility, or `None` until pushed.
     pub race_day: Option<RaceDayView>,
+    /// The tier-1 flash slot's per-run point cap
+    /// ([`crate::flash_store::MAX_POINTS_PER_RUN`]) has been reached: further GPS
+    /// points are dropped from the stored track while the totals keep accruing.
+    /// Lets the face surface the truncation on the wrist instead of it being a
+    /// cable-only `warn!`.
+    pub track_full: bool,
 }
 
 /// Fixed-RAM decimated elevation series feeding [`ElevProfileView`]. Mirrors the
@@ -540,6 +546,12 @@ pub struct Recorder {
     /// fix as a new anchor (the run's first fix or an accepted move). Read-only
     /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
     last_fix_stored: bool,
+    /// Count of anchor-adopting fixes this run — the points the app's flash
+    /// run-store writes. Once it reaches [`crate::flash_store::MAX_POINTS_PER_RUN`]
+    /// the tier-1 slot is full and further points are silently dropped, so the
+    /// `Snapshot`'s `track_full` flag surfaces the truncation on the wrist rather
+    /// than leaving it a cable-only `warn!`.
+    stored_points: u32,
     /// 1-based number of the lap in progress; 0 while idle.
     lap_index: u16,
     /// Run totals at the current lap's start — the anchors lap-relative
@@ -643,6 +655,7 @@ impl Recorder {
             current_speed_mps: 0.0,
             last: None,
             last_fix_stored: false,
+            stored_points: 0,
             lap_index: 0,
             lap_start_distance_m: 0.0,
             lap_start_elapsed_s: 0,
@@ -908,6 +921,7 @@ impl Recorder {
         self.distance_m = 0.0;
         self.current_speed_mps = 0.0;
         self.last = None;
+        self.stored_points = 0;
         self.lap_index = 1;
         self.lap_start_distance_m = 0.0;
         self.lap_start_elapsed_s = 0;
@@ -1003,6 +1017,7 @@ impl Recorder {
                 self.last = Some(*fix);
                 self.current_speed_mps = fix.speed_mps.max(0.0);
                 self.last_fix_stored = true;
+                self.stored_points = self.stored_points.saturating_add(1);
                 self.feed_gap(fix);
                 return;
             }
@@ -1053,6 +1068,7 @@ impl Recorder {
         }
         self.last = Some(*fix);
         self.last_fix_stored = true;
+        self.stored_points = self.stored_points.saturating_add(1);
         self.feed_gap(fix);
         // Distance only moves here, so this is the one place the partner's
         // finish crossing can happen.
@@ -1149,6 +1165,7 @@ impl Recorder {
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
             race_day: self.race_day,
+            track_full: self.stored_points >= crate::flash_store::MAX_POINTS_PER_RUN,
         }
     }
 
@@ -1692,6 +1709,37 @@ mod tests {
         r.pause(4);
         r.on_fix(&fix(40.0005, -105.0, 4.0, 5));
         assert!(!r.last_fix_stored());
+    }
+
+    #[test]
+    fn track_full_flips_when_the_flash_point_cap_is_reached() {
+        use crate::flash_store::MAX_POINTS_PER_RUN;
+        let mut r = Recorder::new();
+        r.start(0);
+        assert!(!r.snapshot().track_full, "empty run is not full");
+
+        // The first fix seeds the anchor (1 stored point); each subsequent
+        // accepted move (~5.5 m at 1 s → 5.5 m/s, over the 3 m threshold and
+        // under the 10 m/s ceiling) adds one. Feed exactly the cap.
+        let mut lat = 40.0;
+        for i in 0..MAX_POINTS_PER_RUN {
+            r.on_fix(&fix(lat, -105.0, 5.0, i));
+            assert!(r.last_fix_stored(), "fix {i} should be an accepted anchor");
+            if i + 1 < MAX_POINTS_PER_RUN {
+                assert!(!r.snapshot().track_full, "not full yet at {}", i + 1);
+            }
+            lat += 0.00005;
+        }
+        assert!(
+            r.snapshot().track_full,
+            "the {MAX_POINTS_PER_RUN}-point tier-1 slot is now full"
+        );
+
+        // A fresh run clears it — the flag is per-run, not sticky across starts.
+        let mut r2 = Recorder::new();
+        r2.start(0);
+        r2.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        assert!(!r2.snapshot().track_full);
     }
 
     #[test]

@@ -592,7 +592,16 @@ fn glance(
 
     // The metric NOT already up large fills the secondary line.
     match metric {
-        GlanceMetric::Distance => write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km),
+        GlanceMetric::Distance => {
+            write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km);
+            // Row 7 is otherwise free on the Distance page (the Pace page uses it
+            // for GAP): surface an honest warning when the tier-1 flash slot is
+            // full, so the runner knows the STORED GPS track has stopped even
+            // though the distance/time above keep accruing.
+            if snap.track_full {
+                let _ = write!(rows[7], "! TRACK FULL");
+            }
+        }
         GlanceMetric::Pace => {
             let km = (snap.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
@@ -2265,6 +2274,7 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            track_full: false,
         }
     }
 
@@ -2810,6 +2820,44 @@ mod tests {
         )
         .iter()
         .all(Option::is_none));
+    }
+
+    #[test]
+    fn distance_page_warns_when_the_flash_track_is_full() {
+        let mut rec = snapshot(RecordState::Recording, 42_195.0);
+        rec.track_full = true;
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        // Row 7 (otherwise free on the Distance page) carries the honest warning.
+        assert!(
+            rows[7].as_str().contains("TRACK FULL"),
+            "row7 = {:?}",
+            rows[7].as_str()
+        );
+
+        // Absent when the track isn't full.
+        rec.track_full = false;
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "");
     }
 
     #[test]
