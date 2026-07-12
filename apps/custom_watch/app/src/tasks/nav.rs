@@ -71,11 +71,20 @@ pub async fn run(course: Option<&'static Course>) {
     sender.send(NavView::NoFix);
     let mut alert = OffCourseAlert::new();
     let mut fix_rx = unwrap!(state::FIX.receiver());
+    // Bias each projection toward forward progress from the last reported
+    // along-distance, so on an out-and-back / lollipop the return leg doesn't
+    // snap onto the coincident outbound segment (course::project_from).
+    let mut prev_along: Option<f64> = None;
     loop {
         let fix = fix_rx.changed().await;
-        let Some(p) = course.project(fix.lat_deg, fix.lon_deg) else {
+        let projected = match prev_along {
+            Some(prev) => course.project_from(fix.lat_deg, fix.lon_deg, prev),
+            None => course.project(fix.lat_deg, fix.lon_deg),
+        };
+        let Some(p) = projected else {
             continue;
         };
+        prev_along = Some(p.along_m);
         let was_active = alert.active();
         if alert.update(p.off_m) {
             warn!(
