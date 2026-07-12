@@ -1208,6 +1208,28 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDiscard => 'Verwerfen';
 
   @override
+  String get runResumeDialogTitle => 'Lauf fortsetzen?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Ein Lauf aus einer früheren Sitzung läuft noch. Setze die Aufzeichnung dort fort, wo du aufgehört hast, beende ihn jetzt oder verwirf ihn.';
+
+  @override
+  String get runResumeAction => 'Fortsetzen';
+
+  @override
+  String get runResumeFinishAction => 'Jetzt beenden';
+
+  @override
+  String get runResumedBanner => 'Lauf fortgesetzt.';
+
+  @override
+  String get runResumeSavedBanner => 'Vorheriger Lauf gespeichert.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Vorheriger Lauf verworfen.';
+
+  @override
   String get runStartWorkout => 'Workout starten';
 
   @override

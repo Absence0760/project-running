@@ -95,6 +95,36 @@ List<Map<String, dynamic>> lapsToCanonicalJson(List<LapSplit> laps) {
   return out;
 }
 
+/// Inverse of [lapsToCanonicalJson]: reconstruct in-memory cumulative
+/// [LapSplit]s from the canonical per-lap-delta JSON persisted in
+/// `metadata.laps`. Used by the resume path so a process-killed run keeps its
+/// mid-run lap / aid-station marks — numbering and cumulative totals continue
+/// unbroken when the recorder is re-hydrated. Timestamps aren't part of the
+/// canonical shape (only `start_offset_s` / `distance_m` / `duration_s`), so
+/// each split's timestamp is reconstructed as [startedAt] + its cumulative
+/// duration; it isn't re-serialised ([lapsToCanonicalJson] ignores timestamp).
+List<LapSplit> lapsFromCanonicalJson(List<dynamic> json, {DateTime? startedAt}) {
+  final anchor = startedAt ?? DateTime.now();
+  final out = <LapSplit>[];
+  var cumDist = 0.0;
+  var cumDur = Duration.zero;
+  for (final entry in json) {
+    if (entry is! Map) continue;
+    final distM = (entry['distance_m'] as num?)?.toDouble() ?? 0.0;
+    final durS = (entry['duration_s'] as num?)?.toInt() ?? 0;
+    final index = (entry['index'] as num?)?.toInt() ?? (out.length + 1);
+    cumDist += distM;
+    cumDur += Duration(seconds: durS);
+    out.add(LapSplit(
+      number: index,
+      timestamp: anchor.add(cumDur),
+      cumulativeDistanceMetres: cumDist,
+      cumulativeDuration: cumDur,
+    ));
+  }
+  return out;
+}
+
 /// Manages a live GPS recording session: opens the position stream, filters
 /// noise, accumulates distance, and emits [RunSnapshot]s to the UI. Survives
 /// a missing/revoked GPS signal — [prepare] flips [prepared] even when the
@@ -119,6 +149,14 @@ class RunRecorder {
   List<LapSplit> get laps => List.unmodifiable(_laps);
 
   DateTime? _startTime;
+  /// Elapsed time already accumulated by a PRIOR session that this recorder
+  /// resumed (see [resumeSession]). Added to the live [_stopwatch] everywhere elapsed
+  /// is reported so a process-killed-then-resumed run reports continuous total
+  /// elapsed instead of restarting from zero. Zero for a normal fresh run. Only
+  /// the time the recorder was actually running is counted — the (unknown-
+  /// length) dead-process gap is deliberately not added, keeping the monotonic-
+  /// clock honesty the [_stopwatch] design buys.
+  Duration _elapsedOffset = Duration.zero;
   /// Monotonic clock for elapsed time. Unlike `DateTime.now()`, [Stopwatch]
   /// is unaffected by wall-clock jumps (NTP sync, manual time change,
   /// timezone change) — the run duration stays correct.
@@ -276,6 +314,7 @@ class RunRecorder {
     // live map falls back to its "Waiting for GPS..." placeholder. If GPS
     // later becomes available the caller can call prepare() again.
     _startTime = null;
+    _elapsedOffset = Duration.zero;
     _stopwatch
       ..stop()
       ..reset();
@@ -471,6 +510,146 @@ class RunRecorder {
     begin();
   }
 
+  /// Resume a persisted partial recording, continuing the SAME run rather than
+  /// starting a new one. Re-hydrates the accumulated [track], [distanceMetres],
+  /// prior [elapsed], original [startedAt], and mid-run [laps], opens the GPS
+  /// stream (via [prepare]), then flips straight into recording mode — new
+  /// fixes extend the existing track and add on to the existing distance /
+  /// elapsed / lap sequence.
+  ///
+  /// This is the process-kill resume path: a multi-day effort whose OS process
+  /// was reaped. Without it the only outcomes were finalizing the partial into
+  /// a separate finished Run or discarding it — either way splitting one
+  /// continuous effort into two disjoint records.
+  ///
+  /// Unlike [begin], this does NOT clear the seeded track / distance / laps.
+  /// The last-tracked position is re-anchored to null so the first post-resume
+  /// fix doesn't add a spurious distance delta across the unknown-length gap
+  /// while the process was dead.
+  ///
+  /// GPS-setup errors from [prepare] are rethrown AFTER the state is seeded and
+  /// recording has begun, so the caller can surface the "GPS unavailable"
+  /// notice while the recorder still resumes as a time-only session (the retry
+  /// loop reopens the stream when services return) — mirroring [begin]'s
+  /// tolerance of a GPS-less start.
+  ///
+  /// Named `resumeSession` (not `resume`) to avoid colliding with [resume],
+  /// which un-pauses an already-running recorder.
+  Future<void> resumeSession({
+    required List<Waypoint> track,
+    required double distanceMetres,
+    required Duration elapsed,
+    required DateTime startedAt,
+    List<LapSplit> laps = const [],
+    Route? route,
+    int distanceFilterMetres = 3,
+    double minMovementMetres = 2,
+    double maxSpeedMps = 10,
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    double accuracyGateMetres = 20,
+  }) async {
+    Object? prepareError;
+    try {
+      await prepare(
+        route: route,
+        distanceFilterMetres: distanceFilterMetres,
+        minMovementMetres: minMovementMetres,
+        maxSpeedMps: maxSpeedMps,
+        accuracy: accuracy,
+        accuracyGateMetres: accuracyGateMetres,
+      );
+    } catch (e) {
+      // prepare() reset state, flipped _prepared true, and started the retry
+      // loop before throwing; seed + begin anyway, then rethrow so the caller
+      // can disclose the GPS problem without losing the resumed session.
+      prepareError = e;
+    }
+    _seedResumeState(
+      track: track,
+      distanceMetres: distanceMetres,
+      elapsed: elapsed,
+      startedAt: startedAt,
+      laps: laps,
+    );
+    _beginResumed();
+    if (prepareError != null) throw prepareError;
+  }
+
+  void _seedResumeState({
+    required List<Waypoint> track,
+    required double distanceMetres,
+    required Duration elapsed,
+    required DateTime startedAt,
+    required List<LapSplit> laps,
+  }) {
+    _track
+      ..clear()
+      ..addAll(track);
+    _distanceMetres = distanceMetres;
+    _elapsedOffset = elapsed;
+    _startTime = startedAt;
+    _laps
+      ..clear()
+      ..addAll(laps);
+  }
+
+  /// [begin]-equivalent for [resumeSession]: starts the clock + 1 s snapshot
+  /// timer WITHOUT clearing the seeded track / distance / laps. Re-anchors the
+  /// last-tracked position so the first post-resume fix doesn't credit the
+  /// dead-process gap as distance.
+  void _beginResumed() {
+    if (!_prepared) {
+      throw StateError('RunRecorder.resumeSession() seeding ran before prepare()');
+    }
+    _stopwatch
+      ..reset()
+      ..start();
+    _lastTrackedPosition = null;
+    _lastTrackedPositionAt = null;
+    _weakGps = false;
+    _resetTreadmillAccumulators();
+    _recording = true;
+    _paused = false;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_recording) return;
+      _emitSnapshot();
+    });
+  }
+
+  /// Test-only: [resumeSession] without the geolocator stream. Seeds the resumed
+  /// state on top of [debugPrepareWithoutStream] then begins, so continuity
+  /// (elapsed offset, distance, track, laps) can be exercised by feeding
+  /// [debugInjectPosition] fixes.
+  @visibleForTesting
+  void debugResumeWithoutStream({
+    required List<Waypoint> track,
+    required double distanceMetres,
+    required Duration elapsed,
+    required DateTime startedAt,
+    List<LapSplit> laps = const [],
+    Route? route,
+    int distanceFilterMetres = 3,
+    double minMovementMetres = 2,
+    double maxSpeedMps = 10,
+    double accuracyGateMetres = 20,
+  }) {
+    debugPrepareWithoutStream(
+      route: route,
+      distanceFilterMetres: distanceFilterMetres,
+      minMovementMetres: minMovementMetres,
+      maxSpeedMps: maxSpeedMps,
+      accuracyGateMetres: accuracyGateMetres,
+    );
+    _seedResumeState(
+      track: track,
+      distanceMetres: distanceMetres,
+      elapsed: elapsed,
+      startedAt: startedAt,
+      laps: laps,
+    );
+    _beginResumed();
+  }
+
   /// Test-only: skip the real geolocator subscription and flip the recorder
   /// into a prepared state with the supplied filter parameters. Tests can
   /// then call [debugInjectPosition] directly to feed simulated GPS fixes
@@ -484,6 +663,7 @@ class RunRecorder {
     double accuracyGateMetres = 20,
   }) {
     _startTime = null;
+    _elapsedOffset = Duration.zero;
     _stopwatch
       ..stop()
       ..reset();
@@ -806,7 +986,7 @@ class RunRecorder {
 
   void _emitSnapshot() {
     final current = _currentWaypoint;
-    final elapsed = _stopwatch.elapsed;
+    final elapsed = _stopwatch.elapsed + _elapsedOffset;
     final pace = _calculatePace();
 
     // Route-relative fields are only meaningful once we have a fix AND a
@@ -1086,7 +1266,7 @@ class RunRecorder {
     return _laps.length;
   }
 
-  Duration _currentElapsed() => _stopwatch.elapsed;
+  Duration _currentElapsed() => _stopwatch.elapsed + _elapsedOffset;
 
   /// Stop recording and return the completed [Run].
   Future<Run> stop() async {
@@ -1101,7 +1281,7 @@ class RunRecorder {
     _positionSub = null;
 
     final startedAt = _startTime ?? DateTime.now();
-    final elapsed = _stopwatch.elapsed;
+    final elapsed = _stopwatch.elapsed + _elapsedOffset;
 
     final metadata = <String, dynamic>{};
     if (_laps.isNotEmpty) metadata['laps'] = lapsToCanonicalJson(_laps);

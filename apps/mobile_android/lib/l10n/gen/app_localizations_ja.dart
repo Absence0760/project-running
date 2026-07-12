@@ -1168,6 +1168,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDiscard => '破棄';
 
   @override
+  String get runResumeDialogTitle => 'ランを再開しますか？';
+
+  @override
+  String get runResumeDialogBody =>
+      '前回のセッションのランがまだ進行中です。中断したところから記録を再開するか、今すぐ終了するか、破棄してください。';
+
+  @override
+  String get runResumeAction => '再開';
+
+  @override
+  String get runResumeFinishAction => '今すぐ終了';
+
+  @override
+  String get runResumedBanner => 'ランを再開しました。';
+
+  @override
+  String get runResumeSavedBanner => '前回のランを保存しました。';
+
+  @override
+  String get runResumeDiscardedBanner => '前回のランを破棄しました。';
+
+  @override
   String get runStartWorkout => 'ワークアウトを開始';
 
   @override

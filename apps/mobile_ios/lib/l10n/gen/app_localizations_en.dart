@@ -1199,6 +1199,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDiscard => 'Discard';
 
   @override
+  String get runResumeDialogTitle => 'Resume your run?';
+
+  @override
+  String get runResumeDialogBody =>
+      'A run from an earlier session is still in progress. Resume recording where you left off, finish it now, or discard it.';
+
+  @override
+  String get runResumeAction => 'Resume';
+
+  @override
+  String get runResumeFinishAction => 'Finish now';
+
+  @override
+  String get runResumedBanner => 'Resumed your run.';
+
+  @override
+  String get runResumeSavedBanner => 'Saved your previous run.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Discarded your previous run.';
+
+  @override
   String get runStartWorkout => 'Start workout';
 
   @override
