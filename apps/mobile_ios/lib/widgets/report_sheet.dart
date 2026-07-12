@@ -235,6 +235,8 @@ class _ReportSheetState extends State<_ReportSheet> {
         return l10n.reportTitlePost;
       case 'run':
         return l10n.reportTitleRun;
+      case 'route_review':
+        return l10n.reportTitleReview;
     }
     return l10n.reportTitleContent;
   }

@@ -2403,6 +2403,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailReportRoute => 'ルートを報告';
 
   @override
+  String get routeDetailReportReview => 'レビューを報告';
+
+  @override
   String get routeDetailTransferToClub => 'クラブに移管';
 
   @override
@@ -7178,6 +7181,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'ランを報告';
+
+  @override
+  String get reportTitleReview => 'レビューを報告';
 
   @override
   String get reportTitleContent => 'コンテンツを報告';

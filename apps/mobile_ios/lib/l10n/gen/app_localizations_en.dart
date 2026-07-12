@@ -2533,6 +2533,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailReportRoute => 'Report route';
 
   @override
+  String get routeDetailReportReview => 'Report review';
+
+  @override
   String get routeDetailTransferToClub => 'Transfer to club';
 
   @override
@@ -7498,6 +7501,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Report run';
+
+  @override
+  String get reportTitleReview => 'Report review';
 
   @override
   String get reportTitleContent => 'Report content';

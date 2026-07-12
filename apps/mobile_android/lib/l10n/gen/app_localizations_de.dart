@@ -2560,6 +2560,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeDetailReportRoute => 'Route melden';
 
   @override
+  String get routeDetailReportReview => 'Bewertung melden';
+
+  @override
   String get routeDetailTransferToClub => 'An Club übertragen';
 
   @override
@@ -7582,6 +7585,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Lauf melden';
+
+  @override
+  String get reportTitleReview => 'Bewertung melden';
 
   @override
   String get reportTitleContent => 'Inhalt melden';

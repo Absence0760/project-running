@@ -4313,6 +4313,12 @@ abstract class AppLocalizations {
   /// **'Report route'**
   String get routeDetailReportRoute;
 
+  /// Tooltip on the report button for an individual route review
+  ///
+  /// In en, this message translates to:
+  /// **'Report review'**
+  String get routeDetailReportReview;
+
   /// Tooltip on the route-detail transfer button when the route is personal
   ///
   /// In en, this message translates to:
@@ -12569,6 +12575,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report run'**
   String get reportTitleRun;
+
+  /// Report sheet title when reporting a route review
+  ///
+  /// In en, this message translates to:
+  /// **'Report review'**
+  String get reportTitleReview;
 
   /// Report sheet title fallback for generic content
   ///

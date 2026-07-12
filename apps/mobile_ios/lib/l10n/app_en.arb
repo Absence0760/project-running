@@ -3433,6 +3433,10 @@
   "@routeDetailReportRoute": {
     "description": "Tooltip on the route-detail report button"
   },
+  "routeDetailReportReview": "Report review",
+  "@routeDetailReportReview": {
+    "description": "Tooltip on the report button for an individual route review"
+  },
   "routeDetailTransferToClub": "Transfer to club",
   "@routeDetailTransferToClub": {
     "description": "Tooltip on the route-detail transfer button when the route is personal"
@@ -10149,6 +10153,10 @@
   "reportTitleRun": "Report run",
   "@reportTitleRun": {
     "description": "Report sheet title when reporting a run"
+  },
+  "reportTitleReview": "Report review",
+  "@reportTitleReview": {
+    "description": "Report sheet title when reporting a route review"
   },
   "reportTitleContent": "Report content",
   "@reportTitleContent": {

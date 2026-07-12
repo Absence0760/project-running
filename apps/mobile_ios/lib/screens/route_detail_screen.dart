@@ -1198,6 +1198,23 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                       color: theme.colorScheme.outline,
                                     ),
                                   ),
+                                if (widget.apiClient != null &&
+                                    widget.apiClient!.userId != null &&
+                                    widget.apiClient!.userId != review.userId)
+                                  IconButton(
+                                    icon: const Icon(Icons.flag_outlined, size: 16),
+                                    tooltip: l10n.routeDetailReportReview,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.only(left: 8),
+                                    constraints: const BoxConstraints(),
+                                    color: theme.colorScheme.outline,
+                                    onPressed: () => showReportSheet(
+                                      context,
+                                      api: widget.apiClient!,
+                                      targetKind: 'route_review',
+                                      targetId: review.id,
+                                    ),
+                                  ),
                               ],
                             ),
                             if (review.comment != null &&
