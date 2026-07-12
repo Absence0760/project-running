@@ -7,8 +7,11 @@ import { USER_A, USER_B } from '../fixtures/users';
 /**
  * /routes/[id] — report affordance on route-review cards. A user can
  * flag a review authored by someone else; they never see the flag on
- * their own review, and a signed-out viewer never sees it. Mirrors the
- * run-detail / comment report gating (auth.loggedIn && not the author).
+ * their own review. A signed-out viewer never sees it either, because
+ * /routes/[id] is not in the layout's anon-allowed set (like /runs/[id],
+ * public read happens via /share, not the app shell) — anon is bounced
+ * to /login before the review surface renders. Mirrors the run-detail /
+ * comment report gating (auth.loggedIn && not the author).
  *
  * The review is authored by USER_B (alex) on USER_A's public route via
  * service-role so the gating is exercised without a UI submit / rate
@@ -80,10 +83,10 @@ test.describe('the review author', () => {
 test.describe('a signed-out viewer', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test('sees no flag on any review', async ({ page }) => {
+	test('is redirected to /login and never reaches a review card', async ({ page }) => {
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
 
-		await expect(page.locator(reviewCard)).toBeVisible({ timeout: 10_000 });
-		await expect(page.locator(`${reviewCard} .review-report-btn`)).toHaveCount(0);
+		await page.waitForURL(/\/login(\?|$)/, { timeout: 10_000 });
+		await expect(page.locator(reviewCard)).toHaveCount(0);
 	});
 });
