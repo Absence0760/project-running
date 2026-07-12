@@ -122,7 +122,10 @@ export async function buildContext(
 			.limit(runsLimit);
 		return (rawRecentRuns ?? []).map((r) => ({
 			...r,
-			metadata: pickAllowedRunMetadata(r.metadata as Record<string, unknown> | null),
+			metadata: pickAllowedRunMetadata(
+				r.metadata as Record<string, unknown> | null,
+				healthConsentGranted,
+			),
 		}));
 	})();
 
@@ -369,7 +372,7 @@ export function summarizeNutrition(
 /// against docs/backend/metadata.md.
 const COACH_METADATA_ALLOWLIST: ReadonlySet<string> = new Set([
 	'activity_type', // run / walk / hike / cycle — coach gates advice on this
-	'avg_bpm', // gated on health consent at the row level; HR zones use this
+	'avg_bpm', // Art 9 heart-rate — stripped unless health consent granted (COACH_HEALTH_METADATA_KEYS); HR zones use it
 	'workout_kind', // structured workouts — coach reads to track plan adherence
 	'workout_step_results', // per-step planned-vs-actual; coach summarises adherence
 	'manual_completion', // user marked a workout done — affects plan completion
@@ -377,15 +380,22 @@ const COACH_METADATA_ALLOWLIST: ReadonlySet<string> = new Set([
 	'elevation_m', // total gain — useful for route-context advice
 ]);
 
+/// Allowlisted keys that are Art 9(2)(a) special-category health data.
+/// Stripped from the coach payload unless the runner granted health-data
+/// consent — the same gate `runner_context` applies to DOB / HR zones,
+/// now enforced at the per-run metadata layer too.
+const COACH_HEALTH_METADATA_KEYS: ReadonlySet<string> = new Set(['avg_bpm']);
+
 export function pickAllowedRunMetadata(
 	metadata: Record<string, unknown> | null,
+	healthConsentGranted: boolean,
 ): Record<string, unknown> | null {
 	if (!metadata) return null;
 	const out: Record<string, unknown> = {};
 	for (const key of Object.keys(metadata)) {
-		if (COACH_METADATA_ALLOWLIST.has(key)) {
-			out[key] = metadata[key];
-		}
+		if (!COACH_METADATA_ALLOWLIST.has(key)) continue;
+		if (!healthConsentGranted && COACH_HEALTH_METADATA_KEYS.has(key)) continue;
+		out[key] = metadata[key];
 	}
 	// Return null when the allowlist would emit an empty object so
 	// the JSON payload stays compact + omits the key entirely.
