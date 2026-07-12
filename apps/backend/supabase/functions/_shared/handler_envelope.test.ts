@@ -390,7 +390,7 @@ const STRIPE_EVENTS_SECRET =
 // event-id dedupe rather than the replay-window reject.
 async function postStripeEvent(
   event: Record<string, unknown>,
-): Promise<{ status: number; json: { account_synced?: unknown; skipped?: unknown } | null }> {
+): Promise<{ status: number; json: Record<string, unknown> | null }> {
   const body = JSON.stringify(event);
   const t = Math.floor(Date.now() / 1000);
   const v1 = await hmacHex(STRIPE_EVENTS_SECRET, `${t}.${body}`);
@@ -906,6 +906,268 @@ Deno.test({
         `/rest/v1/webhook_events?provider=eq.stripe&event_id=eq.${eventId}`,
         { method: 'DELETE' },
       ).then((x) => x.body?.cancel());
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
+    }
+  },
+});
+
+// ── stripe-events-webhook: the DONATION lifecycle SIDE EFFECT ──────
+// The account.updated test above proves ONE of the four event types the
+// webhook writes. This proves the donation money path — the fundraising.md
+// ledger — which had zero HTTP-level coverage: a self-signed
+// checkout.session.completed (metadata.kind='donation') flips donations
+// pending->paid + records the payment intent, a replay is deduped (not
+// double-counted), and a self-signed charge.refunded resolves the donation
+// by payment intent and CAS's it paid->refunded. Drives an ephemeral owner
+// end-to-end so no seed row is mutated. Self-signed exactly like the
+// account.updated test (postStripeEvent computes a valid Stripe-Signature
+// over `${t}.${body}` against the CI-mirrored ci-stripe-events-secret), so
+// it exercises the REAL verify + parse + dedupe + write chain without any
+// operator whsec_ key.
+
+Deno.test({
+  name: 'stripe-events-webhook: donation checkout.session.completed marks ' +
+    'donations paid + dedupes a replay + charge.refunded refunds it',
+  ignore: SKIP_DB,
+  fn: async () => {
+    const email = `stripe-donor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-don-1', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral donor: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    const acctId = `acct_don_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const runId = crypto.randomUUID();
+    const fundraiserId = crypto.randomUUID();
+    const donationId = crypto.randomUUID();
+    const paymentIntent = `pi_don_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const completedEventId = `evt_don_c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const refundEventId = `evt_don_r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const plant = async (path: string, row: Record<string, unknown>) => {
+      const res = await svc(path, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(row),
+      });
+      const status = res.status;
+      await res.body?.cancel();
+      if (status >= 300) throw new Error(`failed to plant ${path}: ${status}`);
+    };
+    const readDonation = async (): Promise<Record<string, unknown> | null> => {
+      const r = await svc(
+        `/rest/v1/donations?id=eq.${donationId}&select=status,stripe_payment_intent_id`,
+      );
+      const rows = await r.json().catch(() => []);
+      return Array.isArray(rows) && rows[0] ? rows[0] : null;
+    };
+
+    try {
+      // A fundraiser can only open with a charges-enabled payout account
+      // (enforce_fundraiser_requires_charges), so plant that capability
+      // first — the same pre-onboarding row the account.updated test uses,
+      // but already charges-enabled.
+      await plant('/rest/v1/instructor_payout_accounts', {
+        user_id: userId,
+        stripe_connect_account_id: acctId,
+        charges_enabled: true,
+        payouts_enabled: true,
+        details_submitted: true,
+      });
+      // The fundraiser needs exactly one anchor; a run is the cheapest.
+      await plant('/rest/v1/runs', {
+        id: runId,
+        user_id: userId,
+        started_at: new Date().toISOString(),
+        duration_s: 1800,
+        distance_m: 5000,
+        source: 'app',
+        metadata: { activity_type: 'run' },
+      });
+      await plant('/rest/v1/fundraisers', {
+        id: fundraiserId,
+        owner_user_id: userId,
+        run_id: runId,
+        charity_name: 'Test Charity',
+        title: 'Test Fundraiser',
+        goal_cents: 100000,
+      });
+      await plant('/rest/v1/donations', {
+        id: donationId,
+        fundraiser_id: fundraiserId,
+        owner_user_id: userId,
+        amount_cents: 5000,
+        status: 'pending',
+      });
+
+      const completed = {
+        id: completedEventId,
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            metadata: { kind: 'donation', donation_id: donationId },
+            payment_intent: paymentIntent,
+          },
+        },
+      };
+
+      // (a) completed -> donations paid + payment intent recorded.
+      let r = await postStripeEvent(completed);
+      if (r.status !== 200 || r.json?.donation_paid !== true) {
+        throw new Error(
+          `(a) expected 200 donation_paid=true, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      const afterPaid = await readDonation();
+      if (
+        afterPaid?.status !== 'paid' ||
+        afterPaid?.stripe_payment_intent_id !== paymentIntent
+      ) {
+        throw new Error(`(a) donation not marked paid: ${JSON.stringify(afterPaid)}`);
+      }
+
+      // (b) replay the same event id (fresh signature) -> 23505 dedupe ->
+      // skipped, and the donation must NOT be re-processed.
+      r = await postStripeEvent(completed);
+      if (r.status !== 200 || r.json?.skipped !== 'duplicate_event') {
+        throw new Error(
+          `(b) expected 200 skipped=duplicate_event, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+
+      // (c) charge.refunded resolves the donation by payment intent and
+      // CAS's paid->refunded.
+      r = await postStripeEvent({
+        id: refundEventId,
+        type: 'charge.refunded',
+        data: { object: { payment_intent: paymentIntent } },
+      });
+      if (r.status !== 200 || r.json?.donation_refunded !== true) {
+        throw new Error(
+          `(c) expected 200 donation_refunded=true, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      if ((await readDonation())?.status !== 'refunded') {
+        throw new Error('(c) donation did not move to refunded');
+      }
+    } finally {
+      for (const id of [completedEventId, refundEventId]) {
+        await svc(
+          `/rest/v1/webhook_events?provider=eq.stripe&event_id=eq.${id}`,
+          { method: 'DELETE' },
+        ).then((x) => x.body?.cancel());
+      }
+      // Deleting the user cascades run -> fundraiser -> donations and the
+      // payout account (all FKs on delete cascade to auth.users).
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
+    }
+  },
+});
+
+// ── stripe-events-webhook: the EVENT-ORDER expiry SIDE EFFECT ──────
+// The paid-events order ledger (club_events.md P1) is the webhook's other
+// status machine and had no positive HTTP coverage. This proves a self-
+// signed checkout.session.expired CAS's an event_orders row pending->
+// canceled (releasing the soft seat reservation). The webhook is the sole
+// service-role writer of event_orders.status, so this is the only place the
+// expiry transition can be exercised end-to-end.
+
+Deno.test({
+  name: 'stripe-events-webhook: event-order checkout.session.expired ' +
+    'CAS pending->canceled',
+  ignore: SKIP_DB,
+  fn: async () => {
+    const email = `stripe-buyer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-ord-1', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral buyer: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    const clubId = crypto.randomUUID();
+    const eventId = crypto.randomUUID();
+    const orderId = crypto.randomUUID();
+    const instanceStart = new Date().toISOString();
+    const stripeEventId = `evt_ord_exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const plant = async (path: string, row: Record<string, unknown>) => {
+      const res = await svc(path, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(row),
+      });
+      const status = res.status;
+      await res.body?.cancel();
+      if (status >= 300) throw new Error(`failed to plant ${path}: ${status}`);
+    };
+
+    try {
+      await plant('/rest/v1/clubs', {
+        id: clubId,
+        owner_id: userId,
+        name: 'Order Test Club',
+        slug: `order-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      });
+      await plant('/rest/v1/events', {
+        id: eventId,
+        club_id: clubId,
+        title: 'Order Test Event',
+        starts_at: instanceStart,
+        author_id: userId,
+      });
+      await plant('/rest/v1/event_orders', {
+        id: orderId,
+        event_id: eventId,
+        instance_start: instanceStart,
+        buyer_user_id: userId,
+        host_user_id: userId,
+        amount_cents: 2000,
+        status: 'pending',
+      });
+
+      const r = await postStripeEvent({
+        id: stripeEventId,
+        type: 'checkout.session.expired',
+        data: { object: { metadata: { order_id: orderId } } },
+      });
+      if (r.status !== 200 || r.json?.canceled !== true) {
+        throw new Error(
+          `expected 200 canceled=true, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      const read = await svc(
+        `/rest/v1/event_orders?id=eq.${orderId}&select=status`,
+      );
+      const rows = await read.json().catch(() => []);
+      if (!Array.isArray(rows) || rows[0]?.status !== 'canceled') {
+        throw new Error(
+          `event_orders.status did not CAS to canceled: ${JSON.stringify(rows)}`,
+        );
+      }
+    } finally {
+      await svc(
+        `/rest/v1/webhook_events?provider=eq.stripe&event_id=eq.${stripeEventId}`,
+        { method: 'DELETE' },
+      ).then((x) => x.body?.cancel());
+      // clubs.owner_id has NO on-delete-cascade, so drop the club first
+      // (cascades events -> event_orders), then the user.
+      await svc(`/rest/v1/clubs?id=eq.${clubId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
       await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
         .then((x) => x.body?.cancel());
     }
