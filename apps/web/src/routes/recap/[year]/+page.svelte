@@ -9,6 +9,7 @@
 	import { svgToPngBlob } from '$lib/share/svg_to_png';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { Run } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
@@ -86,7 +87,7 @@
 			}
 		}
 		await navigator.clipboard.writeText(text);
-		alert(t('recap.copiedToClipboard'));
+		showToast(t('recap.copiedToClipboard'), 'success');
 	}
 
 	async function publishAndShareLink() {
@@ -95,7 +96,7 @@
 		try {
 			const id = await publishRecap('year', String(recap.year), recap);
 			if (!id) {
-				alert(t('recap.publishFailed'));
+				showToast(t('recap.publishFailed'), 'error');
 				return;
 			}
 			const url = `${location.origin}/recap/share/${id}`;
@@ -108,10 +109,10 @@
 				}
 			}
 			await navigator.clipboard.writeText(url);
-			alert(t('recap.publishedLinkCopied'));
+			showToast(t('recap.publishedLinkCopied'), 'success');
 		} catch (err) {
 			console.warn('recap publish failed', err);
-			alert(t('recap.publishFailed'));
+			showToast(t('recap.publishFailed'), 'error');
 		} finally {
 			publishing = false;
 		}
