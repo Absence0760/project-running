@@ -8,7 +8,7 @@ import '../lib/watch_settings.dart';
 /// `watch_core::settings` test vector so a wire-format drift on either side
 /// is caught here.
 const _goldenHex =
-    '53455431010fbe00d3a40000403800000024f4480050434903';
+    '53455431013fbe00d3a40000403800000024f448005043490380e6c54784030000dc050000';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -26,10 +26,12 @@ void main() {
         pacer: (distanceM: 42195, timeS: 14400),
         gear: (baselineM: 500000.0, targetM: 800000.0),
         zoneCeiling: 3,
+        seaLevelPa: 101325.0,
+        fuel: (drinkIntervalS: 900, eatIntervalS: 1500),
       );
       final frame = settings.encode();
       expect(frame, _hex(_goldenHex));
-      expect(frame, hasLength(25));
+      expect(frame, hasLength(37));
     });
 
     test('empty frame is header-only with zero flags', () {
@@ -78,10 +80,28 @@ void main() {
       expect(settings.encode(), _hex('53455431' '01' '08' '04'));
     });
 
+    test('seaLevelPa-only frame sets bit4 and carries the f32', () {
+      const settings = WatchSettings(seaLevelPa: 101325.0);
+      expect(settings.encode(), _hex('53455431' '01' '10' '80e6c547'));
+    });
+
+    test('fuel-only frame sets bit5 and carries drink then eat', () {
+      const settings = WatchSettings(fuel: (drinkIntervalS: 900, eatIntervalS: 1500));
+      expect(
+        settings.encode(),
+        _hex('53455431' '01' '20' '84030000' 'dc050000'),
+      );
+    });
+
     test('present fields are laid out in bit order regardless of set subset',
         () {
       const settings = WatchSettings(maxHr: 190, zoneCeiling: 3);
       expect(settings.encode(), _hex('53455431' '01' '09' 'be00' '03'));
+    });
+
+    test('sea-level and fuel keep bit order after the earlier fields', () {
+      const settings = WatchSettings(maxHr: 190, seaLevelPa: 101325.0);
+      expect(settings.encode(), _hex('53455431' '01' '11' 'be00' '80e6c547'));
     });
   });
 }
