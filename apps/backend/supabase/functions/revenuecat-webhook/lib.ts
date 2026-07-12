@@ -4,6 +4,28 @@
 
 export type Tier = 'free' | 'pro' | 'lifetime';
 
+/// Column on `user_profiles` that records the `event_timestamp_ms` of the
+/// event that last moved `subscription_tier` (migration 20270403_001).
+export const TIER_EVENT_TS_COLUMN = 'tier_updated_event_ts';
+
+/// Build the PostgREST `.or()` filter that makes the tier write monotonic.
+///
+/// The event-id dedupe (20260623_001) only rejects a REPLAY of the same
+/// event — not two DISTINCT events arriving out of order. RevenueCat does
+/// not guarantee delivery order, so an EXPIRATION (event ts T1) delivered
+/// AFTER a newer re-subscribe (RENEWAL/INITIAL_PURCHASE, event ts T2 > T1)
+/// still maps to 'free' and would silently downgrade a paying user.
+///
+/// Gating the UPDATE on `tier_updated_event_ts is null OR
+/// tier_updated_event_ts <= eventTsMs` applies a tier change only when the
+/// event is at least as recent as the one that last moved the tier: the
+/// stale deactivation matches zero rows and the tier is left untouched.
+/// The `>=` (inclusive `lte`) admits a same-timestamp distinct event; an
+/// exact replay is already caught upstream by the event-id dedupe.
+export function tierEventGuardFilter(eventTsMs: number): string {
+  return `${TIER_EVENT_TS_COLUMN}.is.null,${TIER_EVENT_TS_COLUMN}.lte.${eventTsMs}`;
+}
+
 /// Activating events from RevenueCat's taxonomy
 /// (https://www.revenuecat.com/docs/integrations/webhooks/event-types).
 export const ACTIVATING_EVENTS = [
