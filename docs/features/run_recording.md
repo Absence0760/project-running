@@ -151,6 +151,8 @@ Every 10 seconds while the screen state is `recording`, the app serialises the c
 
 `_loadAll` excludes `in_progress.json` from the normal run list, so the in-progress file never pollutes history.
 
+The **terminal** `LocalRunStore.save` (called from `_stop`) encodes the full `Run` — including the entire multi-day track — off the UI isolate via `compute()`, joining `saveInProgress`/`loadInProgress` in offloading heavy JSON work so finishing a 150-300k-point ultra doesn't freeze the app. The atomic tmp+rename write stays on the calling isolate. An architecture guard pins that `save` uses `compute(` and not the on-isolate `writeJsonAtomic`.
+
 Writes go through `in_progress.json.tmp` followed by an atomic POSIX `rename`. The previous in-place `writeAsString` truncated the canonical file before writing the new payload — a process killed mid-write left a partial file behind and the run was lost. With atomic rename, a crash during the new write leaves `in_progress.json` pointing at the last-known-good checkpoint until the new file is fully flushed + renamed.
 
 ### Stop-button ordering: save before clearing the recovery file

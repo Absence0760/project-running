@@ -134,6 +134,13 @@
 					email,
 					password,
 					options: {
+						// Land the confirmation link on /auth/callback (the
+						// PKCE-exchange + consent-stamp-retry + Art 8 gate
+						// handler), not the app root. Without this GoTrue
+						// falls back to the project Site URL. Must be on the
+						// dashboard Redirect-URLs allow-list. See
+						// web_app_auth.md § Email confirmation redirect.
+						emailRedirectTo: `${window.location.origin}/auth/callback`,
 						// raw_user_meta_data carries the consent
 						// timestamps at the auth layer; the server-side
 						// stamp on user_profiles happens via the RPC

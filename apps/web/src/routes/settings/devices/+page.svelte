@@ -586,11 +586,12 @@
 							min={ed.shape.min}
 							max={ed.shape.max}
 							step={ed.shape.step ?? 0.1}
+							aria-label={m('settingsDevices.overrideValueLabel')}
 						/>
 						{#if ed.shape.unit}<span class="unit">{ed.shape.unit}</span>{/if}
 					</div>
 				{:else}
-					<select bind:value={addValueEnum} class="input">
+					<select bind:value={addValueEnum} class="input" aria-label={m('settingsDevices.overrideValueLabel')}>
 						{#each ed.shape.options as opt}
 							<option value={opt.value}>{opt.label}</option>
 						{/each}
