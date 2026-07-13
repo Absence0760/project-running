@@ -650,6 +650,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Live sharing is on — use Share live link to send it';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Running solo after dark? Share a live link so someone can follow along.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Share';
+
+  @override
   String get activitySedentary => 'Mostly sitting (desk job)';
 
   @override

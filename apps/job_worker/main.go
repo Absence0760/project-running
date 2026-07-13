@@ -401,6 +401,34 @@ func main() {
 		logger.Warn("native_push: DISABLED — no FCM/APNs credentials set; native_push jobs finish without sending")
 	}
 
+	// SMS sender for kind='safety_sms' jobs (the overdue-runner SMS escalation
+	// leg). NEW channel behind a provider abstraction — no SMS provider ships
+	// in the stack, so this stays nil (fail-closed) unless SMS_PROVIDER=twilio
+	// AND all three Twilio credentials are set. When disabled the worker still
+	// drains safety_sms jobs (finishing them done without sending) and the
+	// parallel safety_email 'overdue' alert is the guaranteed floor, so no one
+	// is dropped. Obtaining the Twilio account is a pre-deploy checklist item
+	// (docs/features/safety.md), not a code gate.
+	var smsSender internal.SmsSender
+	if os.Getenv("SMS_PROVIDER") == "twilio" {
+		sid := os.Getenv("TWILIO_ACCOUNT_SID")
+		token := os.Getenv("TWILIO_AUTH_TOKEN")
+		from := os.Getenv("TWILIO_FROM")
+		if sid != "" && token != "" && from != "" {
+			smsSender = &internal.TwilioSender{
+				AccountSID: sid,
+				AuthToken:  token,
+				From:       from,
+				HTTP:       client.HTTP, // reuse the worker's pooled client
+			}
+			logger.Info("safety_sms: enabled", "provider", "twilio", "from", from)
+		} else {
+			logger.Warn("safety_sms: DISABLED — SMS_PROVIDER=twilio but TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM incomplete; safety_sms jobs finish without sending (email escalation still delivers)")
+		}
+	} else {
+		logger.Warn("safety_sms: DISABLED — SMS_PROVIDER unset; safety_sms jobs finish without sending (email escalation still delivers)")
+	}
+
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
 	// worker's poll loop bumps it on every successful poll
 	// (claim-or-empty), so /health flips to 503 only when the loop
@@ -426,6 +454,7 @@ func main() {
 		Email:             emailSender,
 		WebPush:           webPushSender,
 		NativePush:        nativePushSender,
+		Sms:               smsSender,
 		AppBaseURL:        appBaseURL,
 		DigestUnsubSecret: digestUnsubSecret,
 		Config: internal.Config{

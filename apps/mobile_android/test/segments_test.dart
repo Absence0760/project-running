@@ -131,4 +131,107 @@ void main() {
     expect(eff, isNotNull);
     expect((eff!.timeSeconds - 80).abs() < 1, isTrue);
   });
+
+  // ─── computeGlobalSegmentEffort (free-standing catalogue geometry) ───
+
+  Waypoint coordAt(double distanceM) =>
+      Waypoint(lat: 37.0 + distanceM / 111320, lng: -122.0);
+
+  test('global: matches an end-to-end run and times the effort', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1); // 5 m/s
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(
+        points: [coordAt(100), coordAt(600)],
+        distanceM: 500,
+      ),
+    );
+    expect(eff, isNotNull);
+    expect((eff!.timeSeconds - 100).abs() < 1, isTrue);
+  });
+
+  test('global: null when the run never approaches the segment start', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    Waypoint far(double d) => Waypoint(lat: 37.0 + d / 111320, lng: -121.988);
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(points: [far(100), far(600)], distanceM: 500),
+    );
+    expect(eff, isNull);
+  });
+
+  test('global: null when the run reaches the start but not the end', () {
+    final track = _straightTrack(points: 80, stepM: 5, stepS: 1); // ~395 m
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(
+        points: [coordAt(100), coordAt(600)],
+        distanceM: 500,
+      ),
+    );
+    expect(eff, isNull);
+  });
+
+  test('global: null when covered distance fails the end-to-end guard', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    // Run covers 500 m but the catalogue claims 200 m → rejected.
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(
+        points: [coordAt(100), coordAt(600)],
+        distanceM: 200,
+      ),
+    );
+    expect(eff, isNull);
+  });
+
+  test('global: directional — a run going the wrong way does not match', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(
+        points: [coordAt(600), coordAt(100)],
+        distanceM: 500,
+      ),
+    );
+    expect(eff, isNull);
+  });
+
+  test('global: null on degenerate track or geometry', () {
+    expect(
+      computeGlobalSegmentEffort(
+        const [],
+        GlobalSegmentGeometry(points: [coordAt(0), coordAt(100)], distanceM: 100),
+      ),
+      isNull,
+    );
+    final track = _straightTrack(points: 50, stepM: 5, stepS: 1);
+    expect(
+      computeGlobalSegmentEffort(
+        track,
+        GlobalSegmentGeometry(points: [coordAt(0)], distanceM: 100),
+      ),
+      isNull,
+    );
+    expect(
+      computeGlobalSegmentEffort(
+        track,
+        GlobalSegmentGeometry(points: [coordAt(0), coordAt(100)], distanceM: 0),
+      ),
+      isNull,
+    );
+  });
+
+  test('global: tolerates start/end falling between run samples', () {
+    final track = _straightTrack(points: 200, stepM: 10, stepS: 2); // 5 m/s
+    final eff = computeGlobalSegmentEffort(
+      track,
+      GlobalSegmentGeometry(
+        points: [coordAt(105), coordAt(605)],
+        distanceM: 500,
+      ),
+    );
+    expect(eff, isNotNull);
+    expect((eff!.timeSeconds - 100).abs() < 2, isTrue);
+  });
 }

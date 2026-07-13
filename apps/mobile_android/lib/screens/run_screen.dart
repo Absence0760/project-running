@@ -39,6 +39,7 @@ import '../race_controller.dart';
 import '../roadbook.dart';
 import '../route_geometry.dart';
 import '../route_match.dart';
+import '../safety_nudge.dart';
 import '../settings_sync.dart';
 import '../turn_cue_announcer.dart';
 import '../turn_cues.dart';
@@ -1136,6 +1137,56 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// One-time (throttled) dismissible prompt to share a live link when a
+  /// solo run starts after dark with no live share attached — the
+  /// safety-net gap for runners who never turned on auto-live-share
+  /// (docs/features/safety.md, persona-woman). The decision is the pure
+  /// `shouldNudgeSoloSafety` twin; this method only gathers inputs,
+  /// surfaces the banner, and stamps the throttle pref. Entirely L4:
+  /// wrapped so any failure here can never disturb the recording.
+  void _maybeShowSafetyNudge() {
+    try {
+      final service = widget.settingsSync?.service;
+      // No settings service → we can't throttle, so nudging would nag on
+      // every run (friction). Fail-closed: skip.
+      if (service == null) return;
+
+      final now = DateTime.now();
+      final nowMs = now.millisecondsSinceEpoch;
+      final dismissedIso =
+          service.effective<String>(SettingsKeys.safetyNudgeDismissedAt);
+      final dismissedAtMs =
+          DateTime.tryParse(dismissedIso ?? '')?.millisecondsSinceEpoch;
+
+      final should = shouldNudgeSoloSafety(SoloSafetyNudgeInput(
+        nowLocalMinutes: now.hour * 60 + now.minute,
+        autoLiveShareOn: _autoLiveShareEnabled,
+        isBroadcast: _liveBroadcaster?.isActive ?? false,
+        nudgeDismissed: nudgeThrottled(dismissedAtMs, nowMs),
+      ));
+      if (!should || !mounted) return;
+
+      // Stamp the throttle window as soon as it's surfaced — the banner
+      // is transient and dismissible, so "shown once" is the throttle
+      // anchor. Fire-and-forget; a failed write just means it may
+      // resurface next run, which is the safe direction.
+      service.updateDevice(
+        {SettingsKeys.safetyNudgeDismissedAt: now.toUtc().toIso8601String()},
+      ).catchError((Object e) {
+        debugPrint('safety nudge stamp failed: $e');
+      });
+
+      _showTopBanner(
+        _l10n.runSafetyNudgeSolo,
+        duration: const Duration(seconds: 6),
+        actionLabel: _l10n.runSafetyNudgeShareAction,
+        onAction: () => unawaited(_shareLiveLink()),
+      );
+    } catch (e) {
+      debugPrint('safety nudge failed: $e');
+    }
+  }
+
   /// Base URL of the spectator web app. Reads `WEB_BASE_URL` from
   /// `.env.local` when set; otherwise falls back to the production host
   /// so a freshly-installed app still produces a working link.
@@ -1212,6 +1263,13 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('auto live share failed: $e');
       }));
     }
+
+    // Solo-run safety nudge (docs/features/safety.md): the complement of
+    // the auto-share path — when the run is unprotected (no auto-share,
+    // no manual broadcast) AND started after dark, prompt the runner to
+    // share a live link. L4 — its own catch path; a failure computing
+    // daylight or reading prefs must never touch the recording.
+    _maybeShowSafetyNudge();
 
     // Subscribe to the BLE chest strap's BPM stream if a strap has been
     // paired. `connectCached` runs at app start in main.dart; the stream

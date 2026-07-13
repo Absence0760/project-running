@@ -222,6 +222,13 @@ type Worker struct {
 	// set) can still send. Wired in main.go when FCM and/or APNs credentials
 	// are present.
 	NativePush NativePushSender
+	// Sms is the transport for kind='safety_sms' jobs (the overdue-runner
+	// SMS escalation leg). Nil disables the send path — the handler finishes
+	// those jobs done without sending, which is the fail-closed default: the
+	// parallel safety_email 'overdue' job is the guaranteed floor, so a
+	// missing SMS provider never suppresses the alert. Wired in main.go when
+	// SMS_PROVIDER + the provider credentials are all set.
+	Sms SmsSender
 	// AppBaseURL is the web origin used to build deep links + the
 	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
 	// to relative-looking links; production sets it.
@@ -367,6 +374,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleLifecycleEmail(ctx, job)
 	case "safety_email":
 		return w.handleSafetyEmail(ctx, job)
+	case "safety_sms":
+		return w.handleSafetySms(ctx, job)
 	case "web_push":
 		return w.handleWebPush(ctx, job)
 	case "native_push":

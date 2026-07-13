@@ -655,6 +655,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Directo activado: envía el enlace con «Compartir enlace en directo»';
 
   @override
+  String get runSafetyNudgeSolo =>
+      '¿Corres en solitario de noche? Comparte un enlace en directo para que alguien pueda seguirte.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Compartir';
+
+  @override
   String get activitySedentary => 'Mayormente sentado (trabajo de oficina)';
 
   @override

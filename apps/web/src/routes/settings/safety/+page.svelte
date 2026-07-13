@@ -11,6 +11,7 @@
 		type SafetyContact,
 		type PendingSafetyRequest,
 	} from '$lib/core/data';
+	import { SvelteSet } from 'svelte/reactivity';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -20,15 +21,21 @@
 	let pending = $state<PendingSafetyRequest[]>([]);
 	let loading = $state(true);
 	let email = $state('');
+	let phone = $state('');
 	let adding = $state(false);
 	// In-flight guard for an incoming-request response so a double-click
 	// can't fire confirm/decline twice.
 	let respondingId = $state<string | null>(null);
 	let confirmingRemove = $state<SafetyContact | null>(null);
+	// Per-request SMS opt-in choice, keyed by request id. Only meaningful
+	// when the request's owner stored a phone (has_phone).
+	let smsOptIn = new SvelteSet<string>();
 
 	// Mirror the server-side CHECK so the user gets an inline message before
 	// a round trip that would 23514.
 	const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+	// Mirror the E.164 CHECK on safety_contacts.contact_phone.
+	const phoneRe = /^\+[1-9][0-9]{6,14}$/;
 
 	async function reload() {
 		[contacts, pending] = await Promise.all([
@@ -70,10 +77,16 @@
 			showToast(m('safety.invalidEmail'), 'error');
 			return;
 		}
+		const phoneValue = phone.trim();
+		if (phoneValue && !phoneRe.test(phoneValue)) {
+			showToast(m('safety.invalidPhone'), 'error');
+			return;
+		}
 		adding = true;
 		try {
-			await addSafetyContact(value);
+			await addSafetyContact(value, phoneValue || null);
 			email = '';
+			phone = '';
 			await reload();
 			showToast(m('safety.addedToast'), 'success');
 		} catch (e) {
@@ -99,7 +112,8 @@
 		if (respondingId) return;
 		respondingId = req.id;
 		try {
-			await confirmSafetyRequest(req.id);
+			await confirmSafetyRequest(req.id, req.has_phone && smsOptIn.has(req.id));
+			smsOptIn.delete(req.id);
 			await reload();
 			showToast(m('safety.confirmedToast'), 'success');
 		} catch (e) {
@@ -153,6 +167,17 @@
 					data-testid="safety-email-input"
 				/>
 			</label>
+			<label class="field">
+				<span class="label-text">{m('safety.phoneLabel')}</span>
+				<input
+					type="tel"
+					bind:value={phone}
+					placeholder="+447700900123"
+					autocomplete="tel"
+					inputmode="tel"
+					data-testid="safety-phone-input"
+				/>
+			</label>
 			<button type="submit" class="btn-primary" disabled={adding} data-testid="safety-add-button">
 				{#if adding}
 					<span class="material-symbols spin" aria-hidden="true">progress_activity</span>
@@ -163,6 +188,7 @@
 				{/if}
 			</button>
 		</form>
+		<p class="phone-hint">{m('safety.phoneHint')}</p>
 
 		{#if loading}
 			<div class="skel-list" aria-hidden="true">
@@ -182,6 +208,12 @@
 								</span>
 								{c.confirmed_at ? m('safety.statusConfirmed') : m('safety.statusPending')}
 							</span>
+							{#if c.sms_opt_in_at}
+								<span class="badge sms" data-testid="safety-sms-badge">
+									<span class="material-symbols" aria-hidden="true">sms</span>
+									{m('safety.smsBadge')}
+								</span>
+							{/if}
 						</div>
 						<button
 							class="btn-danger btn-sm"
@@ -228,11 +260,25 @@
 			</header>
 			<ul class="contact-list">
 				{#each pending as req (req.id)}
-					<li class="contact">
+					<li class="contact incoming-req">
 						<span class="who">
 							<span class="material-symbols req-icon" aria-hidden="true">person</span>
 							{m('safety.incomingFrom', { name: req.owner_name || m('safety.unknownRunner') })}
 						</span>
+						{#if req.has_phone}
+							<label class="sms-opt">
+								<input
+									type="checkbox"
+									checked={smsOptIn.has(req.id)}
+									onchange={(e) => {
+										if ((e.currentTarget as HTMLInputElement).checked) smsOptIn.add(req.id);
+										else smsOptIn.delete(req.id);
+									}}
+									data-testid="safety-confirm-sms"
+								/>
+								<span>{m('safety.confirmSmsLabel')}</span>
+							</label>
+						{/if}
 						<span class="actions">
 							<button class="btn-primary btn-sm" onclick={() => handleConfirm(req)} disabled={respondingId !== null} data-testid="safety-confirm-request">
 								{m('safety.confirm')}
@@ -363,10 +409,30 @@
 		color: var(--color-warning, #92600a);
 		background: color-mix(in srgb, var(--color-warning, #d99a2b) 15%, transparent);
 	}
+	.badge.sms {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.who .badge + .badge { margin-top: var(--space-2xs); }
 	.actions {
 		display: flex;
 		gap: var(--space-sm);
 		flex-shrink: 0;
+	}
+	.phone-hint {
+		margin: 0 0 var(--space-lg);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+	}
+	.incoming-req { flex-wrap: wrap; }
+	.sms-opt {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.84rem;
+		color: var(--color-text-secondary);
+		cursor: pointer;
 	}
 
 	.empty-state {

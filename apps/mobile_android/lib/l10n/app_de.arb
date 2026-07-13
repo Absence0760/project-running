@@ -178,6 +178,8 @@
   "safetyAutoLiveShareTitle": "Automatisches Live-Teilen",
   "safetyAutoLiveShareSubtitle": "Startet auf diesem Telefon automatisch ein Live-Teilen, wenn ein Lauf beginnt. Der laufende Lauf ist für alle mit dem Link sichtbar.",
   "runAutoLiveShareStarted": "Live-Teilen ist aktiv — sende den Link über „Live-Link teilen“",
+  "runSafetyNudgeSolo": "Läufst du allein nach Einbruch der Dunkelheit? Teile einen Live-Link, damit dir jemand folgen kann.",
+  "runSafetyNudgeShareAction": "Teilen",
   "activitySedentary": "Überwiegend sitzend (Bürojob)",
   "activityLight": "Leicht aktiv (wenig Alltagsbewegung)",
   "activityModerate": "Mäßig aktiv (oft auf den Beinen)",

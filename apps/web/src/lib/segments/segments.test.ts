@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	computeEffortFromTrack,
+	computeGlobalSegmentEffort,
 	assignCompetitionRanks,
 	crownLabel,
 	SEGMENT_AGE_BANDS,
@@ -303,4 +304,88 @@ test('crownLabel: gender + age band combined', () => {
 		crownLabel('nonbinary', '18-19'),
 		'Fastest nonbinary runner 18-19',
 	);
+});
+
+// ─── computeGlobalSegmentEffort (free-standing catalogue geometry) ───
+
+/** Coordinate of the `straightTrack` point at ~`distanceM` along the run. */
+function coordAt(distanceM: number): { lat: number; lng: number } {
+	const degPerM = 1 / 111_320;
+	return { lat: 37.0 + distanceM * degPerM, lng: -122.0 };
+}
+
+test('global: matches an end-to-end run and times the effort', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 }); // 5 m/s
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [coordAt(100), coordAt(600)],
+		distance_m: 500,
+	});
+	assert.notEqual(eff, null);
+	// 500 m at 5 m/s = 100 s.
+	assert.ok(Math.abs(eff!.time_seconds - 100) < 1);
+});
+
+test('global: null when the run never approaches the segment start', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	// Segment sits ~1 km east — every track point is far from its start.
+	const far = (d: number) => ({ lat: 37.0 + d / 111_320, lng: -121.988 });
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [far(100), far(600)],
+		distance_m: 500,
+	});
+	assert.equal(eff, null);
+});
+
+test('global: null when the run reaches the start but not the end', () => {
+	const track = straightTrack({ points: 80, stepM: 5, stepS: 1 }); // ~395 m
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [coordAt(100), coordAt(600)], // end at 600 m is past the track
+		distance_m: 500,
+	});
+	assert.equal(eff, null);
+});
+
+test('global: null when covered distance fails the end-to-end guard', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	// The run covers 500 m between the two crossings, but the catalogue
+	// claims the segment is only 200 m — a shortcut / mismatch → rejected.
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [coordAt(100), coordAt(600)],
+		distance_m: 200,
+	});
+	assert.equal(eff, null);
+});
+
+test('global: directional — a run going the wrong way does not match', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	// Segment start is LATER on the track than its end; the run passes the
+	// start point but never reaches the (earlier) end after it.
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [coordAt(600), coordAt(100)],
+		distance_m: 500,
+	});
+	assert.equal(eff, null);
+});
+
+test('global: null on degenerate track or geometry', () => {
+	assert.equal(
+		computeGlobalSegmentEffort([], { points: [coordAt(0), coordAt(100)], distance_m: 100 }),
+		null,
+	);
+	const track = straightTrack({ points: 50, stepM: 5, stepS: 1 });
+	assert.equal(computeGlobalSegmentEffort(track, { points: [coordAt(0)], distance_m: 100 }), null);
+	assert.equal(
+		computeGlobalSegmentEffort(track, { points: [coordAt(0), coordAt(100)], distance_m: 0 }),
+		null,
+	);
+});
+
+test('global: tolerates start/end falling between run samples', () => {
+	const track = straightTrack({ points: 200, stepM: 10, stepS: 2 }); // 5 m/s, 10 m steps
+	const eff = computeGlobalSegmentEffort(track, {
+		points: [coordAt(105), coordAt(605)], // both mid-sample
+		distance_m: 500,
+	});
+	assert.notEqual(eff, null);
+	assert.ok(Math.abs(eff!.time_seconds - 100) < 2);
 });
