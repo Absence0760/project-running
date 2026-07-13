@@ -7086,6 +7086,222 @@ export async function computeSegmentEffortsForRun(input: {
 	return inserted?.length ?? 0;
 }
 
+// --- Global / famous-segment catalogue (decisions §231) ---
+
+export interface GlobalSegment {
+	id: string;
+	name: string;
+	description: string | null;
+	waypoints: { lat: number; lng: number; ele?: number }[];
+	distance_m: number;
+	elevation_m: number | null;
+	surface: string;
+	region: string | null;
+	country_code: string | null;
+	is_active: boolean;
+	created_at: string;
+}
+
+export interface GlobalSegmentEffort {
+	id: string;
+	global_segment_id: string;
+	run_id: string;
+	user_id: string;
+	time_seconds: number;
+	started_at: string;
+	created_at: string;
+}
+
+export interface GlobalSegmentLeaderboardEntry {
+	effort: GlobalSegmentEffort;
+	athlete: PublicProfile;
+	rank: number;
+}
+
+export interface GlobalSegmentEffortWithSegment {
+	effort: GlobalSegmentEffort;
+	segment: GlobalSegment;
+	rank: number;
+}
+
+export async function fetchGlobalSegments(limit = 200): Promise<GlobalSegment[]> {
+	return (await fetchGlobalSegmentsWithError(limit)).segments;
+}
+
+/// Browse the catalogue. Region filtering is client-side (the curated v1
+/// catalogue is small); this fetch just pulls the active rows. Surfaces the
+/// error instead of swallowing to `[]` so the browse page can show a
+/// distinct error state rather than a false "empty catalogue".
+export async function fetchGlobalSegmentsWithError(
+	limit = 200,
+): Promise<{ segments: GlobalSegment[]; error: string | null }> {
+	const { data, error } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.eq('is_active', true)
+		.order('name', { ascending: true })
+		.limit(limit);
+	if (error) {
+		console.error('fetchGlobalSegments failed', error);
+		return { segments: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
+	}
+	return { segments: (data ?? []) as GlobalSegment[], error: null };
+}
+
+export async function fetchGlobalSegment(id: string): Promise<GlobalSegment | null> {
+	const { data, error } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.eq('id', id)
+		.eq('is_active', true)
+		.maybeSingle();
+	if (error) {
+		console.error('fetchGlobalSegment failed', error);
+		return null;
+	}
+	return (data as GlobalSegment) ?? null;
+}
+
+/// Block-guarded global-segment leaderboard. Mirrors
+/// `fetchSegmentLeaderboardTiered` but calls the catalogue RPC (no route
+/// visibility branch — the catalogue is public; per-effort run privacy +
+/// the block graph are applied server-side).
+export async function fetchGlobalSegmentLeaderboard(
+	segmentId: string,
+	filter: {
+		gender?: SegmentGenderFilter | null;
+		ageBand?: SegmentAgeBand | null;
+		clubId?: string | null;
+	} = {},
+	limit = 50,
+): Promise<GlobalSegmentLeaderboardEntry[]> {
+	const { data, error } = await supabase.rpc('global_segment_leaderboard', {
+		p_segment_id: segmentId,
+		p_gender: filter.gender ?? null,
+		p_age_band: filter.ageBand ?? null,
+		p_limit: limit,
+		p_club_id: filter.clubId ?? null,
+	});
+	if (error || !data) {
+		console.warn('fetchGlobalSegmentLeaderboard failed', error);
+		return [];
+	}
+	const rows = data as Array<{
+		effort_id: string;
+		user_id: string;
+		run_id: string;
+		time_seconds: number;
+		started_at: string;
+		display_name: string | null;
+		avatar_url: string | null;
+		gender: string | null;
+		age: number | null;
+	}>;
+	return assignCompetitionRanks(rows).map(({ row, rank }) => ({
+		effort: {
+			id: row.effort_id,
+			global_segment_id: segmentId,
+			run_id: row.run_id,
+			user_id: row.user_id,
+			time_seconds: row.time_seconds,
+			started_at: row.started_at,
+			created_at: row.started_at,
+		} as GlobalSegmentEffort,
+		athlete: { id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url },
+		rank,
+	}));
+}
+
+/// Backfill catalogue-segment efforts a run earned. Called from the
+/// run-detail page on mount (owner only). Scores the run's track against
+/// every active catalogue geometry via the pure `computeGlobalSegmentEffort`
+/// (end-to-end match, curated v1) and batch-upserts matches. Idempotent via
+/// unique(global_segment_id, run_id) + ignoreDuplicates. Returns new count.
+export async function computeGlobalSegmentEffortsForRun(input: {
+	run_id: string;
+	user_id: string;
+	track: { lat: number; lng: number; ts?: string }[];
+}): Promise<number> {
+	if (!input.track || input.track.length < 2) return 0;
+	const userId = auth.user?.id;
+	if (!userId || userId !== input.user_id) return 0;
+
+	const { segments } = await fetchGlobalSegmentsWithError(500);
+	if (segments.length === 0) return 0;
+
+	const { computeGlobalSegmentEffort } = await import('../segments/segments');
+	const rows: {
+		global_segment_id: string;
+		run_id: string;
+		user_id: string;
+		time_seconds: number;
+		started_at: string;
+	}[] = [];
+	for (const seg of segments) {
+		const pts = (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) }));
+		const eff = computeGlobalSegmentEffort(input.track as import('$lib/types').TrackPoint[], {
+			points: pts,
+			distance_m: Number(seg.distance_m),
+		});
+		if (!eff) continue;
+		rows.push({
+			global_segment_id: seg.id,
+			run_id: input.run_id,
+			user_id: userId,
+			time_seconds: eff.time_seconds,
+			started_at: eff.started_at,
+		});
+	}
+	if (rows.length === 0) return 0;
+	const { data: inserted, error } = await supabase
+		.from(TABLES.global_segment_efforts)
+		.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
+		.select('id');
+	if (error) {
+		console.warn('global segment effort batch upsert failed', input.run_id, error);
+		return 0;
+	}
+	return inserted?.length ?? 0;
+}
+
+/// Catalogue-segment efforts a run earned, joined to the segment + ranked
+/// in one round-trip via `global_segment_effort_ranks`. Mirrors
+/// `fetchEffortsForRun` for the run-detail panel.
+export async function fetchGlobalEffortsForRun(
+	runId: string,
+): Promise<GlobalSegmentEffortWithSegment[]> {
+	const { data: efforts, error } = await supabase
+		.from(TABLES.global_segment_efforts)
+		.select('*')
+		.eq('run_id', runId);
+	if (error || !efforts || efforts.length === 0) return [];
+
+	const segmentIds = Array.from(new Set(efforts.map((e) => e.global_segment_id)));
+	const { data: segments } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.in('id', segmentIds);
+	const bySeg = new Map<string, GlobalSegment>();
+	for (const s of segments ?? []) bySeg.set(s.id, s as GlobalSegment);
+
+	const { data: rankRows, error: rankErr } = await supabase.rpc('global_segment_effort_ranks', {
+		p_run_id: runId,
+	});
+	if (rankErr) console.error('global_segment_effort_ranks failed', rankErr);
+	const rankByEffort = new Map<string, number>();
+	for (const r of (rankRows ?? []) as { effort_id: string; rank: number }[]) {
+		rankByEffort.set(r.effort_id, r.rank);
+	}
+
+	const out: GlobalSegmentEffortWithSegment[] = [];
+	for (const e of efforts as GlobalSegmentEffort[]) {
+		const segment = bySeg.get(e.global_segment_id);
+		if (!segment) continue;
+		out.push({ effort: e, segment, rank: rankByEffort.get(e.id) ?? 1 });
+	}
+	return out;
+}
+
 // --- Notifications (decisions §38) ---
 
 export interface NotificationRow {

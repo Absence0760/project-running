@@ -6,10 +6,14 @@
 		fetchEffortsForRunWithError,
 		computeSegmentEffortsForRun,
 		fetchRoutesIntersectingTrack,
+		computeGlobalSegmentEffortsForRun,
+		fetchGlobalEffortsForRun,
 		type SegmentEffortWithSegment,
+		type GlobalSegmentEffortWithSegment,
 	} from '$lib/core/data';
 	import { pickAutoEffortRoute } from '$lib/segments/auto_segment_effort';
 	import { distanceInPreferred } from '$lib/format/units.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import type { TrackPoint } from '$lib/types';
 
 	function trackLengthM(pts: TrackPoint[]): number {
@@ -38,8 +42,11 @@
 	let { runId, runOwnerId, routeId, track }: Props = $props();
 
 	let efforts = $state<SegmentEffortWithSegment[]>([]);
+	let globalEfforts = $state<GlobalSegmentEffortWithSegment[]>([]);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
+
+	const isOwner = $derived(runOwnerId === auth.user?.id);
 
 	async function load() {
 		loading = true;
@@ -69,17 +76,27 @@
 						track,
 					});
 				}
+				// Catalogue-segment backfill (decisions §231): score the run
+				// against the free-standing global/famous-segment geometries it
+				// matches end-to-end. Owner-only; RLS also gates the write.
+				if (isOwner) {
+					await computeGlobalSegmentEffortsForRun({ run_id: runId, user_id: runOwnerId, track });
+				}
 			} catch (e) {
 				console.warn('segment effort compute failed', e);
 			}
 		}
 		try {
-			const res = await fetchEffortsForRunWithError(runId);
+			const [res, globals] = await Promise.all([
+				fetchEffortsForRunWithError(runId),
+				fetchGlobalEffortsForRun(runId),
+			]);
 			if (res.error) {
 				loadError = res.error;
 				return;
 			}
 			efforts = res.efforts;
+			globalEfforts = globals;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -117,23 +134,45 @@
 		</div>
 		<button class="btn btn-outline btn-sm" onclick={load}>{m('runs.retry')}</button>
 	</div>
-{:else if efforts.length > 0}
-	<ul class="efforts">
-		{#each efforts as e (e.effort.id)}
-			<li>
-				<a class="effort-row" href="/routes/{e.segment.route_id}#segment-{e.segment.id}">
-					<div class="effort-meta">
-						<strong>{e.segment.name}</strong>
-						<span class="muted small">
-							{fmtDist(Number(e.segment.length_m ?? Number(e.segment.end_distance_m) - Number(e.segment.start_distance_m)))}
-						</span>
-					</div>
-					<span class="rank-pill {rankClass(e.rank)}">#{e.rank}</span>
-					<span class="time">{fmtTime(e.effort.time_seconds)}</span>
-				</a>
-			</li>
-		{/each}
-	</ul>
+{:else if efforts.length > 0 || globalEfforts.length > 0}
+	{#if efforts.length > 0}
+		<ul class="efforts">
+			{#each efforts as e (e.effort.id)}
+				<li>
+					<a class="effort-row" href="/routes/{e.segment.route_id}#segment-{e.segment.id}">
+						<div class="effort-meta">
+							<strong>{e.segment.name}</strong>
+							<span class="muted small">
+								{fmtDist(Number(e.segment.length_m ?? Number(e.segment.end_distance_m) - Number(e.segment.start_distance_m)))}
+							</span>
+						</div>
+						<span class="rank-pill {rankClass(e.rank)}">#{e.rank}</span>
+						<span class="time">{fmtTime(e.effort.time_seconds)}</span>
+					</a>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+	{#if globalEfforts.length > 0}
+		<p class="section-label">{m('segmentEfforts.catalogueHeading')}</p>
+		<ul class="efforts">
+			{#each globalEfforts as e (e.effort.id)}
+				<li>
+					<a class="effort-row" href="/segments/{e.segment.id}">
+						<div class="effort-meta">
+							<strong>{e.segment.name}</strong>
+							<span class="muted small">
+								{fmtDist(Number(e.segment.distance_m))}
+								{#if e.segment.region}<span class="meta-sep">·</span>{e.segment.region}{/if}
+							</span>
+						</div>
+						<span class="rank-pill {rankClass(e.rank)}">#{e.rank}</span>
+						<span class="time">{fmtTime(e.effort.time_seconds)}</span>
+					</a>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 {:else if routeId}
 	<p class="muted">
 		{m('segmentEfforts.none')}
@@ -152,6 +191,17 @@
 	}
 	.muted.small {
 		font-size: 0.78rem;
+	}
+	.section-label {
+		margin: 0.6rem 0 0.2rem;
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+	.meta-sep {
+		margin: 0 0.3rem;
 	}
 	.error-banner {
 		display: flex;
