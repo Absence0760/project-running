@@ -851,6 +851,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get setupOpenDashboard => 'Ouvrir le tableau de bord';
 
   @override
+  String get setupCreatePlanCta => 'Créer mon plan d\'entraînement';
+
+  @override
   String get setupWelcomeToast => 'Bienvenue sur Threkir !';
 
   @override

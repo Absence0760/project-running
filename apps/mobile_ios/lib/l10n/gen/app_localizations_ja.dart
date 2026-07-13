@@ -822,6 +822,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get setupOpenDashboard => 'ダッシュボードを開く';
 
   @override
+  String get setupCreatePlanCta => 'トレーニングプランを作成';
+
+  @override
   String get setupWelcomeToast => 'Threkir へようこそ！';
 
   @override

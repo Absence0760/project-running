@@ -13,13 +13,15 @@
 /// wizard hasn't been seen yet. The wizard stamps `now()` on either
 /// Finish or Skip-onboarding, so a returning user never re-sees it.
 
+import type { GoalEvent } from '../training/training';
+
 export const PRIMARY_GOAL_KEY = 'primary_goal';
 
 /// Fixed enum the wizard's Goal step writes into
-/// `user_settings.prefs.primary_goal`. A future post-onboarding
-/// nudge will use this to suggest a training plan ("would you like
-/// to create a 10k plan?") without re-asking — same shape the
-/// /plans/new wizard already uses for `GoalEvent`.
+/// `user_settings.prefs.primary_goal`. The post-onboarding "create my
+/// training plan" CTA reads it back through `planPresetForGoal` (below)
+/// to deep-link into `/plans/new` preselected, without re-asking — same
+/// shape the /plans/new wizard uses for `GoalEvent`.
 ///
 /// `general_fitness` and `weight_loss` are the two non-distance
 /// targets. The four distance targets map 1:1 to the
@@ -46,3 +48,31 @@ export type PrimaryGoal = (typeof PRIMARY_GOAL_VALUES)[number];
 /// per-step navigation math. Increment when adding a step (and add
 /// the step's <section> + bound state in /onboarding/+page.svelte).
 export const ONBOARDING_TOTAL_STEPS = 7;
+
+export interface PlanPreset {
+	goalEvent: GoalEvent;
+	beginnerWalkRun: boolean;
+}
+
+/// Maps an onboarding primary-goal answer to a create-plan preset, so the
+/// post-onboarding CTA can deep-link straight into `/plans/new` with the goal
+/// distance preselected and — for the three beginner-leaning goals — the
+/// walk-run toggle already ticked (the affordance a brand-new runner would
+/// otherwise never discover). The distance goals map 1:1 to `GoalEvent`;
+/// `general_fitness` / `weight_loss` / `5k` all seed the beginner walk-run 5K
+/// (the beginner toggle itself snaps the goal to `distance_5k`). Keep in
+/// lockstep with the Dart twin `onboarding.dart#planPresetForGoal`.
+export function planPresetForGoal(goal: PrimaryGoal): PlanPreset {
+	switch (goal) {
+		case '10k':
+			return { goalEvent: 'distance_10k', beginnerWalkRun: false };
+		case 'half_marathon':
+			return { goalEvent: 'distance_half', beginnerWalkRun: false };
+		case 'marathon':
+			return { goalEvent: 'distance_full', beginnerWalkRun: false };
+		case 'general_fitness':
+		case 'weight_loss':
+		case '5k':
+			return { goalEvent: 'distance_5k', beginnerWalkRun: true };
+	}
+}

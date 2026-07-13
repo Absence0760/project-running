@@ -238,6 +238,7 @@
   "setupContinue": "Weiter",
   "setupSaving": "Wird gespeichert …",
   "setupOpenDashboard": "Dashboard öffnen",
+  "setupCreatePlanCta": "Meinen Trainingsplan erstellen",
   "setupWelcomeToast": "Willkommen bei Threkir!",
   "setupSaveError": "Einrichtung konnte nicht gespeichert werden: {message}",
   "setupNameTitle": "Wie sollen wir dich nennen?",

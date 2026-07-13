@@ -238,6 +238,7 @@
   "setupContinue": "Continuer",
   "setupSaving": "Enregistrement…",
   "setupOpenDashboard": "Ouvrir le tableau de bord",
+  "setupCreatePlanCta": "Créer mon plan d'entraînement",
   "setupWelcomeToast": "Bienvenue sur Threkir !",
   "setupSaveError": "Impossible d'enregistrer votre configuration : {message}",
   "setupNameTitle": "Comment doit-on vous appeler ?",

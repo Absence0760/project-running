@@ -238,6 +238,7 @@
   "setupContinue": "Continuar",
   "setupSaving": "Salvando…",
   "setupOpenDashboard": "Abrir painel",
+  "setupCreatePlanCta": "Criar meu plano de treino",
   "setupWelcomeToast": "Bem-vindo ao Threkir!",
   "setupSaveError": "Não foi possível salvar sua configuração: {message}",
   "setupNameTitle": "Como devemos te chamar?",

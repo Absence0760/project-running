@@ -238,6 +238,7 @@
   "setupContinue": "続ける",
   "setupSaving": "保存中…",
   "setupOpenDashboard": "ダッシュボードを開く",
+  "setupCreatePlanCta": "トレーニングプランを作成",
   "setupWelcomeToast": "Threkir へようこそ！",
   "setupSaveError": "設定を保存できませんでした: {message}",
   "setupNameTitle": "何とお呼びしましょうか？",

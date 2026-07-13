@@ -843,6 +843,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupOpenDashboard => 'Open dashboard';
 
   @override
+  String get setupCreatePlanCta => 'Create my training plan';
+
+  @override
   String get setupWelcomeToast => 'Welcome to Threkir!';
 
   @override

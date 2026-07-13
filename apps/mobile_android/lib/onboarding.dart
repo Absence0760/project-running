@@ -8,9 +8,12 @@
 /// Skip, so a returning user never re-sees it.
 library;
 
+import 'training.dart';
+
 /// Universal-prefs bag key the wizard's Goal step writes into. Hard-coded
-/// by name across the wizard + the (future) plan-suggestion surface, so a
-/// rename without grepping every consumer would orphan the saved value.
+/// by name across the wizard + the plan-suggestion surface (the finish-step
+/// "create my training plan" CTA reads it back via [planPresetForGoal]), so
+/// a rename without grepping every consumer would orphan the saved value.
 /// Matches web's `PRIMARY_GOAL_KEY`.
 const String primaryGoalKey = 'primary_goal';
 
@@ -31,3 +34,31 @@ const List<String> primaryGoalValues = [
 /// Total wizard steps. Drives the progress-dot indicator + the per-step
 /// navigation math. Mirrors web's `ONBOARDING_TOTAL_STEPS`.
 const int onboardingTotalSteps = 7;
+
+/// A create-plan preset derived from a primary-goal answer — twin of web's
+/// `PlanPreset`.
+class PlanPreset {
+  final GoalEvent goalEvent;
+  final bool beginnerWalkRun;
+  const PlanPreset(this.goalEvent, this.beginnerWalkRun);
+}
+
+/// Maps an onboarding primary-goal answer to a create-plan preset, so the
+/// post-onboarding CTA can deep-link straight into the plan wizard with the
+/// goal distance preselected and — for the three beginner-leaning goals — the
+/// walk-run toggle already ticked (the affordance a brand-new runner would
+/// otherwise never discover). Distance goals map 1:1 to [GoalEvent];
+/// `general_fitness` / `weight_loss` / `5k` all seed the beginner walk-run 5K.
+/// Keep in lockstep with web's `onboarding.ts#planPresetForGoal`.
+PlanPreset planPresetForGoal(String goal) {
+  switch (goal) {
+    case '10k':
+      return const PlanPreset(GoalEvent.distance10k, false);
+    case 'half_marathon':
+      return const PlanPreset(GoalEvent.distanceHalf, false);
+    case 'marathon':
+      return const PlanPreset(GoalEvent.distanceFull, false);
+    default: // general_fitness, weight_loss, 5k
+      return const PlanPreset(GoalEvent.distance5k, true);
+  }
+}

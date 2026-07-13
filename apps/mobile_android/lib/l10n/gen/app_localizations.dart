@@ -1535,6 +1535,12 @@ abstract class AppLocalizations {
   /// **'Open dashboard'**
   String get setupOpenDashboard;
 
+  /// Setup-wizard finish-step CTA that saves and opens the plan wizard preselected to the runner's chosen goal
+  ///
+  /// In en, this message translates to:
+  /// **'Create my training plan'**
+  String get setupCreatePlanCta;
+
   /// Toast shown after the setup wizard completes
   ///
   /// In en, this message translates to:

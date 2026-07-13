@@ -23,8 +23,10 @@ import '../widgets/log_speed_dial.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
 import 'fitness_hub_screen.dart';
+import '../onboarding.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
+import 'plan_new_screen.dart';
 import 'run_screen.dart';
 import 'setup_wizard_screen.dart';
 import 'social_screen.dart';
@@ -173,8 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
     // can't persist.
     if (profile == null || profile.onboardedAt != null) return;
     _setupWizardShown = true;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    // The wizard pops the chosen `primary_goal` when the runner taps the
+    // goal-keyed "create my training plan" CTA (else null). Route straight
+    // into the plan wizard preselected so a brand-new runner doesn't have to
+    // hunt for /plans/new + the beginner walk-run toggle.
+    final goal = await Navigator.of(context).push<String?>(
+      MaterialPageRoute<String?>(
         fullscreenDialog: true,
         builder: (_) => SetupWizardScreen(
           apiClient: api,
@@ -188,6 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
           // once the user explicitly picked a unit.
           initialPreferredUnit: widget.settingsSync?.service
               ?.effective<String>(SettingsKeys.preferredUnit),
+        ),
+      ),
+    );
+    if (!mounted || goal == null) return;
+    final preset = planPresetForGoal(goal);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanNewScreen(
+          training: widget.training,
+          initialGoal: preset.goalEvent,
+          initialBeginnerWalkRun: preset.beginnerWalkRun,
         ),
       ),
     );

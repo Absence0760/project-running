@@ -1151,6 +1151,10 @@
   "@setupOpenDashboard": {
     "description": "Final setup-wizard button that saves and closes the wizard"
   },
+  "setupCreatePlanCta": "Create my training plan",
+  "@setupCreatePlanCta": {
+    "description": "Setup-wizard finish-step CTA that saves and opens the plan wizard preselected to the runner's chosen goal"
+  },
   "setupWelcomeToast": "Welcome to Threkir!",
   "@setupWelcomeToast": {
     "description": "Toast shown after the setup wizard completes"

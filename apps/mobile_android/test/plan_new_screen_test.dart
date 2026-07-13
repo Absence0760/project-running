@@ -354,4 +354,42 @@ void main() {
       expect(training.createCalled, isTrue);
     });
   });
+
+  group('goal preselection (onboarding nudge)', () {
+    // The form sits in a lazy ListView; a tall surface builds the beginner
+    // toggle so its state can be read.
+    Future<void> pumpPreset(WidgetTester tester,
+        {GoalEvent? goal, bool beginner = false}) {
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(
+            training: TrainingService(),
+            initialGoal: goal,
+            initialBeginnerWalkRun: beginner,
+          ),
+        ),
+      );
+    }
+
+    CheckboxListTile beginnerTile(WidgetTester tester) =>
+        tester.widget<CheckboxListTile>(find.widgetWithText(
+            CheckboxListTile, 'New to running? Use a walk-run plan'));
+
+    testWidgets('initialBeginnerWalkRun ticks the walk-run toggle on mount',
+        (tester) async {
+      await pumpPreset(tester, goal: GoalEvent.distance5k, beginner: true);
+      expect(beginnerTile(tester).value, isTrue);
+    });
+
+    testWidgets('defaults leave the walk-run toggle unticked', (tester) async {
+      await pumpPreset(tester);
+      expect(beginnerTile(tester).value, isFalse);
+    });
+  });
 }
