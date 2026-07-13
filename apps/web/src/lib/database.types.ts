@@ -1669,6 +1669,103 @@ export type Database = {
           },
         ]
       }
+      global_segment_efforts: {
+        Row: {
+          created_at: string
+          global_segment_id: string
+          id: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          global_segment_id: string
+          id?: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          global_segment_id?: string
+          id?: string
+          run_id?: string
+          started_at?: string
+          time_seconds?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_segment_efforts_global_segment_id_fkey"
+            columns: ["global_segment_id"]
+            isOneToOne: false
+            referencedRelation: "global_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_segments: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          distance_m: number
+          elevation_m: number | null
+          id: string
+          is_active: boolean
+          name: string
+          region: string | null
+          surface: string
+          waypoints: Json
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          distance_m: number
+          elevation_m?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          region?: string | null
+          surface?: string
+          waypoints: Json
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          distance_m?: number
+          elevation_m?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          region?: string | null
+          surface?: string
+          waypoints?: Json
+        }
+        Relationships: []
+      }
       gym_routine_exercises: {
         Row: {
           exercise_key: string
@@ -5067,6 +5164,33 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      global_segment_effort_ranks: {
+        Args: { p_run_id: string }
+        Returns: {
+          effort_id: string
+          rank: number
+        }[]
+      }
+      global_segment_leaderboard: {
+        Args: {
+          p_age_band?: string
+          p_club_id?: string
+          p_gender?: string
+          p_limit?: number
+          p_segment_id: string
+        }
+        Returns: {
+          age: number
+          avatar_url: string
+          display_name: string
+          effort_id: string
+          gender: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }[]
       }
       grant_health_data_consent: { Args: never; Returns: string }
       gym_exercise_names: {
