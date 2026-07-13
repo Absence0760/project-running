@@ -4308,6 +4308,40 @@ export async function deletePlan(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Pause an active plan — a first-class, reversible primitive distinct from
+/// abandon/complete (persona runner-woman, decisions §231). Sets status
+/// 'paused', which frees the one-active slot so the runner can resume later.
+export async function pausePlan(id: string): Promise<void> {
+	await updatePlanStatus(id, 'paused');
+}
+
+/// Thrown by resumePlan when the user already has another active plan — the
+/// `training_plans_one_active` unique index would reject the resume, so we
+/// refuse up front with a clear signal the UI can translate rather than
+/// silently completing the other plan.
+export class ActivePlanExistsError extends Error {
+	constructor() {
+		super('active_plan_exists');
+		this.name = 'ActivePlanExistsError';
+	}
+}
+
+/// Resume a paused plan back to 'active'. Refuses (throws
+/// ActivePlanExistsError) when another active plan already exists for the
+/// user, since the one-active partial unique index would reject it — the
+/// runner must pause/finish the other plan first. Non-destructive by design.
+export async function resumePlan(id: string, userId: string): Promise<void> {
+	const { data: active, error: qErr } = await supabase
+		.from('training_plans')
+		.select('id')
+		.eq('user_id', userId)
+		.eq('status', 'active')
+		.limit(1);
+	if (qErr) throw qErr;
+	if (active && active.length > 0) throw new ActivePlanExistsError();
+	await updatePlanStatus(id, 'active');
+}
+
 export async function markWorkoutCompleted(
 	workoutId: string,
 	runId: string | null,

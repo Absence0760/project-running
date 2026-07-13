@@ -464,7 +464,7 @@ export type ClubPostWithAuthor = ClubPost & {
 
 // ─────────────────────── Training plans ───────────────────────
 
-export type PlanStatus = 'active' | 'completed' | 'abandoned';
+export type PlanStatus = 'active' | 'completed' | 'abandoned' | 'paused';
 
 export type TrainingPlan = Omit<TrainingPlanRow, 'status'> & { status: PlanStatus };
 export type PlanWeek = PlanWeekRow;
