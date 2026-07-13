@@ -59,6 +59,84 @@ EffortResult? computeEffortFromTrack(
   );
 }
 
+/// A free-standing catalogue-segment geometry (the global/famous-segment
+/// layer — decisions §231). Carries its own polyline, so matching keys off
+/// the run passing the segment's start then its end rather than a
+/// distance-along-a-route window. Mirrors `GlobalSegmentGeometry` in
+/// `apps/web/src/lib/segments/segments.ts`.
+class GlobalSegmentGeometry {
+  final List<Waypoint> points;
+  final double distanceM;
+  const GlobalSegmentGeometry({required this.points, required this.distanceM});
+}
+
+/// Scores a run track against a free-standing catalogue-segment geometry
+/// and returns the effort time, or null if the run didn't run it.
+///
+/// v1 is a CURATED end-to-end match, NOT arbitrary-geometry HMM matching
+/// (deferred): the run must approach the segment's START within
+/// [toleranceM], then reach its END within [toleranceM] LATER in the track
+/// (a segment is directional), having covered a distance within 25% of the
+/// segment's own length between the two crossings — otherwise null. The
+/// timing reuses [computeEffortFromTrack] over that window so the sparsity
+/// + timestamp-interpolation guards are shared. Mirrors
+/// `computeGlobalSegmentEffort` in `apps/web/src/lib/segments/segments.ts`.
+EffortResult? computeGlobalSegmentEffort(
+  List<Waypoint> track,
+  GlobalSegmentGeometry segment, {
+  double toleranceM = 35,
+}) {
+  if (track.length < 2) return null;
+  final pts = segment.points;
+  if (pts.length < 2 || segment.distanceM <= 0) return null;
+  final start = pts.first;
+  final end = pts.last;
+
+  final cum = List<double>.filled(track.length, 0);
+  for (var i = 1; i < track.length; i++) {
+    cum[i] = cum[i - 1] +
+        _haversine(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+  }
+
+  var startIdx = -1;
+  var startBest = double.infinity;
+  for (var i = 0; i < track.length; i++) {
+    final d = _haversine(track[i].lat, track[i].lng, start.lat, start.lng);
+    if (d < startBest) {
+      startBest = d;
+      startIdx = i;
+    }
+  }
+  if (startIdx < 0 || startBest > toleranceM) return null;
+
+  var endIdx = -1;
+  var endBest = double.infinity;
+  for (var i = startIdx + 1; i < track.length; i++) {
+    final d = _haversine(track[i].lat, track[i].lng, end.lat, end.lng);
+    if (d < endBest) {
+      endBest = d;
+      endIdx = i;
+    }
+  }
+  if (endIdx < 0 || endBest > toleranceM) return null;
+
+  final dStart = cum[startIdx];
+  final dEnd = cum[endIdx];
+  if (dEnd <= dStart) return null;
+
+  // End-to-end guard: covered distance must be ~the segment length so a
+  // straight-line shortcut between distant endpoints isn't mistaken for
+  // running the segment.
+  if ((dEnd - dStart - segment.distanceM).abs() / segment.distanceM > 0.25) {
+    return null;
+  }
+
+  return computeEffortFromTrack(
+    track,
+    SegmentSlice(startDistanceM: dStart, endDistanceM: dEnd),
+  );
+}
+
 /// Auto-effort generation for a run on its parent route. Mirrors
 /// `computeSegmentEffortsForRun` in web `data.ts`. Idempotent against
 /// the unique(segment_id, run_id) constraint via upsert with
