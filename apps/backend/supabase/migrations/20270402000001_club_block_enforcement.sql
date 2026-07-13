@@ -36,14 +36,33 @@
 --
 -- Anon callers must stay able to read public-club rosters and posts.
 -- `is_blocked_either_way`'s anon EXECUTE grant was deliberately revoked
--- (20261108_001, anti-oracle defence-in-depth), so anon calling it at
--- all raises 42501 — and these policies are reached by anon transitively
--- (the `challenges` SELECT policy sub-queries `club_members`). A block is
--- meaningless without a viewer identity anyway, so each guard is written
--- `auth.uid() is null or not is_blocked_either_way(...)`: for anon the
--- left operand is true and the OR short-circuits, so the function is
--- never invoked (public rosters/posts stay readable, the oracle stays
--- closed); only an authenticated viewer evaluates the block predicate.
+-- (20261108_001, anti-oracle defence-in-depth). These policies are
+-- reached by anon transitively (the `challenges` SELECT policy sub-queries
+-- `club_members`), and a policy's function references are ACL-checked at
+-- evaluation time for the querying role regardless of OR short-circuit —
+-- so naming `is_blocked_either_way` directly here raises 42501 for anon
+-- even behind an `auth.uid() is null or …` guard (the guard does not stop
+-- the ACL check). Same problem, same remedy as the membership oracles
+-- (20261120_001): wrap the check in a `private`-schema SECURITY DEFINER
+-- helper the anon/authenticated roles may execute. The inner
+-- `is_blocked_either_way` runs as the definer (no anon ACL needed on it),
+-- and `private` is outside PostgREST's exposed schemas so no anon RPC
+-- oracle is created. viewer_blocks(target) keys on auth.uid() as the
+-- viewer, so anon (null viewer) always gets false — public rosters/posts
+-- stay readable signed-out; only an authenticated viewer is filtered.
+create or replace function private.viewer_blocks(target uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select is_blocked_either_way(auth.uid(), target);
+$$;
+
+revoke execute on function private.viewer_blocks(uuid) from public;
+grant execute on function private.viewer_blocks(uuid)
+  to anon, authenticated, service_role;
 
 -- ── club_members roster ──
 drop policy "active members readable with their club" on club_members;
@@ -59,7 +78,7 @@ create policy "active members readable with their club"
           or private.is_club_member(clubs.id)
         )
     )
-    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_members.user_id))
+    and not private.viewer_blocks(club_members.user_id)
   );
 
 drop policy "private-club members read pending rows" on club_members;
@@ -72,7 +91,7 @@ create policy "private-club members read pending rows"
         and c.is_public = false
         and (c.owner_id = auth.uid() or private.is_club_member(c.id))
     )
-    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_members.user_id))
+    and not private.viewer_blocks(club_members.user_id)
   );
 
 -- ── club_posts feed ──
@@ -88,5 +107,5 @@ create policy "posts readable with their club"
       club_posts.event_id is null
       or exists (select 1 from events e where e.id = club_posts.event_id)
     )
-    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_posts.author_id))
+    and not private.viewer_blocks(club_posts.author_id)
   );
