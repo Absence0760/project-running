@@ -30,6 +30,7 @@
 		comment: 'reportDialog.nounComment',
 		club_post: 'reportDialog.nounPost',
 		run: 'reportDialog.nounRun',
+		route_review: 'reportDialog.nounReview',
 	};
 
 	const REASONS: { value: ReportReason; label: MessageKey; hint: MessageKey }[] = [

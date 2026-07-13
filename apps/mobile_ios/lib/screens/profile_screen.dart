@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../notification_groups.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -62,6 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _blockBusy = false;
   String _notifFilter = 'all'; // 'all' | 'unread'
   Set<String> _dismissedNotifIds = {};
+  Set<String> _expandedGroups = {};
 
   // Pagination state for the Followers / Following tabs. Updated on
   // initial load + each Load-more tap; the boolean flags drive the
@@ -680,6 +682,19 @@ class _ProfileScreenState extends State<ProfileScreen>
         .toList();
     final hasUnread =
         _notifications.any((n) => n.row.readAt == null);
+    final viewById = {for (final v in visible) v.row.id: v};
+    final groups =
+        groupNotifications(visible.map((v) => v.row).toList());
+    final entries = <({NotificationGroup? group, NotificationView? sub})>[];
+    for (final g in groups) {
+      entries.add((group: g, sub: null));
+      if (g.otherCount > 0 && _expandedGroups.contains(g.key)) {
+        for (final o in g.others) {
+          final ov = viewById[o.id];
+          if (ov != null) entries.add((group: null, sub: ov));
+        }
+      }
+    }
     return Column(
       children: [
         Padding(
@@ -723,10 +738,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                   onRefresh: _load,
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: visible.length,
+                    itemCount: entries.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) =>
-                        _buildNotifRow(theme, visible[i]),
+                    itemBuilder: (_, i) {
+                      final e = entries[i];
+                      if (e.group != null) {
+                        return _buildNotifGroupRow(
+                            theme, e.group!, viewById);
+                      }
+                      return _buildNotifRow(theme, e.sub!, isSub: true);
+                    },
                   ),
                 ),
         ),
@@ -734,17 +755,21 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildNotifRow(ThemeData theme, NotificationView item) {
+  Widget _buildNotifRow(ThemeData theme, NotificationView item,
+      {bool isSub = false}) {
     final unread = item.row.readAt == null;
     return Container(
       color: unread
           ? theme.colorScheme.primary.withValues(alpha: 0.06)
           : null,
       child: ListTile(
+        contentPadding: isSub
+            ? const EdgeInsets.only(left: 40, right: 8)
+            : null,
         leading: _Avatar(
           displayName: item.actor?.displayName,
           avatarUrl: item.actor?.avatarUrl,
-          size: 40,
+          size: isSub ? 32 : 40,
         ),
         title: Text(_verbFor(AppLocalizations.of(context), item)),
         subtitle: item.commentExcerpt != null
@@ -763,6 +788,100 @@ class _ProfileScreenState extends State<ProfileScreen>
         onTap: () => _onNotifTap(item),
       ),
     );
+  }
+
+  Widget _buildNotifGroupRow(ThemeData theme, NotificationGroup group,
+      Map<String, NotificationView> viewById) {
+    final l10n = AppLocalizations.of(context);
+    final lead = viewById[group.lead.id];
+    if (lead == null) return const SizedBox.shrink();
+    final unread = group.unreadCount > 0;
+    final expanded = _expandedGroups.contains(group.key);
+    final title = group.otherCount > 0
+        ? _verbFor(l10n, lead,
+            nameOverride: l10n.profileNotifNameAndOthers(
+                _notifName(l10n, lead), group.otherCount))
+        : _verbFor(l10n, lead);
+    return Container(
+      color: unread
+          ? theme.colorScheme.primary.withValues(alpha: 0.06)
+          : null,
+      child: ListTile(
+        leading: _Avatar(
+          displayName: lead.actor?.displayName,
+          avatarUrl: lead.actor?.avatarUrl,
+          size: 40,
+        ),
+        title: Text(title),
+        subtitle: lead.commentExcerpt != null
+            ? Text(
+                '"${lead.commentExcerpt}"',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (unread)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${group.unreadCount}',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onPrimary),
+                ),
+              ),
+            if (group.otherCount > 0)
+              IconButton(
+                icon: Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20),
+                tooltip: expanded
+                    ? l10n.profileNotifShowLess
+                    : l10n.profileNotifAndOthers(group.otherCount),
+                onPressed: () => setState(() {
+                  _expandedGroups = expanded
+                      ? (_expandedGroups.difference({group.key}))
+                      : ({..._expandedGroups, group.key});
+                }),
+              ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: l10n.profileDismiss,
+              onPressed: () => _dismissGroup(group),
+            ),
+          ],
+        ),
+        onTap: () => _openGroup(group, viewById),
+      ),
+    );
+  }
+
+  Future<void> _openGroup(NotificationGroup group,
+      Map<String, NotificationView> viewById) async {
+    final lead = viewById[group.lead.id];
+    if (lead == null) return;
+    for (final o in group.others) {
+      final ov = viewById[o.id];
+      if (ov != null && ov.row.readAt == null) {
+        await _markNotifRead(ov);
+      }
+    }
+    if (!mounted) return;
+    await _onNotifTap(lead);
+  }
+
+  Future<void> _dismissGroup(NotificationGroup group) async {
+    for (final row in [group.lead, ...group.others]) {
+      await _dismissNotif(row.id);
+    }
   }
 
   Future<void> _onNotifTap(NotificationView item) async {
@@ -815,8 +934,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     return formatPaceForPref(durationS / (metres / 1000));
   }
 
-  String _verbFor(AppLocalizations l10n, NotificationView item) {
-    final name = item.actor?.displayName ?? l10n.profileNotifSomeone;
+  String _notifName(AppLocalizations l10n, NotificationView item) =>
+      item.actor?.displayName ?? l10n.profileNotifSomeone;
+
+  String _verbFor(AppLocalizations l10n, NotificationView item,
+      {String? nameOverride}) {
+    final name = nameOverride ?? _notifName(l10n, item);
     final dist = item.runDistanceM != null
         ? formatDistanceForPref(item.runDistanceM!)
         : l10n.profileNotifYourRun;

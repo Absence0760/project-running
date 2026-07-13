@@ -175,6 +175,13 @@ void main() {
       expect(calculateElevationGain(const []), 0);
       expect(calculateElevationGain([100]), 0);
     });
+
+    test('rounds the result (parity with web calculateElevationGain)', () {
+      // Three +0.4 deltas sum to 1.2 → rounds to 1, matching the web twin's
+      // Math.round. Without rounding the mobile route builder stores /
+      // displays a fractional gain the web never would.
+      expect(calculateElevationGain([0, 0.4, 0.8, 1.2]), 1);
+    });
   });
 
   group('sampleCoordinates', () {

@@ -98,8 +98,10 @@ Future<List<double>> fetchElevations(
 }
 
 /// Total elevation gain in metres. Sums every positive delta between
-/// consecutive samples — same definition as the web helper and the
-/// `RunStats` gain pipeline.
+/// consecutive samples, then rounds to whole metres — mirrors the web
+/// twin's `Math.round(gain)` so a route built on either platform stores
+/// the same `elevation_m`. `roundToDouble` matches `Math.round` here
+/// because `gain` is always non-negative.
 double calculateElevationGain(List<double> elevations) {
   if (elevations.length < 2) return 0;
   var gain = 0.0;
@@ -107,7 +109,7 @@ double calculateElevationGain(List<double> elevations) {
     final diff = elevations[i] - elevations[i - 1];
     if (diff > 0) gain += diff;
   }
-  return gain;
+  return gain.roundToDouble();
 }
 
 /// Down-sample a polyline so we don't burn an elevation lookup on

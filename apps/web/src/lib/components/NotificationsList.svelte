@@ -15,6 +15,7 @@
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { notificationLinkFor } from '$lib/social/notification_link';
+	import { groupNotifications, type NotificationGroup } from '$lib/social/notification_groups';
 
 	let items = $state<NotificationView[]>([]);
 	let loading = $state(true);
@@ -44,19 +45,59 @@
 		filter === 'unread' ? items.filter((x) => x.row.read_at == null) : items,
 	);
 
-	async function open(item: NotificationView) {
-		const wasUnread = item.row.read_at == null;
-		if (wasUnread) {
-			notificationStore.decrement();
-			items = items.map((x) =>
-				x.row.id === item.row.id
-					? { ...x, row: { ...x.row, read_at: new Date().toISOString() } }
-					: x,
-			);
-			markNotificationRead(item.row.id).catch((e) => console.warn('mark read failed', e));
+	let viewById = $derived(new Map(visible.map((v) => [v.row.id, v])));
+	let groups = $derived(groupNotifications(visible.map((v) => v.row)));
+	let expanded = $state<Set<string>>(new Set());
+
+	function toggleExpanded(key: string) {
+		const next = new Set(expanded);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		expanded = next;
+	}
+
+	function markReadLocal(ids: string[]) {
+		const idSet = new Set(ids);
+		let unread = 0;
+		items = items.map((x) => {
+			if (idSet.has(x.row.id) && x.row.read_at == null) {
+				unread += 1;
+				return { ...x, row: { ...x.row, read_at: new Date().toISOString() } };
+			}
+			return x;
+		});
+		for (let i = 0; i < unread; i++) notificationStore.decrement();
+		for (const id of ids) {
+			markNotificationRead(id).catch((e) => console.warn('mark read failed', e));
 		}
+	}
+
+	async function open(item: NotificationView) {
+		if (item.row.read_at == null) markReadLocal([item.row.id]);
 		const href = notificationLinkFor(item);
 		if (href) goto(href);
+	}
+
+	function openGroup(group: NotificationGroup) {
+		const lead = viewById.get(group.lead.id);
+		if (!lead) return;
+		const unreadIds = [group.lead, ...group.others]
+			.filter((r) => r.read_at == null)
+			.map((r) => r.id);
+		if (unreadIds.length > 0) markReadLocal(unreadIds);
+		const href = notificationLinkFor(lead);
+		if (href) goto(href);
+	}
+
+	async function removeGroup(group: NotificationGroup, event: Event) {
+		event.stopPropagation();
+		for (const row of [group.lead, ...group.others]) {
+			await remove(row.id, event);
+		}
+	}
+
+	function nameFor(item: NotificationView): string {
+		return item.actor?.display_name ?? m('notificationsList.someone');
 	}
 
 	async function handleMarkAll() {
@@ -86,8 +127,8 @@
 		}
 	}
 
-	function verbFor(item: NotificationView): string {
-		const name = item.actor?.display_name ?? m('notificationsList.someone');
+	function verbFor(item: NotificationView, nameOverride?: string): string {
+		const name = nameOverride ?? nameFor(item);
 		const dist = item.run_distance_m
 			? fmtKm(item.run_distance_m)
 			: m('notificationsList.yourRun');
@@ -191,32 +232,95 @@
 		</div>
 	{:else}
 		<ul class="list">
-			{#each visible as item (item.row.id)}
-				<li class="item-wrap" class:unread={item.row.read_at == null}>
-					<button class="item-main" type="button" onclick={() => open(item)}>
-						<Avatar
-							url={item.actor?.avatar_url}
-							name={item.actor?.display_name}
-							size="2.5rem"
-							font="0.95rem"
-						/>
-						<span class="body">
-							<span class="verb">{verbFor(item)}</span>
-							{#if item.comment_excerpt}
-								<span class="excerpt">"{item.comment_excerpt}"</span>
+			{#each groups as group (group.key + group.lead.id)}
+				{@const lead = viewById.get(group.lead.id)}
+				{#if lead}
+					<li class="item-wrap" class:unread={group.unreadCount > 0}>
+						<button class="item-main" type="button" onclick={() => openGroup(group)}>
+							<Avatar
+								url={lead.actor?.avatar_url}
+								name={lead.actor?.display_name}
+								size="2.5rem"
+								font="0.95rem"
+							/>
+							<span class="body">
+								<span class="verb">
+									{verbFor(
+										lead,
+										group.otherCount > 0
+											? m('notificationsList.nameAndOthers', {
+													name: nameFor(lead),
+													count: group.otherCount,
+												})
+											: undefined,
+									)}
+								</span>
+								{#if lead.comment_excerpt}
+									<span class="excerpt">"{lead.comment_excerpt}"</span>
+								{/if}
+								<span class="when">{fmtAbsolute(group.lead.created_at)}</span>
+							</span>
+							{#if group.unreadCount > 0}
+								<span class="group-unread" aria-hidden="true">{group.unreadCount}</span>
 							{/if}
-							<span class="when">{fmtAbsolute(item.row.created_at)}</span>
-						</span>
-					</button>
-					<button
-						type="button"
-						class="dismiss"
-						aria-label={m('notificationsList.dismiss')}
-						onclick={(e) => remove(item.row.id, e)}
-					>
-						<span class="material-symbols">close</span>
-					</button>
-				</li>
+						</button>
+						{#if group.otherCount > 0}
+							<button
+								type="button"
+								class="expander"
+								aria-expanded={expanded.has(group.key)}
+								aria-label={expanded.has(group.key)
+									? m('notificationsList.showLess')
+									: m('notificationsList.andOthers', { count: group.otherCount })}
+								onclick={() => toggleExpanded(group.key)}
+							>
+								<span class="material-symbols">
+									{expanded.has(group.key) ? 'expand_less' : 'expand_more'}
+								</span>
+							</button>
+						{/if}
+						<button
+							type="button"
+							class="dismiss"
+							aria-label={m('notificationsList.dismiss')}
+							onclick={(e) => removeGroup(group, e)}
+						>
+							<span class="material-symbols">close</span>
+						</button>
+					</li>
+					{#if group.otherCount > 0 && expanded.has(group.key)}
+						{#each group.others as other (other.id)}
+							{@const otherView = viewById.get(other.id)}
+							{#if otherView}
+								<li class="item-wrap sub" class:unread={other.read_at == null}>
+									<button class="item-main" type="button" onclick={() => open(otherView)}>
+										<Avatar
+											url={otherView.actor?.avatar_url}
+											name={otherView.actor?.display_name}
+											size="2rem"
+											font="0.8rem"
+										/>
+										<span class="body">
+											<span class="verb">{verbFor(otherView)}</span>
+											{#if otherView.comment_excerpt}
+												<span class="excerpt">"{otherView.comment_excerpt}"</span>
+											{/if}
+											<span class="when">{fmtAbsolute(other.created_at)}</span>
+										</span>
+									</button>
+									<button
+										type="button"
+										class="dismiss"
+										aria-label={m('notificationsList.dismiss')}
+										onclick={(e) => remove(other.id, e)}
+									>
+										<span class="material-symbols">close</span>
+									</button>
+								</li>
+							{/if}
+						{/each}
+					{/if}
+				{/if}
 			{/each}
 		</ul>
 	{/if}
@@ -374,6 +478,41 @@
 	.when {
 		font-size: 0.78rem;
 		color: var(--color-text-tertiary);
+	}
+	.item-wrap.sub {
+		margin-inline-start: 1.75rem;
+		background: var(--color-bg-secondary, var(--color-surface));
+	}
+	.group-unread {
+		flex-shrink: 0;
+		align-self: center;
+		min-width: 1.3rem;
+		padding: 0 0.4rem;
+		background: var(--color-primary);
+		color: white;
+		border-radius: 9999px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-align: center;
+	}
+	.expander {
+		flex-shrink: 0;
+		background: transparent;
+		border: none;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		padding: 0.5rem 0.5rem;
+		align-self: stretch;
+		display: inline-flex;
+		align-items: center;
+	}
+	.expander:hover {
+		color: var(--color-primary);
+		background: var(--color-bg-secondary);
+	}
+	.expander .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.2rem;
 	}
 	.dismiss {
 		flex-shrink: 0;

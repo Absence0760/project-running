@@ -138,6 +138,41 @@ void main() {
     });
   });
 
+  group('notification grouping wiring', () {
+    // The inbox collapses same-kind + same-target notifications through
+    // the notification_groups.dart parity helper. Pin the wiring so the
+    // "Alice and N others" collapse can't silently regress to a flat list
+    // (the logic itself is covered by notification_groups_test.dart).
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+
+    test('builds groups through the parity helper', () {
+      expect(source.contains('groupNotifications('), isTrue,
+          reason:
+              'The inbox must collapse via notification_groups.dart, not '
+              'render a flat NotificationView list.');
+      expect(source.contains('_buildNotifGroupRow('), isTrue);
+    });
+
+    test('renders the "and N others" collapsed name + expand toggle', () {
+      expect(source.contains('l10n.profileNotifNameAndOthers'), isTrue,
+          reason:
+              'The collapsed group lead must read "<name> and N others" to '
+              'mirror the web NotificationsList.');
+      expect(source.contains('l10n.profileNotifAndOthers'), isTrue);
+      expect(source.contains('l10n.profileNotifShowLess'), isTrue);
+      expect(source.contains('_expandedGroups'), isTrue);
+    });
+
+    test('opening / dismissing acts on the whole group', () {
+      expect(source.contains('_openGroup('), isTrue,
+          reason:
+              'Tapping a group must mark every member read + navigate to '
+              'the shared target.');
+      expect(source.contains('_dismissGroup('), isTrue);
+    });
+  });
+
   group('runs tab — visual upgrade', () {
     // Source-level guards on the Runs tab polish (see the History
     // tab's _RunTile pattern). Driving the full widget tree requires

@@ -2599,6 +2599,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailReportRoute => 'Signaler l\'itinéraire';
 
   @override
+  String get routeDetailReportReview => 'Signaler l\'avis';
+
+  @override
   String get routeDetailTransferToClub => 'Transférer à un club';
 
   @override
@@ -3500,6 +3503,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileNotifYourRun => 'votre course';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name et $count autres';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'et $count autres';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Afficher moins';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name a donné des kudos à votre $dist';
   }
@@ -4308,6 +4324,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get liveCutoffWaitingSignal =>
       'En attente d\'un signal récent pour estimer l\'arrivée';
+
+  @override
+  String get liveCutoffSignalLost =>
+      'Signal perdu — arrivée impossible à estimer';
 
   @override
   String get plansTitle => 'Plans d\'entraînement';
@@ -7686,6 +7706,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Signaler la course';
+
+  @override
+  String get reportTitleReview => 'Signaler l\'avis';
 
   @override
   String get reportTitleContent => 'Signaler le contenu';

@@ -2589,6 +2589,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailReportRoute => 'Denunciar rota';
 
   @override
+  String get routeDetailReportReview => 'Denunciar avaliação';
+
+  @override
   String get routeDetailTransferToClub => 'Transferir para clube';
 
   @override
@@ -3489,6 +3492,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileNotifYourRun => 'sua corrida';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name e mais $count';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'e mais $count';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Mostrar menos';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name deu kudos à sua $dist';
   }
@@ -4300,6 +4316,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get liveCutoffWaitingSignal =>
       'À espera de um sinal recente para prever a chegada';
+
+  @override
+  String get liveCutoffSignalLost =>
+      'Sinal perdido — não é possível prever a chegada';
 
   @override
   String get plansTitle => 'Planos de treino';
@@ -7662,6 +7682,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Denunciar corrida';
+
+  @override
+  String get reportTitleReview => 'Denunciar avaliação';
 
   @override
   String get reportTitleContent => 'Denunciar conteúdo';
@@ -13643,6 +13666,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get routeDetailReportRoute => 'Denunciar rota';
 
   @override
+  String get routeDetailReportReview => 'Denunciar avaliação';
+
+  @override
   String get routeDetailTransferToClub => 'Transferir para clube';
 
   @override
@@ -14543,6 +14569,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get profileNotifYourRun => 'sua corrida';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name e mais $count';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'e mais $count';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Mostrar menos';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name deu kudos à sua $dist';
   }
@@ -15354,6 +15393,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get liveCutoffWaitingSignal =>
       'Aguardando um sinal recente para prever a chegada';
+
+  @override
+  String get liveCutoffSignalLost =>
+      'Sinal perdido — não é possível estimar a chegada';
 
   @override
   String get plansTitle => 'Planos de treino';
@@ -18715,6 +18758,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get reportTitleRun => 'Denunciar corrida';
+
+  @override
+  String get reportTitleReview => 'Denunciar avaliação';
 
   @override
   String get reportTitleContent => 'Denunciar conteúdo';

@@ -4379,6 +4379,12 @@ abstract class AppLocalizations {
   /// **'Report route'**
   String get routeDetailReportRoute;
 
+  /// Tooltip on the report button for an individual route review
+  ///
+  /// In en, this message translates to:
+  /// **'Report review'**
+  String get routeDetailReportReview;
+
   /// Tooltip on the route-detail transfer button when the route is personal
   ///
   /// In en, this message translates to:
@@ -5846,6 +5852,24 @@ abstract class AppLocalizations {
   /// **'your run'**
   String get profileNotifYourRun;
 
+  /// Actor name for a collapsed notification group (Alice and 4 others)
+  ///
+  /// In en, this message translates to:
+  /// **'{name} and {count} others'**
+  String profileNotifNameAndOthers(String name, int count);
+
+  /// Expand toggle label for a collapsed notification group
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} others'**
+  String profileNotifAndOthers(int count);
+
+  /// Collapse toggle label for an expanded notification group
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get profileNotifShowLess;
+
   /// Notification text for a kudos
   ///
   /// In en, this message translates to:
@@ -7160,11 +7184,17 @@ abstract class AppLocalizations {
   /// **'{margin} behind'**
   String liveCutoffBehind(String margin);
 
-  /// Spectator next-cutoff card — shown instead of a verdict when the position is stale
+  /// Spectator next-cutoff card — shown instead of a verdict while a fresh fix has no pace yet (still connecting)
   ///
   /// In en, this message translates to:
   /// **'Waiting for a fresh signal to project arrival'**
   String get liveCutoffWaitingSignal;
+
+  /// Spectator next-cutoff card — shown instead of a verdict when the last fix is stale (runner went dark)
+  ///
+  /// In en, this message translates to:
+  /// **'Signal lost — can\'t project arrival'**
+  String get liveCutoffSignalLost;
 
   /// Plans list AppBar title
   ///
@@ -12731,6 +12761,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report run'**
   String get reportTitleRun;
+
+  /// Report sheet title when reporting a route review
+  ///
+  /// In en, this message translates to:
+  /// **'Report review'**
+  String get reportTitleReview;
 
   /// Report sheet title fallback for generic content
   ///

@@ -44,12 +44,18 @@ test.describe('dashboard training-consistency card', () => {
 			});
 		}
 
-		// Two runs, both in the current week → only ONE active week → the card
-		// must stay hidden (< 2 active weeks).
-		for (const daysBack of [0, 1]) {
+		// Two runs a couple of hours apart on the SAME calendar day → exactly
+		// ONE active week no matter which weekday CI runs on. Anchoring to
+		// local midday keeps the pair from straddling a week boundary the way
+		// a today/yesterday pair does (a Sunday+Monday split under the default
+		// Monday week-start would read as two active weeks). The card must
+		// stay hidden (< 2 active weeks).
+		const midday = new Date();
+		midday.setHours(12, 0, 0, 0);
+		for (const hoursBack of [0, 2]) {
 			await insertRun({
 				user_id: oneWeek.id,
-				started_at: new Date(Date.now() - daysBack * 86_400_000).toISOString(),
+				started_at: new Date(midday.getTime() - hoursBack * 3_600_000).toISOString(),
 				distance_m: 5_000,
 				duration_s: 1_500,
 				source: 'app',

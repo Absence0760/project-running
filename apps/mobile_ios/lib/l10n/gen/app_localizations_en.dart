@@ -2570,6 +2570,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailReportRoute => 'Report route';
 
   @override
+  String get routeDetailReportReview => 'Report review';
+
+  @override
   String get routeDetailTransferToClub => 'Transfer to club';
 
   @override
@@ -3461,6 +3464,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileNotifYourRun => 'your run';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name and $count others';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'and $count others';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Show less';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name gave kudos to your $dist';
   }
@@ -4260,6 +4276,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get liveCutoffWaitingSignal =>
       'Waiting for a fresh signal to project arrival';
+
+  @override
+  String get liveCutoffSignalLost => 'Signal lost — can\'t project arrival';
 
   @override
   String get plansTitle => 'Training plans';
@@ -7586,6 +7605,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'Report run';
+
+  @override
+  String get reportTitleReview => 'Report review';
 
   @override
   String get reportTitleContent => 'Report content';

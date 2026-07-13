@@ -16,9 +16,12 @@ import { USER_A } from '../fixtures/users';
  * banner INSTEAD of the form, which gates every persist path (the auto-save
  * controls and the explicit demographics Save) until a reload succeeds.
  *
- * The auth store also reads get_my_profile once during auth.ready(); the page
- * awaits auth.ready() before its own read, so the page's read is deterministic
- * call #2. We fail only that one, then unblock and Retry.
+ * The auth store reads get_my_profile during auth.ready() — on init AND again
+ * on the INITIAL_SESSION onAuthStateChange event — so the page's own read (made
+ * after it awaits auth.ready()) is call #2 OR #3, not a fixed ordinal. We let
+ * the first read succeed (it populates onboarded_at so the layout gate doesn't
+ * redirect to /onboarding) and fail every read after it: the page's read fails
+ * whichever ordinal it lands on, then we unblock and Retry.
  */
 test.describe('/settings/preferences — load failure fails closed', () => {
 	test.use({ storageState: USER_A.storageStatePath });
@@ -26,12 +29,19 @@ test.describe('/settings/preferences — load failure fails closed', () => {
 	test('a failed profile read shows a load-error banner and gates every save', async ({
 		page,
 	}) => {
-		let profileReads = 0;
+		// We must fail ONLY the preferences page's own get_my_profile read, never
+		// an auth-store read: the auth store treats a failed read (null data) as
+		// "profile missing" and rewrites the user with onboarded_at=null, which
+		// redirects the layout to /onboarding (no banner). The store reads
+		// get_my_profile a non-deterministic number of times during auth.ready()
+		// (init + the INITIAL_SESSION event), so counting a fixed ordinal is
+		// fragile. Instead: let auth fully settle on a DIFFERENT settings page
+		// with reads succeeding, then arm the failure and CLIENT-SIDE navigate to
+		// preferences — a router navigation doesn't re-run the auth store, so the
+		// only get_my_profile that fires is the preferences page's own.
+		let failProfileRead = false;
 		await page.route('**/rest/v1/rpc/get_my_profile**', async (route) => {
-			profileReads += 1;
-			// #1 = auth store (must succeed, else the layout gate would redirect
-			// to /onboarding); #2 = the preferences page's own read.
-			if (profileReads === 2) {
+			if (failProfileRead) {
 				await route.fulfill({
 					status: 500,
 					contentType: 'application/json',
@@ -42,7 +52,16 @@ test.describe('/settings/preferences — load failure fails closed', () => {
 			await route.fallback();
 		});
 
-		await page.goto('/settings/preferences');
+		// Land on Account first so auth.ready() completes with every profile read
+		// succeeding (user established, onboarded_at set → no /onboarding gate).
+		await page.goto('/settings/account');
+		await expect(page.getByRole('heading', { level: 2, name: 'Profile' })).toBeVisible({
+			timeout: 10_000,
+		});
+
+		// Arm the failure, then client-side navigate to Preferences.
+		failProfileRead = true;
+		await page.locator('.settings-nav a[href="/settings/preferences"]').first().click();
 
 		// The alert banner renders instead of the form.
 		const banner = page.getByTestId('prefs-load-error');

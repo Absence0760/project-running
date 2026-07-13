@@ -3477,6 +3477,10 @@
   "@routeDetailReportRoute": {
     "description": "Tooltip on the route-detail report button"
   },
+  "routeDetailReportReview": "Report review",
+  "@routeDetailReportReview": {
+    "description": "Tooltip on the report button for an individual route review"
+  },
   "routeDetailTransferToClub": "Transfer to club",
   "@routeDetailTransferToClub": {
     "description": "Tooltip on the route-detail transfer button when the route is personal"
@@ -4702,6 +4706,31 @@
   "@profileNotifYourRun": {
     "description": "Fallback for a run reference in notification text when distance is unknown"
   },
+  "profileNotifNameAndOthers": "{name} and {count} others",
+  "@profileNotifNameAndOthers": {
+    "description": "Actor name for a collapsed notification group (Alice and 4 others)",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileNotifAndOthers": "and {count} others",
+  "@profileNotifAndOthers": {
+    "description": "Expand toggle label for a collapsed notification group",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileNotifShowLess": "Show less",
+  "@profileNotifShowLess": {
+    "description": "Collapse toggle label for an expanded notification group"
+  },
   "profileNotifKudos": "{name} gave kudos to your {dist}",
   "@profileNotifKudos": {
     "description": "Notification text for a kudos",
@@ -5826,7 +5855,11 @@
   },
   "liveCutoffWaitingSignal": "Waiting for a fresh signal to project arrival",
   "@liveCutoffWaitingSignal": {
-    "description": "Spectator next-cutoff card — shown instead of a verdict when the position is stale"
+    "description": "Spectator next-cutoff card — shown instead of a verdict while a fresh fix has no pace yet (still connecting)"
+  },
+  "liveCutoffSignalLost": "Signal lost — can't project arrival",
+  "@liveCutoffSignalLost": {
+    "description": "Spectator next-cutoff card — shown instead of a verdict when the last fix is stale (runner went dark)"
   },
   "plansTitle": "Training plans",
   "@plansTitle": {
@@ -10266,6 +10299,10 @@
   "reportTitleRun": "Report run",
   "@reportTitleRun": {
     "description": "Report sheet title when reporting a run"
+  },
+  "reportTitleReview": "Report review",
+  "@reportTitleReview": {
+    "description": "Report sheet title when reporting a route review"
   },
   "reportTitleContent": "Report content",
   "@reportTitleContent": {

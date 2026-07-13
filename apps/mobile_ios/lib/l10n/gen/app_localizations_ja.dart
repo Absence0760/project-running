@@ -2438,6 +2438,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailReportRoute => 'ルートを報告';
 
   @override
+  String get routeDetailReportReview => 'レビューを報告';
+
+  @override
   String get routeDetailTransferToClub => 'クラブに移管';
 
   @override
@@ -3280,6 +3283,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get profileNotifYourRun => 'あなたのラン';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$nameさん他$count名';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return '他$count件';
+  }
+
+  @override
+  String get profileNotifShowLess => '折りたたむ';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$nameがあなたの$distにKudosを付けました';
   }
@@ -4037,6 +4053,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get liveCutoffWaitingSignal => '到着予想のため最新の信号を待っています';
+
+  @override
+  String get liveCutoffSignalLost => '信号が途絶えました — 到着予測できません';
 
   @override
   String get plansTitle => 'トレーニングプラン';
@@ -7263,6 +7282,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get reportTitleRun => 'ランを報告';
+
+  @override
+  String get reportTitleReview => 'レビューを報告';
 
   @override
   String get reportTitleContent => 'コンテンツを報告';
