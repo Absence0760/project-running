@@ -10,7 +10,7 @@
 
 begin;
 
-select plan(15);
+select plan(16);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -44,6 +44,9 @@ select is(
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa7502"}';
+select is(
+  (select has_phone from my_pending_safety_requests() limit 1),
+  true, 'the pending request surfaces has_phone so the confirm UI can offer SMS');
 select is(
   confirm_safety_contact((select id from my_pending_safety_requests() limit 1), true),
   true, 'the contact confirms and opts into SMS in one call');

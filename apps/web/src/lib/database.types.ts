@@ -5237,6 +5237,7 @@ export type Database = {
         Args: never
         Returns: {
           created_at: string
+          has_phone: boolean
           id: string
           owner_name: string
         }[]

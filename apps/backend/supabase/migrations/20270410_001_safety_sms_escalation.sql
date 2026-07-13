@@ -130,6 +130,31 @@ $$;
 revoke execute on function confirm_safety_contact_by_token(uuid, boolean) from public;
 grant execute on function confirm_safety_contact_by_token(uuid, boolean) to anon, authenticated;
 
+-- Surface whether the owner stored a phone, so the confirm UI can offer the
+-- SMS opt-in only when a number actually exists (an honest double-opt-in).
+-- Return-shape change needs a drop first. Still leaks nothing: it only ever
+-- returns rows whose contact_email equals the caller's own account email.
+drop function if exists my_pending_safety_requests();
+create function my_pending_safety_requests()
+returns table (id uuid, owner_name text, has_phone boolean, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select sc.id,
+         coalesce(p.display_name, ''),
+         sc.contact_phone is not null,
+         sc.created_at
+  from safety_contacts sc
+  join auth.users me on me.id = auth.uid()
+  left join user_profiles p on p.id = sc.owner_id
+  where sc.confirmed_at is null
+    and lower(sc.contact_email) = lower(me.email);
+$$;
+
+revoke execute on function my_pending_safety_requests() from public;
+grant execute on function my_pending_safety_requests() to authenticated;
+
 -- Let an already-confirmed linked contact turn SMS on/off later (they own the
 -- row via contact_user_id). Opting in requires a stored phone; opting out
 -- always clears it.
