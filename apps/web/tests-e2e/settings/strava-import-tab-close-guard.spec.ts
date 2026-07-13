@@ -111,13 +111,19 @@ test.describe('Strava bulk-import tab-close guard', () => {
 				.filter({ hasText: 'Bulk import from a Strava export' });
 			await expect(stravaBulkCard).toBeVisible({ timeout: 10_000 });
 
-			// IDLE: our code registered no beforeunload listener for a plain
-			// page view (guard is scoped to an in-flight import).
-			const activeAtIdle = await page.evaluate(() => {
-				const w = window as unknown as { __beAdds: number; __beRemoves: number };
-				return w.__beAdds - w.__beRemoves;
-			});
-			expect(activeAtIdle).toBe(0);
+			// BASELINE: capture the net beforeunload count on a plain page view.
+			// Our guard is import-scoped (added in handleZipSelect, removed in its
+			// finally), so any listeners present here are the framework's — the
+			// e2e server runs the Vite dev client, which registers its own
+			// beforeunload. We assert the guard's DELTA around the import against
+			// this baseline rather than an absolute zero, so a framework listener
+			// doesn't red the test.
+			const netListeners = () =>
+				page.evaluate(() => {
+					const w = window as unknown as { __beAdds: number; __beRemoves: number };
+					return w.__beAdds - w.__beRemoves;
+				});
+			const baseline = await netListeners();
 
 			const zip = await buildStravaZip({ stravaId, name: activityName, startedAt });
 			await stravaBulkCard.locator('input[type="file"]').setInputFiles({
@@ -126,35 +132,22 @@ test.describe('Strava bulk-import tab-close guard', () => {
 				buffer: zip
 			});
 
-			// IN FLIGHT: while the delayed runs write is outstanding, exactly
-			// one beforeunload guard is active (added, not yet removed).
+			// IN FLIGHT: while the delayed runs write is outstanding, our guard is
+			// active — the net count rises above the baseline (added, not yet
+			// removed).
 			await expect
-				.poll(
-					() =>
-						page.evaluate(() => {
-							const w = window as unknown as {
-								__beAdds: number;
-								__beRemoves: number;
-							};
-							return w.__beAdds - w.__beRemoves;
-						}),
-					{ timeout: 10_000 }
-				)
-				.toBeGreaterThanOrEqual(1);
+				.poll(netListeners, { timeout: 10_000 })
+				.toBeGreaterThan(baseline);
 
 			// The import completes (success toast) — the finally block ran.
 			await expect(page.locator('.toast-success')).toContainText(/1 new/i, {
 				timeout: 15_000
 			});
 
-			// AFTER: the guard was torn down — every add balanced by a remove,
-			// no listener leaks past the import.
-			const afterState = await page.evaluate(() => {
-				const w = window as unknown as { __beAdds: number; __beRemoves: number };
-				return { adds: w.__beAdds, removes: w.__beRemoves };
-			});
-			expect(afterState.adds).toBeGreaterThanOrEqual(1);
-			expect(afterState.adds).toBe(afterState.removes);
+			// AFTER: the guard was torn down — the net count returns to the
+			// baseline (our one add balanced by its remove), so no listener leaks
+			// past the import.
+			await expect.poll(netListeners, { timeout: 10_000 }).toBe(baseline);
 
 			const { data: rows } = await admin
 				.from('runs')
