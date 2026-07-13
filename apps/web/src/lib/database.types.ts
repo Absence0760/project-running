@@ -3511,30 +3511,36 @@ export type Database = {
           confirm_token: string
           confirmed_at: string | null
           contact_email: string
+          contact_phone: string | null
           contact_user_id: string | null
           created_at: string
           id: string
           owner_id: string
+          sms_opt_in_at: string | null
           updated_at: string
         }
         Insert: {
           confirm_token?: string
           confirmed_at?: string | null
           contact_email: string
+          contact_phone?: string | null
           contact_user_id?: string | null
           created_at?: string
           id?: string
           owner_id: string
+          sms_opt_in_at?: string | null
           updated_at?: string
         }
         Update: {
           confirm_token?: string
           confirmed_at?: string | null
           contact_email?: string
+          contact_phone?: string | null
           contact_user_id?: string | null
           created_at?: string
           id?: string
           owner_id?: string
+          sms_opt_in_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -4819,9 +4825,12 @@ export type Database = {
         }[]
       }
       confirm_age_and_terms: { Args: never; Returns: undefined }
-      confirm_safety_contact: { Args: { p_id: string }; Returns: boolean }
+      confirm_safety_contact: {
+        Args: { p_id: string; p_sms_opt_in?: boolean }
+        Returns: boolean
+      }
       confirm_safety_contact_by_token: {
-        Args: { p_token: string }
+        Args: { p_sms_opt_in?: boolean; p_token: string }
         Returns: boolean
       }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
@@ -5644,6 +5653,14 @@ export type Database = {
           p_token_expiry?: string
           p_user_id: string
         }
+        Returns: boolean
+      }
+      set_run_expected_return: {
+        Args: { p_expected_return_at: string; p_run_id: string }
+        Returns: boolean
+      }
+      set_safety_sms_opt_in: {
+        Args: { p_id: string; p_opt_in: boolean }
         Returns: boolean
       }
       submit_report: {
