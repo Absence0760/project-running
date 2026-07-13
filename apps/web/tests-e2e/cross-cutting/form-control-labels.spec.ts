@@ -175,7 +175,14 @@ test.describe('form-control accessible names', () => {
 				const { error: consentErr } = await userClient.rpc('record_coach_consent');
 				expect(consentErr).toBeNull();
 
-				// Plant a single user turn so its bubble carries the Edit action.
+				// Plant a SETTLED turn — the user question plus an assistant reply
+				// (seeded via the service-role admin client, which the RLS role
+				// lockdown lets past). A thread whose last message is a user turn
+				// auto-resumes the coach (CoachChat streams a reply), and while it
+				// is "thinking" the trailing user bubble hides its Edit action — so
+				// a lone user turn would leave the Edit button unreachable (it never
+				// settles here with no ANTHROPIC_API_KEY). A trailing assistant turn
+				// keeps the user bubble editable.
 				const { error: seedErr } = await admin.from('coach_messages').insert([
 					{
 						user_id: user.id,
@@ -183,6 +190,13 @@ test.describe('form-control accessible names', () => {
 						role: 'user',
 						content: userQ,
 						created_at: '2026-05-20T08:00:00.000Z',
+					},
+					{
+						user_id: user.id,
+						plan_id: null,
+						role: 'assistant',
+						content: 'Keep it easy and conversational.',
+						created_at: '2026-05-20T08:00:05.000Z',
 					},
 				]);
 				expect(seedErr).toBeNull();
