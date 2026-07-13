@@ -27,6 +27,11 @@
 	} from '$lib/util/push';
 	import { cloudExport } from '$lib/backup/cloud_export';
 	import { m } from '$lib/i18n/store.svelte';
+	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
+	import {
+		MIN_CYCLE_LENGTH_DAYS,
+		MAX_CYCLE_LENGTH_DAYS,
+	} from '$lib/training/cycle_plan';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let avatarUrl = $state<string | null>(auth.user?.avatar_url ?? null);
@@ -36,6 +41,15 @@
 	let dateOfBirth = $state('');
 	let restingHr = $state('');
 	let maxHr = $state('');
+	// Cycle/pregnancy-aware training inputs (persona runner-woman, decisions
+	// §231). Art 9 reproductive-health data — persistence is gated on the
+	// SAME health-data consent as DOB below, AND the whole section is hidden
+	// unless the fail-closed PUBLIC_CYCLE_PLANS_ENABLED flag is on.
+	const cyclePlansEnabled = isCyclePlansEnabled();
+	let cycleMode = $state<'off' | 'cycle' | 'pregnancy'>('off');
+	let cycleLengthDays = $state('28');
+	let cycleLastPeriodStart = $state('');
+	let pregnancyDueDate = $state('');
 	// Date of birth is Art 9 demographic data — its persistence is gated
 	// on explicit health-data consent, mirroring the Demographics section
 	// of /settings/preferences. Without this, the account page was an
@@ -131,6 +145,11 @@
 			dateOfBirth = (p.date_of_birth as string) ?? '';
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
+			const mode = p.cycle_tracking_mode;
+			cycleMode = mode === 'cycle' || mode === 'pregnancy' ? mode : 'off';
+			cycleLengthDays = (p.cycle_length_days as number)?.toString() ?? '28';
+			cycleLastPeriodStart = (p.cycle_last_period_start as string) ?? '';
+			pregnancyDueDate = (p.pregnancy_due_date as string) ?? '';
 		}
 		// Self-read goes through the get_my_profile() SECURITY DEFINER RPC:
 		// health_data_consent_at is deny-by-default for direct authenticated
@@ -308,6 +327,23 @@
 		prefs.date_of_birth = healthDataConsent && dateOfBirth ? dateOfBirth : null;
 		if (restingHr) prefs.resting_hr_bpm = parseInt(restingHr, 10) || null;
 		if (maxHr) prefs.max_hr_bpm = parseInt(maxHr, 10) || null;
+		// Cycle/pregnancy inputs are Art 9 reproductive-health data — write
+		// them only when the flag is on AND consent is granted; on withdrawal
+		// (or flag off) they are explicitly nulled so nothing lingers.
+		if (cyclePlansEnabled && healthDataConsent) {
+			prefs.cycle_tracking_mode = cycleMode === 'off' ? null : cycleMode;
+			prefs.cycle_length_days =
+				cycleMode === 'cycle' ? parseInt(cycleLengthDays, 10) || null : null;
+			prefs.cycle_last_period_start =
+				cycleMode === 'cycle' && cycleLastPeriodStart ? cycleLastPeriodStart : null;
+			prefs.pregnancy_due_date =
+				cycleMode === 'pregnancy' && pregnancyDueDate ? pregnancyDueDate : null;
+		} else if (cyclePlansEnabled) {
+			prefs.cycle_tracking_mode = null;
+			prefs.cycle_length_days = null;
+			prefs.cycle_last_period_start = null;
+			prefs.pregnancy_due_date = null;
+		}
 		if (Object.keys(prefs).length > 0) {
 			const { data } = await supabase
 				.from('user_settings')
@@ -712,6 +748,44 @@
 			<p class="section-desc consent-recorded">
 				{m('settingsAccount.consentRecorded', { date: new Date(healthDataConsentAt).toLocaleDateString() })}
 			</p>
+		{/if}
+		{#if cyclePlansEnabled}
+			<div class="cycle-block" data-testid="cycle-plans-inputs">
+				<h3 class="cycle-heading">{m('settingsAccount.cycleHeading')}</h3>
+				<p class="section-desc">{m('settingsAccount.cycleDescription')}</p>
+				<label>
+					<span class="label-text">{m('settingsAccount.cycleMode')}</span>
+					<select bind:value={cycleMode} disabled={!healthDataConsent}>
+						<option value="off">{m('settingsAccount.cycleModeOff')}</option>
+						<option value="cycle">{m('settingsAccount.cycleModeCycle')}</option>
+						<option value="pregnancy">{m('settingsAccount.cycleModePregnancy')}</option>
+					</select>
+				</label>
+				{#if cycleMode === 'cycle'}
+					<label>
+						<span class="label-text">{m('settingsAccount.cycleLength')}</span>
+						<input
+							type="number"
+							bind:value={cycleLengthDays}
+							disabled={!healthDataConsent}
+							min={MIN_CYCLE_LENGTH_DAYS}
+							max={MAX_CYCLE_LENGTH_DAYS}
+						/>
+					</label>
+					<label>
+						<span class="label-text">{m('settingsAccount.cycleLastPeriod')}</span>
+						<input type="date" bind:value={cycleLastPeriodStart} disabled={!healthDataConsent} />
+					</label>
+				{:else if cycleMode === 'pregnancy'}
+					<label>
+						<span class="label-text">{m('settingsAccount.pregnancyDueDate')}</span>
+						<input type="date" bind:value={pregnancyDueDate} disabled={!healthDataConsent} />
+					</label>
+					<p class="section-desc cycle-disclaimer" data-testid="pregnancy-disclaimer">
+						{m('settingsAccount.pregnancyDisclaimer')}
+					</p>
+				{/if}
+			</div>
 		{/if}
 		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
 			{saving ? m('settingsAccount.saving') : saved ? m('settingsAccount.savedDone') : m('settingsAccount.saveProfile')}
