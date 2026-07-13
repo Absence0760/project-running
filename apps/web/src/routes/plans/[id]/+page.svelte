@@ -15,8 +15,13 @@
 		updatePlanWeek,
 		updatePlanMeta,
 		duplicatePlanWeek,
+		pausePlan,
+		resumePlan,
+		ActivePlanExistsError,
 	} from '$lib/core/data';
 	import { shiftIsoDate, recoveryWorkoutPatch, recoveryWeekVolume } from '$lib/training/plan_bulk_ops';
+	import { cyclePlanWorkoutPatch, type CyclePlanConfig } from '$lib/training/cycle_plan';
+	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
 	import { replanRemaining, type ReplanChange, type ReplanWeek } from '$lib/training/plan_replan';
 	import {
 		adaptiveReplanRemaining,
@@ -197,8 +202,17 @@
 		| { kind: 'shift' }
 		| { kind: 'recovery'; week: PlanWeek }
 		| { kind: 'duplicate'; week: PlanWeek }
+		| { kind: 'cycle' }
+		| { kind: 'pause' }
+		| { kind: 'resume' }
 		| null
 	>(null);
+
+	// Cycle/pregnancy-aware adjust (persona runner-woman, decisions §231).
+	// Behind the fail-closed flag; `cyclePlanConfig` is populated from the
+	// runner's consented prefs on mount and stays null when unconfigured.
+	const cyclePlansEnabled = isCyclePlansEnabled();
+	let cyclePlanConfig = $state<CyclePlanConfig | null>(null);
 
 	function runBulkConfirm(): void {
 		const c = bulkConfirm;
@@ -206,7 +220,10 @@
 		if (!c) return;
 		if (c.kind === 'shift') void shiftPlan();
 		else if (c.kind === 'recovery') void markWeekRecovery(c.week);
-		else void duplicateWeek(c.week);
+		else if (c.kind === 'duplicate') void duplicateWeek(c.week);
+		else if (c.kind === 'cycle') void applyCycleAdjustment();
+		else if (c.kind === 'pause') void doPausePlan();
+		else void doResumePlan();
 	}
 
 	/// Move every workout + the plan's start/end by ±N days (race moved,
@@ -272,6 +289,91 @@
 			await load();
 		} catch (e) {
 			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Apply the cycle/pregnancy adjustment to the plan's FUTURE workouts only
+	/// (today onward) — the past is history, don't rewrite it. Each workout
+	/// gets its per-date patch (`cyclePlanWorkoutPatch`), then every touched
+	/// week's stated volume is recomputed from the patched distances so the
+	/// header stays honest. Orchestrated client-side like markWeekRecovery.
+	async function applyCycleAdjustment(): Promise<void> {
+		if (!plan || !isOwner || bulkBusy || !cyclePlanConfig) return;
+		bulkBusy = true;
+		try {
+			const cfg = cyclePlanConfig;
+			const patchByWorkout = new Map<string, ReturnType<typeof cyclePlanWorkoutPatch>>();
+			for (const w of workouts) {
+				if (w.scheduled_date < today) continue;
+				const patch = cyclePlanWorkoutPatch(
+					{ kind: w.kind, target_distance_m: w.target_distance_m, scheduled_date: w.scheduled_date },
+					cfg,
+				);
+				if (patch) patchByWorkout.set(w.id, patch);
+			}
+			if (patchByWorkout.size === 0) {
+				showToast(m('planDetail.cycleAdjustNone'));
+				return;
+			}
+			await Promise.all(
+				[...patchByWorkout].map(([wid, patch]) => updatePlanWorkout(wid, patch!)),
+			);
+			// Recompute the volume of every week that had a workout patched.
+			for (const wk of weeks) {
+				const wkWorkouts = workoutsByWeek.get(wk.id) ?? [];
+				if (!wkWorkouts.some((x) => patchByWorkout.has(x.id))) continue;
+				const vol = wkWorkouts.reduce((s, x) => {
+					if (x.kind === 'rest') return s;
+					const p = patchByWorkout.get(x.id);
+					const d =
+						p && 'target_distance_m' in p
+							? (p.target_distance_m ?? 0)
+							: (x.target_distance_m ?? 0);
+					return s + d;
+				}, 0);
+				await updatePlanWeek(wk.id, { target_volume_m: vol });
+			}
+			showToast(m('planDetail.cycleAdjustDone'));
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Pause the active plan (reversible; frees the one-active slot).
+	async function doPausePlan(): Promise<void> {
+		if (!plan || !isOwner || bulkBusy) return;
+		bulkBusy = true;
+		try {
+			await pausePlan(plan.id);
+			showToast(m('planDetail.pauseDone'));
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Resume a paused plan. Refuses with a clear message when another plan is
+	/// already active rather than silently completing it.
+	async function doResumePlan(): Promise<void> {
+		if (!plan || !isOwner || bulkBusy || !auth.user) return;
+		bulkBusy = true;
+		try {
+			await resumePlan(plan.id, auth.user.id);
+			showToast(m('planDetail.resumeDone'));
+			await load();
+		} catch (e) {
+			if (e instanceof ActivePlanExistsError) {
+				showToast(m('planDetail.resumeBlocked'), 'error');
+			} else {
+				showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+			}
 		} finally {
 			bulkBusy = false;
 		}
@@ -469,6 +571,26 @@
 				const settings = await loadSettings(auth.user.id);
 				const wsd = effective<string>(settings, 'week_start_day');
 				if (wsd === 'sunday' || wsd === 'monday') weekStart = wsd;
+				// Cycle/pregnancy config from the runner's consented prefs. The
+				// keys only exist when health-consent was granted at write time
+				// (nulled on withdrawal), so presence here means consented data.
+				if (cyclePlansEnabled) {
+					const mode = effective<string>(settings, 'cycle_tracking_mode');
+					if (mode === 'cycle') {
+						const len = effective<number>(settings, 'cycle_length_days');
+						const lp = effective<string>(settings, 'cycle_last_period_start');
+						if (typeof len === 'number' && len > 0 && lp) {
+							cyclePlanConfig = {
+								mode: 'cycle',
+								cycleLengthDays: len,
+								lastPeriodStartIso: lp,
+							};
+						}
+					} else if (mode === 'pregnancy') {
+						const due = effective<string>(settings, 'pregnancy_due_date');
+						if (due) cyclePlanConfig = { mode: 'pregnancy', dueDateIso: due };
+					}
+				}
 			} catch (_) {
 				/* default Monday */
 			}
@@ -1194,6 +1316,47 @@
 						{m('planDetail.adaptiveReplan')}
 					</button>
 				</div>
+				<div class="plan-lifecycle" data-testid="plan-lifecycle">
+					{#if plan.status === 'paused'}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => (bulkConfirm = { kind: 'resume' })}
+							disabled={bulkBusy}
+						>
+							<span class="material-symbols">play_arrow</span>
+							{m('planDetail.resumePlan')}
+						</button>
+					{:else if plan.status === 'active'}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => (bulkConfirm = { kind: 'pause' })}
+							disabled={bulkBusy}
+						>
+							<span class="material-symbols">pause</span>
+							{m('planDetail.pausePlan')}
+						</button>
+					{/if}
+					{#if cyclePlansEnabled && cyclePlanConfig}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							data-testid="cycle-adjust-btn"
+							onclick={() => (bulkConfirm = { kind: 'cycle' })}
+							disabled={bulkBusy}
+						>
+							<span class="material-symbols">favorite</span>
+							{cyclePlanConfig.mode === 'pregnancy'
+								? m('planDetail.cycleAdjustPregnancy')
+								: m('planDetail.cycleAdjustCycle')}
+						</button>
+					{:else if cyclePlansEnabled}
+						<a class="cycle-setup-hint" href="/settings/account">
+							{m('planDetail.cycleAdjustConfigure')}
+						</a>
+					{/if}
+				</div>
 			</section>
 
 			{#if replanPreview}
@@ -1355,14 +1518,28 @@
 		? m('planDetail.shiftConfirmTitle')
 		: bulkConfirm?.kind === 'recovery'
 			? m('planDetail.recoveryConfirmTitle')
-			: m('planDetail.duplicateConfirmTitle')}
+			: bulkConfirm?.kind === 'cycle'
+				? m('planDetail.cycleAdjustConfirmTitle')
+				: bulkConfirm?.kind === 'pause'
+					? m('planDetail.pauseConfirmTitle')
+					: bulkConfirm?.kind === 'resume'
+						? m('planDetail.resumeConfirmTitle')
+						: m('planDetail.duplicateConfirmTitle')}
 	message={bulkConfirm?.kind === 'shift'
 		? m('planDetail.shiftConfirmMessage', { n: Math.abs(shiftDays) })
 		: bulkConfirm?.kind === 'recovery'
 			? m('planDetail.recoveryConfirmMessage', { n: bulkConfirm.week.week_index + 1 })
 			: bulkConfirm?.kind === 'duplicate'
 				? m('planDetail.duplicateConfirmMessage', { n: bulkConfirm.week.week_index + 1 })
-				: ''}
+				: bulkConfirm?.kind === 'cycle'
+					? cyclePlanConfig?.mode === 'pregnancy'
+						? m('planDetail.cycleAdjustConfirmPregnancy')
+						: m('planDetail.cycleAdjustConfirmCycle')
+					: bulkConfirm?.kind === 'pause'
+						? m('planDetail.pauseConfirmMessage')
+						: bulkConfirm?.kind === 'resume'
+							? m('planDetail.resumeConfirmMessage')
+							: ''}
 	confirmLabel={m('planDetail.bulkConfirm')}
 	cancelLabel={m('planDetail.replanCancel')}
 	onconfirm={runBulkConfirm}
@@ -1779,6 +1956,18 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-sm);
+	}
+	.plan-lifecycle {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+	.cycle-setup-hint {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		text-decoration: underline;
 	}
 	.replan-preview {
 		margin: 0 0 var(--space-md);
