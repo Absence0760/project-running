@@ -14,6 +14,7 @@
 	import { distanceAlongRoute, type RouteWaypoint } from '$lib/routes/route_geometry';
 	import { nextCutoffEta } from '$lib/runs/live_cutoff_eta';
 	import { supabase } from '$lib/core/supabase';
+	import { TABLES } from '$lib/core/schema';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import {
 		isLiveHubConfigured,
@@ -461,7 +462,7 @@
 				// The owner can read their own run row (RLS), so seed the
 				// current override — public_runs doesn't carry metadata.
 				const { data: mine } = await supabase
-					.from('runs')
+					.from(TABLES.runs)
 					.select('metadata')
 					.eq('id', data.id)
 					.maybeSingle();
