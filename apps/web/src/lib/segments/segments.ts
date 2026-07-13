@@ -70,6 +70,92 @@ export function computeEffortFromTrack(
 	};
 }
 
+/** A free-standing catalogue-segment geometry (the global/famous-segment
+ *  layer — decisions §232). Unlike a route slice, it carries its own
+ *  polyline, so matching keys off the run passing the segment's start
+ *  then its end rather than a distance-along-a-route window. */
+export interface GlobalSegmentGeometry {
+	/** Ordered lat/lng points of the segment's own polyline. */
+	points: { lat: number; lng: number }[];
+	/** The catalogue's stored length in metres — the end-to-end guard. */
+	distance_m: number;
+}
+
+/**
+ * Scores a run track against a free-standing catalogue-segment geometry
+ * and returns the effort time, or null if the run didn't run it.
+ *
+ * v1 is a CURATED end-to-end match, NOT arbitrary-geometry HMM matching
+ * (deferred — see docs/features/segments.md): the run must approach the
+ * segment's START within `toleranceM`, then reach its END within
+ * `toleranceM` LATER in the track (a segment is directional), having
+ * covered a distance within 25% of the segment's own length between the
+ * two crossings — otherwise null, mirroring `pickAutoEffortRoute`'s
+ * "better no effort than a wrong one" stance. The actual timing then
+ * reuses `computeEffortFromTrack` over that distance window, so the
+ * sparsity + timestamp-interpolation guards are shared, not re-derived.
+ *
+ * Mirrors `computeGlobalSegmentEffort` in
+ * `apps/mobile_android/lib/segments.dart`.
+ */
+export function computeGlobalSegmentEffort(
+	track: TrackPoint[],
+	segment: GlobalSegmentGeometry,
+	toleranceM = 35,
+): EffortResult | null {
+	if (track.length < 2) return null;
+	const pts = segment.points;
+	if (pts.length < 2 || segment.distance_m <= 0) return null;
+	const start = pts[0];
+	const end = pts[pts.length - 1];
+
+	// Cumulative distance along the run track.
+	const cum = new Float64Array(track.length);
+	for (let i = 1; i < track.length; i++) {
+		cum[i] =
+			cum[i - 1] +
+			haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+	}
+
+	// Nearest run-track index to the segment start.
+	let startIdx = -1;
+	let startBest = Infinity;
+	for (let i = 0; i < track.length; i++) {
+		const d = haversineMetres(track[i].lat, track[i].lng, start.lat, start.lng);
+		if (d < startBest) {
+			startBest = d;
+			startIdx = i;
+		}
+	}
+	if (startIdx < 0 || startBest > toleranceM) return null;
+
+	// Nearest run-track index to the segment end, AFTER the start crossing.
+	let endIdx = -1;
+	let endBest = Infinity;
+	for (let i = startIdx + 1; i < track.length; i++) {
+		const d = haversineMetres(track[i].lat, track[i].lng, end.lat, end.lng);
+		if (d < endBest) {
+			endBest = d;
+			endIdx = i;
+		}
+	}
+	if (endIdx < 0 || endBest > toleranceM) return null;
+
+	const dStart = cum[startIdx];
+	const dEnd = cum[endIdx];
+	if (dEnd <= dStart) return null;
+
+	// End-to-end guard: the covered distance must be ~the segment length,
+	// so a straight-line shortcut between distant start/end points isn't
+	// mistaken for running the segment.
+	if (Math.abs(dEnd - dStart - segment.distance_m) / segment.distance_m > 0.25) return null;
+
+	return computeEffortFromTrack(track, {
+		start_distance_m: dStart,
+		end_distance_m: dEnd,
+	});
+}
+
 /**
  * Linearly interpolates the timestamp (ms epoch) at the moment the
  * cumulative distance crosses `target`. Returns null when no two

@@ -1,33 +1,36 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { confirmSafetyContactByToken } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
 
-	type State = 'working' | 'success' | 'failure' | 'missing';
-	let state = $state<State>('working');
+	type Phase = 'prompt' | 'working' | 'success' | 'failure' | 'missing';
+	// The anon token flow can't read whether the owner stored a phone, so we
+	// always offer the opt-in and let the RPC force it null when there's no
+	// number on file.
+	const token = page.url.searchParams.get('token');
+	let phase = $state<Phase>(token ? 'prompt' : 'missing');
+	let smsOptIn = $state(false);
 
-	onMount(async () => {
-		const token = $page.url.searchParams.get('token');
-		if (!token) {
-			state = 'missing';
-			return;
-		}
+	async function confirm() {
+		if (!token) return;
+		phase = 'working';
 		try {
-			state = (await confirmSafetyContactByToken(token)) ? 'success' : 'failure';
+			phase = (await confirmSafetyContactByToken(token, smsOptIn)) ? 'success' : 'failure';
 		} catch (_) {
-			state = 'failure';
+			phase = 'failure';
 		}
-	});
+	}
 
 	const message = $derived(
-		state === 'working'
-			? m('safetyConfirm.working')
-			: state === 'success'
-				? m('safetyConfirm.success')
-				: state === 'missing'
-					? m('safetyConfirm.missingToken')
-					: m('safetyConfirm.failure'),
+		phase === 'prompt'
+			? m('safetyConfirm.prompt')
+			: phase === 'working'
+				? m('safetyConfirm.working')
+				: phase === 'success'
+					? m('safetyConfirm.success')
+					: phase === 'missing'
+						? m('safetyConfirm.missingToken')
+						: m('safetyConfirm.failure'),
 	);
 </script>
 
@@ -36,12 +39,20 @@
 </svelte:head>
 
 <main class="confirm-card">
-	<div class="card" data-testid="safety-confirm-card" data-state={state}>
+	<div class="card" data-testid="safety-confirm-card" data-state={phase}>
 		<h1>{m('safetyConfirm.title')}</h1>
-		<p class:ok={state === 'success'} class:bad={state === 'failure' || state === 'missing'}>
+		<p class:ok={phase === 'success'} class:bad={phase === 'failure' || phase === 'missing'}>
 			{message}
 		</p>
-		{#if state !== 'working'}
+		{#if phase === 'prompt'}
+			<label class="sms-opt">
+				<input type="checkbox" bind:checked={smsOptIn} data-testid="safety-confirm-sms" />
+				<span>{m('safety.confirmSmsLabel')}</span>
+			</label>
+			<button class="btn-primary" onclick={confirm} data-testid="safety-confirm-button">
+				{m('safetyConfirm.confirmButton')}
+			</button>
+		{:else if phase !== 'working'}
 			<a class="btn-primary" href="/">{m('safetyConfirm.home')}</a>
 		{/if}
 	</div>
@@ -85,8 +96,21 @@
 		background: var(--color-primary, #2c5f6e);
 		color: #fff;
 		text-decoration: none;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
 		border-radius: 8px;
 		padding: 0.6rem 1.3rem;
 		font-weight: 600;
+	}
+	.sms-opt {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		justify-content: center;
+		margin: 0 0 1.25rem;
+		font-size: 0.92rem;
+		color: var(--color-text, #374151);
+		cursor: pointer;
 	}
 </style>

@@ -2,6 +2,8 @@ import { browser } from '$app/environment';
 import { supabase } from '$lib/core/supabase';
 import { dropUserCache } from '$lib/settings/settings';
 import { setUnit } from '$lib/format/units.svelte';
+import { showToast } from '$lib/stores/toast.svelte';
+import { m } from '$lib/i18n/store.svelte';
 import { createReadyGate, isAuthSettled } from './auth_ready';
 
 /// Longest QUIET gap a `ready()` waiter tolerates before resolving
@@ -93,7 +95,21 @@ function createAuthStore() {
 		// because `subscription_tier`, `subscription_at`, and
 		// `parkrun_number` are column-level revoked from authenticated
 		// callers on `user_profiles` (migration 20260707_001).
-		const { data: profile } = await supabase.rpc('get_my_profile');
+		const { data: profile, error: readErr } = await supabase.rpc('get_my_profile');
+
+		// A failed self-read must NOT fall through to the create branch: that
+		// path treats the user as brand-new and, if its write also fails,
+		// leaves the session with `onboarded_at = null` and no row — an
+		// /onboarding redirect loop the user can't escape (this is exactly
+		// what the 2026-07-13 grant-drift outage produced). Surface it and
+		// leave the session un-hydrated; the layout gate no-ops while `user`
+		// is null, so the user waits rather than loops.
+		if (readErr) {
+			console.error('[auth] get_my_profile failed', readErr);
+			showToast(m('shell.profileLoadError'), 'error');
+			gate.markSettled();
+			return;
+		}
 
 		if (profile) {
 			user = {
@@ -112,11 +128,21 @@ function createAuthStore() {
 			// Profile doesn't exist yet — create it. `onboarded_at`
 			// stays null so the layout's gate routes the new user to
 			// /onboarding.
-			await supabase.from('user_profiles').upsert({
+			const { error: createErr } = await supabase.from('user_profiles').upsert({
 				id: userId,
 				preferred_unit: 'km',
 				subscription_tier: 'free',
 			});
+			if (createErr) {
+				// Bootstrap write failed (e.g. a missing table grant). Don't
+				// fall through to a phantom `onboarded_at = null` user — that
+				// silently loops them through /onboarding against a row that
+				// was never created. Surface + leave un-hydrated instead.
+				console.error('[auth] profile bootstrap upsert failed', createErr);
+				showToast(m('shell.profileSetupError'), 'error');
+				gate.markSettled();
+				return;
+			}
 			user = {
 				id: userId,
 				email: email ?? '',

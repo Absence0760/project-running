@@ -1989,6 +1989,133 @@ class GearWearLogRow {
   };
 }
 
+/// Row shape for the `global_segment_efforts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GlobalSegmentEffortRow {
+  static const String table = 'global_segment_efforts';
+  static const String colId = 'id';
+  static const String colGlobalSegmentId = 'global_segment_id';
+  static const String colRunId = 'run_id';
+  static const String colUserId = 'user_id';
+  static const String colTimeSeconds = 'time_seconds';
+  static const String colStartedAt = 'started_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String globalSegmentId;
+  final String runId;
+  final String userId;
+  final double timeSeconds;
+  final DateTime startedAt;
+  final DateTime createdAt;
+
+  const GlobalSegmentEffortRow({
+    required this.id,
+    required this.globalSegmentId,
+    required this.runId,
+    required this.userId,
+    required this.timeSeconds,
+    required this.startedAt,
+    required this.createdAt,
+  });
+
+  factory GlobalSegmentEffortRow.fromJson(Map<String, dynamic> json) => GlobalSegmentEffortRow(
+    id: json['id'] as String,
+    globalSegmentId: json['global_segment_id'] as String,
+    runId: json['run_id'] as String,
+    userId: json['user_id'] as String,
+    timeSeconds: (json['time_seconds'] as num).toDouble(),
+    startedAt: DateTime.parse(json['started_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colGlobalSegmentId: globalSegmentId,
+    colRunId: runId,
+    colUserId: userId,
+    colTimeSeconds: timeSeconds,
+    colStartedAt: startedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `global_segments` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GlobalSegmentRow {
+  static const String table = 'global_segments';
+  static const String colId = 'id';
+  static const String colName = 'name';
+  static const String colDescription = 'description';
+  static const String colWaypoints = 'waypoints';
+  static const String colDistanceM = 'distance_m';
+  static const String colElevationM = 'elevation_m';
+  static const String colSurface = 'surface';
+  static const String colRegion = 'region';
+  static const String colCountryCode = 'country_code';
+  static const String colCreatedBy = 'created_by';
+  static const String colIsActive = 'is_active';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String name;
+  final String? description;
+  final List<Map<String, dynamic>> waypoints;
+  final double distanceM;
+  final double? elevationM;
+  final String surface;
+  final String? region;
+  final String? countryCode;
+  final String? createdBy;
+  final bool isActive;
+  final DateTime createdAt;
+
+  const GlobalSegmentRow({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.waypoints,
+    required this.distanceM,
+    this.elevationM,
+    required this.surface,
+    this.region,
+    this.countryCode,
+    this.createdBy,
+    required this.isActive,
+    required this.createdAt,
+  });
+
+  factory GlobalSegmentRow.fromJson(Map<String, dynamic> json) => GlobalSegmentRow(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    description: json['description'] as String?,
+    waypoints: (json['waypoints'] as List<dynamic>).cast<Map<String, dynamic>>(),
+    distanceM: (json['distance_m'] as num).toDouble(),
+    elevationM: (json['elevation_m'] as num?)?.toDouble(),
+    surface: json['surface'] as String,
+    region: json['region'] as String?,
+    countryCode: json['country_code'] as String?,
+    createdBy: json['created_by'] as String?,
+    isActive: (json['is_active'] as bool?) ?? false,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colName: name,
+    colDescription: description,
+    colWaypoints: waypoints,
+    colDistanceM: distanceM,
+    colElevationM: elevationM,
+    colSurface: surface,
+    colRegion: region,
+    colCountryCode: countryCode,
+    colCreatedBy: createdBy,
+    colIsActive: isActive,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `gym_routine_exercises` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class GymRoutineExerciseRow {
@@ -4081,6 +4208,8 @@ class SafetyContactRow {
   static const String colConfirmToken = 'confirm_token';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colContactPhone = 'contact_phone';
+  static const String colSmsOptInAt = 'sms_opt_in_at';
 
   final String id;
   final String ownerId;
@@ -4090,6 +4219,8 @@ class SafetyContactRow {
   final String confirmToken;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? contactPhone;
+  final DateTime? smsOptInAt;
 
   const SafetyContactRow({
     required this.id,
@@ -4100,6 +4231,8 @@ class SafetyContactRow {
     required this.confirmToken,
     required this.createdAt,
     required this.updatedAt,
+    this.contactPhone,
+    this.smsOptInAt,
   });
 
   factory SafetyContactRow.fromJson(Map<String, dynamic> json) => SafetyContactRow(
@@ -4111,6 +4244,8 @@ class SafetyContactRow {
     confirmToken: json['confirm_token'] as String,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    contactPhone: json['contact_phone'] as String?,
+    smsOptInAt: json['sms_opt_in_at'] == null ? null : DateTime.parse(json['sms_opt_in_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4122,6 +4257,8 @@ class SafetyContactRow {
     colConfirmToken: confirmToken,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colContactPhone: contactPhone,
+    colSmsOptInAt: smsOptInAt?.toIso8601String(),
   };
 }
 

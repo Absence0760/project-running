@@ -52,6 +52,7 @@ const (
 	TableRunKudos                = "run_kudos"
 	TableRunComments             = "run_comments"
 	TableSegmentEfforts          = "segment_efforts"
+	TableGlobalSegmentEfforts    = "global_segment_efforts"
 	TableFitnessSnapshots        = "fitness_snapshots"
 	TablePersonalRecords         = "personal_records"
 	TableDeviceTokens            = "device_tokens"
