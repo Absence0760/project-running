@@ -102,9 +102,14 @@ test.describe('/dashboard — universal prefs cache', () => {
 		);
 
 		await page.goto('/dashboard');
+		// A generous timeout: with both prefs endpoints aborting, the
+		// dashboard's cold-cache reconcile path plus the runs/fitness fetches
+		// render slower under a loaded CI shard (observed ~13s vs the default
+		// 10s). The assertion still proves the cache is load-bearing — it just
+		// tolerates heavy-shard latency instead of flaking on it.
 		await expect(
 			page.getByRole('heading', { name: /mileage/i, level: 2 }),
-		).toBeVisible();
+		).toBeVisible({ timeout: 20_000 });
 
 		// Cache still has the planted prefs — a regression that
 		// overwrote it on a failed fetch would null these out.
