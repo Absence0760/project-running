@@ -502,24 +502,42 @@ async function handleAccountUpdated(
   if (!accountId) {
     return Response.json({ ok: true, skipped: 'missing_account_id' });
   }
-  const patch: Record<string, unknown> = {
-    charges_enabled: account.charges_enabled === true,
-    payouts_enabled: account.payouts_enabled === true,
-    details_submitted: account.details_submitted === true,
-    updated_at: new Date().toISOString(),
-  };
-  if (account.details_submitted === true) {
-    patch.onboarded_at = new Date().toISOString();
-  }
 
+  // account.updated fires on ANY connected-account change (a new bank, a
+  // capability flip, a periodic refresh) — so the capability flags are
+  // re-mirrored on every delivery to reflect Stripe's latest.
   const { error: updErr } = await service
     .from('instructor_payout_accounts')
-    .update(patch)
+    .update({
+      charges_enabled: account.charges_enabled === true,
+      payouts_enabled: account.payouts_enabled === true,
+      details_submitted: account.details_submitted === true,
+      updated_at: new Date().toISOString(),
+    })
     .eq('stripe_connect_account_id', accountId);
   if (updErr) {
     console.error('account.updated sync failed (code):', updErr?.code ?? 'unknown');
     return Response.json({ ok: false, error: 'account_sync_failed' }, { status: 500 });
   }
+
+  // onboarded_at is set-once: the FIRST time details_submitted is true and
+  // never again. Because account.updated re-fires on later account edits, an
+  // unconditional stamp would keep rewriting "onboarded at" to now(). The
+  // `.is('onboarded_at', null)` filter makes the UPDATE itself the guard — a
+  // later delivery finds it non-null and no-ops, and a second concurrent
+  // first-onboarding delivery can't race it either.
+  if (account.details_submitted === true) {
+    const { error: stampErr } = await service
+      .from('instructor_payout_accounts')
+      .update({ onboarded_at: new Date().toISOString() })
+      .eq('stripe_connect_account_id', accountId)
+      .is('onboarded_at', null);
+    if (stampErr) {
+      console.error('account.updated onboarded_at stamp failed (code):', stampErr?.code ?? 'unknown');
+      return Response.json({ ok: false, error: 'account_sync_failed' }, { status: 500 });
+    }
+  }
+
   return Response.json({ ok: true, account_synced: true });
 }
 

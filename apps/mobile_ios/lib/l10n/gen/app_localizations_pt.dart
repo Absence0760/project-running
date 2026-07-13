@@ -704,6 +704,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authOrDivider => 'OU';
 
   @override
+  String get authErrorOffline =>
+      'Você parece estar offline. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou senha incorretos. Tente novamente.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Muitas tentativas. Aguarde um momento e tente novamente.';
+
+  @override
+  String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -11747,6 +11762,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get authOrDivider => 'OU';
+
+  @override
+  String get authErrorOffline =>
+      'Você parece estar offline. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou senha incorretos. Tente novamente.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Muitas tentativas. Aguarde um momento e tente novamente.';
+
+  @override
+  String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
   String get signInTitle => 'Entrar';

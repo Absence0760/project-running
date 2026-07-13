@@ -48,6 +48,7 @@
 	import { consent } from '$lib/settings/consent.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import {
 		estimateRunCalories,
@@ -111,6 +112,9 @@
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
 	let showReportRun = $state(false);
+	let showNameRoute = $state(false);
+	let routeNameInput = $state('');
+	let savingRoute = $state(false);
 	let shareConfirmIntersectsZone = $state(false);
 	let shareConfirmHasZones = $state(false);
 	let shareBusy = $state(false);
@@ -545,28 +549,37 @@
 		}
 	}
 
-	async function handleSaveAsRoute() {
+	function handleSaveAsRoute() {
 		if (!run?.track || run.track.length < 2) return;
 		// The chosen name is persisted to the DB (routes.name), so the
 		// fallback is the run's ISO date rather than an English-prefixed,
 		// locale-formatted string — a non-English user shouldn't end up
 		// with an English route name baked into their data. They can still
-		// rename it in the prompt below.
-		const defaultName =
+		// rename it in the modal below.
+		routeNameInput =
 			((run.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.title] as string) ||
 			new Date(run.started_at).toISOString().slice(0, 10);
-		const name = window.prompt(m('runDetail.nameThisRoute'), defaultName);
-		if (!name || !name.trim()) return;
+		showNameRoute = true;
+	}
+
+	async function confirmSaveAsRoute() {
+		if (!run?.track || run.track.length < 2) return;
+		const name = routeNameInput.trim();
+		if (!name) return;
+		savingRoute = true;
 		try {
 			const { id } = await saveRunAsRoute(
 				run.id,
-				name.trim(),
+				name,
 				run.track.map((p) => ({ lat: p.lat, lng: p.lng, ele: p.ele ?? null })),
 			);
+			showNameRoute = false;
 			showToast(m('runDetail.savedAsRoute'), 'success');
 			goto(`/routes/${id}`);
 		} catch (e) {
 			showToast(m('runDetail.saveFailed', { error: String(e) }), 'error');
+		} finally {
+			savingRoute = false;
 		}
 	}
 
@@ -1750,7 +1763,7 @@
 				{#if zoneCutoffs == null && maxHrBpm == null}
 					<p class="hr-disclaimer">
 						{m('runDetail.hrDisclaimerPrefix')}
-						<a href="/settings/account">{m('runDetail.hrDisclaimerLink')}</a>
+						<a href="/settings/preferences">{m('runDetail.hrDisclaimerLink')}</a>
 						{m('runDetail.hrDisclaimerSuffix')}
 					</p>
 				{/if}
@@ -1790,6 +1803,46 @@
 	oncancel={() => showDeleteConfirm = false}
 	danger
 />
+
+<Modal
+	open={showNameRoute}
+	onclose={() => (showNameRoute = false)}
+	title={m('runDetail.saveAsRoute')}
+	narrow
+	data-testid="name-route-dialog"
+>
+	<form
+		class="editor-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			confirmSaveAsRoute();
+		}}
+	>
+		<label>
+			{m('runDetail.nameThisRoute')}
+			<input
+				type="text"
+				bind:value={routeNameInput}
+				maxlength="120"
+				required
+				data-testid="name-route-input"
+			/>
+		</label>
+		<div class="form-actions">
+			<button class="btn-outline" type="button" onclick={() => (showNameRoute = false)}>
+				{m('runDetail.cancel')}
+			</button>
+			<button
+				class="btn-primary"
+				type="submit"
+				disabled={savingRoute || !routeNameInput.trim()}
+				data-testid="name-route-save"
+			>
+				{m('runDetail.save')}
+			</button>
+		</div>
+	</form>
+</Modal>
 
 <ConfirmDialog
 	open={showShareConfirm}

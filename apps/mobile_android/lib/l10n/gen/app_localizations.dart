@@ -1271,6 +1271,30 @@ abstract class AppLocalizations {
   /// **'OR'**
   String get authOrDivider;
 
+  /// Friendly auth error shown when sign-in/sign-up fails because the device has no network connection
+  ///
+  /// In en, this message translates to:
+  /// **'You appear to be offline. Check your connection and try again.'**
+  String get authErrorOffline;
+
+  /// Friendly auth error shown when sign-in fails because the email or password was wrong
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect email or password. Please try again.'**
+  String get authErrorInvalidCredentials;
+
+  /// Friendly auth error shown when sign-in/sign-up is rate-limited (too many requests)
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Please wait a moment and try again.'**
+  String get authErrorRateLimited;
+
+  /// Friendly fallback auth error shown when sign-in/sign-up fails for an unrecognised reason
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get authErrorGeneric;
+
   /// AppBar title for the sign-in screen
   ///
   /// In en, this message translates to:

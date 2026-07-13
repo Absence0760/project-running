@@ -81,7 +81,9 @@ void main() {
           find.widgetWithText(TextField, 'Password'), 'wrong');
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Invalid credentials'), findsOneWidget);
+      // The raw exception text is classified into a friendly message
+      // (auth_error.dart) instead of being shown verbatim.
+      expect(find.textContaining('Incorrect email or password'), findsOneWidget);
     });
 
     testWidgets(
@@ -199,7 +201,9 @@ void main() {
           find.widgetWithText(TextField, 'Email'), 'me@example.com');
       await tester.tap(find.text('Forgot password?'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Network unreachable'), findsOneWidget);
+      // A synthetic Exception (not a real SocketException) classifies as
+      // generic — the point is that some readable message surfaces.
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
     });
   });
 }

@@ -3,7 +3,6 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import {
-		fetchFoodLog,
 		fetchFoodLogWithError,
 		fetchLatestWeightKg,
 		fetchRuns,
@@ -178,9 +177,18 @@
 				exerciseKcal,
 			});
 
-			// Weekly calorie trend (last 7 days incl. today).
+			// Weekly calorie trend (last 7 days incl. today). Surface a fetch
+			// failure the same way the today's-food path does — otherwise the
+			// swallowed error leaves an empty trend chart indistinguishable from
+			// a week with nothing logged.
 			const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-			const weekEntries = await fetchFoodLog(weekStart.toISOString(), tomorrow.toISOString());
+			const week = await fetchFoodLogWithError(weekStart.toISOString(), tomorrow.toISOString());
+			if (week.error) {
+				loadError = week.error;
+				loading = false;
+				return;
+			}
+			const weekEntries = week.entries;
 			const calByDay = new Map<string, number>();
 			const proByDay = new Map<string, number>();
 			for (const e of weekEntries) {
@@ -207,7 +215,11 @@
 			await loadTemplates();
 			await loadRecipes();
 		} catch (e) {
+			// A failed secondary load (week trend, water, targets) must not render
+			// as an empty page indistinguishable from "nothing logged" — surface
+			// the same load-error banner the primary today's-food path uses.
 			console.warn('nutrition load failed', e);
+			loadError = (e as Error).message;
 		}
 		loading = false;
 	}

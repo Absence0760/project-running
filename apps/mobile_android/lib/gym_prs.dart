@@ -67,7 +67,7 @@ const int kE1rmMaxReps = 12;
 /// Estimated one-rep-max via Epley `w · (1 + reps/30)`, with a true single
 /// (reps == 1) reported as the lifted weight itself. Returns 0 for
 /// non-positive inputs.
-double estimatedOneRepMax(double weightKg, int reps) {
+double estimatedOneRepMax(double weightKg, num reps) {
   if (!(weightKg > 0) || !(reps > 0)) return 0;
   if (reps == 1) return weightKg;
   final r = reps < kE1rmMaxReps ? reps : kE1rmMaxReps;
@@ -113,7 +113,7 @@ void _accumulateSet(Map<String, ExercisePr> out, GymSetLike s) {
         pr = pr._copyWith(bestVolumeKg: _round1(volume.toDouble()));
         out[key] = pr;
       }
-      final e1rm = estimatedOneRepMax(weight, reps.toInt());
+      final e1rm = estimatedOneRepMax(weight, reps);
       if (pr.bestEst1RmKg == null || e1rm > pr.bestEst1RmKg!) {
         pr = pr._copyWith(bestEst1RmKg: _round1(e1rm));
         out[key] = pr;

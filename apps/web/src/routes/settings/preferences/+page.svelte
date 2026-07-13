@@ -30,6 +30,13 @@
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
+	// A failed settings/profile read must NOT fall back to showing form defaults:
+	// the user could then overwrite their real prefs (incl. the Art 9
+	// health-consent-derived fields) with defaults. On load failure we render an
+	// error banner instead of the form, which fail-closed gates every persist
+	// path (auto-save controls + the explicit demographics Save) until a reload
+	// succeeds.
+	let loadError = $state<string | null>(null);
 	// Auto-save status for the cross-device prefs. Each control persists on
 	// change (no global Save button) — `saveStatus` drives a subtle inline
 	// "Saving…/Saved" cue so the user knows it took. The health-data
@@ -265,6 +272,13 @@
 		// sees "Loading..." forever.
 		await auth.ready();
 		if (!auth.user) return;
+		await loadPreferences();
+	});
+
+	async function loadPreferences() {
+		if (!auth.user) return;
+		loading = true;
+		loadError = null;
 		try {
 			settings = await loadSettings(auth.user.id);
 			preferredUnit = effective(settings, 'preferred_unit', 'km') ?? 'km';
@@ -325,8 +339,14 @@
 
 			// Self-read via get_my_profile(): gender / date_of_birth /
 			// health_data_consent_at are deny-by-default for direct
-			// authenticated SELECTs (column lockdown, 20260707_001).
-			const { data: prof } = await supabase.rpc('get_my_profile');
+			// authenticated SELECTs (column lockdown, 20260707_001). A failed
+			// read must FAIL CLOSED — otherwise the Art 9 consent + demographics
+			// fields silently render as unticked/blank defaults, which an
+			// explicit Save would then round-trip back and clear the user's real
+			// saved values. Throw so the catch shows the load-error banner and
+			// gates every persist path.
+			const { data: prof, error: profErr } = await supabase.rpc('get_my_profile');
+			if (profErr) throw profErr;
 			if (prof) {
 				gender = (prof.gender as typeof gender) ?? '';
 				dateOfBirth = prof.date_of_birth ?? '';
@@ -350,9 +370,10 @@
 				loadedWeightKg != null ? roundWeight(kgToDisplay(loadedWeightKg, weightUnit)) : null;
 		} catch (e) {
 			console.warn('Settings load failed', e);
+			loadError = (e as Error).message;
 		}
 		loading = false;
-	});
+	}
 
 	async function persistZones(next: PrivacyZone[]) {
 		if (!auth.user) return;
@@ -504,6 +525,15 @@
 			{/each}
 		</div>
 		<p class="sr-only" role="status">{m('prefs.loading')}</p>
+	{:else if loadError}
+		<div class="load-error-banner" role="alert" data-testid="prefs-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('prefs.loadFailed')}</strong>
+				<span class="load-error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" type="button" onclick={() => void loadPreferences()} data-testid="prefs-load-retry">{m('prefs.retry')}</button>
+		</div>
 	{:else}
 		<!-- Units -->
 		<section class="card">
@@ -1148,6 +1178,30 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+	.load-error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.load-error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.load-error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.load-error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
 	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }

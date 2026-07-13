@@ -266,6 +266,15 @@
 	let recent5kApplied = $derived(recent5kConfirmed ? recent5kTotal : null);
 	let recent5kNeedsConfirm = $derived(recent5kTotal != null && !recent5kConfirmed);
 
+	// A beginner walk-run plan is duration-based intervals, not pace-based —
+	// the VDOT badge and the five Daniels pace zones are jargon the runner who
+	// ticked "New to running?" can't parse and never uses. Detect it from the
+	// plan itself (every session is a walk_run workout) so a pasted walk-run
+	// plan is covered too, then hide the pace panel for it.
+	let isWalkRunPlan = $derived(
+		!!plan && plan.weeks.some((w) => w.workouts.some((wo) => wo.kind === 'walk_run'))
+	);
+
 	// Re-generate the editable plan whenever any input that drives
 	// generation changes. Replaces the previous $derived preview so we
 	// can mutate workouts in-place; the user's edits live on `plan`
@@ -535,22 +544,24 @@
 		<aside class="preview">
 			<h2>{t('planEditor.previewAndEdit')}</h2>
 			{#if plan}
-				<div class="paces">
-					<div class="pace-row"><span>{t('planEditor.paceEasy')}</span><strong>{fmtPace(plan.paces.easy)}</strong></div>
-					<div class="pace-row"><span>{t('planEditor.paceMarathon')}</span><strong>{fmtPace(plan.paces.marathon)}</strong></div>
-					<div class="pace-row"><span>{t('planEditor.paceTempo')}</span><strong>{fmtPace(plan.paces.tempo)}</strong></div>
-					<div class="pace-row"><span>{t('planEditor.paceInterval')}</span><strong>{fmtPace(plan.paces.interval)}</strong></div>
-					<div class="pace-row"><span>{t('planEditor.paceRepetition')}</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
-				</div>
+				{#if !isWalkRunPlan}
+					<div class="paces">
+						<div class="pace-row"><span>{t('planEditor.paceEasy')}</span><strong>{fmtPace(plan.paces.easy)}</strong></div>
+						<div class="pace-row"><span>{t('planEditor.paceMarathon')}</span><strong>{fmtPace(plan.paces.marathon)}</strong></div>
+						<div class="pace-row"><span>{t('planEditor.paceTempo')}</span><strong>{fmtPace(plan.paces.tempo)}</strong></div>
+						<div class="pace-row"><span>{t('planEditor.paceInterval')}</span><strong>{fmtPace(plan.paces.interval)}</strong></div>
+						<div class="pace-row"><span>{t('planEditor.paceRepetition')}</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
+					</div>
 
-				{#if plan.pacesAreFallback}
-					<p class="paces-estimated" role="status">
-						{t('planEditor.pacesEstimated')}
-					</p>
-				{/if}
+					{#if plan.pacesAreFallback}
+						<p class="paces-estimated" role="status">
+							{t('planEditor.pacesEstimated')}
+						</p>
+					{/if}
 
-				{#if plan.vdot}
-					<p class="vdot">{t('planEditor.danielsVdot')} <strong>{plan.vdot.toFixed(1)}</strong></p>
+					{#if plan.vdot}
+						<p class="vdot">{t('planEditor.danielsVdot')} <strong>{plan.vdot.toFixed(1)}</strong></p>
+					{/if}
 				{/if}
 
 				<h3>{t('planEditor.weekOutline')}</h3>

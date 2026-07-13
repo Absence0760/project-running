@@ -93,7 +93,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Email taken'), findsOneWidget);
+      // A synthetic Exception classifies as generic — the raw text is
+      // replaced by a friendly, user-facing message (auth_error.dart).
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
     });
 
     // ─────────── GDPR Art 8 gates ───────────

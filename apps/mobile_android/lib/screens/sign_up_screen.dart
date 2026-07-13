@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
@@ -100,7 +101,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signUp failed: $e');
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -165,11 +169,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } on GoogleSignInException catch (e) {
       if (e.code != GoogleSignInExceptionCode.canceled) {
         debugPrint('SignUpScreen._signInWithGoogle failed: $e');
-        if (mounted) setState(() => _error = e.toString());
+        if (mounted) {
+          setState(() => _error =
+              friendlyAuthError(AppLocalizations.of(context), e));
+        }
       }
     } catch (e) {
       debugPrint('SignUpScreen._signInWithGoogle failed: $e');
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -212,7 +222,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signInWithApple failed: $e');
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

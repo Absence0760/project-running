@@ -970,6 +970,22 @@
   "@authOrDivider": {
     "description": "Divider text between the email/password form and the OAuth buttons"
   },
+  "authErrorOffline": "You appear to be offline. Check your connection and try again.",
+  "@authErrorOffline": {
+    "description": "Friendly auth error shown when sign-in/sign-up fails because the device has no network connection"
+  },
+  "authErrorInvalidCredentials": "Incorrect email or password. Please try again.",
+  "@authErrorInvalidCredentials": {
+    "description": "Friendly auth error shown when sign-in fails because the email or password was wrong"
+  },
+  "authErrorRateLimited": "Too many attempts. Please wait a moment and try again.",
+  "@authErrorRateLimited": {
+    "description": "Friendly auth error shown when sign-in/sign-up is rate-limited (too many requests)"
+  },
+  "authErrorGeneric": "Something went wrong. Please try again.",
+  "@authErrorGeneric": {
+    "description": "Friendly fallback auth error shown when sign-in/sign-up fails for an unrecognised reason"
+  },
   "signInTitle": "Sign In",
   "@signInTitle": {
     "description": "AppBar title for the sign-in screen"
