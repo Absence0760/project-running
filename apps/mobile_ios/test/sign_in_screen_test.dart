@@ -10,6 +10,7 @@ class _FakeApiClient extends ApiClient {
   String? capturedEmail;
   String? capturedPassword;
   String? capturedResetEmail;
+  String? capturedResetRedirectTo;
   Object? errorToThrow;
   Object? resetErrorToThrow;
 
@@ -25,8 +26,12 @@ class _FakeApiClient extends ApiClient {
   }
 
   @override
-  Future<void> sendPasswordResetEmail({required String email}) async {
+  Future<void> sendPasswordResetEmail({
+    required String email,
+    String? redirectTo,
+  }) async {
     capturedResetEmail = email;
+    capturedResetRedirectTo = redirectTo;
     if (resetErrorToThrow != null) throw resetErrorToThrow!;
   }
 }
@@ -148,6 +153,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(client.capturedResetEmail, 'me@example.com');
+      // The reset link must point at the web /auth/reset page (mobile
+      // doesn't host the form). With dotenv uninitialised in the test,
+      // WEB_BASE_URL falls back to the prod host. Without an explicit
+      // redirectTo GoTrue falls back to the project Site URL (localhost
+      // by default) and the link dies in prod.
+      expect(client.capturedResetRedirectTo, 'https://threkir.com/auth/reset');
       // Tear down the banner timer before the test ends so the
       // fake-async loop doesn't flag a pending timer.
       await tester.pump(const Duration(seconds: 6));

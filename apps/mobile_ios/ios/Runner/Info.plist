@@ -104,5 +104,24 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Supabase auth deep link (signup confirmation / magic link).
+	     GoTrue redirects the emailed verify link to this custom scheme;
+	     supabase_flutter's app_links listener catches it and completes
+	     the PKCE session in-app. Scheme must match
+	     ApiClient.kAuthDeepLinkRedirect, the Android manifest
+	     intent-filter, AND the Auth -> Redirect URLs allow-list. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.threkir.app.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.threkir.app</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
