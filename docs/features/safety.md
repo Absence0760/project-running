@@ -202,7 +202,7 @@ clipping; the email only carries times + the link.
 - Escalation applies only to live-broadcast runs. A runner who records
   without any live share gets no safety net — the pings ARE the signal. The
   settings copy says this; auto-live-share existing is what makes it a
-  reasonable contract. **Softened 2026-07-12 (decisions §231):** a new
+  reasonable contract. **Softened 2026-07-12 (decisions §235):** a new
   runner who never turned on `auto_live_share` and never shared a link
   used to get *silent* nothing — no prompt that they were recording
   unprotected. The solo-run safety nudge (below) surfaces that gap without
@@ -212,7 +212,7 @@ clipping; the email only carries times + the link.
 
 > **STATUS: shipped (2026-07-12).** Built against the `reviews/persona-runner-woman.md`
 > HIGH finding ("off-route / no-live-share solo runs have no safety net at
-> all — the settings copy doesn't make the gap explicit enough"). Decisions §231.
+> all — the settings copy doesn't make the gap explicit enough"). Decisions §235.
 
 The escalation net above only watches *live-broadcast* runs. The persona's
 stated habit is to share a live link for every solo evening run — but a
