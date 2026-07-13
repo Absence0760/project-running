@@ -76,7 +76,7 @@
 						track,
 					});
 				}
-				// Catalogue-segment backfill (decisions §231): score the run
+				// Catalogue-segment backfill (decisions §232): score the run
 				// against the free-standing global/famous-segment geometries it
 				// matches end-to-end. Owner-only; RLS also gates the write.
 				if (isOwner) {

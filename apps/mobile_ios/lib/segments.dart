@@ -60,7 +60,7 @@ EffortResult? computeEffortFromTrack(
 }
 
 /// A free-standing catalogue-segment geometry (the global/famous-segment
-/// layer — decisions §231). Carries its own polyline, so matching keys off
+/// layer — decisions §232). Carries its own polyline, so matching keys off
 /// the run passing the segment's start then its end rather than a
 /// distance-along-a-route window. Mirrors `GlobalSegmentGeometry` in
 /// `apps/web/src/lib/segments/segments.ts`.

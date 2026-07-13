@@ -1526,7 +1526,7 @@
 		<FundraiserSection runId={run.id} isOwner={auth.user?.id === run.user_id} />
 
 		<!-- Segments render even for a route-less run: the free-standing
-		     global/famous-segment catalogue (decisions §231) matches a
+		     global/famous-segment catalogue (decisions §232) matches a
 		     track end-to-end without a linked route, which is the whole
 		     point for imported runs (route_id null). Route-scoped history
 		     stays gated on route_id. -->

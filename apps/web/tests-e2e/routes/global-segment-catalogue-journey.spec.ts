@@ -5,7 +5,7 @@ import { insertRun, deleteRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
- * Global / famous-segment catalogue journey (decisions §231) — the
+ * Global / famous-segment catalogue journey (decisions §232) — the
  * free-standing catalogue layer that matches a run END-TO-END against its
  * OWN geometry, with NO linked route. This is the seam that fixes the
  * chicken-and-egg gap for imported runs (route_id null never matched any

@@ -7086,7 +7086,7 @@ export async function computeSegmentEffortsForRun(input: {
 	return inserted?.length ?? 0;
 }
 
-// --- Global / famous-segment catalogue (decisions §231) ---
+// --- Global / famous-segment catalogue (decisions §232) ---
 
 export interface GlobalSegment {
 	id: string;

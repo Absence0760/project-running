@@ -71,7 +71,7 @@ export function computeEffortFromTrack(
 }
 
 /** A free-standing catalogue-segment geometry (the global/famous-segment
- *  layer — decisions §231). Unlike a route slice, it carries its own
+ *  layer — decisions §232). Unlike a route slice, it carries its own
  *  polyline, so matching keys off the run passing the segment's start
  *  then its end rather than a distance-along-a-route window. */
 export interface GlobalSegmentGeometry {
