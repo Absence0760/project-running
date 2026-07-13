@@ -654,6 +654,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Correndo sozinho(a) depois do escurecer? Compartilhe um link ao vivo para alguém acompanhar.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Compartilhar';
+
+  @override
   String get activitySedentary =>
       'Maior parte sentado (trabalho de escritório)';
 
@@ -11730,6 +11737,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runAutoLiveShareStarted =>
       'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
+
+  @override
+  String get runSafetyNudgeSolo =>
+      'Correndo sozinho(a) depois do escurecer? Compartilhe um link ao vivo para alguém acompanhar.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Compartilhar';
 
   @override
   String get activitySedentary =>

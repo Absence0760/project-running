@@ -655,6 +655,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Live-Teilen ist aktiv — sende den Link über „Live-Link teilen“';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Läufst du allein nach Einbruch der Dunkelheit? Teile einen Live-Link, damit dir jemand folgen kann.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Teilen';
+
+  @override
   String get activitySedentary => 'Überwiegend sitzend (Bürojob)';
 
   @override

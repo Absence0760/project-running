@@ -129,6 +129,16 @@ class SettingsKeys {
   /// explicit opt-in. Read by run_screen at _begin(); L4 (a failed share
   /// never blocks the recording).
   static const autoLiveShare = 'auto_live_share';
+
+  /// ISO-8601 timestamp of the last time the solo-run safety nudge was
+  /// surfaced on THIS device (docs/features/safety.md). The run screen
+  /// stamps it when it shows the "recording solo after dark — share a
+  /// live link" prompt so the nudge is throttled (see
+  /// `safetyNudgeThrottleMs` in `safety_nudge.dart`); absent = never
+  /// surfaced. Device-scoped like [autoLiveShare] — the nudge is a
+  /// property of the recording phone. L4 (read/write failure never
+  /// touches the recording).
+  static const safetyNudgeDismissedAt = 'safety_nudge_dismissed_at';
 }
 
 /// Pluggable on-device cache for the two prefs bags. The mobile app
