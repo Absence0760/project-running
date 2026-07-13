@@ -16,6 +16,8 @@ export const messages = {
 	'shell.skipToMain': 'Zum Hauptinhalt springen',
 	'shell.loading': 'Wird geladen …',
 	'shell.redirecting': 'Weiterleitung…',
+	'shell.profileLoadError': 'Dein Profil konnte nicht geladen werden. Bitte aktualisiere die Seite und versuche es erneut.',
+	'shell.profileSetupError': 'Die Einrichtung deines Kontos konnte nicht abgeschlossen werden. Bitte aktualisiere die Seite und wende dich an den Support, falls das weiterhin passiert.',
 	'shell.accountMenu': 'Kontomenü',
 	'shell.profileAria': '{name} — Profil und abmelden',
 	'shell.expandSidebar': 'Seitenleiste ausklappen',

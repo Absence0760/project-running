@@ -25,6 +25,8 @@ export const en = {
 	'shell.skipToMain': 'Skip to main content',
 	'shell.loading': 'Loading…',
 	'shell.redirecting': 'Redirecting…',
+	'shell.profileLoadError': "Couldn't load your profile. Please refresh and try again.",
+	'shell.profileSetupError': "Couldn't finish setting up your account. Please refresh, and contact support if this keeps happening.",
 	'shell.accountMenu': 'Account menu',
 	'shell.profileAria': '{name} — profile and sign out',
 	'shell.expandSidebar': 'Expand sidebar',

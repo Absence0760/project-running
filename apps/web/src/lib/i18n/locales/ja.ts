@@ -15,6 +15,8 @@ export const messages = {
 	'shell.skipToMain': 'メインコンテンツへスキップ',
 	'shell.loading': '読み込み中…',
 	'shell.redirecting': 'リダイレクト中…',
+	'shell.profileLoadError': 'プロフィールを読み込めませんでした。ページを更新してもう一度お試しください。',
+	'shell.profileSetupError': 'アカウントのセットアップを完了できませんでした。ページを更新し、繰り返し発生する場合はサポートにお問い合わせください。',
 	'shell.accountMenu': 'アカウントメニュー',
 	'shell.profileAria': '{name} — プロフィールとサインアウト',
 	'shell.expandSidebar': 'サイドバーを展開',

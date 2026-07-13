@@ -16,6 +16,8 @@ export const messages = {
 	'shell.skipToMain': 'Pular para o conteúdo principal',
 	'shell.loading': 'Carregando…',
 	'shell.redirecting': 'Redirecionando…',
+	'shell.profileLoadError': 'Não foi possível carregar seu perfil. Atualize a página e tente novamente.',
+	'shell.profileSetupError': 'Não foi possível concluir a configuração da sua conta. Atualize a página e entre em contato com o suporte se isso continuar acontecendo.',
 	'shell.accountMenu': 'Menu da conta',
 	'shell.profileAria': '{name} — perfil e sair',
 	'shell.expandSidebar': 'Expandir barra lateral',
