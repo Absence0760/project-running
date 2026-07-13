@@ -26,6 +26,18 @@ set -euo pipefail
 DB_URL="${SUPABASE_DB_URL:?SUPABASE_DB_URL must be set to the target database connection string}"
 MIG_DIR="${MIG_DIR:-supabase/migrations}"
 
+# Supabase DB passwords routinely contain %, !, ^, etc. Left inline in the URI,
+# psql tries to percent-decode them ("invalid percent-encoded token") and never
+# connects. So authenticate via PGPASSWORD (raw, no encoding) and strip the
+# password out of the URI. The strip is an exact-substring removal keyed on the
+# known SUPABASE_DB_PASSWORD, so it can't mis-parse a password that itself
+# contains ':' or '@'. If SUPABASE_DB_PASSWORD is unset we assume the URL is
+# already usable as-is.
+if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+  export PGPASSWORD="${SUPABASE_DB_PASSWORD}"
+  DB_URL="${DB_URL/:${SUPABASE_DB_PASSWORD}@/@}"
+fi
+
 if [[ ! -d "$MIG_DIR" ]]; then
   echo "::error::migrations directory not found: $MIG_DIR (run from apps/backend)" >&2
   exit 1
