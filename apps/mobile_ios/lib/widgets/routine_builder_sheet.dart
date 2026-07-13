@@ -292,13 +292,16 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
         const SizedBox(height: 12),
         FormSectionLabel(l10n.gymRoutineEditorNotesLabel),
         const SizedBox(height: 8),
-        TextField(
-          controller: _notesCtl,
-          maxLines: 2,
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            border: OutlineInputBorder(),
+        Semantics(
+          label: l10n.gymRoutineEditorNotesLabel,
+          child: TextField(
+            controller: _notesCtl,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
         if (_error != null) ...[
@@ -577,11 +580,14 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           hintText: l10n.gymEditorExercisePlaceholder,
         );
     if (widget.suggestions.isEmpty) {
-      return TextField(
-        controller: ex.name,
-        focusNode: ex.nameFocus,
-        textCapitalization: TextCapitalization.words,
-        decoration: deco(),
+      return Semantics(
+        label: l10n.gymEditorExercisePlaceholder,
+        child: TextField(
+          controller: ex.name,
+          focusNode: ex.nameFocus,
+          textCapitalization: TextCapitalization.words,
+          decoration: deco(),
+        ),
       );
     }
     return RawAutocomplete<String>(
@@ -594,12 +600,15 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             .where((s) => s.toLowerCase().contains(q))
             .take(6);
       },
-      fieldViewBuilder: (context, controller, focusNode, onSubmit) => TextField(
-        controller: controller,
-        focusNode: focusNode,
-        textCapitalization: TextCapitalization.words,
-        decoration: deco(),
-        onSubmitted: (_) => onSubmit(),
+      fieldViewBuilder: (context, controller, focusNode, onSubmit) => Semantics(
+        label: l10n.gymEditorExercisePlaceholder,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          textCapitalization: TextCapitalization.words,
+          decoration: deco(),
+          onSubmitted: (_) => onSubmit(),
+        ),
       ),
       optionsViewBuilder: (context, onSelected, options) => Align(
         alignment: Alignment.topLeft,

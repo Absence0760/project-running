@@ -568,11 +568,29 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Expanded(child: _durationSubField(hoursCtl, 'h')),
+                    Expanded(
+                      child: _durationSubField(
+                        hoursCtl,
+                        'h',
+                        l10n.runDetailFieldDuration,
+                      ),
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: _durationSubField(minutesCtl, 'm')),
+                    Expanded(
+                      child: _durationSubField(
+                        minutesCtl,
+                        'm',
+                        l10n.runDetailFieldDuration,
+                      ),
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: _durationSubField(secondsCtl, 's')),
+                    Expanded(
+                      child: _durationSubField(
+                        secondsCtl,
+                        's',
+                        l10n.runDetailFieldDuration,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -668,14 +686,21 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }
   }
 
-  Widget _durationSubField(TextEditingController ctl, String suffix) {
-    return TextField(
-      controller: ctl,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: InputDecoration(
-        isDense: true,
-        suffixText: suffix,
+  Widget _durationSubField(
+    TextEditingController ctl,
+    String suffix,
+    String label,
+  ) {
+    return Semantics(
+      label: label,
+      child: TextField(
+        controller: ctl,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          isDense: true,
+          suffixText: suffix,
+        ),
       ),
     );
   }

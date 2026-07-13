@@ -5125,6 +5125,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coachSuggestNoPlanTempo => 'What is a tempo run?';
 
   @override
+  String get coachSuggestNewFirstRun =>
+      'I\'ve never run before — where do I start?';
+
+  @override
+  String get coachSuggestNewFirstFeel => 'How should my first run feel?';
+
+  @override
+  String get coachSuggestNewHowOften => 'How often should I run as a beginner?';
+
+  @override
+  String get coachSuggestNewWalkRun => 'Is it OK to walk during my runs?';
+
+  @override
+  String get coachEditMessageLabel => 'Edit your message';
+
+  @override
   String get coachEditCancel => 'Cancel';
 
   @override

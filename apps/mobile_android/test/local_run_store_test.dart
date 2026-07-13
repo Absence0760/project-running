@@ -82,6 +82,50 @@ void main() {
       expect(loaded.duration, run.duration);
     });
 
+    test('terminal save of a large track round-trips every waypoint', () async {
+      // The finish-line save() offloads the full-Run jsonEncode to a
+      // compute() isolate so a multi-day ultra (150k+ points) doesn't
+      // freeze the UI at the moment the runner finishes. Pin that the
+      // off-isolate encode + atomic write still reconstructs the whole
+      // track (every field) on a fresh cold-load.
+      final base = DateTime(2026, 5, 11, 5);
+      final track = [
+        for (var i = 0; i < 40000; i++)
+          Waypoint(
+            lat: 47.37 + i * 1e-7,
+            lng: 8.54 + i * 1e-7,
+            elevationMetres: 400.0 + (i % 100),
+            timestamp: base.add(Duration(seconds: i)),
+            bpm: 120 + (i % 60),
+          ),
+      ];
+      final run = makeRun(
+        id: 'big-finish',
+        distance: 240_300,
+        duration: const Duration(hours: 92),
+        track: track,
+      );
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(run);
+
+      final store2 = LocalRunStore();
+      await store2.init(overrideDirectory: tempDir);
+      final loaded = await store2.runById('big-finish');
+      expect(loaded, isNotNull);
+      expect(loaded!.track.length, track.length);
+      // Sample the ends + middle so a "kept only the first" truncation
+      // or a field-drop regression surfaces here.
+      for (final i in [0, 19999, 39999]) {
+        expect(loaded.track[i].lat, closeTo(track[i].lat, 1e-9));
+        expect(loaded.track[i].lng, closeTo(track[i].lng, 1e-9));
+        expect(loaded.track[i].elevationMetres, track[i].elevationMetres);
+        expect(loaded.track[i].bpm, track[i].bpm);
+        expect(loaded.track[i].timestamp, track[i].timestamp);
+      }
+    });
+
     test('save stamps last_modified_at and marks unsynced', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);

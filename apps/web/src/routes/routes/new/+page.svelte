@@ -720,9 +720,9 @@
 					<span class="time-value">{estimatedTime}</span>
 					<div class="pace-input">
 						<span class="pace-label">{m('routeNew.paceAt')}</span>
-						<input type="number" min="2" max="15" bind:value={paceMin} class="pace-num" />
+						<input type="number" min="2" max="15" bind:value={paceMin} class="pace-num" aria-label={m('routeNew.paceMinutesLabel')} />
 						<span>:</span>
-						<input type="number" min="0" max="59" bind:value={paceSec} class="pace-num" />
+						<input type="number" min="0" max="59" bind:value={paceSec} class="pace-num" aria-label={m('routeNew.paceSecondsLabel')} />
 						<span class="pace-label">/{unitLabel}</span>
 					</div>
 				</div>
