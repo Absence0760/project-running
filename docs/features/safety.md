@@ -191,14 +191,47 @@ clipping; the email only carries times + the link.
    delete `trusted_contacts` helpers/tests, deprecate the key.
 6. Docs: roadmap, parity, decisions ADR, persona finding status.
 
+## SMS escalation + per-run expected-return (feature C, 2026-07-13, ADR §240)
+
+Layered on the email net above; migration `20270410_001`. Reuses the
+channel-agnostic scan rather than forking it.
+
+- **Phone + second opt-in.** `safety_contacts.contact_phone` (nullable E.164,
+  CHECK `^\+[1-9][0-9]{6,14}$`) is **owner-stored**; `safety_contacts.sms_opt_in_at`
+  is a **separate consent the contact controls**. `confirm_safety_contact` /
+  `confirm_safety_contact_by_token` gained a defaulted `p_sms_opt_in` that only
+  stamps the opt-in when a phone is on file (forced null otherwise, so the anon
+  token page can always show the box); `set_safety_sms_opt_in(p_id, p_opt_in)`
+  toggles it later.
+- **Additive, never suppressive.** The scan enqueues a `safety_sms` job **only**
+  for a confirmed contact with `sms_opt_in_at` set. Email stays unconditional —
+  a disabled/failed SMS leg can't stop the email.
+- **Fail-closed transport.** The Go worker's `smsSender` stays nil unless
+  `SMS_PROVIDER=twilio` **and** `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM`
+  are all set; the handler no-ops (logs + returns success) when nil. Acquiring
+  the Twilio account is a pre-deploy checklist item, not a code gate.
+- **Per-run "not back by X".** `set_run_expected_return(p_run_id, p_expected_return_at)`
+  writes/clears `runs.metadata.expected_return_at` on an owned in-progress run
+  (metadata.md) — an absolute deadline layered over the silence-window pref.
+- **Web surfaces.** Optional phone on the `/settings/safety` add form
+  (client-validated against the same CHECK) + an "SMS on" badge + the
+  contact-side opt-in checkbox on inbound requests; the `/safety/confirm` token
+  page now prompts-then-confirms (with the opt-in) rather than auto-confirming;
+  an owner-only "Not back by X" control on `/live/[id]` (web can't record, so
+  the owner's own live spectator view is the only in-progress-run surface).
+- **Deferred (additive per §24).** Mobile safety-contacts screens don't yet
+  carry the phone/SMS fields or the expected-return control; native-push leg
+  still waits on FCM/APNs.
+
 ## Open decisions (chosen; revisit deliberately)
 
 - Threshold presets 15/30/60/120 min, floor 10 in SQL — arbitrary but sane;
   revisit with field data.
-- No per-run expected-return input (friction); could be layered later as an
-  optional override without changing the scan.
-- No SMS / push channel yet; the payload shape (template + run_id + contact)
-  is channel-agnostic so a `native_push` leg can reuse the scan.
+- ~~No per-run expected-return input~~ — **shipped** as an optional override
+  (`set_run_expected_return`, feature C / ADR §240); the scan is unchanged.
+- ~~No SMS / push channel yet~~ — **SMS shipped** (feature C / ADR §240, the
+  `safety_sms` kind + fail-closed Twilio transport); the payload shape stays
+  channel-agnostic so a `native_push` leg can still reuse the scan.
 - Escalation applies only to live-broadcast runs. A runner who records
   without any live share gets no safety net — the pings ARE the signal. The
   settings copy says this; auto-live-share existing is what makes it a
