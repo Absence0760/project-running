@@ -5188,6 +5188,25 @@ class AppLocalizationsDe extends AppLocalizations {
   String get coachSuggestNoPlanTempo => 'Was ist ein Tempolauf?';
 
   @override
+  String get coachSuggestNewFirstRun =>
+      'Ich bin noch nie gelaufen — wo fange ich an?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Wie sollte sich mein erster Lauf anfühlen?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Wie oft sollte ich als Anfänger laufen?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Ist es in Ordnung, während meiner Läufe zu gehen?';
+
+  @override
+  String get coachEditMessageLabel => 'Nachricht bearbeiten';
+
+  @override
   String get coachEditCancel => 'Abbrechen';
 
   @override

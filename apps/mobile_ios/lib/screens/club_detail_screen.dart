@@ -199,7 +199,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Future<void> _submitPost() async {
     final c = _club;
-    if (c == null) return;
+    if (c == null || _busy) return;
     final body = _postCtrl.text.trim();
     if (body.isEmpty) return;
     setState(() => _busy = true);

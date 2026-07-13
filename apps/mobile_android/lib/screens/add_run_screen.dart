@@ -320,22 +320,26 @@ class _AddRunScreenState extends State<AddRunScreen> {
             const SizedBox(height: 20),
             Text(l10n.addRunSectionDistance, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: _distanceCtl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                suffixText: UnitFormat.distanceLabel(unit),
+            Semantics(
+              label: l10n.addRunSectionDistance,
+              child: TextFormField(
+                controller: _distanceCtl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  suffixText: UnitFormat.distanceLabel(unit),
+                ),
+                validator: (v) {
+                  if (_parseDistanceMetres(v ?? '') == null) {
+                    return l10n.addRunDistanceInvalid;
+                  }
+                  return null;
+                },
               ),
-              validator: (v) {
-                if (_parseDistanceMetres(v ?? '') == null) {
-                  return l10n.addRunDistanceInvalid;
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 20),
             Text(l10n.addRunSectionDuration, style: theme.textTheme.labelLarge),

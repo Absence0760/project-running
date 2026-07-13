@@ -195,6 +195,29 @@ void main() {
     expect(find.byIcon(Icons.my_location), findsOneWidget);
   });
 
+  // a11y: the loop-dialog distance field's only visible label is the
+  // descriptive body Text above it, which a screen reader won't associate
+  // with the edit box. The Semantics wrap gives the field its own
+  // accessible name (uxhunt-mobile finding #3).
+  testWidgets('loop-dialog distance field exposes an accessible name',
+      (tester) async {
+    final store = await _store();
+    await _pumpScreen(tester, store);
+    await tester.tap(find.byTooltip('Generate loop'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    const body = "Target distance — we'll build a radial loop "
+        'around the current map centre.';
+    final sem = find.byWidgetPredicate(
+      (w) => w is Semantics && w.properties.label == body,
+    );
+    expect(sem, findsOneWidget);
+    final field = tester.getSemantics(
+      find.descendant(of: sem, matching: find.byType(TextField)),
+    );
+    expect(field.label, body);
+  });
+
   testWidgets('mode toggle has Trail / Road / Straight segments',
       (tester) async {
     final store = await _store();

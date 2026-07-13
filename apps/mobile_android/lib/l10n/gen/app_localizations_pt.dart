@@ -5181,6 +5181,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
 
   @override
+  String get coachSuggestNewFirstRun => 'Nunca corri antes — por onde começo?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Como deve ser a sensação da minha primeira corrida?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Com que frequência devo correr como iniciante?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Não faz mal caminhar durante as corridas?';
+
+  @override
+  String get coachEditMessageLabel => 'Editar a sua mensagem';
+
+  @override
   String get coachEditCancel => 'Cancelar';
 
   @override
@@ -16245,6 +16263,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
+
+  @override
+  String get coachSuggestNewFirstRun => 'Nunca corri antes — por onde começo?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Como deve ser a sensação da minha primeira corrida?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Com que frequência devo correr como iniciante?';
+
+  @override
+  String get coachSuggestNewWalkRun => 'Tudo bem caminhar durante as corridas?';
+
+  @override
+  String get coachEditMessageLabel => 'Edite sua mensagem';
 
   @override
   String get coachEditCancel => 'Cancelar';
