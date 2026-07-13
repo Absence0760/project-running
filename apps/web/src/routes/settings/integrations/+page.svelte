@@ -202,6 +202,16 @@
 
 	// --- Strava bulk-zip import ---
 
+	// Both bulk importers walk the archive serially on the main thread — a
+	// multi-year export is tens of minutes of parse + upload with no
+	// resume. Arm the browser's native "leave site?" confirmation for the
+	// duration of an in-flight import so a stray tab-close/reload doesn't
+	// silently abort it. The browser owns the dialog text (no i18n string).
+	function beforeUnloadGuard(event: BeforeUnloadEvent) {
+		event.preventDefault();
+		event.returnValue = '';
+	}
+
 	let zipProgress = $state<StravaZipProgress | null>(null);
 	let zipError = $state('');
 
@@ -210,20 +220,24 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		zipError = '';
-		zipProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
+		zipProgress = { total: 0, imported: 0, skipped: 0, droppedUnsupported: 0, droppedPhotos: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
+		window.addEventListener('beforeunload', beforeUnloadGuard);
 		try {
 			const result = await importStravaZip(file, (p) => {
 				zipProgress = { ...p };
 			});
-			showToast(
-				result.failed
-					? m('settingsIntegrations.stravaZipImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
-					: m('settingsIntegrations.stravaZipImport', { imported: result.imported, skipped: result.skipped }),
-				'success',
-			);
+			let msg = result.failed
+				? m('settingsIntegrations.stravaZipImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
+				: m('settingsIntegrations.stravaZipImport', { imported: result.imported, skipped: result.skipped });
+			if (result.droppedUnsupported)
+				msg += ' ' + m('settingsIntegrations.stravaZipImportDropped', { dropped: result.droppedUnsupported });
+			if (result.droppedPhotos)
+				msg += ' ' + m('settingsIntegrations.stravaZipImportDroppedPhotos', { photos: result.droppedPhotos });
+			showToast(msg, 'success');
 		} catch (err) {
 			zipError = err instanceof Error ? err.message : String(err);
 		} finally {
+			window.removeEventListener('beforeunload', beforeUnloadGuard);
 			input.value = '';
 			// Leave the final summary visible for a moment, then clear.
 			setTimeout(() => (zipProgress = null), 4000);
@@ -241,6 +255,7 @@
 		if (!file) return;
 		garminError = '';
 		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingFile') };
+		window.addEventListener('beforeunload', beforeUnloadGuard);
 		try {
 			const result = await importGarminBundle(file, (p) => {
 				garminProgress = { ...p };
@@ -257,6 +272,7 @@
 		} catch (err) {
 			garminError = err instanceof Error ? err.message : String(err);
 		} finally {
+			window.removeEventListener('beforeunload', beforeUnloadGuard);
 			input.value = '';
 			setTimeout(() => (garminProgress = null), 4000);
 		}
@@ -397,7 +413,7 @@
 								style="width: {Math.min(
 									100,
 									Math.round(
-										((zipProgress.imported + zipProgress.skipped + zipProgress.failed) /
+										((zipProgress.imported + zipProgress.skipped + zipProgress.droppedUnsupported + zipProgress.failed) /
 											zipProgress.total) *
 											100,
 									),
@@ -409,8 +425,10 @@
 						{#if zipProgress.total === 0}
 							{zipProgress.currentName ?? '…'}
 						{:else}
-							{m('settingsIntegrations.progressDone', { done: zipProgress.imported + zipProgress.skipped + zipProgress.failed, total: zipProgress.total })} · {m('settingsIntegrations.progressImported', { imported: zipProgress.imported })} ·
-							{m('settingsIntegrations.progressSkipped', { skipped: zipProgress.skipped })}{zipProgress.failed
+							{m('settingsIntegrations.progressDone', { done: zipProgress.imported + zipProgress.skipped + zipProgress.droppedUnsupported + zipProgress.failed, total: zipProgress.total })} · {m('settingsIntegrations.progressImported', { imported: zipProgress.imported })} ·
+							{m('settingsIntegrations.progressSkipped', { skipped: zipProgress.skipped })}{zipProgress.droppedUnsupported
+								? ` · ${m('settingsIntegrations.progressDropped', { dropped: zipProgress.droppedUnsupported })}`
+								: ''}{zipProgress.failed
 								? ` · ${m('settingsIntegrations.progressFailed', { failed: zipProgress.failed })}`
 								: ''}
 							{#if zipProgress.currentName}

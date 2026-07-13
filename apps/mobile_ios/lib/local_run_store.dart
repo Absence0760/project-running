@@ -291,7 +291,15 @@ class LocalRunStore extends ChangeNotifier {
       'run': stamped.toJson(),
       'synced': false,
     };
-    await writeJsonAtomic(file, data);
+    // The terminal save serialises the ENTIRE track. For a multi-day ultra
+    // (150k+ waypoints) a synchronous jsonEncode on the UI isolate froze the
+    // app at the exact moment a runner finished — the one save guaranteed to
+    // see the largest track in the app. Encode off-isolate (mirrors
+    // saveInProgress / loadInProgress); the atomic tmp+rename write stays on
+    // the calling isolate, so crash-safety + the save-before-clearInProgress
+    // ordering are unchanged.
+    final encoded = await compute(_encodeJson, data);
+    await writeStringAtomic(file, encoded);
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
     _upsertSummary(stamped, synced: false, atFront: true);
@@ -1052,6 +1060,11 @@ class _LoadedRun {
   final bool synced;
   const _LoadedRun(this.run, this.synced);
 }
+
+/// jsonEncode hoisted to a top-level function so it can run in a `compute()`
+/// isolate — the terminal `save` offloads the full-track encode off the UI
+/// thread through this.
+String _encodeJson(Object? json) => jsonEncode(json);
 
 /// Append a single NDJSON record to the in-progress file. Open-
 /// append-flush-close per call — durable across a crash mid-tick

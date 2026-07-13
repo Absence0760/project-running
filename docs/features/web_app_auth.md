@@ -131,6 +131,30 @@ OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` an
 
 ---
 
+## Email confirmation redirect (signup gap)
+
+Every auth flow that mails a link passes an explicit `emailRedirectTo` / `redirectTo` **except signup**:
+
+| Flow | redirect passed | source |
+|---|---|---|
+| OAuth (Google/Apple) | `${origin}/auth/callback` | `stores/auth.svelte.ts` |
+| Password reset | `${origin}/auth/reset` | `login/+page.svelte` (`resetPasswordForEmail`) |
+| Email change | `${origin}/auth/callback` | `settings/account/+page.svelte` |
+| **Signup confirmation** | **none** | `login/+page.svelte` (`supabase.auth.signUp`) |
+| **Signup (mobile)** | **none** | `packages/api_client/lib/src/api_client.dart` |
+
+When the client sends no redirect, GoTrue falls back to the hosted project's **Site URL** for the confirmation link's landing. On a project whose Site URL is still the Supabase default (`http://localhost:3000`), the confirmation email redirects to `http://localhost:3000/?code=<pkce>` — wrong host, and the app **root** rather than `/auth/callback`.
+
+**Why this is invisible locally / in CI:** `apps/backend/supabase/config.toml` sets `enable_confirmations = false`, so local signup sends no confirmation email at all — the confirm-email redirect path only exists on the hosted project (confirmations ON). Reset-password *does* mail locally and *does* pass a redirect, so it works; the signup gap surfaces only in production.
+
+**Why landing on `/auth/callback` matters (not cosmetic):** the callback page (`auth/callback/+page.svelte`) exchanges the PKCE code, then replays the age/terms consent stamps via `confirm_age_and_terms` and runs the GDPR Art 8 consent gate. For password signup the immediate post-`signUp()` `confirm_age_and_terms` call 401s (no session until confirmation), so the stamp **retry lives on the callback**. A confirmation that lands on `/` (root) skips that retry — `detectSessionInUrl` may still exchange the code, but the consent capture/gate is bypassed.
+
+**A complete fix is two parts, neither sufficient alone:**
+1. **Code (shipped)** — web `signUp` sends `emailRedirectTo: ${origin}/auth/callback`. Mobile `signUp` (`packages/api_client`) sends the custom-scheme deep link `com.threkir.app://login-callback` (`ApiClient.kAuthDeepLinkRedirect`), registered as an Android intent-filter (`MainActivity`) + an iOS `CFBundleURLTypes` scheme; `supabase_flutter`'s `app_links` listener completes the PKCE session in-app. Mobile `sendPasswordResetEmail` sends `${WEB_BASE_URL}/auth/reset` (reset stays on web — mobile hosts no reset form).
+2. **Dashboard (pending)** — set Site URL to the prod origin and add every redirect target to the allow-list: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and `com.threkir.app://login-callback` (+ preview origin). See Production setup below.
+
+---
+
 ## Session persistence
 
 Sessions are managed by `@supabase/supabase-js` itself:
@@ -178,12 +202,13 @@ PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 
 Supabase Auth dashboard:
 
+- Set **Authentication → URL Configuration → Site URL** to the prod origin (`https://threkir.com`). A fresh project defaults this to `http://localhost:3000`; leaving it there sends every fallback redirect (notably signup confirmation, which passes no `emailRedirectTo` — see "Email confirmation redirect" above) to localhost.
+- Add **every** redirect target to **Redirect URLs**: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and the mobile deep link `com.threkir.app://login-callback` (+ the preview origin). The allow-list is enforced — a redirect not on it falls back to the Site URL.
 - Enable Google and Apple providers under **Authentication → Providers**
-- Add the production origin (e.g. `https://run-app.example.com/auth/callback`) to **Authentication → URL Configuration → Redirect URLs**
 - Enable **Allow manual linking** under **Authentication → Settings** so `linkIdentity()` works
 - Mirror the same redirect URI in each external provider's app config
 
-Email confirmations and rate limits are configured in the same dashboard.
+Email confirmations and rate limits are configured in the same dashboard. For the auth-email localization hook + custom SMTP (the sender address), see [email.md § Production ops](email.md).
 
 ---
 

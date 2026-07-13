@@ -21,6 +21,7 @@ import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
 import { classifyStravaMember } from './strava-zip-classify';
+import { classifyStravaRow } from './strava-zip-disposition';
 import { indexHeader, type HeaderIndex } from './strava-zip-header';
 import { parseStravaCsvDateToIso } from './strava-zip-date';
 import { supabase } from '../core/supabase';
@@ -30,6 +31,15 @@ export interface StravaZipProgress {
 	total: number;
 	imported: number;
 	skipped: number;
+	// Rows dropped because the activity type isn't run/walk/hike (Ride,
+	// Swim, Yoga, …) — never imported, distinct from `skipped` (a
+	// duplicate that is already present). Kept separate so the final
+	// summary can't tell a migrant "already present" about data that
+	// was actually left behind.
+	droppedUnsupported: number;
+	// Photos left behind by the per-activity 10-photo cap, summed across
+	// every imported row.
+	droppedPhotos: number;
 	failed: number;
 	currentName: string | null;
 }
@@ -92,6 +102,8 @@ export async function importStravaZip(
 		total: dataRows.length,
 		imported: 0,
 		skipped: 0,
+		droppedUnsupported: 0,
+		droppedPhotos: 0,
 		failed: 0,
 		currentName: null,
 	};
@@ -104,23 +116,26 @@ export async function importStravaZip(
 		const filename = row[idx.filename];
 		progress.currentName = name;
 
-		// Skip non-foot activities — the app is opinionated about what's
-		// a "run" (which also covers walks / hikes).
-		if (actType && !actType.includes('run') && !actType.includes('walk') && !actType.includes('hike')) {
-			progress.skipped++;
+		// Non-foot activities (Ride/Swim/Yoga/…) are DROPPED, not skipped:
+		// they were never imported, so they count separately from `skipped`
+		// (a duplicate that IS already present).
+		const disposition = classifyStravaRow(actType, stravaId, seen);
+		if (disposition === 'unsupported') {
+			progress.droppedUnsupported++;
 			onProgress?.(progress);
 			continue;
 		}
-		if (stravaId && seen.has(stravaId)) {
+		if (disposition === 'duplicate') {
 			progress.skipped++;
 			onProgress?.(progress);
 			continue;
 		}
 
 		try {
-			await importOne(zip, row, idx, stravaId, filename);
+			const { droppedPhotos } = await importOne(zip, row, idx, stravaId, filename);
 			seen.add(stravaId);
 			progress.imported++;
+			progress.droppedPhotos += droppedPhotos;
 		} catch (_err) {
 			progress.failed++;
 		}
@@ -138,7 +153,7 @@ async function importOne(
 	idx: HeaderIndex,
 	stravaId: string,
 	filename: string,
-): Promise<void> {
+): Promise<{ droppedPhotos: number }> {
 	const startedAt = row[idx.date];
 	const distanceM = parseCsvNumber(row[idx.distance]) * 1000; // CSV is km
 	const durationS = parseCsvNumber(row[idx.movingTime]);
@@ -224,8 +239,13 @@ async function importOne(
 	// Attach any photos the export bundled under media/ for this activity
 	// (strava persona #19). Auxiliary — a failed photo never aborts the run
 	// import; cap at 10 so a pathological row can't stall the whole import.
+	// Any photos past the cap are reported as an aggregate so a race-day
+	// album truncation isn't silent.
+	let droppedPhotos = 0;
 	if (idx.media >= 0) {
-		const paths = parseStravaMediaPaths(row[idx.media]).slice(0, 10);
+		const allPaths = parseStravaMediaPaths(row[idx.media]);
+		const paths = allPaths.slice(0, 10);
+		droppedPhotos = allPaths.length - paths.length;
 		for (const p of paths) {
 			const entry = zip.file(p);
 			if (!entry) continue;
@@ -241,6 +261,7 @@ async function importOne(
 			}
 		}
 	}
+	return { droppedPhotos };
 }
 
 // --- CSV parsing ---

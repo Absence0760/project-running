@@ -392,4 +392,54 @@ void main() {
       expect(beginnerTile(tester).value, isFalse);
     });
   });
+
+  group('PlanNewScreen — beginner walk-run hides pace jargon', () {
+    const paceLabels = ['Easy', 'Marathon', 'Tempo', 'Interval', 'Rep'];
+
+    testWidgets('a normal plan preview shows the five pace zones',
+        (tester) async {
+      await _pump(tester);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.text('Week outline'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      for (final label in paceLabels) {
+        expect(find.text(label), findsWidgets, reason: 'pace pill "$label"');
+      }
+    });
+
+    testWidgets('ticking the walk-run toggle hides the pace zones + VDOT',
+        (tester) async {
+      // Reason: a beginner walk-run plan is duration-based intervals — the
+      // Daniels VDOT badge + five pace zones are jargon the runner who ticked
+      // "New to running?" can't parse. The preview must drop them and show
+      // only the week outline (persona runner-new finding #1).
+      await _pump(tester);
+      await tester.pump();
+      final toggle = find.text('New to running? Use a walk-run plan');
+      await tester.scrollUntilVisible(
+        toggle,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CheckboxListTile).first);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.text('Week outline'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      // The duration-based week outline is still rendered...
+      expect(find.text('Week outline'), findsOneWidget);
+      // ...but the pace zones + VDOT line are gone.
+      for (final label in paceLabels) {
+        expect(find.text(label), findsNothing, reason: 'pace pill "$label"');
+      }
+      expect(find.textContaining('Daniels VDOT'), findsNothing);
+    });
+  });
 }

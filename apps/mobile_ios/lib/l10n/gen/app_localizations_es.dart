@@ -704,6 +704,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authOrDivider => 'O';
 
   @override
+  String get authErrorOffline =>
+      'Parece que no tienes conexión. Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'Correo electrónico o contraseña incorrectos. Inténtalo de nuevo.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+
+  @override
+  String get authErrorGeneric => 'Algo salió mal. Inténtalo de nuevo.';
+
+  @override
   String get signInTitle => 'Iniciar sesión';
 
   @override
@@ -1206,6 +1221,28 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get runDiscard => 'Descartar';
+
+  @override
+  String get runResumeDialogTitle => '¿Reanudar tu carrera?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Una carrera de una sesión anterior sigue en curso. Reanuda la grabación donde la dejaste, finalízala ahora o descártala.';
+
+  @override
+  String get runResumeAction => 'Reanudar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar ahora';
+
+  @override
+  String get runResumedBanner => 'Carrera reanudada.';
+
+  @override
+  String get runResumeSavedBanner => 'Carrera anterior guardada.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Carrera anterior descartada.';
 
   @override
   String get runStartWorkout => 'Iniciar entrenamiento';
@@ -5142,6 +5179,25 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => '¿Qué es una carrera de tempo?';
+
+  @override
+  String get coachSuggestNewFirstRun =>
+      'Nunca he corrido antes, ¿por dónde empiezo?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      '¿Cómo debería sentirse mi primera carrera?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      '¿Con qué frecuencia debo correr siendo principiante?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      '¿Está bien caminar durante mis carreras?';
+
+  @override
+  String get coachEditMessageLabel => 'Edita tu mensaje';
 
   @override
   String get coachEditCancel => 'Cancelar';

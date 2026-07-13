@@ -9,6 +9,8 @@ import {
   DEACTIVATING_EVENTS,
   mapEventToBillingIssue,
   mapEventToTier,
+  TIER_EVENT_TS_COLUMN,
+  tierEventGuardFilter,
 } from './lib.ts';
 
 Deno.test('mapEventToTier — INITIAL_PURCHASE → pro', () => {
@@ -161,6 +163,73 @@ Deno.test('billing-issue + tier branches are independent for BILLING_ISSUE', () 
   const flag = mapEventToBillingIssue('BILLING_ISSUE');
   assertStrictEquals(tier, null);
   assertStrictEquals(typeof flag, 'string');
+});
+
+// ── monotonic tier-write guard (out-of-order delivery) ────────────
+//
+// The webhook stamps `tier_updated_event_ts` on every tier change and
+// gates the UPDATE with `tierEventGuardFilter` so a stale, out-of-order
+// deactivation cannot downgrade a re-subscribed user. The gate runs in
+// Postgres (an atomic conditional UPDATE), so these tests emulate the
+// exact WHERE the filter compiles to — `tier_updated_event_ts IS NULL OR
+// tier_updated_event_ts <= eventTsMs` — against a modelled stored value.
+
+/// Emulate the PostgREST `.or()` filter `tierEventGuardFilter` produces:
+/// does the conditional UPDATE match a row whose stored tier-event
+/// timestamp is `storedTsMs` (null = never set)?
+function guardMatches(storedTsMs: number | null, eventTsMs: number): boolean {
+  const filter = tierEventGuardFilter(eventTsMs);
+  // filter === "tier_updated_event_ts.is.null,tier_updated_event_ts.lte.<ts>"
+  const [isNull, lte] = filter.split(',');
+  if (isNull !== `${TIER_EVENT_TS_COLUMN}.is.null` || !lte.startsWith(`${TIER_EVENT_TS_COLUMN}.lte.`)) {
+    throw new Error(`unexpected filter shape: ${filter}`);
+  }
+  const threshold = Number(lte.slice(`${TIER_EVENT_TS_COLUMN}.lte.`.length));
+  return storedTsMs === null || storedTsMs <= threshold;
+}
+
+Deno.test('tierEventGuardFilter — exact PostgREST or() shape', () => {
+  assertStrictEquals(
+    tierEventGuardFilter(1_700_000_000_000),
+    'tier_updated_event_ts.is.null,tier_updated_event_ts.lte.1700000000000',
+  );
+});
+
+Deno.test('monotonic guard — out-of-order EXPIRATION after a newer RENEWAL is dropped', () => {
+  const T1 = 1_700_000_000_000; // EXPIRATION event time
+  const T2 = 1_700_000_060_000; // RENEWAL event time, one minute later
+
+  // RENEWAL (T2) processed first → stored tier-event ts is now T2, tier 'pro'.
+  const storedAfterRenewal = T2;
+
+  // The out-of-order EXPIRATION (T1 < T2) arrives second. Its guard filter
+  // is `<= T1`, which does NOT match the row (stored T2 > T1) → zero rows
+  // updated → tier stays 'pro'. This is the bug the fix closes.
+  assertStrictEquals(guardMatches(storedAfterRenewal, T1), false);
+});
+
+Deno.test('monotonic guard — an in-order EXPIRATION still downgrades', () => {
+  const T2 = 1_700_000_060_000; // last tier-moving event (a purchase)
+  const T3 = 1_700_000_120_000; // later, genuine EXPIRATION
+
+  // The normal case: the EXPIRATION is the newest event (T3 > T2) → its
+  // guard `<= T3` matches the row (stored T2) → the downgrade to 'free'
+  // lands. The fix must not break the ordinary lapse path.
+  assertStrictEquals(guardMatches(T2, T3), true);
+});
+
+Deno.test('monotonic guard — first-ever tier write (null stored) always applies', () => {
+  // A never-subscribed user has tier_updated_event_ts = null; the
+  // `is.null` disjunct matches so the initial purchase always lands.
+  assertStrictEquals(guardMatches(null, 1_700_000_000_000), true);
+});
+
+Deno.test('monotonic guard — a same-timestamp distinct event still applies (inclusive lte)', () => {
+  // Two distinct events sharing an event_timestamp_ms is rare but legal;
+  // an exact replay is already caught by the event-id dedupe, so the
+  // guard is inclusive (`<=`) rather than strict.
+  const T = 1_700_000_000_000;
+  assertStrictEquals(guardMatches(T, T), true);
 });
 
 Deno.test('event taxonomy lists are disjoint', () => {

@@ -683,6 +683,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authOrDivider => 'または';
 
   @override
+  String get authErrorOffline => 'オフラインのようです。接続を確認してもう一度お試しください。';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'メールアドレスまたはパスワードが正しくありません。もう一度お試しください。';
+
+  @override
+  String get authErrorRateLimited => '試行回数が多すぎます。しばらく待ってからもう一度お試しください。';
+
+  @override
+  String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
+
+  @override
   String get signInTitle => 'サインイン';
 
   @override
@@ -1169,6 +1182,28 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runDiscard => '破棄';
+
+  @override
+  String get runResumeDialogTitle => 'ランを再開しますか？';
+
+  @override
+  String get runResumeDialogBody =>
+      '前回のセッションのランがまだ進行中です。中断したところから記録を再開するか、今すぐ終了するか、破棄してください。';
+
+  @override
+  String get runResumeAction => '再開';
+
+  @override
+  String get runResumeFinishAction => '今すぐ終了';
+
+  @override
+  String get runResumedBanner => 'ランを再開しました。';
+
+  @override
+  String get runResumeSavedBanner => '前回のランを保存しました。';
+
+  @override
+  String get runResumeDiscardedBanner => '前回のランを破棄しました。';
 
   @override
   String get runStartWorkout => 'ワークアウトを開始';
@@ -4844,6 +4879,21 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => 'テンポランとは？';
+
+  @override
+  String get coachSuggestNewFirstRun => '走ったことがありません。どこから始めればいい？';
+
+  @override
+  String get coachSuggestNewFirstFeel => '初めてのランはどんな感じがすればいい？';
+
+  @override
+  String get coachSuggestNewHowOften => '初心者はどのくらいの頻度で走ればいい？';
+
+  @override
+  String get coachSuggestNewWalkRun => 'ランの途中で歩いてもいい？';
+
+  @override
+  String get coachEditMessageLabel => 'メッセージを編集';
 
   @override
   String get coachEditCancel => 'キャンセル';

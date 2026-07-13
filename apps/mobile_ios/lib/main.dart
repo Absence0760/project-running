@@ -244,20 +244,36 @@ void main() async {
   // instead of requiring GPS waypoints — a treadmill session that crashed
   // after 10 minutes shouldn't evaporate just because there are no fixes.
   cm.Run? recoveredRun;
+  // A recent, non-empty partial is RESUMABLE — instead of finalizing it into a
+  // separate finished Run (which split one continuous multi-day effort into two
+  // disjoint records — the moab240 CRITICAL finding), hand it down to the run
+  // screen so it can re-hydrate the recorder and continue the SAME run. The
+  // in-progress file is deliberately NOT cleared in this branch; the run screen
+  // appends to it on resume (or clears it on Finish / Discard).
+  cm.Run? resumablePartial;
   // Persona-hunt Casual #3: surface a one-time banner when a partial
   // is recovered OR discarded, so a "the app ate my run" suspicion
   // becomes "the app noticed and dropped a 38 m partial". Null when
-  // nothing happened.
+  // nothing happened (and null for the resumable branch, which prompts
+  // interactively on the run screen rather than passively).
   String? recoveryBannerMessage;
   try {
     final partial = await store.loadInProgress();
     final evaluation = evaluateInProgressPartial(partial);
-    if (evaluation.outcome == InProgressOutcome.recovered) {
-      await store.save(evaluation.recovered!);
-      recoveredRun = evaluation.recovered;
+    switch (evaluation.outcome) {
+      case InProgressOutcome.recovered:
+        await store.save(evaluation.recovered!);
+        recoveredRun = evaluation.recovered;
+        await store.clearInProgress();
+      case InProgressOutcome.resumable:
+        // Keep the in-progress file — the run screen resumes appending to it.
+        resumablePartial = evaluation.resumablePartial;
+      case InProgressOutcome.discarded:
+        await store.clearInProgress();
+      case InProgressOutcome.none:
+        break;
     }
     recoveryBannerMessage = evaluation.bannerMessage;
-    if (partial != null) await store.clearInProgress();
   } catch (e) {
     debugPrint('In-progress recovery failed: $e');
   }
@@ -509,6 +525,7 @@ void main() async {
       treadmill: treadmill,
       recoveredRun: recoveredRun,
       recoveryBannerMessage: recoveryBannerMessage,
+      resumablePartial: resumablePartial,
     ));
   }
 
@@ -587,6 +604,7 @@ class RunApp extends StatefulWidget {
   final BleTreadmill treadmill;
   final cm.Run? recoveredRun;
   final String? recoveryBannerMessage;
+  final cm.Run? resumablePartial;
   const RunApp({
     super.key,
     this.apiClient,
@@ -606,6 +624,7 @@ class RunApp extends StatefulWidget {
     required this.treadmill,
     this.recoveredRun,
     this.recoveryBannerMessage,
+    this.resumablePartial,
   });
 
   @override
@@ -648,6 +667,7 @@ class _RunAppState extends State<RunApp> {
                   settingsSync: widget.settingsSync,
                   recoveredRun: widget.recoveredRun,
                   recoveryBannerMessage: widget.recoveryBannerMessage,
+                  resumablePartial: widget.resumablePartial,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

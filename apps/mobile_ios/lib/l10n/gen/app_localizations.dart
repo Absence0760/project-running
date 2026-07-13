@@ -1271,6 +1271,30 @@ abstract class AppLocalizations {
   /// **'OR'**
   String get authOrDivider;
 
+  /// Friendly auth error shown when sign-in/sign-up fails because the device has no network connection
+  ///
+  /// In en, this message translates to:
+  /// **'You appear to be offline. Check your connection and try again.'**
+  String get authErrorOffline;
+
+  /// Friendly auth error shown when sign-in fails because the email or password was wrong
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect email or password. Please try again.'**
+  String get authErrorInvalidCredentials;
+
+  /// Friendly auth error shown when sign-in/sign-up is rate-limited (too many requests)
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Please wait a moment and try again.'**
+  String get authErrorRateLimited;
+
+  /// Friendly fallback auth error shown when sign-in/sign-up fails for an unrecognised reason
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get authErrorGeneric;
+
   /// AppBar title for the sign-in screen
   ///
   /// In en, this message translates to:
@@ -2200,6 +2224,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get runDiscard;
+
+  /// Title of the cold-start prompt when a process-killed in-progress run is recovered
+  ///
+  /// In en, this message translates to:
+  /// **'Resume your run?'**
+  String get runResumeDialogTitle;
+
+  /// Body of the cold-start resume prompt explaining the Resume / Finish / Discard choice
+  ///
+  /// In en, this message translates to:
+  /// **'A run from an earlier session is still in progress. Resume recording where you left off, finish it now, or discard it.'**
+  String get runResumeDialogBody;
+
+  /// Primary action on the resume prompt — re-hydrate the recorder and continue the same run
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get runResumeAction;
+
+  /// Action on the resume prompt — finalize the recovered partial into a completed run without recording more
+  ///
+  /// In en, this message translates to:
+  /// **'Finish now'**
+  String get runResumeFinishAction;
+
+  /// Banner shown after the user resumes a process-killed run
+  ///
+  /// In en, this message translates to:
+  /// **'Resumed your run.'**
+  String get runResumedBanner;
+
+  /// Banner shown after the user finalizes a recovered partial from the resume prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Saved your previous run.'**
+  String get runResumeSavedBanner;
+
+  /// Banner shown after the user discards a recovered partial from the resume prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Discarded your previous run.'**
+  String get runResumeDiscardedBanner;
 
   /// Option in the workout-entry sheet to begin a structured workout
   ///
@@ -8515,6 +8581,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What is a tempo run?'**
   String get coachSuggestNoPlanTempo;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve never run before — where do I start?'**
+  String get coachSuggestNewFirstRun;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'How should my first run feel?'**
+  String get coachSuggestNewFirstFeel;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'How often should I run as a beginner?'**
+  String get coachSuggestNewHowOften;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'Is it OK to walk during my runs?'**
+  String get coachSuggestNewWalkRun;
+
+  /// Accessible label for the inline message-edit text field
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your message'**
+  String get coachEditMessageLabel;
 
   /// Cancel button in the inline message-edit form
   ///

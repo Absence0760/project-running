@@ -56,6 +56,12 @@ class HomeScreen extends StatefulWidget {
   /// when the recovery pass had nothing to say.
   final String? recoveryBannerMessage;
 
+  /// A recent in-progress partial left over from a process-kill. When set,
+  /// HomeScreen jumps to the Run page on first frame and RunScreen prompts the
+  /// user to Resume / Finish / Discard it (resume the primary path) so a
+  /// multi-day effort continues as ONE run instead of two.
+  final cm.Run? resumablePartial;
+
   const HomeScreen({
     super.key,
     this.apiClient,
@@ -74,6 +80,7 @@ class HomeScreen extends StatefulWidget {
     this.settingsSync,
     this.recoveredRun,
     this.recoveryBannerMessage,
+    this.resumablePartial,
   });
 
   @override
@@ -140,6 +147,17 @@ class _HomeScreenState extends State<HomeScreen> {
           bannerMessage,
           duration: const Duration(seconds: 6),
         );
+      });
+    }
+    // A resumable in-progress partial (process was killed mid-run): jump
+    // straight to the keep-alive Run page on first frame so RunScreen builds
+    // and prompts Resume / Finish / Discard. The runner reopening the app at
+    // the next aid station lands back on the recording surface rather than
+    // hunting for it.
+    if (widget.resumablePartial != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _goToPage(_pageRun);
       });
     }
     // Post-signup setup-wizard gate (mobile twin of web's
@@ -282,6 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
           heartRate: widget.heartRate,
           treadmill: widget.treadmill,
           initialRoute: _preselectedRoute,
+          initialResumablePartial: widget.resumablePartial,
         ),
       ),
       _LazyKeepAliveTab(

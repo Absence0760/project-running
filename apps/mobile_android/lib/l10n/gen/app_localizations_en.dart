@@ -698,6 +698,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authOrDivider => 'OR';
 
   @override
+  String get authErrorOffline =>
+      'You appear to be offline. Check your connection and try again.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'Incorrect email or password. Please try again.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Too many attempts. Please wait a moment and try again.';
+
+  @override
+  String get authErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
   String get signInTitle => 'Sign In';
 
   @override
@@ -1200,6 +1215,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runDiscard => 'Discard';
+
+  @override
+  String get runResumeDialogTitle => 'Resume your run?';
+
+  @override
+  String get runResumeDialogBody =>
+      'A run from an earlier session is still in progress. Resume recording where you left off, finish it now, or discard it.';
+
+  @override
+  String get runResumeAction => 'Resume';
+
+  @override
+  String get runResumeFinishAction => 'Finish now';
+
+  @override
+  String get runResumedBanner => 'Resumed your run.';
+
+  @override
+  String get runResumeSavedBanner => 'Saved your previous run.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Discarded your previous run.';
 
   @override
   String get runStartWorkout => 'Start workout';
@@ -5096,6 +5133,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => 'What is a tempo run?';
+
+  @override
+  String get coachSuggestNewFirstRun =>
+      'I\'ve never run before — where do I start?';
+
+  @override
+  String get coachSuggestNewFirstFeel => 'How should my first run feel?';
+
+  @override
+  String get coachSuggestNewHowOften => 'How often should I run as a beginner?';
+
+  @override
+  String get coachSuggestNewWalkRun => 'Is it OK to walk during my runs?';
+
+  @override
+  String get coachEditMessageLabel => 'Edit your message';
 
   @override
   String get coachEditCancel => 'Cancel';

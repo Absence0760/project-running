@@ -1514,13 +1514,16 @@ class _GenerateLoopDialogState extends State<_GenerateLoopDialog> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _ctl,
-            autofocus: true,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(suffixText: label),
-            onSubmitted: (_) => _submit(),
+          Semantics(
+            label: l10n.routeBuilderLoopDialogBody,
+            child: TextField(
+              controller: _ctl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(suffixText: label),
+              onSubmitted: (_) => _submit(),
+            ),
           ),
         ],
       ),

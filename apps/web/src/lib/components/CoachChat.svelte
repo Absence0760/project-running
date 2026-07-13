@@ -972,7 +972,7 @@
 				<div class="bubble" class:user={m.role === 'user'}>
 					{#if m.role === 'user' && editingId === m.id && m.id != null}
 						<div class="edit-form">
-							<textarea bind:value={editingDraft} rows="3"></textarea>
+							<textarea bind:value={editingDraft} rows="3" aria-label={t('coachChat.editMessageLabel')}></textarea>
 							<div class="edit-actions">
 								<button type="button" class="btn-primary" onclick={commitEdit} disabled={!editingDraft.trim()}>
 									{t('coachChat.saveAndResend')}

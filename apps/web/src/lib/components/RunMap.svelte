@@ -16,6 +16,12 @@
 		type ActivityKind,
 	} from '$lib/segments/pace_segments';
 	import { snapToPolyline } from '$lib/routes/route_snap';
+	import {
+		haversineMetres as haversine,
+		buildTrackIndex,
+		nearestIndex,
+		type TrackIndex,
+	} from '$lib/routes/nearest_track_point';
 
 	/// Segment-detail callback. When set, clicks anywhere on the map
 	/// snap to the nearest track point, compute a small window (±150 m
@@ -149,17 +155,6 @@
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 	const METRES_PER_MILE = 1609.344;
-
-	function haversine(a: [number, number], b: [number, number]): number {
-		const R = 6371000;
-		const toRad = (d: number) => (d * Math.PI) / 180;
-		const dLat = toRad(b[1] - a[1]);
-		const dLng = toRad(b[0] - a[0]);
-		const sinLat = Math.sin(dLat / 2);
-		const sinLng = Math.sin(dLng / 2);
-		const h = sinLat * sinLat + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * sinLng * sinLng;
-		return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-	}
 
 	function buildMarkerFeatures(
 		pins: MapMarkerPin[]
@@ -374,8 +369,7 @@
 	});
 
 	/// Cumulative distance from start to each track index, in metres.
-	/// Computed once when the track is mounted; lookups are O(log n) by
-	/// linear scan since tracks are typically <2k points.
+	/// Computed once when the track is mounted.
 	let cumulativeM: number[] = [];
 
 	function buildCumulative(coords: [number, number][]): number[] {
@@ -386,21 +380,12 @@
 		return out;
 	}
 
-	/// Find the nearest track index to a click point. Linear scan — the
-	/// runs we render top out around 2k points, well below the cost of
-	/// building a spatial index.
-	function nearestTrackIdx(lng: number, lat: number, coords: [number, number][]): number {
-		let bestIdx = 0;
-		let bestDist = Infinity;
-		for (let i = 0; i < coords.length; i++) {
-			const d = haversine([lng, lat], coords[i]);
-			if (d < bestDist) {
-				bestDist = d;
-				bestIdx = i;
-			}
-		}
-		return bestIdx;
-	}
+	/// Spatial index over the track for tap-to-select. Built once with
+	/// `cumulativeM` when the track mounts so per-tap nearest-point
+	/// lookup stays bounded on a 150k+-point ultra track (a plain linear
+	/// scan visibly lagged); small tracks fall through to an exact
+	/// linear scan inside `nearestIndex`.
+	let trackIndex: TrackIndex = { coords: [], grid: null };
 
 	/// Build a segment of the track centred on `clickIdx`, expanding
 	/// outwards until the distance window (±150 m of cumulative track
@@ -753,6 +738,7 @@
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
 		cumulativeM = buildCumulative(trackCoords);
+		trackIndex = buildTrackIndex(trackCoords);
 
 		map.on('load', () => addOverlays(trackCoords, trackBounds, true));
 		// The entrance fitBounds (inside the load handler above) animates the
@@ -786,7 +772,7 @@
 				}
 				if (!onSegmentSelect) return;
 				if (trackCoords.length < 2) return;
-				const idx = nearestTrackIdx(e.lngLat.lng, e.lngLat.lat, trackCoords);
+				const idx = nearestIndex(trackIndex, e.lngLat.lng, e.lngLat.lat);
 				const seg = buildSegment(idx);
 				renderSegmentHighlight(seg);
 				onSegmentSelect(seg);

@@ -705,6 +705,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authOrDivider => 'OU';
 
   @override
+  String get authErrorOffline =>
+      'Vous semblez être hors ligne. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou mot de passe incorrect. Veuillez réessayer.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Trop de tentatives. Veuillez patienter un instant et réessayer.';
+
+  @override
+  String get authErrorGeneric =>
+      'Une erreur s\'est produite. Veuillez réessayer.';
+
+  @override
   String get signInTitle => 'Se connecter';
 
   @override
@@ -1212,6 +1228,28 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get runDiscard => 'Abandonner';
+
+  @override
+  String get runResumeDialogTitle => 'Reprendre votre course ?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Une course d\'une session précédente est toujours en cours. Reprenez l\'enregistrement là où vous vous êtes arrêté, terminez-la maintenant ou supprimez-la.';
+
+  @override
+  String get runResumeAction => 'Reprendre';
+
+  @override
+  String get runResumeFinishAction => 'Terminer maintenant';
+
+  @override
+  String get runResumedBanner => 'Course reprise.';
+
+  @override
+  String get runResumeSavedBanner => 'Course précédente enregistrée.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Course précédente supprimée.';
 
   @override
   String get runStartWorkout => 'Démarrer la séance';
@@ -5159,6 +5197,25 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => 'Qu\'est-ce qu\'une séance de tempo ?';
+
+  @override
+  String get coachSuggestNewFirstRun =>
+      'Je n\'ai jamais couru — par où commencer ?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Comment ma première course devrait-elle se ressentir ?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'À quelle fréquence courir quand on débute ?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Est-ce que je peux marcher pendant mes courses ?';
+
+  @override
+  String get coachEditMessageLabel => 'Modifier votre message';
 
   @override
   String get coachEditCancel => 'Annuler';

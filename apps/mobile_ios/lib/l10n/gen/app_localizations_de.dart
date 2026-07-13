@@ -703,6 +703,22 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authOrDivider => 'ODER';
 
   @override
+  String get authErrorOffline =>
+      'Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-Mail oder Passwort ist falsch. Bitte versuche es erneut.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.';
+
+  @override
+  String get authErrorGeneric =>
+      'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
+
+  @override
   String get signInTitle => 'Anmelden';
 
   @override
@@ -1209,6 +1225,28 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runDiscard => 'Verwerfen';
+
+  @override
+  String get runResumeDialogTitle => 'Lauf fortsetzen?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Ein Lauf aus einer früheren Sitzung läuft noch. Setze die Aufzeichnung dort fort, wo du aufgehört hast, beende ihn jetzt oder verwirf ihn.';
+
+  @override
+  String get runResumeAction => 'Fortsetzen';
+
+  @override
+  String get runResumeFinishAction => 'Jetzt beenden';
+
+  @override
+  String get runResumedBanner => 'Lauf fortgesetzt.';
+
+  @override
+  String get runResumeSavedBanner => 'Vorheriger Lauf gespeichert.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Vorheriger Lauf verworfen.';
 
   @override
   String get runStartWorkout => 'Workout starten';
@@ -5151,6 +5189,25 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => 'Was ist ein Tempolauf?';
+
+  @override
+  String get coachSuggestNewFirstRun =>
+      'Ich bin noch nie gelaufen — wo fange ich an?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Wie sollte sich mein erster Lauf anfühlen?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Wie oft sollte ich als Anfänger laufen?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Ist es in Ordnung, während meiner Läufe zu gehen?';
+
+  @override
+  String get coachEditMessageLabel => 'Nachricht bearbeiten';
 
   @override
   String get coachEditCancel => 'Abbrechen';

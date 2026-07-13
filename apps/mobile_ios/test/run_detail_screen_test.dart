@@ -250,6 +250,27 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    // a11y: the h/m/s duration subfields in the edit dialog had no
+    // field-level label — only the shared "Duration" Text above the row.
+    // The Semantics wrap gives each edit box an accessible name
+    // (uxhunt-mobile finding #3). A run with no GPS track keeps the
+    // stats editable so the subfields render.
+    testWidgets('duration subfields expose an accessible name', (tester) async {
+      final run = _run();
+      await _pump(tester, run);
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final durSem = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.label == 'Duration',
+      );
+      expect(durSem, findsNWidgets(3));
+      final field = tester.getSemantics(
+        find.descendant(of: durSem.first, matching: find.byType(TextField)),
+      );
+      expect(field.label, 'Duration');
+    });
+
     testWidgets('renders activity type label', (tester) async {
       final run = _run(title: 'Easy run');
       await _pump(tester, run);

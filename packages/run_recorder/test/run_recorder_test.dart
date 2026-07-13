@@ -1,3 +1,4 @@
+import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:run_recorder/run_recorder.dart';
@@ -585,6 +586,109 @@ void main() {
       r.setTreadmillSample(3.0);
       expect(r.debugReportedDistanceMetres, closeTo(beforePause, 0.01),
           reason: 'the paused interval must not be credited as belt distance');
+    });
+  });
+
+  group('resumeSession — process-kill continuity', () {
+    // A partial persisted before a process kill: a few waypoints, an
+    // accumulated distance, prior elapsed, and one mid-run lap.
+    List<Waypoint> seededTrack() => [
+          Waypoint(
+              lat: lat,
+              lng: lngBase,
+              timestamp: DateTime(2026, 4, 10, 10, 0, 0)),
+          Waypoint(
+              lat: lat,
+              lng: lngBase + 20 / metrePerDegLng,
+              timestamp: DateTime(2026, 4, 10, 10, 0, 5)),
+          Waypoint(
+              lat: lat,
+              lng: lngBase + 40 / metrePerDegLng,
+              timestamp: DateTime(2026, 4, 10, 10, 0, 10)),
+        ];
+
+    test('re-hydrates track, distance, elapsed offset, and start time',
+        () async {
+      final r = RunRecorder();
+      final track = seededTrack();
+      r.debugResumeWithoutStream(
+        track: track,
+        distanceMetres: 187000,
+        elapsed: const Duration(hours: 40),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+      );
+      expect(r.recording, isTrue);
+      expect(r.debugTrack, hasLength(track.length),
+          reason: 'the seeded track is kept, not cleared like begin()');
+      expect(r.debugDistanceMetres, 187000,
+          reason: 'accumulated distance continues, not reset to 0');
+
+      // The broadcast snapshot stream delivers asynchronously — grab the next.
+      final snapFuture = r.snapshots.first;
+      r.debugInjectPosition(
+          makePosition(metresEast: 60, secondsFromStart: 15));
+      final snap = await snapFuture;
+      // Elapsed reports the prior 40 h offset plus the live stopwatch (~0 here).
+      expect(snap.elapsed, greaterThanOrEqualTo(const Duration(hours: 40)));
+    });
+
+    test('a post-resume fix extends the same track and adds to distance', () {
+      final r = RunRecorder();
+      final track = seededTrack();
+      r.debugResumeWithoutStream(
+        track: track,
+        distanceMetres: 1000,
+        elapsed: const Duration(minutes: 20),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+      );
+      // First post-resume fix re-anchors (no spurious delta across the gap).
+      r.debugInjectPosition(
+          makePosition(metresEast: 1000, secondsFromStart: 20));
+      // Second fix 30 m further adds real movement onto the seeded distance.
+      r.debugInjectPosition(
+          makePosition(metresEast: 1030, secondsFromStart: 25));
+      expect(r.debugTrack.length, greaterThan(track.length),
+          reason: 'new fixes extend the seeded track');
+      expect(r.debugDistanceMetres, closeTo(1030, 2),
+          reason: 'seeded 1000 m + the ~30 m post-resume hop, no gap delta');
+    });
+
+    test('restored laps continue numbering and survive to stop()', () async {
+      final r = RunRecorder();
+      final restored = lapsFromCanonicalJson([
+        {'index': 1, 'start_offset_s': 0, 'distance_m': 500.0, 'duration_s': 300},
+        {'index': 2, 'start_offset_s': 300, 'distance_m': 500.0, 'duration_s': 300},
+      ], startedAt: DateTime(2026, 4, 10, 10, 0, 0));
+      r.debugResumeWithoutStream(
+        track: seededTrack(),
+        distanceMetres: 1000,
+        elapsed: const Duration(minutes: 10),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+        laps: restored,
+      );
+      expect(r.laps, hasLength(2));
+      // A new lap continues numbering from the restored ones.
+      final n = r.lap();
+      expect(n, 3);
+      final run = await r.stop();
+      final laps = run.metadata?['laps'] as List<dynamic>?;
+      expect(laps, hasLength(3),
+          reason: 'pre-kill laps + the post-resume lap all serialise');
+      expect((laps![2] as Map)['index'], 3);
+      // Total elapsed carries the 10 min offset.
+      expect(run.duration, greaterThanOrEqualTo(const Duration(minutes: 10)));
+    });
+
+    test('lapsFromCanonicalJson is the inverse of lapsToCanonicalJson', () {
+      final round = lapsToCanonicalJson(lapsFromCanonicalJson([
+        {'index': 1, 'start_offset_s': 0, 'distance_m': 400.0, 'duration_s': 240},
+        {'index': 2, 'start_offset_s': 240, 'distance_m': 600.0, 'duration_s': 300},
+      ]));
+      expect(round, hasLength(2));
+      expect(round[0]['distance_m'], 400.0);
+      expect(round[0]['duration_s'], 240);
+      expect(round[1]['start_offset_s'], 240);
+      expect(round[1]['distance_m'], 600.0);
     });
   });
 }

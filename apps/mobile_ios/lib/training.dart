@@ -340,6 +340,13 @@ PlanPhase phaseFor(int weekIndex, int totalWeeks) {
 
 // ─────────────────────── Plan generation ───────────────────────
 
+/// Step a local date [n] calendar days. DST-safe via the year/month/day
+/// constructor (adding `Duration(days: n)` adds n×24h of absolute elapsed
+/// time, which skews by an hour across a spring/fall transition and rolls
+/// the calendar day). Mirrors web `addDays` (`c.setDate(c.getDate() + n)`)
+/// in training.ts — every plan `scheduled_date` steps through this.
+DateTime _addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+
 class WorkoutStructure {
   final Map<String, dynamic>? warmup;
   final Map<String, dynamic>? repeats;
@@ -502,7 +509,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
             (input.recent5kSec != null && input.recent5kSec! > 0));
     final frac = _mileageFraction(i, totalWeeks, phase, masters);
     final weeklyKm = (peakKm * frac).round();
-    final weekStart = input.startDate.add(Duration(days: i * 7));
+    final weekStart = _addDays(input.startDate, i * 7);
     final workouts = _generateWeek(
       weekIndex: i,
       phase: phase,
@@ -536,7 +543,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     weeks: weeks,
     paces: paces,
     vdot: vdot,
-    endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
+    endDate: _addDays(input.startDate, totalWeeks * 7 - 1),
     goalDistanceM: goalDistance,
     pacesAreFallback: pacesAreFallback,
   );
@@ -618,10 +625,10 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
   final runSet = dayOffsets.toSet();
   final weeks = <GeneratedWeek>[];
   for (var i = 0; i < totalWeeks; i++) {
-    final weekStart = input.startDate.add(Duration(days: i * 7));
+    final weekStart = _addDays(input.startDate, i * 7);
     final workouts = <GeneratedWorkout>[];
     for (var d = 0; d < 7; d++) {
-      final date = weekStart.add(Duration(days: d));
+      final date = _addDays(weekStart, d);
       if (runSet.contains(d)) {
         workouts.add(_walkRunWorkout(date, i, paces.easy));
       } else {
@@ -646,7 +653,7 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
     weeks: weeks,
     paces: paces,
     vdot: vdot,
-    endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
+    endDate: _addDays(input.startDate, totalWeeks * 7 - 1),
     goalDistanceM: goalDistanceM,
     pacesAreFallback: pacesAreFallback,
   );
@@ -738,8 +745,7 @@ List<GeneratedWorkout> _generateWeek({
   final easyKm = easyDays > 0 ? remaining / easyDays : 0.0;
 
   for (var dow = 0; dow < 7; dow++) {
-    final date = DateTime(weekStart.year, weekStart.month, weekStart.day)
-        .add(Duration(days: dow));
+    final date = _addDays(weekStart, dow);
     if (dow == restDow) {
       workouts.add(GeneratedWorkout(
         scheduledDate: date,

@@ -704,6 +704,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authOrDivider => 'OU';
 
   @override
+  String get authErrorOffline =>
+      'Você parece estar offline. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou senha incorretos. Tente novamente.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Muitas tentativas. Aguarde um momento e tente novamente.';
+
+  @override
+  String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -1207,6 +1222,28 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runDiscard => 'Descartar';
+
+  @override
+  String get runResumeDialogTitle => 'Retomar sua corrida?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Uma corrida de uma sessão anterior ainda está em andamento. Retome a gravação de onde parou, finalize-a agora ou descarte-a.';
+
+  @override
+  String get runResumeAction => 'Retomar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar agora';
+
+  @override
+  String get runResumedBanner => 'Corrida retomada.';
+
+  @override
+  String get runResumeSavedBanner => 'Corrida anterior salva.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Corrida anterior descartada.';
 
   @override
   String get runStartWorkout => 'Iniciar treino';
@@ -5145,6 +5182,24 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
+
+  @override
+  String get coachSuggestNewFirstRun => 'Nunca corri antes — por onde começo?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Como deve ser a sensação da minha primeira corrida?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Com que frequência devo correr como iniciante?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Não faz mal caminhar durante as corridas?';
+
+  @override
+  String get coachEditMessageLabel => 'Editar a sua mensagem';
 
   @override
   String get coachEditCancel => 'Cancelar';
@@ -11737,6 +11792,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get authOrDivider => 'OU';
 
   @override
+  String get authErrorOffline =>
+      'Você parece estar offline. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou senha incorretos. Tente novamente.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Muitas tentativas. Aguarde um momento e tente novamente.';
+
+  @override
+  String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -12240,6 +12310,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDiscard => 'Descartar';
+
+  @override
+  String get runResumeDialogTitle => 'Retomar sua corrida?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Uma corrida de uma sessão anterior ainda está em andamento. Retome a gravação de onde parou, finalize-a agora ou descarte-a.';
+
+  @override
+  String get runResumeAction => 'Retomar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar agora';
+
+  @override
+  String get runResumedBanner => 'Corrida retomada.';
+
+  @override
+  String get runResumeSavedBanner => 'Corrida anterior salva.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Corrida anterior descartada.';
 
   @override
   String get runStartWorkout => 'Iniciar treino';
@@ -16177,6 +16269,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
+
+  @override
+  String get coachSuggestNewFirstRun => 'Nunca corri antes — por onde começo?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Como deve ser a sensação da minha primeira corrida?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'Com que frequência devo correr como iniciante?';
+
+  @override
+  String get coachSuggestNewWalkRun => 'Tudo bem caminhar durante as corridas?';
+
+  @override
+  String get coachEditMessageLabel => 'Edite sua mensagem';
 
   @override
   String get coachEditCancel => 'Cancelar';

@@ -10,6 +10,7 @@ class _FakeApiClient extends ApiClient {
   String? capturedEmail;
   String? capturedPassword;
   String? capturedResetEmail;
+  String? capturedResetRedirectTo;
   Object? errorToThrow;
   Object? resetErrorToThrow;
 
@@ -25,8 +26,12 @@ class _FakeApiClient extends ApiClient {
   }
 
   @override
-  Future<void> sendPasswordResetEmail({required String email}) async {
+  Future<void> sendPasswordResetEmail({
+    required String email,
+    String? redirectTo,
+  }) async {
     capturedResetEmail = email;
+    capturedResetRedirectTo = redirectTo;
     if (resetErrorToThrow != null) throw resetErrorToThrow!;
   }
 }
@@ -81,7 +86,9 @@ void main() {
           find.widgetWithText(TextField, 'Password'), 'wrong');
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Invalid credentials'), findsOneWidget);
+      // The raw exception text is classified into a friendly message
+      // (auth_error.dart) instead of being shown verbatim.
+      expect(find.textContaining('Incorrect email or password'), findsOneWidget);
     });
 
     testWidgets(
@@ -146,6 +153,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(client.capturedResetEmail, 'me@example.com');
+      // The reset link must point at the web /auth/reset page (mobile
+      // doesn't host the form). With dotenv uninitialised in the test,
+      // WEB_BASE_URL falls back to the prod host. Without an explicit
+      // redirectTo GoTrue falls back to the project Site URL (localhost
+      // by default) and the link dies in prod.
+      expect(client.capturedResetRedirectTo, 'https://threkir.com/auth/reset');
       // Tear down the banner timer before the test ends so the
       // fake-async loop doesn't flag a pending timer.
       await tester.pump(const Duration(seconds: 6));
@@ -199,7 +212,9 @@ void main() {
           find.widgetWithText(TextField, 'Email'), 'me@example.com');
       await tester.tap(find.text('Forgot password?'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Network unreachable'), findsOneWidget);
+      // A synthetic Exception (not a real SocketException) classifies as
+      // generic — the point is that some readable message surfaces.
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
     });
   });
 }

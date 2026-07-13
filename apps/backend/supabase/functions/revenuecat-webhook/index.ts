@@ -23,6 +23,7 @@ import {
   DEACTIVATING_EVENTS,
   mapEventToBillingIssue,
   mapEventToTier,
+  tierEventGuardFilter,
 } from './lib.ts';
 
 Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
@@ -150,15 +151,32 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // billing flag are decoupled (BILLING_ISSUE writes the flag without
   // touching tier; RENEWAL / EXPIRATION write both). `undefined` means
   // "this event doesn't move that field".
+  //
+  // A tier change also stamps `tier_updated_event_ts` and gates the write
+  // on it: RevenueCat can deliver events out of order, and the event-id
+  // dedupe only stops replays of the same event — so without this an old
+  // EXPIRATION arriving after a newer re-subscribe would map to 'free' and
+  // silently downgrade a paying user. The conditional UPDATE applies the
+  // change only when this event is at least as recent as the one that last
+  // moved the tier; a stale deactivation matches zero rows atomically (no
+  // read-then-write race) and the tier is left as-is. A billing-issue-only
+  // write stays unconditional — it doesn't move the tier dimension.
   const patch: Record<string, unknown> = {};
-  if (newTier !== null) patch.subscription_tier = newTier;
+  if (newTier !== null) {
+    patch.subscription_tier = newTier;
+    patch.tier_updated_event_ts = eventTsMs;
+  }
   if (billingIssueAt !== undefined) patch.billing_issue_at = billingIssueAt;
 
   if (Object.keys(patch).length > 0) {
-    const { error } = await supabase
+    let query = supabase
       .from('user_profiles')
       .update(patch)
       .eq('id', userId);
+    if (newTier !== null) {
+      query = query.or(tierEventGuardFilter(eventTsMs));
+    }
+    const { error } = await query;
     if (error) {
       console.error('user_profiles patch failed (code):', error?.code ?? 'unknown');
       return Response.json({ ok: false, error: 'profile update failed' }, { status: 500 });

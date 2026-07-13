@@ -198,12 +198,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 			HTMLCanvasElement.prototype.getContext = () => null as never;
 		});
 
-		const alerts: string[] = [];
-		page.on('dialog', async (dialog) => {
-			alerts.push(dialog.message());
-			await dialog.dismiss();
-		});
-
 		await page.goto(`/recap/${CURRENT_YEAR}`);
 		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
 			timeout: 10_000
@@ -211,8 +205,10 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 
 		await page.getByRole('button', { name: 'Share recap' }).click();
 
-		await expect.poll(() => alerts.length, { timeout: 5_000 }).toBeGreaterThan(0);
-		expect(alerts[0]).toMatch(/copied to clipboard/i);
+		// Feedback is now a toast, not a native alert() dialog.
+		await expect(page.locator('.toast-success')).toContainText(/copied to clipboard/i, {
+			timeout: 5_000
+		});
 
 		const clipText = await page.evaluate(() => navigator.clipboard.readText());
 		expect(clipText).toContain(`My ${CURRENT_YEAR} in running`);

@@ -7,7 +7,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/redis/go-redis/v9 v9.21.0
-	golang.org/x/image v0.43.0
+	golang.org/x/image v0.44.0
 )
 
 require (
