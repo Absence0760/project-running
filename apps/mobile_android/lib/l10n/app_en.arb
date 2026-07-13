@@ -6934,6 +6934,26 @@
   "@coachSuggestNoPlanTempo": {
     "description": "Suggestion chip (no plan)"
   },
+  "coachSuggestNewFirstRun": "I've never run before — where do I start?",
+  "@coachSuggestNewFirstRun": {
+    "description": "Suggestion chip (brand-new runner, zero runs)"
+  },
+  "coachSuggestNewFirstFeel": "How should my first run feel?",
+  "@coachSuggestNewFirstFeel": {
+    "description": "Suggestion chip (brand-new runner, zero runs)"
+  },
+  "coachSuggestNewHowOften": "How often should I run as a beginner?",
+  "@coachSuggestNewHowOften": {
+    "description": "Suggestion chip (brand-new runner, zero runs)"
+  },
+  "coachSuggestNewWalkRun": "Is it OK to walk during my runs?",
+  "@coachSuggestNewWalkRun": {
+    "description": "Suggestion chip (brand-new runner, zero runs)"
+  },
+  "coachEditMessageLabel": "Edit your message",
+  "@coachEditMessageLabel": {
+    "description": "Accessible label for the inline message-edit text field"
+  },
   "coachEditCancel": "Cancel",
   "@coachEditCancel": {
     "description": "Cancel button in the inline message-edit form"

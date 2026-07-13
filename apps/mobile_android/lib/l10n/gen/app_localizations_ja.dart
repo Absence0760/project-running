@@ -4852,6 +4852,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachSuggestNoPlanTempo => 'テンポランとは？';
 
   @override
+  String get coachSuggestNewFirstRun => '走ったことがありません。どこから始めればいい？';
+
+  @override
+  String get coachSuggestNewFirstFeel => '初めてのランはどんな感じがすればいい？';
+
+  @override
+  String get coachSuggestNewHowOften => '初心者はどのくらいの頻度で走ればいい？';
+
+  @override
+  String get coachSuggestNewWalkRun => 'ランの途中で歩いてもいい？';
+
+  @override
+  String get coachEditMessageLabel => 'メッセージを編集';
+
+  @override
   String get coachEditCancel => 'キャンセル';
 
   @override

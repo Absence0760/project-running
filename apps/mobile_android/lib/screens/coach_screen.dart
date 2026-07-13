@@ -1233,19 +1233,27 @@ class _CoachScreenState extends State<CoachScreen> {
 
   Widget _buildScroll(ThemeData theme, AppLocalizations l10n, bool hasPlan) {
     if (_messages.isEmpty && _viewingArchiveAt == null) {
-      final suggestions = hasPlan
+      final isNewRunner = _ctx?.runCount == 0;
+      final suggestions = isNewRunner
           ? [
-              l10n.coachSuggestPlanRest,
-              l10n.coachSuggestPlanOnTrack,
-              l10n.coachSuggestPlanLongRun,
-              l10n.coachSuggestPlanToday,
+              l10n.coachSuggestNewFirstRun,
+              l10n.coachSuggestNewFirstFeel,
+              l10n.coachSuggestNewHowOften,
+              l10n.coachSuggestNewWalkRun,
             ]
-          : [
-              l10n.coachSuggestNoPlanLastRun,
-              l10n.coachSuggestNoPlanEasyPace,
-              l10n.coachSuggestNoPlanWeekOff,
-              l10n.coachSuggestNoPlanTempo,
-            ];
+          : hasPlan
+              ? [
+                  l10n.coachSuggestPlanRest,
+                  l10n.coachSuggestPlanOnTrack,
+                  l10n.coachSuggestPlanLongRun,
+                  l10n.coachSuggestPlanToday,
+                ]
+              : [
+                  l10n.coachSuggestNoPlanLastRun,
+                  l10n.coachSuggestNoPlanEasyPace,
+                  l10n.coachSuggestNoPlanWeekOff,
+                  l10n.coachSuggestNoPlanTempo,
+                ];
       return ListView(
         controller: _scrollCtrl,
         padding: const EdgeInsets.all(16),
@@ -1367,6 +1375,9 @@ class _CoachScreenState extends State<CoachScreen> {
           minLines: 2,
           maxLines: 6,
           autofocus: true,
+          decoration: InputDecoration(
+            labelText: l10n.coachEditMessageLabel,
+          ),
         ),
         const SizedBox(height: 8),
         Row(

@@ -5169,6 +5169,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coachSuggestNoPlanTempo => 'Qu\'est-ce qu\'une séance de tempo ?';
 
   @override
+  String get coachSuggestNewFirstRun =>
+      'Je n\'ai jamais couru — par où commencer ?';
+
+  @override
+  String get coachSuggestNewFirstFeel =>
+      'Comment ma première course devrait-elle se ressentir ?';
+
+  @override
+  String get coachSuggestNewHowOften =>
+      'À quelle fréquence courir quand on débute ?';
+
+  @override
+  String get coachSuggestNewWalkRun =>
+      'Est-ce que je peux marcher pendant mes courses ?';
+
+  @override
+  String get coachEditMessageLabel => 'Modifier votre message';
+
+  @override
   String get coachEditCancel => 'Annuler';
 
   @override

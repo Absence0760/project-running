@@ -8534,6 +8534,36 @@ abstract class AppLocalizations {
   /// **'What is a tempo run?'**
   String get coachSuggestNoPlanTempo;
 
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve never run before — where do I start?'**
+  String get coachSuggestNewFirstRun;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'How should my first run feel?'**
+  String get coachSuggestNewFirstFeel;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'How often should I run as a beginner?'**
+  String get coachSuggestNewHowOften;
+
+  /// Suggestion chip (brand-new runner, zero runs)
+  ///
+  /// In en, this message translates to:
+  /// **'Is it OK to walk during my runs?'**
+  String get coachSuggestNewWalkRun;
+
+  /// Accessible label for the inline message-edit text field
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your message'**
+  String get coachEditMessageLabel;
+
   /// Cancel button in the inline message-edit form
   ///
   /// In en, this message translates to:
