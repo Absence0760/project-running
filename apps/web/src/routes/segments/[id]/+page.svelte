@@ -237,7 +237,7 @@
 		text-decoration: none;
 	}
 	.back-link:hover {
-		color: var(--color-text-primary);
+		color: var(--color-text);
 	}
 	.loading {
 		min-height: 40vh;
@@ -336,12 +336,12 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
 		background: var(--color-surface);
-		color: var(--color-text-primary);
+		color: var(--color-text);
 	}
 	.clear-btn {
 		background: none;
 		border: none;
-		color: var(--color-accent);
+		color: var(--color-primary);
 		cursor: pointer;
 		font-size: 0.8rem;
 		padding: 0.4rem 0;
@@ -381,7 +381,7 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 	li.viewer {
-		background: var(--color-surface-hover, rgba(99, 102, 241, 0.06));
+		background: var(--color-primary-light);
 		border-radius: var(--radius-sm);
 	}
 	.rank {
@@ -395,7 +395,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		text-decoration: none;
-		color: var(--color-text-primary);
+		color: var(--color-text);
 		min-width: 0;
 	}
 	.athlete-name {
