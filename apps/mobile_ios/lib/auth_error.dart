@@ -85,6 +85,8 @@ int? _statusCode(Object error) {
     final s = (error as dynamic).statusCode;
     if (s is int) return s;
     if (s is String) return int.tryParse(s);
-  } catch (_) {}
-  return null;
+    return null;
+  } catch (_) {
+    return null;
+  }
 }
