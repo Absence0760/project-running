@@ -8,7 +8,8 @@
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { formatPace, formatDistance } from '$lib/core/mock-data';
 	import { formatDuration } from '$lib/format/time';
-	import { fetchRouteById, fetchRouteMarkers } from '$lib/core/data';
+	import { fetchRouteById, fetchRouteMarkers, setRunExpectedReturn } from '$lib/core/data';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { buildRoadbook, type RoadbookLeg } from '$lib/routes/roadbook';
 	import { distanceAlongRoute, type RouteWaypoint } from '$lib/routes/route_geometry';
 	import { nextCutoffEta } from '$lib/runs/live_cutoff_eta';
@@ -42,6 +43,21 @@
 	let distance = $state(0);
 	let currentPace = $state('--:--');
 	let runnerName = $state<string | null>(null);
+	// Owner-only "not back by X" escalation override. Only the run owner
+	// viewing their own in-progress broadcast can set it; the RPC re-checks
+	// ownership + in_progress, so this is a convenience gate, not the guard.
+	let isOwner = $state(false);
+	let expectedReturnIso = $state<string | null>(null);
+	let expectedReturnInput = $state('');
+	let savingReturn = $state(false);
+	const expectedReturnDisplay = $derived(
+		expectedReturnIso
+			? new Date(expectedReturnIso).toLocaleString(undefined, {
+					dateStyle: 'medium',
+					timeStyle: 'short',
+				})
+			: '',
+	);
 	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
@@ -439,8 +455,74 @@
 				runnerFollowsViewer,
 			});
 			runnerName = reveal && dn ? dn : runnerHandle(row.user_id as string);
+
+			isOwner = viewerId != null && viewerId === row.user_id;
+			if (isOwner) {
+				// The owner can read their own run row (RLS), so seed the
+				// current override — public_runs doesn't carry metadata.
+				const { data: mine } = await supabase
+					.from('runs')
+					.select('metadata')
+					.eq('id', data.id)
+					.maybeSingle();
+				const stored = (mine?.metadata as Record<string, unknown> | null)?.[
+					'expected_return_at'
+				];
+				setExpectedReturnLocal(typeof stored === 'string' ? stored : null);
+			}
 		}
 		return true;
+	}
+
+	// datetime-local <-> ISO. The input is naive local time; convert to a
+	// real instant on save and back to a local-slot string on load.
+	function isoToLocalInput(iso: string): string {
+		const d = new Date(iso);
+		if (!Number.isFinite(d.getTime())) return '';
+		const off = d.getTimezoneOffset() * 60_000;
+		return new Date(d.getTime() - off).toISOString().slice(0, 16);
+	}
+
+	function setExpectedReturnLocal(iso: string | null) {
+		expectedReturnIso = iso;
+		expectedReturnInput = iso ? isoToLocalInput(iso) : '';
+	}
+
+	async function saveExpectedReturn() {
+		if (savingReturn || !expectedReturnInput) return;
+		const when = new Date(expectedReturnInput);
+		if (!Number.isFinite(when.getTime())) return;
+		if (when.getTime() <= Date.now()) {
+			showToast(m('safety.expectedReturnPast'), 'error');
+			return;
+		}
+		savingReturn = true;
+		try {
+			const iso = when.toISOString();
+			const ok = await setRunExpectedReturn(data.id, iso);
+			if (!ok) throw new Error('not updated');
+			setExpectedReturnLocal(iso);
+			showToast(m('safety.expectedReturnSavedToast'), 'success');
+		} catch (_) {
+			showToast(m('safety.expectedReturnFailed'), 'error');
+		} finally {
+			savingReturn = false;
+		}
+	}
+
+	async function clearExpectedReturn() {
+		if (savingReturn) return;
+		savingReturn = true;
+		try {
+			const ok = await setRunExpectedReturn(data.id, null);
+			if (!ok) throw new Error('not updated');
+			setExpectedReturnLocal(null);
+			showToast(m('safety.expectedReturnClearedToast'), 'info');
+		} catch (_) {
+			showToast(m('safety.expectedReturnFailed'), 'error');
+		} finally {
+			savingReturn = false;
+		}
 	}
 
 	// Load the linked public route + its course markers and build the
@@ -765,6 +847,50 @@
 							</span>
 						{/if}
 					</div>
+				</section>
+			{/if}
+
+			{#if isOwner && status !== 'finished'}
+				<section class="return-card" data-testid="expected-return-card">
+					<div class="return-head">
+						<span class="material-symbols" aria-hidden="true">notifications_active</span>
+						<div>
+							<h2>{m('safety.expectedReturnTitle')}</h2>
+							<p class="return-intro">{m('safety.expectedReturnIntro')}</p>
+						</div>
+					</div>
+					<div class="return-controls">
+						<input
+							type="datetime-local"
+							class="return-input"
+							bind:value={expectedReturnInput}
+							aria-label={m('safety.expectedReturnLabel')}
+							data-testid="expected-return-input"
+						/>
+						<button
+							class="btn btn-primary"
+							onclick={saveExpectedReturn}
+							disabled={savingReturn || !expectedReturnInput}
+							data-testid="expected-return-set"
+						>
+							{m('safety.expectedReturnSave')}
+						</button>
+						{#if expectedReturnIso}
+							<button
+								class="btn btn-outline"
+								onclick={clearExpectedReturn}
+								disabled={savingReturn}
+								data-testid="expected-return-clear"
+							>
+								{m('safety.expectedReturnClear')}
+							</button>
+						{/if}
+					</div>
+					{#if expectedReturnIso}
+						<p class="return-active" data-testid="expected-return-active">
+							{m('safety.expectedReturnActive', { time: expectedReturnDisplay })}
+						</p>
+					{/if}
 				</section>
 			{/if}
 
@@ -1168,6 +1294,54 @@
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
 		font-style: italic;
+	}
+
+	.return-card {
+		margin: 0 var(--space-md) var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg, 12px);
+		background: var(--color-surface);
+	}
+	.return-head {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-sm);
+	}
+	.return-head .material-symbols {
+		color: var(--color-primary);
+		flex-shrink: 0;
+	}
+	.return-head h2 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.return-intro {
+		margin: var(--space-2xs) 0 0;
+		font-size: 0.84rem;
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+	}
+	.return-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-md);
+	}
+	.return-input {
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md, 8px);
+		font-size: 0.9rem;
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.return-active {
+		margin: var(--space-md) 0 0;
+		font-size: 0.84rem;
+		font-weight: 600;
+		color: var(--color-primary);
 	}
 
 	.live-map-wrap {

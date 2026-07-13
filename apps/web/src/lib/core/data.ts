@@ -6747,14 +6747,17 @@ export async function setGearRotationMembers(
 export interface SafetyContact {
 	id: string;
 	contact_email: string;
+	contact_phone: string | null;
 	contact_user_id: string | null;
 	confirmed_at: string | null;
+	sms_opt_in_at: string | null;
 	created_at: string;
 }
 
 export interface PendingSafetyRequest {
 	id: string;
 	owner_name: string;
+	has_phone: boolean;
 	created_at: string;
 }
 
@@ -6762,7 +6765,7 @@ export interface PendingSafetyRequest {
 export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
-		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.order('created_at', { ascending: false });
 	if (error) {
 		console.error('fetchMySafetyContacts failed', error);
@@ -6776,13 +6779,14 @@ export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
 /// are forced null server-side (the contact must opt in), so we never set
 /// them here. Throws on RLS / unique / format failure for the caller to
 /// surface.
-export async function addSafetyContact(email: string): Promise<SafetyContact> {
+export async function addSafetyContact(email: string, phone?: string | null): Promise<SafetyContact> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
+	const trimmedPhone = phone?.trim() ?? '';
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
-		.insert({ owner_id: userId, contact_email: email })
-		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.insert({ owner_id: userId, contact_email: email, contact_phone: trimmedPhone || null })
+		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.single();
 	if (error || !data) throw error ?? new Error('addSafetyContact failed');
 	return data as SafetyContact;
@@ -6807,9 +6811,38 @@ export async function fetchPendingSafetyRequests(): Promise<PendingSafetyRequest
 }
 
 /// Confirm a pending request addressed to my account email (links my
-/// account). Returns whether a row was confirmed.
-export async function confirmSafetyRequest(id: string): Promise<boolean> {
-	const { data, error } = await supabase.rpc('confirm_safety_contact', { p_id: id });
+/// account). `smsOptIn` additionally consents to SMS alerts — armed only when
+/// the owner stored a phone number (server-enforced). Returns whether a row
+/// was confirmed.
+export async function confirmSafetyRequest(id: string, smsOptIn = false): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact', {
+		p_id: id,
+		p_sms_opt_in: smsOptIn,
+	});
+	if (error) throw error;
+	return data === true;
+}
+
+/// Turn SMS consent on/off on a relationship the signed-in user is the
+/// confirmed contact of. Opting in requires a phone on file (server-enforced).
+export async function setSafetySmsOptIn(id: string, optIn: boolean): Promise<boolean> {
+	const { data, error } = await supabase.rpc('set_safety_sms_opt_in', { p_id: id, p_opt_in: optIn });
+	if (error) throw error;
+	return data === true;
+}
+
+/// Set (or clear, with null) the per-run "not back by X" expected-return
+/// override on one of my own in-progress broadcast runs. The overdue scan
+/// escalates to my confirmed safety contacts once this time passes. Returns
+/// whether the run was updated (false if it isn't mine or isn't in-progress).
+export async function setRunExpectedReturn(
+	runId: string,
+	expectedReturnAt: string | null,
+): Promise<boolean> {
+	const { data, error } = await supabase.rpc('set_run_expected_return', {
+		p_run_id: runId,
+		p_expected_return_at: expectedReturnAt,
+	});
 	if (error) throw error;
 	return data === true;
 }
@@ -6823,8 +6856,11 @@ export async function declineSafetyRequest(id: string): Promise<boolean> {
 
 /// Unauthenticated email-link confirm for an external contact. The token is
 /// the capability; the anon Supabase client may call it.
-export async function confirmSafetyContactByToken(token: string): Promise<boolean> {
-	const { data, error } = await supabase.rpc('confirm_safety_contact_by_token', { p_token: token });
+export async function confirmSafetyContactByToken(token: string, smsOptIn = false): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact_by_token', {
+		p_token: token,
+		p_sms_opt_in: smsOptIn,
+	});
 	if (error) throw error;
 	return data === true;
 }
