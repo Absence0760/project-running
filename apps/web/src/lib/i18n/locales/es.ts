@@ -408,6 +408,7 @@ export const messages = {
 	"onboarding.continue": "Continuar",
 	"onboarding.saving": "Guardando…",
 	"onboarding.openDashboard": "Abrir panel",
+	"onboarding.createPlanCta": "Crear mi plan de entrenamiento",
 	"onboarding.pushEnableError": "No se pudieron activar las notificaciones: {message}",
 	"onboarding.saveError": "No se pudo guardar: {message}",
 	"onboarding.welcomeToast": "¡Todo listo! Bienvenido a bordo.",

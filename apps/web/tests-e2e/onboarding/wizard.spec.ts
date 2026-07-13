@@ -217,9 +217,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		).toBeVisible();
 		await page.getByRole('button', { name: 'Continue' }).click();
 
-		// Step 7 — done
+		// Step 7 — done. Because a goal (10K) was chosen, the goal-keyed
+		// "Create my training plan" CTA is offered alongside the neutral
+		// dashboard exit (runner-new discoverability nudge).
 		await expect(
 			page.getByRole('heading', { name: /All set/i })
+		).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Create my training plan' })
 		).toBeVisible();
 		await page.getByRole('button', { name: 'Open dashboard' }).click();
 

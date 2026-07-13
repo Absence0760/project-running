@@ -55,13 +55,19 @@ export function progressParts(
  * view's summary jsonb (distance_m / duration_s strings). For activity_count
  * and streak_days a single activity always contributes 1 (the day-distinctness
  * of streak_days is resolved by the caller over a day-set, not per activity).
- * Returns 0 when the activity type doesn't match the filter. */
+ * Returns 0 when the activity type doesn't match the filter, or when the run is
+ * a DNF — mirroring the server aggregate (`challenge_leaderboard` /
+ * `recompute_challenge_completion`, ADR 231), which excludes DNF'd runs from
+ * every metric, so a client-side optimistic estimate can't drift by counting a
+ * just-DNF'd run's distance. `is_dnf` rides the activities-view runs summary
+ * (migration `20270408_001`); gym/meal activities never carry it. */
 export function metricFromActivity(
 	summary: {
 		distance_m?: number | string | null;
 		duration_s?: number | string | null;
 		elevation_gain_m?: number | string | null;
 		activity_type?: string | null;
+		is_dnf?: boolean | null;
 	},
 	metric: ChallengeMetric,
 	activityTypeFilter: string | null,
@@ -69,6 +75,7 @@ export function metricFromActivity(
 	if (activityTypeFilter !== null && (summary.activity_type ?? 'run') !== activityTypeFilter) {
 		return 0;
 	}
+	if (summary.is_dnf === true) return 0;
 	switch (metric) {
 		case 'distance':
 			return numberOf(summary.distance_m);

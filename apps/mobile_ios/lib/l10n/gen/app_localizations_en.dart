@@ -865,6 +865,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupOpenDashboard => 'Open dashboard';
 
   @override
+  String get setupCreatePlanCta => 'Create my training plan';
+
+  @override
   String get setupWelcomeToast => 'Welcome to Threkir!';
 
   @override
@@ -1990,6 +1993,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String runDetailZoneRow(int number, String label) {
     return 'Zone $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'Zones use an age-estimated max HR. On heart-rate medication (e.g. beta-blockers) or if you\'ve measured your max HR, set it in Preferences for accurate zones.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Set max HR';
 
   @override
   String get runDetailSectionSplits => 'Splits';

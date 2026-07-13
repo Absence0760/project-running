@@ -5,6 +5,7 @@ import {
 	ONBOARDING_TOTAL_STEPS,
 	PRIMARY_GOAL_KEY,
 	PRIMARY_GOAL_VALUES,
+	planPresetForGoal,
 } from './onboarding';
 import { en } from '../i18n/locales/en';
 
@@ -44,6 +45,26 @@ test('PRIMARY_GOAL_VALUES includes the four GoalEvent distances + 2 non-distance
 	assert.ok((PRIMARY_GOAL_VALUES as readonly string[]).includes('weight_loss'));
 	// And exactly those 6 — guards against a silent addition.
 	assert.equal(PRIMARY_GOAL_VALUES.length, 6);
+});
+
+test('planPresetForGoal maps distance goals 1:1 and seeds beginners into walk-run 5K', () => {
+	// Distance goals map straight to GoalEvent, no beginner toggle.
+	assert.deepEqual(planPresetForGoal('10k'), { goalEvent: 'distance_10k', beginnerWalkRun: false });
+	assert.deepEqual(planPresetForGoal('half_marathon'), { goalEvent: 'distance_half', beginnerWalkRun: false });
+	assert.deepEqual(planPresetForGoal('marathon'), { goalEvent: 'distance_full', beginnerWalkRun: false });
+	// The three beginner-leaning goals all land on the walk-run 5K — the
+	// affordance a brand-new runner would otherwise never find.
+	assert.deepEqual(planPresetForGoal('5k'), { goalEvent: 'distance_5k', beginnerWalkRun: true });
+	assert.deepEqual(planPresetForGoal('general_fitness'), { goalEvent: 'distance_5k', beginnerWalkRun: true });
+	assert.deepEqual(planPresetForGoal('weight_loss'), { goalEvent: 'distance_5k', beginnerWalkRun: true });
+});
+
+test('planPresetForGoal covers every PRIMARY_GOAL_VALUE', () => {
+	// No goal falls through to an undefined preset.
+	for (const v of PRIMARY_GOAL_VALUES) {
+		const preset = planPresetForGoal(v);
+		assert.ok(preset && typeof preset.goalEvent === 'string');
+	}
 });
 
 test('ONBOARDING_TOTAL_STEPS matches the wizard step count', () => {

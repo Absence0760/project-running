@@ -424,4 +424,83 @@ void main() {
     });
   });
 
+  group('HR medication disclaimer', () {
+    Run runWithHr() => Run(
+          id: 'run-hr',
+          startedAt: DateTime.utc(2026, 4, 15, 7, 30),
+          duration: const Duration(minutes: 25),
+          distanceMetres: 5000,
+          source: RunSource.app,
+          metadata: const {'activity_type': 'run'},
+          track: [
+            for (final e in const [110, 135, 160, 175])
+              Waypoint(
+                lat: -37.8136,
+                lng: 144.9631,
+                timestamp: DateTime.utc(2026, 4, 15, 7, 30),
+                bpm: e,
+              ),
+          ],
+        );
+
+    // The HR-zone section sits deep in the lazy run-detail ListView. Give
+    // the test a tall surface so the whole list builds eagerly and the
+    // disclaimer's presence/absence is asserted against a fully-built tree.
+    void useTallSurface(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+    }
+
+    testWidgets('shows the disclaimer when zones are age-estimated',
+        (tester) async {
+      useTallSurface(tester);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(
+        tester,
+        runWithHr(),
+        settingsSync: _FakeSettingsSync(prefs, _FakeSettingsService({})),
+      );
+      expect(find.text('Set max HR'), findsOneWidget);
+    });
+
+    testWidgets('hides the disclaimer when a max_hr_bpm override is set',
+        (tester) async {
+      useTallSurface(tester);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(
+        tester,
+        runWithHr(),
+        settingsSync:
+            _FakeSettingsSync(prefs, _FakeSettingsService({'max_hr_bpm': 185})),
+      );
+      // The HR section still renders (zone rows present); only the
+      // age-estimated disclaimer is suppressed.
+      expect(find.text('Set max HR'), findsNothing);
+    });
+
+    testWidgets('hides the disclaimer when explicit hr_zones are set',
+        (tester) async {
+      useTallSurface(tester);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(
+        tester,
+        runWithHr(),
+        settingsSync: _FakeSettingsSync(
+          prefs,
+          _FakeSettingsService({
+            'hr_zones': {'z1': 110, 'z2': 130, 'z3': 150, 'z4': 170, 'z5': 190},
+          }),
+        ),
+      );
+      expect(find.text('Set max HR'), findsNothing);
+    });
+  });
 }

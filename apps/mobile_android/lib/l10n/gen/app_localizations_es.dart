@@ -871,6 +871,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get setupOpenDashboard => 'Abrir panel';
 
   @override
+  String get setupCreatePlanCta => 'Crear mi plan de entrenamiento';
+
+  @override
   String get setupWelcomeToast => '¡Bienvenido a Threkir!';
 
   @override
@@ -2007,6 +2010,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String runDetailZoneRow(int number, String label) {
     return 'Zona $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'Las zonas usan una FC máxima estimada por edad. Si tomas medicación cardíaca (p. ej. betabloqueantes) o si has medido tu FC máxima, configúrala en Preferencias para obtener zonas precisas.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Definir FC máx.';
 
   @override
   String get runDetailSectionSplits => 'Parciales';

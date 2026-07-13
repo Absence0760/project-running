@@ -60,7 +60,13 @@ ProgressParts progressParts(ChallengeMetric metric, num value, num? goal) {
 /// view's summary jsonb (distance_m / duration_s, number or string). For
 /// activity_count and streak_days a single activity always contributes 1 (the
 /// day-distinctness of streak_days is resolved by the caller over a day-set,
-/// not per activity). Returns 0 when the activity type doesn't match the filter.
+/// not per activity). Returns 0 when the activity type doesn't match the
+/// filter, or when the run is a DNF — mirroring the server aggregate
+/// (`challenge_leaderboard` / `recompute_challenge_completion`, ADR 231), which
+/// excludes DNF'd runs from every metric, so a client-side optimistic estimate
+/// can't drift by counting a just-DNF'd run's distance. `is_dnf` rides the
+/// activities-view runs summary (migration `20270408_001`); gym/meal
+/// activities never carry it.
 num metricFromActivity(
   Map<String, dynamic> summary,
   ChallengeMetric metric,
@@ -70,6 +76,7 @@ num metricFromActivity(
       (summary['activity_type'] as String? ?? 'run') != activityTypeFilter) {
     return 0;
   }
+  if (summary['is_dnf'] == true) return 0;
   switch (metric) {
     case ChallengeMetric.distance:
       return _numberOf(summary['distance_m']);

@@ -122,8 +122,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
   }
 
   /// Final "Open dashboard". Persists every answer, stamps `onboarded_at`.
-  /// Mirrors web's `finishAndExit`.
-  Future<void> _finish() async {
+  /// Mirrors web's `finishAndExit`. When [createPlan] is set (the goal-keyed
+  /// "create my training plan" CTA), pops with the chosen `primary_goal` so
+  /// the home screen can route straight into the plan wizard preselected.
+  Future<void> _finish({bool createPlan = false}) async {
     if (_saving) return;
     setState(() => _saving = true);
     final l10n = AppLocalizations.of(context);
@@ -172,7 +174,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
 
       if (!mounted) return;
       showTopBanner(context, l10n.setupWelcomeToast);
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(createPlan ? _primaryGoal : null);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -336,7 +338,19 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
           theme,
           title: l10n.setupDoneTitle,
           hint: l10n.setupDoneHint,
-          child: const SizedBox.shrink(),
+          // A goal-keyed CTA into the plan wizard (runner-new discoverability
+          // nudge) when the runner picked a goal; a plain finish otherwise.
+          child: _primaryGoal == null
+              ? const SizedBox.shrink()
+              : Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton(
+                    onPressed: _saving ? null : () => _finish(createPlan: true),
+                    child: Text(_saving
+                        ? l10n.setupSaving
+                        : l10n.setupCreatePlanCta),
+                  ),
+                ),
         );
     }
   }

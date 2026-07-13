@@ -416,6 +416,7 @@ export const en = {
 	"onboarding.continue": "Continue",
 	"onboarding.saving": "Saving…",
 	"onboarding.openDashboard": "Open dashboard",
+	"onboarding.createPlanCta": "Create my training plan",
 	"onboarding.pushEnableError": "Could not enable notifications: {message}",
 	"onboarding.saveError": "Could not save: {message}",
 	"onboarding.welcomeToast": "All set! Welcome aboard.",

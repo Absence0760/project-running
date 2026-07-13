@@ -403,6 +403,7 @@ export const messages = {
 	"onboarding.continue": "続ける",
 	"onboarding.saving": "保存しています…",
 	"onboarding.openDashboard": "ダッシュボードを開く",
+	"onboarding.createPlanCta": "トレーニングプランを作成",
 	"onboarding.pushEnableError": "通知を有効にできませんでした: {message}",
 	"onboarding.saveError": "保存できませんでした: {message}",
 	"onboarding.welcomeToast": "準備完了です！ようこそ。",
