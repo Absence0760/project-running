@@ -373,11 +373,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(suffixText: suffix),
-          autofocus: true,
+        content: Semantics(
+          label: title,
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(suffixText: suffix),
+            autofocus: true,
+          ),
         ),
         actions: [
           if (allowClear)
@@ -421,11 +424,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(suffixText: suffix),
-          autofocus: true,
+        content: Semantics(
+          label: title,
+          child: TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(suffixText: suffix),
+            autofocus: true,
+          ),
         ),
         actions: [
           if (allowClear)

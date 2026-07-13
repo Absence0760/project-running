@@ -221,6 +221,38 @@ class _ReplySocial extends SocialService {
       Supabase.instance.client.channel('test-$clubId');
 }
 
+/// Member club with an empty feed and a gated createPost so the in-flight
+/// window stays open while the test taps the compose Post button again.
+class _ComposeSocial extends SocialService {
+  int createCalls = 0;
+  final Completer<void> createGate = Completer<void>();
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _memberClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  Future<void> createPost({
+    required String clubId,
+    required String body,
+    String? parentPostId,
+    String? eventId,
+    DateTime? eventInstanceStart,
+  }) async {
+    createCalls++;
+    await createGate.future;
+  }
+
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
 /// Training service that surfaces one plan template and gates the clone
 /// so the in-flight window stays open across a second Adopt tap.
 class _AdoptTraining extends TrainingService {
@@ -510,6 +542,48 @@ void main() {
       // Second tap while the first createPost is still gated in flight —
       // the button is now disabled, so the tap is expected to miss.
       await tester.tap(sendBtn, warnIfMissed: false);
+      await tester.pump();
+
+      expect(social.createCalls, 1);
+
+      // Release the gate so no future leaks.
+      social.createGate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+  });
+
+  group('ClubDetailScreen — compose double-submit guard', () {
+    testWidgets('rapid double-tap of compose Post only fires createPost once',
+        (tester) async {
+      final social = _ComposeSocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Feed is the default tab; the member composer renders inline.
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Share an update…'), 'Long run Sat 7am');
+      await tester.pump();
+
+      final postBtn = find.widgetWithText(FilledButton, 'Post');
+      expect(postBtn, findsOneWidget);
+
+      await tester.tap(postBtn);
+      await tester.pump();
+      // Second tap while the first createPost is still gated in flight — the
+      // button is now disabled, so the tap is expected to miss.
+      await tester.tap(postBtn, warnIfMissed: false);
       await tester.pump();
 
       expect(social.createCalls, 1);

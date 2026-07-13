@@ -539,6 +539,32 @@ void main() {
       );
     });
 
+    test('save offloads the terminal full-track encode to compute()', () {
+      // Reason: the terminal save() serialises the ENTIRE Run.toJson()
+      // (full multi-day track) — for a 150k-300k-point ultra a synchronous
+      // jsonEncode on the UI isolate froze the app at the exact moment the
+      // runner (or their pacer) finished. Unlike saveInProgress this path
+      // never got the compute() offload the other heavy encode/decode paths
+      // have. Must encode off-isolate; a bare writeJsonAtomic(...) here
+      // encodes on the UI thread and reintroduces the freeze.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> save\(Run run\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('compute('),
+        reason: 'save must offload the full-Run jsonEncode to an isolate '
+            'so finishing a huge track does not freeze the UI.',
+      );
+      expect(
+        body.contains('writeJsonAtomic('),
+        isFalse,
+        reason: 'save must not call writeJsonAtomic (which jsonEncodes on '
+            'the UI isolate) — encode via compute() then writeStringAtomic.',
+      );
+    });
+
     test('_loadAll reads run files in parallel', () {
       // Reason: serial reads made cold-start scale linearly with run
       // count (a user with 500 runs waited seconds on the first frame).

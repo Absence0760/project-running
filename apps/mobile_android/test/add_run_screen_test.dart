@@ -66,6 +66,20 @@ void main() {
       expect(find.text('Distance'), findsAtLeastNWidgets(1));
     });
 
+    // a11y: the distance field carries only a separate section Text as
+    // its visible label, which a screen reader won't associate with the
+    // edit box. The Semantics wrap gives the field its own accessible
+    // name (uxhunt-mobile finding #3).
+    testWidgets('distance field exposes an accessible name for screen readers',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s.runs, s.routes, s.prefs);
+      await tester.pumpAndSettle();
+      // The distance field is the screen's only TextFormField.
+      final node = tester.getSemantics(find.byType(TextFormField));
+      expect(node.label, 'Distance');
+    });
+
     testWidgets('Save action is present in the app bar', (tester) async {
       final s = await _makeStores();
       await _pump(tester, s.runs, s.routes, s.prefs);
