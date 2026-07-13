@@ -16,16 +16,21 @@ name: Release Android
 #
 # Production runtime config, injected as `--dart-define`s at build time
 # (main.dart seeds each non-empty one into dotenv — decisions §137). Leave a
-# secret unset to keep that feature fail-closed:
-#   MOBILE_SUPABASE_URL           https://api.threkir.com          (required)
-#   MOBILE_SUPABASE_ANON_KEY      Supabase publishable key         (required)
-#   MOBILE_MAPTILER_KEY           MapTiler key — no maps without it (required)
-#   MOBILE_WEB_BASE_URL           https://threkir.com  (live-share link host)
+# secret unset to keep that feature fail-closed.
+#
+# REUSED (already set — the web + Wear OS releases inject the same ones, so
+# there's a single prod source of truth, no re-pasting):
+#   PUBLIC_SUPABASE_URL           prod Supabase URL                (required)
+#   PUBLIC_SUPABASE_ANON_KEY      Supabase publishable key         (required)
+#   PUBLIC_MAPTILER_KEY           MapTiler key — no maps without it (required)
+#   PUBLIC_SENTRY_DSN             Sentry DSN (empty → Sentry off)
+# (WEB_BASE_URL is a literal https://threkir.com in the build step — no secret.)
+#
+# MOBILE-SPECIFIC (create these):
 #   MOBILE_OSRM_URL               https://osrm.threkir.com — REQUIRED or the
 #                                 release route builder throws on first use
 #   MOBILE_LIVE_HUB_URL           Go live-hub base URL (optional; empty →
 #                                 falls back to Supabase live pings)
-#   MOBILE_SENTRY_DSN             mobile Sentry DSN (optional; empty → off)
 #   MOBILE_GOOGLE_WEB_CLIENT_ID   Google Sign-In web client id (optional)
 #   MOBILE_STRAVA_CLIENT_ID       Strava OAuth client id (optional)
 #   MOBILE_REVENUECAT_API_KEY_ANDROID  RevenueCat Android key (optional; empty
@@ -125,13 +130,19 @@ jobs:
         # keys (DEV_USER_*, BYPASS_PAYWALL, *_GATE) are deliberately NOT
         # passed — release must not carry them.
         env:
-          SUPABASE_URL: ${{ secrets.MOBILE_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.MOBILE_SUPABASE_ANON_KEY }}
-          MAPTILER_KEY: ${{ secrets.MOBILE_MAPTILER_KEY }}
-          WEB_BASE_URL: ${{ secrets.MOBILE_WEB_BASE_URL }}
+          # Shared prod values reuse the SAME canonical secrets the web +
+          # Wear OS releases inject — one source of truth, no web↔mobile
+          # drift. Same prod Supabase project, same publishable anon key,
+          # same MapTiler key. WEB_BASE_URL is a public host, passed as a
+          # literal (no secret).
+          SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          MAPTILER_KEY: ${{ secrets.PUBLIC_MAPTILER_KEY }}
+          SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
+          # Mobile-specific secrets (create these). Any left unset stays
+          # fail-closed at runtime.
           OSRM_URL: ${{ secrets.MOBILE_OSRM_URL }}
           LIVE_HUB_URL: ${{ secrets.MOBILE_LIVE_HUB_URL }}
-          SENTRY_DSN: ${{ secrets.MOBILE_SENTRY_DSN }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.MOBILE_GOOGLE_WEB_CLIENT_ID }}
           STRAVA_CLIENT_ID: ${{ secrets.MOBILE_STRAVA_CLIENT_ID }}
           REVENUECAT_API_KEY_ANDROID: ${{ secrets.MOBILE_REVENUECAT_API_KEY_ANDROID }}
@@ -140,7 +151,7 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=MAPTILER_KEY="$MAPTILER_KEY" \
-            --dart-define=WEB_BASE_URL="$WEB_BASE_URL" \
+            --dart-define=WEB_BASE_URL="https://threkir.com" \
             --dart-define=OSRM_URL="$OSRM_URL" \
             --dart-define=LIVE_HUB_URL="$LIVE_HUB_URL" \
             --dart-define=SENTRY_DSN="$SENTRY_DSN" \

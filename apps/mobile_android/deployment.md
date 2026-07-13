@@ -129,17 +129,25 @@ Local dev is the mirror image: `flutter run` (debug) reads `apps/mobile_android/
 
 ### Production config injected at build time
 
-Each is a GitHub Secret (`MOBILE_*`) passed as a `--dart-define`; `main.dart`'s `String.fromEnvironment` block seeds every non-empty one into `dotenv`. **Leave a secret unset to keep that feature fail-closed.**
+Each define is passed from a GitHub Secret; `main.dart`'s `String.fromEnvironment` block seeds every non-empty one into `dotenv`. **Leave a secret unset to keep that feature fail-closed.**
+
+**Shared values reuse the canonical `PUBLIC_*` secrets the web + Wear OS releases already inject** — one prod source of truth, nothing to re-paste for these:
+
+| Secret (already set) | Define | Value / effect |
+|---|---|---|
+| `PUBLIC_SUPABASE_URL` | `SUPABASE_URL` | prod Supabase URL — **required** |
+| `PUBLIC_SUPABASE_ANON_KEY` | `SUPABASE_ANON_KEY` | publishable key — **required** |
+| `PUBLIC_MAPTILER_KEY` | `MAPTILER_KEY` | MapTiler key — **required** (no maps without it) |
+| `PUBLIC_SENTRY_DSN` | `SENTRY_DSN` | Sentry DSN; empty → Sentry off |
+
+`WEB_BASE_URL` is passed as a literal `https://threkir.com` in the build step (public host, not a secret).
+
+**Mobile-specific secrets — create these:**
 
 | Secret | Define | Value / effect |
 |---|---|---|
-| `MOBILE_SUPABASE_URL` | `SUPABASE_URL` | `https://api.threkir.com` — **required** |
-| `MOBILE_SUPABASE_ANON_KEY` | `SUPABASE_ANON_KEY` | publishable key from Supabase — **required** |
-| `MOBILE_MAPTILER_KEY` | `MAPTILER_KEY` | MapTiler key — **required** (no maps without it) |
-| `MOBILE_WEB_BASE_URL` | `WEB_BASE_URL` | `https://threkir.com` — live-share link host |
 | `MOBILE_OSRM_URL` | `OSRM_URL` | `https://osrm.threkir.com` — **required**, or the release route builder throws on first routing call (the public demo has no DPA and is refused in release) |
 | `MOBILE_LIVE_HUB_URL` | `LIVE_HUB_URL` | Go live-hub URL; empty → falls back to Supabase `live_run_pings` |
-| `MOBILE_SENTRY_DSN` | `SENTRY_DSN` | mobile Sentry project DSN; empty → Sentry off |
 | `MOBILE_GOOGLE_WEB_CLIENT_ID` | `GOOGLE_WEB_CLIENT_ID` | Google Sign-In web client id; empty → Google button no-ops |
 | `MOBILE_STRAVA_CLIENT_ID` | `STRAVA_CLIENT_ID` | Strava OAuth client id; empty → connect falls back to the web flow |
 | `MOBILE_REVENUECAT_API_KEY_ANDROID` | `REVENUECAT_API_KEY_ANDROID` | RevenueCat Android key; empty → Subscribe falls back to the web upgrade page |
@@ -320,7 +328,7 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [ ] Upload keystore generated, in 1Password and GitHub Secrets
 - [ ] Keystore backup stored cold (off-machine)
 - [ ] Play service account created, JSON in GitHub Secrets, granted Release manager on this app
-- [ ] Production `MOBILE_*` secrets set (at minimum `MOBILE_SUPABASE_URL`, `MOBILE_SUPABASE_ANON_KEY`, `MOBILE_MAPTILER_KEY`, `MOBILE_OSRM_URL`); optional keys left unset stay fail-closed
+- [ ] Shared `PUBLIC_*` secrets present (Supabase URL/anon, MapTiler — already set for web) and `MOBILE_OSRM_URL` set (required); optional `MOBILE_*` keys left unset stay fail-closed
 - [ ] Manifest reviewed; permissions list matches data-safety form
 - [ ] BACKGROUND_LOCATION prominent in-app disclosure on OnboardingScreen verified
 - [ ] First `mobile_android@*` tag built clean, AAB landed on Internal track
