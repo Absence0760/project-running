@@ -8,12 +8,15 @@ name: Release Backend
 # Secrets read (production environment):
 #   SUPABASE_ACCESS_TOKEN         personal access token for the CLI (link + functions)
 #   SUPABASE_PROJECT_REF          target project's ref (e.g. `abcd1234xyz`)
-#   SUPABASE_DB_URL               full Postgres connection string (Session pooler)
-#                                 for the migration apply step. Copy from the
-#                                 dashboard: Settings -> Database -> Connection
-#                                 string -> Session mode.
-# (SUPABASE_DB_PASSWORD is no longer used — `supabase db push` was replaced by
-#  scripts/apply-pending-migrations.sh, which connects via SUPABASE_DB_URL.)
+#   SUPABASE_DB_URL               Session-pooler connection string for the
+#                                 migration apply step (dashboard -> Connect ->
+#                                 Session pooler). The embedded password is
+#                                 ignored — see below.
+#   SUPABASE_DB_PASSWORD          Postgres password. apply-pending-migrations.sh
+#                                 authenticates with it via PGPASSWORD and
+#                                 strips the password out of SUPABASE_DB_URL, so
+#                                 special characters (%, !, ^) don't break psql's
+#                                 URI percent-decoding.
 #
 # There is no "internal track" for a backend — once migrations and
 # functions deploy they're live for every client. Roll forward with a
@@ -79,6 +82,7 @@ jobs:
         working-directory: apps/backend
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: ./scripts/apply-pending-migrations.sh
 
       - name: Deploy Edge Functions
