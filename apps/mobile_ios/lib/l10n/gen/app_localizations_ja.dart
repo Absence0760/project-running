@@ -635,6 +635,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runAutoLiveShareStarted => 'ライブ共有中 — 「ライブリンクを共有」でリンクを送れます';
 
   @override
+  String get runSafetyNudgeSolo =>
+      '暗くなってから一人で走っていますか？ライブリンクを共有して、誰かに見守ってもらいましょう。';
+
+  @override
+  String get runSafetyNudgeShareAction => '共有';
+
+  @override
   String get activitySedentary => 'ほとんど座っている（デスクワーク）';
 
   @override
