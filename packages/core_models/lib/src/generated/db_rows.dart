@@ -4208,6 +4208,8 @@ class SafetyContactRow {
   static const String colConfirmToken = 'confirm_token';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colContactPhone = 'contact_phone';
+  static const String colSmsOptInAt = 'sms_opt_in_at';
 
   final String id;
   final String ownerId;
@@ -4217,6 +4219,8 @@ class SafetyContactRow {
   final String confirmToken;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? contactPhone;
+  final DateTime? smsOptInAt;
 
   const SafetyContactRow({
     required this.id,
@@ -4227,6 +4231,8 @@ class SafetyContactRow {
     required this.confirmToken,
     required this.createdAt,
     required this.updatedAt,
+    this.contactPhone,
+    this.smsOptInAt,
   });
 
   factory SafetyContactRow.fromJson(Map<String, dynamic> json) => SafetyContactRow(
@@ -4238,6 +4244,8 @@ class SafetyContactRow {
     confirmToken: json['confirm_token'] as String,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    contactPhone: json['contact_phone'] as String?,
+    smsOptInAt: json['sms_opt_in_at'] == null ? null : DateTime.parse(json['sms_opt_in_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4249,6 +4257,8 @@ class SafetyContactRow {
     colConfirmToken: confirmToken,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colContactPhone: contactPhone,
+    colSmsOptInAt: smsOptInAt?.toIso8601String(),
   };
 }
 

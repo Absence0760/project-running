@@ -70,6 +70,80 @@ test.describe('/settings/safety', () => {
 		}
 	});
 
+	test('owner adds a contact with a phone → contact opts into SMS → owner sees the SMS badge', async ({
+		browser,
+	}) => {
+		const ctxRunner = await browser.newContext({ storageState: USER_A.storageStatePath });
+		const ctxAlex = await browser.newContext({ storageState: USER_B.storageStatePath });
+		const runner = await ctxRunner.newPage();
+		const alex = await ctxAlex.newPage();
+
+		try {
+			// ── Owner adds alex by email + an E.164 phone ──
+			await runner.goto('/settings/safety');
+			await runner.getByTestId('safety-email-input').fill(USER_B.email);
+			await runner.getByTestId('safety-phone-input').fill('+447700900123');
+			await runner.getByTestId('safety-add-button').click();
+
+			const contact = runner.getByTestId('safety-contact').filter({ hasText: USER_B.email });
+			await expect(contact).toBeVisible({ timeout: 5_000 });
+			await expect(contact).toContainText('Pending');
+
+			// ── Alex sees the incoming request; the SMS opt-in appears because
+			// the owner stored a phone (has_phone). Opt in, then confirm. ──
+			await alex.goto('/settings/safety');
+			await expect(alex.getByTestId('safety-incoming')).toBeVisible({ timeout: 5_000 });
+			await expect(alex.getByTestId('safety-confirm-sms')).toBeVisible();
+			await alex.getByTestId('safety-confirm-sms').check();
+			await alex.getByTestId('safety-confirm-request').click();
+			await expect(alex.getByTestId('safety-incoming')).toHaveCount(0, { timeout: 5_000 });
+
+			// ── Owner reloads → confirmed + "SMS on" badge ──
+			await runner.reload();
+			const confirmed = runner.getByTestId('safety-contact').filter({ hasText: USER_B.email });
+			await expect(confirmed).toContainText('Confirmed', { timeout: 5_000 });
+			await expect(confirmed.getByTestId('safety-sms-badge')).toBeVisible();
+
+			// The opt-in stamp is persisted server-side.
+			const admin = getAdminClient();
+			const { data: after } = await admin
+				.from('safety_contacts')
+				.select('sms_opt_in_at, contact_phone')
+				.eq('owner_id', USER_A.id)
+				.eq('contact_email', USER_B.email)
+				.single();
+			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
+			expect((after as { contact_phone: string | null }).contact_phone).toBe('+447700900123');
+		} finally {
+			await ctxRunner.close();
+			await ctxAlex.close();
+		}
+	});
+
+	test('an invalid phone is rejected client-side before any insert', async ({ browser }) => {
+		const ctx = await browser.newContext({ storageState: USER_A.storageStatePath });
+		const page = await ctx.newPage();
+		try {
+			let inserts = 0;
+			await page.route('**/rest/v1/safety_contacts**', async (route) => {
+				if (route.request().method() === 'POST') inserts++;
+				await route.continue();
+			});
+
+			await page.goto('/settings/safety');
+			await page.getByTestId('safety-email-input').fill(USER_B.email);
+			// Missing leading '+' → fails the E.164 mirror of the DB CHECK.
+			await page.getByTestId('safety-phone-input').fill('447700900123');
+			await page.getByTestId('safety-add-button').click();
+
+			await expect(page.getByText(/international format/)).toBeVisible({ timeout: 5_000 });
+			await expect(page.getByTestId('safety-contact')).toHaveCount(0);
+			expect(inserts).toBe(0);
+		} finally {
+			await ctx.close();
+		}
+	});
+
 	test('double-clicking Confirm on an incoming request fires the RPC once', async ({
 		browser,
 	}) => {
@@ -123,7 +197,7 @@ test.describe('/settings/safety', () => {
 		const email = `external-${Date.now()}@safe.local`;
 		const { error: insErr } = await admin
 			.from('safety_contacts')
-			.insert({ owner_id: USER_A.id, contact_email: email });
+			.insert({ owner_id: USER_A.id, contact_email: email, contact_phone: '+447700900124' });
 		expect(insErr).toBeNull();
 		const { data: row } = await admin
 			.from('safety_contacts')
@@ -140,19 +214,28 @@ test.describe('/settings/safety', () => {
 		try {
 			await anon.goto(`/safety/confirm?token=${token}`);
 			const card = anon.getByTestId('safety-confirm-card');
+			// The page now prompts (with the SMS opt-in) instead of
+			// auto-confirming; the contact clicks Confirm to opt in.
+			await expect(card).toHaveAttribute('data-state', 'prompt', { timeout: 5_000 });
+			await anon.getByTestId('safety-confirm-sms').check();
+			await anon.getByTestId('safety-confirm-button').click();
 			await expect(card).toHaveAttribute('data-state', 'success', { timeout: 5_000 });
 
-			// The row is now confirmed in the DB.
+			// The row is now confirmed in the DB, with the SMS opt-in stamped
+			// because the owner had stored a phone.
 			const { data: after } = await admin
 				.from('safety_contacts')
-				.select('confirmed_at')
+				.select('confirmed_at, sms_opt_in_at')
 				.eq('owner_id', USER_A.id)
 				.eq('contact_email', email)
 				.single();
 			expect((after as { confirmed_at: string | null }).confirmed_at).not.toBeNull();
+			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
 
 			// A junk / already-used token fails closed.
 			await anon.goto('/safety/confirm?token=00000000-0000-0000-0000-000000000000');
+			await expect(card).toHaveAttribute('data-state', 'prompt', { timeout: 5_000 });
+			await anon.getByTestId('safety-confirm-button').click();
 			await expect(card).toHaveAttribute('data-state', 'failure', { timeout: 5_000 });
 		} finally {
 			await ctx.close();
