@@ -28,6 +28,7 @@ import '../grade_adjusted_pace.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
+import 'settings_preferences_screen.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/track_segment.dart';
@@ -1783,9 +1784,57 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           ],
         ),
       ),
+      if (_zonesAreAgeEstimated())
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.runDetailHrDisclaimer,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline),
+              ),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: const Size(0, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SettingsPreferencesScreen(
+                        apiClient: widget.apiClient,
+                        preferences: widget.preferences,
+                        settingsSync: widget.settingsSync,
+                      ),
+                    ),
+                  ),
+                  child: Text(l10n.runDetailHrDisclaimerAction),
+                ),
+              ),
+            ],
+          ),
+        ),
       const SizedBox(height: 8),
       const Divider(),
     ];
+  }
+
+  /// Whether the HR zones shown here fall back to an age-estimated max HR —
+  /// i.e. the user has set neither an explicit `hr_zones` override nor a
+  /// `max_hr_bpm`. Mirrors the web run-detail disclaimer condition so a
+  /// runner on heart-rate medication (beta-blockers) is told the zones may
+  /// be off and pointed at where to fix them.
+  bool _zonesAreAgeEstimated() {
+    final svc = widget.settingsSync?.service;
+    if (svc == null) return true;
+    final hasExplicit = parseHrZones(svc.effective<Map>(SettingsKeys.hrZones)) != null;
+    final hasMaxHr = svc.effective<num>(SettingsKeys.maxHrBpm) != null;
+    return !hasExplicit && !hasMaxHr;
   }
 
   /// Resolve the zone cutoffs for this run. Precedence (mirrors web's

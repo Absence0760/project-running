@@ -1962,6 +1962,13 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runDetailHrDisclaimer =>
+      'As zonas usam uma FC máxima estimada pela idade. Se você toma medicação cardíaca (ex.: betabloqueadores) ou já mediu sua FC máxima, defina-a em Preferências para zonas precisas.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Definir FC máx.';
+
+  @override
   String get runDetailSectionSplits => 'Parciais';
 
   @override
@@ -12982,6 +12989,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runDetailZoneRow(int number, String label) {
     return 'Zona $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'As zonas usam uma FC máxima estimada pela idade. Se você toma medicação cardíaca (ex.: betabloqueadores) ou já mediu sua FC máxima, defina-a em Preferências para zonas precisas.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Definir FC máx.';
 
   @override
   String get runDetailSectionSplits => 'Parciais';

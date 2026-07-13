@@ -1967,6 +1967,13 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get runDetailHrDisclaimer =>
+      'Die Zonen verwenden eine altersgeschätzte maximale HF. Wenn du Herzfrequenzmedikamente nimmst (z. B. Betablocker) oder deine maximale HF gemessen hast, lege sie in den Präferenzen fest, um genaue Zonen zu erhalten.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Max. HF festlegen';
+
+  @override
   String get runDetailSectionSplits => 'Splits';
 
   @override

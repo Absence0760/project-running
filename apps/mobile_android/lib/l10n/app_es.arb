@@ -547,6 +547,8 @@
   "runDetailHrMin": "Mín",
   "runDetailHrMax": "Máx",
   "runDetailZoneRow": "Zona {number} · {label}",
+  "runDetailHrDisclaimer": "Las zonas usan una FC máxima estimada por edad. Si tomas medicación cardíaca (p. ej. betabloqueantes) o si has medido tu FC máxima, configúrala en Preferencias para obtener zonas precisas.",
+  "runDetailHrDisclaimerAction": "Definir FC máx.",
   "runDetailSectionSplits": "Parciales",
   "runDetailNoGpsForSplits": "Sin datos GPS para los parciales",
   "runDetailRunTooShortSplit": "Carrera demasiado corta para un parcial completo de {unit}",

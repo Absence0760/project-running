@@ -1969,6 +1969,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get runDetailHrDisclaimer =>
+      'Les zones utilisent une FC max estimée selon l\'âge. Si tu prends des médicaments cardiaques (p. ex. bêtabloquants) ou si tu as mesuré ta FC max, définis-la dans Préférences pour des zones précises.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Définir la FC max';
+
+  @override
   String get runDetailSectionSplits => 'Splits';
 
   @override

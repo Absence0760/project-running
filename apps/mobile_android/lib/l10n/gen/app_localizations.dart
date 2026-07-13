@@ -3389,6 +3389,18 @@ abstract class AppLocalizations {
   /// **'Zone {number} · {label}'**
   String runDetailZoneRow(int number, String label);
 
+  /// Info note under the run-detail HR-zone breakdown when zones fall back to an age-estimated max HR (no hr_zones or max_hr_bpm override set)
+  ///
+  /// In en, this message translates to:
+  /// **'Zones use an age-estimated max HR. On heart-rate medication (e.g. beta-blockers) or if you\'ve measured your max HR, set it in Preferences for accurate zones.'**
+  String get runDetailHrDisclaimer;
+
+  /// Button under the HR-zone disclaimer that opens Settings to set max HR / zones
+  ///
+  /// In en, this message translates to:
+  /// **'Set max HR'**
+  String get runDetailHrDisclaimerAction;
+
   /// Section header for the splits list on run-detail
   ///
   /// In en, this message translates to:

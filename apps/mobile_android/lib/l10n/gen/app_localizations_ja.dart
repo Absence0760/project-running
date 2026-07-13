@@ -1871,6 +1871,13 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get runDetailHrDisclaimer =>
+      'ゾーンは年齢から推定した最大心拍数を使用します。心拍に影響する薬（ベータ遮断薬など）を服用している場合や最大心拍数を測定済みの場合は、環境設定で設定すると正確なゾーンを取得できます。';
+
+  @override
+  String get runDetailHrDisclaimerAction => '最大心拍数を設定';
+
+  @override
   String get runDetailSectionSplits => 'スプリット';
 
   @override

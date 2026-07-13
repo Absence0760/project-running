@@ -1948,6 +1948,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get runDetailHrDisclaimer =>
+      'Zones use an age-estimated max HR. On heart-rate medication (e.g. beta-blockers) or if you\'ve measured your max HR, set it in Preferences for accurate zones.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Set max HR';
+
+  @override
   String get runDetailSectionSplits => 'Splits';
 
   @override

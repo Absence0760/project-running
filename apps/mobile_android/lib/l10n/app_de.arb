@@ -547,6 +547,8 @@
   "runDetailHrMin": "Min",
   "runDetailHrMax": "Max",
   "runDetailZoneRow": "Zone {number} · {label}",
+  "runDetailHrDisclaimer": "Die Zonen verwenden eine altersgeschätzte maximale HF. Wenn du Herzfrequenzmedikamente nimmst (z. B. Betablocker) oder deine maximale HF gemessen hast, lege sie in den Präferenzen fest, um genaue Zonen zu erhalten.",
+  "runDetailHrDisclaimerAction": "Max. HF festlegen",
   "runDetailSectionSplits": "Splits",
   "runDetailNoGpsForSplits": "Keine GPS-Daten für Splits",
   "runDetailRunTooShortSplit": "Lauf zu kurz für einen vollständigen {unit}-Split",
