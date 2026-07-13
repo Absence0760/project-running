@@ -656,6 +656,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Partage en direct actif — envoyez le lien via « Partager le lien en direct »';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Vous courez seul(e) après la tombée de la nuit ? Partagez un lien en direct pour que quelqu\'un puisse vous suivre.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Partager';
+
+  @override
   String get activitySedentary => 'Surtout assis (travail de bureau)';
 
   @override

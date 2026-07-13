@@ -178,6 +178,8 @@
   "safetyAutoLiveShareTitle": "Directo automático",
   "safetyAutoLiveShareSubtitle": "Inicia automáticamente el directo cuando empieza una carrera en este teléfono. La carrera en curso es visible para cualquiera con el enlace.",
   "runAutoLiveShareStarted": "Directo activado: envía el enlace con «Compartir enlace en directo»",
+  "runSafetyNudgeSolo": "¿Corres en solitario de noche? Comparte un enlace en directo para que alguien pueda seguirte.",
+  "runSafetyNudgeShareAction": "Compartir",
   "activitySedentary": "Mayormente sentado (trabajo de oficina)",
   "activityLight": "Ligeramente activo (poco movimiento diario)",
   "activityModerate": "Moderadamente activo (a menudo de pie)",

@@ -1175,6 +1175,18 @@ abstract class AppLocalizations {
   /// **'Live sharing is on — use Share live link to send it'**
   String get runAutoLiveShareStarted;
 
+  /// One-time dismissible nudge on the run screen when a solo run starts after dark with no live share
+  ///
+  /// In en, this message translates to:
+  /// **'Running solo after dark? Share a live link so someone can follow along.'**
+  String get runSafetyNudgeSolo;
+
+  /// Action button on the solo-run safety nudge banner; shares a live link for the current run
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get runSafetyNudgeShareAction;
+
   /// Nutrition activity level: little exercise
   ///
   /// In en, this message translates to:

@@ -906,6 +906,14 @@
   "@runAutoLiveShareStarted": {
     "description": "Banner on the run screen when the auto-live-share pref attached the broadcaster"
   },
+  "runSafetyNudgeSolo": "Running solo after dark? Share a live link so someone can follow along.",
+  "@runSafetyNudgeSolo": {
+    "description": "One-time dismissible nudge on the run screen when a solo run starts after dark with no live share"
+  },
+  "runSafetyNudgeShareAction": "Share",
+  "@runSafetyNudgeShareAction": {
+    "description": "Action button on the solo-run safety nudge banner; shares a live link for the current run"
+  },
   "activitySedentary": "Mostly sitting (desk job)",
   "@activitySedentary": {
     "description": "Nutrition activity level: little exercise"
