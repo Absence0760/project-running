@@ -5,10 +5,15 @@ name: Release Backend
 # that depends on a new column doesn't deploy ahead of the schema it
 # reads.
 #
-# Secrets read:
-#   SUPABASE_ACCESS_TOKEN         personal access token for the CLI
+# Secrets read (production environment):
+#   SUPABASE_ACCESS_TOKEN         personal access token for the CLI (link + functions)
 #   SUPABASE_PROJECT_REF          target project's ref (e.g. `abcd1234xyz`)
-#   SUPABASE_DB_PASSWORD          Postgres password for `supabase db push`
+#   SUPABASE_DB_URL               full Postgres connection string (Session pooler)
+#                                 for the migration apply step. Copy from the
+#                                 dashboard: Settings -> Database -> Connection
+#                                 string -> Session mode.
+# (SUPABASE_DB_PASSWORD is no longer used — `supabase db push` was replaced by
+#  scripts/apply-pending-migrations.sh, which connects via SUPABASE_DB_URL.)
 #
 # There is no "internal track" for a backend — once migrations and
 # functions deploy they're live for every client. Roll forward with a
@@ -63,12 +68,18 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
 
-      - name: Push migrations
+      # NOT `supabase db push`: it refuses against this project's mixed
+      # 8-digit/14-digit migration history (its version-sort disagrees with the
+      # remote ledger order, so the alignment pre-flight fails even though
+      # nothing is missing — see apps/backend/CLAUDE.md). This script is the
+      # automated form of the documented manual workaround: apply each
+      # not-yet-recorded migration in a transaction + record its ledger row, in
+      # version order. Idempotent and safe to re-run.
+      - name: Apply pending migrations
         working-directory: apps/backend
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: supabase db push
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: ./scripts/apply-pending-migrations.sh
 
       - name: Deploy Edge Functions
         working-directory: apps/backend
