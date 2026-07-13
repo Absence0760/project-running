@@ -34,9 +34,16 @@
 --     request with nobody able to approve or reject it; block is a
 --     social-visibility primitive, not a reason to break moderation.
 --
--- Anon callers are unaffected: is_blocked_either_way(NULL, user_id)
--- returns false (the `blocker_id = NULL` comparison is never true), so
--- public-club rosters and posts stay readable when signed out.
+-- Anon callers must stay able to read public-club rosters and posts.
+-- `is_blocked_either_way`'s anon EXECUTE grant was deliberately revoked
+-- (20261108_001, anti-oracle defence-in-depth), so anon calling it at
+-- all raises 42501 — and these policies are reached by anon transitively
+-- (the `challenges` SELECT policy sub-queries `club_members`). A block is
+-- meaningless without a viewer identity anyway, so each guard is written
+-- `auth.uid() is null or not is_blocked_either_way(...)`: for anon the
+-- left operand is true and the OR short-circuits, so the function is
+-- never invoked (public rosters/posts stay readable, the oracle stays
+-- closed); only an authenticated viewer evaluates the block predicate.
 
 -- ── club_members roster ──
 drop policy "active members readable with their club" on club_members;
@@ -52,7 +59,7 @@ create policy "active members readable with their club"
           or private.is_club_member(clubs.id)
         )
     )
-    and not is_blocked_either_way(auth.uid(), club_members.user_id)
+    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_members.user_id))
   );
 
 drop policy "private-club members read pending rows" on club_members;
@@ -65,7 +72,7 @@ create policy "private-club members read pending rows"
         and c.is_public = false
         and (c.owner_id = auth.uid() or private.is_club_member(c.id))
     )
-    and not is_blocked_either_way(auth.uid(), club_members.user_id)
+    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_members.user_id))
   );
 
 -- ── club_posts feed ──
@@ -81,5 +88,5 @@ create policy "posts readable with their club"
       club_posts.event_id is null
       or exists (select 1 from events e where e.id = club_posts.event_id)
     )
-    and not is_blocked_either_way(auth.uid(), club_posts.author_id)
+    and (auth.uid() is null or not is_blocked_either_way(auth.uid(), club_posts.author_id))
   );

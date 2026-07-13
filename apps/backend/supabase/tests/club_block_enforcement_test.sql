@@ -16,7 +16,7 @@
 
 begin;
 
-select plan(11);
+select plan(13);
 
 -- ── Fixture (RLS bypassed as the implicit test-runner role) ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -160,6 +160,33 @@ select is_empty(
   $$ select id from club_posts
      where id = 'dddddddd-dddd-dddd-dddd-ddddddddcb0a' $$,
   'B cannot SELECT A''s club_post (block is symmetric)'
+);
+
+-- ── Anon (signed-out) must still read a PUBLIC club ──
+-- The block guard calls is_blocked_either_way, whose anon EXECUTE was
+-- revoked (20261108_001). The `auth.uid() is null or …` short-circuit
+-- keeps anon from ever invoking it, so public rosters/posts stay
+-- readable signed-out. Without the guard these raise 42501.
+
+set local role anon;
+select set_config('request.jwt.claims', null, true);
+
+-- 12. Anon sees the full active roster of the public club (block never
+-- applies without a viewer identity).
+select results_eq(
+  $$ select count(*)::int from club_members
+     where club_id = 'cbcbcbcb-cbcb-cbcb-cbcb-cbcbcbcbcb01'
+       and status = 'active' $$,
+  $$ values (3) $$,
+  'anon sees the full active roster of a public club (no 42501)'
+);
+
+-- 13. Anon sees all 3 posts of the public club.
+select results_eq(
+  $$ select count(*)::int from club_posts
+     where club_id = 'cbcbcbcb-cbcb-cbcb-cbcb-cbcbcbcbcb01' $$,
+  $$ values (3) $$,
+  'anon sees all posts of a public club (no 42501)'
 );
 
 select * from finish();
