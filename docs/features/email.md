@@ -364,8 +364,19 @@ None of this sends in prod until an operator:
    with a generated secret, plus `supabase secrets set
    SEND_EMAIL_HOOK_SECRET=… SMTP_HOST=… SMTP_PORT=… SMTP_USERNAME=…
    SMTP_PASSWORD=… SMTP_FROM=…` on the functions side. Until then prod auth
-   mail falls back to GoTrue's built-in English templates (functional, just
-   unlocalized/unbranded).
+   mail falls back to GoTrue's built-in templates AND GoTrue's default shared
+   sender: mail arrives from `noreply@mail.app.supabase.io`, not
+   `noreply@threkir.com` — the `SMTP_FROM` above (with the hook, or as project
+   custom SMTP) is what changes the sender. Two more Dashboard settings gate the
+   auth-email flow independently of the hook: **Auth → Providers → Email →
+   Confirm email** (off on a fresh project *and* off in local `config.toml`, so
+   the signup confirmation path is prod-only — see web_app_auth.md § Email
+   confirmation redirect), and **Auth → URL Configuration → Site URL +
+   Redirect URLs**. The Site URL defaults to `http://localhost:3000`; because
+   the web/mobile signup calls pass no `emailRedirectTo`, the confirmation link
+   redirects to whatever the Site URL is — set it to `https://threkir.com` and
+   add `/auth/callback` + `/auth/reset` to the allow-list, or confirmations land
+   on localhost.
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
    spam-filed.
 4. (Before any **bulk/engagement** mail — the weekly digest AND the lifecycle
