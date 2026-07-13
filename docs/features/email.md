@@ -359,26 +359,45 @@ None of this sends in prod until an operator:
    neither set → `native_push` jobs finish done while leaving the rows pending,
    and the mobile bridge no-ops (compiles + runs without the config files). A
    configured-but-invalid credential fails the worker loudly at startup.
-2d. (For **auth emails**) enables the send-email hook on the hosted project —
-   Dashboard → Auth → Hooks pointed at the deployed `auth-email` function URL
-   with a generated secret, plus `supabase secrets set
-   SEND_EMAIL_HOOK_SECRET=… SMTP_HOST=… SMTP_PORT=… SMTP_USERNAME=…
-   SMTP_PASSWORD=… SMTP_FROM=…` on the functions side. Until then prod auth
-   mail falls back to GoTrue's built-in templates AND GoTrue's default shared
-   sender: mail arrives from `noreply@mail.app.supabase.io`, not
-   `noreply@threkir.com` — the `SMTP_FROM` above (with the hook, or as project
-   custom SMTP) is what changes the sender. Two more Dashboard settings gate the
-   auth-email flow independently of the hook: **Auth → Providers → Email →
-   Confirm email** (off on a fresh project *and* off in local `config.toml`, so
-   the signup confirmation path is prod-only — see web_app_auth.md § Email
-   confirmation redirect), and **Auth → URL Configuration → Site URL +
-   Redirect URLs**. The Site URL defaults to `http://localhost:3000`; because
-   the web/mobile signup calls pass no `emailRedirectTo`, the confirmation link
-   redirects to whatever the Site URL is — set it to `https://threkir.com` and
-   add `/auth/callback` + `/auth/reset` to the allow-list, or confirmations land
-   on localhost.
+2d. (For **auth emails**) prod auth mail has three independent knobs — the
+   **sender** (SMTP), the **templates** (the send-email hook), and the **URL
+   config**. Provider is **Resend, already wired**: the DKIM/SPF/DMARC for
+   `threkir.com` are Terraformed in `infra/dns` (the same identity the Go
+   worker's transactional mail already uses), so there is **no new provider or
+   DNS work** — reuse it.
+   - **Sender — essential; fixes the `noreply@mail.app.supabase.io` From.**
+     Set project custom SMTP → Resend (Dashboard → Auth → Emails → SMTP, or the
+     Management API `config/auth` `smtp_*` fields): host `smtp.resend.com`, port
+     `587`, **username the literal `resend`** (not the key), password = a
+     sending-scoped Resend API key (`re_…`, ideally a dedicated `supabase-auth`
+     key, not the worker's), sender email `noreply@threkir.com`, name `Threkir`.
+     Until this is set, all auth mail arrives from GoTrue's shared
+     `noreply@mail.app.supabase.io`. This alone gives a correct sender +
+     working (English, unbranded) emails.
+   - **Templates — optional, currently deferred → English built-ins.** Enable
+     the send-email hook (Dashboard → Auth → Hooks → Send Email) pointed at the
+     deployed `auth-email` function URL with a generated `v1,whsec_…` secret,
+     plus `supabase secrets set SEND_EMAIL_HOOK_SECRET=… SMTP_HOST=smtp.resend.com
+     SMTP_PORT=587 SMTP_USERNAME=resend SMTP_PASSWORD=<re_…>
+     SMTP_FROM='Threkir <noreply@threkir.com>'` on the function. **Deploy
+     `auth-email` to prod BEFORE enabling the hook** — an enabled hook pointed
+     at an absent function 404s every auth email. When the hook is off, GoTrue
+     uses its built-in English templates sent via the project custom SMTP above.
+     Tracked in followups.md.
+   - **URL config.** The Site URL defaults to `http://localhost:3000`. Web +
+     mobile signup and reset now pass an explicit redirect (`/auth/callback`,
+     the `com.threkir.app://login-callback` deep link, `/auth/reset`), but
+     GoTrue only honours a redirect that is on the allow-list and otherwise
+     falls back to the Site URL — so set Site URL to `https://threkir.com` and
+     add `/auth/callback`, `/auth/reset`, and `com.threkir.app://login-callback`
+     to **Auth → URL Configuration → Redirect URLs**, or confirmations land on
+     localhost. **Confirm email** (Auth → Providers → Email) is off on a fresh
+     project *and* in local `config.toml`, so the signup-confirmation path is
+     prod-only — see web_app_auth.md § Email confirmation redirect.
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
-   spam-filed.
+   spam-filed. **Already done for Resend** — the record set is Terraformed in
+   `infra/dns` (`email_auth_records`), so a DR rebuild restores deliverability;
+   auth mail (2d) reuses the same verified identity.
 4. (Before any **bulk/engagement** mail — the weekly digest AND the lifecycle
    drip) the RFC 8058 one-click unsubscribe endpoints (set
    `WEEKLY_DIGEST_UNSUB_SECRET` — the one shared secret keys both
