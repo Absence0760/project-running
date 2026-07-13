@@ -26,8 +26,18 @@ test.describe('/plans/[id] pause + resume', () => {
 		const admin = getAdminClient();
 		const planId = crypto.randomUUID();
 		const week0 = crypto.randomUUID();
+		let displacedActiveIds: string[] = [];
 		try {
 			// Clear any pre-existing active plan so the one-active index is free.
+			// Remember which plans we displaced so the `finally` can restore
+			// them — this user's seed is shared with sibling specs (e.g.
+			// list.spec.ts), which expect the seeded plan to stay active.
+			const { data: displaced } = await admin
+				.from('training_plans')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('status', 'active');
+			displacedActiveIds = (displaced ?? []).map((p) => p.id as string);
 			await admin
 				.from('training_plans')
 				.update({ status: 'completed' })
@@ -73,7 +83,16 @@ test.describe('/plans/[id] pause + resume', () => {
 			await dialog.getByRole('button', { name: 'Apply' }).click();
 			await expect.poll(status).toBe('active');
 		} finally {
+			// Delete our own plan first (frees the one-active slot), then
+			// restore the plans we displaced so the shared seed is left active
+			// for sibling specs.
 			await admin.from('training_plans').delete().eq('id', planId);
+			if (displacedActiveIds.length) {
+				await admin
+					.from('training_plans')
+					.update({ status: 'active' })
+					.in('id', displacedActiveIds);
+			}
 		}
 	});
 });
