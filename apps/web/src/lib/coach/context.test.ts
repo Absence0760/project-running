@@ -12,10 +12,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+	buildContext,
 	summarizeRecentLifts,
 	summarizeNutrition,
 	COACH_LIFTS_CAP,
 } from './context';
+import type { CoachProfileRow } from './context';
 
 const SRC = readFileSync(
 	resolve(import.meta.dirname ?? '.', 'context.ts'),
@@ -155,6 +157,66 @@ test('food_log query uses started_at, never the renamed logged_at column', () =>
 		/\.gte\(\s*'started_at'/,
 		'the food_log window filter must use started_at',
 	);
+});
+
+// --- buildContext end-to-end HR gate ----------------------------------
+
+// Minimal chainable Supabase stub: every filter/order returns `this`;
+// the terminal `.limit()` / `.maybeSingle()` resolve to `{ data }` keyed
+// by table. Unknown tables resolve to null so lanes self-empty.
+function fakeSupabase(tableData: Record<string, unknown>) {
+	return {
+		from(table: string) {
+			const result = { data: tableData[table] ?? null, error: null };
+			const q: Record<string, unknown> = {};
+			for (const m of ['select', 'eq', 'in', 'order', 'gte']) {
+				q[m] = () => q;
+			}
+			q.limit = () => Promise.resolve(result);
+			q.maybeSingle = () => Promise.resolve(result);
+			return q;
+		},
+	};
+}
+
+function runWithConsent(consentAt: string | null) {
+	const runRow = {
+		id: 'r1',
+		started_at: '2026-06-08T08:00:00.000Z',
+		distance_m: 10000,
+		duration_s: 3000,
+		metadata: { activity_type: 'run', avg_bpm: 152 },
+		route_id: null,
+	};
+	const profileRow: CoachProfileRow = {
+		display_name: 'Runner',
+		preferred_unit: 'km',
+		health_data_consent_at: consentAt,
+	};
+	return buildContext(
+		fakeSupabase({ runs: [runRow] }) as never,
+		'user-1',
+		null,
+		10,
+		profileRow,
+	);
+}
+
+test('buildContext strips per-run avg_bpm when health consent is null', async () => {
+	// End-to-end: an Art 9 heart-rate value on a recent run must NOT reach
+	// the Anthropic-bound context when the runner has never granted (or has
+	// revoked) health-data consent.
+	const ctx = await runWithConsent(null);
+	const runs = (ctx.data as { recent_runs: { metadata: unknown }[] }).recent_runs;
+	assert.equal(runs.length, 1);
+	assert.deepEqual(runs[0].metadata, { activity_type: 'run' });
+});
+
+test('buildContext keeps per-run avg_bpm when health consent is granted', async () => {
+	const ctx = await runWithConsent('2026-06-01T00:00:00.000Z');
+	const runs = (ctx.data as { recent_runs: { metadata: unknown }[] }).recent_runs;
+	assert.equal(runs.length, 1);
+	assert.deepEqual(runs[0].metadata, { activity_type: 'run', avg_bpm: 152 });
 });
 
 // --- summarizeRecentLifts ---------------------------------------------

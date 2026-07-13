@@ -1629,6 +1629,34 @@
   "@runDiscard": {
     "description": "Confirm action on the confirm-discard dialog"
   },
+  "runResumeDialogTitle": "Resume your run?",
+  "@runResumeDialogTitle": {
+    "description": "Title of the cold-start prompt when a process-killed in-progress run is recovered"
+  },
+  "runResumeDialogBody": "A run from an earlier session is still in progress. Resume recording where you left off, finish it now, or discard it.",
+  "@runResumeDialogBody": {
+    "description": "Body of the cold-start resume prompt explaining the Resume / Finish / Discard choice"
+  },
+  "runResumeAction": "Resume",
+  "@runResumeAction": {
+    "description": "Primary action on the resume prompt — re-hydrate the recorder and continue the same run"
+  },
+  "runResumeFinishAction": "Finish now",
+  "@runResumeFinishAction": {
+    "description": "Action on the resume prompt — finalize the recovered partial into a completed run without recording more"
+  },
+  "runResumedBanner": "Resumed your run.",
+  "@runResumedBanner": {
+    "description": "Banner shown after the user resumes a process-killed run"
+  },
+  "runResumeSavedBanner": "Saved your previous run.",
+  "@runResumeSavedBanner": {
+    "description": "Banner shown after the user finalizes a recovered partial from the resume prompt"
+  },
+  "runResumeDiscardedBanner": "Discarded your previous run.",
+  "@runResumeDiscardedBanner": {
+    "description": "Banner shown after the user discards a recovered partial from the resume prompt"
+  },
   "runStartWorkout": "Start workout",
   "@runStartWorkout": {
     "description": "Option in the workout-entry sheet to begin a structured workout"

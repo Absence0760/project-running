@@ -1206,6 +1206,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDiscard => 'Descartar';
 
   @override
+  String get runResumeDialogTitle => 'Retomar sua corrida?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Uma corrida de uma sessão anterior ainda está em andamento. Retome a gravação de onde parou, finalize-a agora ou descarte-a.';
+
+  @override
+  String get runResumeAction => 'Retomar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar agora';
+
+  @override
+  String get runResumedBanner => 'Corrida retomada.';
+
+  @override
+  String get runResumeSavedBanner => 'Corrida anterior salva.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Corrida anterior descartada.';
+
+  @override
   String get runStartWorkout => 'Iniciar treino';
 
   @override
@@ -12227,6 +12249,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDiscard => 'Descartar';
+
+  @override
+  String get runResumeDialogTitle => 'Retomar sua corrida?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Uma corrida de uma sessão anterior ainda está em andamento. Retome a gravação de onde parou, finalize-a agora ou descarte-a.';
+
+  @override
+  String get runResumeAction => 'Retomar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar agora';
+
+  @override
+  String get runResumedBanner => 'Corrida retomada.';
+
+  @override
+  String get runResumeSavedBanner => 'Corrida anterior salva.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Corrida anterior descartada.';
 
   @override
   String get runStartWorkout => 'Iniciar treino';

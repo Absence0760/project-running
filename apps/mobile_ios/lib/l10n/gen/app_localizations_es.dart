@@ -1205,6 +1205,28 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDiscard => 'Descartar';
 
   @override
+  String get runResumeDialogTitle => '¿Reanudar tu carrera?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Una carrera de una sesión anterior sigue en curso. Reanuda la grabación donde la dejaste, finalízala ahora o descártala.';
+
+  @override
+  String get runResumeAction => 'Reanudar';
+
+  @override
+  String get runResumeFinishAction => 'Finalizar ahora';
+
+  @override
+  String get runResumedBanner => 'Carrera reanudada.';
+
+  @override
+  String get runResumeSavedBanner => 'Carrera anterior guardada.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Carrera anterior descartada.';
+
+  @override
   String get runStartWorkout => 'Iniciar entrenamiento';
 
   @override

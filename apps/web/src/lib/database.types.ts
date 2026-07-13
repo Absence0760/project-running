@@ -4002,6 +4002,7 @@ export type Database = {
           subscription_at: string | null
           subscription_tier: string | null
           terms_accepted_at: string | null
+          tier_updated_event_ts: number | null
         }
         Insert: {
           age_confirmed_at?: string | null
@@ -4022,6 +4023,7 @@ export type Database = {
           subscription_at?: string | null
           subscription_tier?: string | null
           terms_accepted_at?: string | null
+          tier_updated_event_ts?: number | null
         }
         Update: {
           age_confirmed_at?: string | null
@@ -4042,6 +4044,7 @@ export type Database = {
           subscription_at?: string | null
           subscription_tier?: string | null
           terms_accepted_at?: string | null
+          tier_updated_event_ts?: number | null
         }
         Relationships: []
       }
@@ -5056,6 +5059,7 @@ export type Database = {
           subscription_at: string | null
           subscription_tier: string | null
           terms_accepted_at: string | null
+          tier_updated_event_ts: number | null
         }
         SetofOptions: {
           from: "*"

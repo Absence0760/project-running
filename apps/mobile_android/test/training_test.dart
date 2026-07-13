@@ -528,6 +528,61 @@ void main() {
       expect(plan.paces.easy > 0, isTrue);
     });
 
+    // DST parity guard. Mirrors web's `addDays` (setDate-based, calendar-safe).
+    // `startDate.add(Duration(days: n))` adds n×24h of absolute elapsed time,
+    // so on a device in a DST-observing timezone (e.g. America/New_York) the
+    // extra hour inserted at the Nov 2 fall-back rolls the calendar day back by
+    // one from week ~4 on — mobile-generated scheduled_dates then disagree with
+    // web's for the same inputs. The engine must step dates through the
+    // year/month/day constructor so every scheduled_date is calendar-correct
+    // regardless of the host timezone.
+    test('plan dates step by calendar days across a DST transition', () {
+      final start = DateTime(2025, 10, 20); // Mon; US fall-back is 2025-11-02
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceFull,
+        startDate: start,
+        daysPerWeek: 5,
+        recent5kSec: 22 * 60,
+        weeks: 16,
+      ));
+      // Week index 4 starts start + 28 calendar days = 2025-11-17 (NOT -16).
+      final wk4Start = plan.weeks[4].workouts.first.scheduledDate;
+      expect(toIsoDate(wk4Start), '2025-11-17');
+
+      // Every workout's date must equal the calendar-correct date for its
+      // (weekIndex, dayOffset) — computed via the DST-safe constructor.
+      for (final week in plan.weeks) {
+        for (var d = 0; d < week.workouts.length; d++) {
+          final expected =
+              DateTime(start.year, start.month, start.day + week.weekIndex * 7 + d);
+          expect(toIsoDate(week.workouts[d].scheduledDate), toIsoDate(expected),
+              reason: 'week ${week.weekIndex} day $d off calendar date');
+        }
+      }
+      // End date is start + totalWeeks*7 - 1 calendar days.
+      expect(toIsoDate(plan.endDate),
+          toIsoDate(DateTime(start.year, start.month, start.day + 16 * 7 - 1)));
+    });
+
+    test('walk-run plan dates step by calendar days across a DST transition',
+        () {
+      final start = DateTime(2025, 10, 20);
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: start,
+        daysPerWeek: 3,
+        beginnerWalkRun: true,
+      ));
+      for (final week in plan.weeks) {
+        for (var d = 0; d < week.workouts.length; d++) {
+          final expected =
+              DateTime(start.year, start.month, start.day + week.weekIndex * 7 + d);
+          expect(toIsoDate(week.workouts[d].scheduledDate), toIsoDate(expected),
+              reason: 'walk-run week ${week.weekIndex} day $d off calendar date');
+        }
+      }
+    });
+
     test(
         'every generated workout has a non-null kind across goals and days/week',
         () {

@@ -2195,6 +2195,48 @@ abstract class AppLocalizations {
   /// **'Discard'**
   String get runDiscard;
 
+  /// Title of the cold-start prompt when a process-killed in-progress run is recovered
+  ///
+  /// In en, this message translates to:
+  /// **'Resume your run?'**
+  String get runResumeDialogTitle;
+
+  /// Body of the cold-start resume prompt explaining the Resume / Finish / Discard choice
+  ///
+  /// In en, this message translates to:
+  /// **'A run from an earlier session is still in progress. Resume recording where you left off, finish it now, or discard it.'**
+  String get runResumeDialogBody;
+
+  /// Primary action on the resume prompt — re-hydrate the recorder and continue the same run
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get runResumeAction;
+
+  /// Action on the resume prompt — finalize the recovered partial into a completed run without recording more
+  ///
+  /// In en, this message translates to:
+  /// **'Finish now'**
+  String get runResumeFinishAction;
+
+  /// Banner shown after the user resumes a process-killed run
+  ///
+  /// In en, this message translates to:
+  /// **'Resumed your run.'**
+  String get runResumedBanner;
+
+  /// Banner shown after the user finalizes a recovered partial from the resume prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Saved your previous run.'**
+  String get runResumeSavedBanner;
+
+  /// Banner shown after the user discards a recovered partial from the resume prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Discarded your previous run.'**
+  String get runResumeDiscardedBanner;
+
   /// Option in the workout-entry sheet to begin a structured workout
   ///
   /// In en, this message translates to:

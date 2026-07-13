@@ -17,8 +17,8 @@ import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/sag
  * pins the raw-INSERT 23505 backstop. None of them exercise:
  *
  *   - A ZIP with MORE THAN ONE data row, so the run/walk/hike filter at
- *     strava-zip.ts:109 (a non-foot `Ride` row → `skipped`, never saved)
- *     is never taken.
+ *     strava-zip.ts:109 (a non-foot `Ride` row → `dropped`, never saved —
+ *     counted distinctly from a duplicate `skip`) is never taken.
  *   - A per-activity GPX member inside `activities/`, so the
  *     track-parse path (importOne → classifyStravaMember → parseRouteFile
  *     → saveRun({ track }) → the `runs` Storage upload at data.ts:827)
@@ -37,8 +37,9 @@ import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/sag
  *
  *   1. IMPORT a 3-row ZIP: a Run carrying a real `activities/<id>.gpx`
  *      track, a Walk (trackless, also a foot activity → imported), and a
- *      Ride (non-foot → SKIPPED by the run/walk/hike filter). Progress:
- *      "3 / 3 · 2 imported · 1 skipped". Backend: exactly the two foot
+ *      Ride (non-foot → DROPPED by the run/walk/hike filter, counted as
+ *      an unsupported type not a dupe). Progress:
+ *      "3 / 3 · 2 imported · 0 skipped · 1 dropped". Backend: exactly the two foot
  *      activities land as source='strava' rows with `strava:<id>`
  *      external ids + metadata.strava_id; the Ride's id is absent. The
  *      Run's row carries a `track_url` (the GPX threaded through to the
@@ -48,8 +49,8 @@ import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/sag
  *      title (from the CSV Activity Name).
  *   3. PARTIAL RE-IMPORT: a 4-row ZIP = the original three + one NEW Run.
  *      The two foot rows already present (matched on strava_id) skip, the
- *      Ride skips again, the new Run imports. Progress: "4 / 4 ·
- *      1 imported · 3 skipped". Backend: the user now has exactly THREE
+ *      Ride drops again, the new Run imports. Progress: "4 / 4 ·
+ *      1 imported · 2 skipped · 1 dropped". Backend: the user now has exactly THREE
  *      strava runs (2 + 1), and each original external_id still has a
  *      count of exactly 1 — the dedupe held per-id across a mixed ZIP.
  *
@@ -224,15 +225,19 @@ test.describe('Strava bulk-import — multi-activity, track-bearing, partial re-
 				});
 
 				// Progress: all 3 rows processed, 2 imported (run+walk),
-				// 1 skipped (the ride, filtered at strava-zip.ts:109).
+				// 0 skipped, 1 dropped (the ride — an unsupported activity
+				// type, dropped not imported, counted distinctly from a dupe).
 				const progress = stravaBulkCard.locator('.zip-status');
 				await expect(progress).toContainText('3 / 3', { timeout: 15_000 });
 				await expect(progress).toContainText('2 imported');
-				await expect(progress).toContainText('1 skipped');
-				// Toast: "Strava zip import: 2 new, 1 already present."
+				await expect(progress).toContainText('0 skipped');
+				await expect(progress).toContainText('1 dropped');
+				// Toast: "Strava zip import: 2 new, 0 already present. 1 not
+				// imported (unsupported activity type)."
 				await expect(page.locator('.toast-success')).toContainText(/2 new/i, {
 					timeout: 10_000
 				});
+				await expect(page.locator('.toast-success')).toContainText(/not imported/i);
 
 				// Backend: exactly the two foot activities landed; the ride did not.
 				const { data: rows } = await admin
@@ -315,12 +320,14 @@ test.describe('Strava bulk-import — multi-activity, track-bearing, partial re-
 					buffer: zip
 				});
 
-				// 4 rows processed: run + walk already present (skip), ride
-				// filtered (skip), only the new run imports.
+				// 4 rows processed: run + walk already present (2 skip), ride
+				// dropped as an unsupported type (1 dropped), only the new run
+				// imports.
 				const progress = stravaBulkCard.locator('.zip-status');
 				await expect(progress).toContainText('4 / 4', { timeout: 15_000 });
 				await expect(progress).toContainText('1 imported');
-				await expect(progress).toContainText('3 skipped');
+				await expect(progress).toContainText('2 skipped');
+				await expect(progress).toContainText('1 dropped');
 				await expect(page.locator('.toast-success')).toContainText(/1 new/i, {
 					timeout: 10_000
 				});

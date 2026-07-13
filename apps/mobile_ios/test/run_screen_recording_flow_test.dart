@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -93,6 +94,7 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
 /// `_stop()` → `runStore.save(run)` UI path end-to-end.
 class _CapturingRunStore extends LocalRunStore {
   final List<dynamic> captured = [];
+  int clearInProgressCalls = 0;
 
   @override
   Future<void> save(run) async {
@@ -100,7 +102,9 @@ class _CapturingRunStore extends LocalRunStore {
   }
 
   @override
-  Future<void> clearInProgress() async {}
+  Future<void> clearInProgress() async {
+    clearInProgressCalls++;
+  }
 }
 
 class _NoOpWakelock extends WakelockPlusPlatformInterface {
@@ -581,6 +585,156 @@ void main() {
       // Unmount the screen (disposes LiveRunMap so no new tile fetches are
       // scheduled), then pump to fire any orphaned zero-duration dio fetch
       // timers so the teardown `!timersPending` guard stays satisfied.
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
+  });
+
+  group('RunScreen — resume a process-killed partial', () {
+    cm.Run resumablePartial() {
+      final track = List.generate(
+        6,
+        (i) => cm.Waypoint(
+          lat: 47.37,
+          lng: 8.54 + i * 0.0002,
+          timestamp: DateTime(2026, 4, 10, 9, 0, i * 5),
+        ),
+      );
+      return cm.Run(
+        id: 'resume-me-1',
+        startedAt: DateTime(2026, 4, 10, 9, 0, 0),
+        duration: const Duration(hours: 40),
+        distanceMetres: 187000,
+        track: track,
+        source: cm.RunSource.app,
+        metadata: {
+          'activity_type': 'run',
+          'in_progress_saved_at':
+              DateTime(2026, 4, 10, 9, 40, 0).toIso8601String(),
+          'laps': [
+            {
+              'index': 1,
+              'start_offset_s': 0,
+              'distance_m': 6700.0,
+              'duration_s': 2400,
+            },
+          ],
+        },
+      );
+    }
+
+    Future<_CapturingRunStore> pumpResume(WidgetTester tester) async {
+      final runStore = _CapturingRunStore();
+      await runStore.init(overrideDirectory: runsDir);
+      final s = await makeStores();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+            initialResumablePartial: resumablePartial(),
+          ),
+        ),
+      );
+      // First pump mounts; second lets the post-frame callback open the dialog.
+      await tester.pump();
+      await tester.pump();
+      return runStore;
+    }
+
+    testWidgets('cold start prompts Resume / Finish / Discard', (tester) async {
+      await pumpResume(tester);
+      expect(find.text('Resume your run?'), findsOneWidget);
+      expect(find.text('Resume'), findsOneWidget);
+      expect(find.text('Finish now'), findsOneWidget);
+      expect(find.text('Discard'), findsOneWidget);
+    });
+
+    testWidgets('Discard clears the in-progress file and returns to idle',
+        (tester) async {
+      final runStore = await pumpResume(tester);
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      await tester.pump();
+      expect(runStore.clearInProgressCalls, greaterThanOrEqualTo(1),
+          reason: 'Discard must drop the in-progress recovery file');
+      expect(runStore.captured, isEmpty,
+          reason: 'Discard saves nothing');
+      // Back on the idle surface.
+      expect(find.text('START'), findsOneWidget);
+      expect(find.text('Resume your run?'), findsNothing);
+    });
+
+    testWidgets('Finish now finalizes the SAME run id without recording',
+        (tester) async {
+      final runStore = await pumpResume(tester);
+      await tester.tap(find.text('Finish now'));
+      await tester.pump();
+      await tester.pump();
+      expect(runStore.captured, hasLength(1),
+          reason: 'Finish saves the recovered partial exactly once');
+      final saved = runStore.captured.single;
+      expect(saved.id, 'resume-me-1',
+          reason: 'the finalized run keeps the partial id, not a new one');
+      expect(saved.metadata?['recovered_from_crash'], isTrue);
+      expect(runStore.clearInProgressCalls, greaterThanOrEqualTo(1));
+      // Never entered recording — still idle.
+      expect(find.text('START'), findsOneWidget);
+    });
+
+    testWidgets('Resume continues the SAME run — hold-Finish saves partial id',
+        (tester) async {
+      final runStore = await pumpResume(tester);
+      await tester.tap(find.text('Resume'));
+      // Drive the resume: geolocator prepare + setState recording + the
+      // resumed-banner overlay. Stay under the 10 s incremental-save timer.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // LiveRunMap tile-fetch noise on the recording mount
+
+      // The prompt is gone and recording is live (LiveRunMap mounted).
+      expect(find.text('Resume your run?'), findsNothing);
+      final map = tester.allWidgets
+          .where((w) => w.runtimeType.toString() == 'LiveRunMap')
+          .toList();
+      expect(map, isNotEmpty,
+          reason: 'Resume re-hydrates the recorder into the recording surface');
+
+      // Drain the 3 s resumed banner timer before finishing (still < 10 s).
+      await tester.pump(const Duration(seconds: 4));
+      tester.takeException();
+
+      // Feed a couple of post-resume fixes, then finish.
+      for (var i = 0; i < 3; i++) {
+        geolocator.emit(_pos(metresEast: 1000 + i * 12.0, secondsFromStart: i * 2));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+
+      await holdFinish(tester);
+      tester.takeException();
+
+      expect(runStore.captured, hasLength(1),
+          reason: 'finishing a resumed run saves ONE run, not a second record');
+      final saved = runStore.captured.single;
+      expect(saved.id, 'resume-me-1',
+          reason: 'the finished run is the SAME run that was resumed');
+      // Elapsed carries the pre-kill 40 h offset (continuity, not a fresh clock).
+      expect(saved.duration.inHours, greaterThanOrEqualTo(40));
+
       await tester.pumpWidget(const SizedBox());
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 50));

@@ -1211,6 +1211,28 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDiscard => 'Abandonner';
 
   @override
+  String get runResumeDialogTitle => 'Reprendre votre course ?';
+
+  @override
+  String get runResumeDialogBody =>
+      'Une course d\'une session précédente est toujours en cours. Reprenez l\'enregistrement là où vous vous êtes arrêté, terminez-la maintenant ou supprimez-la.';
+
+  @override
+  String get runResumeAction => 'Reprendre';
+
+  @override
+  String get runResumeFinishAction => 'Terminer maintenant';
+
+  @override
+  String get runResumedBanner => 'Course reprise.';
+
+  @override
+  String get runResumeSavedBanner => 'Course précédente enregistrée.';
+
+  @override
+  String get runResumeDiscardedBanner => 'Course précédente supprimée.';
+
+  @override
   String get runStartWorkout => 'Démarrer la séance';
 
   @override

@@ -14,6 +14,7 @@ Run _partial({
   required Duration duration,
   int waypoints = 0,
   bool indoor = false,
+  DateTime? savedAt,
 }) {
   final track = List.generate(
     waypoints,
@@ -23,6 +24,10 @@ Run _partial({
       timestamp: DateTime.utc(2026, 4, 1).add(Duration(seconds: i * 5)),
     ),
   );
+  final metadata = <String, dynamic>{
+    if (indoor) 'indoor_estimated': true,
+    if (savedAt != null) 'in_progress_saved_at': savedAt.toIso8601String(),
+  };
   return Run(
     id: 'partial-1',
     startedAt: DateTime.utc(2026, 4, 1),
@@ -30,7 +35,7 @@ Run _partial({
     distanceMetres: distanceMetres,
     track: track,
     source: RunSource.app,
-    metadata: indoor ? const {'indoor_estimated': true} : null,
+    metadata: metadata.isEmpty ? null : metadata,
   );
 }
 
@@ -137,6 +142,91 @@ void main() {
       );
       final r = evaluateInProgressPartial(partial);
       expect(r.outcome, InProgressOutcome.discarded);
+    });
+
+    group('resumable (process-kill continuation)', () {
+      final now = DateTime.utc(2026, 4, 3, 12);
+
+      test('recent qualifying GPS partial → resumable, no banner', () {
+        // Saved 6 h ago — a canyon dead-zone stretch. The runner reopens the
+        // app; the partial should be offered for resume, not finalized.
+        final partial = _partial(
+          distanceMetres: 187000,
+          duration: const Duration(hours: 40),
+          waypoints: 5,
+          savedAt: now.subtract(const Duration(hours: 6)),
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.resumable);
+        expect(r.resumablePartial, isNotNull);
+        expect(r.resumablePartial!.id, partial.id,
+            reason: 'the raw partial is handed back so resume keeps the id');
+        expect(r.recovered, isNull);
+        // Interactive prompt on the run screen, not a passive banner.
+        expect(r.bannerMessage, isNull);
+      });
+
+      test('recent qualifying indoor partial → resumable', () {
+        final partial = _partial(
+          distanceMetres: 0,
+          duration: const Duration(minutes: 20),
+          indoor: true,
+          savedAt: now.subtract(const Duration(minutes: 30)),
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.resumable);
+      });
+
+      test('stale qualifying partial (> 48 h) → recovered, not resumable', () {
+        final partial = _partial(
+          distanceMetres: 5000,
+          duration: const Duration(minutes: 40),
+          waypoints: 10,
+          savedAt: now.subtract(const Duration(hours: 72)),
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.recovered,
+            reason: 'a days-old abandoned partial still auto-finalizes');
+        expect(r.resumablePartial, isNull);
+        expect(r.bannerMessage, contains('Recovered'));
+      });
+
+      test('boundary: exactly at the window edge → resumable', () {
+        final partial = _partial(
+          distanceMetres: 5000,
+          duration: const Duration(minutes: 40),
+          waypoints: 10,
+          savedAt: now.subtract(kResumableWindow),
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.resumable);
+      });
+
+      test('recent but below content threshold → still discarded', () {
+        // Recency never rescues a sub-threshold partial — the content gate
+        // runs first.
+        final partial = _partial(
+          distanceMetres: 30,
+          duration: const Duration(seconds: 20),
+          waypoints: 5,
+          savedAt: now.subtract(const Duration(minutes: 1)),
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.discarded);
+      });
+
+      test('no in_progress_saved_at stamp → finalizes (recovered), never resumable',
+          () {
+        // Unknown-age partial: preserve the pre-fix behaviour rather than
+        // prompt a resume for a run whose age we can't establish.
+        final partial = _partial(
+          distanceMetres: 5000,
+          duration: const Duration(minutes: 40),
+          waypoints: 10,
+        );
+        final r = evaluateInProgressPartial(partial, now: now);
+        expect(r.outcome, InProgressOutcome.recovered);
+      });
     });
   });
 }

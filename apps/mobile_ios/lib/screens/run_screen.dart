@@ -87,6 +87,13 @@ class RunScreen extends StatefulWidget {
   /// `workout_adherence` to `runs.metadata`.
   final PlanWorkoutRow? initialWorkout;
 
+  /// An in-progress partial recovered at cold start whose process was killed
+  /// mid-run. When set, RunScreen prompts the user to Resume (re-hydrate the
+  /// recorder and continue the SAME run), Finish (finalize into a completed
+  /// run), or Discard it. Resume is the primary path — it's the fix for a
+  /// multi-day effort being split into two disjoint runs by a process kill.
+  final cm.Run? initialResumablePartial;
+
   const RunScreen({
     super.key,
     this.apiClient,
@@ -102,6 +109,7 @@ class RunScreen extends StatefulWidget {
     required this.treadmill,
     this.initialRoute,
     this.initialWorkout,
+    this.initialResumablePartial,
   });
 
   @override
@@ -109,6 +117,10 @@ class RunScreen extends StatefulWidget {
 }
 
 enum _ScreenState { idle, countdown, recording, paused, finished }
+
+/// The user's choice at the cold-start resume prompt for a process-killed
+/// partial: continue the same run, finalize it as-is, or drop it.
+enum _ResumeChoice { resume, finish, discard }
 
 class _RunScreenState extends State<RunScreen> {
   _ScreenState _state = _ScreenState.idle;
@@ -384,6 +396,16 @@ class _RunScreenState extends State<RunScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onPendingStartWorkout();
     });
+    // A process-killed run was recovered as resumable at cold start. Prompt
+    // once, after first frame (so `_l10n` + a Navigator context exist), to
+    // Resume / Finish / Discard it — resume the primary path.
+    final resumable = widget.initialResumablePartial;
+    if (resumable != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _promptResume(resumable);
+      });
+    }
   }
 
   /// Best-effort check for a previously-paired treadmill. The mode toggle
@@ -838,16 +860,14 @@ class _RunScreenState extends State<RunScreen> {
   /// Kick off all asynchronous setup that's needed before the run can start
   /// cleanly. Runs during the countdown so the user doesn't see a delay when
   /// it ends.
-  void _preload() {
-    _recorder = RunRecorder();
-    _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
-
-    // #14: wire the lock-screen notification's Pause / Resume / Stop
-    // buttons to the recorder. The actions route through the native
-    // RunNotificationBridge → MainActivity → method channel; here we map
-    // them onto the same handlers the on-screen controls use, so a11y
-    // announcements + UI state stay consistent. Android-only — on iOS the
-    // notification has no action buttons so these never fire.
+  /// #14: wire the lock-screen notification's Pause / Resume / Stop buttons to
+  /// the recorder. The actions route through the native RunNotificationBridge →
+  /// MainActivity → method channel; here we map them onto the same handlers the
+  /// on-screen controls use, so a11y announcements + UI state stay consistent.
+  /// Android-only — on iOS the notification has no action buttons so these
+  /// never fire. Shared by the fresh-start [_preload] and the [_resumeInProgress]
+  /// paths.
+  void _wireLockScreenControls() {
     _lockScreen.onPause = () {
       if (!mounted || _recorder == null || _manualPaused) return;
       _toggleManualPause();
@@ -860,6 +880,13 @@ class _RunScreenState extends State<RunScreen> {
       if (!mounted || _recorder == null) return;
       _stop();
     };
+  }
+
+  void _preload() {
+    _recorder = RunRecorder();
+    _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
+
+    _wireLockScreenControls();
 
     // Pedometer sensor stream. We subscribe now, but don't count steps
     // toward the run until _begin sets a baseline.
@@ -1054,6 +1081,31 @@ class _RunScreenState extends State<RunScreen> {
     _runId ??= _uuid.v4();
     _runStartedAtWall = DateTime.now();
 
+    // Reset the pedometer baseline so steps taken during the countdown
+    // don't count toward the run.
+    _startSteps = _latestPedometerSteps;
+    _steps = 0;
+    _cadence = 0;
+    _stepSamples.clear();
+
+    _attachRecordingSideEffects();
+
+    if (widget.preferences.audioCues) {
+      _ttsCue('announceStart', () => widget.audioCues.announceStart());
+    }
+
+    setState(() => _state = _ScreenState.recording);
+    _announceA11yState(_l10n.runA11yStarted);
+  }
+
+  /// Shared post-begin wiring for both a fresh [_begin] and a
+  /// [_resumeInProgress]: auto-live-share, the BLE HR + treadmill status
+  /// streams, the crash-save / GPS-health / permission watchdog timers, and the
+  /// live-race attach. The recorder is already recording and [_runId] /
+  /// [_runStartedAtWall] are set before this runs. Step-baseline handling stays
+  /// in each caller (a fresh run zeroes it; a resume continues from the
+  /// persisted total).
+  void _attachRecordingSideEffects() {
     // Auto-live-share (docs/features/safety.md): the device pref starts
     // the broadcast on every run start, so the overdue escalation has a
     // telemetry stream to watch and a partner has a link to follow. L4 —
@@ -1069,13 +1121,6 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('auto live share failed: $e');
       }));
     }
-
-    // Reset the pedometer baseline so steps taken during the countdown
-    // don't count toward the run.
-    _startSteps = _latestPedometerSteps;
-    _steps = 0;
-    _cadence = 0;
-    _stepSamples.clear();
 
     // Subscribe to the BLE chest strap's BPM stream if a strap has been
     // paired. `connectCached` runs at app start in main.dart; the stream
@@ -1209,13 +1254,6 @@ class _RunScreenState extends State<RunScreen> {
       (_) => _checkPermission(),
     );
 
-    if (widget.preferences.audioCues) {
-      _ttsCue('announceStart', () => widget.audioCues.announceStart());
-    }
-
-    setState(() => _state = _ScreenState.recording);
-    _announceA11yState(_l10n.runA11yStarted);
-
     // If a live race is running, attach this recorder so pings flow and
     // the finished run auto-submits to the leaderboard.
     final race = widget.raceController?.active;
@@ -1225,6 +1263,171 @@ class _RunScreenState extends State<RunScreen> {
         instance: race.instanceStart,
       );
     }
+  }
+
+  /// Prompt the user to Resume / Finish / Discard a process-killed partial
+  /// recovered at cold start. Resume is the primary (highlighted) action —
+  /// re-hydrating the recorder so a multi-day effort continues as ONE run
+  /// instead of being split into two disjoint records. The prompt is modal
+  /// (no barrier-dismiss) so the partial isn't silently left in limbo.
+  Future<void> _promptResume(cm.Run partial) async {
+    if (!mounted || _state != _ScreenState.idle) return;
+    final choice = await showDialog<_ResumeChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(_l10n.runResumeDialogTitle),
+        content: Text(_l10n.runResumeDialogBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _ResumeChoice.discard),
+            child: Text(_l10n.runDiscard),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _ResumeChoice.finish),
+            child: Text(_l10n.runResumeFinishAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, _ResumeChoice.resume),
+            child: Text(_l10n.runResumeAction),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case _ResumeChoice.resume:
+        await _resumeInProgress(partial);
+      case _ResumeChoice.finish:
+        await _finalizeResumedPartial(partial);
+      case _ResumeChoice.discard:
+        await widget.runStore.clearInProgress();
+        if (mounted) {
+          _showTopBanner(_l10n.runResumeDiscardedBanner,
+              duration: const Duration(seconds: 3));
+        }
+      case null:
+        break;
+    }
+  }
+
+  /// Re-hydrate the recorder from a persisted partial and CONTINUE the same
+  /// run — the append-only in-progress file keeps accumulating onto the same
+  /// run id, and the finished run carries the whole effort (track, laps,
+  /// elapsed) as one record.
+  Future<void> _resumeInProgress(cm.Run partial) async {
+    if (_startRequested || _state != _ScreenState.idle) return;
+    _startRequested = true;
+
+    _runId = partial.id;
+    _runStartedAtWall = partial.startedAt;
+    _activityType = ActivityType.fromName(
+        partial.metadata?[cm.MetadataKeys.activityType] as String? ??
+            _activityType.name);
+
+    final restoredLaps = lapsFromCanonicalJson(
+      (partial.metadata?[cm.MetadataKeys.laps] as List<dynamic>?) ??
+          const <dynamic>[],
+      startedAt: partial.startedAt,
+    );
+    final restoredSteps =
+        (partial.metadata?[cm.MetadataKeys.steps] as num?)?.toInt() ?? 0;
+
+    // Seed the mirror fields up front so an early crash-save (before the first
+    // post-resume snapshot lands) still writes the full accumulated
+    // track / stats, and the finish summary is continuous from the moment of
+    // resume.
+    _track = List<cm.Waypoint>.from(partial.track);
+    _distanceMetres = partial.distanceMetres;
+    _elapsed = partial.duration;
+    _lapCount = restoredLaps.length;
+    _steps = restoredSteps;
+    _everHadGpsFix = partial.track.isNotEmpty;
+
+    _recorder = RunRecorder();
+    _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
+    _wireLockScreenControls();
+    _subscribeToPedometer();
+    if (widget.preferences.keepScreenOn) {
+      WakelockPlus.enable();
+    }
+
+    final adv = widget.preferences.advancedGps;
+    try {
+      await _recorder!.resumeSession(
+        track: partial.track,
+        distanceMetres: partial.distanceMetres,
+        elapsed: partial.duration,
+        startedAt: partial.startedAt,
+        laps: restoredLaps,
+        route: _selectedRoute,
+        distanceFilterMetres: adv ? 2 : _activityType.gpsDistanceFilter,
+        minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
+        maxSpeedMps: _activityType.maxSpeedMps,
+        accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
+      );
+    } catch (e) {
+      _notifyGpsUnavailable(e);
+    }
+
+    if (!mounted || _recorder == null) {
+      _startRequested = false;
+      return;
+    }
+
+    // Continue pedometer from the restored total: bias the baseline so the
+    // handler's (event.steps - _startSteps) resumes at restoredSteps rather
+    // than restarting at 0. A zero latest reading falls back to re-baselining
+    // on the first event.
+    _startSteps = _latestPedometerSteps > restoredSteps
+        ? _latestPedometerSteps - restoredSteps
+        : 0;
+
+    _attachRecordingSideEffects();
+
+    setState(() => _state = _ScreenState.recording);
+    _announceA11yState(_l10n.runA11yStarted);
+    _showTopBanner(_l10n.runResumedBanner,
+        duration: const Duration(seconds: 3));
+    _startRequested = false;
+  }
+
+  /// Finalize a resumed partial into a completed run without continuing to
+  /// record (the "Finish" choice). Mirrors the pre-existing crash-recovery
+  /// finalize: stamp `recovered_from_crash`, save locally, and clear the
+  /// in-progress file — the SyncService pushes it to the cloud on its next
+  /// trigger. Stays on the idle surface with a confirmation banner. Save is
+  /// guarded: if it throws, the in-progress file is left in place so the next
+  /// launch can retry.
+  Future<void> _finalizeResumedPartial(cm.Run partial) async {
+    final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
+    metadata[cm.MetadataKeys.recoveredFromCrash] = true;
+    metadata.remove(cm.MetadataKeys.inProgressSavedAt);
+    final run = cm.Run(
+      id: partial.id,
+      startedAt: partial.startedAt,
+      duration: partial.duration,
+      distanceMetres: partial.distanceMetres,
+      track: partial.track,
+      routeId: partial.routeId,
+      source: partial.source,
+      externalId: partial.externalId,
+      metadata: metadata,
+      createdAt: partial.createdAt,
+    );
+    bool saved = false;
+    try {
+      await widget.runStore.save(run);
+      saved = true;
+    } catch (e) {
+      debugPrint('Finalize resumed partial save failed: $e');
+    }
+    if (saved) await widget.runStore.clearInProgress();
+    if (!mounted) return;
+    _showTopBanner(
+      saved ? _l10n.runResumeSavedBanner : _l10n.runSaveFailedRelaunch,
+      duration: const Duration(seconds: 4),
+    );
   }
 
   /// Manual heart-rate reconnect, driven by the "Reconnect" affordance on
@@ -1679,6 +1882,14 @@ class _RunScreenState extends State<RunScreen> {
       if (indoorEstimate) cm.MetadataKeys.distanceSource: 'pedometer',
       if (_steps > 0) cm.MetadataKeys.steps: _steps,
     };
+    // Persist lap / aid-station marks so a process-kill mid-run can restore
+    // them on resume (numbering + cumulative totals continue unbroken). The
+    // recorder owns the canonical lap state; mirror it in the same shape
+    // `stop()` writes so the loader reads one format.
+    final recorderLaps = _recorder?.laps ?? const <LapSplit>[];
+    if (recorderLaps.isNotEmpty) {
+      metadata[cm.MetadataKeys.laps] = lapsToCanonicalJson(recorderLaps);
+    }
     // Workout review trail — written here so a crash mid-workout
     // surfaces the planned-vs-actual table on the recovered run.
     // Empty map when no runner is active or no plan_workout_id is
