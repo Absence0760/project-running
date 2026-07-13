@@ -506,6 +506,17 @@ create table segment_efforts (
 
 Anyone who can read the parent route can create a segment (Strava-style community contribution); `author_id` is enforced as `auth.uid()`. Effort visibility = segment AND run readability so private runs don't surface on a public segment's leaderboard. **Auto-effort generation is client-side**: there's no trigger because `pg_net` isn't wired and downloading from Postgres is gross. The browser walks the run track via `lib/segments.ts#computeEffortFromTrack` (haversine cumulative distance + timestamp interpolation) on the run-detail page, then INSERTs new efforts via the regular RLS-gated path. The unique constraint makes this idempotent.
 
+#### `global_segments` / `global_segment_efforts`
+
+Free-standing global/famous-segment catalogue (decisions §231, migration `20270411_001`). Unlike v1 `segments`, a `global_segments` row carries its **own** polyline (`waypoints jsonb`, same `[{lat,lng,ele?}]` shape as `routes.waypoints`) with no `route_id` dependency — so a run can match it without anyone having re-created the road as an in-app route first (the imported-run, `route_id`-null case). `global_segments` is world-readable for `is_active = true` rows; only the `app_admins` allow-list (`private.is_admin`, migration `20270105_001`) may insert / edit / pull, and `is_active` is a soft-delete so pulling a bad entry doesn't cascade away athletes' efforts. `global_segment_efforts` (`unique(global_segment_id, run_id)`) mirrors `segment_efforts`: run-owner-only insert, base-table SELECT gated on `segment active AND private.is_run_visible_to(run_id, caller)` so a private run never leaks onto a catalogue leaderboard.
+
+Two RPCs back the read surfaces:
+
+- `global_segment_leaderboard(p_segment_id, p_gender, p_age_band, p_limit, p_club_id)` — SECURITY DEFINER, block-guarded (`is_blocked_either_way`), the catalogue twin of `segment_leaderboard_tiered` minus the route-visibility branch. Requires an authenticated caller (raises `42501` in-body; granted to `anon` too only so the call enters the body rather than SEGV-ing on a missing EXECUTE). Demographic columns are disclosed only for the caller's own row.
+- `global_segment_effort_ranks(p_run_id)` — SECURITY INVOKER, the catalogue twin of `segment_effort_ranks`; `rank = 1 +` strictly-faster visible efforts on the same segment, in one round-trip for the run-detail chips.
+
+Matching stays narrow — end-to-end against curated geometry via `computeGlobalSegmentEffort` (reusing `computeEffortFromTrack`); arbitrary-geometry HMM/Hausdorff matching is deferred. pgTAP `global_segments_test.sql`.
+
 ---
 
 #### `reports`
