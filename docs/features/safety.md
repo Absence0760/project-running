@@ -202,4 +202,59 @@ clipping; the email only carries times + the link.
 - Escalation applies only to live-broadcast runs. A runner who records
   without any live share gets no safety net — the pings ARE the signal. The
   settings copy says this; auto-live-share existing is what makes it a
-  reasonable contract.
+  reasonable contract. **Softened 2026-07-12 (decisions §231):** a new
+  runner who never turned on `auto_live_share` and never shared a link
+  used to get *silent* nothing — no prompt that they were recording
+  unprotected. The solo-run safety nudge (below) surfaces that gap without
+  turning the escalation into a duration-based net.
+
+## Solo-run safety nudge (after-dark, no live share)
+
+> **STATUS: shipped (2026-07-12).** Built against the `reviews/persona-runner-woman.md`
+> HIGH finding ("off-route / no-live-share solo runs have no safety net at
+> all — the settings copy doesn't make the gap explicit enough"). Decisions §231.
+
+The escalation net above only watches *live-broadcast* runs. The persona's
+stated habit is to share a live link for every solo evening run — but a
+runner who hasn't enabled `auto_live_share` (default off) and doesn't tap
+"Share live link" gets no net and, worse, no signal that they're
+unprotected. This closes that gap with a **one-time, throttled, dismissible
+contextual nudge** at run start — no start-flow friction, no new blocking
+step.
+
+- **Trigger (pure, twinned).** `shouldNudgeSoloSafety` in
+  `apps/web/src/lib/safety/safety_nudge.ts` ↔ `apps/mobile_android/lib/safety_nudge.dart`
+  (TS↔Dart parity pair, 14 mirror tests each) returns true only when the
+  run is genuinely unprotected AND after dark AND not throttled:
+  `autoLiveShareOn` off, `isBroadcast` false (no manual share before GO),
+  `nudgeDismissed` false, and `isNightWindow(nowLocalMinutes)` true. Night
+  is a **fixed 20:00–06:00 local window** (`isNightWindow`), deliberately
+  *not* astronomical sunrise/sunset — no new astronomy dependency,
+  deterministic, and erring toward nudging slightly early in summer is
+  harmless where silently missing a dark run is not. Every guard is
+  fail-closed (any suppressor wins), so a covered runner is never prompted.
+- **Throttle.** `nudgeThrottled(dismissedAtMs, nowMs)` suppresses the nudge
+  for `safetyNudgeThrottleMs` (30 days) after it's surfaced. The device
+  pref `safety_nudge_dismissed_at` (D scope, ISO-8601, [settings.md](../backend/settings.md))
+  is stamped the moment the banner shows — the banner is transient and
+  dismissible, so "surfaced once" is the throttle anchor. A failed
+  stamp-write just risks re-surfacing next run (the safe direction).
+- **Surface (mobile-only, L4).** `run_screen._maybeShowSafetyNudge()` runs
+  inside `_attachRecordingSideEffects` right after the auto-live-share
+  block — the complement of that path. It gathers the inputs, and on a
+  positive decision shows a top banner ("Running solo after dark? Share a
+  live link so someone can follow along.") whose action shares the current
+  run's live link (`_shareLiveLink`, one-off — it does NOT flip the
+  public-by-default `auto_live_share` pref). The whole method is wrapped in
+  its own try/catch + `debugPrint`: a failure computing daylight or reading
+  prefs must never touch the recording (L0–L1). Recording is mobile-only,
+  so there is no web surface — the decision helper is the twinned canonical
+  logic (decisions §24), the banner is the platform-additive surface.
+- **Sign-in.** Gated on a settings service being available (so the throttle
+  can persist) — without one the nudge would nag every run, which is the
+  friction the persona explicitly doesn't want. Fail-closed: no service →
+  no nudge.
+- **Deferred:** an off-route → auto-notify-contact tie-in stays out of
+  scope (no off-route-detection hook exists yet; named in the persona
+  finding's Medium bucket). The nudge is the low-friction first step; a
+  future off-route signal could reuse the same banner path.
