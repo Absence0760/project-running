@@ -128,6 +128,21 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Supabase auth deep link (signup confirmation / magic link).
+                 GoTrue redirects the emailed verify link here after
+                 verifying; supabase_flutter's app_links listener catches
+                 the incoming URI and completes the PKCE session in-app.
+                 Scheme is deliberately distinct from the flutter_web_auth_2
+                 `threkir://` OAuth scheme above. Must match
+                 `ApiClient.kAuthDeepLinkRedirect`, the iOS Info.plist
+                 CFBundleURLTypes entry, AND the Auth -> URL Configuration
+                 -> Redirect URLs allow-list. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.threkir.app" android:host="login-callback" />
+            </intent-filter>
             <!-- Health Connect privacy-policy rationale entry-point.
                  Android invokes this intent when the user taps "Privacy
                  policy" inside the Health Connect permission sheet.

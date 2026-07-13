@@ -75,7 +75,18 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     try {
-      await widget.apiClient.sendPasswordResetEmail(email: email);
+      var webBase =
+          (dotenv.isInitialized ? dotenv.maybeGet('WEB_BASE_URL') : null)
+                  ?.trim() ??
+              '';
+      if (webBase.isEmpty) webBase = 'https://threkir.com';
+      if (webBase.endsWith('/')) {
+        webBase = webBase.substring(0, webBase.length - 1);
+      }
+      await widget.apiClient.sendPasswordResetEmail(
+        email: email,
+        redirectTo: '$webBase/auth/reset',
+      );
       if (!mounted) return;
       // Show the privacy-preserving copy via the canonical top-banner
       // primitive (see docs/architecture/conventions.md § "Mobile in-app
