@@ -2900,3 +2900,31 @@ VALUES
   ('f0000006-0000-0000-0000-000000000006', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
   ('f0000006-0000-0000-0000-000000000006', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
   ('f0000007-0000-0000-0000-000000000007', 'b2c3d4e5-f6a7-8901-bcde-f23456789012');
+
+-- ─────────────────── Global / famous-segment catalogue ───────────────────
+-- Free-standing catalogue geometries (migration 20270411_001). NOT tied to
+-- any owner's route — a handful of world-recognisable segments so the
+-- /segments browse + detail surface isn't empty on a fresh stack. Seeded
+-- with no `created_by` (a curator/service_role insert). Efforts accrue
+-- automatically when a matching run is viewed (end-to-end match against
+-- these geometries — see docs/features/segments.md). Curators add more via
+-- Supabase Studio / service_role; there is no public write path.
+INSERT INTO global_segments (name, description, waypoints, distance_m, elevation_m, surface, region, country_code) VALUES
+  ('Central Park — Harlem Hill', 'The classic north-end climb of the Central Park loop, run counter-clockwise.',
+   '[{"lat":40.7963,"lng":-73.9582,"ele":40},{"lat":40.7975,"lng":-73.9588,"ele":44},{"lat":40.7988,"lng":-73.9575,"ele":52},{"lat":40.7994,"lng":-73.9555,"ele":58},{"lat":40.7986,"lng":-73.9535,"ele":49},{"lat":40.7972,"lng":-73.954,"ele":42}]',
+   857, 18, 'road', 'Central Park, New York', 'US'),
+  ('Regent''s Park — Outer Circle', 'One full lap of the Outer Circle carriageway, a London club-run staple.',
+   '[{"lat":51.5265,"lng":-0.156,"ele":30},{"lat":51.53,"lng":-0.152,"ele":31},{"lat":51.531,"lng":-0.147,"ele":32},{"lat":51.53,"lng":-0.1435,"ele":31},{"lat":51.527,"lng":-0.145,"ele":30},{"lat":51.525,"lng":-0.15,"ele":29},{"lat":51.5252,"lng":-0.1548,"ele":30}]',
+   2201, 3, 'road', 'Regent''s Park, London', 'GB'),
+  ('Golden Gate Bridge Span', 'South tower to north tower across the Golden Gate Bridge east walkway.',
+   '[{"lat":37.8078,"lng":-122.4753,"ele":67},{"lat":37.8155,"lng":-122.4771,"ele":75},{"lat":37.8235,"lng":-122.4785,"ele":80},{"lat":37.8302,"lng":-122.4796,"ele":78}]',
+   2520, 13, 'road', 'San Francisco, US', 'US'),
+  ('Champs-Élysées Sprint', 'Arc de Triomphe down to Place de la Concorde — the Bastille Day straight.',
+   '[{"lat":48.8738,"lng":2.295,"ele":45},{"lat":48.871,"lng":2.301,"ele":42},{"lat":48.869,"lng":2.308,"ele":40},{"lat":48.8672,"lng":2.316,"ele":38},{"lat":48.8656,"lng":2.3212,"ele":36}]',
+   2135, 0, 'road', 'Paris, FR', 'FR'),
+  ('Bondi to Bronte Coastal', 'The cliff-top coastal path from Bondi Beach south to Bronte.',
+   '[{"lat":-33.8908,"lng":151.2773,"ele":8},{"lat":-33.8945,"lng":151.2745,"ele":18},{"lat":-33.8975,"lng":151.272,"ele":24},{"lat":-33.901,"lng":151.27,"ele":20},{"lat":-33.9036,"lng":151.268,"ele":12}]',
+   1665, 16, 'trail', 'Sydney, AU', 'AU'),
+  ('Tiergarten — Straße des 17. Juni', 'Brandenburg Gate west along the marathon finishing straight through the Tiergarten.',
+   '[{"lat":52.5163,"lng":13.3777,"ele":38},{"lat":52.5145,"lng":13.369,"ele":37},{"lat":52.514,"lng":13.36,"ele":37},{"lat":52.5138,"lng":13.351,"ele":36},{"lat":52.5137,"lng":13.345,"ele":36}]',
+   2249, 0, 'road', 'Berlin, DE', 'DE');
