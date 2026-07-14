@@ -7553,8 +7553,8 @@ abstract class AppLocalizations {
   /// Toast when adopting a club template fails
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t adopt that template: {error}'**
-  String planNewTemplateCloneFailed(String error);
+  /// **'Couldn\'t adopt that template.'**
+  String get planNewTemplateCloneFailed;
 
   /// Plan-new club-template picker
   ///
@@ -7781,8 +7781,8 @@ abstract class AppLocalizations {
   /// Toast when creating from a starter plan fails
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t create that plan: {error}'**
-  String planNewStarterCreateFailed(String error);
+  /// **'Couldn\'t create that plan.'**
+  String get planNewStarterCreateFailed;
 
   /// Title of the confirm dialog shown before a new plan retires the current active one
   ///
@@ -8759,14 +8759,14 @@ abstract class AppLocalizations {
   /// Error starting a new conversation
   ///
   /// In en, this message translates to:
-  /// **'Could not start a new conversation: {error}'**
-  String coachNewConversationFailed(String error);
+  /// **'Could not start a new conversation.'**
+  String get coachNewConversationFailed;
 
   /// Error opening an archive
   ///
   /// In en, this message translates to:
-  /// **'Could not open archive: {error}'**
-  String coachOpenArchiveFailed(String error);
+  /// **'Could not open archive.'**
+  String get coachOpenArchiveFailed;
 
   /// Banner shown when deleting a coach archive fails; the swiped row snaps back
   ///

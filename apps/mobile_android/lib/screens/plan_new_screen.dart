@@ -212,9 +212,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         ),
       );
     } catch (e) {
+      debugPrint('Template clone failed: $e');
       if (mounted) {
         setState(() => _cloning = false);
-        showTopBanner(context, l10n.planNewTemplateCloneFailed(e.toString()));
+        showTopBanner(context, l10n.planNewTemplateCloneFailed);
       }
     }
   }
@@ -267,9 +268,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         ),
       );
     } catch (e) {
+      debugPrint('Starter plan create failed: $e');
       if (mounted) {
         setState(() => _creatingStarter = false);
-        showTopBanner(context, l10n.planNewStarterCreateFailed(e.toString()));
+        showTopBanner(context, l10n.planNewStarterCreateFailed);
       }
     }
   }

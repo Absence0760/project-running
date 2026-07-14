@@ -4528,9 +4528,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get planNewTemplateCloning => 'Adoptando…';
 
   @override
-  String planNewTemplateCloneFailed(String error) {
-    return 'No se pudo adoptar esa plantilla: $error';
-  }
+  String get planNewTemplateCloneFailed => 'No se pudo adoptar esa plantilla.';
 
   @override
   String get planNewTemplatePickerTitle => 'Elige una plantilla';
@@ -4668,9 +4666,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get planNewStarterPickerCancel => 'Cancelar';
 
   @override
-  String planNewStarterCreateFailed(String error) {
-    return 'No se pudo crear ese plan: $error';
-  }
+  String get planNewStarterCreateFailed => 'No se pudo crear ese plan.';
 
   @override
   String get planNewReplaceActiveTitle => '¿Reemplazar tu plan activo?';
@@ -5282,14 +5278,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get coachStreamFailed => 'error de transmisión';
 
   @override
-  String coachNewConversationFailed(String error) {
-    return 'No se pudo iniciar una nueva conversación: $error';
-  }
+  String get coachNewConversationFailed =>
+      'No se pudo iniciar una nueva conversación.';
 
   @override
-  String coachOpenArchiveFailed(String error) {
-    return 'No se pudo abrir el archivo: $error';
-  }
+  String get coachOpenArchiveFailed => 'No se pudo abrir el archivo.';
 
   @override
   String coachArchiveDeleteFailed(String error) {

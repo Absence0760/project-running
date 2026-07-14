@@ -6142,14 +6142,9 @@
   "@planNewTemplateCloning": {
     "description": "Plan-new club-template picker"
   },
-  "planNewTemplateCloneFailed": "Couldn't adopt that template: {error}",
+  "planNewTemplateCloneFailed": "Couldn't adopt that template.",
   "@planNewTemplateCloneFailed": {
-    "description": "Toast when adopting a club template fails",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Toast when adopting a club template fails"
   },
   "planNewTemplatePickerTitle": "Choose a template",
   "@planNewTemplatePickerTitle": {
@@ -6339,14 +6334,9 @@
   "@planNewStarterPickerCancel": {
     "description": "Plan-new built-in starter-plan picker"
   },
-  "planNewStarterCreateFailed": "Couldn't create that plan: {error}",
+  "planNewStarterCreateFailed": "Couldn't create that plan.",
   "@planNewStarterCreateFailed": {
-    "description": "Toast when creating from a starter plan fails",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Toast when creating from a starter plan fails"
   },
   "planNewReplaceActiveTitle": "Replace your active plan?",
   "@planNewReplaceActiveTitle": {
@@ -7105,23 +7095,13 @@
   "@coachStreamFailed": {
     "description": "Fallback error message from the SSE error event"
   },
-  "coachNewConversationFailed": "Could not start a new conversation: {error}",
+  "coachNewConversationFailed": "Could not start a new conversation.",
   "@coachNewConversationFailed": {
-    "description": "Error starting a new conversation",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Error starting a new conversation"
   },
-  "coachOpenArchiveFailed": "Could not open archive: {error}",
+  "coachOpenArchiveFailed": "Could not open archive.",
   "@coachOpenArchiveFailed": {
-    "description": "Error opening an archive",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Error opening an archive"
   },
   "coachArchiveDeleteFailed": "Couldn't delete archive: {error}",
   "@coachArchiveDeleteFailed": {
