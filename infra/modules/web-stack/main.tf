@@ -119,6 +119,21 @@ locals {
     var.graphhopper_url != "" ? { GRAPHHOPPER_URL = var.graphhopper_url } : {},
     local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if k == "GRAPHHOPPER_API_KEY" || k == "GRAPH_CYCLE_API_KEY" } : {},
   )
+
+  # osrm-proxy Lambda env. OSRM_URL is a non-secret internal engine URL passed
+  # as a plain Terraform var (same posture as GRAPHHOPPER_URL — issue #198: the
+  # browser must never see it); an empty string is omitted so the handler sees
+  # the env unset and answers 501 (the route builder degrades to straight-line
+  # segments). The Supabase pair backs the auth gate's auth.getUser check —
+  # public client values, not secrets; absent → the handler fails the gate
+  # closed (500) rather than serving anonymously.
+  osrm_proxy_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+    },
+    var.osrm_url != "" ? { OSRM_URL = var.osrm_url } : {},
+  )
 }
 
 data "aws_caller_identity" "current" {}
@@ -147,6 +162,7 @@ locals {
   effective_share_badge_zip_path    = var.share_badge_lambda_zip_path != null ? var.share_badge_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_share_entity_zip_path   = var.share_entity_lambda_zip_path != null ? var.share_entity_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_generate_route_zip_path = var.generate_route_lambda_zip_path != null ? var.generate_route_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_osrm_proxy_zip_path     = var.osrm_proxy_lambda_zip_path != null ? var.osrm_proxy_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
 # ──────────────────────────── KMS key for sops ────────────────────────────
@@ -1216,6 +1232,114 @@ resource "aws_lambda_permission" "cloudfront_invoke_generate_route" {
   }
 }
 
+# ─── osrm-proxy Lambda (route-builder waypoint snapping/routing) ───
+#
+# GET-only JSON proxy for /api/routes/osrm/* — the route builder's manual
+# waypoint snapping (`/nearest/v1/...`) and per-segment routing
+# (`/route/v1/...`) against the self-hosted OSRM engine. Before this hop
+# the browser fetched the OSRM host directly over a PUBLIC_ env, shipping
+# the user's pin coordinates (routinely their home) with no server
+# boundary (issue #198). OSRM_URL is a server-only, non-secret engine URL
+# passed as a Terraform var, same treatment as GRAPHHOPPER_URL; the
+# handler validates + rebuilds every upstream URL (no open relay) and
+# requires a signed-in Supabase user. When the URL is unset the endpoint
+# returns 501 and the builder degrades to straight-line segments. See
+# apps/web/lambda/osrm-proxy/ for the bundle shape + lifecycle.
+
+resource "aws_cloudwatch_log_group" "lambda_osrm_proxy" {
+  name              = "/aws/lambda/${local.resource_prefix}-osrm-proxy"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "osrm_proxy" {
+  function_name = "${local.resource_prefix}-osrm-proxy"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the other Lambdas; the esbuild target in
+  # apps/web/lambda/osrm-proxy/build.mjs is pinned to node24 to match.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 256 MB — one auth round trip + one fetch() to OSRM per invocation;
+  # network-bound, no rendering.
+  memory_size                    = 256
+  timeout                        = 15
+  reserved_concurrent_executions = var.osrm_proxy_reserved_concurrency
+
+  filename         = local.effective_osrm_proxy_zip_path
+  source_code_hash = filebase64sha256(local.effective_osrm_proxy_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.osrm_proxy_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # Same rationale as the other Lambdas — CI updates code on every web@*
+  # tag; Terraform owns infra-shape (env, role, etc.).
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_osrm_proxy]
+}
+
+resource "aws_lambda_alias" "osrm_proxy_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.osrm_proxy.function_name
+  function_version = aws_lambda_function.osrm_proxy.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "osrm_proxy" {
+  function_name      = aws_lambda_function.osrm_proxy.function_name
+  qualifier          = aws_lambda_alias.osrm_proxy_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered — each response is one small OSRM JSON document, no SSE.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["GET"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_osrm_proxy" {
+  name                              = "${local.resource_prefix}-osrm-proxy-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_osrm_proxy" {
+  statement_id           = "AllowCloudFrontInvokeOsrmProxy"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.osrm_proxy.function_name
+  qualifier              = aws_lambda_alias.osrm_proxy_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ──────────────────────────── CloudFront ────────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -1603,6 +1727,23 @@ resource "aws_cloudfront_origin_request_policy" "generate_route" {
   }
 }
 
+# Origin request policy for the osrm-proxy Lambda. Same viewer-JWT slot as
+# generate-route (`x-supabase-authorization` — the OAC owns `Authorization`),
+# but the OSRM calls are GETs whose meaning rides the query string
+# (radiuses / overview / geometries), so query strings are forwarded. The
+# handler allowlists + rebuilds them; nothing else is passed through.
+resource "aws_cloudfront_origin_request_policy" "osrm_proxy" {
+  name = "${local.resource_prefix}-osrm-proxy-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "all" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["accept", "x-supabase-authorization"]
+    }
+  }
+}
+
 # Viewer-request function: 301 www.* -> apex (SEO duplicate-content
 # consolidation). Gated on redirect_www_to_apex so only envs that
 # serve a www alias (prod) create + associate it; preview has no www
@@ -1737,6 +1878,19 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
+  origin {
+    origin_id                = "lambda-osrm-proxy"
+    domain_name              = replace(aws_lambda_function_url.osrm_proxy.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_osrm_proxy.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     target_origin_id           = "s3-site"
     viewer_protocol_policy     = "redirect-to-https"
@@ -1789,6 +1943,30 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.generate_route.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  # osrm-proxy Lambda: route-builder waypoint snapping/routing for
+  # GET /api/routes/osrm/*. No caching (routing responses are per-user,
+  # per-coordinate); the dedicated origin-request policy forwards the
+  # query string the OSRM GETs carry.
+  ordered_cache_behavior {
+    path_pattern               = "/api/routes/osrm*"
+    target_origin_id           = "lambda-osrm-proxy"
+    viewer_protocol_policy     = "https-only"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
+    cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.osrm_proxy.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
     dynamic "function_association" {

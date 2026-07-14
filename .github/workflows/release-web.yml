@@ -221,6 +221,20 @@ jobs:
         working-directory: apps/web
         run: node lambda/share-entity/build.mjs
 
+      - name: Bundle generate-route Lambda
+        # Server-side loop generation for POST /api/routes/generate. Pure
+        # esbuild bundle, no build/index.html dependency. See
+        # apps/web/lambda/generate-route/README.md.
+        working-directory: apps/web
+        run: node lambda/generate-route/build.mjs
+
+      - name: Bundle osrm-proxy Lambda
+        # Server-side OSRM proxy for the route builder's waypoint
+        # snapping/routing (GET /api/routes/osrm/*, issue #198). Pure esbuild
+        # bundle. See apps/web/lambda/osrm-proxy/README.md.
+        working-directory: apps/web
+        run: node lambda/osrm-proxy/build.mjs
+
       # ──────────────────── AWS auth via OIDC ────────────────────
 
       - name: Pick deploy role ARN
@@ -266,6 +280,8 @@ jobs:
           echo "share_recap_lambda=threkir-web-${ENV}-share-recap" >> "$GITHUB_OUTPUT"
           echo "share_badge_lambda=threkir-web-${ENV}-share-badge" >> "$GITHUB_OUTPUT"
           echo "share_entity_lambda=threkir-web-${ENV}-share-entity" >> "$GITHUB_OUTPUT"
+          echo "generate_route_lambda=threkir-web-${ENV}-generate-route" >> "$GITHUB_OUTPUT"
+          echo "osrm_proxy_lambda=threkir-web-${ENV}-osrm-proxy" >> "$GITHUB_OUTPUT"
 
           if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
@@ -377,6 +393,34 @@ jobs:
             --name live \
             --function-version "$NEW_VERSION"
           echo "Share-entity Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Update generate-route Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.generate_route_lambda }}" \
+            --zip-file "fileb://apps/web/lambda/generate-route/dist/generate-route.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.generate_route_lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Generate-route Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Update osrm-proxy Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.osrm_proxy_lambda }}" \
+            --zip-file "fileb://apps/web/lambda/osrm-proxy/dist/osrm-proxy.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.osrm_proxy_lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Osrm-proxy Lambda alias 'live' now points at version $NEW_VERSION"
 
       - name: Invalidate CloudFront
         run: |

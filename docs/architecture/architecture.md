@@ -223,7 +223,7 @@ Key modules:
 
 - `RouteBuilder.svelte` — MapLibre GL JS map with click-to-place waypoints, draggable markers, and GeoJSON route line rendering
 - `ElevationProfile.svelte` — SVG elevation chart updated live as waypoints are placed
-- `routing.ts` — OSRM integration for road-snapped routing between waypoints (car profile for roads, foot profile for trails)
+- `routing.ts` — OSRM client for road-snapped routing between waypoints (car profile for roads, foot profile for trails); every call rides the server-side `/api/routes/osrm` proxy so the engine URL stays server-only (decisions §242)
 - `elevation.ts` — Open-Meteo API for elevation data along the route
 - `gpx.ts` — GPX file generation and browser download
 

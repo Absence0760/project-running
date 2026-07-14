@@ -103,12 +103,22 @@ module "web" {
   # FIRST. When empty the handler skips it and serves round_trip (no regression).
   graph_cycle_url = var.graph_cycle_url
 
+  # Self-hosted OSRM engine URL for the route builder's server-side
+  # waypoint snapping/routing proxy (issue #198 — server-only, the browser
+  # only ever calls /api/routes/osrm). Non-secret. When empty the proxy
+  # returns 501 and the builder degrades to straight-line segments.
+  osrm_url = var.osrm_url
+
   # Caps the generate-route Lambda's concurrency. Each invocation fans
   # out several round_trip calls at the GraphHopper engine, so this is
   # the engine's load ceiling. 25 is comfortable for launch traffic;
   # raise once real usage is observed. Var-driven for the same
   # quota-pending override as lambda_reserved_concurrency above.
   generate_route_reserved_concurrency = var.generate_route_reserved_concurrency
+
+  # Same load-ceiling idea for the osrm-proxy Lambda — each invocation is
+  # one snapping/routing round trip at the self-hosted OSRM engine.
+  osrm_proxy_reserved_concurrency = var.osrm_proxy_reserved_concurrency
 
   # Prod tightens the coach WAF per-IP rate limit below the module
   # default (100). A free user's coach cap is 2/day and a pro's 10/day

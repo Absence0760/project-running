@@ -403,8 +403,9 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// fails, drop two waypoints via the builder's dev-exposed
 		// addWaypoint API (synthetic canvas clicks don't land reliably on
 		// MapLibre's WebGL pointer pipeline in headless chromium), and
-		// assert the gate stays armed.
-		await page.route('https://router.project-osrm.org/**', (route) =>
+		// assert the gate stays armed. All OSRM traffic rides the
+		// /api/routes/osrm proxy (issue #198), so that's the intercept.
+		await page.route('**/api/routes/osrm/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' })
 		);
 
@@ -586,10 +587,11 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// WebGL surface aren't reliable in headless chromium. Plant
 		// them near the map's current center so the marker DOM lands
 		// inside the viewport (needed for the marker.click() below).
-		// Waypoint placement now auto-routes. Stub OSRM so the background
-		// snap is deterministic + offline (this test only cares about
-		// waypoint-count bookkeeping, not the snapped geometry).
-		await page.route('https://router.project-osrm.org/**', (route) =>
+		// Waypoint placement now auto-routes. Stub the /api/routes/osrm
+		// proxy so the background snap is deterministic + offline (this
+		// test only cares about waypoint-count bookkeeping, not the
+		// snapped geometry).
+		await page.route('**/api/routes/osrm/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' })
 		);
 

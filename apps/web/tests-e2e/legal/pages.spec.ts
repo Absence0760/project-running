@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
  * a refactor or accidental delete fails CI loudly.
  *
  * All four are public-by-design — anon viewers must reach them without
- * a login. The pages are complete legal text (decisions §242); the only
+ * a login. The pages are complete legal text (decisions §243); the only
  * permitted "unfinished" surface is the operator-facts pending banner
  * driven by src/lib/legal/operator.ts — never a TODO placeholder or a
  * "Draft" banner. If a fact is filled in operator.ts, the pending copy

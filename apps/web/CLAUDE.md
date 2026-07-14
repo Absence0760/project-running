@@ -41,7 +41,7 @@ src/
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
     # Loose lib modules are grouped into topical subfolders: core/ (data + supabase client),
     # training/ routes/ segments/ social/ integrations/ backup/ share/ settings/ runs/ format/ util/ billing/ gym/ nutrition/ gear/ (gear_wear.ts wear classification),
-    # legal/ (operator.ts — the nullable operator-facts seam for the legal pages; nulls render fail-closed "pending" lines, decisions §242).
+    # legal/ (operator.ts — the nullable operator-facts seam for the legal pages; nulls render fail-closed "pending" lines, decisions §243).
     # Only types.ts + database.types.ts stay at the lib root (gen:types writes database.types.ts there; the
     # twin parity-pair paths in docs/architecture/conventions.md + shared-library-syncer.md track the new locations).
     core/data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
@@ -93,7 +93,7 @@ src/
     runs/heatmap/   # Personal run-track heatmap — the user's OWN tracks (PersonalHeatmap.svelte + lib/run_heatmap.ts). Distinct from the public /routes/heatmap community map. Persona #53.
     runs/[id]/      # Run detail with map, elevation, splits. In-page back-link returns to /runs (history.back() when arrived from /runs or /history so the list snapshot restores).
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab. Routes now lives under the run surface — the page renders the shared RunSurfaceTabs (Runs · Routes · Plans) strip above its inner My-routes/Explore/Heatmap tablist, and is reached from the /runs Routes sub-tab. The /routes URL keeps resolving for bookmarks, club deep links, and shares.
-    routes/new/     # Route builder (MapLibre + OSRM). Auto-routes per waypoint (no Calculate button); per-segment cache in routes/segment_cache.ts so each new pin fetches only its segment (decisions §136). Twin: routing.dart's RouteSegmentCache.
+    routes/new/     # Route builder (MapLibre + OSRM via the /api/routes/osrm server proxy — OSRM_URL is server-only, the browser never calls the engine; decisions §243). Auto-routes per waypoint (no Calculate button); per-segment cache in routes/segment_cache.ts so each new pin fetches only its segment (decisions §136). Twin: routing.dart's RouteSegmentCache.
     routes/[id]/    # Route detail
     clubs/          # Thin client-side redirect to `/social?tab=clubs` (preserves `?tab=browse` as `clubs-sub=browse`). The /clubs/[slug] + /clubs/new + /clubs/[slug]/events/* + /clubs/join/[token] sub-routes are unchanged — only the top-level browse landing moved.
     clubs/new/      # Create a club (visibility + join policy)
@@ -174,6 +174,17 @@ lambda/
                     # path in dev. infra landed + deploy-gated. Chosen over cloning the
                     # share-badge stack 4x (decisions §205). See lambda/share-entity/README.md
                     # + docs/features/seo.md.
+  generate-route/   # Non-streaming JSON Lambda for POST /api/routes/generate — the
+                    # server-side loop generator (graph-cycle first, GraphHopper
+                    # round_trip fallback). Wraps $lib/routes/generate/handler; the
+                    # SvelteKit /api/routes/generate/+server.ts owns the path in dev.
+                    # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Decisions §137/§204.
+  osrm-proxy/       # GET-only JSON Lambda for /api/routes/osrm/* — the server hop for
+                    # the route builder's OSRM waypoint snapping/routing (issue #198,
+                    # decisions §243). Wraps $lib/routes/osrm_proxy/handler (validates +
+                    # rebuilds every upstream URL, requires a signed-in user); the
+                    # SvelteKit /api/routes/osrm/[...path]/+server.ts owns the path in
+                    # dev (with a dev-only demo fallback). OSRM_URL is server-only.
 ```
 
 ## Development

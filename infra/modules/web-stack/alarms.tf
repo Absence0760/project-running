@@ -193,6 +193,84 @@ resource "aws_cloudwatch_metric_alarm" "generate_route_engine_unreachable" {
   tags                = var.tags
 }
 
+# osrm-proxy mirrors generate-route's failure shape: a down OSRM engine is a
+# CLEAN 502 (the builder degrades to straight-line segments), not a Lambda
+# throw, so the Errors metric alone would sleep through an engine outage.
+resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_errors" {
+  alarm_name          = "${local.resource_prefix}-osrm-proxy-lambda-errors"
+  alarm_description   = "Osrm-proxy Lambda 4xx/5xx error rate over 2% across two consecutive 5-min windows (10 min sustained)."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  metric_query {
+    id          = "errors_pct"
+    expression  = "(errors / invocations) * 100"
+    label       = "Error rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Errors"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = aws_lambda_function.osrm_proxy.function_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "invocations"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Invocations"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = aws_lambda_function.osrm_proxy.function_name
+      }
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "osrm_proxy_engine_unreachable" {
+  name           = "${local.resource_prefix}-osrm-proxy-engine-unreachable"
+  log_group_name = aws_cloudwatch_log_group.lambda_osrm_proxy.name
+  # `console.error('[osrm-proxy] engine_unreachable')` from the Lambda when
+  # handleOsrmProxy returns 502 — same clean-502 shape as generate-route.
+  pattern = "\"[osrm-proxy] engine_unreachable\""
+
+  metric_transformation {
+    name          = "${local.resource_prefix}-osrm-proxy-engine-unreachable-count"
+    namespace     = "Threkir/OsrmProxy"
+    value         = "1"
+    default_value = "0"
+  }
+}
+resource "aws_cloudwatch_metric_alarm" "osrm_proxy_engine_unreachable" {
+  alarm_name          = "${local.resource_prefix}-osrm-proxy-engine-unreachable"
+  alarm_description   = "The OSRM engine is unreachable from the osrm-proxy Lambda (>=5 engine_unreachable events in each of two consecutive 5-min windows). Route-builder snapping has silently degraded to straight-line segments for all users. Check the OSRM Fly app."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  metric_name         = aws_cloudwatch_log_metric_filter.osrm_proxy_engine_unreachable.metric_transformation[0].name
+  namespace           = aws_cloudwatch_log_metric_filter.osrm_proxy_engine_unreachable.metric_transformation[0].namespace
+  period              = 300
+  statistic           = "Sum"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+}
+
 # The four share Lambdas keep serving a branded fallback card (HTTP 200 PNG /
 # 404 HTML) when Supabase is unreachable — correct for never breaking a social
 # unfurl, but it means a Supabase outage degrades EVERY card with no AWS/Lambda
