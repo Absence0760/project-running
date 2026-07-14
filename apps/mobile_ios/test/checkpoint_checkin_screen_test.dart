@@ -84,17 +84,28 @@ void main() {
         ),
       );
 
-  // The load (store.init + api fetches) is real async work, so settle it
-  // inside runAsync. pumpAndSettle is avoided — the loading spinner + the
-  // autofocused TextField cursor are perpetual animations that hang it.
+  // The load (store.init + api fetches) and the stamp's sync drain are real
+  // async work (file I/O), so their completion time is load-dependent — a
+  // fixed sleep flaked on a busy CI runner. Poll the observable condition
+  // under runAsync with a bounded deadline instead. pumpAndSettle is avoided
+  // — the loading spinner + the autofocused TextField cursor are perpetual
+  // animations that hang it.
+  Future<void> _settleUntil(WidgetTester tester, bool Function() done) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (!done() && DateTime.now().isBefore(deadline)) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    expect(done(), isTrue, reason: 'condition not reached within 5s');
+  }
+
   Future<void> _pumpLoaded(WidgetTester tester) async {
     await tester.runAsync(() async {
       await tester.pumpWidget(_app());
-      // Let _load's futures resolve, then rebuild into the loaded state.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      await tester.pump();
     });
     await tester.pump();
+    await _settleUntil(tester, () => tester.any(find.byType(TextField)));
   }
 
   testWidgets('stamping IN writes a pending crossing through the store',
@@ -104,11 +115,8 @@ void main() {
         tester.element(find.byType(CheckpointCheckinScreen)));
 
     await tester.enterText(find.byType(TextField), '101');
-    await tester.runAsync(() async {
-      await tester.tap(find.text(l10n.checkpointStampIn));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    await tester.tap(find.text(l10n.checkpointStampIn));
+    await _settleUntil(tester, () => api.upserts.isNotEmpty);
 
     expect(store.rows, hasLength(1));
     expect(store.rows.first['bib'], '101');
@@ -122,9 +130,13 @@ void main() {
     final l10n = AppLocalizations.of(
         tester.element(find.byType(CheckpointCheckinScreen)));
 
+    // Absence assertion — no condition to poll for; give any (wrong) write a
+    // generous window to land before asserting nothing did. The tap stays
+    // inside runAsync so the rejection banner's auto-dismiss timer is created
+    // in the real zone, not the fake-timer zone the binding asserts empty.
     await tester.runAsync(() async {
       await tester.tap(find.text(l10n.checkpointStampIn));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     });
     await tester.pump();
 
