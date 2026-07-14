@@ -106,7 +106,7 @@ The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline
 
 ```json
 {
-  "SUPABASE_URL": "https://api.threkir.com",
+  "SUPABASE_URL": "https://<project-ref>.supabase.co",
   "SUPABASE_ANON_KEY": "sb_publishable_...",
   "MAPTILER_KEY": "...",
   "REVENUECAT_API_KEY": "appl_...",

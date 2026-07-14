@@ -10,7 +10,7 @@ variable "apex_domain" {
 }
 
 variable "public_supabase_url" {
-  description = "Production Supabase REST URL. Once `api.threkir.com` is wired, switch to that."
+  description = "Production Supabase REST URL — the raw https://<ref>.supabase.co. `api.threkir.com` is a Pro-only custom domain (not provisioned); switch only if it is ever wired."
   type        = string
 }
 

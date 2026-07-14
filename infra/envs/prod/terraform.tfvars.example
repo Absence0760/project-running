@@ -6,7 +6,7 @@
 # NOT anywhere in this public repo.
 
 apex_domain              = "threkir.com"
-public_supabase_url      = "https://api.threkir.com"
+public_supabase_url      = "https://<ref>.supabase.co" # raw project URL; api.threkir.com is a Pro-only custom domain (not provisioned)
 public_supabase_anon_key = "ey..." # publishable key, NOT service-role
 
 extra_lambda_env = {

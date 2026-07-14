@@ -4,7 +4,7 @@ How `apps/backend/` (the whole Supabase project — Postgres, Auth, Storage, Rea
 
 This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md) (which describes the schema + EF + helpers) and [`apps/backend/local_testing.md`](local_testing.md) (the local stack). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md). Tag-driven release mechanics live in [`docs/ops/releasing.md`](../../docs/ops/releasing.md).
 
-**Status: plan.** Local-only at the time of writing.
+**Status: live on the Free tier** (raw `<ref>.supabase.co` URL, no custom domain, no automated backups — see "Provider and tier"). The Pro-tier items below are the documented upgrade path, not the current state.
 
 ---
 
@@ -12,10 +12,15 @@ This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md
 
 **Provider:** Supabase Cloud.
 
-**Tier: Pro ($25/month).** Required for:
+**Tier: Free ($0) today.** The prod project runs on the Free tier for the lean launch —
+clients use the raw `https://<ref>.supabase.co` URL (the value in `PUBLIC_SUPABASE_URL` /
+`MOBILE_SUPABASE_URL`), there is no custom domain, no daily backups, and the project
+auto-pauses after 7 days idle (see [`docs/ops/deployment_lean.md`](../../docs/ops/deployment_lean.md)
+§ Rock-bottom risk). **Pro ($25/month) is the planned upgrade**, to be bought the moment real
+users exist; it buys:
 
-- Daily Point-In-Time Recovery (free tier is project-only snapshots with a 7-day window)
-- Custom domain (`api.threkir.com`)
+- Daily backups + Point-In-Time Recovery (free tier has no automated backups)
+- Custom domain (`api.threkir.com` — additionally needs the paid custom-domain add-on)
 - Larger compute (4 GB RAM minimum) — the materialized-view refresh + the run-write trigger fan-out push the free tier's 1 GB instance into swap fast as soon as bulk Strava imports run
 - 8 GB Storage included (raw track gzips are ~10 KB each; 1k users × 200 runs ≈ 2 GB → fits Pro for the foreseeable)
 - Removal of the 1-week pause on inactive projects
@@ -31,7 +36,8 @@ This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md
 ## One-time project setup
 
 ```bash
-# 1. Create the Supabase Cloud project in the dashboard (Pro tier, eu-west-2).
+# 1. Create the Supabase Cloud project in the dashboard (Free tier today — see
+#    "Provider and tier"; eu-west-2).
 # 2. From a local clone:
 cd apps/backend
 supabase login                     # opens browser for OAuth
@@ -102,7 +108,10 @@ supabase secrets set --project-ref <ref> \
 
 ## Custom domain — `api.threkir.com`
 
-Optional but recommended; lets us migrate Supabase projects (region change, account swap) without invalidating every client's stored URL.
+**Not provisioned.** Custom domains require a paid plan plus the custom-domain add-on; on
+the current Free tier this subdomain does not resolve and every client uses the raw
+`https://<ref>.supabase.co` URL. Optional but recommended once on Pro; lets us migrate
+Supabase projects (region change, account swap) without invalidating every client's stored URL.
 
 In the Supabase dashboard → Settings → Custom Domains:
 
@@ -168,7 +177,7 @@ The schema is what local `supabase db reset` builds — see [api_database.md](..
 | Realtime | Supabase dashboard → Realtime → Channels | active subscribers, message rate |
 | Custom queries | `select * from postgres_log;` from the SQL editor | one-off forensics |
 
-**External uptime probe** (Better Stack or UptimeRobot): hit `https://api.threkir.com/rest/v1/runs?select=count&limit=0`. It's a cheap PostgREST call that returns 200 only if Postgres is up + PostgREST is up + RLS still permits the anon role to read the table count. Set the alarm threshold at 2 consecutive failures (60 s gap).
+**External uptime probe** (Better Stack or UptimeRobot): hit `https://<ref>.supabase.co/rest/v1/runs?select=count&limit=0` (or `api.threkir.com` once the Pro custom domain exists). It's a cheap PostgREST call that returns 200 only if Postgres is up + PostgREST is up + RLS still permits the anon role to read the table count. Set the alarm threshold at 2 consecutive failures (60 s gap).
 
 **Sentry on the EF side:** every EF wraps its `serve` handler in `withSentry('<ef-name>', ...)` from `functions/_shared/sentry.ts`. Unhandled errors are captured with the EF name as a tag, then a 500 is returned so the caller still gets a clean response. Init is gated on `SENTRY_DSN` — set it via `supabase secrets set SENTRY_DSN=... APP_RELEASE=<tag>` against the linked project; an unset DSN makes the wrapper a passthrough so local `supabase functions serve` doesn't need a Sentry account.
 
@@ -231,12 +240,18 @@ If production Postgres is corrupt / lost / wedged:
 2. Open the dashboard → Settings → Database → Backups. Pick the most recent good backup.
 3. **Point In Time Recovery** lets you restore to any minute in the last 7 days. Use it if the corruption has a known timestamp; use the daily backup otherwise.
 4. The restore goes to a new project (Supabase doesn't restore-in-place). The new project gets a new `<ref>`.
-5. Update the `api.threkir.com` CNAME to the new project. Within 5 min DNS propagates and clients resume.
+5. Repoint clients at the new project. With the Pro custom domain this is one CNAME update
+   (5 min DNS propagation). **On the current Free tier there is no CNAME** — the new `<ref>`
+   means updating `PUBLIC_SUPABASE_URL` + `MOBILE_SUPABASE_URL` (+ the watch Gradle property),
+   redeploying web, and shipping new mobile builds through the stores. This is the main
+   operational argument for buying the custom domain when upgrading to Pro.
 6. Edge Functions don't migrate automatically — re-run `supabase functions deploy` for each.
 7. Once the new project has been smoke-tested, archive the old one (don't delete for 7 days in case you need to grab additional data).
 
-**RTO ≤ 30 min** as long as DNS is the only client-side knob.
-**RPO ≤ 5 min** with PITR; **≤ 24 h** without (daily backup only).
+**RTO ≤ 30 min** once DNS is the only client-side knob (Pro custom domain); on Free, web
+recovers in ~30 min (secret update + redeploy) but mobile clients wait on a store release.
+**RPO ≤ 5 min** with PITR; **≤ 24 h** with Pro daily backups; **unbounded on Free** (no
+automated backups — take periodic manual `pg_dump`s until the Pro upgrade).
 
 ### Storage recovery
 
@@ -268,12 +283,12 @@ If a `backend@1.2.3` deploy broke a function, tag `backend@1.2.4` from a revert 
 
 Before flipping the row in [`docs/ops/deployment.md`](../../docs/ops/deployment.md) from "Plan" to "Live":
 
-- [ ] Pro tier active, billing alert set in Supabase dashboard
+- [ ] Tier decision recorded — Free today; upgrade to Pro (+ billing alert) before real users exist
 - [ ] `eu-west-2` region (or whichever was picked) confirmed
 - [ ] `supabase db push` ran clean against the live project
 - [ ] All seven Edge Functions deployed; each logs a successful test invocation
 - [ ] EF secrets set (`PARKRUN_USER_AGENT`, Strava env, RevenueCat env)
-- [ ] Custom domain `api.threkir.com` verified
+- [ ] Custom domain `api.threkir.com` verified (Pro + add-on only — skipped on Free; clients use the raw project URL)
 - [ ] `pg_cron` schedules confirmed (`SELECT * FROM cron.job;` from SQL editor)
 - [ ] Storage versioning on for `runs`
 - [ ] External uptime probe live

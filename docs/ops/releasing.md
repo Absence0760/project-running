@@ -192,7 +192,7 @@ The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_AC
 |---|---|
 | `AWS_DEPLOY_ROLE_ARN_PROD` | IAM role ARN assumed via OIDC for prod deploys (tag `web@*`). Trust policy scoped to `repo:<owner>/<repo>:ref:refs/tags/web@*`. |
 | `AWS_DEPLOY_ROLE_ARN_PREVIEW` | Same shape for the preview env (push to `main`). Trust policy scoped to `:ref:refs/heads/main`. |
-| `PUBLIC_SUPABASE_URL` | Production Supabase REST URL (`https://api.threkir.com` once the custom domain is live). Inlined into the build. |
+| `PUBLIC_SUPABASE_URL` | Production Supabase REST URL — the raw `https://<ref>.supabase.co` (`api.threkir.com` is a Pro-only custom domain, not provisioned on the current Free tier). Inlined into the build. |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase **publishable** key. Inlined into the build. |
 | `PUBLIC_MAPTILER_KEY` | MapTiler key shared with mobile + Wear OS. Inlined into the build. |
 | `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat hosted Web Paywall Link (`https://pay.rev.cat/<token>`). Inlined into the build; the prod-env guard fails the release if unset. |

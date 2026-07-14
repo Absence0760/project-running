@@ -133,7 +133,7 @@ The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflo
 
 | Variable | Source (GitHub Secrets) | Notes |
 |---|---|---|
-| `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | once custom domain is live, use `https://api.threkir.com` |
+| `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | the raw `https://<ref>.supabase.co` (`api.threkir.com` is a Pro-only custom domain, not provisioned on Free) |
 | `PUBLIC_SUPABASE_ANON_KEY` | `PUBLIC_SUPABASE_ANON_KEY` | the **publishable** key, not service-role |
 | `PUBLIC_MAPTILER_KEY` | `PUBLIC_MAPTILER_KEY` | shared with mobile + Wear OS |
 | `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | hosted Web Paywall Link; required for prod (build guard) |
