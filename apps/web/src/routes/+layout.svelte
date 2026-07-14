@@ -189,6 +189,8 @@
 		'/terms',
 		'/cookie-notice',
 		'/health-data-notice',
+		// Play Console "Delete account URL" — reviewers open it logged-out.
+		'/delete-account',
 		'/compare',
 		'/guided',
 	];

@@ -308,7 +308,7 @@
 	<ul>
 		<li><strong>Access</strong> your personal data (Art 15) — use Settings → Export your data.</li>
 		<li><strong>Rectify</strong> inaccurate data (Art 16) — use Settings → Profile.</li>
-		<li><strong>Erase</strong> your data (Art 17) — use Settings → Delete account. Deletion cascades through our database, drains your uploaded files from storage, and disconnects or deletes linked third-party resources (for example Strava authorisation and any connected Stripe account).</li>
+		<li><strong>Erase</strong> your data (Art 17) — use Settings → Delete account. Deletion cascades through our database, drains your uploaded files from storage, and disconnects or deletes linked third-party resources (for example Strava authorisation and any connected Stripe account). Step-by-step instructions, including what to do if you can no longer sign in, are on the <a href="/delete-account">Delete your account</a> page.</li>
 		<li><strong>Restrict</strong> or <strong>object to</strong> processing (Arts 18 + 21) — email <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>. There is no self-service toggle yet; we action these manually and confirm within one month.</li>
 		<li><strong>Portability</strong> (Art 20) — use Settings → Export your data; the bundle is machine-readable JSON plus GPX.</li>
 		<li><strong>Withdraw consent</strong> at any time without affecting the lawfulness of prior processing. AI Coach consent and health-data consent are each withdrawable self-service in Settings → Account; withdrawing blocks the corresponding processing immediately.</li>

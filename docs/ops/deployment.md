@@ -256,7 +256,8 @@ Before flipping any service from "Plan" to live in the table at the top:
 
 ### Legal pages — before public launch
 
-The legal pages (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice`) are complete text
+The legal pages (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice`, plus the
+store-facing `/delete-account` instructions page — decisions §247) are complete text
 (decisions §243); what remains is operator work, not code:
 
 1. Counsel review of the four pages (plus the docs under `docs/compliance/`).
@@ -269,3 +270,6 @@ The legal pages (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice`) 
    Office (the Terms already name the address).
 5. Confirm each sub-processor DPA is executed (list in
    [docs/compliance/sub-processors.md](../compliance/sub-processors.md)).
+6. Enter `https://threkir.com/delete-account` as the **Delete account URL** in the Play Console
+   Data safety form (and as the account-deletion link in App Store Connect). The page is live and
+   pinned by `tests-e2e/legal/pages.spec.ts`; this item is just the console data entry.
