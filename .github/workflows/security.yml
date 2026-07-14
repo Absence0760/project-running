@@ -6,8 +6,10 @@ name: Security
 # the same SARIF category made the alert set flip-flop between their
 # different query suites and left the Security tab flagging configuration
 # errors whenever either workflow failed. Merged here 2026-07-14.)
-# Runs on every push to main, on PRs that touch code (docs-only PRs
-# skipped), and weekly to catch CVEs disclosed since the last commit.
+# Runs on every push to main and every PR — including docs-only changes:
+# Scorecard's SAST check requires a completed scan on each recent commit,
+# and a docs-only paths-ignore left commits unchecked (code-scanning
+# alert 162). Also weekly, to catch CVEs disclosed since the last commit.
 # Findings flow to the GitHub Security tab via SARIF.
 #
 # Language coverage for this monorepo's mix:
@@ -35,14 +37,8 @@ name: Security
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
   schedule:
     # Sundays at 06:00 UTC — catches new CodeQL queries / CVEs disclosed
     # since the last commit. Offset by ~24h from audit.yml / gitleaks /
@@ -52,10 +48,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Cancel every analysis leg together when a new commit lands on the
-  # same ref — no point analysing the stale SHA.
-  group: security-${{ github.ref }}
-  cancel-in-progress: true
+  # PR pushes cancel the superseded head's analysis (no point analysing a
+  # stale SHA), but every push to main gets its own per-SHA group and is
+  # never cancelled: back-to-back merges would otherwise race the older
+  # commit's analysis into a cancellation and leave that commit without
+  # the completed SAST run Scorecard checks for (code-scanning alert 162).
+  group: security-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Workflow-level permission is the least-privilege baseline; each job
 # below requests the additional scopes it actually needs. Per Scorecard
