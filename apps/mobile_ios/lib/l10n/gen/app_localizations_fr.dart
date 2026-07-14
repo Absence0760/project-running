@@ -652,6 +652,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Démarre automatiquement un partage en direct au début d\'une course sur ce téléphone. La course en cours est visible par toute personne ayant le lien.';
 
   @override
+  String get safetyOffRouteTitle => 'Alerte hors itinéraire';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'Prévenez un contact confirmé si vous quittez durablement votre itinéraire prévu lors d\'une course partagée en direct.';
+
+  @override
+  String get runOffRouteAlertSent =>
+      'Nous avons prévenu votre contact de sécurité : vous êtes hors itinéraire depuis un moment.';
+
+  @override
   String get runAutoLiveShareStarted =>
       'Partage en direct actif — envoyez le lien via « Partager le lien en direct »';
 

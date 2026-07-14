@@ -902,6 +902,18 @@
   "@safetyAutoLiveShareSubtitle": {
     "description": "Subtitle of the auto-live-share device toggle (public-by-link disclosure)"
   },
+  "safetyOffRouteTitle": "Off-route alert",
+  "@safetyOffRouteTitle": {
+    "description": "Title of the off-route auto-notify toggle on the safety settings screen"
+  },
+  "safetyOffRouteSubtitle": "Alert a confirmed contact if you go and stay off your planned route on a live-shared run.",
+  "@safetyOffRouteSubtitle": {
+    "description": "Subtitle of the off-route auto-notify toggle"
+  },
+  "runOffRouteAlertSent": "We alerted your safety contact — you've been off route for a while.",
+  "@runOffRouteAlertSent": {
+    "description": "Banner on the run screen when a sustained off-route departure escalated to safety contacts"
+  },
   "runAutoLiveShareStarted": "Live sharing is on — use Share live link to send it",
   "@runAutoLiveShareStarted": {
     "description": "Banner on the run screen when the auto-live-share pref attached the broadcaster"

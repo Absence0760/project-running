@@ -1270,6 +1270,22 @@ class ApiClient {
     await _client.rpc('enqueue_run_rematch', params: {'p_run_id': runId});
   }
 
+  /// Escalate a sustained off-route departure to the runner's confirmed
+  /// safety contacts (docs/features/safety.md, persona-woman). The
+  /// `escalate_run_off_route` SECURITY DEFINER RPC self-gates on
+  /// `auth.uid() = run.user_id` + an in-progress live-broadcast stub + the
+  /// `safety_off_route_alerts` opt-in pref + ≥1 confirmed contact, stamps the
+  /// once-per-run `metadata.safety_escalated_at`, and enqueues the same
+  /// `safety_email` (+ additive `safety_sms`) jobs the overdue scan uses, with
+  /// an `off_route` template. Idempotent — a re-call on an already-escalated
+  /// run no-ops. Returns whether it escalated. Best-effort at the call site
+  /// (L4): a failure must never disturb the recording.
+  Future<bool> escalateRunOffRoute(String runId) async {
+    final result =
+        await _client.rpc('escalate_run_off_route', params: {'p_run_id': runId});
+    return result == true;
+  }
+
   /// Download the raw gzipped track bytes from Storage without decoding.
   /// Used by the backup flow which wants to archive the gzipped blob
   /// verbatim so restore is a byte-for-byte upload.

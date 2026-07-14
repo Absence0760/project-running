@@ -632,6 +632,16 @@ class AppLocalizationsJa extends AppLocalizations {
       'この端末でランを開始すると自動的にライブ共有を開始します。進行中のランはリンクを知っている人なら誰でも見られます。';
 
   @override
+  String get safetyOffRouteTitle => 'ルート逸脱アラート';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'ライブ共有中のランで予定ルートを外れたままになったら、確認済みの連絡先に通知します。';
+
+  @override
+  String get runOffRouteAlertSent => '予定ルートを外れた状態が続いたため、緊急連絡先に通知しました。';
+
+  @override
   String get runAutoLiveShareStarted => 'ライブ共有中 — 「ライブリンクを共有」でリンクを送れます';
 
   @override

@@ -650,6 +650,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
 
   @override
+  String get safetyOffRouteTitle => 'Alerta de saída de rota';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'Avise um contato confirmado se você sair e continuar fora da rota planejada numa corrida compartilhada ao vivo.';
+
+  @override
+  String get runOffRouteAlertSent =>
+      'Avisamos seu contato de segurança — você está fora da rota há um tempo.';
+
+  @override
   String get runAutoLiveShareStarted =>
       'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
 
@@ -11743,6 +11754,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get safetyAutoLiveShareSubtitle =>
       'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
+
+  @override
+  String get safetyOffRouteTitle => 'Alerta de saída de rota';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'Avise um contato confirmado se você sair e continuar fora da rota planejada numa corrida compartilhada ao vivo.';
+
+  @override
+  String get runOffRouteAlertSent =>
+      'Avisamos seu contato de segurança — você está fora da rota há um tempo.';
 
   @override
   String get runAutoLiveShareStarted =>
