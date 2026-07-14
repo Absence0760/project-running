@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../backend_timeout.dart';
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -339,7 +340,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('PlanNewScreen._submit failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

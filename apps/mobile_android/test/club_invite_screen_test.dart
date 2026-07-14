@@ -1,10 +1,12 @@
 // Widget tests for ClubInviteScreen — mobile parity with the web
 // /clubs/join/[token] surface. The screen reads a token (typed or
 // deep-link-injected), calls SocialService.joinClubByToken, and
-// navigates to the club detail on success. Failures surface the
-// RPC's own error string (those are written for end-user reading).
+// navigates to the club detail on success. Failures route through
+// friendlyError so the banner shows actionable copy (offline /
+// rate-limited / generic) rather than a raw exception toString.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,11 +110,11 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
-    testWidgets('RPC error surfaces the message in the error slot',
+    testWidgets('a failure shows friendly generic copy, not the raw exception',
         (tester) async {
-      // RPC error strings ("token expired", "already a member") are
-      // written for end-user reading — the screen surfaces them
-      // raw rather than re-wrapping in generic copy.
+      // The raw exception (a PostgrestException / SocketException
+      // toString is jargon) must never reach the banner — an opaque
+      // failure collapses to the generic friendly fallback.
       final social = _FakeSocialService()
         ..errorToThrow = Exception('Invite token expired');
       await _pump(tester, social: social);
@@ -123,7 +125,34 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Join'));
       await tester.pump();
       await tester.pump();
-      expect(find.textContaining('Invite token expired'), findsOneWidget);
+      expect(
+          find.text('Something went wrong. Please try again.'), findsOneWidget);
+      expect(find.textContaining('Invite token expired'), findsNothing);
+      expect(find.textContaining('Exception'), findsNothing);
+    });
+
+    testWidgets('an offline failure shows the offline copy, not raw jargon',
+        (tester) async {
+      // A network drop must be distinguishable from a generic error —
+      // classifyAuthError routes a SocketException to the offline copy.
+      final social = _FakeSocialService()
+        ..errorToThrow =
+            const SocketException('Failed host lookup: "example.com"');
+      await _pump(tester, social: social);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Invite code'),
+        'any-token',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text(
+            'You appear to be offline. Check your connection and try again.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('SocketException'), findsNothing);
+      expect(find.textContaining('Failed host lookup'), findsNothing);
     });
 
     testWidgets('initialToken fires auto-redemption on mount', (tester) async {
@@ -181,7 +210,8 @@ void main() {
       social.errorToThrow = Exception('expired');
       social.gate!.complete();
       await tester.pumpAndSettle();
-      expect(find.textContaining('expired'), findsOneWidget);
+      expect(
+          find.text('Something went wrong. Please try again.'), findsOneWidget);
     });
 
     testWidgets('error then a fixed retry succeeds — second call fires',
@@ -199,7 +229,8 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Join'));
       await tester.pump();
       await tester.pump();
-      expect(find.textContaining('invalid token'), findsOneWidget);
+      expect(
+          find.text('Something went wrong. Please try again.'), findsOneWidget);
       expect(social.joinCalls, 1);
 
       // Fix the code; clear the error injection; retry.

@@ -58,6 +58,24 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
   }
 }
 
+/// Map an arbitrary exception on a non-auth form screen (club, coach, plan,
+/// invite) to a localized, user-facing message. Reuses [classifyAuthError]'s
+/// offline / rate-limited detection; the invalid-credentials branch can't
+/// arise off the sign-in screens, so it collapses into the generic fallback.
+/// Route every rendered `_error =` assignment on those screens through this
+/// and keep the raw string in `debugPrint` only.
+String friendlyError(AppLocalizations l10n, Object error) {
+  switch (classifyAuthError(error)) {
+    case AuthErrorKind.offline:
+      return l10n.authErrorOffline;
+    case AuthErrorKind.rateLimited:
+      return l10n.authErrorRateLimited;
+    case AuthErrorKind.invalidCredentials:
+    case AuthErrorKind.generic:
+      return l10n.authErrorGeneric;
+  }
+}
+
 bool _looksOffline(String msg) =>
     msg.contains('failed host lookup') ||
     msg.contains('socketexception') ||
