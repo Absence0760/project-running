@@ -1388,81 +1388,30 @@ These tables ship in the live schema but don't have a full column-by-column bloc
 
 ## Row-level security
 
-RLS is enabled on every table. Policies ensure users can only access their own data, with a specific carve-out for public routes.
+RLS is enabled on every table. The authoritative policy set lives in the migrations (grep `create policy` / `alter policy`, latest touch wins) and in live `pg_policies`; behaviour is pinned by the pgtap suite under `supabase/tests/`. This section documents the access *model* — do not paste policy SQL from here; it will drift.
 
-```sql
--- runs
-alter table runs enable row level security;
+House patterns:
 
-create policy "users own their runs"
-  on runs for all
-  using (auth.uid() = user_id);
+- **Owner-scoped by default.** The baseline for user-data tables is an owner policy over `user_id` (per-command on newer tables, `for all` on the early ones), e.g.:
 
-create policy "public runs are readable by anyone"
-  on runs for select
-  using (is_public = true);
+  ```sql
+  create policy "users own their runs"
+    on runs for all
+    using ((select auth.uid()) = user_id);
+  ```
 
--- routes
-alter table routes enable row level security;
-
-create policy "users own their routes"
-  on routes for all
-  using (auth.uid() = user_id);
-
-create policy "public routes are readable by anyone"
-  on routes for select
-  using (is_public = true);
-
--- integrations
-alter table integrations enable row level security;
-
-create policy "users own their integrations"
-  on integrations for all
-  using (auth.uid() = user_id);
-
--- user_profiles
-alter table user_profiles enable row level security;
-
-create policy "users own their profile"
-  on user_profiles for all
-  using (auth.uid() = id);
-
--- route_reviews
-alter table route_reviews enable row level security;
-
-create policy "reviews on public routes are readable by anyone"
-  on route_reviews for select
-  using (
-    exists (select 1 from routes where routes.id = route_reviews.route_id and routes.is_public = true)
-  );
-
-create policy "users manage their own reviews"
-  on route_reviews for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- user_coach_usage: users can read/insert/update their own rows only.
-alter table user_coach_usage enable row level security;
--- (select/insert/update policies scoped to auth.uid() = user_id)
-
--- monthly_funding: publicly readable by anyone. Write restricted to
--- service role (project owner).
-alter table monthly_funding enable row level security;
-create policy "monthly_funding_public_read"
-  on monthly_funding for select using (true);
-
--- clubs: public clubs readable by anyone; private clubs readable only by
--- members (+ owner). Only authenticated users can create. Updates/deletes
--- gated by is_club_admin and owner_id respectively.
-alter table clubs enable row level security;
--- events, event_attendees, club_posts inherit visibility from the parent
--- club PLUS an event-level gate (20270113_001, §148): an event is readable
--- when the club is readable AND (events.is_public OR member), so a public
--- club can hide an individual event from non-members + discovery. Admin-only
--- inserts for events and posts. Users manage their own RSVP row and leave
--- their own club membership row. See
--- 20260416_001_clubs_and_events.sql for the full set.
-```
+  `auth.uid()` / `auth.jwt()` / `auth.role()` / `current_setting()` are always wrapped in a scalar subselect so they hoist into a once-per-statement InitPlan instead of re-evaluating per row; `rls_initplan_test.sql` fails the suite on any bare call.
+- **Public reads go through the eight `public_*` SECURITY DEFINER views** (`public_runs`, `public_routes`, `public_profiles`, `public_race_listings`, `public_gym_workouts`, `public_gym_sets`, `public_gym_routines`, `public_food_log`) — NOT through base-table policies. The early `is_public = true` SELECT policies on `runs`/`routes` were dropped when clients switched to the views, which redact columns and metadata keys the row-level flag would otherwise leak (decisions §33). Views are read-only to `anon`/`authenticated` (revoke-then-grant, §201, pinned by `view_write_privileges_test.sql`).
+- **Named carve-outs widen the baseline** where a feature needs it — each is its own policy so intent stays readable, which is also why the Supabase advisor's "multiple permissive policies" warnings are accepted. The load-bearing ones on the core tables:
+  - `runs`: owner ALL + `active coach reads athlete runs` (SELECT via the coach link).
+  - `routes`: owner ALL + club-scoped branches (`club members read club routes`, admin insert/update/delete). No public-read base policy — `public_routes` serves that.
+  - `user_profiles`: per-command owner policies (the INSERT gate also blocks self-granting a paid `subscription_tier`; UPDATE columns are locked by `lock_subscription_columns()`), and SELECT for authenticated readers excludes shadow-hidden profiles. Anonymous readers use `public_profiles`.
+  - `route_reviews`: own-row per-command writes + `reviews on visible routes are readable` (visibility follows the route, including the club branches).
+  - `integrations`: owner ALL (tokens themselves live in Vault, not in the row).
+  - `user_coach_usage`: own-row select/insert/update, no delete.
+  - `monthly_funding`: public SELECT, service-role writes.
+- **Clubs & the social graph**: public clubs readable by anyone, private clubs by members + owner; `events`, `event_attendees`, `club_posts` inherit the parent club's visibility PLUS an event-level gate (`20270113_001`, §148) so a public club can hide an individual event; admin-gated writes via `private.is_club_admin`. Social reads additionally carry the `is_blocked_either_way` / `private.viewer_blocks` predicate (§228) so a block hides each party from the other everywhere, including shared-club surfaces.
+- **Service-role-only tables** (`app_quota`, `deletion_audit_log`, ledgers like `webhook_events`) have RLS enabled with no anon/authenticated policies at all — fail closed.
 
 ---
 
