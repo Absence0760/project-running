@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -15,10 +16,11 @@ import 'club_detail_screen.dart';
 /// here with [initialToken] pre-filled.
 ///
 /// On success, redirects to the club's detail screen so the user
-/// sees the club they just joined immediately. On failure, surfaces
-/// the RPC's own error string ("expired", "already a member",
-/// "invalid token") in the error slot — those messages come from
-/// the database function and are written for end-user reading.
+/// sees the club they just joined immediately. On failure, the
+/// exception is routed through [friendlyError] so the error slot
+/// shows actionable copy (offline / rate-limited / generic) rather
+/// than a raw `PostgrestException(...)` / `SocketException` toString;
+/// the raw string is kept in `debugPrint` only.
 class ClubInviteScreen extends StatefulWidget {
   final SocialService social;
   final TrainingService training;
@@ -88,7 +90,10 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('ClubInviteScreen._redeem failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
