@@ -83,6 +83,12 @@
 				</a>
 			{/each}
 		{/each}
+		<div class="legal-links">
+			<a href="/privacy">{m('landing.footerPrivacy')}</a>
+			<a href="/terms">{m('landing.footerTerms')}</a>
+			<a href="/cookie-notice">{m('landing.footerCookies')}</a>
+			<a href="/health-data-notice">{m('landing.footerHealthData')}</a>
+		</div>
 	</nav>
 	<div class="settings-content">
 		{#if unsetFields.length > 0}
@@ -154,6 +160,22 @@
 	}
 	.nav-item .material-symbols {
 		font-size: 1.15rem;
+	}
+	.legal-links {
+		margin-top: auto;
+		padding: var(--space-lg) 0.75rem 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem 0.75rem;
+		font-size: 0.75rem;
+	}
+	.legal-links a {
+		color: var(--color-text-tertiary);
+		text-decoration: none;
+	}
+	.legal-links a:hover {
+		color: var(--color-text-secondary);
+		text-decoration: underline;
 	}
 	.settings-content {
 		flex: 1;

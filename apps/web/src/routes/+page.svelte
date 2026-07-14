@@ -161,6 +161,7 @@
 		<a href="/privacy">{m('landing.footerPrivacy')}</a>
 		<a href="/terms">{m('landing.footerTerms')}</a>
 		<a href="/cookie-notice">{m('landing.footerCookies')}</a>
+		<a href="/health-data-notice">{m('landing.footerHealthData')}</a>
 	</div>
 </footer>
 {/if}
