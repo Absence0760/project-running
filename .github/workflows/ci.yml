@@ -42,7 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      - run: "$(go env GOPATH)/bin/actionlint -color"
+      # -shellcheck= / -pyflakes= disable the external-linter integrations:
+      # the runner image ships shellcheck, whose style findings across every
+      # existing run block would fail this job. The gate's purpose is only
+      # what GitHub itself enforces — workflow syntax + expression parsing.
+      - run: "$(go env GOPATH)/bin/actionlint -color -shellcheck= -pyflakes="
 
   test-packages:
     name: Test Flutter packages
