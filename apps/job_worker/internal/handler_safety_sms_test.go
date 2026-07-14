@@ -97,6 +97,35 @@ func TestSafetySms_ConfiguredProviderSends(t *testing.T) {
 	}
 }
 
+func TestSafetySms_OffRouteSendsRouteDepartureCopy(t *testing.T) {
+	sender := &fakeSmsSender{}
+	w := newSmsTestWorker(&fakeBackend{}, sender)
+	job := smsJob(SafetySmsPayload{
+		Template:     "off_route",
+		ContactPhone: "+447700900123",
+		OwnerName:    "Ada Owner",
+		RunID:        strptr("run-9"),
+		StartedAt:    "2026-07-06T18:00:00+00:00",
+		LastSeenAt:   "2026-07-06T18:42:11+00:00",
+	})
+	if err := w.handleSafetySms(context.Background(), job); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("off_route must send once, got %d", len(sender.sent))
+	}
+	got := sender.sent[0]
+	if !strings.Contains(got.body, "route") {
+		t.Errorf("off_route SMS must state the route departure, got %q", got.body)
+	}
+	if !strings.Contains(got.body, "/live/run-9") {
+		t.Errorf("off_route SMS must carry the live link, got %q", got.body)
+	}
+	if strings.Contains(got.body, "51.5") || strings.Contains(got.body, "lat") {
+		t.Errorf("off_route SMS must not carry coordinates, got %q", got.body)
+	}
+}
+
 func TestSafetySms_NoPingUsesStartOnlyVariant(t *testing.T) {
 	sender := &fakeSmsSender{}
 	w := newSmsTestWorker(&fakeBackend{}, sender)
@@ -208,7 +237,8 @@ func TestSmsCatalogueParity(t *testing.T) {
 			t.Errorf("smsCatalogue missing locale %q", loc)
 			continue
 		}
-		if s.withLastSeen == "" || s.noPing == "" {
+		if s.withLastSeen == "" || s.noPing == "" ||
+			s.offRouteWithLastSeen == "" || s.offRouteNoPing == "" {
 			t.Errorf("smsCatalogue[%q] has an empty variant", loc)
 		}
 	}

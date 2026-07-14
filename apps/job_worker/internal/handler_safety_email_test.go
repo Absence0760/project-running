@@ -243,6 +243,44 @@ func TestSafetyEmail_OverdueLocalizesToLinkedContact(t *testing.T) {
 	}
 }
 
+func TestSafetyEmail_OffRouteCarriesLiveLinkAndTimes(t *testing.T) {
+	be := &fakeBackend{}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+
+	job := safetyJob(SafetyEmailPayload{
+		Template:     "off_route",
+		ContactEmail: "partner@safe.local",
+		OwnerName:    "Ada Owner",
+		RunID:        strptr("run-9"),
+		StartedAt:    "2026-07-06T18:00:00+00:00",
+		LastSeenAt:   "2026-07-06T18:42:11+00:00",
+	})
+	if err := w.handleSafetyEmail(context.Background(), job); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("off_route must send, got %d", len(sender.sent))
+	}
+	got := sender.sent[0]
+	if !strings.Contains(got.msg.Subject, "Ada Owner") {
+		t.Errorf("subject should name the owner, got %q", got.msg.Subject)
+	}
+	if !strings.Contains(got.msg.Body, "/live/run-9") {
+		t.Errorf("off_route mail must carry the live link, got %q", got.msg.Body)
+	}
+	if !strings.Contains(got.msg.Body, "off route") && !strings.Contains(got.msg.Body, "off their planned route") {
+		t.Errorf("off_route copy must state the route departure, got %q", got.msg.Body)
+	}
+	if !strings.Contains(got.msg.Body, "18:00 UTC on 6 Jul") ||
+		!strings.Contains(got.msg.Body, "18:42 UTC on 6 Jul") {
+		t.Errorf("body should carry started + last-seen wall clocks, got %q", got.msg.Body)
+	}
+	if got.msg.ListUnsubscribe != "" {
+		t.Errorf("safety mail carries no List-Unsubscribe, got %q", got.msg.ListUnsubscribe)
+	}
+}
+
 func TestFormatTimeUTC(t *testing.T) {
 	if got := formatTimeUTC("2026-07-06T18:42:11.123456+02:00"); got != "16:42 UTC on 6 Jul" {
 		t.Errorf("offset input should normalise to UTC, got %q", got)
