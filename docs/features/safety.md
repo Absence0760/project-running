@@ -287,7 +287,54 @@ step.
   can persist) — without one the nudge would nag every run, which is the
   friction the persona explicitly doesn't want. Fail-closed: no service →
   no nudge.
-- **Deferred:** an off-route → auto-notify-contact tie-in stays out of
-  scope (no off-route-detection hook exists yet; named in the persona
-  finding's Medium bucket). The nudge is the low-friction first step; a
-  future off-route signal could reuse the same banner path.
+- ~~**Deferred:** an off-route → auto-notify-contact tie-in stays out of
+  scope (no off-route-detection hook exists yet).~~ — **shipped** (feature D,
+  below): a debounced off-route detector on the run screen escalates a
+  sustained departure to confirmed contacts via the existing notify path,
+  gated on a fail-closed deploy flag.
+
+## Off-route → auto-notify trusted contact (feature D, 2026-07-13, ADR §241)
+
+> **STATUS: code shipped, prod-gated.** Built against the
+> `reviews/persona-runner-woman.md` Medium finding (the off-route leg of the
+> "solo-run safety" cluster). The other two legs already shipped: per-run
+> "not back by X" (`set_run_expected_return`) + SMS escalation (feature C).
+> **Fail-closed and unreachable in prod** until the `OFF_ROUTE_ESCALATION_ENABLED`
+> deploy flag flips — the pre-prod checklist item below is the gate.
+
+The overdue net watches for telemetry *silence*; this is the complementary
+trigger for a runner who is still moving and still pinging but has left — and
+stayed off — their planned route on a live-shared run.
+
+- **Detection (client-side, twinned).** Only the recording run screen knows the
+  runner's off-route distance vs the planned route. `OffRouteAlertDetector`
+  (`apps/web/src/lib/safety/off_route_alert.ts` ↔
+  `apps/mobile_android/lib/off_route_alert.dart`, TS↔Dart parity pair, 10
+  mirror tests each) is a pure debounce: it fires ONCE when the runner has been
+  continuously > 75 m off route for ≥ 90 s (a single GPS spike or brief
+  corner-cut dips under the threshold and resets the clock; larger than the
+  40 m off-route *banner* threshold so it's a genuine departure, not a wobble),
+  and latches for the run's lifetime (the escalation is once-per-run).
+- **Escalation reuses the notify path.** On fire, the run screen calls
+  `escalate_run_off_route(p_run_id)` (migration `20270414_001`) — a
+  SECURITY DEFINER RPC that enqueues the SAME `safety_email` (+ additive
+  `safety_sms`) jobs the overdue scan uses, with a distinct `off_route`
+  template, and shares the once-per-run `metadata.safety_escalated_at` stamp
+  so a runner gets ONE alert per run whichever trigger fires first. Times +
+  the live link only, never coordinates.
+- **Fail-closed, defence in depth.** The client only calls the RPC when the
+  `OFF_ROUTE_ESCALATION_ENABLED` deploy flag is on (`off_route_flag.ts` /
+  `dotenv`, default off), the runner opted into `safety_off_route_alerts` (U
+  pref, default off), a route is selected, AND a live broadcast is active (so
+  the `/live` link the contact receives works). The RPC re-checks every gate
+  server-side: owner-only, in-progress-stub-only, the opt-in pref, ≥1 confirmed
+  contact, and the atomic once-per-run stamp (a concurrent double-tap no-ops).
+  The SMS leg additionally needs the (default-unset) Twilio provider.
+- **Surfaces.** Mobile: a `safety_off_route_alerts` toggle on Settings → Safety
+  contacts (hidden until the flag flips) + a run-screen banner on escalation.
+  Web: the same opt-in toggle on `/settings/safety` (web can't record, so no
+  trigger there). Copy localized across six web locales + all mobile ARBs.
+- **Pre-prod deploy checklist (not a code gate):** CISO/counsel review of the
+  `off_route` email/SMS copy + this posture, then set
+  `OFF_ROUTE_ESCALATION_ENABLED` on the web build + mobile dotenv. The feature
+  is fail-closed (flag off, pref off) so shipping the code exposes no one.
