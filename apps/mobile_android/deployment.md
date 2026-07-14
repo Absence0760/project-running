@@ -121,30 +121,38 @@ The same service account JSON is reusable for the Wear OS release ([`apps/watch_
 
 ## Build configuration
 
-### Build flavours
+### Single build, config by `--dart-define`
 
-Two product flavours, set up in `apps/mobile_android/android/app/build.gradle.kts`:
+There are **no product flavours** — one `applicationId` (`com.threkir.app`), one build. The release build carries no `.env` config: `main.dart` gates the `.env.development` asset load behind `kDebugMode` (decisions §137), so a release APK **only** sees config passed as compile-time `--dart-define`s. The workflow writes an empty `.env.development` (the pubspec ships it as an asset, so the file must exist, but its contents are never read in release) and injects the values below.
 
-| Flavour | applicationId | Backend |
+Local dev is the mirror image: `flutter run` (debug) reads `apps/mobile_android/.env.development` from the bundle; per-machine overrides go through `--dart-define`, not a `.env.local`.
+
+### Production config injected at build time
+
+Each define is passed from a GitHub Secret; `main.dart`'s `String.fromEnvironment` block seeds every non-empty one into `dotenv`. **Leave a secret unset to keep that feature fail-closed.**
+
+**Shared values reuse the canonical `PUBLIC_*` secrets the web + Wear OS releases already inject** — one prod source of truth, nothing to re-paste for these:
+
+| Secret (already set) | Define | Value / effect |
 |---|---|---|
-| `dev` | `com.threkir.app.dev` | Local Supabase or staging |
-| `production` | `com.threkir.app` | Production Supabase |
+| `PUBLIC_SUPABASE_URL` | `SUPABASE_URL` | prod Supabase URL — **required** |
+| `PUBLIC_SUPABASE_ANON_KEY` | `SUPABASE_ANON_KEY` | publishable key — **required** |
+| `PUBLIC_MAPTILER_KEY` | `MAPTILER_KEY` | MapTiler key — **required** (no maps without it) |
+| `PUBLIC_SENTRY_DSN` | `SENTRY_DSN` | Sentry DSN; empty → Sentry off |
 
-Different `applicationId` lets dev + prod coexist on a single device. Useful for the "I want to test against staging without losing my production runs" flow.
+`WEB_BASE_URL` is passed as a literal `https://threkir.com` in the build step (public host, not a secret).
 
-### Production secrets injected at build time
+**Mobile-specific secrets — create these:**
 
-The production flavour reads from `--dart-define`s (passed by the workflow):
+| Secret | Define | Value / effect |
+|---|---|---|
+| `MOBILE_OSRM_URL` | `OSRM_URL` | `https://osrm.threkir.com` — **required**, or the release route builder throws on first routing call (the public demo has no DPA and is refused in release) |
+| `MOBILE_LIVE_HUB_URL` | `LIVE_HUB_URL` | Go live-hub URL; empty → falls back to Supabase `live_run_pings` |
+| `MOBILE_GOOGLE_WEB_CLIENT_ID` | `GOOGLE_WEB_CLIENT_ID` | Google Sign-In web client id; empty → Google button no-ops |
+| `MOBILE_STRAVA_CLIENT_ID` | `STRAVA_CLIENT_ID` | Strava OAuth client id; empty → connect falls back to the web flow |
+| `MOBILE_REVENUECAT_API_KEY_ANDROID` | `REVENUECAT_API_KEY_ANDROID` | RevenueCat Android key; empty → Subscribe falls back to the web upgrade page |
 
-| Define | Value |
-|---|---|
-| `SUPABASE_URL` | `https://api.threkir.com` |
-| `SUPABASE_ANON_KEY` | publishable key from Supabase |
-| `MAPTILER_KEY` | from MapTiler dashboard |
-| `REVENUECAT_API_KEY` | RevenueCat Android key |
-| `SENTRY_DSN` | Sentry mobile project DSN |
-
-The dev flavour reads from `apps/mobile_android/.env.local` (gitignored), which carries staging or local URLs.
+Dev-only defines (`DEV_USER_EMAIL` / `DEV_USER_PASSWORD` auto-login, `BYPASS_PAYWALL`, `ADAPTIVE_FITNESS_GATE` / `WEIGH_IN_GATE`, `USDA_FDC_API_KEY`) are **deliberately not passed** — the gated ones stay off until their sign-off lands.
 
 ### Manifest declarations to verify before launch
 
@@ -228,12 +236,11 @@ Triggered by tagging `mobile_android@1.2.3`. The workflow at `.github/workflows/
 2. Sets up Flutter SDK + JDK 17.
 3. `melos bootstrap`.
 4. Decodes `ANDROID_KEYSTORE_BASE64` to a temp file.
-5. Reads version from the tag (`1.2.3`); derives `versionCode` from `git rev-list --count HEAD`.
-6. `flutter build appbundle --flavor production --release \
-     --dart-define-from-file=production-defines.json`.
-7. Signs the AAB with the upload keystore.
+5. Reads version from the tag (`1.2.3`); derives `versionCode` from `git rev-list --count HEAD`, and pins both into `pubspec.yaml`.
+6. Decodes the keystore + writes `key.properties` (so the gradle release `signingConfig` engages), and stubs an empty `.env.development`.
+7. `flutter build appbundle --release` with the production `--dart-define`s (§ Production config above) — the build is signed by gradle via `key.properties`, no separate sign step.
 8. Uploads to Play Internal track via `PLAY_SERVICE_ACCOUNT_JSON`.
-9. Creates a GitHub Release with the AAB attached.
+9. Attaches the AAB to the GitHub Release that triggered the run.
 
 Promotion from Internal to Beta to Production is **manual** through the Play Console after smoke-testing the Internal build.
 
@@ -321,7 +328,7 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [ ] Upload keystore generated, in 1Password and GitHub Secrets
 - [ ] Keystore backup stored cold (off-machine)
 - [ ] Play service account created, JSON in GitHub Secrets, granted Release manager on this app
-- [ ] Production-flavour `--dart-define` values verified (URL, anon key, MapTiler, RevenueCat, Sentry DSN)
+- [ ] Shared `PUBLIC_*` secrets present (Supabase URL/anon, MapTiler — already set for web) and `MOBILE_OSRM_URL` set (required); optional `MOBILE_*` keys left unset stay fail-closed
 - [ ] Manifest reviewed; permissions list matches data-safety form
 - [ ] BACKGROUND_LOCATION prominent in-app disclosure on OnboardingScreen verified
 - [ ] First `mobile_android@*` tag built clean, AAB landed on Internal track
