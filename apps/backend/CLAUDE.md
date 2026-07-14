@@ -174,6 +174,10 @@ grant select on public.<view> to <intended audience>;
 
 `view_write_privileges_test.sql` pins this with an information_schema catch-all, so a view created without the reset fails the pgtap job.
 
+### Every new function must pin `search_path`
+
+`create function` / `create or replace function` bodies must carry `set search_path = public` (add `, extensions` if the body references postgis/pg_trgm objects) — for SECURITY DEFINER functions it's a hijack defence, for plain invoker functions it silences the Supabase security advisor's "Function Search Path Mutable" lint and keeps resolution independent of the caller's session. The backfill was `20270415_001` (via `ALTER FUNCTION … SET`, never a body rewrite); `function_search_path_test.sql` is a pg_proc catch-all that fails the pgtap suite on any unpinned public function. The eight `public_*` views the same advisor flags as "Security Definer View" are intentional and stay definer — see decisions.md §244 before "fixing" them.
+
 ### `drop policy if exists "wrong-name"` is a silent no-op
 
 When you replace an RLS policy, the `drop policy if exists "name"` is keyed by EXACT name. A wrong name (typo, stale guess, name that was changed by a later migration) silently does nothing — your new policy then gets created ALONGSIDE the original, and at evaluation Postgres OR's them: the more permissive policy wins. The restrictive new policy you thought you added is bypassed.
