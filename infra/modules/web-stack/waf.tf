@@ -110,6 +110,51 @@ resource "aws_wafv2_web_acl" "coach" {
     }
   }
 
+  # Third rate-based rule on /api/routes/osrm*. The proxy fronts the
+  # self-hosted OSRM engine and requires a signed-in user, but the WAF cap
+  # is the pre-auth backstop: it stops a scripted client (or a stolen JWT)
+  # from using the proxy as a free routing relay or pinning the engine.
+  # Interactive route-building legitimately issues tens of requests per
+  # session, so the limit sits well above the coach/generate caps.
+  rule {
+    name     = "rate-limit-osrm-proxy"
+    priority = 3
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit                 = var.waf_osrm_proxy_rate_limit
+        aggregate_key_type    = "IP"
+        evaluation_window_sec = 300
+
+        scope_down_statement {
+          byte_match_statement {
+            positional_constraint = "STARTS_WITH"
+            search_string         = "/api/routes/osrm"
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-rate-limit-osrm-proxy"
+      sampled_requests_enabled   = true
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${local.resource_prefix}-coach-acl"

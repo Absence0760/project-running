@@ -1,48 +1,43 @@
-import { dev } from '$app/environment';
-import { env as publicEnv } from '$env/dynamic/public';
+import { supabase } from '../core/supabase';
 import type { TrackPoint } from '../types';
 
 /**
- * Base URL for the OSRM routing service.
+ * Client for the OSRM waypoint-routing proxy.
  *
- * **Dev**: falls back to `https://router.project-osrm.org`, the public
- * community demo. This is convenient locally but it's a third-party
- * service with no DPA, no published region, and an unauthenticated
- * URL — sending production user IPs + waypoints to it is a GDPR Art
- * 28 violation (no processor contract). audit/third-party-data-flows
- * (May 2026) flagged the silent fallback as Critical.
- *
- * **Prod**: `PUBLIC_OSRM_URL` MUST be set (typically pointing at the
- * `apps/job_worker/osrm/` self-hosted instance on Fly.io). If it's
- * absent the routing helpers throw the moment they're called rather
- * than silently leaking traffic to the community endpoint.
- *
- * Read via `$env/dynamic/public` rather than the static variant so a
- * fresh clone with no local `.env.local` still type-checks — the
- * dynamic API tolerates undeclared keys and returns `undefined`.
+ * The browser never talks to the OSRM host: every snapping/routing call goes
+ * to `/api/routes/osrm/*` — the dev SvelteKit wrapper locally, the osrm-proxy
+ * Lambda in production — and the OSRM base URL (`OSRM_URL`) is server-only,
+ * matching the generate-route path's `GRAPHHOPPER_URL` posture. A user's pin
+ * coordinates (routinely their home) therefore never leave our infra
+ * unproxied, and there is no client-side env to misconfigure toward the
+ * uncontracted community demo — that guard lives in the proxy handler now.
+ * See decisions §242 / issue #198.
  */
-const PUBLIC_DEMO_OSRM = 'https://router.project-osrm.org';
-const RAW_OSRM_URL = publicEnv.PUBLIC_OSRM_URL;
-
-export const OSRM_BASE_URL = (RAW_OSRM_URL || PUBLIC_DEMO_OSRM).replace(/\/+$/, '');
+export const OSRM_PROXY_BASE = '/api/routes/osrm';
 
 /**
- * Throws when the build is running in production mode AND the env var
- * is unset (or still points at the community demo). Callers invoke
- * this at the top of each fetch helper so a misconfigured deploy
- * fails loudly on the first routing request instead of quietly
- * forwarding user data to an uncontracted third party.
+ * Issue a GET against the proxy, carrying the viewer JWT in
+ * `x-supabase-authorization` (CloudFront's OAC owns `Authorization`, same as
+ * the generate/coach endpoints). A failed session read just sends no header —
+ * the proxy answers 401 and the caller takes its normal failure path.
+ *
+ * `pathAndQuery` is the OSRM-shaped remainder, e.g.
+ * `/route/v1/foot/2.35,48.85;2.36,48.86?overview=full&geometries=geojson`.
  */
-export function assertOsrmConfiguredForProd(): void {
-	if (dev) return;
-	if (!RAW_OSRM_URL || OSRM_BASE_URL === PUBLIC_DEMO_OSRM) {
-		throw new Error(
-			'OSRM not configured: set PUBLIC_OSRM_URL to a self-hosted ' +
-				'instance. The community endpoint router.project-osrm.org is ' +
-				'uncontracted (no DPA) and must not receive production traffic. ' +
-				'audit/third-party-data-flows (May 2026).',
-		);
+export async function osrmProxyFetch(
+	pathAndQuery: string,
+	init: { signal?: AbortSignal } = {},
+): Promise<Response> {
+	let token: string | undefined;
+	try {
+		token = (await supabase.auth.getSession()).data.session?.access_token;
+	} catch {
+		token = undefined;
 	}
+	return fetch(`${OSRM_PROXY_BASE}${pathAndQuery}`, {
+		headers: token ? { 'x-supabase-authorization': `Bearer ${token}` } : {},
+		signal: init.signal,
+	});
 }
 
 interface OsrmRoute {
@@ -71,9 +66,7 @@ export async function snapToRoad(
 	point: { lng: number; lat: number },
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<[number, number]> {
-	assertOsrmConfiguredForProd();
-	const url = `${OSRM_BASE_URL}/nearest/v1/${profile}/${point.lng},${point.lat}`;
-	const res = await fetch(url);
+	const res = await osrmProxyFetch(`/nearest/v1/${profile}/${point.lng},${point.lat}`);
 	if (!res.ok) return [point.lng, point.lat];
 
 	const data = await res.json();
@@ -93,11 +86,8 @@ export async function fetchRoute(
 	to: TrackPoint,
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<{ coordinates: [number, number][]; distance: number; snappedFrom: [number, number]; snappedTo: [number, number] }> {
-	assertOsrmConfiguredForProd();
 	const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
-
-	const res = await fetch(url);
+	const res = await osrmProxyFetch(`/route/v1/${profile}/${coords}?overview=full&geometries=geojson`);
 	if (!res.ok) throw new Error(`OSRM error: ${res.status}`);
 
 	const data: OsrmResponse = await res.json();
@@ -128,11 +118,8 @@ export async function fetchFullRoute(
 		return { coordinates: [], distance: 0 };
 	}
 
-	assertOsrmConfiguredForProd();
 	const coords = waypoints.map((w) => `${w.lng},${w.lat}`).join(';');
-	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
-
-	const res = await fetch(url);
+	const res = await osrmProxyFetch(`/route/v1/${profile}/${coords}?overview=full&geometries=geojson`);
 	if (!res.ok) throw new Error(`OSRM error: ${res.status}`);
 
 	const data: OsrmResponse = await res.json();

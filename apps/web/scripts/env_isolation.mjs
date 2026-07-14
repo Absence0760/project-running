@@ -33,9 +33,11 @@ const KNOWN_ENV_VARS = [
 	// export endpoint would write test export jobs to the live
 	// service's queue + Storage bucket.
 	'PUBLIC_EXPORT_HUB_URL',
-	// Bundled into the client at build time and read by routing.ts /
-	// RouteBuilder.svelte. The legacy `OSRM_URL` is kept in the
-	// allow-list below for any external tooling that still uses it.
+	// `OSRM_URL` is the server-only base the dev /api/routes/osrm proxy
+	// wrapper reads (issue #198 — the browser never sees it). The legacy
+	// `PUBLIC_OSRM_URL` is unread by code now but stays guarded so a stale
+	// prod value in someone's .env.local is still flagged, not silently
+	// ignored.
 	'PUBLIC_OSRM_URL',
 	'OSRM_URL',
 	'PUBLIC_SITE_URL',

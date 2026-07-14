@@ -36,10 +36,10 @@ import { USER_A } from '../fixtures/users';
 // Richmond, VA suburb — the coordinate the user actually exercises.
 const FIELD_START = { lat: 37.6519, lng: -77.3611 };
 
-// Match the client OSRM heuristic's calls by PATH, not host: the demo
-// (router.project-osrm.org) in CI, but localhost:5000 locally when
-// PUBLIC_OSRM_URL is set + the dev server is reused. A host-pinned mock misses
-// the latter and the client hits the real engine.
+// Match the client OSRM heuristic's calls by PATH, not host. Every OSRM
+// call now rides the same-origin /api/routes/osrm proxy (issue #198), and
+// the proxy mirrors OSRM's own path shape, so this regex intercepts the
+// request in-browser before it ever reaches the dev server.
 const OSRM_ROUTE = /\/route\/v1\/foot\//;
 
 const TARGETS = [

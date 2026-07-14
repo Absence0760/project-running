@@ -68,10 +68,10 @@ export default defineConfig({
 			// A dedicated dev server (the main config owns :7777, livehub
 			// :7778). `localhost` not 127.0.0.1: vite binds localhost (::1)
 			// by default, so a 127.0.0.1 readiness probe never connects.
-			// Empty PUBLIC_TILE_STYLE_URL + PUBLIC_OSRM_URL force the
-			// committed .env.development localhost dev services off (same
-			// guard the livehub config uses) — the SSO lane never renders a
-			// map, but the dev server still boots cleaner without them.
+			// Empty PUBLIC_TILE_STYLE_URL + OSRM_URL force the committed
+			// .env.development localhost dev services off (same guard the
+			// livehub config uses) — the SSO lane never renders a map, but
+			// the dev server still boots cleaner without them.
 			command: `pnpm exec vite dev --port ${DEV_PORT}`,
 			cwd: WEB_DIR,
 			url: `http://localhost:${DEV_PORT}`,
@@ -79,7 +79,7 @@ export default defineConfig({
 			timeout: 120_000,
 			stdout: 'ignore',
 			stderr: 'pipe',
-			env: { PUBLIC_TILE_STYLE_URL: '', PUBLIC_OSRM_URL: '' }
+			env: { PUBLIC_TILE_STYLE_URL: '', OSRM_URL: '' }
 		}
 	],
 
