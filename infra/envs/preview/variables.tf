@@ -42,6 +42,12 @@ variable "graphhopper_url" {
   default     = ""
 }
 
+variable "osrm_url" {
+  description = "Base URL of the self-hosted OSRM engine for the osrm-proxy Lambda (route-builder snapping, issue #198). Non-secret, server-only. Defaults to '' on preview so the proxy stays unconfigured (501) and the builder degrades to straight-line segments."
+  type        = string
+  default     = ""
+}
+
 # Email subscribers for the preview env's CloudWatch alarms (Lambda
 # throttling + 5xx error rate). Without subscribers the alarms fire
 # into an SNS topic nobody reads — a hit Lambda concurrency cap on

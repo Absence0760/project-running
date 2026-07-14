@@ -145,6 +145,7 @@ resource "aws_iam_role_policy" "deploy_prod" {
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-coach*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-generate-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-osrm-proxy*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-run*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-recap*",
@@ -220,6 +221,7 @@ resource "aws_iam_role_policy" "deploy_preview" {
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-coach*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-generate-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-osrm-proxy*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-run*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-recap*",

@@ -67,6 +67,15 @@ module "web" {
   # tests / PR review.
   generate_route_reserved_concurrency = 5
 
+  # Preview defaults to no OSRM engine ("" → the /api/routes/osrm proxy
+  # returns 501 and the builder degrades to straight-line segments). Point
+  # it at an engine only if a preview must exercise real snapping.
+  osrm_url = var.osrm_url
+
+  # Tight cap — mirrors generate-route; preview only sees smoke-test
+  # route-builder traffic.
+  osrm_proxy_reserved_concurrency = 5
+
   # Explicit rather than module-default so a future module-default
   # change doesn't silently shift preview's throttle-alarm
   # sensitivity. 5 throttles in the 5-min eval window is enough to

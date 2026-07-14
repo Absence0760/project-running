@@ -103,6 +103,18 @@ variable "generate_route_lambda_zip_path" {
   default     = null
 }
 
+variable "osrm_proxy_lambda_zip_path" {
+  description = "Optional path to a pre-built osrm-proxy Lambda zip (apps/web/lambda/osrm-proxy/dist/osrm-proxy.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Handles /api/routes/osrm* — the server-side proxy for the route builder's OSRM waypoint snapping/routing (issue #198)."
+  type        = string
+  default     = null
+}
+
+variable "osrm_url" {
+  description = "Base URL of the self-hosted OSRM engine for the osrm-proxy Lambda's snapping/routing calls (apps/job_worker/osrm/ on Fly.io). NON-SECRET (an internal engine URL, no key) — passed as a Terraform var like GRAPHHOPPER_URL, NOT via sops, and SERVER-ONLY (the browser only ever calls /api/routes/osrm — issue #198). Empty string ('') leaves OSRM_URL unset so the endpoint returns 501 and the route builder degrades to straight-line segments."
+  type        = string
+  default     = ""
+}
+
 variable "graphhopper_url" {
   description = "Base URL of the self-hosted GraphHopper engine for the generate-route Lambda's round_trip calls. NON-SECRET (an internal engine URL, no key) — passed as a Terraform var like PUBLIC_SUPABASE_URL, NOT via sops. Empty string ('') leaves GRAPHHOPPER_URL unset so the endpoint returns 501 (unconfigured) and the client falls back to the OSRM heuristic. Prod sets the engine URL; preview defaults to '' so it stays on the heuristic."
   type        = string
@@ -133,6 +145,12 @@ variable "generate_route_reserved_concurrency" {
   default     = 5
 }
 
+variable "osrm_proxy_reserved_concurrency" {
+  description = "Reserved concurrent executions for the osrm-proxy Lambda — caps the function's worst-case concurrency so a burst can't hammer the self-hosted OSRM engine. Snapping is chattier than generation (a call per dropped pin / segment batch) but each invocation is one cheap engine round trip. Default 5 = safe-by-default ceiling; raise once real traffic is observed. Set explicitly in env stacks rather than relying on the default."
+  type        = number
+  default     = 5
+}
+
 # ─────────────────── WAF ───────────────────
 
 variable "waf_enabled" {
@@ -151,6 +169,12 @@ variable "waf_generate_route_rate_limit" {
   description = "Per-IP rate limit applied to /api/routes/generate* requests across a 5-minute rolling window. Each generate call fans out several round_trip requests to the GraphHopper engine, so this caps how hard one IP can push the engine. 100 is generous for legitimate interactive use (a handful of generations per session) while still backstopping a scripted hammer. Only applies when waf_enabled is true."
   type        = number
   default     = 100
+}
+
+variable "waf_osrm_proxy_rate_limit" {
+  description = "Per-IP rate limit applied to /api/routes/osrm* requests across a 5-minute rolling window. The route builder issues one nearest call per snapped pin plus one route call per changed segment, so an active editing session legitimately produces tens of requests — 600 leaves interactive use untouched while backstopping a scripted relay attempt against the self-hosted OSRM engine. Only applies when waf_enabled is true."
+  type        = number
+  default     = 600
 }
 
 variable "kms_decrypt_principal_arn" {
