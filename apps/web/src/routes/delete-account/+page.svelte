@@ -87,12 +87,26 @@
 	</p>
 
 	<h2>5. Deleting some data without closing the account</h2>
+	<p>To delete individual data without deleting the account:</p>
+	<ul>
+		<li>
+			<strong>Runs, routes, photos, gym workouts, food-log entries, posts, comments</strong>:
+			open the item and use its Delete control. Runs can also be bulk-deleted from the Runs
+			list via multi-select.
+		</li>
+		<li>
+			<strong>Connected services</strong> (Strava, parkrun, and similar): disconnect them in
+			Settings → Integrations; disconnecting revokes our access.
+		</li>
+		<li>
+			<strong>Anything else, or if you prefer not to do it in the app</strong>: email
+			<a href="mailto:privacy@threkir.com">privacy@threkir.com</a> describing the data to
+			delete, and we will action it with the same verification and timeline as section 2.
+		</li>
+	</ul>
 	<p>
-		You can delete individual items at any time without deleting the account: runs (single or
-		bulk), routes, photos, gym workouts, food-log entries, posts, and comments each have their
-		own delete controls, and connected integrations can be disconnected in Settings →
-		Integrations. You can also
-		<a href="/settings/account">export your data</a> before deleting anything.
+		Deleted items leave encrypted backups within the same 28-day window described above. You can
+		also <a href="/settings/account">export your data</a> before deleting anything.
 	</p>
 
 	<h2>6. Related documents</h2>
