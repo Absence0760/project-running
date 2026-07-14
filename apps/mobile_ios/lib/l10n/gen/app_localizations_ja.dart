@@ -635,6 +635,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runAutoLiveShareStarted => 'ライブ共有中 — 「ライブリンクを共有」でリンクを送れます';
 
   @override
+  String get runSafetyNudgeSolo =>
+      '暗くなってから一人で走っていますか？ライブリンクを共有して、誰かに見守ってもらいましょう。';
+
+  @override
+  String get runSafetyNudgeShareAction => '共有';
+
+  @override
   String get activitySedentary => 'ほとんど座っている（デスクワーク）';
 
   @override
@@ -833,6 +840,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get setupOpenDashboard => 'ダッシュボードを開く';
+
+  @override
+  String get setupCreatePlanCta => 'トレーニングプランを作成';
 
   @override
   String get setupWelcomeToast => 'Threkir へようこそ！';
@@ -1904,6 +1914,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String runDetailZoneRow(int number, String label) {
     return 'ゾーン $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'ゾーンは年齢から推定した最大心拍数を使用します。心拍に影響する薬（ベータ遮断薬など）を服用している場合や最大心拍数を測定済みの場合は、環境設定で設定すると正確なゾーンを取得できます。';
+
+  @override
+  String get runDetailHrDisclaimerAction => '最大心拍数を設定';
 
   @override
   String get runDetailSectionSplits => 'スプリット';

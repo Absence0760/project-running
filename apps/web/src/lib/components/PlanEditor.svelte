@@ -78,11 +78,16 @@
 	interface Props {
 		oncreated?: (plan: { id: string }) => void;
 		oncancel?: () => void;
+		// Preselect the goal + beginner toggle on mount (the onboarding
+		// "create my training plan" deep-link keys these off primary_goal).
+		// Absent → the normal defaults below.
+		initialGoalEvent?: GoalEvent;
+		initialBeginnerWalkRun?: boolean;
 	}
-	let { oncreated, oncancel }: Props = $props();
+	let { oncreated, oncancel, initialGoalEvent, initialBeginnerWalkRun }: Props = $props();
 
 	let name = $state('');
-	let goalEvent = $state<GoalEvent>('distance_half');
+	let goalEvent = $state<GoalEvent>(initialGoalEvent ?? 'distance_half');
 	let startDate = $state(defaultStart());
 	let daysPerWeek = $state(4);
 
@@ -98,7 +103,7 @@
 	// reflects current fitness; otherwise we fall back to goal-based paces.
 	let recent5kConfirmed = $state(false);
 	// Beginner / return-to-run: generate a C25K-style walk-run plan (persona #22).
-	let beginnerWalkRun = $state(false);
+	let beginnerWalkRun = $state(initialBeginnerWalkRun ?? false);
 
 	let weekOverride = $state<number | null>(null);
 	let busy = $state(false);

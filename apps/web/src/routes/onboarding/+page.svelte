@@ -194,7 +194,7 @@
 	/// the runner answered along the way: display name, units, goal,
 	/// optional demographics (with GDPR Art 9 consent), privacy
 	/// default. Stamps `onboarded_at` so the gate releases.
-	async function finishAndExit(): Promise<void> {
+	async function finishAndExit(dest: string = '/dashboard'): Promise<void> {
 		if (saving) return;
 		if (!(await ensureAuthUser())) return;
 		saving = true;
@@ -267,7 +267,11 @@
 			if (profileResult.error) throw profileResult.error;
 
 			showToast(m('onboarding.welcomeToast'), 'success');
-			navigateToDashboard();
+			// Full page navigation (same rationale as navigateToDashboard) so the
+			// layout onboarding-gate re-bootstraps from the freshly-written
+			// onboarded_at. `dest` is /dashboard by default, or the goal-keyed
+			// /plans/new deep-link from the "create my training plan" CTA.
+			window.location.href = dest;
 		} catch (e) {
 			showToast(m('onboarding.saveError', { message: (e as Error).message }), 'error');
 			saving = false;
@@ -477,6 +481,16 @@
 				<p class="hint">
 					{m('onboarding.step7Hint')}
 				</p>
+				{#if primaryGoal}
+					<button
+						type="button"
+						class="btn btn-primary create-plan-cta"
+						onclick={() => finishAndExit(`/plans/new?type=training&goal=${primaryGoal}`)}
+						disabled={saving}
+					>
+						{saving ? m('onboarding.saving') : m('onboarding.createPlanCta')}
+					</button>
+				{/if}
 			</section>
 		{/if}
 
@@ -500,7 +514,12 @@
 						{m('onboarding.continue')}
 					</button>
 				{:else}
-					<button type="button" class="btn btn-primary" onclick={finishAndExit} disabled={saving}>
+					<button
+						type="button"
+						class="btn {primaryGoal ? 'btn-outline' : 'btn-primary'}"
+						onclick={() => finishAndExit()}
+						disabled={saving}
+					>
 						{saving ? m('onboarding.saving') : m('onboarding.openDashboard')}
 					</button>
 				{/if}
@@ -580,6 +599,7 @@
 		margin: 0 0 var(--space-lg);
 	}
 	section { display: flex; flex-direction: column; gap: var(--space-md); }
+	.create-plan-cta { align-self: flex-start; }
 
 	.field { display: flex; flex-direction: column; gap: 0.35rem; }
 	.label-text { font-size: 0.85rem; color: var(--color-text-secondary); font-weight: 500; }

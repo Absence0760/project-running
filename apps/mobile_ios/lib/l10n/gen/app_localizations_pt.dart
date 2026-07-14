@@ -654,6 +654,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Correndo sozinho(a) depois do escurecer? Compartilhe um link ao vivo para alguém acompanhar.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Compartilhar';
+
+  @override
   String get activitySedentary =>
       'Maior parte sentado (trabalho de escritório)';
 
@@ -862,6 +869,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get setupOpenDashboard => 'Abrir painel';
+
+  @override
+  String get setupCreatePlanCta => 'Criar meu plano de treino';
 
   @override
   String get setupWelcomeToast => 'Bem-vindo ao Threkir!';
@@ -1997,6 +2007,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String runDetailZoneRow(int number, String label) {
     return 'Zona $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'As zonas usam uma FC máxima estimada pela idade. Se você toma medicação cardíaca (ex.: betabloqueadores) ou já mediu sua FC máxima, defina-a em Preferências para zonas precisas.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Definir FC máx.';
 
   @override
   String get runDetailSectionSplits => 'Parciais';
@@ -11732,6 +11749,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Correndo sozinho(a) depois do escurecer? Compartilhe um link ao vivo para alguém acompanhar.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Compartilhar';
+
+  @override
   String get activitySedentary =>
       'Maior parte sentado (trabalho de escritório)';
 
@@ -11940,6 +11964,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get setupOpenDashboard => 'Abrir painel';
+
+  @override
+  String get setupCreatePlanCta => 'Criar meu plano de treino';
 
   @override
   String get setupWelcomeToast => 'Bem-vindo ao Threkir!';
@@ -13074,6 +13101,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runDetailZoneRow(int number, String label) {
     return 'Zona $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'As zonas usam uma FC máxima estimada pela idade. Se você toma medicação cardíaca (ex.: betabloqueadores) ou já mediu sua FC máxima, defina-a em Preferências para zonas precisas.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Definir FC máx.';
 
   @override
   String get runDetailSectionSplits => 'Parciais';

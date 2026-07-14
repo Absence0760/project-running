@@ -906,6 +906,14 @@
   "@runAutoLiveShareStarted": {
     "description": "Banner on the run screen when the auto-live-share pref attached the broadcaster"
   },
+  "runSafetyNudgeSolo": "Running solo after dark? Share a live link so someone can follow along.",
+  "@runSafetyNudgeSolo": {
+    "description": "One-time dismissible nudge on the run screen when a solo run starts after dark with no live share"
+  },
+  "runSafetyNudgeShareAction": "Share",
+  "@runSafetyNudgeShareAction": {
+    "description": "Action button on the solo-run safety nudge banner; shares a live link for the current run"
+  },
   "activitySedentary": "Mostly sitting (desk job)",
   "@activitySedentary": {
     "description": "Nutrition activity level: little exercise"
@@ -1166,6 +1174,10 @@
   "setupOpenDashboard": "Open dashboard",
   "@setupOpenDashboard": {
     "description": "Final setup-wizard button that saves and closes the wizard"
+  },
+  "setupCreatePlanCta": "Create my training plan",
+  "@setupCreatePlanCta": {
+    "description": "Setup-wizard finish-step CTA that saves and opens the plan wizard preselected to the runner's chosen goal"
   },
   "setupWelcomeToast": "Welcome to Threkir!",
   "@setupWelcomeToast": {
@@ -2678,6 +2690,14 @@
         "type": "String"
       }
     }
+  },
+  "runDetailHrDisclaimer": "Zones use an age-estimated max HR. On heart-rate medication (e.g. beta-blockers) or if you've measured your max HR, set it in Preferences for accurate zones.",
+  "@runDetailHrDisclaimer": {
+    "description": "Info note under the run-detail HR-zone breakdown when zones fall back to an age-estimated max HR (no hr_zones or max_hr_bpm override set)"
+  },
+  "runDetailHrDisclaimerAction": "Set max HR",
+  "@runDetailHrDisclaimerAction": {
+    "description": "Button under the HR-zone disclaimer that opens Settings to set max HR / zones"
   },
   "runDetailSectionSplits": "Splits",
   "@runDetailSectionSplits": {

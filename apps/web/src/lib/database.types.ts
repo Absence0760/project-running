@@ -1669,6 +1669,103 @@ export type Database = {
           },
         ]
       }
+      global_segment_efforts: {
+        Row: {
+          created_at: string
+          global_segment_id: string
+          id: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          global_segment_id: string
+          id?: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          global_segment_id?: string
+          id?: string
+          run_id?: string
+          started_at?: string
+          time_seconds?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_segment_efforts_global_segment_id_fkey"
+            columns: ["global_segment_id"]
+            isOneToOne: false
+            referencedRelation: "global_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_segments: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          distance_m: number
+          elevation_m: number | null
+          id: string
+          is_active: boolean
+          name: string
+          region: string | null
+          surface: string
+          waypoints: Json
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          distance_m: number
+          elevation_m?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          region?: string | null
+          surface?: string
+          waypoints: Json
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          distance_m?: number
+          elevation_m?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          region?: string | null
+          surface?: string
+          waypoints?: Json
+        }
+        Relationships: []
+      }
       gym_routine_exercises: {
         Row: {
           exercise_key: string
@@ -3511,30 +3608,36 @@ export type Database = {
           confirm_token: string
           confirmed_at: string | null
           contact_email: string
+          contact_phone: string | null
           contact_user_id: string | null
           created_at: string
           id: string
           owner_id: string
+          sms_opt_in_at: string | null
           updated_at: string
         }
         Insert: {
           confirm_token?: string
           confirmed_at?: string | null
           contact_email: string
+          contact_phone?: string | null
           contact_user_id?: string | null
           created_at?: string
           id?: string
           owner_id: string
+          sms_opt_in_at?: string | null
           updated_at?: string
         }
         Update: {
           confirm_token?: string
           confirmed_at?: string | null
           contact_email?: string
+          contact_phone?: string | null
           contact_user_id?: string | null
           created_at?: string
           id?: string
           owner_id?: string
+          sms_opt_in_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -4819,9 +4922,12 @@ export type Database = {
         }[]
       }
       confirm_age_and_terms: { Args: never; Returns: undefined }
-      confirm_safety_contact: { Args: { p_id: string }; Returns: boolean }
+      confirm_safety_contact: {
+        Args: { p_id: string; p_sms_opt_in?: boolean }
+        Returns: boolean
+      }
       confirm_safety_contact_by_token: {
-        Args: { p_token: string }
+        Args: { p_sms_opt_in?: boolean; p_token: string }
         Returns: boolean
       }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
@@ -5068,6 +5174,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      global_segment_effort_ranks: {
+        Args: { p_run_id: string }
+        Returns: {
+          effort_id: string
+          rank: number
+        }[]
+      }
+      global_segment_leaderboard: {
+        Args: {
+          p_age_band?: string
+          p_club_id?: string
+          p_gender?: string
+          p_limit?: number
+          p_segment_id: string
+        }
+        Returns: {
+          age: number
+          avatar_url: string
+          display_name: string
+          effort_id: string
+          gender: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }[]
+      }
       grant_health_data_consent: { Args: never; Returns: string }
       gym_exercise_names: {
         Args: never
@@ -5228,6 +5361,7 @@ export type Database = {
         Args: never
         Returns: {
           created_at: string
+          has_phone: boolean
           id: string
           owner_name: string
         }[]
@@ -5644,6 +5778,14 @@ export type Database = {
           p_token_expiry?: string
           p_user_id: string
         }
+        Returns: boolean
+      }
+      set_run_expected_return: {
+        Args: { p_expected_return_at: string; p_run_id: string }
+        Returns: boolean
+      }
+      set_safety_sms_opt_in: {
+        Args: { p_id: string; p_opt_in: boolean }
         Returns: boolean
       }
       submit_report: {

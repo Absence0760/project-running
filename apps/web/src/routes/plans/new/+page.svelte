@@ -15,6 +15,7 @@
 		publishGymRoutineAsTemplate,
 	} from '$lib/core/data';
 	import { STARTER_PLANS, starterById, instantiateStarter } from '$lib/training/starter_plans';
+	import { PRIMARY_GOAL_VALUES, planPresetForGoal, type PrimaryGoal } from '$lib/settings/onboarding';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
@@ -44,6 +45,15 @@
 	const showChooser = !(
 		explicitType === 'training' || explicitType === 'session' || explicitType === 'gym'
 	);
+
+	// `?goal=<primary_goal>` (the onboarding "create my training plan" CTA)
+	// preselects the goal distance + walk-run toggle so a brand-new runner
+	// lands on the right plan shape without hunting for the beginner checkbox.
+	const goalParam = $page.url.searchParams.get('goal');
+	const goalPreset =
+		goalParam && (PRIMARY_GOAL_VALUES as readonly string[]).includes(goalParam)
+			? planPresetForGoal(goalParam as PrimaryGoal)
+			: null;
 
 	let kind = $state<PlanKind>(initialKind());
 
@@ -361,6 +371,8 @@
 	<PlanEditor
 		oncreated={(plan) => goto(`/plans/${plan.id}`)}
 		oncancel={handleCancel}
+		initialGoalEvent={goalPreset?.goalEvent}
+		initialBeginnerWalkRun={goalPreset?.beginnerWalkRun}
 	/>
 	{:else if kind === 'session'}
 		<div class="form-branch">

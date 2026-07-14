@@ -26,6 +26,18 @@ test.describe('/nutrition — meal templates', () => {
 		const item = `E2E Template Oats ${stamp}`;
 		const templateName = `E2E Breakfast ${stamp}`;
 
+		// "Save as meal" captures ALL of today's food_log for this user, and
+		// this test asserts the template has exactly one item. Sibling specs
+		// sharing USER_A can leave today's food_log dirty, so clear today's
+		// entries first — this test owns today's meals for its window.
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+		await admin
+			.from('food_log')
+			.delete()
+			.eq('user_id', USER_A.id)
+			.gte('started_at', todayStart.toISOString());
+
 		// Seed one logged entry today so "Save as meal" has something to capture.
 		const { data: seedEntry } = await admin
 			.from('food_log')
@@ -60,7 +72,22 @@ test.describe('/nutrition — meal templates', () => {
 				.locator('.template-row', { hasText: templateName });
 			await expect(templateRow).toBeVisible({ timeout: 10_000 });
 
-			// Backend rows landed owner-scoped, with the item nested.
+			// Backend rows landed owner-scoped, with the item nested. The save
+			// modal closes optimistically, so the insert can lag the visible
+			// template row by a beat — poll for the row rather than reading once.
+			await expect
+				.poll(
+					async () =>
+						(
+							await admin
+								.from('meal_templates')
+								.select('id')
+								.eq('user_id', USER_A.id)
+								.eq('name', templateName)
+						).data?.length ?? 0,
+					{ timeout: 10_000 },
+				)
+				.toBe(1);
 			const { data: tmpl } = await admin
 				.from('meal_templates')
 				.select('id, name, item_count, meal_slot, user_id')

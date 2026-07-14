@@ -655,6 +655,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Live-Teilen ist aktiv — sende den Link über „Live-Link teilen“';
 
   @override
+  String get runSafetyNudgeSolo =>
+      'Läufst du allein nach Einbruch der Dunkelheit? Teile einen Live-Link, damit dir jemand folgen kann.';
+
+  @override
+  String get runSafetyNudgeShareAction => 'Teilen';
+
+  @override
   String get activitySedentary => 'Überwiegend sitzend (Bürojob)';
 
   @override
@@ -862,6 +869,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get setupOpenDashboard => 'Dashboard öffnen';
+
+  @override
+  String get setupCreatePlanCta => 'Meinen Trainingsplan erstellen';
 
   @override
   String get setupWelcomeToast => 'Willkommen bei Threkir!';
@@ -2003,6 +2013,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String runDetailZoneRow(int number, String label) {
     return 'Zone $number · $label';
   }
+
+  @override
+  String get runDetailHrDisclaimer =>
+      'Die Zonen verwenden eine altersgeschätzte maximale HF. Wenn du Herzfrequenzmedikamente nimmst (z. B. Betablocker) oder deine maximale HF gemessen hast, lege sie in den Präferenzen fest, um genaue Zonen zu erhalten.';
+
+  @override
+  String get runDetailHrDisclaimerAction => 'Max. HF festlegen';
 
   @override
   String get runDetailSectionSplits => 'Splits';

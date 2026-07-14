@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../backend_timeout.dart';
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -32,7 +33,19 @@ class PlanNewScreen extends StatefulWidget {
   /// constructs its own against the global Supabase client.
   final SocialService? social;
 
-  const PlanNewScreen({super.key, required this.training, this.social});
+  /// Preselect the goal + beginner toggle on mount (the onboarding
+  /// "create my training plan" nudge keys these off the runner's
+  /// primary_goal). Null → the normal defaults.
+  final GoalEvent? initialGoal;
+  final bool initialBeginnerWalkRun;
+
+  const PlanNewScreen({
+    super.key,
+    required this.training,
+    this.social,
+    this.initialGoal,
+    this.initialBeginnerWalkRun = false,
+  });
 
   @override
   State<PlanNewScreen> createState() => _PlanNewScreenState();
@@ -93,6 +106,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialGoal != null) _goal = widget.initialGoal!;
+    _beginnerWalkRun = widget.initialBeginnerWalkRun;
     widget.training.fetchViewerGender().then((g) {
       if (!mounted) return;
       setState(() => _viewerGender = g);
@@ -325,7 +340,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('PlanNewScreen._submit failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

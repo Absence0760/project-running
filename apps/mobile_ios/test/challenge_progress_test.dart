@@ -67,6 +67,16 @@ void main() {
         5000);
   });
 
+  test('metricFromActivity excludes a DNF run from every metric', () {
+    // Mirrors the server aggregate's `and r.is_dnf = false` — a 42 km effort
+    // dropped mid-race must not bank toward a "run 100 km" challenge estimate.
+    expect(metricFromActivity({'distance_m': 42000, 'is_dnf': true}, ChallengeMetric.distance, null), 0);
+    expect(metricFromActivity({'duration_s': 1800, 'is_dnf': true}, ChallengeMetric.duration, null), 0);
+    expect(metricFromActivity({'is_dnf': true}, ChallengeMetric.activityCount, null), 0);
+    // A finished (non-DNF) run still counts in full.
+    expect(metricFromActivity({'distance_m': 42000, 'is_dnf': false}, ChallengeMetric.distance, null), 42000);
+  });
+
   test('metricFromActivity defaults missing activity_type to run', () {
     expect(metricFromActivity({'distance_m': 5000}, ChallengeMetric.distance, 'run'), 5000);
   });

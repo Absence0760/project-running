@@ -6,6 +6,18 @@
 > for the staleness/ETA contract and the [flows.md spectator section](flows.md#predictive-next-cut-off-will-they-make-it).
 > The brief below is preserved as the design record.
 >
+> **Extended to the runner's own live screen (mobile, 2026-07-12).** The same
+> card now renders on `RunScreen`'s recording overlay while the runner is
+> recording against a route that carries cutoff markers, so an ultra runner
+> sees their own cutoff buffer without doing the math by hand at hour 60 —
+> not just the at-home spectator. The card widget was extracted from
+> `live_spectator_screen.dart` into the shared `lib/widgets/cutoff_card.dart`
+> (`CutoffCard`) so the two surfaces can't diverge; `run_screen.dart` loads the
+> roadbook cutoff legs at route selection (`_loadCutoffLegs`, L4 best-effort —
+> fetch failure / offline just hides the card) and projects per GPS tick
+> (`_cutoffEta`). Reuses the existing seven `liveCutoff*` ARB keys — no new
+> strings.
+>
 > **Decisions taken vs the open questions below:** pace window = recent flat pace
 > over the last ~5 pings; **flat** pace (grade-adjusted remaining deferred, as on
 > `checkpoint_projection`); flip to `unknown` reuses `live_freshness`'s `stale`
@@ -76,8 +88,9 @@ over-claiming when the position is stale** (the personas' core complaint).
    pace yet) keeps the neutral `live.cutoffWaitingSignal` /
    `liveCutoffWaitingSignal` line, so a runner who went dark mid-race is never
    mislabelled as still starting up. (Mobile mirror shipped 2026-07-11 —
-   `_CutoffCard.stale` on `live_spectator_screen.dart` + the
-   `liveCutoffSignalLost` ARB key in all seven catalogues.)
+   `CutoffCard.stale` in the shared `lib/widgets/cutoff_card.dart` + the
+   `liveCutoffSignalLost` ARB key in all seven catalogues; the runner's own
+   `RunScreen` renders the same widget as of 2026-07-12.)
 3. **Pace source:** recent average over the last N pings (decide N), or
    effort-adjusted (GAP) remaining distance for a better hill estimate.
 

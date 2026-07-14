@@ -98,6 +98,8 @@ const _tables = <String>{
   'saved_routes',
   'segments',
   'segment_efforts',
+  'global_segments',
+  'global_segment_efforts',
   'notifications',
   'run_matched_tracks',
   'gear',

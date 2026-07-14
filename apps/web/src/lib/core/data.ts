@@ -4308,6 +4308,40 @@ export async function deletePlan(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Pause an active plan — a first-class, reversible primitive distinct from
+/// abandon/complete (persona runner-woman, decisions §231). Sets status
+/// 'paused', which frees the one-active slot so the runner can resume later.
+export async function pausePlan(id: string): Promise<void> {
+	await updatePlanStatus(id, 'paused');
+}
+
+/// Thrown by resumePlan when the user already has another active plan — the
+/// `training_plans_one_active` unique index would reject the resume, so we
+/// refuse up front with a clear signal the UI can translate rather than
+/// silently completing the other plan.
+export class ActivePlanExistsError extends Error {
+	constructor() {
+		super('active_plan_exists');
+		this.name = 'ActivePlanExistsError';
+	}
+}
+
+/// Resume a paused plan back to 'active'. Refuses (throws
+/// ActivePlanExistsError) when another active plan already exists for the
+/// user, since the one-active partial unique index would reject it — the
+/// runner must pause/finish the other plan first. Non-destructive by design.
+export async function resumePlan(id: string, userId: string): Promise<void> {
+	const { data: active, error: qErr } = await supabase
+		.from('training_plans')
+		.select('id')
+		.eq('user_id', userId)
+		.eq('status', 'active')
+		.limit(1);
+	if (qErr) throw qErr;
+	if (active && active.length > 0) throw new ActivePlanExistsError();
+	await updatePlanStatus(id, 'active');
+}
+
 export async function markWorkoutCompleted(
 	workoutId: string,
 	runId: string | null,
@@ -6747,14 +6781,17 @@ export async function setGearRotationMembers(
 export interface SafetyContact {
 	id: string;
 	contact_email: string;
+	contact_phone: string | null;
 	contact_user_id: string | null;
 	confirmed_at: string | null;
+	sms_opt_in_at: string | null;
 	created_at: string;
 }
 
 export interface PendingSafetyRequest {
 	id: string;
 	owner_name: string;
+	has_phone: boolean;
 	created_at: string;
 }
 
@@ -6762,7 +6799,7 @@ export interface PendingSafetyRequest {
 export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
-		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.order('created_at', { ascending: false });
 	if (error) {
 		console.error('fetchMySafetyContacts failed', error);
@@ -6776,13 +6813,14 @@ export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
 /// are forced null server-side (the contact must opt in), so we never set
 /// them here. Throws on RLS / unique / format failure for the caller to
 /// surface.
-export async function addSafetyContact(email: string): Promise<SafetyContact> {
+export async function addSafetyContact(email: string, phone?: string | null): Promise<SafetyContact> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
+	const trimmedPhone = phone?.trim() ?? '';
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
-		.insert({ owner_id: userId, contact_email: email })
-		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.insert({ owner_id: userId, contact_email: email, contact_phone: trimmedPhone || null })
+		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.single();
 	if (error || !data) throw error ?? new Error('addSafetyContact failed');
 	return data as SafetyContact;
@@ -6807,9 +6845,38 @@ export async function fetchPendingSafetyRequests(): Promise<PendingSafetyRequest
 }
 
 /// Confirm a pending request addressed to my account email (links my
-/// account). Returns whether a row was confirmed.
-export async function confirmSafetyRequest(id: string): Promise<boolean> {
-	const { data, error } = await supabase.rpc('confirm_safety_contact', { p_id: id });
+/// account). `smsOptIn` additionally consents to SMS alerts — armed only when
+/// the owner stored a phone number (server-enforced). Returns whether a row
+/// was confirmed.
+export async function confirmSafetyRequest(id: string, smsOptIn = false): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact', {
+		p_id: id,
+		p_sms_opt_in: smsOptIn,
+	});
+	if (error) throw error;
+	return data === true;
+}
+
+/// Turn SMS consent on/off on a relationship the signed-in user is the
+/// confirmed contact of. Opting in requires a phone on file (server-enforced).
+export async function setSafetySmsOptIn(id: string, optIn: boolean): Promise<boolean> {
+	const { data, error } = await supabase.rpc('set_safety_sms_opt_in', { p_id: id, p_opt_in: optIn });
+	if (error) throw error;
+	return data === true;
+}
+
+/// Set (or clear, with null) the per-run "not back by X" expected-return
+/// override on one of my own in-progress broadcast runs. The overdue scan
+/// escalates to my confirmed safety contacts once this time passes. Returns
+/// whether the run was updated (false if it isn't mine or isn't in-progress).
+export async function setRunExpectedReturn(
+	runId: string,
+	expectedReturnAt: string | null,
+): Promise<boolean> {
+	const { data, error } = await supabase.rpc('set_run_expected_return', {
+		p_run_id: runId,
+		p_expected_return_at: expectedReturnAt,
+	});
 	if (error) throw error;
 	return data === true;
 }
@@ -6823,8 +6890,11 @@ export async function declineSafetyRequest(id: string): Promise<boolean> {
 
 /// Unauthenticated email-link confirm for an external contact. The token is
 /// the capability; the anon Supabase client may call it.
-export async function confirmSafetyContactByToken(token: string): Promise<boolean> {
-	const { data, error } = await supabase.rpc('confirm_safety_contact_by_token', { p_token: token });
+export async function confirmSafetyContactByToken(token: string, smsOptIn = false): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact_by_token', {
+		p_token: token,
+		p_sms_opt_in: smsOptIn,
+	});
 	if (error) throw error;
 	return data === true;
 }
@@ -7084,6 +7154,222 @@ export async function computeSegmentEffortsForRun(input: {
 		return 0;
 	}
 	return inserted?.length ?? 0;
+}
+
+// --- Global / famous-segment catalogue (decisions §232) ---
+
+export interface GlobalSegment {
+	id: string;
+	name: string;
+	description: string | null;
+	waypoints: { lat: number; lng: number; ele?: number }[];
+	distance_m: number;
+	elevation_m: number | null;
+	surface: string;
+	region: string | null;
+	country_code: string | null;
+	is_active: boolean;
+	created_at: string;
+}
+
+export interface GlobalSegmentEffort {
+	id: string;
+	global_segment_id: string;
+	run_id: string;
+	user_id: string;
+	time_seconds: number;
+	started_at: string;
+	created_at: string;
+}
+
+export interface GlobalSegmentLeaderboardEntry {
+	effort: GlobalSegmentEffort;
+	athlete: PublicProfile;
+	rank: number;
+}
+
+export interface GlobalSegmentEffortWithSegment {
+	effort: GlobalSegmentEffort;
+	segment: GlobalSegment;
+	rank: number;
+}
+
+export async function fetchGlobalSegments(limit = 200): Promise<GlobalSegment[]> {
+	return (await fetchGlobalSegmentsWithError(limit)).segments;
+}
+
+/// Browse the catalogue. Region filtering is client-side (the curated v1
+/// catalogue is small); this fetch just pulls the active rows. Surfaces the
+/// error instead of swallowing to `[]` so the browse page can show a
+/// distinct error state rather than a false "empty catalogue".
+export async function fetchGlobalSegmentsWithError(
+	limit = 200,
+): Promise<{ segments: GlobalSegment[]; error: string | null }> {
+	const { data, error } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.eq('is_active', true)
+		.order('name', { ascending: true })
+		.limit(limit);
+	if (error) {
+		console.error('fetchGlobalSegments failed', error);
+		return { segments: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
+	}
+	return { segments: (data ?? []) as GlobalSegment[], error: null };
+}
+
+export async function fetchGlobalSegment(id: string): Promise<GlobalSegment | null> {
+	const { data, error } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.eq('id', id)
+		.eq('is_active', true)
+		.maybeSingle();
+	if (error) {
+		console.error('fetchGlobalSegment failed', error);
+		return null;
+	}
+	return (data as GlobalSegment) ?? null;
+}
+
+/// Block-guarded global-segment leaderboard. Mirrors
+/// `fetchSegmentLeaderboardTiered` but calls the catalogue RPC (no route
+/// visibility branch — the catalogue is public; per-effort run privacy +
+/// the block graph are applied server-side).
+export async function fetchGlobalSegmentLeaderboard(
+	segmentId: string,
+	filter: {
+		gender?: SegmentGenderFilter | null;
+		ageBand?: SegmentAgeBand | null;
+		clubId?: string | null;
+	} = {},
+	limit = 50,
+): Promise<GlobalSegmentLeaderboardEntry[]> {
+	const { data, error } = await supabase.rpc('global_segment_leaderboard', {
+		p_segment_id: segmentId,
+		p_gender: filter.gender ?? null,
+		p_age_band: filter.ageBand ?? null,
+		p_limit: limit,
+		p_club_id: filter.clubId ?? null,
+	});
+	if (error || !data) {
+		console.warn('fetchGlobalSegmentLeaderboard failed', error);
+		return [];
+	}
+	const rows = data as Array<{
+		effort_id: string;
+		user_id: string;
+		run_id: string;
+		time_seconds: number;
+		started_at: string;
+		display_name: string | null;
+		avatar_url: string | null;
+		gender: string | null;
+		age: number | null;
+	}>;
+	return assignCompetitionRanks(rows).map(({ row, rank }) => ({
+		effort: {
+			id: row.effort_id,
+			global_segment_id: segmentId,
+			run_id: row.run_id,
+			user_id: row.user_id,
+			time_seconds: row.time_seconds,
+			started_at: row.started_at,
+			created_at: row.started_at,
+		} as GlobalSegmentEffort,
+		athlete: { id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url },
+		rank,
+	}));
+}
+
+/// Backfill catalogue-segment efforts a run earned. Called from the
+/// run-detail page on mount (owner only). Scores the run's track against
+/// every active catalogue geometry via the pure `computeGlobalSegmentEffort`
+/// (end-to-end match, curated v1) and batch-upserts matches. Idempotent via
+/// unique(global_segment_id, run_id) + ignoreDuplicates. Returns new count.
+export async function computeGlobalSegmentEffortsForRun(input: {
+	run_id: string;
+	user_id: string;
+	track: { lat: number; lng: number; ts?: string }[];
+}): Promise<number> {
+	if (!input.track || input.track.length < 2) return 0;
+	const userId = auth.user?.id;
+	if (!userId || userId !== input.user_id) return 0;
+
+	const { segments } = await fetchGlobalSegmentsWithError(500);
+	if (segments.length === 0) return 0;
+
+	const { computeGlobalSegmentEffort } = await import('../segments/segments');
+	const rows: {
+		global_segment_id: string;
+		run_id: string;
+		user_id: string;
+		time_seconds: number;
+		started_at: string;
+	}[] = [];
+	for (const seg of segments) {
+		const pts = (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) }));
+		const eff = computeGlobalSegmentEffort(input.track as import('$lib/types').TrackPoint[], {
+			points: pts,
+			distance_m: Number(seg.distance_m),
+		});
+		if (!eff) continue;
+		rows.push({
+			global_segment_id: seg.id,
+			run_id: input.run_id,
+			user_id: userId,
+			time_seconds: eff.time_seconds,
+			started_at: eff.started_at,
+		});
+	}
+	if (rows.length === 0) return 0;
+	const { data: inserted, error } = await supabase
+		.from(TABLES.global_segment_efforts)
+		.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
+		.select('id');
+	if (error) {
+		console.warn('global segment effort batch upsert failed', input.run_id, error);
+		return 0;
+	}
+	return inserted?.length ?? 0;
+}
+
+/// Catalogue-segment efforts a run earned, joined to the segment + ranked
+/// in one round-trip via `global_segment_effort_ranks`. Mirrors
+/// `fetchEffortsForRun` for the run-detail panel.
+export async function fetchGlobalEffortsForRun(
+	runId: string,
+): Promise<GlobalSegmentEffortWithSegment[]> {
+	const { data: efforts, error } = await supabase
+		.from(TABLES.global_segment_efforts)
+		.select('*')
+		.eq('run_id', runId);
+	if (error || !efforts || efforts.length === 0) return [];
+
+	const segmentIds = Array.from(new Set(efforts.map((e) => e.global_segment_id)));
+	const { data: segments } = await supabase
+		.from(TABLES.global_segments)
+		.select('*')
+		.in('id', segmentIds);
+	const bySeg = new Map<string, GlobalSegment>();
+	for (const s of segments ?? []) bySeg.set(s.id, s as GlobalSegment);
+
+	const { data: rankRows, error: rankErr } = await supabase.rpc('global_segment_effort_ranks', {
+		p_run_id: runId,
+	});
+	if (rankErr) console.error('global_segment_effort_ranks failed', rankErr);
+	const rankByEffort = new Map<string, number>();
+	for (const r of (rankRows ?? []) as { effort_id: string; rank: number }[]) {
+		rankByEffort.set(r.effort_id, r.rank);
+	}
+
+	const out: GlobalSegmentEffortWithSegment[] = [];
+	for (const e of efforts as GlobalSegmentEffort[]) {
+		const segment = bySeg.get(e.global_segment_id);
+		if (!segment) continue;
+		out.push({ effort: e, segment, rank: rankByEffort.get(e.id) ?? 1 });
+	}
+	return out;
 }
 
 // --- Notifications (decisions §38) ---

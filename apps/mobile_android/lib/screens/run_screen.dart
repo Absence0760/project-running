@@ -32,14 +32,18 @@ import '../local_run_store.dart';
 import '../live_broadcaster.dart';
 import '../live_hub_client.dart';
 import '../main.dart' show pendingStartWorkout;
+import '../live_cutoff_eta.dart';
 import '../preferences.dart';
 import '../privacy.dart';
 import '../race_controller.dart';
+import '../roadbook.dart';
 import '../route_geometry.dart';
 import '../route_match.dart';
+import '../safety_nudge.dart';
 import '../settings_sync.dart';
 import '../turn_cue_announcer.dart';
 import '../turn_cues.dart';
+import '../widgets/cutoff_card.dart';
 import 'route_picker_screen.dart';
 import '../background_location_nudge.dart';
 import '../battery_optimisation_hint.dart';
@@ -180,6 +184,91 @@ class _RunScreenState extends State<RunScreen> {
     } catch (e) {
       debugPrint('turn-cue generation failed: $e');
       _turnAnnouncer = null;
+    }
+  }
+
+  // Roadbook cutoff legs for the followed route, when it carries course
+  // markers with cutoffs. Drives the live "next cut-off" card so an ultra
+  // runner sees their cutoff buffer without doing the math by hand at hour 60
+  // — the same engine (roadbook + live_cutoff_eta) the spectator /live/[id]
+  // and planner surfaces already use. Empty when no route / no cutoffs.
+  List<RoadbookLeg> _cutoffLegs = const [];
+
+  /// Load the followed route's cutoff legs. Best-effort (L4): fetched once at
+  /// route selection (the runner is typically online at the start line) and
+  /// cached; any failure — offline, no markers, malformed geometry — leaves
+  /// the card hidden, never disturbing the core live stats. A mid-run dead
+  /// zone simply keeps whatever was loaded at the start.
+  Future<void> _loadCutoffLegs() async {
+    final route = _selectedRoute;
+    final api = widget.apiClient;
+    final routeId = route?.id;
+    if (route == null ||
+        api == null ||
+        routeId == null ||
+        routeId.isEmpty ||
+        route.waypoints.length < 2) {
+      if (_cutoffLegs.isNotEmpty && mounted) {
+        setState(() => _cutoffLegs = const []);
+      }
+      return;
+    }
+    try {
+      final waypoints = route.waypoints;
+      final markers = await api.fetchRouteMarkers(routeId);
+      final legs = buildRoadbook(
+        [
+          for (final w in waypoints)
+            RoadbookWaypoint(lat: w.lat, lng: w.lng, ele: w.elevationMetres),
+        ],
+        [
+          for (final m in markers)
+            RoadbookMarker(
+              positionM: m.positionM,
+              kind: m.kind,
+              label: m.label,
+              meta: m.meta,
+            ),
+        ],
+        // Cutoff limits are absolute clock/elapsed times on the markers, so a
+        // nominal goal is fine — it only shapes the projected-arrival column,
+        // which the card ignores.
+        goalSeconds: polylineLengthMetres(waypoints),
+        model: PacingModel.even,
+      ).legs;
+      final next = legs.any((l) => l.cutoff != null)
+          ? legs
+          : const <RoadbookLeg>[];
+      if (mounted) setState(() => _cutoffLegs = next);
+    } catch (e) {
+      debugPrint('cutoff-leg load failed: $e');
+    }
+  }
+
+  /// The next-cutoff projection for the current live position, or null when
+  /// there's no route with cutoffs / no fix yet / the runner is past the last
+  /// cutoff. `stale` suppresses the verdict (the helper returns
+  /// [LiveCutoffStatus.unknown]) rather than fabricating an ETA off an old fix.
+  LiveCutoffEta? _cutoffEta(_LiveStats stats, bool stale) {
+    if (_cutoffLegs.isEmpty) return null;
+    final pos = stats.currentPosition;
+    final route = _selectedRoute;
+    if (pos == null || route == null) return null;
+    try {
+      final distAlong =
+          distanceAlongRoute((lat: pos.lat, lng: pos.lng), route.waypoints);
+      if (distAlong == null) return null;
+      final eta = nextCutoffEta(
+        distAlongRouteM: distAlong,
+        elapsedS: stats.elapsed.inSeconds.toDouble(),
+        recentPaceSecPerKm: stats.pace,
+        legs: _cutoffLegs,
+        stale: stale,
+      );
+      return eta.checkpoint == null ? null : eta;
+    } catch (e) {
+      debugPrint('cutoff eta projection failed: $e');
+      return null;
     }
   }
 
@@ -386,6 +475,7 @@ class _RunScreenState extends State<RunScreen> {
     _selectedRoute = widget.initialRoute;
     _loadTreadmillPairing();
     _rebuildTurnAnnouncer();
+    _loadCutoffLegs();
     _maybePreloadWorkoutRunner();
     _refreshUpcomingEvent();
     _refreshPlanOverview();
@@ -661,6 +751,7 @@ class _RunScreenState extends State<RunScreen> {
         _state == _ScreenState.idle) {
       setState(() => _selectedRoute = widget.initialRoute);
       _rebuildTurnAnnouncer();
+      _loadCutoffLegs();
     }
   }
 
@@ -818,6 +909,7 @@ class _RunScreenState extends State<RunScreen> {
     if (!mounted) return;
     setState(() => _selectedRoute = picked);
     _rebuildTurnAnnouncer();
+    _loadCutoffLegs();
   }
 
   Future<void> _beginCountdown() async {
@@ -1045,6 +1137,56 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// One-time (throttled) dismissible prompt to share a live link when a
+  /// solo run starts after dark with no live share attached — the
+  /// safety-net gap for runners who never turned on auto-live-share
+  /// (docs/features/safety.md, persona-woman). The decision is the pure
+  /// `shouldNudgeSoloSafety` twin; this method only gathers inputs,
+  /// surfaces the banner, and stamps the throttle pref. Entirely L4:
+  /// wrapped so any failure here can never disturb the recording.
+  void _maybeShowSafetyNudge() {
+    try {
+      final service = widget.settingsSync?.service;
+      // No settings service → we can't throttle, so nudging would nag on
+      // every run (friction). Fail-closed: skip.
+      if (service == null) return;
+
+      final now = DateTime.now();
+      final nowMs = now.millisecondsSinceEpoch;
+      final dismissedIso =
+          service.effective<String>(SettingsKeys.safetyNudgeDismissedAt);
+      final dismissedAtMs =
+          DateTime.tryParse(dismissedIso ?? '')?.millisecondsSinceEpoch;
+
+      final should = shouldNudgeSoloSafety(SoloSafetyNudgeInput(
+        nowLocalMinutes: now.hour * 60 + now.minute,
+        autoLiveShareOn: _autoLiveShareEnabled,
+        isBroadcast: _liveBroadcaster?.isActive ?? false,
+        nudgeDismissed: nudgeThrottled(dismissedAtMs, nowMs),
+      ));
+      if (!should || !mounted) return;
+
+      // Stamp the throttle window as soon as it's surfaced — the banner
+      // is transient and dismissible, so "shown once" is the throttle
+      // anchor. Fire-and-forget; a failed write just means it may
+      // resurface next run, which is the safe direction.
+      service.updateDevice(
+        {SettingsKeys.safetyNudgeDismissedAt: now.toUtc().toIso8601String()},
+      ).catchError((Object e) {
+        debugPrint('safety nudge stamp failed: $e');
+      });
+
+      _showTopBanner(
+        _l10n.runSafetyNudgeSolo,
+        duration: const Duration(seconds: 6),
+        actionLabel: _l10n.runSafetyNudgeShareAction,
+        onAction: () => unawaited(_shareLiveLink()),
+      );
+    } catch (e) {
+      debugPrint('safety nudge failed: $e');
+    }
+  }
+
   /// Base URL of the spectator web app. Reads `WEB_BASE_URL` from
   /// `.env.local` when set; otherwise falls back to the production host
   /// so a freshly-installed app still produces a working link.
@@ -1121,6 +1263,13 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('auto live share failed: $e');
       }));
     }
+
+    // Solo-run safety nudge (docs/features/safety.md): the complement of
+    // the auto-share path — when the run is unprotected (no auto-share,
+    // no manual broadcast) AND started after dark, prompt the runner to
+    // share a live link. L4 — its own catch path; a failure computing
+    // daylight or reading prefs must never touch the recording.
+    _maybeShowSafetyNudge();
 
     // Subscribe to the BLE chest strap's BPM stream if a strap has been
     // paired. `connectCached` runs at app start in main.dart; the stream
@@ -3213,6 +3362,26 @@ class _RunScreenState extends State<RunScreen> {
               ),
             ),
           ),
+        // Next cut-off card (L4) — only when the followed route carries
+        // cutoff markers and there's a next cutoff ahead. Listens to the
+        // snapshot notifier so the ETA refreshes at GPS rate. Sits above the
+        // stats overlay, stacked over the treadmill toggle when both show.
+        if (_cutoffLegs.isNotEmpty)
+          ValueListenableBuilder<_LiveStats>(
+            valueListenable: _statsNotifier,
+            builder: (context, stats, _) {
+              final stale = _gpsLost || _weakGpsLatest;
+              final eta = _cutoffEta(stats, stale);
+              if (eta == null) return const SizedBox.shrink();
+              return Positioned(
+                left: 12,
+                right: 12,
+                bottom: _statsOverlayHeight + 12 + (_treadmillPaired ? 68 : 0),
+                child: CutoffCard(eta: eta, stale: stale),
+              );
+            },
+          ),
+
         // Treadmill live-mode toggle — only when a belt is paired (otherwise
         // it would do nothing; the user is pointed at Settings instead). Sits
         // just above the stats overlay so it's reachable without leaving the

@@ -50,6 +50,16 @@ String safeErrorLabel(Object e) {
 /// to inject a fake `SupabaseClient` so the wire-level methods can
 /// be driven without booting a real Supabase backend.
 class ApiClient {
+  /// Custom-scheme deep link GoTrue redirects the signup-confirmation /
+  /// magic-link auth mail to on mobile. supabase_flutter's app_links
+  /// listener catches it and completes the PKCE session inside the app.
+  /// Distinct from the `threkir://` scheme (owned by flutter_web_auth_2
+  /// for Strava OAuth). Must be registered as an intent-filter (Android
+  /// manifest) + CFBundleURLTypes (iOS Info.plist) AND allow-listed in
+  /// Supabase Auth -> URL Configuration -> Redirect URLs. See
+  /// docs/features/web_app_auth.md.
+  static const String kAuthDeepLinkRedirect = 'com.threkir.app://login-callback';
+
   /// Test-only override. When non-null, [_client] returns this
   /// instead of `Supabase.instance.client`. Always null on the
   /// production code path.
@@ -160,8 +170,17 @@ class ApiClient {
   /// the email is registered, so the caller's UI should say something
   /// like "If that email is registered, we've sent a reset link."
   /// rather than leaking account existence.
-  Future<void> sendPasswordResetEmail({required String email}) async {
-    await _client.auth.resetPasswordForEmail(email.trim());
+  /// [redirectTo] is the web `/auth/reset` URL the caller builds from
+  /// `WEB_BASE_URL` — mobile doesn't host the reset form, so the link
+  /// points at web. Without it GoTrue falls back to the project Site
+  /// URL (a fresh project's default is `http://localhost:3000`), which
+  /// produces a dead link in prod. The URL must be on the Auth ->
+  /// Redirect URLs allow-list. See docs/features/web_app_auth.md.
+  Future<void> sendPasswordResetEmail({
+    required String email,
+    String? redirectTo,
+  }) async {
+    await _client.auth.resetPasswordForEmail(email.trim(), redirectTo: redirectTo);
   }
 
   /// Submit a user-content report. [targetKind] is one of 'user' /
@@ -261,6 +280,11 @@ class ApiClient {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      // Land the confirmation link back in the app via the custom-scheme
+      // deep link, not the project Site URL (which a mobile signup can't
+      // pass). Without this GoTrue falls back to the Site URL and the
+      // link opens a browser instead of returning to the app.
+      emailRedirectTo: kAuthDeepLinkRedirect,
       data: {
         'age_confirmed_at': ageIso,
         'terms_accepted_at': termsIso,

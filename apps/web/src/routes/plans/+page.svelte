@@ -67,12 +67,14 @@
 
 	const statusIcon: Record<PlanStatus, string> = {
 		active: 'play_circle',
+		paused: 'pause_circle',
 		completed: 'check_circle',
 		abandoned: 'cancel'
 	};
 
 	function statusLabel(s: PlanStatus): string {
 		if (s === 'active') return m('plansPage.statusActive');
+		if (s === 'paused') return m('plansPage.statusPaused');
 		if (s === 'completed') return m('plansPage.statusCompleted');
 		return m('plansPage.statusAbandoned');
 	}
@@ -80,6 +82,7 @@
 	const statusFilters: { value: StatusFilter; label: () => string; icon: string }[] = [
 		{ value: 'all', label: () => m('plansPage.filterAll'), icon: 'apps' },
 		{ value: 'active', label: () => m('plansPage.filterActive'), icon: 'play_circle' },
+		{ value: 'paused', label: () => m('plansPage.filterPaused'), icon: 'pause_circle' },
 		{ value: 'completed', label: () => m('plansPage.filterCompleted'), icon: 'check_circle' },
 		{ value: 'abandoned', label: () => m('plansPage.filterAbandoned'), icon: 'cancel' }
 	];
@@ -157,8 +160,8 @@
 	let filteredPlans = $derived.by(() => {
 		const out =
 			statusFilter === 'all' ? [...plans] : plans.filter((p) => p.status === statusFilter);
-		// Active first, then completed, then abandoned. Newest within each.
-		const rank: Record<PlanStatus, number> = { active: 0, completed: 1, abandoned: 2 };
+		// Active first, then paused, then completed, then abandoned. Newest within each.
+		const rank: Record<PlanStatus, number> = { active: 0, paused: 1, completed: 2, abandoned: 3 };
 		out.sort((a, b) => {
 			const r = rank[a.status] - rank[b.status];
 			if (r !== 0) return r;
@@ -168,7 +171,7 @@
 	});
 
 	let counts = $derived.by(() => {
-		const c = { all: plans.length, active: 0, completed: 0, abandoned: 0 } as Record<
+		const c = { all: plans.length, active: 0, paused: 0, completed: 0, abandoned: 0 } as Record<
 			StatusFilter,
 			number
 		>;

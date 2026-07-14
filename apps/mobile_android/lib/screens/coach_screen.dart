@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend_timeout.dart';
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -240,9 +241,10 @@ class _CoachScreenState extends State<CoachScreen> {
         _consentSaving = false;
       });
     } catch (e) {
+      debugPrint('CoachScreen._acceptCoachConsent failed: $e');
       if (!mounted) return;
       setState(() {
-        _consentError = e.toString();
+        _consentError = friendlyError(AppLocalizations.of(context), e);
         _consentSaving = false;
       });
     }
@@ -600,7 +602,10 @@ class _CoachScreenState extends State<CoachScreen> {
       },
       onDone: () => completer.complete(),
       onError: (e) {
-        if (mounted) setState(() => _error = e.toString());
+        debugPrint('CoachScreen stream error: $e');
+        if (mounted) {
+          setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+        }
         completer.complete();
       },
       cancelOnError: true,

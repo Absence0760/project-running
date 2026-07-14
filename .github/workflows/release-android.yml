@@ -5,7 +5,7 @@ name: Release Android
 # release keystore from Secrets, uploads to Play Internal track, and
 # attaches the AAB to a GitHub Release so there's an audit trail.
 #
-# Secrets this workflow reads (configure under Settings → Secrets → Actions):
+# Signing / upload secrets (configure under Settings → Secrets → Actions):
 #   ANDROID_KEYSTORE_BASE64       base64-encoded upload-keystore.jks
 #   ANDROID_KEYSTORE_PASSWORD     store password
 #   ANDROID_KEY_ALIAS             alias inside the keystore
@@ -13,6 +13,28 @@ name: Release Android
 #   PLAY_SERVICE_ACCOUNT_JSON     Google Play service-account JSON key
 #                                 (grant the account "Release apps to testing
 #                                 tracks" on the Play Console)
+#
+# Production runtime config, injected as `--dart-define`s at build time
+# (main.dart seeds each non-empty one into dotenv — decisions §137). Leave a
+# secret unset to keep that feature fail-closed.
+#
+# REUSED (already set — the web + Wear OS releases inject the same ones, so
+# there's a single prod source of truth, no re-pasting):
+#   PUBLIC_SUPABASE_URL           prod Supabase URL                (required)
+#   PUBLIC_SUPABASE_ANON_KEY      Supabase publishable key         (required)
+#   PUBLIC_MAPTILER_KEY           MapTiler key — no maps without it (required)
+#   PUBLIC_SENTRY_DSN             Sentry DSN (empty → Sentry off)
+# (WEB_BASE_URL is a literal https://threkir.com in the build step — no secret.)
+#
+# MOBILE-SPECIFIC (create these):
+#   MOBILE_OSRM_URL               https://osrm.threkir.com — REQUIRED or the
+#                                 release route builder throws on first use
+#   MOBILE_LIVE_HUB_URL           Go live-hub base URL (optional; empty →
+#                                 falls back to Supabase live pings)
+#   MOBILE_GOOGLE_WEB_CLIENT_ID   Google Sign-In web client id (optional)
+#   MOBILE_STRAVA_CLIENT_ID       Strava OAuth client id (optional)
+#   MOBILE_REVENUECAT_API_KEY_ANDROID  RevenueCat Android key (optional; empty
+#                                 → Subscribe falls back to the web page)
 #
 # See docs/ops/releasing.md for the end-to-end flow.
 
@@ -90,12 +112,53 @@ jobs:
           storeFile=app/upload-keystore.jks
           EOF
 
-      - name: Copy dotenv
-        run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
+      - name: Stub the bundled dotenv asset
+        # pubspec ships `.env.development` as an asset, so the file must
+        # exist for the build to resolve. Release builds NEVER read it at
+        # runtime (main.dart gates the load behind kDebugMode) — production
+        # config comes exclusively from the `--dart-define`s below — so we
+        # write an EMPTY file rather than copying `.env.example`, keeping the
+        # dev localhost URLs + empty keys out of the shipped bundle.
+        run: 'echo > apps/mobile_android/.env.development'
 
       - name: Build signed AAB
         working-directory: apps/mobile_android
-        run: flutter build appbundle --release
+        # Production config is injected as compile-time defines; main.dart's
+        # `String.fromEnvironment` block seeds each non-empty one into dotenv
+        # (decisions §137). Anything left unset stays fail-closed (e.g. an
+        # empty RevenueCat key falls back to the web upgrade page). Dev-only
+        # keys (DEV_USER_*, BYPASS_PAYWALL, *_GATE) are deliberately NOT
+        # passed — release must not carry them.
+        env:
+          # Shared prod values reuse the SAME canonical secrets the web +
+          # Wear OS releases inject — one source of truth, no web↔mobile
+          # drift. Same prod Supabase project, same publishable anon key,
+          # same MapTiler key. WEB_BASE_URL is a public host, passed as a
+          # literal (no secret).
+          SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          MAPTILER_KEY: ${{ secrets.PUBLIC_MAPTILER_KEY }}
+          SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
+          # Mobile-specific secrets (create these). Any left unset stays
+          # fail-closed at runtime.
+          OSRM_URL: ${{ secrets.MOBILE_OSRM_URL }}
+          LIVE_HUB_URL: ${{ secrets.MOBILE_LIVE_HUB_URL }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.MOBILE_GOOGLE_WEB_CLIENT_ID }}
+          STRAVA_CLIENT_ID: ${{ secrets.MOBILE_STRAVA_CLIENT_ID }}
+          REVENUECAT_API_KEY_ANDROID: ${{ secrets.MOBILE_REVENUECAT_API_KEY_ANDROID }}
+        run: |
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=MAPTILER_KEY="$MAPTILER_KEY" \
+            --dart-define=WEB_BASE_URL="https://threkir.com" \
+            --dart-define=OSRM_URL="$OSRM_URL" \
+            --dart-define=LIVE_HUB_URL="$LIVE_HUB_URL" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --dart-define=STRAVA_CLIENT_ID="$STRAVA_CLIENT_ID" \
+            --dart-define=REVENUECAT_API_KEY_ANDROID="$REVENUECAT_API_KEY_ANDROID" \
+            --dart-define=APP_RELEASE="${{ steps.version.outputs.name }}"
 
       - name: Upload to Play Internal
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1

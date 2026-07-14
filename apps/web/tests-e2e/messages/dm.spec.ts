@@ -32,8 +32,11 @@ test.describe('/messages — direct messages', () => {
 		await composer.fill(body);
 		await page.getByRole('button', { name: 'Send' }).click();
 
-		// The sent message renders as a bubble in the conversation.
-		await expect(page.getByText(body)).toBeVisible({ timeout: 10_000 });
+		// The sent message renders as a bubble in the conversation. Match the
+		// body EXACTLY: the thread-list preview also contains it as "You: <body>",
+		// so a substring getByText resolves to two elements (strict-mode
+		// violation) once that preview has rendered.
+		await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 10_000 });
 
 		// And the conversation shows in the thread list with a "You:" preview.
 		await expect(page.locator('.thread', { hasText: /You:/ }).first()).toBeVisible();

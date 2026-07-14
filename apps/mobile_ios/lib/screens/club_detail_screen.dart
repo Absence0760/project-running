@@ -9,6 +9,7 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -140,7 +141,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       debugPrint('ClubDetailScreen._load failed: $e\n$s');
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = friendlyError(AppLocalizations.of(context), e);
           _loading = false;
         });
       }
@@ -159,7 +160,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       }
       await _load();
     } catch (e) {
-      setState(() => _error = e.toString());
+      debugPrint('ClubDetailScreen._join failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -191,7 +195,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       await widget.social.leaveClub(c.row.id);
       await _load();
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('ClubDetailScreen._leave failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -208,7 +215,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       _postCtrl.clear();
       await _load();
     } catch (e) {
-      setState(() => _error = e.toString());
+      debugPrint('ClubDetailScreen._submitPost failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

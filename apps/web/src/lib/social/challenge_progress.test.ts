@@ -69,6 +69,16 @@ test('metricFromActivity activity_type filter excludes non-matching', () => {
 	assert.equal(metricFromActivity({ distance_m: 5000, activity_type: 'run' }, 'distance', 'run'), 5000);
 });
 
+test('metricFromActivity excludes a DNF run from every metric', () => {
+	// Mirrors the server aggregate's `and r.is_dnf = false` — a 42 km effort
+	// dropped mid-race must not bank toward a "run 100 km" challenge estimate.
+	assert.equal(metricFromActivity({ distance_m: 42000, is_dnf: true }, 'distance', null), 0);
+	assert.equal(metricFromActivity({ duration_s: 1800, is_dnf: true }, 'duration', null), 0);
+	assert.equal(metricFromActivity({ is_dnf: true }, 'activity_count', null), 0);
+	// A finished (non-DNF) run still counts in full.
+	assert.equal(metricFromActivity({ distance_m: 42000, is_dnf: false }, 'distance', null), 42000);
+});
+
 test('metricFromActivity defaults missing activity_type to run', () => {
 	assert.equal(metricFromActivity({ distance_m: 5000 }, 'distance', 'run'), 5000);
 });

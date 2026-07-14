@@ -130,6 +130,12 @@ void main() async {
   const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
   const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
   const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
+  const osrmUrlDef = String.fromEnvironment('OSRM_URL');
+  const liveHubUrlDef = String.fromEnvironment('LIVE_HUB_URL');
+  const sentryDsnDef = String.fromEnvironment('SENTRY_DSN');
+  const googleWebClientIdDef = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+  const revenueCatAndroidDef = String.fromEnvironment('REVENUECAT_API_KEY_ANDROID');
+  const revenueCatIosDef = String.fromEnvironment('REVENUECAT_API_KEY_IOS');
   dotenv.loadFromString(
     envString: [
       if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
@@ -139,6 +145,12 @@ void main() async {
       if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
       if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
       if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
+      if (osrmUrlDef.isNotEmpty) 'OSRM_URL=$osrmUrlDef',
+      if (liveHubUrlDef.isNotEmpty) 'LIVE_HUB_URL=$liveHubUrlDef',
+      if (sentryDsnDef.isNotEmpty) 'SENTRY_DSN=$sentryDsnDef',
+      if (googleWebClientIdDef.isNotEmpty) 'GOOGLE_WEB_CLIENT_ID=$googleWebClientIdDef',
+      if (revenueCatAndroidDef.isNotEmpty) 'REVENUECAT_API_KEY_ANDROID=$revenueCatAndroidDef',
+      if (revenueCatIosDef.isNotEmpty) 'REVENUECAT_API_KEY_IOS=$revenueCatIosDef',
     ].join('\n'),
     isOptional: true,
   );

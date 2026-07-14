@@ -255,6 +255,27 @@ type SafetyEmailPayload struct {
 	LastSeenAt    string  `json:"last_seen_at,omitempty"`
 }
 
+// SafetySmsPayload is the payload for `kind='safety_sms'` jobs (migration
+// 20270410_001). The SMS escalation channel is a NEW transport behind a
+// provider abstraction; the enqueue happens in the same overdue scan that
+// writes the safety_email 'overdue' job, but ONLY for a confirmed contact who
+// has a stored phone AND an SMS opt-in. SMS is additive — the email is always
+// enqueued too — so the alert is never gated on the (default-unset) provider.
+//
+// Same channel-agnostic shape as the overdue email payload minus the
+// email-specific fields: ContactPhone is the E.164 destination; ContactUserID
+// (when the contact is a linked app user) localizes the copy only; StartedAt
+// and, when a ping landed, LastSeenAt carry the times. Never coordinates.
+type SafetySmsPayload struct {
+	Template      string  `json:"template"`
+	ContactUserID *string `json:"contact_user_id"`
+	ContactPhone  string  `json:"contact_phone"`
+	OwnerName     string  `json:"owner_name"`
+	RunID         *string `json:"run_id"`
+	StartedAt     string  `json:"started_at,omitempty"`
+	LastSeenAt    string  `json:"last_seen_at,omitempty"`
+}
+
 // WeeklyDigestPayload is the payload for `kind='weekly_digest'` jobs
 // (migration 20270108_001). Engagement mail — BEHIND THE GATE: the builder
 // that enqueues these is UNSCHEDULED (no pg_cron) and the handler skips
