@@ -487,8 +487,8 @@ export function recapHeadline(recap: YearInRunningRecap, kmOrMi: 'km' | 'mi'): s
 	if (recap.runCount === 0) return `No runs in ${recap.year} yet.`;
 	const total =
 		kmOrMi === 'mi'
-			? (recap.totalDistanceM / 1609.344).toFixed(0) + ' mi'
-			: (recap.totalDistanceM / 1000).toFixed(0) + ' km';
+			? Math.round(recap.totalDistanceM / 1609.344) + ' mi'
+			: Math.round(recap.totalDistanceM / 1000) + ' km';
 	return `${recap.year}: ${total} across ${recap.runCount} runs.`;
 }
 
