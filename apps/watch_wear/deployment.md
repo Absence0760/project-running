@@ -78,7 +78,7 @@ Plus build-time secrets injected via Gradle properties:
 
 | Secret | Source |
 |---|---|
-| `SUPABASE_URL` | `https://api.threkir.com` (production) |
+| `SUPABASE_URL` | the raw `https://<ref>.supabase.co` — same value as `PUBLIC_SUPABASE_URL` (`api.threkir.com` only if the Pro-only custom domain is ever provisioned) |
 | `SUPABASE_ANON_KEY` | publishable key |
 | `PUBLIC_MAPTILER_KEY` | shared MapTiler key |
 

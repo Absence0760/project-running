@@ -54,7 +54,7 @@ Per-service deep dives:
             │
             ├────► api.anthropic.com (or self-hosted via OPENAI_BASE_URL)
             │
-            └────► Supabase Cloud (api.threkir.com)
+            └────► Supabase Cloud (<ref>.supabase.co)
                    ├── Postgres + PostGIS
                    ├── Auth (email + Google + Apple)
                    ├── Storage (runs/, route-files/, run-photos/)
@@ -95,7 +95,7 @@ Subdomain map:
 |---|---|---|
 | `threkir.com` | Route 53 ALIAS → CloudFront distribution | 300 |
 | `www.threkir.com` | Route 53 ALIAS → CloudFront distribution | 300 |
-| `api.threkir.com` | Supabase project URL (CNAME or A — depends on plan) | 300 |
+| `api.threkir.com` | Reserved for the Supabase custom domain (Pro + add-on) — **not provisioned on the current Free tier**; clients use the raw `<ref>.supabase.co` | 300 |
 | `worker.threkir.com` | Not exposed publicly — internal Fly.io 6PN address only | — |
 | `osrm.threkir.com` | Same — never publicly resolvable | — |
 
@@ -155,13 +155,13 @@ The bar for v1 is: **someone gets paged when the site is down, can read the rele
 | Backend (Supabase) | Supabase Dashboard → Logs | Postgres slow queries, EF invocations, Auth events | included |
 | Worker + OSRM (Fly.io) | `fly logs -a job_worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
 | Cross-service errors | **Sentry** — single org, separate projects per service | grouped exceptions, release tagging, breadcrumb trail on mobile | $0 (free tier) → $26 (team) |
-| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `api.threkir.com/health`, `threkir.com/api/coach` (HEAD-only) | $0 (free tier) |
+| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `<ref>.supabase.co/rest/v1/…`, `threkir.com/api/coach` (HEAD-only) | $0 (free tier) |
 | RevenueCat / Stripe events | dashboards on each | subscription lifecycle, churn signals | included |
 
 **Alerts that page someone** (Better Stack → email + push):
 
 1. `threkir.com/` returns non-200 for >2 min
-2. `api.threkir.com/rest/v1/runs?select=count` returns non-200 for >2 min (proxy for "PostgREST is up + DB reachable + RLS still permits reads")
+2. `<ref>.supabase.co/rest/v1/runs?select=count` returns non-200 for >2 min (proxy for "PostgREST is up + DB reachable + RLS still permits reads")
 3. Worker hasn't claimed a job in >10 min while `jobs.status='queued'` count > 0 (worker stuck)
 4. OSRM `/health` non-200 for >5 min
 5. Sentry: any new error class with >10 events in 5 min
@@ -177,7 +177,7 @@ Not paging on:
 
 | What | How | RTO | RPO |
 |---|---|---|---|
-| Postgres | Supabase Pro daily PITR backups, 7-day window | 30 min | 24 h (PITR closes the gap to ~5 min) |
+| Postgres | **Free tier today: no automated backups** — periodic manual `pg_dump` until the Pro upgrade (Pro: daily backups, 7-day window; PITR closes the gap to ~5 min) | 30 min | last manual dump (Pro: 24 h → ~5 min with PITR) |
 | Storage (`runs`, `route-files`, `run-photos`) | Supabase Storage built-in (object versioning is opt-in per bucket — turn it on for `runs`, leave off for `run-photos` to save cost) | 2 h | 24 h |
 | OSRM graph | Reproducible — `make download && make build` against a Geofabrik PBF; ~15 min on the build machine. We do **not** back up the extracted graph. | 15 min | N/A (regenerable) |
 | Worker state | Stateless — every claim is a fresh DB read. Restart loses nothing. | seconds | 0 |

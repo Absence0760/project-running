@@ -2,7 +2,7 @@
 
 apex_domain              = "threkir.com"
 preview_subdomain        = "preview"
-public_supabase_url      = "https://api.threkir.com"  # or a separate preview project
+public_supabase_url      = "https://<ref>.supabase.co"  # raw project URL (api.threkir.com is Pro-only, not provisioned); or a separate preview project
 public_supabase_anon_key = "ey..."
 
 extra_lambda_env = {}
