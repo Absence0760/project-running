@@ -179,6 +179,7 @@ Extends the shipped cancel-occurrence (`event_exceptions`) + `notify_event_cance
 - **Host cancels an occurrence** → `refund_orders_for_instance(event_id, instance_start)` full-refunds every `paid` order for that instance (the host cancelled, so policy is overridden to full), marks orders `refunded`, demotes RSVPs, and the existing cancel notification carries a "you've been refunded" line.
 - **Buyer self-cancels** → honoured per `event_pricing.refund_policy` (`full_until_start | full_until_24h | no_refund`); freeing the slot triggers waitlist promotion → notify-to-pay.
 - **Refunds reverse the application fee** (`refund_application_fee: true`) so the platform doesn't profit on a cancelled class. Chargebacks are the host's liability (merchant of record), but the platform fee is clawed back — state this in onboarding copy.
+- **The refund policy is disclosed pre-purchase** (2026-07-14, US legal review of the Terms): the event-detail register box renders the policy line under the price, before the Register CTA — not only at cancel time (FTC "clear and conspicuous before purchase"). Pinned in `event-paid-register.spec.ts`; the buyer-facing contractual framing (host as merchant of record, per-policy refunds, host-cancel full refund) lives in `/terms` §6.
 
 ## Data model
 

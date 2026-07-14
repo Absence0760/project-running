@@ -175,6 +175,10 @@ test.describe('paid registration — non-charge UI (slice P1)', () => {
 		await expect(cta).toBeVisible();
 		await expect(cta).toContainText(/Register/);
 		await expect(cta).toContainText(/22/);
+		// FTC pre-purchase disclosure: the host's refund policy must be
+		// visible before the buyer pays, not only at cancel time.
+		await expect(page.getByTestId('register-refund-policy')).toBeVisible();
+		await expect(page.getByTestId('register-refund-policy')).toContainText(/cancellation/i);
 	});
 
 	test('priced event past sales close renders Registration closed', async ({ page }) => {

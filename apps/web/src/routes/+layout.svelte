@@ -184,7 +184,14 @@
 	// — also includes the legal pages, marketing pages, and the guided /
 	// recap content surfaces. When a signed-in user visits one of these,
 	// the app shell still wraps it (sidebar stays put).
-	const anonExtraExact = ['/privacy', '/terms', '/cookie-notice', '/compare', '/guided'];
+	const anonExtraExact = [
+		'/privacy',
+		'/terms',
+		'/cookie-notice',
+		'/health-data-notice',
+		'/compare',
+		'/guided',
+	];
 	// `/clubs/*` paths that REQUIRE auth — keep them out of the anon-
 	// allowed set so a signed-in user lands directly in the loggedIn
 	// branch instead of briefly rendering through the anon branch

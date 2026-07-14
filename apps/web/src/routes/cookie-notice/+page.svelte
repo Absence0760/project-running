@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { consent } from '$lib/settings/consent.svelte';
 
-	const lastUpdated = '2026-07-02';
+	const lastUpdated = '2026-07-14';
 
 	// audit/cookie-consent (May 2026): the prior page told users to
 	// use a "Cookie settings" link in the footer that does not exist.
@@ -23,36 +23,54 @@
 </svelte:head>
 
 <div class="legal-page">
-	<div class="draft-banner">
-		<strong>Draft.</strong> This Cookie Notice is published as a placeholder. The list below is
-		generated from the codebase and is accurate at the date stamped on the page, but the legal
-		wording has not been reviewed by counsel.
-	</div>
-
 	<h1>Cookie Notice</h1>
 	<p class="lead">
-		Threkir uses a small number of cookies and similar technologies. Most are strictly
-		necessary; the rest are off by default and load only after you opt in.
+		Threkir uses a small number of cookies and similar technologies (including browser
+		localStorage). Most are strictly necessary or first-party preferences that never leave your
+		device; the consent-gated third-party services are off by default and load only after you opt
+		in.
 	</p>
 	<p class="meta">Last updated: {lastUpdated}</p>
 
 	<h2>1. Strictly necessary</h2>
 	<p>
-		These load unconditionally because the site cannot function without them. They do not
-		require consent under EU ePrivacy.
+		These load unconditionally because the site cannot function (or function securely) without
+		them. They do not require consent under EU ePrivacy.
 	</p>
 	<table>
 		<thead>
-			<tr><th>Name</th><th>Provider</th><th>Purpose</th><th>Lifetime</th></tr>
+			<tr><th>Name</th><th>Kind</th><th>Purpose</th><th>Lifetime</th></tr>
 		</thead>
 		<tbody>
-			<tr><td>sb-access-token / sb-refresh-token</td><td>Supabase Auth</td><td>Authentication session</td><td>1 hour / 30 days</td></tr>
-			<tr><td>theme</td><td>Threkir (localStorage)</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
-			<tr><td>sidebar_collapsed</td><td>Threkir (localStorage)</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
+			<tr><td>sb-access-token / sb-refresh-token</td><td>Cookie (Supabase Auth)</td><td>Authentication session</td><td>1 hour / 30 days</td></tr>
+			<tr><td>cookie_consent</td><td>localStorage + a same-named cookie</td><td>Remembers your consent choice. The cookie mirrors the stored choice so our server can respect it per-request (for example, gating error monitoring) — the server cannot read localStorage.</td><td>12 months</td></tr>
+			<tr><td>strava_oauth_state</td><td>Browser storage</td><td>Anti-forgery (CSRF) state while you connect Strava</td><td>During the connect flow</td></tr>
+			<tr><td>run_app.device_id</td><td>localStorage</td><td>A random identifier for this browser so per-device settings can differ from your other devices. First-party only; never used for advertising.</td><td>Persistent</td></tr>
 		</tbody>
 	</table>
 
-	<h2>2. Functional, on consent</h2>
+	<h2>2. Preferences + on-device caches</h2>
+	<p>
+		First-party localStorage that holds your own preferences and offline caches. Nothing in this
+		table is sent to a third party; entries keyed by user id or date are cleared on sign-out or
+		roll off naturally.
+	</p>
+	<table>
+		<thead>
+			<tr><th>Name</th><th>Purpose</th><th>Lifetime</th></tr>
+		</thead>
+		<tbody>
+			<tr><td>run_app.theme</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
+			<tr><td>sidebar_collapsed</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
+			<tr><td>locale</td><td>Language preference</td><td>Persistent</td></tr>
+			<tr><td>settings_cache_* (per user/device)</td><td>Offline-first cache of your account settings, plus a pending-changes queue drained when you're back online</td><td>Until sign-out</td></tr>
+			<tr><td>runs_filters_v1 / routes_filters_v1</td><td>Your list filters, so they survive navigation</td><td>Persistent</td></tr>
+			<tr><td>water_ml_&lt;date&gt;</td><td>Today's water-tracker total (stays on this device)</td><td>Per day</td></tr>
+			<tr><td>Layout keys (panel widths, goal migration)</td><td>Remember resizable-panel positions; migrate legacy locally-stored goals into your account</td><td>Persistent</td></tr>
+		</tbody>
+	</table>
+
+	<h2>3. Consent-gated</h2>
 	<p>These load only after you accept them via the consent banner.</p>
 	<table>
 		<thead>
@@ -60,11 +78,10 @@
 		</thead>
 		<tbody>
 			<tr><td>sentry-trace, baggage</td><td>Sentry</td><td>Error monitoring + performance traces</td><td>Per-request</td></tr>
-			<tr><td>cookie_consent</td><td>Threkir (localStorage)</td><td>Remembers your consent choice</td><td>12 months</td></tr>
 		</tbody>
 	</table>
 
-	<h2>3. Third-party services that load on-page</h2>
+	<h2>4. Third-party services that load on-page</h2>
 	<p>
 		The following third-party services may set their own cookies or log your IP address when the
 		page makes a request to them. We disclose them here even though they're not all "cookies" in
@@ -83,6 +100,11 @@
 			near your home) and your IP address.
 		</li>
 		<li>
+			<strong>Open Food Facts</strong> (EU) — fires when you search for a food in the nutrition
+			log. The request includes only the search text you typed and your IP address; entering
+			macros manually avoids it entirely.
+		</li>
+		<li>
 			<strong>Anthropic / OpenAI</strong> — only fires when you open the AI Coach. The
 			request includes prompt text + recent training data.
 		</li>
@@ -93,7 +115,7 @@
 		</li>
 	</ul>
 
-	<h2>4. Your choices</h2>
+	<h2>5. Your choices</h2>
 	<p class="manage-consent">
 		<button
 			type="button"
@@ -110,17 +132,25 @@
 	</p>
 	<ul>
 		<li>
+			<strong>Global Privacy Control (GPC) is honoured.</strong> If your browser sends the
+			<code>Sec-GPC: 1</code> signal, we treat it as a binding opt-out — exactly as if you had
+			pressed "Reject" on the banner — and the consent-gated services above never load. Under
+			the CCPA/CPRA, GPC counts as a valid opt-out of sale/share (we don't sell or share your
+			data in any case).
+		</li>
+		<li>
+			<strong>Browser-level "Do Not Track" (DNT)</strong> — the older, distinct signal — is not
+			honoured because it has no consistent meaning across browsers. Use GPC or the button above
+			instead.
+		</li>
+		<li>
 			<strong>Block cookies in your browser.</strong> Most browsers let you reject cookies
 			from a specific site. Strictly-necessary cookies cannot be blocked without breaking
 			authentication.
 		</li>
-		<li>
-			<strong>Browser-level "Do Not Track".</strong> We do not currently honour DNT because it
-			has no consistent meaning across browsers. Use the button above to change your choice.
-		</li>
 	</ul>
 
-	<h2>5. Contact</h2>
+	<h2>6. Contact</h2>
 	<p>
 		Privacy questions: <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>.
 	</p>
@@ -142,14 +172,6 @@
 	.manage-consent-hint {
 		color: var(--color-muted, #6b7280);
 		font-size: 0.9em;
-	}
-	.draft-banner {
-		background: var(--color-warning-bg, #fff3cd);
-		color: var(--color-warning-text, #664d03);
-		border: 1px solid var(--color-warning-border, #ffecb5);
-		border-radius: var(--radius-md);
-		padding: var(--space-md) var(--space-lg);
-		margin-bottom: var(--space-2xl);
 	}
 	h1 {
 		margin-top: 0;

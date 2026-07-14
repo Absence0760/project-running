@@ -15,6 +15,8 @@ Operating docs that back the project's international-launch posture. The `/audit
 
 ## Status
 
+The public legal pages these docs feed (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice` in `apps/web/src/routes/`) carry **complete text synced to these registries** as of 2026-07-14 (decisions §243); the remaining operator items (counsel review, postal address, governing-law state, Art 27 reps, DMCA agent registration) are the "Legal pages — before public launch" checklist in [docs/ops/deployment.md](../ops/deployment.md). Keep the pages in lockstep with `sub-processors.md` + `retention.md` — `tests-e2e/legal/pages.spec.ts` pins the load-bearing facts.
+
 Every doc here is a **scaffold** generated alongside the international-compliance audit infrastructure. None of these are legal advice. Before a real EU / UK launch, every doc needs:
 
 1. Counsel review.

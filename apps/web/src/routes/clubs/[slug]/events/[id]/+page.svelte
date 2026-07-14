@@ -1522,6 +1522,13 @@
 							<span class="register-price-label">{m('clubEvent.priceLabel')}</span>
 							<span class="register-price-amount">{priceFormatted}</span>
 						</div>
+						<p class="register-refund-policy" data-testid="register-refund-policy">
+							{pricing.refund_policy === 'full_until_start'
+								? m('clubEvent.refundPolicyFullUntilStart')
+								: pricing.refund_policy === 'full_until_24h'
+									? m('clubEvent.refundPolicyFullUntil24h')
+									: m('clubEvent.refundPolicyNoRefund')}
+						</p>
 						{#if paymentState === 'processing'}
 							<p class="register-status processing" role="status">
 								<span class="material-symbols" aria-hidden="true">hourglass_top</span>
@@ -2688,6 +2695,11 @@
 		font-weight: 800;
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
+	}
+	.register-refund-policy {
+		margin: 0.35rem 0 0;
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
 	}
 	.register-cta {
 		width: 100%;
