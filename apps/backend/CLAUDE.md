@@ -186,6 +186,10 @@ grep -B 1 "on user_follows for insert" apps/backend/supabase/migrations/*.sql | 
 
 Pick the latest `create policy "..." on user_follows for insert` you find — that's the name to drop. Don't guess. Cost me an extra iteration on Round 3 W1 (the user_blocks finding): I dropped `"user_follows owner insert"` thinking that was the name; the real one was `"users follow on their own behalf"` from `20260521_001_user_follows.sql`. Both policies coexisted afterwards and the test that expected a block-induced 42501 saw the insert succeed via the un-touched original.
 
+### New policies wrap auth.* in `(select ...)`; new FKs ship with a covering index
+
+Two pgtap catch-alls enforce the performance-advisor posture (decisions §245): `rls_initplan_test.sql` fails on any policy expression calling `auth.uid()` / `auth.jwt()` / `auth.role()` / `current_setting()` bare — write `(select auth.uid())` so it hoists into a once-per-statement InitPlan instead of re-evaluating per row — and `fk_covering_index_test.sql` fails on any public-schema foreign key without a covering index (add the `<table>_<column>` index in the same migration as the FK). The backfills were `20270416_001` (mechanical `ALTER POLICY` over all 261 policies) + `20270417_001` (41 indexes). The advisor's "multiple permissive policies" warnings are accepted by design — see §245 before consolidating policies over it.
+
 ### CI green ≠ migration applied
 
 Older `supabase/setup-cli` versions on CI **silently skip** migrations that collide on the `YYYYMMDD` version key (rather than erroring like the local CLI). A `Result: PASS` on the pgtap CI job does NOT prove your migration ran. The Round 2 persona-fix migrations sat in `main` for weeks "passing" CI before anyone noticed they hadn't been applied in any environment. **Always verify a new migration with `cd apps/backend && supabase db reset --local` locally before trusting CI.** If the local CLI errors with `duplicate key value violates unique constraint "schema_migrations_pkey"`, CI is probably just hiding the same error.
