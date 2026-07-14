@@ -237,7 +237,7 @@ jobs:
           # Mask the ARN before writing it to a step output so the
           # account ID embedded in it doesn't appear in subsequent
           # step logs (configure-aws-credentials masks the value
-          # itself, but a step running `${{ steps.role.outputs.arn }}`
+          # itself, but a step interpolating `steps.role.outputs.arn`
           # would otherwise leak it). The ARN itself is not a
           # credential — OIDC assumes the role — but the account ID
           # is identifying information.
