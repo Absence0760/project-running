@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(11);
+select plan(10);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -42,6 +42,12 @@ values ('dddddddd-dddd-dddd-dddd-dddddddddd01', 'cccccccc-cccc-cccc-cccc-ccccccc
 
 delete from public.jobs;
 
+-- The RPC is exercised as the `authenticated` caller (owner-only path reads
+-- auth.uid()); every job-count assertion + fail-closed setup mutation runs
+-- with `reset role` because `public.jobs` is an RLS queue with no SELECT
+-- policy and `safety_contacts` has no UPDATE policy — the backend/definer
+-- side sees them, the runner's role does not.
+
 -- ─────────── a non-owner caller escalates nothing ───────────
 
 set local role authenticated;
@@ -50,18 +56,22 @@ set local "request.jwt.claims" = '{"sub":"cccccccc-cccc-cccc-cccc-cccccccccc03",
 select is(
   public.escalate_run_off_route('dddddddd-dddd-dddd-dddd-dddddddddd01'),
   false, 'a non-owner call does not escalate');
+
+reset role;
 select is(
   (select count(*)::int from public.jobs where payload->>'template' = 'off_route'),
   0, 'a non-owner call enqueues no off_route jobs');
 
 -- ─────────── the owner escalates: email + SMS, once, stamped ───────────
 
+set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"cccccccc-cccc-cccc-cccc-cccccccccc01","role":"authenticated"}';
 
 select is(
   public.escalate_run_off_route('dddddddd-dddd-dddd-dddd-dddddddddd01'),
   true, 'the owner escalates their own in-progress broadcast run');
 
+reset role;
 select is(
   (select count(*)::int from public.jobs
    where kind = 'safety_email' and payload->>'template' = 'off_route'
@@ -83,9 +93,12 @@ select isnt(
   null, 'the escalated run is stamped safety_escalated_at');
 
 -- Second call: already stamped → no-op, no second job.
+set local role authenticated;
 select is(
   public.escalate_run_off_route('dddddddd-dddd-dddd-dddd-dddddddddd01'),
   false, 'a second call on an already-escalated run no-ops');
+
+reset role;
 select is(
   (select count(*)::int from public.jobs where payload->>'template' = 'off_route'),
   2, 'no duplicate off_route jobs on a re-call (1 email + 1 sms)');
@@ -99,20 +112,25 @@ insert into runs (id, user_id, started_at, duration_s, distance_m, source, activ
 values ('dddddddd-dddd-dddd-dddd-dddddddddd02', 'cccccccc-cccc-cccc-cccc-cccccccccc01',
         now() - interval '10 minutes', 0, 0, 'app', 'run', true, '{"activity_type": "run", "in_progress": true}');
 
+set local role authenticated;
 select is(
   public.escalate_run_off_route('dddddddd-dddd-dddd-dddd-dddddddddd02'),
   false, 'no safety_off_route_alerts opt-in means no escalation (fail-closed)');
 
 -- ─────────── fail-closed: no confirmed contact → never escalates ───────────
 
+reset role;
 update user_settings set prefs = '{"safety_off_route_alerts": true}'
   where user_id = 'cccccccc-cccc-cccc-cccc-cccccccccc01';
 update safety_contacts set confirmed_at = null
   where owner_id = 'cccccccc-cccc-cccc-cccc-cccccccccc01';
 
+set local role authenticated;
 select is(
   public.escalate_run_off_route('dddddddd-dddd-dddd-dddd-dddddddddd02'),
   false, 'no confirmed contact means no escalation (fail-closed)');
+
+reset role;
 
 select * from finish();
 rollback;
