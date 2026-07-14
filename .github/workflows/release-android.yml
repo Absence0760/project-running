@@ -103,18 +103,32 @@ jobs:
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/mobile_android/android/app/upload-keystore.jks
+          # printf from env vars, NOT a ${{ }}-interpolated heredoc: an unquoted
+          # heredoc shell-expands the secret values, silently mangling a
+          # password that contains $ or backticks.
           # storeFile is resolved by Gradle's file() relative to the android/app
           # module dir, not android/ where key.properties lives — an `app/`
           # prefix doubles into android/app/app/ and validateSigningRelease
           # fails with "Keystore file not found".
-          cat > apps/mobile_android/android/key.properties <<EOF
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=upload-keystore.jks
-          EOF
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" \
+            > apps/mobile_android/android/key.properties
+
+      - name: Verify keystore credentials
+        # Fail in seconds on a wrong store password / missing alias instead of
+        # 9 minutes into the Gradle build (run 29340366061 died at
+        # signReleaseBundle with "keystore password was incorrect").
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          keytool -list -keystore apps/mobile_android/android/app/upload-keystore.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null
 
       - name: Stub the bundled dotenv asset
         # pubspec ships `.env.development` as an asset, so the file must
