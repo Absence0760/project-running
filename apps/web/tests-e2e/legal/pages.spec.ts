@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * /privacy, /terms, /cookie-notice, /health-data-notice — the legal pages.
+ * /privacy, /terms, /cookie-notice, /health-data-notice, /delete-account —
+ * the legal pages.
  *
  * Both app stores reject submissions that don't have a stable
  * privacy-policy URL, and Apple + Play privacy reviewers grep for
