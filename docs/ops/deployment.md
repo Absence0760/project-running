@@ -253,3 +253,19 @@ Before flipping any service from "Plan" to live in the table at the top:
 6. Update the row at the top of this file from "Plan" to "Live (region)".
 7. Tick the corresponding box in [roadmap.md](../product/roadmap.md).
 8. If this enables a feature, flip the cell in [parity.md](../product/parity.md).
+
+### Legal pages — before public launch
+
+The legal pages (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice`) are complete text
+(decisions §242); what remains is operator work, not code:
+
+1. Counsel review of the four pages (plus the docs under `docs/compliance/`).
+2. Fill the operator facts in `apps/web/src/lib/legal/operator.ts` — registered postal address and
+   governing-law state; the pages' "pending" lines disappear on their own.
+3. Appoint the Art 27 EU + UK representatives (vendors + process in
+   [docs/compliance/eu-representative.md](../compliance/eu-representative.md)) and fill them in the
+   same file.
+4. Create the `dmca@threkir.com` mailbox/alias and register the DMCA agent with the US Copyright
+   Office (the Terms already name the address).
+5. Confirm each sub-processor DPA is executed (list in
+   [docs/compliance/sub-processors.md](../compliance/sub-processors.md)).

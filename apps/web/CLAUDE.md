@@ -40,7 +40,8 @@ src/
                     # SocialFeed, SocialPeople, SocialClubs — the three tab panels of /social. SocialPeople is the only top-level surface for finding other runners (name search + suggested-from-clubs). decisions §54.
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
     # Loose lib modules are grouped into topical subfolders: core/ (data + supabase client),
-    # training/ routes/ segments/ social/ integrations/ backup/ share/ settings/ runs/ format/ util/ billing/ gym/ nutrition/ gear/ (gear_wear.ts wear classification).
+    # training/ routes/ segments/ social/ integrations/ backup/ share/ settings/ runs/ format/ util/ billing/ gym/ nutrition/ gear/ (gear_wear.ts wear classification),
+    # legal/ (operator.ts — the nullable operator-facts seam for the legal pages; nulls render fail-closed "pending" lines, decisions §242).
     # Only types.ts + database.types.ts stay at the lib root (gen:types writes database.types.ts there; the
     # twin parity-pair paths in docs/architecture/conventions.md + shared-library-syncer.md track the new locations).
     core/data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
