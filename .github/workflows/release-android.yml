@@ -181,6 +181,19 @@ jobs:
             --dart-define=REVENUECAT_API_KEY_ANDROID="$REVENUECAT_API_KEY_ANDROID" \
             --dart-define=APP_RELEASE="${{ steps.version.outputs.name }}"
 
+      - name: Attach AAB to the Release
+        # The Release already exists — it triggered this run. Upload the
+        # signed AAB onto it (no name/notes → the human-authored release
+        # title + notes aren't clobbered). Runs BEFORE the Play upload:
+        # when that step fails (Play permissions, the manual-first-upload
+        # rule), the signed AAB must still land somewhere durable so it
+        # can be hand-uploaded — run 29344377051 built a good bundle and
+        # lost it with the runner.
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: apps/mobile_android/build/app/outputs/bundle/release/app-release.aab
+
       - name: Upload to Play Internal
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
@@ -192,12 +205,3 @@ jobs:
           # Rolling out to a fraction isn't meaningful on the internal
           # track — always 100% there. Promote to beta / prod manually
           # via the Play Console once tested.
-
-      - name: Attach AAB to the Release
-        # The Release already exists — it triggered this run. Upload the
-        # signed AAB onto it (no name/notes → the human-authored release
-        # title + notes aren't clobbered).
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: apps/mobile_android/build/app/outputs/bundle/release/app-release.aab
