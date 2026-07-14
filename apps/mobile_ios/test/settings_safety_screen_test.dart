@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -238,6 +239,52 @@ void main() {
       expect(dropdown.onChanged, isNull);
       final toggle = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
       expect(toggle.onChanged, isNull);
+    });
+
+    testWidgets(
+        'the off-route toggle is hidden until the deploy flag is on, then '
+        'writes the universal pref', (tester) async {
+      // Flag off (dotenv not initialized) → hidden.
+      dotenv.clean();
+      final sync = await _fakeSync();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: null, settingsSync: sync),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(SwitchListTile, 'Off-route alert'),
+          findsNothing);
+
+      // Flag on → the toggle appears and writes the universal pref.
+      dotenv.loadFromString(
+        mergeWith: {'OFF_ROUTE_ESCALATION_ENABLED': 'true'},
+        isOptional: true,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: null, settingsSync: sync),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final offRoute = find.widgetWithText(SwitchListTile, 'Off-route alert');
+      expect(offRoute, findsOneWidget);
+      await tester.ensureVisible(offRoute);
+      await tester.pumpAndSettle();
+      await tester.tap(offRoute);
+      await tester.pumpAndSettle();
+
+      expect(sync.universalWrites, [
+        {'safety_off_route_alerts': true},
+      ]);
+
+      // Reset the global flag so no later test in the file sees the toggle.
+      dotenv.clean();
     });
   });
 }

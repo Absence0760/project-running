@@ -41,6 +41,16 @@ class SettingsKeys {
   /// the clients only edit it (web /settings/safety + mobile Settings →
   /// Safety contacts).
   static const safetyOverdueMinutes = 'safety_overdue_minutes';
+  /// Opt-in (default absent/false) for the off-route → auto-notify-contact
+  /// escalation (docs/features/safety.md, persona-woman). When true AND the
+  /// runner is on a live-shared run AND has a confirmed safety contact, a
+  /// sustained departure from the planned route calls the
+  /// `escalate_run_off_route` RPC, which alerts contacts via the same
+  /// email/SMS path as the overdue scan. Read SERVER-SIDE by the RPC (the
+  /// documented never-queried-placement exception, like [safetyOverdueMinutes]).
+  /// Fail-closed: absent/false → the RPC never enqueues. Also gated behind the
+  /// `OFF_ROUTE_ESCALATION_ENABLED` deploy flag on the client.
+  static const safetyOffRouteAlerts = 'safety_off_route_alerts';
   static const coachPersonality = 'coach_personality';
   /// Which notification kinds are also delivered by email — `'all'` |
   /// `'important'` (default) | `'off'`. Read server-side by the Go

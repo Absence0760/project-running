@@ -16,6 +16,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { effective, loadSettings, updateUniversal } from '$lib/settings/settings';
+	import { isOffRouteEscalationEnabled } from '$lib/safety/off_route_flag';
 
 	let contacts = $state<SafetyContact[]>([]);
 	let pending = $state<PendingSafetyRequest[]>([]);
@@ -50,14 +51,31 @@
 	let overdueMinutes = $state('off');
 	const OVERDUE_CHOICES = ['15', '30', '60', '120'];
 
+	// Off-route → auto-notify escalation (docs/features/safety.md): an opt-in
+	// universal pref (default off), gated behind the deploy flag so the whole
+	// surface stays hidden until owner + CISO + counsel sign-off.
+	const offRouteEnabled = isOffRouteEscalationEnabled();
+	let offRouteAlerts = $state(false);
+
 	onMount(async () => {
 		await auth.ready();
 		if (!auth.user) return;
 		const [, settings] = await Promise.all([reload(), loadSettings(auth.user.id)]);
 		const v = effective<number>(settings, 'safety_overdue_minutes');
 		overdueMinutes = v && Number.isFinite(v) ? String(v) : 'off';
+		offRouteAlerts = effective<boolean>(settings, 'safety_off_route_alerts') === true;
 		loading = false;
 	});
+
+	async function saveOffRoute() {
+		if (!auth.user) return;
+		try {
+			await updateUniversal(auth.user.id, { safety_off_route_alerts: offRouteAlerts });
+			showToast(m('safety.offRouteSaved'), 'success');
+		} catch (e) {
+			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		}
+	}
 
 	async function saveOverdue() {
 		if (!auth.user) return;
@@ -251,6 +269,25 @@
 		</label>
 		<p class="overdue-note">{m('safety.overdueNote')}</p>
 	</section>
+
+	{#if offRouteEnabled}
+		<section class="card" data-testid="safety-off-route-card">
+			<header class="section-head">
+				<h2>{m('safety.offRouteTitle')}</h2>
+				<p class="tagline">{m('safety.offRouteIntro')}</p>
+			</header>
+			<label class="toggle-row">
+				<input
+					type="checkbox"
+					bind:checked={offRouteAlerts}
+					onchange={saveOffRoute}
+					data-testid="safety-off-route-toggle"
+				/>
+				<span>{m('safety.offRouteLabel')}</span>
+			</label>
+			<p class="overdue-note">{m('safety.offRouteNote')}</p>
+		</section>
+	{/if}
 
 	{#if pending.length > 0}
 		<section class="card incoming" data-testid="safety-incoming">
@@ -466,6 +503,18 @@
 		font-size: 0.82rem;
 		line-height: 1.5;
 		color: var(--color-text-secondary);
+	}
+	.toggle-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		font-size: 0.9rem;
+		cursor: pointer;
+	}
+	.toggle-row input {
+		width: 1.1rem;
+		height: 1.1rem;
+		flex-shrink: 0;
 	}
 
 	.section-head { margin-bottom: var(--space-md); }

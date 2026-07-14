@@ -35,6 +35,7 @@ import '../main.dart' show pendingStartWorkout;
 import '../live_cutoff_eta.dart';
 import '../preferences.dart';
 import '../privacy.dart';
+import '../off_route_alert.dart';
 import '../race_controller.dart';
 import '../roadbook.dart';
 import '../route_geometry.dart';
@@ -405,6 +406,14 @@ class _RunScreenState extends State<RunScreen> {
   double? _offRouteDistance;
   bool _offRouteWarned = false;
   static const double _offRouteThresholdMetres = 40;
+
+  // Off-route → auto-notify safety contact (docs/features/safety.md).
+  // Armed in _attachRecordingSideEffects only when the deploy flag + the
+  // runner's opt-in pref are on and a route is selected; null = inert.
+  // _offRouteAlertFiring guards a second RPC while the first is in flight
+  // (the detector also latches once-per-run).
+  OffRouteAlertDetector? _offRouteAlertDetector;
+  bool _offRouteAlertFiring = false;
 
   // Distance remaining on selected route
   double? _routeRemaining;
@@ -1137,6 +1146,54 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// The OFF_ROUTE_ESCALATION_ENABLED deploy flag (docs/features/safety.md).
+  /// Fail-closed: unset/false → the whole off-route auto-notify path is inert
+  /// (the CISO/counsel deploy gate).
+  bool get _offRouteEscalationEnabled =>
+      dotenv.isInitialized &&
+      offRouteEscalationEnabled(dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']);
+
+  /// The runner's `safety_off_route_alerts` opt-in (default false). False when
+  /// settings aren't available — fail-closed.
+  bool get _offRouteAlertsPrefEnabled {
+    final service = widget.settingsSync?.service;
+    if (service == null) return false;
+    try {
+      return service.effective<bool>(
+            SettingsKeys.safetyOffRouteAlerts,
+            fallback: false,
+          ) ==
+          true;
+    } catch (e) {
+      debugPrint('safety_off_route_alerts read failed: $e');
+      return false;
+    }
+  }
+
+  /// Fire the off-route trusted-contact escalation once (docs/features/safety.md).
+  /// Requires an active live broadcast so the `/live` link the contact
+  /// receives actually works; the RPC re-checks every server-side gate (owner,
+  /// opt-in, confirmed contact, once-per-run). L4 — best-effort, its own catch
+  /// path; a failure must never touch the recording.
+  void _escalateOffRoute() {
+    final api = widget.apiClient;
+    final runId = _runId;
+    if (api == null || runId == null) return;
+    // No live broadcast → the contact would get a dead link; skip.
+    if (!(_liveBroadcaster?.isActive ?? false)) return;
+    _offRouteAlertFiring = true;
+    unawaited(api.escalateRunOffRoute(runId).then((escalated) {
+      if (escalated && mounted) {
+        _showTopBanner(
+          _l10n.runOffRouteAlertSent,
+          duration: const Duration(seconds: 6),
+        );
+      }
+    }).catchError((Object e) {
+      debugPrint('escalateRunOffRoute failed: $e');
+    }));
+  }
+
   /// One-time (throttled) dismissible prompt to share a live link when a
   /// solo run starts after dark with no live share attached — the
   /// safety-net gap for runners who never turned on auto-live-share
@@ -1270,6 +1327,22 @@ class _RunScreenState extends State<RunScreen> {
     // share a live link. L4 — its own catch path; a failure computing
     // daylight or reading prefs must never touch the recording.
     _maybeShowSafetyNudge();
+
+    // Off-route → auto-notify safety contact (docs/features/safety.md,
+    // persona-woman). Arm the sustained-off-route detector only when the
+    // deploy flag + the runner's opt-in pref are on, a route is selected (so
+    // an off-route distance is computed), and we can reach the backend. The
+    // escalation itself also requires an active live broadcast at fire time
+    // (checked in _escalateOffRoute). Fail-closed: any gate off → null (inert).
+    _offRouteAlertFiring = false;
+    if (_offRouteEscalationEnabled &&
+        _offRouteAlertsPrefEnabled &&
+        _selectedRoute != null &&
+        widget.apiClient?.userId != null) {
+      _offRouteAlertDetector = OffRouteAlertDetector();
+    } else {
+      _offRouteAlertDetector = null;
+    }
 
     // Subscribe to the BLE chest strap's BPM stream if a strap has been
     // paired. `connectCached` runs at app start in main.dart; the stream
@@ -1835,6 +1908,24 @@ class _RunScreenState extends State<RunScreen> {
         }
       } catch (e) {
         debugPrint('off-route cue failed: $e');
+      }
+
+      // L4 — Off-route → auto-notify trusted contact (docs/features/safety.md).
+      // Feed the debounced detector; a sustained departure fires ONCE and
+      // escalates to confirmed safety contacts via escalate_run_off_route.
+      // Pure decision + best-effort RPC; a failure here can't disturb the
+      // core stats above.
+      try {
+        final detector = _offRouteAlertDetector;
+        if (detector != null && !_offRouteAlertFiring) {
+          final fired = detector.update(
+            snapshot.offRouteDistanceMetres,
+            DateTime.now().millisecondsSinceEpoch,
+          );
+          if (fired) _escalateOffRoute();
+        }
+      } catch (e) {
+        debugPrint('off-route escalation check failed: $e');
       }
 
       // L4 — Turn-by-turn voice cue. Pure geometry (distanceAlongRoute +
@@ -2542,6 +2633,8 @@ class _RunScreenState extends State<RunScreen> {
       _lapCount = 0;
       _offRouteDistance = null;
       _offRouteWarned = false;
+      _offRouteAlertDetector = null;
+      _offRouteAlertFiring = false;
       _routeRemaining = null;
       _lastPaceAlertAt = null;
     });

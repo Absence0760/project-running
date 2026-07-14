@@ -5016,6 +5016,7 @@ export type Database = {
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       enqueue_safety_overdue_emails: { Args: never; Returns: undefined }
       enqueue_weekly_digests: { Args: never; Returns: number }
+      escalate_run_off_route: { Args: { p_run_id: string }; Returns: boolean }
       event_is_athletic: { Args: { target_event: string }; Returns: boolean }
       event_next_instance_going_counts: {
         Args: { p_event_ids: string[]; p_next_starts: string[] }

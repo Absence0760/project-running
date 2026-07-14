@@ -646,6 +646,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.';
 
   @override
+  String get safetyOffRouteTitle => 'Off-route alert';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'Alert a confirmed contact if you go and stay off your planned route on a live-shared run.';
+
+  @override
+  String get runOffRouteAlertSent =>
+      'We alerted your safety contact — you\'ve been off route for a while.';
+
+  @override
   String get runAutoLiveShareStarted =>
       'Live sharing is on — use Share live link to send it';
 

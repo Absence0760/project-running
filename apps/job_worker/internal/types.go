@@ -236,6 +236,10 @@ type LifecycleEmailPayload struct {
 //     the owner's safety_overdue_minutes window; carries started_at and,
 //     when at least one ping landed, last_seen_at — times only, never
 //     coordinates (the live page applies privacy-zone clipping).
+//   - "off_route": the off-route escalation (migration 20270414_001), enqueued
+//     once per run by the escalate_run_off_route() RPC when the client detects
+//     a sustained departure from the planned route. Same times-only payload
+//     shape as "overdue".
 //
 // ContactEmail is always set (the address the alert goes to). ContactUserID
 // is set only for a contact linked to an app account — used purely to

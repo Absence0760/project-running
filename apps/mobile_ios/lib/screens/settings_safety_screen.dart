@@ -1,8 +1,10 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../off_route_alert.dart';
 import '../settings_sync.dart';
 import '../widgets/top_banner.dart';
 
@@ -47,6 +49,14 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   static const List<int> _overdueChoices = [15, 30, 60, 120];
   int? _overdueMinutes;
   bool _autoLiveShare = false;
+  bool _offRouteAlerts = false;
+
+  // Off-route auto-notify deploy gate (docs/features/safety.md). Hidden until
+  // OFF_ROUTE_ESCALATION_ENABLED flips at deploy time (owner+CISO+counsel).
+  // Fail-closed when dotenv isn't loaded (e.g. under widget tests).
+  bool get _offRouteEnabled =>
+      dotenv.isInitialized &&
+      offRouteEscalationEnabled(dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']);
 
   @override
   void initState() {
@@ -68,9 +78,14 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       SettingsKeys.autoLiveShare,
       fallback: false,
     );
+    final offRoute = service.effective<bool>(
+      SettingsKeys.safetyOffRouteAlerts,
+      fallback: false,
+    );
     _overdueMinutes =
         overdue != null && overdue.isFinite && overdue > 0 ? overdue.toInt() : null;
     _autoLiveShare = auto == true;
+    _offRouteAlerts = offRoute == true;
   }
 
   Future<void> _setOverdueMinutes(int? minutes) async {
@@ -91,6 +106,17 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     try {
       await widget.settingsSync
           ?.updateDevice({SettingsKeys.autoLiveShare: value});
+    } catch (e) {
+      _banner(l10n.safetyAddFailed(e.toString()));
+    }
+  }
+
+  Future<void> _setOffRouteAlerts(bool value) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _offRouteAlerts = value);
+    try {
+      await widget.settingsSync
+          ?.updateUniversal({SettingsKeys.safetyOffRouteAlerts: value});
     } catch (e) {
       _banner(l10n.safetyAddFailed(e.toString()));
     }
@@ -328,6 +354,13 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                   value: _autoLiveShare,
                   onChanged: _prefsEditable ? _setAutoLiveShare : null,
                 ),
+                if (_offRouteEnabled)
+                  SwitchListTile(
+                    title: Text(l10n.safetyOffRouteTitle),
+                    subtitle: Text(l10n.safetyOffRouteSubtitle),
+                    value: _offRouteAlerts,
+                    onChanged: _prefsEditable ? _setOffRouteAlerts : null,
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: Text(

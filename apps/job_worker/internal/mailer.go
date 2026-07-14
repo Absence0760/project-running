@@ -503,6 +503,33 @@ func renderSafetyEmail(p SafetyEmailPayload, baseURL, locale string) (Email, boo
 			ctaURL:    ctaURL,
 			footer:    shared.footerSafety,
 		}), true
+	case "off_route":
+		// Sibling of "overdue" but for a runner who LEFT their planned route
+		// rather than going silent. Same 3-paragraph shape: body[0] = a
+		// last-seen variant, body[1] = a no-ping variant, body[2] = the
+		// detour/glitch caveat. Times only, never coordinates — the /live CTA
+		// does the privacy-clipped rendering. docs/features/safety.md.
+		s := lookupEmailStrings(loc, "safety_off_route")
+		var first string
+		if p.LastSeenAt != "" {
+			first = fmt.Sprintf(s.body[0], owner, formatTimeUTC(p.StartedAt), formatTimeUTC(p.LastSeenAt))
+		} else {
+			first = fmt.Sprintf(s.body[1], owner, formatTimeUTC(p.StartedAt))
+		}
+		ctaURL := base
+		if p.RunID != nil && *p.RunID != "" {
+			ctaURL = base + "/live/" + *p.RunID
+		}
+		return composeEmail(emailContent{
+			lang:      loc,
+			subject:   fmt.Sprintf(s.subject, owner),
+			preheader: s.preheader,
+			heading:   fmt.Sprintf(s.heading, owner),
+			body:      []string{first, s.body[2]},
+			ctaLabel:  s.cta,
+			ctaURL:    ctaURL,
+			footer:    shared.footerSafety,
+		}), true
 	default:
 		return Email{}, false
 	}

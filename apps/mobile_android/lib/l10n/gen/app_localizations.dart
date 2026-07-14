@@ -1169,6 +1169,24 @@ abstract class AppLocalizations {
   /// **'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.'**
   String get safetyAutoLiveShareSubtitle;
 
+  /// Title of the off-route auto-notify toggle on the safety settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Off-route alert'**
+  String get safetyOffRouteTitle;
+
+  /// Subtitle of the off-route auto-notify toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Alert a confirmed contact if you go and stay off your planned route on a live-shared run.'**
+  String get safetyOffRouteSubtitle;
+
+  /// Banner on the run screen when a sustained off-route departure escalated to safety contacts
+  ///
+  /// In en, this message translates to:
+  /// **'We alerted your safety contact — you\'ve been off route for a while.'**
+  String get runOffRouteAlertSent;
+
   /// Banner on the run screen when the auto-live-share pref attached the broadcaster
   ///
   /// In en, this message translates to:

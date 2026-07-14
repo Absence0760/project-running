@@ -58,6 +58,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/format/locale_defaults.ts` (`regionOfLocale`, `defaultUnitForLocale`, `defaultWeekStartForLocale`; web additionally consults `Intl` week data — the shared contract is the region tables) | `apps/mobile_android/lib/locale_defaults.dart` | `format/locale_defaults.test.ts` ↔ `test/locale_defaults_test.dart` |
 | `apps/web/src/lib/integrations/parkrun_regions.ts` (`PARKRUN_REGIONS`, `parkrunLikelyUnavailable`) | `apps/mobile_android/lib/parkrun_regions.dart` | `integrations/parkrun_regions.test.ts` ↔ `test/parkrun_regions_test.dart` |
 | `apps/web/src/lib/social/notification_groups.ts` (`groupNotifications`, `NOTIFICATION_GROUP_WINDOW_MS`) | `apps/mobile_android/lib/notification_groups.dart` (`groupNotifications`, `kNotificationGroupWindowMs`) | `social/notification_groups.test.ts` ↔ `test/notification_groups_test.dart` |
+| `apps/web/src/lib/safety/off_route_alert.ts` (`OffRouteAlertDetector`, `OFF_ROUTE_ALERT_DISTANCE_M`, `OFF_ROUTE_ALERT_SUSTAIN_MS`, `offRouteEscalationEnabled`) | `apps/mobile_android/lib/off_route_alert.dart` | `safety/off_route_alert.test.ts` ↔ `test/off_route_alert_test.dart` |
 
 > The embedded factor tables `apps/web/src/lib/runs/age_grade_tables.ts` ↔ `apps/mobile_android/lib/age_grade_tables.dart` are part of the `age_grade` pair but are **generated** from `scripts/age_grade/` and stay identical by construction — never hand-edit them.
 

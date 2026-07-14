@@ -651,6 +651,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Startet auf diesem Telefon automatisch ein Live-Teilen, wenn ein Lauf beginnt. Der laufende Lauf ist für alle mit dem Link sichtbar.';
 
   @override
+  String get safetyOffRouteTitle => 'Routen-Warnung';
+
+  @override
+  String get safetyOffRouteSubtitle =>
+      'Benachrichtige einen bestätigten Kontakt, wenn du bei einem live geteilten Lauf von deiner geplanten Route abkommst und dort bleibst.';
+
+  @override
+  String get runOffRouteAlertSent =>
+      'Wir haben deinen Sicherheitskontakt benachrichtigt — du bist seit einiger Zeit von der Route abgekommen.';
+
+  @override
   String get runAutoLiveShareStarted =>
       'Live-Teilen ist aktiv — sende den Link über „Live-Link teilen“';
 
