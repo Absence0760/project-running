@@ -257,7 +257,7 @@ Before flipping any service from "Plan" to live in the table at the top:
 ### Legal pages — before public launch
 
 The legal pages (`/privacy`, `/terms`, `/cookie-notice`, `/health-data-notice`, plus the
-store-facing `/delete-account` instructions page — decisions §246) are complete text
+store-facing `/delete-account` instructions page — decisions §247) are complete text
 (decisions §243); what remains is operator work, not code:
 
 1. Counsel review of the four pages (plus the docs under `docs/compliance/`).
