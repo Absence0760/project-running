@@ -108,9 +108,12 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/mobile_android/android/app/upload-keystore.jks
-          # printf from env vars, NOT a ${{ }}-interpolated heredoc: an unquoted
-          # heredoc shell-expands the secret values, silently mangling a
-          # password that contains $ or backticks.
+          # printf from env vars, NOT a secrets-interpolated heredoc: an
+          # unquoted heredoc shell-expands the secret values, silently mangling
+          # a password that contains $ or backticks. (And never write literal
+          # GitHub expression syntax in this script, even in a comment — Actions
+          # expands it anywhere in the block, and an empty expression is a parse
+          # error that invalidates the whole workflow; run 29342366906.)
           # storeFile is resolved by Gradle's file() relative to the android/app
           # module dir, not android/ where key.properties lives — an `app/`
           # prefix doubles into android/app/app/ and validateSigningRelease
