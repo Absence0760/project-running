@@ -4,10 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	// Single source of truth for the OSRM endpoint — env-overridable via
-	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
-	// demo server without code edits.
-	import { OSRM_BASE_URL, assertOsrmConfiguredForProd } from '$lib/routes/routing';
+	import { osrmProxyFetch } from '$lib/routes/routing';
 	import { SegmentCache, segmentCacheKey } from '$lib/routes/segment_cache';
 	import {
 		DEFAULT_SCALE_FACTOR,
@@ -553,12 +550,6 @@
 		waypointsToSnap: TrackPoint[],
 		versionAtStart: number,
 	): Promise<TrackPoint[]> {
-		// audit/third-party-data-flows: refuse to ship waypoints to the
-		// community OSRM endpoint in prod. The helper in $lib/routes/routing.ts
-		// asserts on its own; this component builds URLs inline (custom
-		// retry / batching) and bypasses those helpers, so we re-assert
-		// at every call site that issues OSRM fetches.
-		assertOsrmConfiguredForProd();
 		const lastIdx = waypointsToSnap.length - 1;
 		const snapped = await Promise.all(
 			waypointsToSnap.map(async (wp, i) => {
@@ -566,8 +557,10 @@
 				if (i === 0 || i === lastIdx) return wp;
 				if (versionAtStart !== routeVersion) return wp;
 				try {
-					const url = `${OSRM_BASE_URL}/nearest/v1/foot/${wp.lng},${wp.lat}?number=1&radiuses=${OSRM_SNAP_RADIUS_M}`;
-					const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+					const res = await osrmProxyFetch(
+						`/nearest/v1/foot/${wp.lng},${wp.lat}?number=1&radiuses=${OSRM_SNAP_RADIUS_M}`,
+						{ signal: AbortSignal.timeout(5000) },
+					);
 					if (!res.ok) return wp;
 					if (versionAtStart !== routeVersion) return wp;
 					const data = (await res.json()) as {
@@ -630,15 +623,11 @@
 		onerror(null);
 
 		try {
-			// audit/third-party-data-flows: same assertion as snapWaypoints —
-			// refuse the community OSRM endpoint in prod. Done inside the try
-			// so onerror is reachable if the assertion throws.
-			assertOsrmConfiguredForProd();
 			// Route each segment — batched in groups of 3 to avoid OSRM rate limits
 			const BATCH_SIZE = 3;
-			// Per-fetch timeout. The public OSRM demo server is frequently
-			// overloaded and can hang for 30s+ before returning a 504; we
-			// bail out aggressively so the spinner never lasts longer than
+			// Per-fetch timeout. An overloaded engine (the dev demo fallback
+			// can hang for 30s+ before a 504) must not pin the spinner; we
+			// bail out aggressively so it never lasts longer than
 			// (FETCH_TIMEOUT_MS * retries * segments) in the worst case.
 			const FETCH_TIMEOUT_MS = 8000;
 			const segments: { from: TrackPoint; to: TrackPoint }[] = [];
@@ -657,7 +646,7 @@
 				// `code: "NoSegment"` when no road is in range; we treat
 				// that as a normal segment failure (counted in okSegments).
 				const radius = OSRM_SNAP_RADIUS_M;
-				const url = `${OSRM_BASE_URL}/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
+				const path = `/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
 				for (let attempt = 0; attempt <= retries; attempt++) {
 					// Honor cancellation between retries. Without this check,
 					// a cancelGeneration() call mid-batch had to wait for all
@@ -667,7 +656,7 @@
 					// short-circuits inside the slow path too.
 					if (currentVersion !== routeVersion) return { code: 'Error' };
 					try {
-						const res = await fetch(url, {
+						const res = await osrmProxyFetch(path, {
 							signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
 						});
 						// Same check after the await — the cancel might've

@@ -71,10 +71,11 @@ export default defineConfig({
 		// Force the localhost dev services empty for e2e. `.env.development`
 		// ships a localhost:8080 tileserver + localhost:5000 OSRM the runner
 		// doesn't boot; process.env wins over the .env files, so this makes the
-		// suite fall through (tiles → MapTiler/OSM raster; routing → the public
-		// OSRM demo) deterministically, local and CI alike, instead of chasing
-		// services that aren't there. See decisions.md § 137.
-		env: { PUBLIC_TILE_STYLE_URL: '', PUBLIC_OSRM_URL: '' },
+		// suite fall through (tiles → MapTiler/OSM raster; routing → the dev
+		// /api/routes/osrm proxy's demo fallback, though the specs mock the
+		// proxy path in-browser) deterministically, local and CI alike, instead
+		// of chasing services that aren't there. See decisions.md § 137.
+		env: { PUBLIC_TILE_STYLE_URL: '', OSRM_URL: '' },
 		// Vite logs are noisy; only surface them on failure.
 		stdout: 'ignore',
 		stderr: 'pipe'

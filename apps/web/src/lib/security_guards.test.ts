@@ -2203,17 +2203,25 @@ test('/cookie-notice carries a Manage-cookie-preferences button wired to consent
 	);
 });
 
-test('routing helpers refuse to fall back to router.project-osrm.org in prod', () => {
-	// Reason: audit/third-party-data-flows (May 2026). Pre-fix, the
-	// `OSRM_BASE_URL = (publicEnv.PUBLIC_OSRM_URL || 'https://router.project-osrm.org')`
-	// fallback meant a missing env var silently shipped user waypoints
-	// + IPs to a community endpoint with no DPA. assertOsrmConfiguredForProd
-	// throws when dev=false and the env var resolves to the demo URL.
+test('route-builder OSRM traffic goes through the server-side proxy, never browser-direct', () => {
+	// Reason: issue #198 (persona-hunt route-builder review, 2026-07). Pre-fix,
+	// routing.ts + RouteBuilder.svelte fetched the OSRM host straight from the
+	// browser over PUBLIC_OSRM_URL, so a user's pin coordinates (routinely
+	// their home) left the client with no server boundary — the exact exposure
+	// the GraphHopper hop closed on the generate path. The OSRM base is now
+	// server-only (`OSRM_URL`), and every client call rides the
+	// /api/routes/osrm proxy via osrmProxyFetch.
 	const source = read('src/lib/routes/routing.ts');
+	assert.doesNotMatch(
+		source,
+		/PUBLIC_OSRM_URL|\$env\/dynamic\/public|router\.project-osrm\.org/,
+		'routing.ts must not read a PUBLIC_ OSRM env or reference the OSRM ' +
+			'host/demo — the browser only ever talks to /api/routes/osrm.',
+	);
 	assert.match(
 		source,
-		/export function assertOsrmConfiguredForProd/,
-		'routing.ts must declare assertOsrmConfiguredForProd',
+		/OSRM_PROXY_BASE = '\/api\/routes\/osrm'/,
+		'routing.ts must route through the /api/routes/osrm proxy base.',
 	);
 	for (const fn of ['snapToRoad', 'fetchRoute', 'fetchFullRoute']) {
 		const body = source.match(
@@ -2222,28 +2230,46 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 		assert.ok(body, `routing.ts missing function ${fn}`);
 		assert.match(
 			body!,
-			/assertOsrmConfiguredForProd\(\)/,
-			`${fn} must call assertOsrmConfiguredForProd() before issuing ` +
-				'an OSRM fetch — silent fallback to the demo endpoint is a ' +
-				'GDPR Art 28 violation.',
+			/osrmProxyFetch\(/,
+			`${fn} must issue its OSRM call through osrmProxyFetch — a bare ` +
+				'fetch() here reopens the browser-direct coordinate leak.',
 		);
 	}
 
-	// RouteBuilder.svelte builds OSRM URLs inline (custom retry +
-	// batching + radius / version cancellation) instead of going
-	// through the helper functions. The self-audit caught that the
-	// assertion above was therefore not reachable for the route-
-	// builder code path. Both call sites in the component now
-	// assert too.
+	// RouteBuilder.svelte builds OSRM paths inline (custom retry + batching +
+	// radius / version cancellation) instead of going through the helper
+	// functions — both inline call sites (snapWaypointsToRoads +
+	// recalculateRoute's fetchSegment) must ride the proxy too.
 	const rb = read('src/lib/components/RouteBuilder.svelte');
-	const rbMatches = rb.match(/assertOsrmConfiguredForProd\(\)/g) ?? [];
+	assert.doesNotMatch(
+		rb,
+		/OSRM_BASE_URL|PUBLIC_OSRM_URL|router\.project-osrm\.org/,
+		'RouteBuilder.svelte must not reference the OSRM host directly.',
+	);
+	const rbMatches = rb.match(/osrmProxyFetch\(/g) ?? [];
 	assert.ok(
 		rbMatches.length >= 2,
-		'RouteBuilder.svelte must call assertOsrmConfiguredForProd() at ' +
-			'each OSRM-fetch entry point (snapWaypointsToRoads + ' +
-			'recalculateRoute). Found ' +
+		'RouteBuilder.svelte must call osrmProxyFetch() at each OSRM-fetch ' +
+			'entry point (snapWaypointsToRoads + recalculateRoute). Found ' +
 			rbMatches.length +
 			' call sites.',
+	);
+
+	// The demo fallback now lives server-side and is dev-only: the proxy core
+	// must gate it on allowDemoFallback, and the production Lambda must pin
+	// that gate to false so an unset OSRM_URL can never ship waypoints to the
+	// uncontracted community endpoint (GDPR Art 28 — no DPA).
+	const handler = read('src/lib/routes/osrm_proxy/handler.ts');
+	assert.match(
+		handler,
+		/config\.allowDemoFallback \? OSRM_DEMO_URL : undefined/,
+		'osrm_proxy handler must only use the demo URL behind allowDemoFallback.',
+	);
+	const lambda = read('lambda/osrm-proxy/src/index.ts');
+	assert.match(
+		lambda,
+		/allowDemoFallback: false/,
+		'The osrm-proxy Lambda must hard-code allowDemoFallback: false.',
 	);
 });
 
