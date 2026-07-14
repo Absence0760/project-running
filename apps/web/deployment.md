@@ -157,6 +157,12 @@ The generate-route Lambda reads one additional non-secret var:
 |---|---|---|
 | `GRAPHHOPPER_URL` | non-secret — set in `terraform.tfvars` per env (the self-hosted GraphHopper Fly app's internal base URL) | **server-only — never `PUBLIC_`** so the browser can't reach the engine and the user's start coordinates never leave our infra. Unset → the Lambda returns `501` and the client falls back to the in-browser OSRM heuristic. |
 
+The osrm-proxy Lambda reads one additional non-secret var:
+
+| Lambda env var | Source | Notes |
+|---|---|---|
+| `OSRM_URL` | non-secret — set in `terraform.tfvars` per env (the self-hosted OSRM Fly app's base URL) | **server-only — never `PUBLIC_`** (issue #198): the route builder's waypoint snapping/routing rides the `/api/routes/osrm` proxy, so pin coordinates never leave our infra unproxied. Unset → the Lambda returns `501` and the builder degrades to straight-line segments. The dev SvelteKit wrapper (never the Lambda) may fall back to the community demo. |
+
 ---
 
 ## CI deploy path
@@ -203,9 +209,9 @@ The only SSR route in the app, and the only one that costs money to run.
 
 Distance-targeted loop generation (decisions §137). `apps/web/lambda/generate-route/` wraps `$lib/routes/generate/handler` as a non-streaming JSON Function URL handler (mirroring `lambda/coach` + `lambda/share-route`); `build.mjs` bundles via esbuild → `dist/generate-route.zip`. CloudFront routes `/api/routes/generate*` to it; CI's `release-web.yml` updates the Lambda code on every published `web@*` GitHub Release.
 
-**Why a server-side hop at all.** The browser must never call GraphHopper directly — the request carries the user's start coordinates, and `GRAPHHOPPER_URL` is a server-only env (never `PUBLIC_`) so those coordinates stay inside our infra (privacy parity with the self-hosted OSRM map-matcher). The Lambda is the only thing that talks to the engine.
+**Why a server-side hop at all.** The browser must never call GraphHopper directly — the request carries the user's start coordinates, and `GRAPHHOPPER_URL` is a server-only env (never `PUBLIC_`) so those coordinates stay inside our infra. The Lambda is the only thing that talks to the engine. The same posture now holds on the OSRM side: the route builder's manual snapping/routing rides the osrm-proxy Lambda below (issue #198), so no routing engine is reachable from the browser.
 
-**Engine.** A self-hosted GraphHopper running the `round_trip` algorithm, deployed as its own Fly app alongside the OSRM map-matcher (`apps/job_worker/osrm/`). GraphHopper is loop-generation only; OSRM still owns map-matching and manual-waypoint snapping. The Lambda races a few seeds and picks the best-shaped loop by enclosed-area efficiency (`apps/web/src/lib/routes/generate/select.ts`).
+**Engine.** A self-hosted GraphHopper running the `round_trip` algorithm, deployed as its own Fly app alongside the OSRM map-matcher (`apps/job_worker/osrm/`). GraphHopper is loop-generation only; OSRM still owns map-matching and manual-waypoint snapping (the latter via the osrm-proxy Lambda). The Lambda races a few seeds and picks the best-shaped loop by enclosed-area efficiency (`apps/web/src/lib/routes/generate/select.ts`).
 
 **Response contract.** Returns `{coordinates: [lng,lat][], distanceM}` on success. `501` when `GRAPHHOPPER_URL` is unconfigured, `502` when the engine is unreachable, `503` on an unhandled error. The web client treats any non-200 as "fall back to the in-browser OSRM radial heuristic" and surfaces the existing `routeBuilder.couldntGenerateLoop` / `generatedDistanceLonger` / `generatedDistanceShorter` copy — the server path is a quality upgrade, not a hard dependency.
 
@@ -222,6 +228,24 @@ Distance-targeted loop generation (decisions §137). `apps/web/lambda/generate-r
 - generate-route Lambda throttles >0 in any 1 min window → same topic
 
 A spike in `502`s is the engine-down signal — the alarms above plus a Better Stack probe of the GraphHopper Fly app's health endpoint catch it; the client degrades to the OSRM heuristic in the meantime, so an engine outage is a quality regression, not an outage of the route builder.
+
+---
+
+## OSRM proxy `/api/routes/osrm/*` specifics — Lambda
+
+The server hop for the route builder's manual waypoint snapping (`/nearest/v1/...`) and per-segment routing (`/route/v1/...`) against the self-hosted OSRM engine (issue #198). `apps/web/lambda/osrm-proxy/` wraps `$lib/routes/osrm_proxy/handler` as a GET-only JSON Function URL handler (same two-wrapper shape as generate-route); CloudFront routes `/api/routes/osrm*` to it; CI's `release-web.yml` updates the code on every published `web@*` Release.
+
+**Why it exists.** The builder used to fetch the OSRM host directly from the browser over `PUBLIC_OSRM_URL`, shipping the user's pin coordinates (routinely their home) + client IP with no server boundary — the exact exposure the GraphHopper hop closed on the generate path. `OSRM_URL` is server-only; the browser only ever sees the same-origin proxy path.
+
+**Not an open relay.** The handler enumerates the two supported services and profiles, range-checks every coordinate, allowlists + rebuilds the query string, and rebuilds the upstream URL from those validated parts — nothing is forwarded verbatim. It also requires a signed-in Supabase user (`auth.getUser` on the `x-supabase-authorization` JWT), so it can't be used as a free public OSRM; the per-IP WAF rule on `/api/routes/osrm*` is the pre-auth backstop.
+
+**Response contract.** Passes the OSRM JSON through on success. `400` malformed path/query, `401` unauthenticated, `501` when `OSRM_URL` is unconfigured, `502` when the engine is down (or answered non-200), `503` on an unhandled error. The client treats any non-200 exactly as it treated a failed OSRM call before: a failed snap returns the un-snapped pin, a failed segment falls back to a straight line with the existing warning banner.
+
+**Demo fallback is dev-only.** The dev SvelteKit wrapper may fall back to `router.project-osrm.org` when `OSRM_URL` is unset (local convenience, NODE_ENV-gated); the Lambda hard-codes the fallback off, so production can never leak coordinates to the uncontracted community endpoint. `security_guards.test.ts` pins both halves.
+
+**Memory + timeout.** 256 MB, 15 s. Each invocation is one auth round trip + one engine fetch (10 s upstream timeout inside the handler).
+
+**CloudWatch alarms (same SNS topic as coach):** error rate >2% over two 5-min windows, plus an `engine_unreachable` log-metric alarm mirroring generate-route's — a down OSRM engine is a clean 502, not a Lambda throw, so the Errors metric alone would sleep through the outage while every user silently degrades to straight-line segments.
 
 ---
 
