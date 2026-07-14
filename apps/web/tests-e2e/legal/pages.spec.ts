@@ -21,6 +21,7 @@ const PAGES = [
 	{ path: '/terms', title: 'Terms of Service' },
 	{ path: '/cookie-notice', title: 'Cookie Notice' },
 	{ path: '/health-data-notice', title: 'Consumer Health Data Privacy Policy' },
+	{ path: '/delete-account', title: 'Delete your account' },
 ];
 
 test.describe('Legal pages', () => {
@@ -104,6 +105,33 @@ test.describe('Legal pages', () => {
 		await page.goto('/cookie-notice');
 		await expect(page.getByText('Global Privacy Control (GPC) is honoured.')).toBeVisible();
 		await expect(page.getByTestId('manage-cookie-preferences')).toBeVisible();
+	});
+
+	test('/delete-account gives the self-service path, the email fallback, and honest retention', async ({
+		page
+	}) => {
+		// This URL is submitted to the Play Console as the "Delete account
+		// URL" (Data safety → data deletion), so its shape is a store
+		// requirement: reachable logged-out, a working path to the in-app
+		// deletion, and a fallback for users who can no longer sign in.
+		await page.goto('/delete-account');
+		await expect(
+			page.getByRole('link', { name: 'Settings → Account' })
+		).toHaveAttribute('href', '/settings/account');
+		await expect(
+			page.getByRole('link', { name: /privacy@threkir\.com/ }).first()
+		).toHaveAttribute('href', /^mailto:/);
+		const body = await page.locator('.legal-page').innerText();
+		// Retention carve-outs must not silently drift from /privacy §7.
+		expect(body).toMatch(/backups[^\n]*28 days/i);
+		expect(body).toContain('permanent and cannot be undone');
+	});
+
+	test('/privacy links the /delete-account page from the erasure clause', async ({ page }) => {
+		await page.goto('/privacy');
+		await expect(
+			page.getByRole('link', { name: 'Delete your account' })
+		).toHaveAttribute('href', '/delete-account');
 	});
 
 	test('legal pages cross-link each other consistently', async ({ page }) => {
