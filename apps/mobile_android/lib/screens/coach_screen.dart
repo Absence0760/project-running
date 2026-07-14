@@ -695,8 +695,9 @@ class _CoachScreenState extends State<CoachScreen> {
       final archives = await widget.api.listCoachArchives(planId: _planId);
       if (mounted) setState(() => _archives = archives);
     } catch (e) {
+      debugPrint('New conversation failed: $e');
       if (!mounted) return;
-      setState(() => _error = l10n.coachNewConversationFailed(e.toString()));
+      setState(() => _error = l10n.coachNewConversationFailed);
     }
   }
 
@@ -719,8 +720,9 @@ class _CoachScreenState extends State<CoachScreen> {
       Navigator.maybePop(context);
       _scrollToBottom();
     } catch (e) {
+      debugPrint('Open archive failed: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.coachOpenArchiveFailed(e.toString()));
+      showTopBanner(context, l10n.coachOpenArchiveFailed);
     }
   }
 

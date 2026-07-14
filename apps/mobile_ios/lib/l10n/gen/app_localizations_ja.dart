@@ -4261,9 +4261,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewTemplateCloning => '取り込み中…';
 
   @override
-  String planNewTemplateCloneFailed(String error) {
-    return 'テンプレートを取り込めませんでした: $error';
-  }
+  String get planNewTemplateCloneFailed => 'テンプレートを取り込めませんでした。';
 
   @override
   String get planNewTemplatePickerTitle => 'テンプレートを選択';
@@ -4397,9 +4395,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewStarterPickerCancel => 'キャンセル';
 
   @override
-  String planNewStarterCreateFailed(String error) {
-    return 'そのプランを作成できませんでした: $error';
-  }
+  String get planNewStarterCreateFailed => 'そのプランを作成できませんでした。';
 
   @override
   String get planNewReplaceActiveTitle => 'アクティブなプランを置き換えますか？';
@@ -4974,14 +4970,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachStreamFailed => 'ストリームに失敗しました';
 
   @override
-  String coachNewConversationFailed(String error) {
-    return '新しい会話を開始できませんでした：$error';
-  }
+  String get coachNewConversationFailed => '新しい会話を開始できませんでした。';
 
   @override
-  String coachOpenArchiveFailed(String error) {
-    return 'アーカイブを開けませんでした：$error';
-  }
+  String get coachOpenArchiveFailed => 'アーカイブを開けませんでした。';
 
   @override
   String coachArchiveDeleteFailed(String error) {

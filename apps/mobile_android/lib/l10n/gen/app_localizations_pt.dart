@@ -4532,9 +4532,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewTemplateCloning => 'Adotando…';
 
   @override
-  String planNewTemplateCloneFailed(String error) {
-    return 'Não foi possível adotar esse modelo: $error';
-  }
+  String get planNewTemplateCloneFailed =>
+      'Não foi possível adotar esse modelo.';
 
   @override
   String get planNewTemplatePickerTitle => 'Escolha um modelo';
@@ -4671,9 +4670,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewStarterPickerCancel => 'Cancelar';
 
   @override
-  String planNewStarterCreateFailed(String error) {
-    return 'Não foi possível criar esse plano: $error';
-  }
+  String get planNewStarterCreateFailed => 'Não foi possível criar esse plano.';
 
   @override
   String get planNewReplaceActiveTitle => 'Substituir seu plano ativo?';
@@ -5284,14 +5281,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get coachStreamFailed => 'falha no fluxo';
 
   @override
-  String coachNewConversationFailed(String error) {
-    return 'Não foi possível iniciar uma nova conversa: $error';
-  }
+  String get coachNewConversationFailed =>
+      'Não foi possível iniciar uma nova conversa.';
 
   @override
-  String coachOpenArchiveFailed(String error) {
-    return 'Não foi possível abrir o arquivo: $error';
-  }
+  String get coachOpenArchiveFailed => 'Não foi possível abrir o arquivo.';
 
   @override
   String coachArchiveDeleteFailed(String error) {
@@ -15637,9 +15631,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planNewTemplateCloning => 'Adotando…';
 
   @override
-  String planNewTemplateCloneFailed(String error) {
-    return 'Não foi possível adotar esse modelo: $error';
-  }
+  String get planNewTemplateCloneFailed =>
+      'Não foi possível adotar esse modelo.';
 
   @override
   String get planNewTemplatePickerTitle => 'Escolha um modelo';
@@ -15776,9 +15769,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planNewStarterPickerCancel => 'Cancelar';
 
   @override
-  String planNewStarterCreateFailed(String error) {
-    return 'Não foi possível criar esse plano: $error';
-  }
+  String get planNewStarterCreateFailed => 'Não foi possível criar esse plano.';
 
   @override
   String get planNewReplaceActiveTitle => 'Substituir seu plano ativo?';
@@ -16388,14 +16379,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get coachStreamFailed => 'falha no fluxo';
 
   @override
-  String coachNewConversationFailed(String error) {
-    return 'Não foi possível iniciar uma nova conversa: $error';
-  }
+  String get coachNewConversationFailed =>
+      'Não foi possível iniciar uma nova conversa.';
 
   @override
-  String coachOpenArchiveFailed(String error) {
-    return 'Não foi possível abrir o arquivo: $error';
-  }
+  String get coachOpenArchiveFailed => 'Não foi possível abrir o arquivo.';
 
   @override
   String coachArchiveDeleteFailed(String error) {
