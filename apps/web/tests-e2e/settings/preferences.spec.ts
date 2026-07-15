@@ -278,10 +278,12 @@ test.describe('/settings/preferences', () => {
 		// Default when the key is absent: off (unchecked).
 		await expect(toggle).not.toBeChecked();
 
-		// Opt in. The bag write must be the literal 'on' string.
+		// Opt in. The bag write must be the literal 'on' string. The push is
+		// a POST upsert, not a PATCH — a missing client-provisioned row makes
+		// an update match 0 rows and silently drop the change (#234).
 		const optInPatch = page.waitForRequest(
 			(req) =>
-				req.method() === 'PATCH' &&
+				req.method() === 'POST' &&
 				req.url().includes('/rest/v1/user_settings') &&
 				(req.postData() ?? '').includes('"email_weekly_digest":"on"'),
 			{ timeout: 8_000 }
@@ -318,10 +320,11 @@ test.describe('/settings/preferences', () => {
 		// Default when the key is absent: off (unchecked).
 		await expect(toggle).not.toBeChecked();
 
-		// Opt in. The bag write must be the literal 'on' string.
+		// Opt in. The bag write must be the literal 'on' string. POST upsert,
+		// not PATCH — see the weekly-digest test above (#234).
 		const optInPatch = page.waitForRequest(
 			(req) =>
-				req.method() === 'PATCH' &&
+				req.method() === 'POST' &&
 				req.url().includes('/rest/v1/user_settings') &&
 				(req.postData() ?? '').includes('"email_lifecycle_drip":"on"'),
 			{ timeout: 8_000 }
@@ -347,7 +350,7 @@ test.describe('/settings/preferences', () => {
 		// The UI locale stays client-side; separately the applied tag is
 		// mirrored into user_settings.prefs.locale so the worker can localize
 		// email (decisions §120). Assert the write actually fires by catching
-		// the user_settings PATCH — a regression dropping it would silently
+		// the user_settings upsert — a regression dropping it would silently
 		// leave every user's email in English.
 		await page.goto('/settings/preferences');
 		await page.waitForLoadState('networkidle');
@@ -357,7 +360,7 @@ test.describe('/settings/preferences', () => {
 
 		const patch = page.waitForRequest(
 			(req) =>
-				req.method() === 'PATCH' &&
+				req.method() === 'POST' &&
 				req.url().includes('/rest/v1/user_settings') &&
 				(req.postData() ?? '').includes('"locale":"de"'),
 			{ timeout: 8_000 }
