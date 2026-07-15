@@ -1447,6 +1447,8 @@ The fix is a `metadata.created_by_user_id` tag stamped at save time, plus a filt
 - Stamping the tag during `saveFromRemote` — would mask cross-user contamination on the read path (a row from A's cloud account being pulled while signed in as B should be flagged, not silently re-stamped).
 - Stamping during `update()` — would mean edits transfer ownership; B editing A's title would steal the run.
 
+**Amendment (2026-07-15, issue #230) — the tag now also gates DISPLAY.** The original decision only defended the push path; no read seam consulted the tag, so after A signed out and B signed in, B still *saw* A's entire local history — runs list, dashboard stats/heatmap, timeline, and run detail (with A's GPS tracks) all rendered the whole store. Every public `LocalRunStore` read seam (`runs`, `summaries`, `summaryRuns`, `recentWindow`, `unsyncedRuns`/`unsyncedCount`, `runById`, `iterateAllRuns`) now filters to active-account rows ∪ untagged rows, so display matches the push policy exactly: untagged (legacy / signed-out-recorded) runs stay visible to any account and are adopted on push; another account's tagged rows are invisible. An UNWIRED `currentUserIdProvider` (tests, pre-bootstrap) means no filtering; a wired provider returning null (signed out) hides all tagged rows. The store's own ingest paths use an unfiltered internal resolve (`_runByIdRaw`) so the newer-wins merge can still see a hidden local copy. Routes got the equivalent treatment via a sidecar tag in §250. Pinned by the `owner-tag display filtering` group in `local_run_store_test.dart`.
+
 ---
 
 ## 68. Tile rendering honours an env override so local dev can use self-hosted Protomaps without touching prod code paths

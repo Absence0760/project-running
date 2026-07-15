@@ -70,7 +70,11 @@ class LocalRouteStore extends ChangeNotifier {
 
   bool _visibleToActiveOwner(String routeId) {
     final tag = _ownerTags[routeId] ?? '';
-    return tag.isEmpty || tag == _activeOwner;
+    if (tag.isEmpty) return true;
+    // An UNWIRED provider (tests, pre-bootstrap) means no filtering; a
+    // wired provider returning null means signed out — tagged rows hide.
+    if (currentUserIdProvider == null) return true;
+    return tag == _activeOwner;
   }
 
   void _stampOwner(String routeId) {
