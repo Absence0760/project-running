@@ -56,10 +56,25 @@ class SettingsSyncService extends ChangeNotifier {
   /// reads the cached bag on every push — leaking the previous user's
   /// zones to a new user's broadcast would be a real privacy regression.
   /// Idempotent — safe to call multiple times.
-  Future<void> onSignedOut() async {
+  ///
+  /// Also (issue #231) resets the [Preferences] bag mirrors to defaults —
+  /// [_applyUniversal] only overwrites keys PRESENT in the next account's
+  /// bag, so any absent key (privacy default, body weight, goals, fueling
+  /// rates, units) would otherwise carry the prior account's value
+  /// indefinitely — and drops the prior user's on-disk cached bags
+  /// (privacy zones included) when [priorUserId] is known.
+  Future<void> onSignedOut({String? priorUserId}) async {
     _settings = null;
     _synced = false;
     _lastError = null;
+    await preferences.resetAccountScopedPrefs();
+    if (priorUserId != null && priorUserId.isNotEmpty) {
+      try {
+        await cache?.dropUser(priorUserId);
+      } catch (e) {
+        debugPrint('Settings cache dropUser failed: $e');
+      }
+    }
     notifyListeners();
   }
 

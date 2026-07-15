@@ -307,18 +307,50 @@
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
 		};
-		if (!healthDataConsent && healthDataConsentAt != null) {
-			// Withdrawal — null the consent timestamp (the lock trigger
-			// permits a direct null write); DOB is cleared from prefs below.
-			profileUpdate.health_data_consent_at = null;
-			healthDataConsentAt = null;
-		}
-		const { error: profileError } = await supabase.from('user_profiles')
-			.update(profileUpdate).eq('id', auth.user.id);
+		// Row-count-verified: user_profiles rows are client-provisioned, so a
+		// plain update against a missing row matches 0 rows and reports
+		// success — the save would silently vanish (issue #233).
+		const { data: updatedProfileRows, error: profileError } = await supabase
+			.from('user_profiles')
+			.update(profileUpdate)
+			.eq('id', auth.user.id)
+			.select('id');
 		if (profileError) {
 			showToast(m('settingsAccount.saveFailed', { error: profileError.message }), 'error');
 			saving = false;
 			return;
+		}
+		if (!updatedProfileRows?.length) {
+			const { error: profileInsertError } = await supabase
+				.from('user_profiles')
+				.insert({ id: auth.user.id, ...profileUpdate });
+			if (profileInsertError) {
+				showToast(
+					m('settingsAccount.saveFailed', { error: profileInsertError.message }),
+					'error',
+				);
+				saving = false;
+				return;
+			}
+		}
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
+			// consent stamp + gender/DOB/height and erases the weight series
+			// atomically; insert-or-update server-side so a missing profile
+			// row can't 0-row silent no-op (issue #233). Local state flips
+			// only after the server confirms. DOB is cleared from prefs below.
+			const { error: withdrawError } = await supabase.rpc(
+				'withdraw_health_data_consent',
+			);
+			if (withdrawError) {
+				showToast(
+					m('settingsAccount.saveFailed', { error: withdrawError.message }),
+					'error',
+				);
+				saving = false;
+				return;
+			}
+			healthDataConsentAt = null;
 		}
 
 		// Persist DOB + HR into user_settings.prefs. DOB only when consented;

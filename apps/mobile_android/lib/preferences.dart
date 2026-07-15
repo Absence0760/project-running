@@ -475,6 +475,43 @@ class Preferences extends ChangeNotifier {
     await _prefs.setString(_kRunsLastFetchedAt, when.toIso8601String());
   }
 
+  /// Back to "never fetched" so the next signed-in account's first runs
+  /// fetch takes the FULL path — a delta fetch against the prior
+  /// account's watermark would silently skip the new account's older
+  /// history on this device (issue #231).
+  Future<void> clearRunsLastFetchedAt() async {
+    await _prefs.remove(_kRunsLastFetchedAt);
+  }
+
+  /// Reset every account-scoped preference — the local mirrors of the
+  /// user_settings bags plus the runs delta-sync watermark — back to its
+  /// default. Called at sign-out (issue #231): the sign-in overlay
+  /// (`SettingsSyncService._applyUniversal`) only overwrites keys PRESENT
+  /// in the next account's bag, so any value it doesn't carry would
+  /// otherwise keep the prior account's setting indefinitely — including
+  /// `privacyDefault` (A choosing public-by-default must not make B's
+  /// runs save public) and `bodyWeightKg` (A's weight driving B's calorie
+  /// estimates). Genuinely device-scoped state (theme, locale, onboarded,
+  /// keepRunPrimary, sentryOptOut, one-time hints) stays.
+  Future<void> resetAccountScopedPrefs() async {
+    await setUseMiles(false);
+    await setDefaultActivityType('run');
+    await setVoiceFeedbackVerbosity('full');
+    await setBodyWeightKg(null);
+    await setCarbsPerHourG(null);
+    await setFluidPerHourMl(null);
+    await setPrivacyDefault('private');
+    await setWeightUnit(WeightUnit.kg);
+    await clearGoals();
+    await clearRunsLastFetchedAt();
+    // Device-bag mirrors: per-(user, device) server-side, so they are
+    // account-scoped too — the next account gets the defaults until its
+    // own device bag applies.
+    await setAudioCues(true);
+    await setSplitIntervalMetres(0);
+    await setKeepScreenOn(true);
+  }
+
   /// Whether the one-time OEM battery-optimisation hint has been shown. Many
   /// Android OEMs (Samsung Stamina, Xiaomi MIUI, OnePlus) kill the recording
   /// foreground service unless the app is exempted from battery optimisation,
@@ -733,6 +770,17 @@ class Preferences extends ChangeNotifier {
     final before = _goals.length;
     _goals.removeWhere((g) => g.id == id);
     if (_goals.length == before) return;
+    await _persistGoals();
+    notifyListeners();
+  }
+
+  /// Drop every goal — the sign-out account reset. A goal is account
+  /// data (the sign-in overlay would seed the prior user's weekly-
+  /// distance value straight into the next account's bag via
+  /// pushWeeklyDistanceGoal on first edit).
+  Future<void> clearGoals() async {
+    if (_goals.isEmpty) return;
+    _goals = [];
     await _persistGoals();
     notifyListeners();
   }

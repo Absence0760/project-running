@@ -136,12 +136,15 @@ export async function loadSettings(userId: string): Promise<LoadedSettings> {
 		// ignoreDuplicates preserves the "never overwrite existing prefs"
 		// intent — an existing row is left untouched.
 		if (!universalRes.data) {
-			await supabase
+			const provRes = await supabase
 				.from('user_settings')
 				.upsert({ user_id: userId, prefs: {} }, { onConflict: 'user_id', ignoreDuplicates: true });
+			// Error-checked (#234): a silently failed provision used to leave
+			// the 0-row update hole open. Throwing routes to the cache path.
+			if (provRes.error) throw provRes.error;
 		}
 		if (!deviceRes.data) {
-			await supabase.from('user_device_settings').upsert(
+			const provRes = await supabase.from('user_device_settings').upsert(
 				{
 					user_id: userId,
 					device_id: deviceId,
@@ -151,6 +154,7 @@ export async function loadSettings(userId: string): Promise<LoadedSettings> {
 				},
 				{ onConflict: 'user_id,device_id', ignoreDuplicates: true },
 			);
+			if (provRes.error) throw provRes.error;
 		}
 
 		const universal: PrefsBag = (universalRes.data?.prefs as PrefsBag | null) ?? {};
@@ -224,10 +228,17 @@ async function pushUniversal(userId: string, changes: PrefsBag): Promise<void> {
 		.maybeSingle();
 	if (error) throw error;
 	const merged = applyPrefsChanges((data?.prefs as PrefsBag) ?? {}, changes);
+	// Upsert, not update: rows are client-provisioned, so a missing row
+	// makes an update match 0 rows and report success — the change is
+	// neither stored nor queued, and the next load reverts it (#234).
+	// This bag carries privacy_zones + safety_overdue_minutes, so a
+	// silent drop here is a privacy/safety failure, not a lost nicety.
 	const updRes = await supabase
 		.from('user_settings')
-		.update({ prefs: merged, updated_at: new Date().toISOString() })
-		.eq('user_id', userId);
+		.upsert(
+			{ user_id: userId, prefs: merged, updated_at: new Date().toISOString() },
+			{ onConflict: 'user_id' },
+		);
 	if (updRes.error) throw updRes.error;
 	// Stamp the cache with the canonical server-merged value so a
 	// device with a stale base picks up the union, not just its own
@@ -244,11 +255,21 @@ async function pushDevice(userId: string, deviceId: string, changes: PrefsBag): 
 		.maybeSingle();
 	if (error) throw error;
 	const merged = applyPrefsChanges((data?.prefs as PrefsBag) ?? {}, changes);
+	// Upsert for the same 0-row reason as pushUniversal; the insert arm
+	// needs platform (NOT NULL) + label, matching the auto-provision row.
 	const updRes = await supabase
 		.from('user_device_settings')
-		.update({ prefs: merged, updated_at: new Date().toISOString() })
-		.eq('user_id', userId)
-		.eq('device_id', deviceId);
+		.upsert(
+			{
+				user_id: userId,
+				device_id: deviceId,
+				platform: detectPlatform(),
+				label: deviceLabel(),
+				prefs: merged,
+				updated_at: new Date().toISOString(),
+			},
+			{ onConflict: 'user_id,device_id' },
+		);
 	if (updRes.error) throw updRes.error;
 	cache.writeDevice(userId, deviceId, merged);
 }

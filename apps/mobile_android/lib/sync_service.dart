@@ -315,6 +315,13 @@ class SyncService with WidgetsBindingObserver {
     }
     if (succeededIds.isNotEmpty) {
       await store.markManyRoutesSynced(succeededIds);
+      // Adoption stamp (§67 semantics, issue #229): an untagged
+      // (signed-out-built) route that just landed in this account now
+      // belongs to it — tag it so it stops rendering for other accounts.
+      final uid = api.userId;
+      if (uid != null && uid.isNotEmpty) {
+        await store.tagRoutesOwner(succeededIds, uid);
+      }
     }
     debugPrint(
       'SyncService: drained $ok / ${unsyncedRoutes.length} unsynced routes',

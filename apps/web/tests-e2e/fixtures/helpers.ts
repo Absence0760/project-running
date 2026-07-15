@@ -105,6 +105,19 @@ export async function signOut(page: Page) {
 }
 
 /**
+ * The nutrition page's water tracker persists to a user-scoped
+ * localStorage key — `water_ml_<userId>_<Y-M-D>` with UNPADDED local
+ * month/day — mirroring `waterStorageKey()` in routes/nutrition/+page.svelte
+ * (user-scoped per issue #231). Specs that seed or clear the counter
+ * must build the key identically or they silently touch a key the
+ * page never reads.
+ */
+export function waterStorageKey(userId: string): string {
+	const d = new Date();
+	return `water_ml_${userId}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/**
  * The /runs page defaults its date filter to "today" (so cold loads
  * aren't slow on heavy users). For seed-data assertions we always
  * want everything — switch to "All time" via the toolbar select.

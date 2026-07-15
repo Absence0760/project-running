@@ -104,7 +104,9 @@
 	const groups = $derived<MealSlotGroup<FoodEntry>[]>(groupByMealSlot(entries));
 
 	function waterStorageKey(): string {
-		return `water_ml_${todayKey()}`;
+		// User-scoped (issue #231): a shared browser profile's next account
+		// must not inherit — or increment — the prior account's water count.
+		return `water_ml_${auth.user?.id ?? 'anon'}_${todayKey()}`;
 	}
 
 	function litres(ml: number): string {

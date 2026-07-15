@@ -803,10 +803,18 @@ void main() {
       currentUser = 'user-b';
       await store.save(makeRun(id: 'r-user-b'));
 
-      final byId = {for (final r in store.runs) r.id: r};
-      expect(byId['r-signed-out']?.metadata?['created_by_user_id'], isNull);
-      expect(byId['r-signed-in']?.metadata?['created_by_user_id'], 'user-a');
-      expect(byId['r-user-b']?.metadata?['created_by_user_id'], 'user-b');
+      // The getters are owner-filtered (#230), so read each account's view.
+      currentUser = null;
+      expect(store.runs.single.id, 'r-signed-out');
+      expect(store.runs.single.metadata?['created_by_user_id'], isNull);
+      currentUser = 'user-a';
+      final aView = {for (final r in store.runs) r.id: r};
+      expect(aView.keys, {'r-signed-out', 'r-signed-in'});
+      expect(aView['r-signed-in']?.metadata?['created_by_user_id'], 'user-a');
+      currentUser = 'user-b';
+      final bView = {for (final r in store.runs) r.id: r};
+      expect(bView.keys, {'r-signed-out', 'r-user-b'});
+      expect(bView['r-user-b']?.metadata?['created_by_user_id'], 'user-b');
     });
 
     test('an existing metadata.created_by_user_id is OVERWRITTEN by save',
@@ -1252,6 +1260,86 @@ void main() {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
       expect(store.summaries.map((s) => s.id).toSet(), {'a', 'x'});
+    });
+  });
+
+  group('owner-tag display filtering (issue #230)', () {
+    // The push side has filtered on metadata.created_by_user_id since §67;
+    // these pin the display side — every read seam must exclude another
+    // account's rows so a shared device's next user can't browse the prior
+    // user's runs (or their GPS tracks / home start points).
+    test("A's runs are invisible to B across every read seam", () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      String? uid = 'user-a';
+      store.currentUserIdProvider = () => uid;
+      await store.save(makeRun(
+        id: 'r-a',
+        track: const [Waypoint(lat: 47.37, lng: 8.54)],
+      ));
+
+      uid = 'user-b';
+      expect(store.runs, isEmpty);
+      expect(store.summaries, isEmpty);
+      expect(store.summaryRuns, isEmpty);
+      expect(store.recentWindow(), isEmpty);
+      expect(store.unsyncedRuns, isEmpty,
+          reason: "A's unsynced run must not surface in B's drain view");
+      expect(store.unsyncedCount, 0);
+      expect(await store.runById('r-a'), isNull,
+          reason: 'run detail must not hydrate another account\'s track');
+      expect(await store.iterateAllRuns().toList(), isEmpty,
+          reason: "the backup export must not carry A's history under B");
+
+      uid = 'user-a';
+      expect(store.runs, hasLength(1),
+          reason: 'A signing back in sees their history again');
+      expect((await store.runById('r-a'))?.track, isNotEmpty);
+    });
+
+    test('untagged (legacy / signed-out-recorded) runs stay visible to any '
+        'account, matching the §67 adoption rule', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      // No provider wired — the save lands untagged.
+      await store.save(makeRun(id: 'r-anon'));
+
+      store.currentUserIdProvider = () => 'user-b';
+      expect(store.runs.map((r) => r.id), contains('r-anon'));
+      expect(store.summaries.map((s) => s.id), contains('r-anon'));
+      expect(store.unsyncedRuns.map((r) => r.id), contains('r-anon'),
+          reason: 'the adoptable run must stay drainable under the next '
+              'signed-in account');
+    });
+
+    test('a signed-out viewer sees only untagged runs', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      String? uid = 'user-a';
+      store.currentUserIdProvider = () => uid;
+      await store.save(makeRun(id: 'r-owned'));
+      uid = null;
+      await store.save(makeRun(id: 'r-free'));
+
+      expect(store.runs.map((r) => r.id).toList(), ['r-free']);
+      expect(store.summaries.map((s) => s.id).toList(), ['r-free']);
+    });
+
+    test('the filter survives a cold reload from disk', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRun(id: 'r-cold'));
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      String? uid = 'user-b';
+      reloaded.currentUserIdProvider = () => uid;
+      expect(reloaded.runs, isEmpty);
+      expect(reloaded.summaries, isEmpty,
+          reason: 'the index round-trip must preserve the owner tag');
+      uid = 'user-a';
+      expect(reloaded.runs, hasLength(1));
     });
   });
 }
