@@ -261,9 +261,30 @@ class SettingsService {
   })  : _deviceId = deviceId,
         _platform = platform,
         _label = label,
-        _cache = cache;
+        _cache = cache,
+        _clientOverride = null;
 
-  static SupabaseClient get _client {
+  /// Test seam mirroring [ApiClient.withClient]: inject a
+  /// [SupabaseClient] so wire-level behaviour is testable without
+  /// booting `Supabase.initialize`.
+  @visibleForTesting
+  SettingsService.withClient(
+    SupabaseClient client, {
+    required String deviceId,
+    required String platform,
+    String? label,
+    SettingsCache cache = const _NoOpSettingsCache(),
+  })  : _deviceId = deviceId,
+        _platform = platform,
+        _label = label,
+        _cache = cache,
+        _clientOverride = client;
+
+  final SupabaseClient? _clientOverride;
+
+  SupabaseClient get _client {
+    final override = _clientOverride;
+    if (override != null) return override;
     if (!ApiClient.isInitialized) {
       throw StateError(
         'SettingsService called before Supabase.initialize() resolved.',
@@ -324,10 +345,16 @@ class SettingsService {
           .eq(UserSettingRow.colUserId, userId)
           .maybeSingle();
       if (universalRes == null) {
-        await _client.from(UserSettingRow.table).insert(<String, dynamic>{
-          UserSettingRow.colUserId: userId,
-          UserSettingRow.colPrefs: <String, dynamic>{},
-        });
+        // ignoreDuplicates: concurrent load()s race select→insert and the
+        // loser 409s into the offline path; an existing row stays untouched.
+        await _client.from(UserSettingRow.table).upsert(
+          <String, dynamic>{
+            UserSettingRow.colUserId: userId,
+            UserSettingRow.colPrefs: <String, dynamic>{},
+          },
+          onConflict: UserSettingRow.colUserId,
+          ignoreDuplicates: true,
+        );
         _universal = <String, dynamic>{};
       } else {
         _universal = _asMap(universalRes['prefs']);
@@ -340,13 +367,18 @@ class SettingsService {
           .eq(UserDeviceSettingRow.colDeviceId, _deviceId)
           .maybeSingle();
       if (deviceRes == null) {
-        await _client.from(UserDeviceSettingRow.table).insert(<String, dynamic>{
-          UserDeviceSettingRow.colUserId: userId,
-          UserDeviceSettingRow.colDeviceId: _deviceId,
-          UserDeviceSettingRow.colPlatform: _platform,
-          if (_label != null) UserDeviceSettingRow.colLabel: _label,
-          UserDeviceSettingRow.colPrefs: <String, dynamic>{},
-        });
+        await _client.from(UserDeviceSettingRow.table).upsert(
+          <String, dynamic>{
+            UserDeviceSettingRow.colUserId: userId,
+            UserDeviceSettingRow.colDeviceId: _deviceId,
+            UserDeviceSettingRow.colPlatform: _platform,
+            if (_label != null) UserDeviceSettingRow.colLabel: _label,
+            UserDeviceSettingRow.colPrefs: <String, dynamic>{},
+          },
+          onConflict:
+              '${UserDeviceSettingRow.colUserId},${UserDeviceSettingRow.colDeviceId}',
+          ignoreDuplicates: true,
+        );
         _device = <String, dynamic>{};
       } else {
         _device = _asMap(deviceRes['prefs']);
@@ -458,10 +490,19 @@ class SettingsService {
         .maybeSingle();
     final base = _asMap(fresh?[UserSettingRow.colPrefs]);
     final merged = applyPrefsChanges(base, changes);
-    await _client.from(UserSettingRow.table).update(<String, dynamic>{
-      UserSettingRow.colPrefs: merged,
-      UserSettingRow.colUpdatedAt: DateTime.now().toUtc().toIso8601String(),
-    }).eq(UserSettingRow.colUserId, userId);
+    // Upsert, not update: rows are client-provisioned, so a missing row
+    // makes an update match 0 rows and report success — the change is
+    // neither stored nor queued, and the next load reverts it (#234).
+    // This bag carries privacy_zones + safety_overdue_minutes, so a
+    // silent drop here is a privacy/safety failure, not a lost nicety.
+    await _client.from(UserSettingRow.table).upsert(
+      <String, dynamic>{
+        UserSettingRow.colUserId: userId,
+        UserSettingRow.colPrefs: merged,
+        UserSettingRow.colUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: UserSettingRow.colUserId,
+    );
     _universal = merged;
     await _cache.writeUniversal(userId, _universal);
   }
@@ -476,15 +517,21 @@ class SettingsService {
         .maybeSingle();
     final base = _asMap(fresh?[UserDeviceSettingRow.colPrefs]);
     final merged = applyPrefsChanges(base, changes);
-    await _client
-        .from(UserDeviceSettingRow.table)
-        .update(<String, dynamic>{
-          UserDeviceSettingRow.colPrefs: merged,
-          UserDeviceSettingRow.colUpdatedAt:
-              DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq(UserDeviceSettingRow.colUserId, userId)
-        .eq(UserDeviceSettingRow.colDeviceId, _deviceId);
+    // Upsert for the same 0-row reason as _pushUniversal; the insert arm
+    // needs platform (NOT NULL) + label, matching the load() provision row.
+    await _client.from(UserDeviceSettingRow.table).upsert(
+      <String, dynamic>{
+        UserDeviceSettingRow.colUserId: userId,
+        UserDeviceSettingRow.colDeviceId: _deviceId,
+        UserDeviceSettingRow.colPlatform: _platform,
+        if (_label != null) UserDeviceSettingRow.colLabel: _label,
+        UserDeviceSettingRow.colPrefs: merged,
+        UserDeviceSettingRow.colUpdatedAt:
+            DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict:
+          '${UserDeviceSettingRow.colUserId},${UserDeviceSettingRow.colDeviceId}',
+    );
     _device = merged;
     await _cache.writeDevice(userId, _deviceId, _device);
   }
