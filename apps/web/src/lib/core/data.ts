@@ -9303,16 +9303,6 @@ export async function recordWeightKg(weightKg: number): Promise<void> {
 	if (error) throw error;
 }
 
-/// Erase the whole weight history. Called when the user withdraws
-/// health-data consent (GDPR Art 7(3)) so the special-category series is
-/// cleared alongside height/gender/DOB.
-export async function clearWeightHistory(): Promise<void> {
-	const userId = auth.user?.id;
-	if (!userId) return;
-	const { error } = await supabase.from(TABLES.body_metrics).delete().eq('user_id', userId);
-	if (error) throw error;
-}
-
 // --- Unified activities timeline (Phase 4 multi-modal History) ---
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log)
