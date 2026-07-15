@@ -1101,11 +1101,11 @@ void main() {
       );
       expect(
         source,
-        contains('settingsSync?.onSignedOut()'),
+        contains('?.onSignedOut(priorUserId:'),
         reason: 'main.dart\'s signedOut handler MUST call '
-            'settingsSync?.onSignedOut() — without it, the previous '
-            'user\'s privacy_zones stay cached and leak into the '
-            'next user\'s live broadcast.',
+            'settingsSync?.onSignedOut(priorUserId: …) — without it, the '
+            'previous user\'s privacy_zones stay cached (and their bag-'
+            'mirrored Preferences carry over) into the next account.',
       );
     });
 

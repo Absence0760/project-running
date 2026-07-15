@@ -49,6 +49,10 @@ import 'wear_routes_bridge.dart';
 /// belt-and-braces for future reconnect logic) can cancel any prior
 /// listener instead of stacking duplicates.
 StreamSubscription<AuthState>? _authStateSub;
+// The most recent signed-in user id, remembered so the signedOut handler
+// (whose event carries no session) can scope the settings-cache drop to
+// the departing account (issue #231).
+String? _lastSignedInUserId;
 
 /// The native-push (FCM/APNs) device-token bridge, attached in [main] after
 /// Supabase init. Top-level so a re-entrant main can detach a prior instance.
@@ -400,6 +404,10 @@ void main() async {
     _authStateSub?.cancel();
     _authStateSub = Supabase.instance.client.auth.onAuthStateChange
         .listen((event) {
+      final sessionUserId = event.session?.user.id;
+      if (sessionUserId != null && sessionUserId.isNotEmpty) {
+        _lastSignedInUserId = sessionUserId;
+      }
       if (event.event == AuthChangeEvent.signedIn) {
         WatchIngest.attach(apiNonNull, watchQueue);
         // Stamp the queue with the freshly-signed-in user BEFORE
@@ -455,7 +463,16 @@ void main() async {
         // place would leak the previous user's home/work coordinates
         // to a new user's spectator broadcast. Other settings (units,
         // theme) are merely cosmetic but the clear is uniform.
-        settingsSync?.onSignedOut().catchError((Object e) {
+        // The reset also clears the bag-mirrored Preferences (privacy
+        // default, body weight, goals, fueling rates, units) + the runs
+        // delta-sync watermark, and drops the departing account's cached
+        // bags — the sign-in overlay only overwrites keys present in the
+        // NEXT account's bag, so anything left set would carry over.
+        final departingUserId = _lastSignedInUserId;
+        _lastSignedInUserId = null;
+        settingsSync
+            ?.onSignedOut(priorUserId: departingUserId)
+            .catchError((Object e) {
           debugPrint('Settings sync on signedOut failed: $e');
         });
         // Clear the per-row offline stores so a DIFFERENT user signing in on
