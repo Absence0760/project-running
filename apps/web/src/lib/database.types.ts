@@ -5853,6 +5853,7 @@ export type Database = {
         }[]
       }
       withdraw_coach_consent: { Args: never; Returns: undefined }
+      withdraw_health_data_consent: { Args: never; Returns: undefined }
     }
     Enums: {
       goal_event:
