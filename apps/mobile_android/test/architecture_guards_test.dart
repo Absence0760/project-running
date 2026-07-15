@@ -4416,4 +4416,46 @@ void main() {
       );
     });
   });
+
+  group('every OfflineSyncStore subclass is wiped on sign-out', () {
+    // Reason (issue #228): sign-out used to clear only the three
+    // app-singleton stores, so the screen-owned routine / meal-template /
+    // recipe / crossings stores survived — a different user signing in on
+    // the same device both SAW the prior user's rows and ADOPTED them
+    // (replaceFromServer preserves pendingCreate rows; syncWithServer
+    // pushes them into the new account). The crossings store carries bibs
+    // and, behind WEIGH_IN_GATE, medical weigh-in fields. A NEW
+    // OfflineSyncStore subclass must land in one of the two wipe lists:
+    // main.dart's app-singleton clear, or buildScreenOwnedOfflineStores()
+    // in offline_store_wipe.dart.
+    test('each subclass appears in a sign-out wipe list', () {
+      final subclassNames = <String>[];
+      for (final entity in Directory('lib').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final src = entity.readAsStringSync();
+        for (final m in RegExp(r'class\s+(\w+)\s+extends\s+OfflineSyncStore<')
+            .allMatches(src)) {
+          subclassNames.add(m.group(1)!);
+        }
+      }
+      expect(subclassNames, isNotEmpty,
+          reason: 'the subclass scan itself must find the stores');
+
+      final mainSrc = File('lib/main.dart').readAsStringSync();
+      final wipeSrc = File('lib/offline_store_wipe.dart').readAsStringSync();
+      // main.dart holds singletons as `final xStore = LocalXStore()`;
+      // the registry constructs `LocalXStore(),`. Either counts as wired.
+      for (final name in subclassNames) {
+        final constructed = RegExp('$name\\(\\)');
+        expect(
+          constructed.hasMatch(mainSrc) || constructed.hasMatch(wipeSrc),
+          isTrue,
+          reason: '$name is an OfflineSyncStore subclass but is neither an '
+              'app-singleton cleared in main.dart nor listed in '
+              'buildScreenOwnedOfflineStores() — its rows would survive '
+              'sign-out and leak to (and be adopted by) the next account.',
+        );
+      }
+    });
+  });
 }

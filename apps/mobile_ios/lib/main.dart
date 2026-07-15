@@ -25,6 +25,7 @@ import 'local_gear_store.dart';
 import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
+import 'offline_store_wipe.dart';
 import 'offline_sync_store.dart';
 import 'preferences.dart';
 import 'push_messaging_bridge.dart';
@@ -464,6 +465,14 @@ void main() async {
             debugPrint('Offline store clear on signedOut failed: $e');
           });
         }
+        // The screen-owned store types (routines, meal templates, recipes,
+        // checkpoint crossings, session plans) have no app-singleton to
+        // clear — wipe their shared on-disk directories via throwaway
+        // instances. The crossings store carries bibs and, behind
+        // WEIGH_IN_GATE, medical weigh-in fields.
+        wipeScreenOwnedOfflineStores().catchError((Object e) {
+          debugPrint('Screen-owned store wipe on signedOut failed: $e');
+        });
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
