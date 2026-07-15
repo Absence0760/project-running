@@ -327,6 +327,11 @@ void main() async {
   // for the "record without an account" flow; the first signed-in
   // user adopts those runs).
   store.currentUserIdProvider = () => api?.userId;
+  // Routes get the same treatment (issue #229): the store stamps a
+  // device-local owner tag on save and filters its getters by it, so a
+  // shared device's next account neither sees nor sync-pushes the prior
+  // account's local route library.
+  routeStore.currentUserIdProvider = () => api?.userId;
 
   final syncService = SyncService(
     apiClient: api,
