@@ -18611,6 +18611,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{seconds} s'**
   String simWatchSeconds(int seconds);
+
+  /// Error message when the session-plan list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load sessions.'**
+  String get sessionLoadError;
+
+  /// Error message when a session plan detail fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this session plan.'**
+  String get sessionDetailLoadError;
+
+  /// Title of the remove-exercise confirmation dialog in the gym composer
+  ///
+  /// In en, this message translates to:
+  /// **'Remove exercise?'**
+  String get gymEditorRemoveExerciseTitle;
+
+  /// Body of the remove-exercise confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This exercise and all its sets will be removed from this workout.'**
+  String get gymEditorRemoveExerciseBody;
+
+  /// Confirm button of the remove-exercise dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get gymEditorRemoveExerciseConfirm;
+
+  /// Title of the wear-log delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this note?'**
+  String get gearWearLogDeleteTitle;
+
+  /// Body of the wear-log delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This wear-log note will be permanently deleted.'**
+  String get gearWearLogDeleteBody;
+
+  /// Confirm button of the wear-log delete dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get gearWearLogDeleteConfirm;
+
+  /// Error when the submit-time sheet fails to load recent runs
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your recent runs.'**
+  String get eventSubmitRunsLoadError;
+
+  /// Banner when a race entry/results URL cannot be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open that link.'**
+  String get racesCouldNotOpenLink;
+
+  /// Title of the clear-HR-zones confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Clear heart-rate zones?'**
+  String get prefsHrZonesClearTitle;
+
+  /// Body of the clear-HR-zones confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Your five custom zones will be cleared.'**
+  String get prefsHrZonesClearBody;
+
+  /// Confirm button of the clear-HR-zones dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get prefsHrZonesClearConfirm;
 }
 
 class _AppLocalizationsDelegate
