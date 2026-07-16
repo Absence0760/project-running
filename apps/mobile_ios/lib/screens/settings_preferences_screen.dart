@@ -1141,7 +1141,10 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
                   l10n.prefsSignInToEdit,
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ListTile(
