@@ -1043,6 +1043,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runStartA11yLabel => 'Démarrer la course';
 
   @override
+  String get runLastRunOpenA11yLabel =>
+      'Ouvrir les détails de la dernière course';
+
+  @override
   String get runChooseRoute => 'Choisir un parcours';
 
   @override

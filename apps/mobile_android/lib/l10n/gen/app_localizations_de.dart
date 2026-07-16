@@ -1040,6 +1040,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runStartA11yLabel => 'Lauf starten';
 
   @override
+  String get runLastRunOpenA11yLabel => 'Details des letzten Laufs öffnen';
+
+  @override
   String get runChooseRoute => 'Route wählen';
 
   @override

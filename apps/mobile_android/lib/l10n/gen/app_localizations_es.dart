@@ -1040,6 +1040,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runStartA11yLabel => 'Iniciar carrera';
 
   @override
+  String get runLastRunOpenA11yLabel =>
+      'Abrir los detalles de la última carrera';
+
+  @override
   String get runChooseRoute => 'Elegir ruta';
 
   @override

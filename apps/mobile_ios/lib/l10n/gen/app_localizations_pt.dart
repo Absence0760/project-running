@@ -1040,6 +1040,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runStartA11yLabel => 'Iniciar corrida';
 
   @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
+
+  @override
   String get runChooseRoute => 'Escolher rota';
 
   @override
@@ -12138,6 +12141,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runStartA11yLabel => 'Iniciar corrida';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
 
   @override
   String get runChooseRoute => 'Escolher rota';

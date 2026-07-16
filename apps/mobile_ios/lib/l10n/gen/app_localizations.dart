@@ -1877,6 +1877,12 @@ abstract class AppLocalizations {
   /// **'Start run'**
   String get runStartA11yLabel;
 
+  /// Screen-reader label for the tappable recent-run card on the start-run screen
+  ///
+  /// In en, this message translates to:
+  /// **'Open last run details'**
+  String get runLastRunOpenA11yLabel;
+
   /// Idle-screen button to pick a route to follow when no route is selected
   ///
   /// In en, this message translates to:

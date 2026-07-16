@@ -1033,6 +1033,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runStartA11yLabel => 'Start run';
 
   @override
+  String get runLastRunOpenA11yLabel => 'Open last run details';
+
+  @override
   String get runChooseRoute => 'Choose route';
 
   @override

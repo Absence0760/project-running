@@ -295,6 +295,7 @@
   "privacyPublicSubtitle": "Jeder kann deine Läufe finden und ansehen.",
   "runStart": "START",
   "runStartA11yLabel": "Lauf starten",
+  "runLastRunOpenA11yLabel": "Details des letzten Laufs öffnen",
   "runChooseRoute": "Route wählen",
   "runChangeRoute": "Route ändern",
   "runShareLiveLink": "Live-Link teilen",

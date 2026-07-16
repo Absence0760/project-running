@@ -1384,6 +1384,10 @@
   "@runStartA11yLabel": {
     "description": "Screen-reader label for the start-run button"
   },
+  "runLastRunOpenA11yLabel": "Open last run details",
+  "@runLastRunOpenA11yLabel": {
+    "description": "Screen-reader label for the tappable recent-run card on the start-run screen"
+  },
   "runChooseRoute": "Choose route",
   "@runChooseRoute": {
     "description": "Idle-screen button to pick a route to follow when no route is selected"

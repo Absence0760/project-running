@@ -295,6 +295,7 @@
   "privacyPublicSubtitle": "誰でもあなたのランを見つけて閲覧できます。",
   "runStart": "スタート",
   "runStartA11yLabel": "ランを開始",
+  "runLastRunOpenA11yLabel": "前回のランの詳細を開く",
   "runChooseRoute": "ルートを選択",
   "runChangeRoute": "ルートを変更",
   "runShareLiveLink": "ライブリンクを共有",

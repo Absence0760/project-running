@@ -63,6 +63,7 @@ import '../widgets/workout_execution_band.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'plans_screen.dart';
+import 'run_detail_screen.dart';
 import 'workout_detail_screen.dart';
 
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
@@ -3087,7 +3088,10 @@ class _RunScreenState extends State<RunScreen> {
                           ),
                         ),
                       if (lastRun != null)
-                        _LastRunCard(run: lastRun)
+                        _LastRunCard(
+                          run: lastRun,
+                          onTap: () => _openLastRun(lastRun),
+                        )
                       else if (_upcomingEvent == null &&
                           _planOverview?.todayWorkout == null)
                         _FirstRunPrompt(theme: theme),
@@ -3164,6 +3168,22 @@ class _RunScreenState extends State<RunScreen> {
     final sorted = [...runs]
       ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
     return sorted.first;
+  }
+
+  void _openLastRun(cm.Run run) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RunDetailScreen(
+          run: run,
+          runStore: widget.runStore,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+          apiClient: widget.apiClient,
+          settingsSync: widget.settingsSync,
+        ),
+      ),
+    );
   }
 
   Widget _buildLive(BuildContext context) {
@@ -4298,85 +4318,97 @@ String _formatPace(Duration duration, double metres) {
 
 class _LastRunCard extends StatelessWidget {
   final cm.Run run;
-  const _LastRunCard({required this.run});
+  final VoidCallback onTap;
+  const _LastRunCard({required this.run, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
+    return Semantics(
+      button: true,
+      label: l10n.runLastRunOpenA11yLabel,
+      child: Material(
         color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor),
-      ),
-      child: Row(
-        children: [
-          if (run.track.length >= 2)
-            SizedBox(
-              width: 72,
-              height: 56,
-              child: CustomPaint(
-                painter: _TrackSparkPainter(
-                  track: run.track,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            )
-          else
-            Container(
-              width: 72,
-              height: 56,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.directions_run,
-                color: theme.colorScheme.primary.withOpacity(0.6),
-              ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.dividerColor),
             ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
               children: [
-                Text(
-                  run.distanceMetres < 50
-                      ? l10n.runLastActivity
-                      : l10n.runLastRun,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _formatAgo(context, run.startedAt),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _metricPill(
-                      theme,
-                      '${_formatKm(run.distanceMetres)} km',
+                if (run.track.length >= 2)
+                  SizedBox(
+                    width: 72,
+                    height: 56,
+                    child: CustomPaint(
+                      painter: _TrackSparkPainter(
+                        track: run.track,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
-                    const SizedBox(width: 6),
-                    _metricPill(
-                      theme,
-                      '${_formatPace(run.duration, run.distanceMetres)} /km',
+                  )
+                else
+                  Container(
+                    width: 72,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ],
+                    child: Icon(
+                      Icons.directions_run,
+                      color: theme.colorScheme.primary.withOpacity(0.6),
+                    ),
+                  ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        run.distanceMetres < 50
+                            ? l10n.runLastActivity
+                            : l10n.runLastRun,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatAgo(context, run.startedAt),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _metricPill(
+                            theme,
+                            '${_formatKm(run.distanceMetres)} km',
+                          ),
+                          const SizedBox(width: 6),
+                          _metricPill(
+                            theme,
+                            '${_formatPace(run.duration, run.distanceMetres)} /km',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

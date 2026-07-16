@@ -1000,6 +1000,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runStartA11yLabel => 'ランを開始';
 
   @override
+  String get runLastRunOpenA11yLabel => '前回のランの詳細を開く';
+
+  @override
   String get runChooseRoute => 'ルートを選択';
 
   @override

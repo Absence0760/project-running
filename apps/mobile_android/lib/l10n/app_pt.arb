@@ -295,6 +295,7 @@
   "privacyPublicSubtitle": "Qualquer pessoa pode encontrar e ver suas corridas.",
   "runStart": "INICIAR",
   "runStartA11yLabel": "Iniciar corrida",
+  "runLastRunOpenA11yLabel": "Abrir os detalhes da última corrida",
   "runChooseRoute": "Escolher rota",
   "runChangeRoute": "Trocar rota",
   "runShareLiveLink": "Compartilhar link ao vivo",
