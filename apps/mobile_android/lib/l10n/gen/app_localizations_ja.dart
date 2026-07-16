@@ -815,6 +815,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signUpErrorAcceptTerms => '続けるには、利用規約とプライバシーポリシーに同意してください。';
 
   @override
+  String get signUpConfirmPasswordLabel => 'パスワードを確認';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'パスワードは$min文字以上で入力してください。';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch => 'パスワードが一致しません。';
+
+  @override
   String get signUpCheckEmailTitle => 'メールをご確認ください';
 
   @override

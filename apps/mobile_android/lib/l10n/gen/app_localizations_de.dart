@@ -849,6 +849,18 @@ class AppLocalizationsDe extends AppLocalizations {
       'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung, um fortzufahren.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Passwort bestätigen';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'Das Passwort muss mindestens $min Zeichen lang sein.';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch =>
+      'Die Passwörter stimmen nicht überein.';
+
+  @override
   String get signUpCheckEmailTitle => 'Sieh in dein E-Mail-Postfach';
 
   @override

@@ -849,6 +849,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Aceite os Termos de Serviço e a Política de Privacidade para continuar.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Confirme a senha';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'A senha precisa ter pelo menos $min caracteres.';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch => 'As senhas não coincidem.';
+
+  @override
   String get signUpCheckEmailTitle => 'Verifique seu e-mail';
 
   @override
@@ -12120,6 +12131,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get signUpErrorAcceptTerms =>
       'Aceite os Termos de Serviço e a Política de Privacidade para continuar.';
+
+  @override
+  String get signUpConfirmPasswordLabel => 'Confirme a senha';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'A senha precisa ter pelo menos $min caracteres.';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch => 'As senhas não coincidem.';
 
   @override
   String get signUpCheckEmailTitle => 'Verifique seu e-mail';

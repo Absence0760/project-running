@@ -843,6 +843,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Please accept the Terms of Service and Privacy Policy to continue.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Confirm password';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'Password must be at least $min characters.';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch => 'Passwords don\'t match.';
+
+  @override
   String get signUpCheckEmailTitle => 'Check your email';
 
   @override

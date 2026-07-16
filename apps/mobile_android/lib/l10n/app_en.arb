@@ -1144,6 +1144,23 @@
   "@signUpErrorAcceptTerms": {
     "description": "Validation error shown when the terms gate is not accepted"
   },
+  "signUpConfirmPasswordLabel": "Confirm password",
+  "@signUpConfirmPasswordLabel": {
+    "description": "Label for the password-confirmation field on the sign-up screen. Sign-up is the only surface that mints a password on mobile, so this is not shared with the sign-in screen."
+  },
+  "signUpErrorPasswordTooShort": "Password must be at least {min} characters.",
+  "@signUpErrorPasswordTooShort": {
+    "description": "Validation error shown when the chosen password is shorter than the minimum",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "signUpErrorPasswordMismatch": "Passwords don't match.",
+  "@signUpErrorPasswordMismatch": {
+    "description": "Validation error shown when the password and its confirmation differ"
+  },
   "signUpCheckEmailTitle": "Check your email",
   "@signUpCheckEmailTitle": {
     "description": "Headline of the check-your-email state shown after a sign-up that needs email confirmation"

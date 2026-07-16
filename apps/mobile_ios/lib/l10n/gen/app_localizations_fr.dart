@@ -852,6 +852,18 @@ class AppLocalizationsFr extends AppLocalizations {
       'Veuillez accepter les Conditions d\'utilisation et la Politique de confidentialité pour continuer.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Confirmer le mot de passe';
+
+  @override
+  String signUpErrorPasswordTooShort(int min) {
+    return 'Le mot de passe doit contenir au moins $min caractères.';
+  }
+
+  @override
+  String get signUpErrorPasswordMismatch =>
+      'Les mots de passe ne correspondent pas.';
+
+  @override
   String get signUpCheckEmailTitle => 'Vérifiez votre boîte mail';
 
   @override
