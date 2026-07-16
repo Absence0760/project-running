@@ -28,19 +28,26 @@ void _expectMin48After(String content, String anchor, {int window = 300}) {
 void main() {
   group('compact IconButtons keep a >=48dp tap target', () {
     test('routes_screen cloud-sync button', () {
+      // Reason: the header cloud-sync IconButton carries VisualDensity.compact;
+      // without an explicit 48dp constraint it renders ~40dp (WCAG 2.5.8 #255).
       _expectMin48After(_read('routes_screen.dart'), 'l10n.routesSyncFromCloud');
     });
 
     test('route_detail report-review flag button', () {
+      // Reason: the report-review flag button shipped with an empty
+      // BoxConstraints(); it must keep the explicit 48x48 (WCAG 2.5.8 #255).
       _expectMin48After(
           _read('route_detail_screen.dart'), 'l10n.routeDetailReportReview');
     });
 
     test('routes_heatmap pin button', () {
+      // Reason: the compact pin IconButton must not regress below 48dp (#255).
       _expectMin48After(_read('routes_heatmap_screen.dart'), 'trailing:IconButton(');
     });
 
     test('runs_screen nav chevrons (both)', () {
+      // Reason: both period-nav chevrons used a sub-48dp tightFor(32, 32); they
+      // must stay >=48dp and never revert to the tight constraint (#255).
       final c = _read('runs_screen.dart');
       _expectMin48After(c, 'Icons.chevron_left');
       _expectMin48After(c, 'Icons.chevron_right');
