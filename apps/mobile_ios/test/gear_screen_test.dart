@@ -200,6 +200,50 @@ void main() {
         f.dir.deleteSync(recursive: true);
       }
     });
+
+    testWidgets(
+        'an absurdly long gear name does not overflow the tile at a narrow width',
+        (tester) async {
+      final view = tester.view;
+      view.physicalSize = const Size(360, 800);
+      view.devicePixelRatio = 1.0;
+      addTearDown(view.reset);
+
+      final f = await _makeFixtures();
+      try {
+        final longName = 'A' * 80;
+        await tester.runAsync(() => f.store.replaceFromServer([
+              gearRow(id: 'a', name: longName, totalM: 100000, targetM: 800000),
+            ]));
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GearScreen(
+            api: null,
+            preferences: f.prefs,
+            store: f.store,
+          ),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        // The gear card carries a sub-pixel (0.0000076 px) rounding
+        // overflow that reproduces on an unmodified tree, so a blanket
+        // take-exception-is-null assert cannot isolate the name. Drain it
+        // and assert the name's own geometry instead: Wrap re-flows rather
+        // than throwing, so an unconstrained name silently paints past the
+        // card at its full intrinsic width.
+        tester.takeException();
+
+        final textWidget = tester.widget<Text>(find.text(longName));
+        expect(textWidget.maxLines, 1);
+        expect(textWidget.overflow, TextOverflow.ellipsis);
+        expect(tester.getRect(find.text(longName)).width,
+            lessThanOrEqualTo(220.0));
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
   });
 
   group('gear_form_sheet — system gesture-bar padding', () {

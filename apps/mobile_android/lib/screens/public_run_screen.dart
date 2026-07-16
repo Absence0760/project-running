@@ -189,11 +189,14 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Row(
               children: [
-                Text(
-                  _author!.displayName ?? l10n.publicRunAuthorFallback,
-                  style: theme.textTheme.titleMedium,
+                Expanded(
+                  child: Text(
+                    _author!.displayName ?? l10n.publicRunAuthorFallback,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
                 Text(
                   formatDateTime(row.startedAt.toLocal(),
                       localeToTag(Localizations.localeOf(context))),

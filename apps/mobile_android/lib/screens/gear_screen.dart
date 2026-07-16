@@ -477,7 +477,19 @@ class _GearScreenState extends State<GearScreen> {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
-                        Text(name, style: theme.textTheme.titleSmall),
+                        // Cap the name + ellipsize so a long gear name can't
+                        // blow past the card width (RenderFlex overflow) —
+                        // Wrap doesn't width-constrain its children the way
+                        // Row/Column do. Mirrors run_gear_chips.dart.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          child: Text(
+                            name,
+                            style: theme.textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         ?wearBadge,
                       ],
                     ),
