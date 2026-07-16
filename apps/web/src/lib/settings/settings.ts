@@ -294,7 +294,7 @@ async function drainPending(userId: string, deviceId: string): Promise<void> {
 	cache.clearPending(userId, deviceId);
 }
 
-function detectPlatform(): string {
+export function detectPlatform(): string {
 	if (typeof navigator === 'undefined') return 'web';
 	const ua = navigator.userAgent.toLowerCase();
 	if (ua.includes('android')) return 'web-android';
@@ -305,7 +305,7 @@ function detectPlatform(): string {
 	return 'web';
 }
 
-function deviceLabel(): string {
+export function deviceLabel(): string {
 	if (typeof navigator === 'undefined') return 'Web';
 	// Best-effort readable label — shown in the per-device list. Falls
 	// back to a short UA fragment if the UA is unparseable.
