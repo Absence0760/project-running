@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../badges.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -183,10 +184,11 @@ class _FeedScreenState extends State<FeedScreen> {
         _loadingMore = false;
       });
     } catch (e) {
+      debugPrint('feed load more failed: $e');
       if (!mounted) return;
       setState(() => _loadingMore = false);
       showTopBanner(
-          context, AppLocalizations.of(context).feedLoadMoreFailed('$e'));
+          context, AppLocalizations.of(context).feedLoadMoreFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -569,21 +571,29 @@ class _EntryCard extends StatelessWidget {
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              // Expanded, not spaceAround: an intrinsically-sized cell has no
+              // bound for its FittedBox to scale against, so a long value
+              // overflowed the card instead of shrinking.
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _Stat(
-                    label: AppLocalizations.of(context).runStatDistance,
-                    value: formatDistanceForPref(entry.run.distanceM),
+                  Expanded(
+                    child: _Stat(
+                      label: AppLocalizations.of(context).runStatDistance,
+                      value: formatDistanceForPref(entry.run.distanceM),
+                    ),
                   ),
-                  _Stat(
-                    label: AppLocalizations.of(context).runStatTime,
-                    value:
-                        _fmtDuration(Duration(seconds: entry.run.durationS)),
+                  Expanded(
+                    child: _Stat(
+                      label: AppLocalizations.of(context).runStatTime,
+                      value:
+                          _fmtDuration(Duration(seconds: entry.run.durationS)),
+                    ),
                   ),
-                  _Stat(
-                    label: AppLocalizations.of(context).runStatPace,
-                    value: _fmtPace(entry.run.distanceM, entry.run.durationS),
+                  Expanded(
+                    child: _Stat(
+                      label: AppLocalizations.of(context).runStatPace,
+                      value: _fmtPace(entry.run.distanceM, entry.run.durationS),
+                    ),
                   ),
                 ],
               ),
@@ -693,10 +703,11 @@ class _EngagementFooterState extends State<_EngagementFooter> {
             ));
       }
     } catch (e) {
+      debugPrint('feed kudos update failed: $e');
       if (!mounted) return;
       setState(() => _eng = prev);
       showTopBanner(
-          context, AppLocalizations.of(context).feedKudosUpdateFailed('$e'));
+          context, AppLocalizations.of(context).feedKudosUpdateFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -866,9 +877,16 @@ class _Stat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700)),
+        // An ultra's value ("104:32:11", "386.24") is far wider than a 5K's,
+        // so scale it down to the cell rather than overflow the card.
+        // Mirrors _StatBig on run_detail_screen.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+        ),
         const SizedBox(height: 2),
         Text(
           label.toUpperCase(),
@@ -876,6 +894,8 @@ class _Stat extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
             letterSpacing: 0.6,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

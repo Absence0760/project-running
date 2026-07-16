@@ -229,6 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         await widget.api.followUser(widget.userId);
       }
     } catch (e) {
+      debugPrint('profile follow update failed: $e');
       if (!mounted) return;
       // Roll back on failure.
       setState(() => _summary = summary);
@@ -305,9 +306,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           AppLocalizations.of(context).profileBlocked(summary.displayName ??
               AppLocalizations.of(context).profileRunnerNoun));
     } catch (e) {
+      debugPrint('profile block failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileBlockFailed('$e'));
+          context, AppLocalizations.of(context).profileBlockFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -326,9 +328,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             AppLocalizations.of(context).profileRunnerNoun),
       );
     } catch (e) {
+      debugPrint('profile unblock failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileUnblockFailed('$e'));
+          context, AppLocalizations.of(context).profileUnblockFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -396,9 +399,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             .toList();
       });
     } catch (e) {
+      debugPrint('profile mark all read failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileMarkAllReadFailed('$e'));
+          context, AppLocalizations.of(context).profileMarkAllReadFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -409,13 +413,14 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       await widget.api.deleteNotification(id);
     } catch (e) {
+      debugPrint('profile dismiss failed: $e');
       if (!mounted) return;
       // Roll back the optimistic dismiss.
       setState(() {
         _dismissedNotifIds = _dismissedNotifIds.difference({id});
       });
       showTopBanner(
-          context, AppLocalizations.of(context).profileDismissFailed('$e'));
+          context, AppLocalizations.of(context).profileDismissFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

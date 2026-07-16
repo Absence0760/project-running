@@ -1,3 +1,5 @@
+import 'dart:io' show SocketException;
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -15,12 +17,14 @@ class _FakeApi extends ApiClient {
     this.overview,
     this.plans = const [],
     this.assignError,
+    this.loadError,
   });
 
   final List<AthleteRunSummary> runs;
   final AthletePlanOverview? overview;
   final List<TrainingPlanRow> plans;
   final String? assignError;
+  final Object? loadError;
 
   String? lastAssignedPlanId;
 
@@ -29,8 +33,10 @@ class _FakeApi extends ApiClient {
 
   @override
   Future<List<AthleteRunSummary>> fetchAthleteRuns(String athleteId,
-          {int limit = 20}) async =>
-      runs;
+          {int limit = 20}) async {
+    if (loadError != null) throw loadError!;
+    return runs;
+  }
 
   @override
   Future<AthletePlanOverview?> fetchAthletePlanOverview(String athleteId) async =>
@@ -166,6 +172,26 @@ void main() {
     await tester.pump();
 
     expect(find.text('athlete already has an active plan'), findsOneWidget);
+    // showTopBanner schedules an auto-dismiss timer; drain it past the hard
+    // ceiling so the test doesn't trip the pending-timer invariant.
+    await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets(
+      'shows friendly, localized copy (not the raw exception) when the '
+      'athlete load fails', (tester) async {
+    final prefs = await _prefs();
+    final api = _FakeApi(
+      loadError: const SocketException("Failed host lookup: 'xyz.supabase.co'"),
+    );
+    await _pump(tester, api, prefs);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    expect(find.text(l10n.coachingAthleteLoadError(l10n.authErrorOffline)),
+        findsOneWidget);
+    expect(find.textContaining('SocketException'), findsNothing);
+    expect(find.textContaining('Exception:'), findsNothing);
+
     // showTopBanner schedules an auto-dismiss timer; drain it past the hard
     // ceiling so the test doesn't trip the pending-timer invariant.
     await tester.pump(const Duration(seconds: 7));

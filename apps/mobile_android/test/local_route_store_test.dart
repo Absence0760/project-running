@@ -601,13 +601,23 @@ void main() {
     test('100 pinned ids round-trip without performance pathology', () async {
       final store = LocalRouteStore();
       await store.init(overrideDirectory: tempDir);
+      // Populate the store first so the pathology this guards — a pin
+      // that rewrites every route record instead of only the pin
+      // sidecar — would cost ~10,000 file writes across the loop and
+      // blow any bound. The bound itself is deliberately loose: 100
+      // sidecar writes are I/O-bound and a loaded shared CI runner has
+      // taken 28ms/write (run 29520492396 failed a 2s bound at 2.8s),
+      // so a tight wall-clock number flakes on runner speed rather
+      // than catching a regression.
+      await store.saveBatch(
+          [for (var i = 0; i < 100; i++) makeRoute(id: 'r-$i')]);
       final sw = Stopwatch()..start();
       for (var i = 0; i < 100; i++) {
         await store.pinOffline('r-$i');
       }
       sw.stop();
       expect(store.offlinePinnedIds, hasLength(100));
-      expect(sw.elapsedMilliseconds, lessThan(2000),
+      expect(sw.elapsedMilliseconds, lessThan(10000),
           reason: '100 sequential pin writes took ${sw.elapsedMilliseconds}ms');
 
       // Survives cold start with the full set intact.

@@ -9,8 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
+import '../local_run_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
@@ -60,6 +62,9 @@ bool shouldShowRoutesLoadMore({
 class RoutesScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRouteStore routeStore;
+  /// Only forwarded to [RunHeatmapScreen], whose tracks come from the
+  /// local store as well as the server (issue #239).
+  final LocalRunStore? runStore;
   final Preferences preferences;
   final void Function(cm.Route route)? onStartRun;
   /// Optional social service. Threaded into [RouteBuilderScreen] so
@@ -78,6 +83,7 @@ class RoutesScreen extends StatefulWidget {
     super.key,
     this.apiClient,
     required this.routeStore,
+    this.runStore,
     required this.preferences,
     this.onStartRun,
     this.social,
@@ -625,12 +631,13 @@ class RoutesScreenState extends State<RoutesScreen> {
     try {
       await api.setRouteStar(route.id, next);
     } catch (e) {
+      debugPrint('routes star update failed: $e');
       // Cloud failed — revert local + surface.
       await widget.routeStore.save(route);
       if (mounted) {
         setState(() {});
         showTopBanner(
-            context, AppLocalizations.of(context).routesStarUpdateFailed('$e'));
+            context, AppLocalizations.of(context).routesStarUpdateFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -666,9 +673,10 @@ class RoutesScreenState extends State<RoutesScreen> {
             context, AppLocalizations.of(context).routesImported(route.name));
       }
     } catch (e) {
+      debugPrint('routes import failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routesImportFailed('$e'));
+            context, AppLocalizations.of(context).routesImportFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -1196,6 +1204,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                   MaterialPageRoute(
                     builder: (_) => RunHeatmapScreen(
                       api: widget.apiClient!,
+                      runStore: widget.runStore,
                     ),
                   ),
                 ),

@@ -264,6 +264,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       setState(() => _threads[postId] = replies);
       _load();
     } catch (e) {
+      debugPrint('club detail reply failed: $e');
       // Without this catch, a network error / RLS rejection on
       // reply post would propagate as an uncaught Future error —
       // Flutter logs it to console but the user sees no feedback
@@ -272,7 +273,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       // because the `ctrl?.clear()` above only fires on success.
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailReplyFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailReplyFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _replyBusy.remove(postId));
     }
@@ -1071,9 +1072,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             _pending.where((m) => m.userId != userId).toList());
       }
     } catch (e) {
+      debugPrint('club detail approve failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailApproveFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailApproveFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _pendingBusy.remove(userId));
     }
@@ -1114,9 +1116,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             _pending.where((m) => m.userId != userId).toList());
       }
     } catch (e) {
+      debugPrint('club detail deny failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailDenyFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailDenyFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _pendingBusy.remove(userId));
     }
@@ -1327,9 +1330,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         ),
       );
     } catch (e) {
+      debugPrint('club detail adopt failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailAdoptFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _adoptingRoutineId = null);
     }
@@ -1354,9 +1358,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         ),
       );
     } catch (e) {
+      debugPrint('club detail adopt failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailAdoptFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _adoptingSessionId = null);
     }
@@ -1380,9 +1385,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         ),
       );
     } catch (e) {
+      debugPrint('club detail adopt failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+          context, AppLocalizations.of(context).clubDetailAdoptFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _adoptingPlanId = null);
     }

@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../auth_error.dart';
 import '../local_crossings_store.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
@@ -101,9 +102,10 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
         _loading = false;
       });
     } catch (e) {
+      debugPrint('checkpoint check-in load failed: $e');
       if (!mounted) return;
       setState(() {
-        _loadError = '$e';
+        _loadError = friendlyError(AppLocalizations.of(context), e);
         _loading = false;
       });
     }

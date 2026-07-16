@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -102,10 +103,11 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
       if (!mounted) return;
       Navigator.pop(context, n);
     } catch (e) {
+      debugPrint('gear backfill attach error: $e');
       if (!mounted) return;
       setState(() => _saving = false);
       showTopBanner(
-          context, AppLocalizations.of(context).gearBackfillAttachError('$e'));
+          context, AppLocalizations.of(context).gearBackfillAttachError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../auth_error.dart';
 import '../backend_timeout.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -446,10 +447,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         await api.bookmarkRoute(widget.route.id);
       }
     } catch (e) {
+      debugPrint('route detail bookmark failed: $e');
       if (!mounted) return;
       setState(() => _bookmarked = before);
       showTopBanner(
-          context, AppLocalizations.of(context).routeDetailBookmarkFailed('$e'));
+          context, AppLocalizations.of(context).routeDetailBookmarkFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _bookmarkBusy = false);
     }
@@ -528,6 +530,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     try {
       await api.setRoutePublic(widget.route.id, newValue);
     } catch (e) {
+      debugPrint('route detail visibility failed: $e');
       // Roll back local state to match what cloud thinks. Surface
       // the error so the user knows the toggle didn't persist
       // cloud-side. The route stays in the unsynced queue if it
@@ -537,7 +540,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         setState(() => _isPublic = !newValue);
         await widget.routeStore.save(buildRoute(!newValue));
         showTopBanner(context,
-            AppLocalizations.of(context).routeDetailVisibilityFailed('$e'));
+            AppLocalizations.of(context).routeDetailVisibilityFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -620,11 +623,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     try {
       await api.setRouteStar(r.id, newValue);
     } catch (e) {
+      debugPrint('route detail star failed: $e');
       if (mounted) setState(() => _isStarred = !newValue);
       await widget.routeStore.save(buildRoute(!newValue));
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routeDetailStarFailed('$e'));
+            context, AppLocalizations.of(context).routeDetailStarFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -711,9 +715,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       );
       await _fetchReviews();
     } catch (e) {
+      debugPrint('route detail review failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routeDetailReviewFailed('$e'));
+            context, AppLocalizations.of(context).routeDetailReviewFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -1411,7 +1416,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (!mounted) return;
       setState(() => _transferBusy = false);
       showTopBanner(
-          context, AppLocalizations.of(context).routeDetailTransferFailed('$e'));
+          context, AppLocalizations.of(context).routeDetailTransferFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -1450,9 +1455,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       try {
         await api.deleteRoute(widget.route.id);
       } catch (e) {
+        debugPrint('route detail delete failed: $e');
         if (!context.mounted) return;
         showTopBanner(
-            context, AppLocalizations.of(context).routeDetailDeleteFailed('$e'));
+            context, AppLocalizations.of(context).routeDetailDeleteFailed(friendlyError(AppLocalizations.of(context), e)));
         return;
       }
     }
@@ -1802,10 +1808,11 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
       setState(() { _tags = next; _saving = false; _controller.clear(); });
       widget.onChange(next);
     } catch (e) {
+      debugPrint('route detail tag save failed: $e');
       setState(() => _saving = false);
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagSaveFailed('$e'));
+            context, AppLocalizations.of(context).routeDetailTagSaveFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -1824,7 +1831,7 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
       setState(() => _saving = false);
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagRemoveFailed('$e'));
+            context, AppLocalizations.of(context).routeDetailTagRemoveFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,35 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/gear_form_sheet.dart';
+
+/// Fakes the gear wear-log endpoints only; every other ApiClient method
+/// is unused by this sheet when [existing] carries an id + [api] is
+/// wired, since the rest of the form writes through [LocalGearStore].
+class _WearLogApi extends ApiClient {
+  _WearLogApi(this._logs);
+  final List<GearWearLogRow> _logs;
+  int deleteCalls = 0;
+
+  @override
+  Future<List<GearWearLogRow>> fetchGearWearLogs(String gearId) async =>
+      _logs;
+
+  @override
+  Future<void> deleteGearWearLog(String id) async {
+    deleteCalls++;
+  }
+}
+
+GearWearLogRow _wearLog() => GearWearLogRow(
+      id: 'log-1',
+      gearId: 'gear-1',
+      ownerId: 'owner-1',
+      loggedOn: DateTime(2026, 1, 1),
+      area: 'outsole',
+      note: 'resoled outsole',
+      createdAt: DateTime(2026, 1, 1),
+      updatedAt: DateTime(2026, 1, 1),
+    );
 
 Future<({LocalGearStore store, Directory dir, Preferences prefs})> _setup(
     String tag) async {
@@ -24,6 +55,8 @@ Widget _opener(
   LocalGearStore store,
   Preferences prefs, {
   void Function(GearFormResult?)? onResult,
+  Map<String, dynamic>? existing,
+  ApiClient? api,
 }) =>
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -38,6 +71,8 @@ Widget _opener(
                   store: store,
                   preferences: prefs,
                   kind: 'shoe',
+                  existing: existing,
+                  api: api,
                 );
                 onResult?.call(r);
               },
@@ -124,6 +159,73 @@ void main() {
       expect(f.store.rows.first['kind'], 'shoe');
       expect(f.store.rows.first['target_distance_m'], isNull);
       expect(f.store.rows.first['brand'], isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'wear-log delete: Cancel in the confirm dialog keeps the note and '
+      'calls no api delete', (tester) async {
+    final f = await _setup('wearlog_cancel');
+    final api = _WearLogApi([_wearLog()]);
+    try {
+      await _open(
+        tester,
+        _opener(f.store, f.prefs,
+            existing: {'id': 'gear-1', 'name': 'Vaporfly'}, api: api),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('resoled outsole'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Delete observation'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('resoled outsole'), findsOneWidget);
+      expect(api.deleteCalls, 0);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'wear-log delete: confirming the dialog deletes the note via the api',
+      (tester) async {
+    final f = await _setup('wearlog_confirm');
+    final api = _WearLogApi([_wearLog()]);
+    try {
+      await _open(
+        tester,
+        _opener(f.store, f.prefs,
+            existing: {'id': 'gear-1', 'name': 'Vaporfly'}, api: api),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('resoled outsole'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Delete observation'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Delete'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('resoled outsole'), findsNothing);
+      expect(api.deleteCalls, 1);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

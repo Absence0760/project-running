@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +15,7 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/race_controller.dart';
+import '../lib/screens/run_detail_screen.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
@@ -354,6 +357,47 @@ void main() {
       expect(caught, isTrue,
           reason: 'onError must absorb the fault — nothing escapes the zone');
       await sub.cancel();
+    });
+  });
+
+  group('RunScreen — last-run card', () {
+    testWidgets('is a real control that opens the run detail', (tester) async {
+      // Issue #249: the recent-run card looked tappable (same visual
+      // language as the runs-list rows) but was a plain Container — a
+      // dead-end surprise. It must navigate to RunDetailScreen like every
+      // other run row, and be announced as a button with a meaningful
+      // label, matching the START button's a11y treatment.
+      final s = await _makeStores();
+      await tester.runAsync(() async {
+        await s.runStore.save(cm.Run(
+          id: 'last-run-1',
+          startedAt: DateTime.now().subtract(const Duration(hours: 3)),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          source: cm.RunSource.app,
+        ));
+      });
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, s);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.runLastRun), findsOneWidget,
+          reason: 'the seeded run must surface the recent-run card');
+      final card = find.bySemanticsLabel(RegExp(l10n.runLastRunOpenA11yLabel));
+      expect(card, findsOneWidget,
+          reason: 'the card must be announced as a labelled button');
+      expect(
+        tester.getSemantics(card).hasFlag(SemanticsFlag.isButton),
+        isTrue,
+        reason: 'Semantics(button: true) is the a11y contract',
+      );
+
+      await tester.tap(find.text(l10n.runLastRun));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byType(RunDetailScreen), findsOneWidget,
+          reason: 'tapping the card opens the run detail for that run');
+      semantics.dispose();
     });
   });
 }

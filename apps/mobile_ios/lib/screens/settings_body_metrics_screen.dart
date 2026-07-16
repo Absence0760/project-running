@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../nutrition_targets.dart' show activityLevels, goalKcalDelta;
 import '../preferences.dart';
@@ -156,7 +157,8 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
       }
       _snack(l10n.bodyMetricsSaved);
     } catch (e) {
-      _snack(l10n.bodyMetricsSaveFailed(e.toString()));
+      debugPrint('body metrics save failed: $e');
+      _snack(l10n.bodyMetricsSaveFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -166,7 +168,8 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     try {
       await widget.settingsSync?.updateUniversal(<String, dynamic>{key: value});
     } catch (e) {
-      if (mounted) _snack(AppLocalizations.of(context).bodyMetricsPrefSaveFailed(e.toString()));
+      debugPrint('body metrics pref save failed: $e');
+      if (mounted) _snack(AppLocalizations.of(context).bodyMetricsPrefSaveFailed(friendlyError(AppLocalizations.of(context), e)));
       return;
     }
     if (mounted) setState(() {});
