@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +20,27 @@ import '../lib/race_controller.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
+import '../lib/screens/setup_wizard_screen.dart';
+
+/// Drives auth transitions for the setup-wizard gate (#232): a fresh
+/// account (onboarded_at null) signs in after launch.
+class _WizardApi extends ApiClient {
+  String? uid;
+  final _controller = StreamController<String?>.broadcast();
+
+  @override
+  String? get userId => uid;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  @override
+  Future<cm.UserProfileRow?> fetchMyProfile() async => uid == null
+      ? null
+      : cm.UserProfileRow(shadowHidden: false, id: uid!, displayName: null);
+
+  void emit() => _controller.add(uid);
+}
 
 late Directory _runsDir;
 
@@ -77,13 +101,13 @@ Future<({
   );
 }
 
-Future<void> _pump(WidgetTester tester, dynamic s) async {
+Future<void> _pump(WidgetTester tester, dynamic s, {ApiClient? api}) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: HomeScreen(
-        apiClient: null,
+        apiClient: api,
         runStore: s.runStore,
         routeStore: s.routeStore,
         gearStore: s.gearStore,
@@ -213,6 +237,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Nutrition'), findsOneWidget);
       expect(find.byType(BottomAppBar), findsOneWidget);
+    });
+
+    testWidgets(
+        'setup wizard fires for a fresh account signing in after launch (#232)',
+        (tester) async {
+      final s = await _makeStores();
+      final api = _WizardApi();
+      await _pump(tester, s, api: api);
+      await tester.pump();
+      // Launched signed out: the post-frame gate must not push anything.
+      expect(find.byType(SetupWizardScreen), findsNothing);
+
+      // The normal signup flow — the account is created after launch. The
+      // gate used to run once per process, so this user never saw the
+      // wizard (nor did a fresh account B signing in over A's session).
+      api.uid = 'u9';
+      api.emit();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(SetupWizardScreen), findsOneWidget);
     });
   });
 }
