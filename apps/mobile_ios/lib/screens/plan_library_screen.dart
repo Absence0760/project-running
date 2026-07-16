@@ -8,7 +8,6 @@ import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
-import '../auth_error.dart';
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
