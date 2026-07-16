@@ -55,8 +55,10 @@ test.describe('plans journey', () => {
 		};
 
 		// ── Snapshot ───────────────────────────────────────────────
+		// The seed marks two long runs completed (week-0 2026-03-29 +
+		// week-1 2026-04-05, via completed_run_id in seed.sql).
 		const initialCompleted = await completedCount.count();
-		expect(initialCompleted).toBe(1);
+		expect(initialCompleted).toBe(2);
 		const initialPct = await readPct();
 		expect(initialPct).toBeGreaterThanOrEqual(0);
 

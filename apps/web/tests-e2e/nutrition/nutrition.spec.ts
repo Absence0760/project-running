@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { waterStorageKey } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -189,10 +190,10 @@ test.describe('/nutrition — manual log, render, water', () => {
 		// final add must flip the chip + pips to the reached state.
 		const targetL = parseFloat((await amount.innerText()).split('/')[1].replace(/[^\d.]/g, ''));
 		const targetMl = Math.round(targetL * 1000);
-		await page.evaluate((ml) => {
-			const d = new Date();
-			localStorage.setItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, String(ml));
-		}, targetMl - 250);
+		await page.evaluate(
+			({ key, ml }) => localStorage.setItem(key, String(ml)),
+			{ key: waterStorageKey(USER_A.id), ml: targetMl - 250 },
+		);
 		await page.reload();
 		await expect(chip).toContainText(/ml left/);
 		await page.getByTestId('add-water').click();
@@ -201,10 +202,7 @@ test.describe('/nutrition — manual log, render, water', () => {
 
 		// Reset the per-day localStorage counter so the shared seed user starts
 		// clean on the next run (the tracker is client-only, not a DB row).
-		await page.evaluate(() => {
-			const d = new Date();
-			localStorage.removeItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
-		});
+		await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 	});
 
 	test('deleting a food entry confirms first: cancel keeps it, confirm removes it', async ({

@@ -2371,7 +2371,9 @@ class ApiClient {
   /// to `coach_consent_at` are blocked at the DB. Returns the effective
   /// (original-if-already-set) timestamp.
   Future<DateTime?> recordCoachConsent() async {
-    if (_client.auth.currentUser?.id == null) return null;
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('not signed in');
+    }
     final res = await _client.rpc('record_coach_consent');
     if (res is! String) return null;
     return DateTime.tryParse(res);
@@ -2382,8 +2384,13 @@ class ApiClient {
   /// inverse of [recordCoachConsent]. Clears the server-held stamp; the
   /// coach request gate then re-blocks the Coach until the user
   /// re-consents through [recordCoachConsent].
+  ///
+  /// Throws on a missing session: a silent return here would let the
+  /// caller confirm a withdrawal that never reached the server.
   Future<void> withdrawCoachConsent() async {
-    if (_client.auth.currentUser?.id == null) return;
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('not signed in');
+    }
     await _client.rpc('withdraw_coach_consent');
   }
 
@@ -6337,43 +6344,61 @@ class ApiClient {
   /// Record the GDPR Art 9(2)(a) health-data consent for the signed-in user
   /// via the `grant_health_data_consent()` SECURITY DEFINER RPC — the only
   /// sanctioned writer of `health_data_consent_at` (first-stamp-wins,
-  /// server `now()`; direct end-user writes setting it to a non-null value
-  /// are blocked by the `lock_consent_columns` trigger, migration
-  /// 20261118_001). Gate any height / weight write behind this. Returns the
-  /// effective (original-if-already-set) timestamp.
+  /// server `now()`, insert-or-update since 20270418_001 so a grant before
+  /// the profile bootstrap still lands; direct end-user writes setting it
+  /// to a non-null value are blocked by the `lock_consent_columns`
+  /// trigger, migration 20261118_001). Gate any height / weight write
+  /// behind this. Returns the effective (original-if-already-set)
+  /// timestamp.
   Future<DateTime?> grantHealthDataConsent() async {
-    if (_client.auth.currentUser?.id == null) return null;
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('not signed in');
+    }
     final res = await _client.rpc('grant_health_data_consent');
     if (res is! String) return null;
     return DateTime.tryParse(res);
   }
 
-  /// Withdraw health-data consent (GDPR Art 7(3)): nulls
-  /// `health_data_consent_at` and the special-category `height_cm` on the
-  /// user's profile in one write. A NULL write to the consent column is the
-  /// only direct end-user write the lock trigger permits. The weight
-  /// time-series is cleared separately via [clearBodyWeightHistory]. The
-  /// inverse of [grantHealthDataConsent] + [setMyHeightCm].
+  /// Withdraw health-data consent (GDPR Art 7(3)) via the
+  /// `withdraw_health_data_consent()` SECURITY DEFINER RPC — the
+  /// sanctioned inverse of [grantHealthDataConsent] (migration
+  /// 20270418_001). One transaction nulls the consent stamp + every
+  /// Art 9 profile column (height, gender, DOB) and erases the
+  /// `body_metrics` weight series. Server-side insert-or-update, so a
+  /// missing client-provisioned profile row can't turn the withdrawal
+  /// into a 0-row silent no-op; throws on a missing session for the
+  /// same reason.
   Future<void> withdrawHealthDataConsent() async {
-    final uid = _client.auth.currentUser?.id;
-    if (uid == null) return;
-    await _client.from('user_profiles').update({
-      UserProfileRow.colHealthDataConsentAt: null,
-      UserProfileRow.colHeightCm: null,
-    }).eq(UserProfileRow.colId, uid);
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('not signed in');
+    }
+    await _client.rpc('withdraw_health_data_consent');
   }
 
   /// Set (or clear, when null) the signed-in user's height in centimetres
   /// on `user_profiles`. Special-category health data — the caller must have
   /// recorded consent via [grantHealthDataConsent] first. Feeds the
   /// nutrition BMR target ([fetchMyProfile] reads it back).
+  /// Row-count-verified: `user_profiles` rows are client-provisioned, so
+  /// a plain update against a missing row matches 0 rows and reports
+  /// success — the save silently vanishes (issue #233). An upsert can't
+  /// close this from the client (PostgREST's ON CONFLICT reads
+  /// `excluded.<col>`, needing SELECT on the revoked health columns), so
+  /// verify the update landed and insert the row when it didn't.
   Future<void> setMyHeightCm(double? heightCm) async {
     final uid = _client.auth.currentUser?.id;
-    if (uid == null) return;
-    await _client
+    if (uid == null) throw StateError('not signed in');
+    final updated = await _client
         .from('user_profiles')
-        .update({UserProfileRow.colHeightCm: heightCm}).eq(
-            UserProfileRow.colId, uid);
+        .update({UserProfileRow.colHeightCm: heightCm})
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from('user_profiles').insert({
+        UserProfileRow.colId: uid,
+        UserProfileRow.colHeightCm: heightCm,
+      });
+    }
   }
 
   /// Append a weight measurement (kg) to the `body_metrics` time-series —
@@ -6386,18 +6411,6 @@ class ApiClient {
       BodyMetricRow.colUserId: uid,
       BodyMetricRow.colWeightKg: weightKg,
     });
-  }
-
-  /// Erase the whole weight history. Called when the user withdraws
-  /// health-data consent (GDPR Art 7(3)) so the special-category series is
-  /// cleared alongside height / gender / DOB.
-  Future<void> clearBodyWeightHistory() async {
-    final uid = _client.auth.currentUser?.id;
-    if (uid == null) return;
-    await _client
-        .from(BodyMetricRow.table)
-        .delete()
-        .eq(BodyMetricRow.colUserId, uid);
   }
 
   // ──────────────────── Coach-athlete roster (persona #46) ────────────────

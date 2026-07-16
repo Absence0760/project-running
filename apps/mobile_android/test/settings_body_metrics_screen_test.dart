@@ -24,7 +24,6 @@ class _ThrowingSync extends SettingsSyncService {
 /// something to erase. Records the destructive calls.
 class _ConsentedApi extends ApiClient {
   bool withdrawCalled = false;
-  bool clearCalled = false;
 
   @override
   String? get userId => 'u1';
@@ -38,8 +37,6 @@ class _ConsentedApi extends ApiClient {
   Future<double?> fetchLatestBodyWeightKg() async => 70.0;
   @override
   Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
-  @override
-  Future<void> clearBodyWeightHistory() async => clearCalled = true;
 }
 
 Future<Preferences> _prefs() async {
@@ -133,7 +130,7 @@ void main() {
   });
 
   group('SettingsBodyMetricsScreen — withdraw-consent confirm', () {
-    testWidgets('Cancel does not erase; confirm calls withdraw + clear',
+    testWidgets('Cancel does not erase; confirm calls the withdrawal RPC',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = Preferences();
@@ -171,16 +168,14 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(api.withdrawCalled, isFalse);
-      expect(api.clearCalled, isFalse);
 
-      // Save again → confirm via "Withdraw & erase" → both fire.
+      // Save again → confirm via "Withdraw & erase" → the RPC fires.
       await tester.runAsync(() => tester.tap(find.widgetWithText(FilledButton, 'Save')));
       await tester.pumpAndSettle();
       await tester.runAsync(
           () => tester.tap(find.widgetWithText(TextButton, 'Withdraw & erase')));
       await tester.pumpAndSettle();
       expect(api.withdrawCalled, isTrue);
-      expect(api.clearCalled, isTrue);
 
       // Drain the showTopBanner auto-dismiss timer.
       await tester.pump(const Duration(seconds: 4));

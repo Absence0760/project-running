@@ -87,27 +87,53 @@ class LocalRunStore extends ChangeNotifier {
   int _inProgressWaypointsWritten = 0;
   String? _inProgressRunId;
 
-  List<Run> get runs => List.unmodifiable(_runs);
+  /// Display-side half of the §67 owner tag (issue #230): every public read
+  /// seam filters to the active account's rows ∪ untagged rows, so user A's
+  /// runs (with their GPS tracks + home start points) stop rendering for
+  /// user B on a shared device. The push side has filtered on the same tag
+  /// since §67; untagged rows (legacy, or recorded signed out) stay visible
+  /// to everyone and are adopted on push, matching the §67 null-owner rule.
+  bool _ownerTagVisible(String? ownerTag) {
+    if (ownerTag == null || ownerTag.isEmpty) return true;
+    // An UNWIRED provider (tests, pre-bootstrap) means no filtering; a
+    // wired provider returning null means signed out — tagged rows hide.
+    final provider = currentUserIdProvider;
+    if (provider == null) return true;
+    return provider() == ownerTag;
+  }
 
-  /// The full-history lightweight index (every row, newest-first). Filters /
-  /// sorts that need the whole set read this instead of [runs] (which becomes a
-  /// resident window). Carries scalars only — no track.
-  List<RunSummary> get summaries => List.unmodifiable(_summaries);
+  bool _runVisible(Run r) => _ownerTagVisible(
+      r.metadata?[MetadataKeys.createdByUserId] as String?);
+
+  bool _summaryVisible(RunSummary s) => _ownerTagVisible(s.createdByUserId);
+
+  List<Run> get runs =>
+      List.unmodifiable(_runs.where(_runVisible));
+
+  /// The full-history lightweight index (every visible row, newest-first).
+  /// Filters / sorts that need the whole set read this instead of [runs]
+  /// (which becomes a resident window). Carries scalars only — no track.
+  List<RunSummary> get summaries =>
+      List.unmodifiable(_summaries.where(_summaryVisible));
 
   /// Full history as track-less [Run]s rebuilt from [summaries]. The seam every
   /// all-time consumer (fitness, mileage, goals, gear backfill, period summary,
   /// recap, intensity) reads so it keeps whole-history correctness without the
   /// store holding every full [Run] resident. Anything needing a track must
   /// hydrate the real run via [runById].
-  List<Run> get summaryRuns => [for (final s in _summaries) s.toRun()];
+  List<Run> get summaryRuns =>
+      [for (final s in _summaries.where(_summaryVisible)) s.toRun()];
 
   // Unsynced runs are ALWAYS resident in `_runs` (the residency invariant:
   // window ∪ unsynced), and they carry their GPS track — which the sync drain
   // uploads — so this reads the full Runs from `_runs`, never the track-less
   // summaries. Correctness after windowing rests on that invariant; the
-  // architecture guards pin it.
-  List<Run> get unsyncedRuns =>
-      _runs.where((r) => !_syncedIds.contains(r.id)).toList();
+  // architecture guards pin it. Owner-filtered like every read seam — the
+  // drain's filterRunsForCurrentUser applies the same rule, so this is
+  // defence in depth plus an honest unsyncedCount badge.
+  List<Run> get unsyncedRuns => _runs
+      .where((r) => !_syncedIds.contains(r.id) && _runVisible(r))
+      .toList();
 
   int get unsyncedCount => unsyncedRuns.length;
 
@@ -129,8 +155,9 @@ class LocalRunStore extends ChangeNotifier {
   List<Run> recentWindow([int count = kResidentWindow]) {
     // Sort by date first — `save` inserts a new run at the front assuming it's
     // the newest, which a manual back-dated add-run can violate, so `_runs`
-    // insertion order isn't a reliable date order.
-    final sorted = [..._runs]
+    // insertion order isn't a reliable date order. Owner-filter BEFORE the
+    // take so another account's rows can't shrink the visible window.
+    final sorted = _runs.where(_runVisible).toList()
       ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
     final out = sorted.take(count).toList();
     final ids = out.map((r) => r.id).toSet();
@@ -146,6 +173,14 @@ class LocalRunStore extends ChangeNotifier {
   /// isn't in the index at all. The on-demand hydration path every detail /
   /// nav surface uses so it works for a run outside the resident window.
   Future<Run?> runById(String id) async {
+    final run = await _runByIdRaw(id);
+    if (run == null || !_runVisible(run)) return null;
+    return run;
+  }
+
+  /// Unfiltered resolve for the store's own ingest paths (the newer-wins
+  /// merge must see another account's local copy to avoid clobbering it).
+  Future<Run?> _runByIdRaw(String id) async {
     for (final r in _runs) {
       if (r.id == id) return r;
     }
@@ -189,7 +224,7 @@ class LocalRunStore extends ChangeNotifier {
   /// backup export, which must include the complete history — including unsynced
   /// runs whose track lives only in the local file.
   Stream<Run> iterateAllRuns() async* {
-    for (final s in _summaries) {
+    for (final s in _summaries.where(_summaryVisible)) {
       final run = await runById(s.id);
       if (run != null) yield run;
     }
@@ -362,7 +397,7 @@ class LocalRunStore extends ChangeNotifier {
     // memory; an out-of-window copy is hydrated from disk.
     Run? existingFull = existing;
     if (run.track.isEmpty && existingFull == null && existingSummary != null) {
-      existingFull = await runById(run.id);
+      existingFull = await _runByIdRaw(run.id);
     }
     final merged = (run.track.isEmpty &&
             existingFull != null &&
@@ -422,7 +457,7 @@ class LocalRunStore extends ChangeNotifier {
       if (localTs != null && localTs.isAfter(_lastModifiedOf(run))) continue;
       Run? existingFull = existing;
       if (run.track.isEmpty && existingFull == null && existingSummary != null) {
-        existingFull = await runById(run.id);
+        existingFull = await _runByIdRaw(run.id);
       }
       final merged = (run.track.isEmpty &&
               existingFull != null &&
