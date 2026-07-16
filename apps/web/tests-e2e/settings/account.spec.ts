@@ -4,9 +4,9 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * /settings/account — profile + email / password / parkrun number /
- * DOB / HR fields. Currently covers the display-name round-trip;
- * future depth: parkrun number import button, password change flow,
- * profile avatar upload, account deletion.
+ * DOB / HR fields. Covers the display-name round-trip + the
+ * change-password validation branches; future depth: parkrun number
+ * import button, profile avatar upload, account deletion.
  */
 
 const uniqueText = (prefix: string) =>
@@ -116,6 +116,41 @@ test.describe('/settings/account', () => {
 		await page.getByRole('button', { name: /Save Profile/ }).click();
 		await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible({
 			timeout: 5_000
+		});
+	});
+
+	// Change-password validation. This section MINTS a password
+	// (updateUser), so it shares checkPasswordPair with /login?signup=1
+	// and /auth/reset — see web_app_auth.md § Password confirmation.
+	//
+	// Only the REJECTION branches are exercised: a successful save would
+	// rotate USER_A's password out from under storageStatePath and every
+	// other spec that signs in as them. Both cases below return before
+	// updateUser is called, which is exactly why they're safe to run
+	// against the shared fixture user.
+	test.describe('change password — validation', () => {
+		test('mismatched entries are rejected', async ({ page }) => {
+			await page.goto('/settings/account');
+			await page.getByLabel('New Password').fill('longenough1');
+			await page.getByLabel('Confirm Password').fill('longenough2');
+			await page.getByRole('button', { name: 'Save Password' }).click();
+
+			await expect(page.getByText('Passwords do not match.')).toBeVisible();
+		});
+
+		test('a too-short entry reports length, not mismatch', async ({ page }) => {
+			await page.goto('/settings/account');
+			// Short AND mismatched: length is the user's real problem, so
+			// reporting a mismatch would send them round the loop fixing
+			// the wrong thing. Pins the precedence through the UI.
+			await page.getByLabel('New Password').fill('abc');
+			await page.getByLabel('Confirm Password').fill('xyz');
+			await page.getByRole('button', { name: 'Save Password' }).click();
+
+			await expect(
+				page.getByText('Password must be at least 6 characters.')
+			).toBeVisible();
+			await expect(page.getByText('Passwords do not match.')).toHaveCount(0);
 		});
 	});
 });

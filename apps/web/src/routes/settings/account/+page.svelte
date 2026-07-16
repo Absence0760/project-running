@@ -7,6 +7,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import { checkPasswordPair } from '$lib/core/auth_gates';
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
@@ -369,8 +370,13 @@
 	}
 
 	async function handleSavePassword() {
-		if (newPassword.length < 6) { passwordError = m('settingsAccount.passwordTooShort'); return; }
-		if (newPassword !== confirmPassword) { passwordError = m('settingsAccount.passwordsMismatch'); return; }
+		const pair = checkPasswordPair(newPassword, confirmPassword);
+		if (!pair.ok) {
+			passwordError = pair.reason === 'too_short'
+				? m('settingsAccount.passwordTooShort')
+				: m('settingsAccount.passwordsMismatch');
+			return;
+		}
 		passwordSaving = true; passwordError = null; passwordStatus = null;
 		const { error } = await supabase.auth.updateUser({ password: newPassword });
 		passwordSaving = false;

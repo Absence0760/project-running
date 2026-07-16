@@ -133,13 +133,13 @@ OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` an
 
 ## Password confirmation
 
-Both surfaces that **mint** a password — sign-up (`/login?signup=1`) and reset (`/auth/reset`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none.
+All three surfaces that **mint** a password — sign-up (`/login?signup=1`), reset (`/auth/reset`), and change-password (`/settings/account`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none. **If you add a fourth, route it through the same helper.**
 
 The rule: at least `MIN_PASSWORD_LENGTH` (6, matching GoTrue's default — `config.toml` sets no `minimum_password_length`), then exact equality. Length is reported first so two matching-but-too-short entries name the fixable problem. **Neither side is trimmed** — whitespace is a real password character and is exactly the typo class the confirmation catches.
 
 **Why this exists.** Sign-up used to take the password in a single field. A typo there is silently baked into the account: GoTrue hashes what was typed, the confirmation email arrives and gets clicked, and the account is then unreachable by its owner. Nothing errors on either side — to the user it's indistinguishable from a forgotten password, and the only tell on our side is a **confirmed account whose `last_sign_in_at` stays null**. That signature cost a real user on 2026-07-16; if a support case looks like it, this is the first thing to check. The gap existed because sign-up and reset were written independently and only reset grew a confirmation, which is why both now share the one helper.
 
-Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the length boundary); wiring pinned in `tests-e2e/auth/signup-confirm-password.spec.ts`.
+Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the length boundary); wiring pinned in `tests-e2e/auth/signup-confirm-password.spec.ts` and `tests-e2e/settings/account.spec.ts`. The settings tests exercise the rejection branches only — a successful save there would rotate the shared fixture user's password out from under every other spec.
 
 > **Mobile has not closed this gap.** `sign_up_screen.dart` still takes the password in a single field, so the same lock-out is reachable from an Android / iOS sign-up.
 
