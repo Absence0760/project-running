@@ -1113,11 +1113,13 @@ void main() {
     });
 
     test('5 rapid notifications within 50ms coalesce into ONE push', () async {
-      // Real-time wait approach: short window (60ms) so the
-      // tests run fast (~250ms total) and reliable — FakeAsync
-      // doesn't pump platform-channel mocks.
+      // Real-time wait approach — FakeAsync doesn't pump platform-channel
+      // mocks. 250ms window (not 60ms): the 5ms spacing does NOT bound the
+      // burst to ~25ms, because each `await store.save(...)` also writes to
+      // disk (5-15ms on a loaded CI runner), so the span is really 50-100ms.
+      // CI run 29517668370 fired the coalesced push mid-burst against 60ms.
       WearRoutesBridge.kPushDebounceWindow =
-          const Duration(milliseconds: 60);
+          const Duration(milliseconds: 250);
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
@@ -1135,7 +1137,7 @@ void main() {
               'a push yet — timer keeps resetting');
 
       // Wait past the window.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       expect(channel.pushCalls, hasLength(1),
           reason: 'after the window expires with no new '
               'notifications, exactly ONE coalesced push fires');
@@ -1149,9 +1151,6 @@ void main() {
       // 5-15ms, so 10 zero-spaced saves span 50-150ms — comfortably
       // outside a 60ms window. CI run 26523370163 split the burst
       // into 2 pushes when the 9th save crossed the 60ms boundary.
-      // The 5-save sibling test stays at 60ms because its explicit
-      // 5ms `Future.delayed` between saves keeps the total span
-      // <= 25ms regardless of disk latency.
       WearRoutesBridge.kPushDebounceWindow =
           const Duration(milliseconds: 250);
       final bridge = WearRoutesBridge();
