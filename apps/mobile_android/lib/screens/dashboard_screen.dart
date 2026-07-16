@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../age_grade.dart';
+import '../auth_change_aware.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -97,7 +98,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with AuthChangeAware<DashboardScreen> {
   /// Memoised fastest-5k window per run id. Rescanning a 200-run history
   /// with several thousand waypoints each on every rebuild (and the
   /// dashboard rebuilds every time a listener fires) is the hottest loop
@@ -126,10 +128,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// resident runs is used instead.
   List<PersonalRecordRow> _serverPbs = const [];
 
-  /// Viewer profile (DOB + sex), loaded once on mount so the best-effort PB
-  /// rows can show an age grade alongside the raw time — the same inputs
-  /// run-detail feeds `ageGradeForRun`. Null until resolved / signed out;
-  /// age grade then simply doesn't render (graceful degrade).
+  /// Viewer profile (DOB + sex) so the best-effort PB rows can show an age
+  /// grade alongside the raw time — the same inputs run-detail feeds
+  /// `ageGradeForRun`. Null until resolved / signed out; age grade then
+  /// simply doesn't render (graceful degrade).
   UserProfileRow? _viewerProfile;
 
   @override
@@ -140,6 +142,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.gymStore.addListener(_onChange);
     widget.foodStore.addListener(_onChange);
     widget.training?.addListener(_refreshPlanOverview);
+    _refreshPlanOverview();
+    _hydrateModalities();
+    _loadPersonalRecords();
+    _loadViewerProfile();
+  }
+
+  @override
+  ApiClient? get authApi => widget.apiClient;
+
+  /// The dashboard is page 0 of the never-torn-down keep-alive PageView,
+  /// so its initState-fetched per-user caches outlive the session that
+  /// fetched them. Drop them the moment the user changes (sign-out clears,
+  /// account switch clears + refetches as the new user — the loaders
+  /// no-op / come back empty while signed out).
+  @override
+  void onAuthUserChanged(String? userId) {
+    setState(() {
+      _serverPbs = const [];
+      _planOverview = null;
+      _nutritionTargets = null;
+      _viewerProfile = null;
+      _bestEffortCache.clear();
+    });
     _refreshPlanOverview();
     _hydrateModalities();
     _loadPersonalRecords();

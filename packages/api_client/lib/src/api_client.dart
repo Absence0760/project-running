@@ -433,6 +433,25 @@ class ApiClient {
     }
   }
 
+  /// Auth transitions as a stream of the signed-in user id (null =
+  /// signed out), one event per underlying `onAuthStateChange` event.
+  /// Identity-bearing screens subscribe (via the mobile apps'
+  /// `AuthChangeAware` mixin) and refetch when the id differs from
+  /// what they rendered; the payload is advisory — [userId] stays the
+  /// authoritative read, so test fakes that override [userId] remain
+  /// consistent. Same offline-safety as [userId]: when Supabase isn't
+  /// initialised this returns an empty stream rather than throwing,
+  /// degrading to "never notified" exactly as the getters degrade to
+  /// "signed out".
+  Stream<String?> get authUserChanges {
+    try {
+      return _client.auth.onAuthStateChange
+          .map((state) => state.session?.user.id);
+    } catch (_) {
+      return const Stream<String?>.empty();
+    }
+  }
+
   /// Sign out the current user.
   Future<void> signOut() async {
     await _client.auth.signOut();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -19,6 +20,45 @@ import '../lib/training_service.dart';
 class _FakeApi extends ApiClient {
   @override
   String? get userId => 'u1';
+}
+
+/// Drives auth transitions for the AuthChangeAware seam (#232): mutate
+/// [uid], then [emit] a tick. Records which user each PB / profile fetch ran
+/// as so the refetch-on-transition contract is pinned, not just the clear.
+class _SwitchableApi extends ApiClient {
+  String? uid = 'u1';
+  final _controller = StreamController<String?>.broadcast();
+  final pbFetchesAs = <String?>[];
+  final profileFetchesAs = <String?>[];
+
+  @override
+  String? get userId => uid;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  @override
+  Future<List<PersonalRecordRow>> fetchPersonalRecords() async {
+    pbFetchesAs.add(uid);
+    return const [];
+  }
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async {
+    profileFetchesAs.add(uid);
+    return uid == null ? null : UserProfileRow(id: uid!, shadowHidden: false);
+  }
+
+  void emit() => _controller.add(uid);
+}
+
+/// Test seam: a TrainingService whose overview can be swapped mid-test —
+/// mirrors the server returning nothing once the plan's owner signed out.
+class _SwitchableTraining extends TrainingService {
+  ActivePlanOverview? overview;
+  _SwitchableTraining(this.overview);
+  @override
+  Future<ActivePlanOverview?> fetchActiveOverview() async => overview;
 }
 
 /// Signed-in fake that also serves an authoritative 5 km personal record plus
@@ -520,6 +560,76 @@ void main() {
           await tester.pump();
 
           expect(find.text("TODAY'S WORKOUT"), findsNothing);
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets(
+        'clears plan overview + refetches per-user caches on sign-out (#232)',
+        (tester) async {
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir =
+            Directory.systemTemp.createTempSync('dashboard_auth_switch_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          final api = _SwitchableApi();
+          final training = _SwitchableTraining(_overviewWithTodayWorkout());
+
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: api,
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+                training: training,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+          expect(find.text("TODAY'S WORKOUT"), findsOneWidget);
+          expect(api.pbFetchesAs, ['u1']);
+          // Several loaders want the profile (age-grade inputs + nutrition
+          // targets), so assert who they ran as rather than how many there
+          // were — the count is not the contract.
+          expect(api.profileFetchesAs, isNotEmpty);
+          expect(api.profileFetchesAs, everyElement('u1'));
+          final profileFetchesOnMount = api.profileFetchesAs.length;
+
+          // Sign out: the prior user's plan card must clear instead of
+          // rendering for whoever looks at the dashboard next, and the
+          // loaders re-run so an account switch fetches as the new user.
+          api.uid = null;
+          training.overview = null;
+          api.emit();
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+          expect(find.text("TODAY'S WORKOUT"), findsNothing);
+          expect(api.pbFetchesAs, ['u1', null]);
+          // The age-grade inputs (DOB + sex) are per-user too: a stale profile
+          // would grade the next user's PBs against this user's birth date.
+          final refetched = api.profileFetchesAs.skip(profileFetchesOnMount);
+          expect(refetched, isNotEmpty);
+          expect(refetched, everyElement(isNull));
         } finally {
           dir.deleteSync(recursive: true);
         }
