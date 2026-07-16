@@ -6,6 +6,8 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { checkSignUpGates, type SignUpGateReason } from '$lib/core/auth_gates';
+	import { classifyAuthError, authErrorMessageKey } from '$lib/core/auth_errors';
+	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
 	import { googleAuthEnabled } from '$lib/core/google_auth_flag';
 	import { m } from '$lib/i18n/store.svelte';
@@ -30,6 +32,9 @@
 	let confirmAdult = $state(false);
 	let acceptTerms = $state(false);
 	let hydrated = $state(false);
+	// Set to the attempted email when sign-in failed with
+	// email_not_confirmed — renders the resend-confirmation affordance.
+	let resendFor = $state<string | null>(null);
 	// Snapshot return_to at mount, BEFORE either the post-sign-in $effect
 	// or the explicit handler goto can fire. The previous version re-read
 	// $page.url.searchParams every call, but the $effect's goto mutates
@@ -87,7 +92,10 @@
 		try {
 			await auth.signInWithGoogle();
 		} catch (err) {
-			error = err instanceof Error ? err.message : m('login.signInFailed');
+			// Classified into a localized, user-facing message — the raw
+			// supabase err.message is unlocalized developer jargon. Same
+			// mapping as mobile's friendlyAuthError (auth_error.dart).
+			error = m(authErrorMessageKey(classifyAuthError(err)), { min: PASSWORD_MIN_LENGTH });
 			loading = false;
 		}
 	}
@@ -113,6 +121,14 @@
 		e.preventDefault();
 		error = '';
 		info = '';
+		resendFor = null;
+		if (isSignUp && !isReset) {
+			const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
+			if (!gate.ok) {
+				error = gateMessage(gate.reason);
+				return;
+			}
+		}
 		loading = true;
 		try {
 			if (isReset) {
@@ -127,10 +143,8 @@
 				info = m('login.resetEmailSent');
 				email = '';
 			} else if (isSignUp) {
-				const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
-				if (!gate.ok) throw new Error(gateMessage(gate.reason));
 				const stamp = new Date().toISOString();
-				const { error: signUpError } = await supabase.auth.signUp({
+				const { data, error: signUpError } = await supabase.auth.signUp({
 					email,
 					password,
 					options: {
@@ -149,6 +163,17 @@
 					},
 				});
 				if (signUpError) throw signUpError;
+				if (!data.session) {
+					// Success WITHOUT a session: email confirmation is
+					// pending — or the address is already registered and
+					// GoTrue returned its obfuscated duplicate response
+					// (deliberately the same shape, so sign-up can't be
+					// used to enumerate accounts). Either way there is no
+					// session to navigate with; show the check-your-email
+					// state instead of a silent non-event.
+					info = m('login.checkEmail', { email });
+					return;
+				}
 				// Server-side consent stamp on user_profiles. Fire-
 				// and-forget — if email confirmation is pending and no
 				// JWT exists yet, the /auth/callback fallback retries.
@@ -166,7 +191,33 @@
 				goto(safeReturnTo());
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : m('login.authFailed');
+			// Classified into a localized, user-facing message — raw
+			// supabase err.message is unlocalized and over-general. Same
+			// mapping as mobile's friendlyAuthError (auth_error.dart).
+			const kind = classifyAuthError(err);
+			error = m(authErrorMessageKey(kind), { min: PASSWORD_MIN_LENGTH });
+			if (kind === 'emailNotConfirmed' && email) resendFor = email;
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function handleResendConfirmation() {
+		if (!resendFor) return;
+		error = '';
+		loading = true;
+		try {
+			const { error: resendError } = await supabase.auth.resend({
+				type: 'signup',
+				email: resendFor,
+				options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+			});
+			if (resendError) throw resendError;
+			// Privacy-preserving copy — must not confirm account existence.
+			info = m('login.confirmationResent');
+			resendFor = null;
+		} catch (err) {
+			error = m(authErrorMessageKey(classifyAuthError(err)), { min: PASSWORD_MIN_LENGTH });
 		} finally {
 			loading = false;
 		}
@@ -230,7 +281,19 @@
 			<p class="subtitle">{subtitle}</p>
 
 			{#if error}
-				<div class="error" role="alert">{error}</div>
+				<div class="error" role="alert">
+					{error}
+					{#if resendFor}
+						<button
+							type="button"
+							class="link-btn resend-btn"
+							onclick={handleResendConfirmation}
+							disabled={loading}
+						>
+							{m('login.resendConfirmation')}
+						</button>
+					{/if}
+				</div>
 			{/if}
 			{#if info}
 				<div class="info" role="status" aria-live="polite">{info}</div>
@@ -296,7 +359,7 @@
 						bind:value={password}
 						placeholder={m('login.passwordPlaceholder')}
 						required
-						minlength="6"
+						minlength={isSignUp ? PASSWORD_MIN_LENGTH : undefined}
 						autocomplete={isSignUp ? 'new-password' : 'current-password'}
 					/>
 				{/if}
@@ -760,6 +823,11 @@
 
 	.link-btn:hover {
 		text-decoration: underline;
+	}
+
+	.resend-btn {
+		display: block;
+		margin-top: var(--space-xs);
 	}
 
 	.terms {
