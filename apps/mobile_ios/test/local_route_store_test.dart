@@ -682,4 +682,106 @@ void main() {
       expect(s2.routes.single.name, 'Pre-init save');
     });
   });
+
+  group('owner tags (issue #229 — cross-account leak)', () {
+    // The store survives sign-out (like LocalRunStore, §67), so a
+    // device-local owner tag is what keeps user A's local library from
+    // rendering for — or sync-pushing under — user B.
+    test('a route saved under A is invisible (and undrainable) under B',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      String? uid = 'user-a';
+      store.currentUserIdProvider = () => uid;
+
+      await store.save(makeRoute(id: 'r-a', name: 'A home loop'));
+      expect(store.routes, hasLength(1));
+      expect(store.unsyncedRoutes, hasLength(1));
+
+      uid = 'user-b';
+      expect(store.routes, isEmpty,
+          reason: "user B must not see A's local route library");
+      expect(store.unsyncedRoutes, isEmpty,
+          reason: "A's unsynced route must not drain into B's account");
+      expect(store.offlinePinnedRoutes, isEmpty);
+
+      uid = 'user-a';
+      expect(store.routes, hasLength(1),
+          reason: 'A signing back in sees their library again');
+    });
+
+    test('untagged (pre-upgrade) and signed-out-saved routes stay visible '
+        'to any account', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+
+      // No provider wired: a signed-out save gets the '' tag.
+      await store.save(makeRoute(id: 'r-anon', name: 'Signed-out build'));
+
+      String? uid = 'user-b';
+      store.currentUserIdProvider = () => uid;
+      expect(store.routes.map((r) => r.id), contains('r-anon'),
+          reason: 'the §67 null-owner policy: unowned rows are visible and '
+              'adoptable by whoever signs in');
+    });
+
+    test('tagRoutesOwner adopts a signed-out route on push and hides it '
+        'from other accounts', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-adopt'));
+
+      String? uid = 'user-a';
+      store.currentUserIdProvider = () => uid;
+      await store.tagRoutesOwner(['r-adopt'], 'user-a');
+      expect(store.routes, hasLength(1));
+
+      uid = 'user-b';
+      expect(store.routes, isEmpty,
+          reason: 'once adopted by A the route must stop rendering for B');
+    });
+
+    test('owner tags survive a store reload from disk', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRoute(id: 'r-persist'));
+
+      final reloaded = LocalRouteStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      String? uid = 'user-b';
+      reloaded.currentUserIdProvider = () => uid;
+      expect(reloaded.routes, isEmpty,
+          reason: 'the tag sidecar must round-trip through disk');
+      uid = 'user-a';
+      expect(reloaded.routes, hasLength(1));
+    });
+
+    test('the tag sidecar is not loaded as a route', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRoute(id: 'r-1'));
+
+      final reloaded = LocalRouteStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      reloaded.currentUserIdProvider = () => 'user-a';
+      expect(reloaded.routes, hasLength(1));
+    });
+
+    test('delete drops the tag so a reused id starts clean', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      String? uid = 'user-a';
+      store.currentUserIdProvider = () => uid;
+      await store.save(makeRoute(id: 'r-del'));
+      await store.delete('r-del');
+
+      uid = null;
+      await store.save(makeRoute(id: 'r-del', name: 'Rebuilt signed out'));
+      uid = 'user-b';
+      expect(store.routes.map((r) => r.id), contains('r-del'),
+          reason: "the stale tag must not hide a re-created unowned route");
+    });
+  });
 }

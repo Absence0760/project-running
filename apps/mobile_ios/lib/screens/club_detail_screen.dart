@@ -32,6 +32,7 @@ import 'routine_detail_screen.dart';
 import 'session_detail_screen.dart';
 import 'public_route_screen.dart';
 import 'route_builder_screen.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
 class ClubDetailScreen extends StatefulWidget {
@@ -151,6 +152,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   Future<void> _join() async {
     final c = _club;
     if (c == null || _busy) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.apiClient?.userId,
+        api: widget.apiClient,
+        onSignedIn: _load)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       final status = await widget.social.joinClub(c.row.id, c.joinPolicy);

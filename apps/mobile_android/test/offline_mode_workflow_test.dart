@@ -195,11 +195,17 @@ void main() {
         expect(r.metadata?['created_by_user_id'], 'user-a');
       }
 
-      // User A signs out.
+      // User A signs out. The queue is still there on disk (we
+      // deliberately don't wipe — A could sign back in and finish
+      // syncing), but the getters are viewer-filtered (#230): a
+      // signed-out viewer no longer sees A's tagged runs.
       api.simulateSignOut();
-      // Queue is still there (we deliberately don't wipe — the
-      // user could sign back in as A and finish syncing).
-      expect(store.unsyncedCount, 2);
+      expect(store.unsyncedCount, 0,
+          reason: 'the badge must not show A\'s queue while signed out');
+      api.simulateSignIn('user-a');
+      expect(store.unsyncedCount, 2,
+          reason: 'the queue is preserved for A, not wiped');
+      api.simulateSignOut();
 
       // User B signs in.
       api.simulateSignIn('user-b');
@@ -210,9 +216,13 @@ void main() {
       expect(api.saveBatchCallCount, 0,
           reason: 'B must NOT silently push A\'s runs under B\'s '
               'account — the filter dropped them all');
-      // A's runs are still in the queue (waiting for A to sign back
-      // in).
-      expect(store.unsyncedCount, 2);
+      // A's runs stay queued for A; B's badge no longer counts them
+      // (#230 — pre-fix B saw a stuck "2 unsynced" for foreign runs).
+      expect(store.unsyncedCount, 0);
+      api.simulateSignOut();
+      api.simulateSignIn('user-a');
+      expect(store.unsyncedCount, 2,
+          reason: 'A\'s queue is intact, awaiting A\'s next drain');
     });
 
     test('user A returns → drain pushes A\'s runs successfully', () async {
@@ -227,7 +237,9 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
       await svc.debugTrySync('b-sync');
       expect(api.saveBatchCallCount, 0);
-      expect(store.unsyncedCount, 1);
+      expect(store.unsyncedCount, 0,
+          reason: 'B\'s badge no longer counts A\'s queued run (#230); '
+              'the run itself stays on disk for A');
 
       // User A signs back in.
       api.simulateSignOut();
@@ -267,6 +279,11 @@ void main() {
       expect(api.saveBatchCallCount, 1);
       expect(api.pushedBatches.single.map((r) => r.id).toSet(),
           {'r-b-1', 'r-untagged'});
+      // A's run stays queued but is hidden from B's view (#230) —
+      // switch to A to see it.
+      expect(store.unsyncedRuns, isEmpty);
+      api.simulateSignOut();
+      api.simulateSignIn('user-a');
       expect(store.unsyncedRuns.map((r) => r.id), ['r-a-1']);
     });
 
@@ -301,11 +318,15 @@ void main() {
       await store.save(_makeRun('r-1'));
       expect(store.unsyncedCount, 1);
 
-      // Sign out.
+      // Sign out. The viewer-filtered badge drops to 0 (#230), but the
+      // queue itself must survive on disk.
       api.simulateSignOut();
+      expect(store.unsyncedCount, 0,
+          reason: 'a signed-out viewer must not see A\'s queue');
+      api.simulateSignIn('user-a');
       expect(store.unsyncedCount, 1,
           reason: 'sign-out must NOT wipe the local queue');
-      // Runs still on disk.
+      // Runs still on disk (a fresh, unwired store reads everything).
       final fresh = LocalRunStore();
       await fresh.init(overrideDirectory: tempDir);
       expect(fresh.runs, hasLength(1));

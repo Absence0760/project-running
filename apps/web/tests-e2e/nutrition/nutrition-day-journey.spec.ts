@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { waterStorageKey } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -134,15 +135,10 @@ test.describe('/nutrition — day-in-the-life journey', () => {
 			expect(created![0].meal_slot).toBe('lunch');
 		});
 
-		// ── 4. Water tracker (localStorage per day) ──────────────────────────
+		// ── 4. Water tracker (localStorage per user + day) ───────────────────
 		await test.step('water: one add drops the remaining; crossing the goal flips to reached', async () => {
 			// Start from a clean per-day counter (the tracker is client-only).
-			await page.evaluate(() => {
-				const d = new Date();
-				localStorage.removeItem(
-					`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
-				);
-			});
+			await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 			await page.reload();
 
 			const chip = page.getByTestId('water-budget');
@@ -160,25 +156,17 @@ test.describe('/nutrition — day-in-the-life journey', () => {
 			const amount = page.locator('.water-amount');
 			const targetL = parseFloat((await amount.innerText()).split('/')[1].replace(/[^\d.]/g, ''));
 			const targetMl = Math.round(targetL * 1000);
-			await page.evaluate((ml) => {
-				const d = new Date();
-				localStorage.setItem(
-					`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
-					String(ml),
-				);
-			}, targetMl - 250);
+			await page.evaluate(
+				({ key, ml }) => localStorage.setItem(key, String(ml)),
+				{ key: waterStorageKey(USER_A.id), ml: targetMl - 250 },
+			);
 			await page.reload();
 			await expect(chip).toContainText(/ml left/);
 			await page.getByTestId('add-water').click();
 			await expect(chip).toContainText('Goal reached');
 
 			// Reset so the shared seed user starts clean on the next run.
-			await page.evaluate(() => {
-				const d = new Date();
-				localStorage.removeItem(
-					`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
-				);
-			});
+			await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 		});
 
 		// ── 5. 7-day calorie-trend week-summary chip ─────────────────────────

@@ -16,6 +16,8 @@
 /// the gates always apply there; on web the screen is shared and
 /// the gate has to be conditional on `isSignUp`.
 
+import { PASSWORD_MIN_LENGTH } from './auth_rules';
+
 /// A stable, locale-independent reason a sign-up gate failed. The
 /// caller resolves it to a localized message via `m('login.gateAdult')`
 /// / `m('login.gateTerms')` so the error isn't hard-coded English.
@@ -40,11 +42,13 @@ export function checkSignUpGates(
 	return { ok: true };
 }
 
-/// GoTrue's default minimum. `config.toml` sets no
-/// `minimum_password_length`, so a shorter password is rejected by the
-/// auth server anyway — checking here turns an opaque API error into a
+/// The canonical minimum from `auth_rules.ts`, re-exported under the
+/// parity-pair name (`minPasswordLength` on the Dart side). The server
+/// enforces the same floor via `minimum_password_length` in
+/// `apps/backend/supabase/config.toml` (prod: the dashboard Auth
+/// settings) — checking here turns an opaque API error into a
 /// field-level message.
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = PASSWORD_MIN_LENGTH;
 
 /// A stable, locale-independent reason a password pair was rejected.
 /// The caller resolves it to a localized message — the keys differ per

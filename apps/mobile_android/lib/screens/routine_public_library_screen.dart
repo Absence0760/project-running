@@ -12,6 +12,7 @@ import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/error_state.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import 'routine_detail_screen.dart';
 
@@ -50,6 +51,7 @@ class _RoutinePublicLibraryScreenState
   List<({GymRoutineRow routine, String? authorHandle})> _routines = const [];
   bool _loading = true;
   bool _error = false;
+  bool _signedOut = false;
   String _query = '';
   Timer? _debounce;
 
@@ -67,9 +69,13 @@ class _RoutinePublicLibraryScreenState
 
   Future<void> _load() async {
     final api = widget.api;
-    if (api == null) {
+    // The public_gym_routines view is granted to authenticated only —
+    // an anon read 42501s, so a retry loop can never succeed. Fail into
+    // the sign-in state instead (issue #237); a null api means the
+    // backend never initialised, which sign-in can't fix either.
+    if (api == null || api.userId == null) {
       setState(() {
-        _error = true;
+        _signedOut = true;
         _loading = false;
       });
       return;
@@ -77,6 +83,7 @@ class _RoutinePublicLibraryScreenState
     setState(() {
       _loading = true;
       _error = false;
+      _signedOut = false;
     });
     try {
       final routines = await api
@@ -141,7 +148,9 @@ class _RoutinePublicLibraryScreenState
                     child:
                         ActivityLoader(kind: ActivityLoaderKind.train, size: 76),
                   )
-                : _error
+                : _signedOut
+                    ? SignInRequiredState(api: widget.api, onSignedIn: _load)
+                    : _error
                     ? ErrorState(
                         message: l10n.gymLibraryLoadError, onRetry: _load)
                     : _routines.isEmpty

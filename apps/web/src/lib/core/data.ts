@@ -487,7 +487,8 @@ export async function fetchRoutesIntersectingTrack(
 /// /runs/[id] and by any future "save as route" flow that wants
 /// to back-link the run to its source.
 export async function linkRunToRoute(runId: string, routeId: string): Promise<void> {
-	await supabase.from(TABLES.runs).update({ route_id: routeId }).eq('id', runId);
+	const { error } = await supabase.from(TABLES.runs).update({ route_id: routeId }).eq('id', runId);
+	if (error) throw error;
 }
 
 export type MatchStatus = 'pending' | 'matched' | 'failed' | 'skipped';
@@ -9303,16 +9304,6 @@ export async function recordWeightKg(weightKg: number): Promise<void> {
 	if (error) throw error;
 }
 
-/// Erase the whole weight history. Called when the user withdraws
-/// health-data consent (GDPR Art 7(3)) so the special-category series is
-/// cleared alongside height/gender/DOB.
-export async function clearWeightHistory(): Promise<void> {
-	const userId = auth.user?.id;
-	if (!userId) return;
-	const { error } = await supabase.from(TABLES.body_metrics).delete().eq('user_id', userId);
-	if (error) throw error;
-}
-
 // --- Unified activities timeline (Phase 4 multi-modal History) ---
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log)
@@ -9454,9 +9445,19 @@ export async function fetchSessionPlan(id: string): Promise<SessionPlanWithItems
 }
 
 async function replaceSessionPlanChildren(planId: string, input: SessionPlanInput): Promise<void> {
-	// Children cascade on plan delete; here we clear + re-insert to apply edits.
-	await supabase.from('session_plan_items').delete().eq('plan_id', planId);
-	await supabase.from('session_plan_blocks').delete().eq('plan_id', planId);
+	// Children cascade on plan delete; here we clear + re-insert to apply
+	// edits. A resolved-with-error delete followed by successful inserts
+	// would duplicate every block/item, so both deletes are error-checked.
+	const { error: itemsError } = await supabase
+		.from('session_plan_items')
+		.delete()
+		.eq('plan_id', planId);
+	if (itemsError) throw itemsError;
+	const { error: blocksError } = await supabase
+		.from('session_plan_blocks')
+		.delete()
+		.eq('plan_id', planId);
+	if (blocksError) throw blocksError;
 
 	const blockIds: string[] = [];
 	if (input.blocks.length > 0) {

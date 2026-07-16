@@ -148,7 +148,7 @@ test.describe('/settings/account', () => {
 			await page.getByRole('button', { name: 'Save Password' }).click();
 
 			await expect(
-				page.getByText('Password must be at least 6 characters.')
+				page.getByText('Password must be at least 8 characters.')
 			).toBeVisible();
 			await expect(page.getByText('Passwords do not match.')).toHaveCount(0);
 		});

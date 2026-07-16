@@ -132,8 +132,8 @@ test.describe('Signup password confirmation', () => {
 		// What IS worth pinning here: the two fields agree, so the
 		// confirmation can't be the thing that rejects a password the
 		// first field accepted.
-		await expect(pw(page)).toHaveAttribute('minlength', '6');
-		await expect(confirmPw(page)).toHaveAttribute('minlength', '6');
+		await expect(pw(page)).toHaveAttribute('minlength', '8');
+		await expect(confirmPw(page)).toHaveAttribute('minlength', '8');
 	});
 
 	test('a trailing space is treated as a real difference', async ({ page }) => {

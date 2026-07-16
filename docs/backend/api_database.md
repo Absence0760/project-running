@@ -841,12 +841,22 @@ create table user_profiles (
 -- BOTH consent timestamps are server-stamped + tamper-resistant. The
 -- GRANT path goes through a SECURITY DEFINER RPC that stamps the
 -- server's now() (first-stamp-wins): record_coach_consent()
--- (20261110_001) and grant_health_data_consent() (20261118_001). The
--- shared lock_consent_columns BEFORE-UPDATE trigger blocks a direct
--- end-user write that SETS either timestamp to a non-null value, so a
--- client can't backdate or forge the affirmative act. A direct NULL
--- write (the Art 7(3) withdrawal) stays allowed for health-data
--- consent; coach consent is one-way (cleared only on account deletion).
+-- (20261110_001) and grant_health_data_consent() (20261118_001,
+-- insert-or-update since 20270418_001 so a grant that runs before the
+-- client-provisioned profile row exists still lands instead of 0-row
+-- no-oping). The shared lock_consent_columns BEFORE-UPDATE trigger
+-- blocks a direct end-user write that SETS either timestamp to a
+-- non-null value, so a client can't backdate or forge the affirmative
+-- act. WITHDRAWAL is also RPC-shaped on both consents:
+-- withdraw_coach_consent() (20261128_001) and
+-- withdraw_health_data_consent() (20270418_001, issue #233) — the
+-- latter nulls the consent stamp + every Art 9 profile column
+-- (height_cm, gender, date_of_birth) AND erases the body_metrics
+-- series in one transaction, insert-or-update so a missing profile
+-- row can't turn the withdrawal into a silent no-op. (A direct NULL
+-- write of health_data_consent_at remains trigger-permitted, but
+-- clients use the RPC.) Pinned by withdraw_coach_consent_test.sql +
+-- withdraw_health_data_consent_test.sql.
 ```
 
 `height_cm` (migration `20261216_001`, nutrition BMR) is **special-category health data** and shares the `gender`/`date_of_birth` posture: it is **owner-only** — not on the `20260707_001` public-safe column grant, so it's read back through `get_my_profile()` and never exposed to other authenticated callers or anon — and its persistence is gated on `health_data_consent_at` at the client layer, exactly like gender/DOB. Same for the `body_metrics` weight series below.

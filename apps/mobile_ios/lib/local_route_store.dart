@@ -41,12 +41,66 @@ class LocalRouteStore extends ChangeNotifier {
   File get _offlinePinnedIdsFile =>
       File('${_dir!.path}/$_offlinePinnedIdsFilename');
 
-  List<Route> get routes => List.unmodifiable(_routes);
+  /// Device-local map of route id → the ACCOUNT that saved it into this
+  /// store ('' = saved while signed out). Distinct from `Route.userId`,
+  /// which names the route's CREATOR — a bookmarked community route
+  /// carries someone else's userId but belongs to whoever bookmarked it.
+  /// This is the routes counterpart of the §67 run tag
+  /// (`metadata.created_by_user_id`): the store is deliberately NOT wiped
+  /// on sign-out (an unsynced route built offline must survive, like an
+  /// unsynced run), so the tag is what keeps user A's local library from
+  /// rendering for — or sync-pushing under — user B on a shared device
+  /// (issue #229). Untagged rows (pre-upgrade files, signed-out saves)
+  /// stay visible to every account and are adopted on push, mirroring
+  /// the §67 null-owner policy.
+  final Map<String, String> _ownerTags = {};
+  static const _ownerTagsFilename = 'route_owner_tags.json';
+  File get _ownerTagsFile => File('${_dir!.path}/$_ownerTagsFilename');
+
+  /// Session provider, same idiom as `LocalRunStore.currentUserIdProvider`
+  /// (§67): wired once in main.dart to `() => api?.userId`, read at each
+  /// save (stamp) and each getter (filter). Null / unset = signed out —
+  /// only untagged rows are visible.
+  String? Function()? currentUserIdProvider;
+
+  String? get _activeOwner {
+    final uid = currentUserIdProvider?.call();
+    return (uid == null || uid.isEmpty) ? null : uid;
+  }
+
+  bool _visibleToActiveOwner(String routeId) {
+    final tag = _ownerTags[routeId] ?? '';
+    if (tag.isEmpty) return true;
+    // An UNWIRED provider (tests, pre-bootstrap) means no filtering; a
+    // wired provider returning null means signed out — tagged rows hide.
+    if (currentUserIdProvider == null) return true;
+    return tag == _activeOwner;
+  }
+
+  void _stampOwner(String routeId) {
+    final active = _activeOwner;
+    if (active != null) {
+      // Last-account-to-save wins: a route two accounts both bookmark is
+      // re-tagged by whichever account hydrates it, and self-heals on the
+      // other account's next server hydrate.
+      _ownerTags[routeId] = active;
+    } else {
+      _ownerTags.putIfAbsent(routeId, () => '');
+    }
+  }
+
+  List<Route> get routes => List.unmodifiable(
+        _routes.where((r) => _visibleToActiveOwner(r.id)),
+      );
 
   /// Routes that need to be pushed to the cloud on the next sync
-  /// trigger. Empty when the user is fully synced.
-  List<Route> get unsyncedRoutes =>
-      _routes.where((r) => !_syncedIds.contains(r.id)).toList();
+  /// trigger. Empty when the user is fully synced. Owner-filtered like
+  /// [routes]: another account's unsynced routes must never drain into
+  /// the active account (the display-side twin of §67's push filter).
+  List<Route> get unsyncedRoutes => _routes
+      .where((r) =>
+          !_syncedIds.contains(r.id) && _visibleToActiveOwner(r.id))
+      .toList();
 
   int get unsyncedCount => unsyncedRoutes.length;
 
@@ -59,7 +113,8 @@ class LocalRouteStore extends ChangeNotifier {
   /// Unmodifiable snapshot of every route the user has pinned for
   /// offline access. Order matches `_routes` (newest-first).
   List<Route> get offlinePinnedRoutes => List.unmodifiable(
-        _routes.where((r) => _offlinePinnedIds.contains(r.id)),
+        _routes.where((r) =>
+            _offlinePinnedIds.contains(r.id) && _visibleToActiveOwner(r.id)),
       );
 
   bool isOfflinePinned(String routeId) => _offlinePinnedIds.contains(routeId);
@@ -97,6 +152,7 @@ class LocalRouteStore extends ChangeNotifier {
     await _loadAll();
     await _loadSyncedIds();
     await _loadOfflinePinnedIds();
+    await _loadOwnerTags();
   }
 
   /// Recover from a missed / failed init() by lazily creating the
@@ -152,6 +208,8 @@ class LocalRouteStore extends ChangeNotifier {
     // and the cold-start would falsely promote the new route to
     // synced via the upgrade-safety default.
     await _persistSyncedIds();
+    _stampOwner(route.id);
+    await _persistOwnerTags();
     notifyListeners();
   }
 
@@ -194,6 +252,10 @@ class LocalRouteStore extends ChangeNotifier {
       _syncedIds.removeAll(list.map((r) => r.id));
     }
     await _persistSyncedIds();
+    for (final route in list) {
+      _stampOwner(route.id);
+    }
+    await _persistOwnerTags();
     notifyListeners();
   }
 
@@ -217,6 +279,24 @@ class LocalRouteStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Adoption stamp for the drain loop: after `api.saveRoute` lands an
+  /// untagged (signed-out-built) route in [owner]'s account, tag it so
+  /// it stops being visible to every other account on the device.
+  /// Mirrors §67's push-time adoption of null-owner runs.
+  Future<void> tagRoutesOwner(Iterable<String> routeIds, String owner) async {
+    if (owner.isEmpty) return;
+    var touched = false;
+    for (final id in routeIds) {
+      if (_ownerTags[id] != owner) {
+        _ownerTags[id] = owner;
+        touched = true;
+      }
+    }
+    if (!touched) return;
+    await _persistOwnerTags();
+    notifyListeners();
+  }
+
   Future<void> delete(String routeId) async {
     final dir = await _ensureDir();
     final file = File('${dir.path}/$routeId.json');
@@ -227,6 +307,9 @@ class LocalRouteStore extends ChangeNotifier {
     }
     if (_offlinePinnedIds.remove(routeId)) {
       await _persistOfflinePinnedIds();
+    }
+    if (_ownerTags.remove(routeId) != null) {
+      await _persistOwnerTags();
     }
     notifyListeners();
   }
@@ -247,10 +330,13 @@ class LocalRouteStore extends ChangeNotifier {
     _routes.removeWhere((r) => ids.contains(r.id));
     final touchedSynced = _syncedIds.intersection(ids).isNotEmpty;
     final touchedPinned = _offlinePinnedIds.intersection(ids).isNotEmpty;
+    final touchedTags = ids.any(_ownerTags.containsKey);
     _syncedIds.removeAll(ids);
     _offlinePinnedIds.removeAll(ids);
+    _ownerTags.removeWhere((id, _) => ids.contains(id));
     if (touchedSynced) await _persistSyncedIds();
     if (touchedPinned) await _persistOfflinePinnedIds();
+    if (touchedTags) await _persistOwnerTags();
     notifyListeners();
   }
 
@@ -280,6 +366,7 @@ class LocalRouteStore extends ChangeNotifier {
         .where((f) => f.path.endsWith('.json'))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
         .where((f) => !f.path.endsWith(_offlinePinnedIdsFilename))
+        .where((f) => !f.path.endsWith(_ownerTagsFilename))
         .toList();
 
     // Read all files in parallel — cold-start is bounded by the slowest
@@ -391,5 +478,39 @@ class LocalRouteStore extends ChangeNotifier {
       }
     });
     return _offlinePersistChain;
+  }
+
+  /// Absent sidecar (first run, pre-tag upgrade) leaves the map empty:
+  /// every existing route reads as untagged → visible to any account,
+  /// the same presumed-shared default the §67 run tag chose.
+  Future<void> _loadOwnerTags() async {
+    final dir = _dir;
+    if (dir == null) return;
+    _ownerTags.clear();
+    final file = _ownerTagsFile;
+    if (!file.existsSync()) return;
+    try {
+      final raw = await file.readAsString();
+      final data = jsonDecode(raw);
+      if (data is Map && data['tags'] is Map) {
+        (data['tags'] as Map).forEach((id, owner) {
+          if (id is String && owner is String) _ownerTags[id] = owner;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load route owner tags sidecar: $e');
+    }
+  }
+
+  Future<void> _persistOwnerTags() async {
+    try {
+      await writeJsonAtomic(_ownerTagsFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'tags': _ownerTags,
+      });
+    } catch (e) {
+      // Not fatal — the in-memory map is still correct for this session.
+      debugPrint('Failed to persist route owner tags sidecar: $e');
+    }
   }
 }

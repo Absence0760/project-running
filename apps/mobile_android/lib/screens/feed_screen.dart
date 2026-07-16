@@ -10,6 +10,7 @@ import '../social_service.dart';
 import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
+import '../widgets/sign_in_required_state.dart';
 import 'people_screen.dart';
 import 'profile_screen.dart';
 import 'public_run_screen.dart';
@@ -244,7 +245,19 @@ class _FeedScreenState extends State<FeedScreen> {
                     if (_followees.isNotEmpty) _buildToolbar(theme),
                     Expanded(
                       child: _entries.isEmpty
-                          ? _buildEmpty(theme)
+                          ? (widget.api.userId == null
+                              // A signed-out viewer's following feed is
+                              // empty by definition, and the "follow other
+                              // runners" copy invites an action they can't
+                              // take. Only the EMPTY state gates — entries
+                              // still render signed out when there are any.
+                              ? SignInRequiredState(
+                                  api: widget.api,
+                                  message: AppLocalizations.of(context)
+                                      .feedSignedOutMessage,
+                                  onSignedIn: _loadInitial,
+                                )
+                              : _buildEmpty(theme))
                           : RefreshIndicator(
                               onRefresh: _loadInitial,
                               child: NotificationListener<ScrollNotification>(

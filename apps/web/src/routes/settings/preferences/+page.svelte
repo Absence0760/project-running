@@ -15,7 +15,7 @@
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
-	import { fetchLatestWeightKg, recordWeightKg, clearWeightHistory } from '$lib/core/data';
+	import { fetchLatestWeightKg, recordWeightKg } from '$lib/core/data';
 	import { kgToDisplay, displayToKg, roundWeight } from '$lib/format/weight';
 	import {
 		ACTIVITY_LEVELS,
@@ -449,34 +449,48 @@
 				}
 				if (stampedAt) healthDataConsentAt = stampedAt as string;
 			}
-			const profileUpdate: Record<string, unknown> = {
-				gender: healthDataConsent && gender ? gender : null,
-				date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
-				height_cm: healthDataConsent && heightVal != null ? heightVal : null,
-			};
 			if (!healthDataConsent) {
-				profileUpdate.health_data_consent_at = null;
+				// Art 7(3): one SECURITY DEFINER RPC nulls the consent stamp +
+				// gender/DOB/height and erases the weight series atomically.
+				// Insert-or-update server-side, so a missing client-provisioned
+				// profile row can't turn the withdrawal into a 0-row silent
+				// no-op while the UI confirms success (issue #233).
+				const { error: withdrawErr } = await supabase.rpc(
+					'withdraw_health_data_consent',
+				);
+				if (withdrawErr) throw withdrawErr;
 				healthDataConsentAt = null;
-			}
-			const { error } = await supabase
-				.from('user_profiles')
-				.update(profileUpdate)
-				.eq('id', auth.user.id);
-			if (error) throw error;
-
-			if (!healthDataConsent) {
-				// Art 7(3): withdrawing consent clears the special-category
-				// series alongside the profile fields.
-				await clearWeightHistory();
 				loadedWeightKg = null;
 				weightInput = null;
-			} else if (weightDisplay != null && weightDisplay > 0) {
-				// Append a new measurement only when the value changed, so
-				// re-saving the card doesn't pad the time-series.
-				const kg = roundWeight(displayToKg(weightDisplay, weightUnit));
-				if (loadedWeightKg == null || Math.abs(kg - loadedWeightKg) > 0.01) {
-					await recordWeightKg(kg);
-					loadedWeightKg = kg;
+			} else {
+				const profileUpdate: Record<string, unknown> = {
+					gender: healthDataConsent && gender ? gender : null,
+					date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
+					height_cm: healthDataConsent && heightVal != null ? heightVal : null,
+				};
+				// Row-count-verified: rows are client-provisioned, so a plain
+				// update against a missing row matches 0 rows and reports
+				// success — the save would silently vanish (issue #233).
+				const { data: updatedRows, error } = await supabase
+					.from('user_profiles')
+					.update(profileUpdate)
+					.eq('id', auth.user.id)
+					.select('id');
+				if (error) throw error;
+				if (!updatedRows?.length) {
+					const { error: insertErr } = await supabase
+						.from('user_profiles')
+						.insert({ id: auth.user.id, ...profileUpdate });
+					if (insertErr) throw insertErr;
+				}
+				if (weightDisplay != null && weightDisplay > 0) {
+					// Append a new measurement only when the value changed, so
+					// re-saving the card doesn't pad the time-series.
+					const kg = roundWeight(displayToKg(weightDisplay, weightUnit));
+					if (loadedWeightKg == null || Math.abs(kg - loadedWeightKg) > 0.01) {
+						await recordWeightKg(kg);
+						loadedWeightKg = kg;
+					}
 				}
 			}
 			demographicsSaved = true;

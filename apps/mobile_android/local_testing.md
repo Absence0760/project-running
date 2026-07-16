@@ -154,6 +154,23 @@ If the sign-in fails with "Google sign-in did not return an ID token" or similar
 - The Android OAuth client's package name or SHA-1 doesn't match the APK that's installed → rerun `keytool` and compare to what's in Google Cloud Console.
 - You're testing on an emulator without Google Play services → use a Google Play system image, not the stock AOSP one.
 
+## Apple Sign-In (optional)
+
+On iOS the button uses the native flow and needs no client-side configuration (only the Apple provider enabled in Supabase). On **Android** Apple sign-in runs through Apple's **web flow**, which `sign_in_with_apple` hard-requires configuration for — without it the plugin throws before any UI opens. The button therefore fails closed with a "coming soon" notice until both env vars below are set (same pattern as the Google gate).
+
+Skip this section if you're only using email/password.
+
+1. Apple Developer portal → **Certificates, Identifiers & Profiles → Identifiers** → create a **Services ID** (e.g. `com.threkir.signin`). Enable "Sign in with Apple" on it and register your Supabase auth callback as a **Return URL**: `https://<project-ref>.supabase.co/auth/v1/callback`.
+2. Supabase dashboard → **Authentication → Providers → Apple** → **Enable**, and add the Services ID to the authorized client IDs.
+3. Add both values to `.env.local`:
+
+```
+APPLE_SERVICE_CLIENT_ID=com.threkir.signin
+APPLE_REDIRECT_URI=https://<project-ref>.supabase.co/auth/v1/callback
+```
+
+The Apple Developer Services ID is an operator-provisioned credential — a deploy gate, not a code gate (see `docs/architecture/decisions.md`). Until it exists the Android button shows the coming-soon notice.
+
 ## Running
 
 ```bash

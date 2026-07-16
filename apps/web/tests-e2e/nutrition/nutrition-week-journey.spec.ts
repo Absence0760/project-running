@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { waterStorageKey } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -265,12 +266,7 @@ test.describe('/nutrition — multi-day week journey', () => {
 
 		// ── 6. Reset the client-only water counter for the shared seed user ──
 		await test.step('leave the water tracker clean for the next run', async () => {
-			await page.evaluate(() => {
-				const d = new Date();
-				localStorage.removeItem(
-					`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
-				);
-			});
+			await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 		});
 	});
 });
