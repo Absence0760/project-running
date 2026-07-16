@@ -1352,6 +1352,10 @@
   "@setupDoneHint": {
     "description": "Setup wizard final step hint"
   },
+  "setupDoneHintGoal": "That's everything. Create a training plan for your goal, or open the dashboard to start running.",
+  "@setupDoneHintGoal": {
+    "description": "Setup wizard final step hint when the runner picked a goal, so the primary action is Create my training plan"
+  },
   "privacyPrivateTitle": "Private",
   "@privacyPrivateTitle": {
     "description": "Title of the Private visibility default option"
@@ -5993,6 +5997,28 @@
   "@planNewNameHint": {
     "description": "Plan-name field hint"
   },
+  "planNewNameRequiredHint": "Add a plan name to enable Create.",
+  "@planNewNameRequiredHint": {
+    "description": "Inline hint below the plan-name field explaining why the Create button is disabled when the name is empty"
+  },
+  "planNewDefaultName": "{goal} plan",
+  "@planNewDefaultName": {
+    "description": "Default plan name prefilled when the plan wizard opens preselected to a goal (from the onboarding nudge)",
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewDefaultNameBeginner": "Walk-run to {goal}",
+  "@planNewDefaultNameBeginner": {
+    "description": "Default plan name prefilled when the plan wizard opens on the beginner walk-run preset",
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
   "planNewGoalRace": "Goal race",
   "@planNewGoalRace": {
     "description": "Goal-race dropdown label"
@@ -8423,6 +8449,18 @@
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },
+  "privacyZonesDiscardTitle": "Discard changes?",
+  "@privacyZonesDiscardTitle": {
+    "description": "Title of the unsaved-changes confirm dialog on the privacy-zones editor"
+  },
+  "privacyZonesDiscardBody": "You have unsaved privacy zones. Leave without saving?",
+  "@privacyZonesDiscardBody": {
+    "description": "Body of the unsaved-changes confirm dialog on the privacy-zones editor"
+  },
+  "privacyZonesDiscard": "Discard",
+  "@privacyZonesDiscard": {
+    "description": "Confirm button that leaves the privacy-zones editor discarding unsaved zones"
+  },
   "prefsTitle": "Preferences",
   "@prefsTitle": {
     "description": "AppBar title for the Settings > Preferences screen"
@@ -8864,6 +8902,10 @@
   "@dashboardWelcomeBody": {
     "description": "Dashboard empty-state explanatory body"
   },
+  "dashboardStartRun": "Start a run",
+  "@dashboardStartRun": {
+    "description": "Dashboard empty-state primary button that opens the recorder to start a run"
+  },
   "dashboardSetGoal": "Set a goal",
   "@dashboardSetGoal": {
     "description": "Dashboard empty-state primary button to create a goal"
@@ -8947,6 +8989,15 @@
     "description": "Personal-best row label for the fastest effort at a named distance",
     "placeholders": {
       "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardPbAgeGrade": "{percent} age grade",
+  "@dashboardPbAgeGrade": {
+    "description": "Muted second line under a personal-best time showing its age grade (e.g. 72.4% age grade)",
+    "placeholders": {
+      "percent": {
         "type": "String"
       }
     }

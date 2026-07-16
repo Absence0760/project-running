@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
+import '../age_grade.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -46,6 +47,22 @@ import 'recap_screen.dart';
 const _kCardPadding = EdgeInsets.all(20);
 const _kSectionGap = SizedBox(height: 24);
 
+/// Metres for each best-effort PB label (both the offline track-scan keys and
+/// the server `personal_records` labels). Used to age-grade a timed PB via the
+/// shared `ageGradeForRun` helper — non-standard distances simply yield no
+/// grade (matchStandardDistance returns null).
+const _pbLabelMetres = <String, double>{
+  'Mile': 1609.344,
+  '1 mi': 1609.344,
+  '1 km': 1000,
+  '5 km': 5000,
+  '8 km': 8000,
+  '10 km': 10000,
+  '12 km': 12000,
+  'Half Marathon': 21097,
+  'Marathon': 42195,
+};
+
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -57,6 +74,12 @@ class DashboardScreen extends StatefulWidget {
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
 
+  /// Starts a run from the zero-runs welcome empty state, wired by the host
+  /// (`home_screen`) to the same page jump the centre Log FAB performs
+  /// (`_pageRun`). Null when there's no host able to reach the recorder, in
+  /// which case the "Start a run" affordance is hidden rather than dead.
+  final VoidCallback? onStartRun;
+
   const DashboardScreen({
     super.key,
     this.apiClient,
@@ -67,6 +90,7 @@ class DashboardScreen extends StatefulWidget {
     required this.foodStore,
     required this.preferences,
     this.settingsSync,
+    this.onStartRun,
   });
 
   @override
@@ -102,6 +126,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// resident runs is used instead.
   List<PersonalRecordRow> _serverPbs = const [];
 
+  /// Viewer profile (DOB + sex), loaded once on mount so the best-effort PB
+  /// rows can show an age grade alongside the raw time — the same inputs
+  /// run-detail feeds `ageGradeForRun`. Null until resolved / signed out;
+  /// age grade then simply doesn't render (graceful degrade).
+  UserProfileRow? _viewerProfile;
+
   @override
   void initState() {
     super.initState();
@@ -113,6 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _refreshPlanOverview();
     _hydrateModalities();
     _loadPersonalRecords();
+    _loadViewerProfile();
   }
 
   /// Best-effort load of the server PB cache (L4 — a failure just leaves the
@@ -126,6 +157,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       debugPrint('dashboard: personal_records fetch failed: $e');
     }
+  }
+
+  /// Best-effort load of the viewer's DOB + sex for age-grading the PB rows
+  /// (L4 — a failure just omits the age grade). Sourced from the profile,
+  /// which carries both `date_of_birth` and `gender` (get_my_profile).
+  Future<void> _loadViewerProfile() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final p = await api.fetchMyProfile();
+      if (mounted) setState(() => _viewerProfile = p);
+    } catch (e) {
+      debugPrint('dashboard: profile fetch failed: $e');
+    }
+  }
+
+  /// Age grade (e.g. `72.4%`) for a timed best-effort PB, or null when the
+  /// distance isn't a graded standard or the viewer's DOB/sex is unknown.
+  /// Grades against the runner's age when the PB was set ([achievedAt]) for the
+  /// server PBs that carry a real date; falls back to [now] only for the
+  /// date-less offline track-scan. Uses the shared `ageGradeForRun` twin.
+  String? _pbAgeGrade(String label, Duration time, DateTime now,
+      {DateTime? achievedAt}) {
+    final metres = _pbLabelMetres[label];
+    if (metres == null) return null;
+    final p = _viewerProfile;
+    final result = ageGradeForRun(
+      distanceM: metres,
+      durationSec: time.inSeconds.toDouble(),
+      dobIso: p?.dateOfBirth?.toIso8601String(),
+      runStartIso: (achievedAt ?? now).toIso8601String(),
+      sex: p?.gender,
+    );
+    return result != null ? formatAgeGradePercent(result.percent) : null;
   }
 
   @override
@@ -541,6 +606,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final displayEfforts = _serverPbs.isNotEmpty
         ? bestEffortsFromPersonalRecords(_serverPbs)
         : bestEfforts;
+    // Age each server PB against the date it was actually set; the offline
+    // track-scan path carries no date, so its grades fall back to `now`.
+    final pbDates = _serverPbs.isNotEmpty
+        ? pbAchievedAtByLabel(_serverPbs)
+        : const <String, DateTime>{};
     final hasAnyPb = longest != null || displayEfforts.isNotEmpty;
 
     final api = widget.apiClient;
@@ -623,14 +693,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? Column(
               children: [
                 if (actionToolbar != null) actionToolbar,
-                if (_coachEntry() case final coach?)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: coach,
-                  ),
+                // #272: no "Ask your coach" card on the brand-new zero-runs
+                // welcome screen — it used to dominate above the onboarding
+                // buttons. It returns once the runner has data (the
+                // ListView branch, gated on runs.isNotEmpty below).
                 Expanded(
                   child: _WelcomeEmpty(
                     theme: theme,
+                    onStartRun: widget.onStartRun,
                     onAddGoal: _newGoal,
                     onImport: _openImport,
                   ),
@@ -644,8 +714,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // Pinned coach entry — the resolved Coach-prominence
                 // decision puts the AI coach one persistent tap from Home
                 // (it has no bottom-nav slot). Gated on the same api +
-                // training guard as the toolbar action.
-                if (_coachEntry() case final coach?) ...[
+                // training guard as the toolbar action, plus runs.isNotEmpty
+                // (#272) so it never dominates a zero-runs first screen.
+                if (_coachEntry() case final coach? when runs.isNotEmpty) ...[
                   coach,
                   _kSectionGap,
                 ],
@@ -765,6 +836,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               label: l10n.dashboardFastestDistance(
                                   bestEffortDistanceLabel(l10n, e.key)),
                               value: _formatDuration(e.value),
+                              subValue: switch (_pbAgeGrade(e.key, e.value, now,
+                                  achievedAt: pbDates[e.key])) {
+                                final ag? => l10n.dashboardPbAgeGrade(ag),
+                                _ => null,
+                              },
                             ),
                           ],
                         ],
@@ -789,6 +865,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   hrZones: parseHrZones(widget.settingsSync?.service
                       ?.effective<Map>(SettingsKeys.hrZones)),
                   now: now,
+                  settingsSync: widget.settingsSync,
                 ),
                 _buildTrainingLoadChart(runs, now, loadSeries),
                 if (_hasRecentLift(now)) _gymReadinessNote(theme, l10n),
@@ -1009,10 +1086,12 @@ class _SectionHeader extends StatelessWidget {
 
 class _WelcomeEmpty extends StatelessWidget {
   final ThemeData theme;
+  final VoidCallback? onStartRun;
   final VoidCallback onAddGoal;
   final VoidCallback onImport;
   const _WelcomeEmpty({
     required this.theme,
+    required this.onStartRun,
     required this.onAddGoal,
     required this.onImport,
   });
@@ -1040,7 +1119,21 @@ class _WelcomeEmpty extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            // Two side-by-side actions — primary "Set a goal" + the
+            // Primary CTA: start recording. The welcome copy promises
+            // "record a run" as the first path, so the empty state leads
+            // with it (the goal / import handles used to be the only
+            // actions, leaving the promised recording path with no
+            // affordance). Hidden when the host can't reach the recorder
+            // (onStartRun null) rather than shown as a dead button.
+            if (onStartRun != null) ...[
+              FilledButton.icon(
+                onPressed: onStartRun,
+                icon: const Icon(Icons.directions_run),
+                label: Text(l10n.dashboardStartRun),
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Two side-by-side secondary actions — "Set a goal" + the
             // discoverability handle to bulk-import a Strava / Garmin /
             // Health Connect history (the empty-state used to leave
             // import buried under Settings).
@@ -1381,21 +1474,45 @@ class _PbRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _PbRow({required this.icon, required this.label, required this.value});
+
+  /// Optional muted second line under the value — the age grade for a timed
+  /// PB (#269). Null for rows with no graded standard (e.g. longest run) or
+  /// when the viewer's DOB/sex is unknown.
+  final String? subValue;
+  const _PbRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.subValue,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Icon(icon, color: theme.colorScheme.primary, size: 22),
         const SizedBox(width: 12),
         Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (subValue != null)
+              Text(
+                subValue!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+          ],
         ),
       ],
     );

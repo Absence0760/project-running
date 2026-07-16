@@ -177,8 +177,10 @@ class FitnessStat extends StatelessWidget {
   final String label;
   final String value;
 
-  /// Optional plain-English explanation of the metric. When set, long-press
-  /// (or the semantics tooltip) explains the acronym for newer runners (#25).
+  /// Optional plain-English explanation of the metric. When set, a tap opens
+  /// a dialog with the explanation (and the long-press tooltip still works) so
+  /// the acronym is discoverable for newer runners without a hidden gesture
+  /// (#25, #267). An info glyph beside the label signals the affordance.
   final String? tooltip;
   const FitnessStat({
     super.key,
@@ -190,6 +192,9 @@ class FitnessStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final labelStyle =
+        theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline);
+    final hasTip = tooltip != null;
     final column = Column(
       children: [
         Text(value,
@@ -197,17 +202,53 @@ class FitnessStat extends StatelessWidget {
               fontWeight: FontWeight.w700,
             )),
         const SizedBox(height: 4),
-        Text(label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            )),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(label,
+                  style: labelStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (hasTip) ...[
+              const SizedBox(width: 3),
+              Icon(Icons.info_outline,
+                  size: 13, color: theme.colorScheme.outline),
+            ],
+          ],
+        ),
       ],
     );
-    if (tooltip == null) return column;
+    if (!hasTip) return column;
     return Tooltip(
       message: tooltip!,
       triggerMode: TooltipTriggerMode.longPress,
-      child: column,
+      child: InkWell(
+        onTap: () => _showExplanation(context),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: column,
+        ),
+      ),
+    );
+  }
+
+  void _showExplanation(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(label),
+        content: Text(tooltip!),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(MaterialLocalizations.of(dialogContext).okButtonLabel),
+          ),
+        ],
+      ),
     );
   }
 }

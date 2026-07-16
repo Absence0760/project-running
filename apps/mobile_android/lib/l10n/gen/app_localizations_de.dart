@@ -1013,6 +1013,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Das war\'s. Tippe auf „Dashboard öffnen“, um loszulaufen.';
 
   @override
+  String get setupDoneHintGoal =>
+      'Das war alles. Erstelle einen Trainingsplan für dein Ziel oder öffne das Dashboard, um mit dem Laufen zu beginnen.';
+
+  @override
   String get privacyPrivateTitle => 'Privat';
 
   @override
@@ -4429,6 +4433,20 @@ class AppLocalizationsDe extends AppLocalizations {
   String get planNewNameHint => 'z. B. Herbst-Halbmarathon';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Gib einen Plannamen ein, um „Erstellen“ zu aktivieren.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal-Plan';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Geh-Lauf zu $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Zielrennen';
 
   @override
@@ -6325,6 +6343,16 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dadurch werden alle Zonen entfernt und alle diese Bereiche bei öffentlichen Freigaben wieder sichtbar.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Änderungen verwerfen?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Sie haben nicht gespeicherte Datenschutzzonen. Ohne Speichern verlassen?';
+
+  @override
+  String get privacyZonesDiscard => 'Verwerfen';
+
+  @override
   String get prefsTitle => 'Einstellungen';
 
   @override
@@ -6655,6 +6683,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dein Dashboard füllt sich, sobald du einen Lauf aufzeichnest, ein Ziel setzt oder deinen Verlauf importierst.';
 
   @override
+  String get dashboardStartRun => 'Lauf starten';
+
+  @override
   String get dashboardSetGoal => 'Ziel setzen';
 
   @override
@@ -6714,6 +6745,11 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Schnellste $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent Altersbewertung';
   }
 
   @override

@@ -1016,6 +1016,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'C\'est tout. Touchez « Ouvrir le tableau de bord » pour commencer à courir.';
 
   @override
+  String get setupDoneHintGoal =>
+      'C\'est tout. Créez un plan d\'entraînement pour votre objectif, ou ouvrez le tableau de bord pour commencer à courir.';
+
+  @override
   String get privacyPrivateTitle => 'Privé';
 
   @override
@@ -4432,6 +4436,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get planNewNameHint => 'ex. Semi-marathon d\'automne';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Ajoutez un nom de plan pour activer Créer.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return 'Plan $goal';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Marche-course vers $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Course objectif';
 
   @override
@@ -6334,6 +6352,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cela supprime toutes les zones et réexpose toutes ces zones dans les partages publics.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Ignorer les modifications ?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Vous avez des zones de confidentialité non enregistrées. Quitter sans enregistrer ?';
+
+  @override
+  String get privacyZonesDiscard => 'Ignorer';
+
+  @override
   String get prefsTitle => 'Préférences';
 
   @override
@@ -6663,6 +6691,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ton tableau de bord se remplit dès que tu enregistres une course, définis un objectif ou importes ton historique.';
 
   @override
+  String get dashboardStartRun => 'Démarrer une course';
+
+  @override
   String get dashboardSetGoal => 'Définir un objectif';
 
   @override
@@ -6722,6 +6753,11 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Plus rapide sur $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent indice d\'âge';
   }
 
   @override
