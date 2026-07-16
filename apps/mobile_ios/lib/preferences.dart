@@ -269,6 +269,14 @@ class Preferences extends ChangeNotifier {
   // a once-per-account toggle). See audit/gdpr (2026-05-25) High.
   static const _kSentryOptOut = 'sentry_opt_out';
 
+  // Local "wizard dismissed offline" flag (issue #246). The setup wizard's
+  // fail-safe exit sets it when the `onboarded_at` stamp can't reach the
+  // server, so the home-screen gate stops re-pushing the wizard and instead
+  // retries the deferred stamp on each launch until one lands. Cleared on
+  // a successful stamp, and at sign-out (account-scoped — the next account
+  // must get its own wizard decision).
+  static const _kSetupWizardDismissed = 'setup_wizard_dismissed';
+
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
   static const _kLegacyWeeklyGoalKm = 'weekly_goal_km';
@@ -298,6 +306,7 @@ class Preferences extends ChangeNotifier {
   String? _lastLogType;
   bool _showRawTrack = false;
   bool _sentryOptOut = false;
+  bool _setupWizardDismissed = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -372,6 +381,18 @@ class Preferences extends ChangeNotifier {
   /// for opted-in builds). Toggle in Settings → Privacy → "Send
   /// error reports".
   bool get sentryOptOut => _sentryOptOut;
+
+  /// Whether the setup wizard was dismissed via its offline fail-safe exit
+  /// while the `onboarded_at` stamp couldn't reach the server (issue #246).
+  /// While true the home-screen gate skips re-pushing the wizard and
+  /// retries the deferred [ApiClient.markOnboarded] stamp instead.
+  bool get setupWizardDismissed => _setupWizardDismissed;
+
+  Future<void> setSetupWizardDismissed(bool v) async {
+    _setupWizardDismissed = v;
+    await _prefs.setBool(_kSetupWizardDismissed, v);
+    notifyListeners();
+  }
 
   /// Convenience: should newly-saved runs be marked `is_public=true`?
   /// True only when `privacyDefault == 'public'`. `followers` /
@@ -504,6 +525,9 @@ class Preferences extends ChangeNotifier {
     await setWeightUnit(WeightUnit.kg);
     await clearGoals();
     await clearRunsLastFetchedAt();
+    // The deferred-onboarding flag belongs to the account that dismissed
+    // the wizard offline — the next account must get its own gate decision.
+    await setSetupWizardDismissed(false);
     // Device-bag mirrors: per-(user, device) server-side, so they are
     // account-scoped too — the next account gets the defaults until its
     // own device bag applies.
@@ -572,6 +596,7 @@ class Preferences extends ChangeNotifier {
     _lastLogType = _prefs.getString(_kLastLogType);
     _showRawTrack = _prefs.getBool(_kShowRawTrack) ?? false;
     _sentryOptOut = _prefs.getBool(_kSentryOptOut) ?? false;
+    _setupWizardDismissed = _prefs.getBool(_kSetupWizardDismissed) ?? false;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {

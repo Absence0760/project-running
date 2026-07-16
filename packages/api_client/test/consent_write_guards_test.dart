@@ -44,5 +44,10 @@ void main() {
       final api = ApiClient.withClient(signedOut);
       expect(api.recordBodyWeightKg(70), throwsStateError);
     });
+
+    test('updateDisplayName (issue #226, same §248 write family)', () {
+      final api = ApiClient.withClient(signedOut);
+      expect(api.updateDisplayName('Alex'), throwsStateError);
+    });
   });
 }

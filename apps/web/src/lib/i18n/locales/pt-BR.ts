@@ -418,6 +418,7 @@ export const messages = {
 	"onboarding.createPlanCta": "Criar meu plano de treino",
 	"onboarding.pushEnableError": "Não foi possível ativar as notificações: {message}",
 	"onboarding.saveError": "Não foi possível salvar: {message}",
+	"onboarding.notSignedIn": "Você não está conectado — entre e tente novamente",
 	"onboarding.welcomeToast": "Tudo pronto! Boas-vindas a bordo.",
 	"planDetail.backAllPlans": "Todos os planos",
 	"planDetail.backDashboard": "Painel",

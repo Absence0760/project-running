@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth_change_aware.dart';
 import '../auth_validation.dart';
 import '../backup.dart';
 import '../exif_strip.dart';
@@ -46,7 +47,8 @@ class SettingsAccountScreen extends StatefulWidget {
   State<SettingsAccountScreen> createState() => _SettingsAccountScreenState();
 }
 
-class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
+class _SettingsAccountScreenState extends State<SettingsAccountScreen>
+    with AuthChangeAware<SettingsAccountScreen> {
   DateTime? _coachConsentAt;
   bool _coachConsentWithdrawing = false;
   // In-flight guard for the multi-second account actions (full backup,
@@ -57,6 +59,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   String? _avatarUrl;
   bool _avatarBusy = false;
   final ImagePicker _avatarPicker = ImagePicker();
+
+  String? _displayName;
+  bool _displayNameBusy = false;
 
   @override
   void initState() {
@@ -70,6 +75,23 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   void dispose() {
     widget.preferences.removeListener(_onChange);
     super.dispose();
+  }
+
+  @override
+  ApiClient? get authApi => widget.apiClient;
+
+  /// Sign-out can happen on this very screen (or a session can expire
+  /// under it) and the initState-loaded avatar + coach-consent stamp
+  /// belong to the departed user — clear them and reload as whoever is
+  /// signed in now (the loaders no-op while signed out).
+  @override
+  void onAuthUserChanged(String? userId) {
+    setState(() {
+      _coachConsentAt = null;
+      _avatarUrl = null;
+    });
+    _loadCoachConsent();
+    _loadAvatar();
   }
 
   Future<void> _loadCoachConsent() async {
@@ -88,9 +110,63 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     if (api == null || api.userId == null) return;
     try {
       final profile = await api.fetchMyProfile();
-      if (mounted) setState(() => _avatarUrl = profile?.avatarUrl);
+      if (mounted) {
+        setState(() {
+          _avatarUrl = profile?.avatarUrl;
+          _displayName = profile?.displayName;
+        });
+      }
     } catch (_) {
       // Non-fatal: the tile falls back to the email initial.
+    }
+  }
+
+  Future<void> _editDisplayName() async {
+    final api = widget.apiClient;
+    final l10n = AppLocalizations.of(context);
+    if (api == null || api.userId == null) {
+      showTopBanner(context, l10n.settingsAccountSignInToSync);
+      return;
+    }
+    final ctl = TextEditingController(text: _displayName ?? '');
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.settingsAccountDisplayName),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: l10n.settingsAccountDisplayName,
+            helperText: l10n.settingsAccountDisplayNameHint,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.settingsAccountCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: Text(l10n.settingsAccountSave),
+          ),
+        ],
+      ),
+    );
+    if (saved == null || !mounted) return;
+    final trimmed = saved.trim();
+    setState(() => _displayNameBusy = true);
+    try {
+      await api.updateDisplayName(trimmed);
+      if (!mounted) return;
+      setState(() => _displayName = trimmed.isEmpty ? null : trimmed);
+      showTopBanner(context, l10n.settingsAccountDisplayNameUpdated);
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.settingsAccountDisplayNameUpdateFailed);
+    } finally {
+      if (mounted) setState(() => _displayNameBusy = false);
     }
   }
 
@@ -603,6 +679,24 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               ),
             if (signedIn)
               ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(l10n.settingsAccountDisplayName),
+                subtitle: Text(
+                  (_displayName != null && _displayName!.isNotEmpty)
+                      ? _displayName!
+                      : l10n.settingsAccountDisplayNameUnset,
+                ),
+                trailing: _displayNameBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_outlined),
+                onTap: _displayNameBusy ? null : _editDisplayName,
+              ),
+            if (signedIn)
+              ListTile(
                 leading: const Icon(Icons.person_outline),
                 title: Text(l10n.settingsAccountViewProfile),
                 subtitle: Text(l10n.settingsAccountViewProfileSubtitle),
@@ -666,7 +760,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 );
               },
             ),
-            if (_coachConsentAt != null)
+            if (signedIn && _coachConsentAt != null)
               ListTile(
                 leading: const Icon(Icons.block),
                 title: Text(l10n.settingsAccountCoachConsentWithdraw),

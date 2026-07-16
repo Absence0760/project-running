@@ -419,6 +419,7 @@ export const messages = {
 	"onboarding.createPlanCta": "Meinen Trainingsplan erstellen",
 	"onboarding.pushEnableError": "Benachrichtigungen konnten nicht aktiviert werden: {message}",
 	"onboarding.saveError": "Konnte nicht gespeichert werden: {message}",
+	"onboarding.notSignedIn": "Du bist nicht angemeldet — melde dich an und versuche es erneut",
 	"onboarding.welcomeToast": "Alles bereit! Willkommen an Bord.",
 	"planDetail.backAllPlans": "Alle Pläne",
 	"planDetail.backDashboard": "Übersicht",

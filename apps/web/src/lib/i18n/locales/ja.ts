@@ -414,6 +414,7 @@ export const messages = {
 	"onboarding.createPlanCta": "トレーニングプランを作成",
 	"onboarding.pushEnableError": "通知を有効にできませんでした: {message}",
 	"onboarding.saveError": "保存できませんでした: {message}",
+	"onboarding.notSignedIn": "サインインしていません — サインインしてからもう一度お試しください",
 	"onboarding.welcomeToast": "準備完了です！ようこそ。",
 	"planDetail.backAllPlans": "すべてのプラン",
 	"planDetail.backDashboard": "ダッシュボード",

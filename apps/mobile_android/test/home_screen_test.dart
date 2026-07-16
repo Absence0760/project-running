@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,8 +20,29 @@ import '../lib/race_controller.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
+import '../lib/screens/setup_wizard_screen.dart';
 
-late Directory _runsDir;
+/// Drives auth transitions for the setup-wizard gate (#232): a fresh
+/// account (onboarded_at null) signs in after launch.
+class _WizardApi extends ApiClient {
+  String? uid;
+  final _controller = StreamController<String?>.broadcast();
+
+  @override
+  String? get userId => uid;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  @override
+  Future<cm.UserProfileRow?> fetchMyProfile() async => uid == null
+      ? null
+      : cm.UserProfileRow(shadowHidden: false, id: uid!, displayName: null);
+
+  void emit() => _controller.add(uid);
+}
+
+Directory? _runsDir;
 
 Future<({
   LocalRunStore runStore,
@@ -77,13 +101,13 @@ Future<({
   );
 }
 
-Future<void> _pump(WidgetTester tester, dynamic s) async {
+Future<void> _pump(WidgetTester tester, dynamic s, {ApiClient? api}) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: HomeScreen(
-        apiClient: null,
+        apiClient: api,
         runStore: s.runStore,
         routeStore: s.routeStore,
         gearStore: s.gearStore,
@@ -105,9 +129,67 @@ Future<void> _pump(WidgetTester tester, dynamic s) async {
   await tester.pump();
 }
 
+class _StampApi extends ApiClient {
+  int markOnboardedCalls = 0;
+  bool failStamp = false;
+
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<void> markOnboarded() async {
+    markOnboardedCalls++;
+    if (failStamp) throw Exception('network unreachable');
+  }
+}
+
 void main() {
   tearDown(() {
-    if (_runsDir.existsSync()) _runsDir.deleteSync(recursive: true);
+    // Null when the test never built the stores (the pure gate-helper
+    // group below has no run store on disk).
+    if (_runsDir?.existsSync() ?? false) {
+      _runsDir!.deleteSync(recursive: true);
+    }
+    _runsDir = null;
+  });
+
+  group('deferredOnboardingStampHandled (issue #246)', () {
+    Future<Preferences> makePrefs() async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      return prefs;
+    }
+
+    test('no dismissal flag: gate proceeds normally, no stamp attempt',
+        () async {
+      final prefs = await makePrefs();
+      final api = _StampApi();
+      expect(await deferredOnboardingStampHandled(api, prefs), isFalse);
+      expect(api.markOnboardedCalls, 0);
+    });
+
+    test('flag set + stamp lands: wizard suppressed, flag cleared', () async {
+      final prefs = await makePrefs();
+      await prefs.setSetupWizardDismissed(true);
+      final api = _StampApi();
+      expect(await deferredOnboardingStampHandled(api, prefs), isTrue);
+      expect(api.markOnboardedCalls, 1);
+      expect(prefs.setupWizardDismissed, isFalse,
+          reason: 'a landed stamp retires the deferred flag');
+    });
+
+    test('flag set + stamp still failing: wizard suppressed, flag kept',
+        () async {
+      final prefs = await makePrefs();
+      await prefs.setSetupWizardDismissed(true);
+      final api = _StampApi()..failStamp = true;
+      expect(await deferredOnboardingStampHandled(api, prefs), isTrue,
+          reason: 'the user chose Finish later — never re-trap them in '
+              'the wizard while the stamp is queued');
+      expect(prefs.setupWizardDismissed, isTrue,
+          reason: 'the queued stamp retries on the next launch');
+    });
   });
 
   group('HomeScreen multi-modal shell', () {
@@ -145,6 +227,21 @@ void main() {
           reason: '"$gone" is no longer a bottom-nav destination',
         );
       }
+    });
+
+    testWidgets('the centre Log action shows a visible text label (#256)',
+        (tester) async {
+      // Every nav tab carries a text label; the centre Log action used to be
+      // an unlabelled "+" FAB with a tooltip only. It now caption's "Log"
+      // inside the bar so the affordance is discoverable without a hover.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final bar = find.byType(BottomAppBar);
+      expect(
+        find.descendant(of: bar, matching: find.text('Log')),
+        findsOneWidget,
+        reason: 'the centre Log action must carry a visible label in the bar',
+      );
     });
 
     testWidgets('initial page is Home (welcome empty state)', (tester) async {
@@ -213,6 +310,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Nutrition'), findsOneWidget);
       expect(find.byType(BottomAppBar), findsOneWidget);
+    });
+
+    testWidgets(
+        'setup wizard fires for a fresh account signing in after launch (#232)',
+        (tester) async {
+      final s = await _makeStores();
+      final api = _WizardApi();
+      await _pump(tester, s, api: api);
+      await tester.pump();
+      // Launched signed out: the post-frame gate must not push anything.
+      expect(find.byType(SetupWizardScreen), findsNothing);
+
+      // The normal signup flow — the account is created after launch. The
+      // gate used to run once per process, so this user never saw the
+      // wizard (nor did a fresh account B signing in over A's session).
+      api.uid = 'u9';
+      api.emit();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(SetupWizardScreen), findsOneWidget);
     });
   });
 }

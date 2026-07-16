@@ -939,6 +939,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Impossible de joindre le serveur pour le moment. Vous pouvez terminer la configuration plus tard — tout est modifiable dans les Réglages.';
+
+  @override
+  String get setupFinishLater => 'Terminer plus tard';
+
+  @override
   String get setupNameTitle => 'Comment doit-on vous appeler ?';
 
   @override
@@ -1057,6 +1064,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get setupDoneHint =>
       'C\'est tout. Touchez « Ouvrir le tableau de bord » pour commencer à courir.';
+
+  @override
+  String get setupDoneHintGoal =>
+      'C\'est tout. Créez un plan d\'entraînement pour votre objectif, ou ouvrez le tableau de bord pour commencer à courir.';
 
   @override
   String get privacyPrivateTitle => 'Privé';
@@ -4475,6 +4486,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get planNewNameHint => 'ex. Semi-marathon d\'automne';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Ajoutez un nom de plan pour activer Créer.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return 'Plan $goal';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Marche-course vers $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Course objectif';
 
   @override
@@ -5584,6 +5609,24 @@ class AppLocalizationsFr extends AppLocalizations {
       'Données anonymisées de plantage et d\'erreur vers Sentry (USA). Désactive pour retirer ton consentement. Appliqué au prochain lancement.';
 
   @override
+  String get settingsAccountDisplayName => 'Nom affiché';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Le nom que voient les autres coureurs. Laisse vide pour utiliser « Runner ».';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Non défini — tu apparais comme « Runner »';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nom affiché mis à jour';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Échec de la mise à jour du nom affiché. Réessaie.';
+
+  @override
   String get settingsAccountErrorReportingEnabled =>
       'Rapports d\'erreur activés — redémarre l\'app pour appliquer.';
 
@@ -6373,6 +6416,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cela supprime toutes les zones et réexpose toutes ces zones dans les partages publics.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Ignorer les modifications ?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Vous avez des zones de confidentialité non enregistrées. Quitter sans enregistrer ?';
+
+  @override
+  String get privacyZonesDiscard => 'Ignorer';
+
+  @override
   String get prefsTitle => 'Préférences';
 
   @override
@@ -6702,6 +6755,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ton tableau de bord se remplit dès que tu enregistres une course, définis un objectif ou importes ton historique.';
 
   @override
+  String get dashboardStartRun => 'Démarrer une course';
+
+  @override
   String get dashboardSetGoal => 'Définir un objectif';
 
   @override
@@ -6761,6 +6817,11 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Plus rapide sur $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent indice d\'âge';
   }
 
   @override
