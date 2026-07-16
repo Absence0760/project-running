@@ -1607,6 +1607,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save your setup: {message}'**
   String setupSaveError(String message);
 
+  /// Hint shown next to the setup wizard's offline fail-safe exit after a save failed
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.'**
+  String get setupOfflineHint;
+
+  /// Setup wizard fail-safe exit that closes the wizard without a server write and defers the onboarding stamp
+  ///
+  /// In en, this message translates to:
+  /// **'Finish later'**
+  String get setupFinishLater;
+
   /// Setup wizard display-name step title
   ///
   /// In en, this message translates to:

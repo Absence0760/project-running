@@ -250,6 +250,8 @@
   "setupCreatePlanCta": "トレーニングプランを作成",
   "setupWelcomeToast": "Threkir へようこそ！",
   "setupSaveError": "設定を保存できませんでした: {message}",
+  "setupOfflineHint": "現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。",
+  "setupFinishLater": "後で完了する",
   "setupNameTitle": "何とお呼びしましょうか？",
   "setupNameHint": "これはプロフィールや共有したランで他のランナーに表示される名前です。",
   "setupNameLabel": "表示名",

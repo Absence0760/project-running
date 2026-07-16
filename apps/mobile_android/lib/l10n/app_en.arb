@@ -1204,6 +1204,14 @@
       }
     }
   },
+  "setupOfflineHint": "Can't reach the server right now. You can finish setup later — everything here is editable in Settings.",
+  "@setupOfflineHint": {
+    "description": "Hint shown next to the setup wizard's offline fail-safe exit after a save failed"
+  },
+  "setupFinishLater": "Finish later",
+  "@setupFinishLater": {
+    "description": "Setup wizard fail-safe exit that closes the wizard without a server write and defers the onboarding stamp"
+  },
   "setupNameTitle": "What should we call you?",
   "@setupNameTitle": {
     "description": "Setup wizard display-name step title"

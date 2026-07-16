@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,7 +19,7 @@ import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
 
-late Directory _runsDir;
+Directory? _runsDir;
 
 Future<({
   LocalRunStore runStore,
@@ -105,9 +106,67 @@ Future<void> _pump(WidgetTester tester, dynamic s) async {
   await tester.pump();
 }
 
+class _StampApi extends ApiClient {
+  int markOnboardedCalls = 0;
+  bool failStamp = false;
+
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<void> markOnboarded() async {
+    markOnboardedCalls++;
+    if (failStamp) throw Exception('network unreachable');
+  }
+}
+
 void main() {
   tearDown(() {
-    if (_runsDir.existsSync()) _runsDir.deleteSync(recursive: true);
+    // Null when the test never built the stores (the pure gate-helper
+    // group below has no run store on disk).
+    if (_runsDir?.existsSync() ?? false) {
+      _runsDir!.deleteSync(recursive: true);
+    }
+    _runsDir = null;
+  });
+
+  group('deferredOnboardingStampHandled (issue #246)', () {
+    Future<Preferences> makePrefs() async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      return prefs;
+    }
+
+    test('no dismissal flag: gate proceeds normally, no stamp attempt',
+        () async {
+      final prefs = await makePrefs();
+      final api = _StampApi();
+      expect(await deferredOnboardingStampHandled(api, prefs), isFalse);
+      expect(api.markOnboardedCalls, 0);
+    });
+
+    test('flag set + stamp lands: wizard suppressed, flag cleared', () async {
+      final prefs = await makePrefs();
+      await prefs.setSetupWizardDismissed(true);
+      final api = _StampApi();
+      expect(await deferredOnboardingStampHandled(api, prefs), isTrue);
+      expect(api.markOnboardedCalls, 1);
+      expect(prefs.setupWizardDismissed, isFalse,
+          reason: 'a landed stamp retires the deferred flag');
+    });
+
+    test('flag set + stamp still failing: wizard suppressed, flag kept',
+        () async {
+      final prefs = await makePrefs();
+      await prefs.setSetupWizardDismissed(true);
+      final api = _StampApi()..failStamp = true;
+      expect(await deferredOnboardingStampHandled(api, prefs), isTrue,
+          reason: 'the user chose Finish later — never re-trap them in '
+              'the wizard while the stamp is queued');
+      expect(prefs.setupWizardDismissed, isTrue,
+          reason: 'the queued stamp retries on the next launch');
+    });
   });
 
   group('HomeScreen multi-modal shell', () {

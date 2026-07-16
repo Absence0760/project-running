@@ -893,6 +893,13 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'No se puede conectar con el servidor ahora mismo. Puedes terminar la configuración más tarde — todo esto se puede editar en Ajustes.';
+
+  @override
+  String get setupFinishLater => 'Terminar más tarde';
+
+  @override
   String get setupNameTitle => '¿Cómo te llamamos?';
 
   @override

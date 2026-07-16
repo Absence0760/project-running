@@ -887,6 +887,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.';
+
+  @override
+  String get setupFinishLater => 'Finish later';
+
+  @override
   String get setupNameTitle => 'What should we call you?';
 
   @override

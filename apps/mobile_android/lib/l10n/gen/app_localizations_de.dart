@@ -893,6 +893,13 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.';
+
+  @override
+  String get setupFinishLater => 'Später abschließen';
+
+  @override
   String get setupNameTitle => 'Wie sollen wir dich nennen?';
 
   @override

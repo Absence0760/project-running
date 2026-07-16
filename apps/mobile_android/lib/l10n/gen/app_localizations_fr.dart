@@ -896,6 +896,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Impossible de joindre le serveur pour le moment. Vous pouvez terminer la configuration plus tard — tout est modifiable dans les Réglages.';
+
+  @override
+  String get setupFinishLater => 'Terminer plus tard';
+
+  @override
   String get setupNameTitle => 'Comment doit-on vous appeler ?';
 
   @override

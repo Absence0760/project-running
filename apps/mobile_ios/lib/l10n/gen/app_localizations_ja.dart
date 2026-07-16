@@ -863,6 +863,13 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      '現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。';
+
+  @override
+  String get setupFinishLater => '後で完了する';
+
+  @override
   String get setupNameTitle => '何とお呼びしましょうか？';
 
   @override

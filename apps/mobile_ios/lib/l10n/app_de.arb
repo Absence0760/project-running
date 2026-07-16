@@ -250,6 +250,8 @@
   "setupCreatePlanCta": "Meinen Trainingsplan erstellen",
   "setupWelcomeToast": "Willkommen bei Threkir!",
   "setupSaveError": "Einrichtung konnte nicht gespeichert werden: {message}",
+  "setupOfflineHint": "Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.",
+  "setupFinishLater": "Später abschließen",
   "setupNameTitle": "Wie sollen wir dich nennen?",
   "setupNameHint": "Diesen Namen sehen andere Läufer in deinem Profil und bei geteilten Läufen.",
   "setupNameLabel": "Anzeigename",

@@ -250,6 +250,8 @@
   "setupCreatePlanCta": "Crear mi plan de entrenamiento",
   "setupWelcomeToast": "¡Bienvenido a Threkir!",
   "setupSaveError": "No se pudo guardar tu configuración: {message}",
+  "setupOfflineHint": "No se puede conectar con el servidor ahora mismo. Puedes terminar la configuración más tarde — todo esto se puede editar en Ajustes.",
+  "setupFinishLater": "Terminar más tarde",
   "setupNameTitle": "¿Cómo te llamamos?",
   "setupNameHint": "Este es el nombre que otros corredores ven en tu perfil y en tus carreras compartidas.",
   "setupNameLabel": "Nombre visible",

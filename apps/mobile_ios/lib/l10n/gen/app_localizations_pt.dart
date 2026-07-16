@@ -893,6 +893,13 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
+
+  @override
   String get setupNameTitle => 'Como devemos te chamar?';
 
   @override
@@ -11991,6 +11998,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String setupSaveError(String message) {
     return 'Não foi possível salvar sua configuração: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
 
   @override
   String get setupNameTitle => 'Como devemos te chamar?';

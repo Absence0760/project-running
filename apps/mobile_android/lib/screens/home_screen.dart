@@ -32,6 +32,27 @@ import 'setup_wizard_screen.dart';
 import 'social_screen.dart';
 import 'you_screen.dart';
 
+/// The deferred half of the setup wizard's offline fail-safe exit
+/// (issue #246). When the wizard was dismissed via "Finish later" while
+/// the `onboarded_at` stamp couldn't reach the server, the gate must NOT
+/// re-push the wizard — it retries the minimal [ApiClient.markOnboarded]
+/// stamp instead, clearing the flag once one lands. Returns true when the
+/// dismissal flag consumed the gate (whether or not the stamp landed).
+@visibleForTesting
+Future<bool> deferredOnboardingStampHandled(
+  ApiClient api,
+  Preferences preferences,
+) async {
+  if (!preferences.setupWizardDismissed) return false;
+  try {
+    await api.markOnboarded();
+    await preferences.setSetupWizardDismissed(false);
+  } catch (e) {
+    debugPrint('deferred onboarding stamp failed (kept queued): $e');
+  }
+  return true;
+}
+
 class HomeScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
@@ -179,6 +200,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
     if (_setupWizardShown) return;
+    if (await deferredOnboardingStampHandled(api, widget.preferences)) {
+      return;
+    }
     cm.UserProfileRow? profile;
     try {
       profile = await api.fetchMyProfile();
