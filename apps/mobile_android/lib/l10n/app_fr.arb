@@ -92,6 +92,8 @@
   "peopleFallbackDisplayName": "Coureur",
   "peopleFollowingButton": "Abonné",
   "peopleFollowButton": "Suivre",
+  "peopleSignedOutMessage": "Connectez-vous pour rechercher et suivre d'autres coureurs.",
+  "peopleSuggestionsLoadFailed": "Impossible de charger les suggestions.",
   "readinessCardHeader": "FORME DU JOUR",
   "readinessBandHigh": "élevée",
   "readinessBandModerate": "modérée",

@@ -370,6 +370,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get peopleFollowButton => 'Suivre';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Connectez-vous pour rechercher et suivre d\'autres coureurs.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'Impossible de charger les suggestions.';
+
+  @override
   String get readinessCardHeader => 'FORME DU JOUR';
 
   @override

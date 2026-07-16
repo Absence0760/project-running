@@ -92,6 +92,8 @@
   "peopleFallbackDisplayName": "Läufer",
   "peopleFollowingButton": "Folgt",
   "peopleFollowButton": "Folgen",
+  "peopleSignedOutMessage": "Melde dich an, um andere Läufer zu suchen und ihnen zu folgen.",
+  "peopleSuggestionsLoadFailed": "Vorschläge konnten nicht geladen werden.",
   "readinessCardHeader": "BEREITSCHAFT",
   "readinessBandHigh": "hoch",
   "readinessBandModerate": "mäßig",

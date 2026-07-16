@@ -546,6 +546,14 @@
   "@peopleFollowButton": {
     "description": "Follow-toggle button label when not following the person"
   },
+  "peopleSignedOutMessage": "Sign in to search for and follow other runners.",
+  "@peopleSignedOutMessage": {
+    "description": "Body of the signed-out state on the People screen; people search is auth-gated so a signed-out search can only fail"
+  },
+  "peopleSuggestionsLoadFailed": "Could not load suggestions.",
+  "@peopleSuggestionsLoadFailed": {
+    "description": "Error-state message when the suggested-people list fails to load"
+  },
   "readinessCardHeader": "READINESS",
   "@readinessCardHeader": {
     "description": "Header label on the dashboard readiness-to-run card"
