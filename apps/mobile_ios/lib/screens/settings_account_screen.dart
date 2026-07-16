@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth_change_aware.dart';
 import '../backup.dart';
 import '../exif_strip.dart';
 import '../backup_server_client.dart';
@@ -45,7 +46,8 @@ class SettingsAccountScreen extends StatefulWidget {
   State<SettingsAccountScreen> createState() => _SettingsAccountScreenState();
 }
 
-class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
+class _SettingsAccountScreenState extends State<SettingsAccountScreen>
+    with AuthChangeAware<SettingsAccountScreen> {
   DateTime? _coachConsentAt;
   bool _coachConsentWithdrawing = false;
   // In-flight guard for the multi-second account actions (full backup,
@@ -69,6 +71,23 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   void dispose() {
     widget.preferences.removeListener(_onChange);
     super.dispose();
+  }
+
+  @override
+  ApiClient? get authApi => widget.apiClient;
+
+  /// Sign-out can happen on this very screen (or a session can expire
+  /// under it) and the initState-loaded avatar + coach-consent stamp
+  /// belong to the departed user — clear them and reload as whoever is
+  /// signed in now (the loaders no-op while signed out).
+  @override
+  void onAuthUserChanged(String? userId) {
+    setState(() {
+      _coachConsentAt = null;
+      _avatarUrl = null;
+    });
+    _loadCoachConsent();
+    _loadAvatar();
   }
 
   Future<void> _loadCoachConsent() async {
@@ -665,7 +684,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 );
               },
             ),
-            if (_coachConsentAt != null)
+            if (signedIn && _coachConsentAt != null)
               ListTile(
                 leading: const Icon(Icons.block),
                 title: Text(l10n.settingsAccountCoachConsentWithdraw),
