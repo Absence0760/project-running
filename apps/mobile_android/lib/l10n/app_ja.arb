@@ -203,6 +203,7 @@
   "authErrorInvalidCredentials": "メールアドレスまたはパスワードが正しくありません。もう一度お試しください。",
   "authErrorRateLimited": "試行回数が多すぎます。しばらく待ってからもう一度お試しください。",
   "authErrorGeneric": "問題が発生しました。もう一度お試しください。",
+  "authErrorNotSignedIn": "この操作にはサインインが必要です。サインインしてからもう一度お試しください。",
   "signInTitle": "サインイン",
   "signInHeadline": "ランを複数のデバイスで同期",
   "signInSubtitle": "サインインしてランをバックアップし、ウェブアプリで表示できます。",

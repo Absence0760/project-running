@@ -203,6 +203,7 @@
   "authErrorInvalidCredentials": "E-mail ou senha incorretos. Tente novamente.",
   "authErrorRateLimited": "Muitas tentativas. Aguarde um momento e tente novamente.",
   "authErrorGeneric": "Algo deu errado. Tente novamente.",
+  "authErrorNotSignedIn": "Você precisa estar conectado para fazer isso. Entre e tente novamente.",
   "signInTitle": "Entrar",
   "signInHeadline": "Sincronize corridas entre dispositivos",
   "signInSubtitle": "Entre para fazer backup das corridas e vê-las no app web.",

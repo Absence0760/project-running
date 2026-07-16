@@ -203,6 +203,7 @@
   "authErrorInvalidCredentials": "Correo electrónico o contraseña incorrectos. Inténtalo de nuevo.",
   "authErrorRateLimited": "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
   "authErrorGeneric": "Algo salió mal. Inténtalo de nuevo.",
+  "authErrorNotSignedIn": "Debes iniciar sesión para hacer eso. Inicia sesión e inténtalo de nuevo.",
   "signInTitle": "Iniciar sesión",
   "signInHeadline": "Sincroniza tus carreras entre dispositivos",
   "signInSubtitle": "Inicia sesión para respaldar tus carreras y verlas en la app web.",

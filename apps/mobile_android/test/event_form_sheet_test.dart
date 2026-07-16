@@ -309,7 +309,9 @@ void main() {
           find.widgetWithText(TextField, 'Title'), 'Doomed event');
       await tapCreate(tester);
       expect(fake.createCalled, isTrue);
-      expect(find.textContaining('boom-create'), findsOneWidget);
+      // Classified copy inline, never the raw exception (issue #240).
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
+      expect(find.textContaining('boom-create'), findsNothing);
       // The sheet stays open (result not yet set on the launcher).
       expect(find.textContaining('result='), findsNothing);
     });

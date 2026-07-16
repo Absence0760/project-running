@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth_error.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
@@ -176,9 +177,10 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
         _pendingCaptionCtrl.text = '';
       });
     } catch (e) {
+      debugPrint('club photos picker error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubPhotosPickerError('$e'));
+          context, AppLocalizations.of(context).clubPhotosPickerError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -212,10 +214,11 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
         _uploading = false;
       });
     } catch (e) {
+      debugPrint('club photos upload error: $e');
       if (!mounted) return;
       setState(() => _uploading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).clubPhotosUploadError('$e'));
+          context, AppLocalizations.of(context).clubPhotosUploadError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -245,9 +248,10 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _photos = _photos.where((q) => q.id != p.id).toList());
     } catch (e) {
+      debugPrint('club photos delete error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubPhotosDeleteError('$e'));
+          context, AppLocalizations.of(context).clubPhotosDeleteError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -284,9 +288,10 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
             .toList();
       });
     } catch (e) {
+      debugPrint('club photos caption error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).clubPhotosCaptionError('$e'));
+          context, AppLocalizations.of(context).clubPhotosCaptionError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

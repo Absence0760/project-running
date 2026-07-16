@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../locale_defaults.dart';
 import '../onboarding.dart';
@@ -115,9 +116,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
+      debugPrint('SetupWizardScreen save failed: $e');
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, l10n.setupSaveError(e.toString()));
+      showTopBanner(context, l10n.setupSaveError(friendlyError(l10n, e)));
     }
   }
 
@@ -176,9 +178,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       showTopBanner(context, l10n.setupWelcomeToast);
       Navigator.of(context).pop(createPlan ? _primaryGoal : null);
     } catch (e) {
+      debugPrint('SetupWizardScreen save failed: $e');
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, l10n.setupSaveError(e.toString()));
+      showTopBanner(context, l10n.setupSaveError(friendlyError(l10n, e)));
     }
   }
 

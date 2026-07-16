@@ -203,6 +203,7 @@
   "authErrorInvalidCredentials": "E-Mail oder Passwort ist falsch. Bitte versuche es erneut.",
   "authErrorRateLimited": "Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.",
   "authErrorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  "authErrorNotSignedIn": "Dafür musst du angemeldet sein. Melde dich an und versuche es erneut.",
   "signInTitle": "Anmelden",
   "signInHeadline": "Läufe geräteübergreifend synchronisieren",
   "signInSubtitle": "Melde dich an, um Läufe zu sichern und in der Web-App anzusehen.",

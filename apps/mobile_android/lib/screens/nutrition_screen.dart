@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart' show FoodEntry;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../auth_error.dart';
 import '../exercise_calories.dart';
 import '../food_search.dart' show FoodMacros;
 import '../hydration.dart';
@@ -361,8 +362,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
         showTopBanner(context, l10n.nutritionTemplateSaved);
       }
     } catch (e) {
+      debugPrint('nutrition template save failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionTemplateSaveFailed(e.toString()));
+        showTopBanner(context, l10n.nutritionTemplateSaveFailed(friendlyError(l10n, e)));
       }
     } finally {
       if (mounted) setState(() => _savingMeal = false);
@@ -422,8 +424,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
         );
       }
     } catch (e) {
+      debugPrint('nutrition template log failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionTemplateLogFailed(e.toString()));
+        showTopBanner(context, l10n.nutritionTemplateLogFailed(friendlyError(l10n, e)));
       }
     } finally {
       if (mounted) {
@@ -462,8 +465,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
       await _templateStore.deleteLocal(t.id);
       await _maybeSyncTemplates();
     } catch (e) {
+      debugPrint('nutrition template delete failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionTemplateDeleteFailed('$e'));
+        showTopBanner(context, l10n.nutritionTemplateDeleteFailed(friendlyError(l10n, e)));
       }
     }
   }
@@ -602,8 +606,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
         showTopBanner(context, l10n.nutritionRecipeSaved);
       }
     } catch (e) {
+      debugPrint('nutrition recipe save failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionRecipeSaveFailed(e.toString()));
+        showTopBanner(context, l10n.nutritionRecipeSaveFailed(friendlyError(l10n, e)));
       }
     } finally {
       if (mounted) setState(() => _savingRecipe = false);
@@ -672,8 +677,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
         }
       }
     } catch (e) {
+      debugPrint('nutrition recipe log failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionRecipeLogFailed(e.toString()));
+        showTopBanner(context, l10n.nutritionRecipeLogFailed(friendlyError(l10n, e)));
       }
     } finally {
       if (mounted) {
@@ -712,8 +718,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
       await _recipeStore.deleteLocal(r.id);
       await _maybeSyncRecipes();
     } catch (e) {
+      debugPrint('nutrition recipe delete failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionRecipeDeleteFailed('$e'));
+        showTopBanner(context, l10n.nutritionRecipeDeleteFailed(friendlyError(l10n, e)));
       }
     }
   }
@@ -745,8 +752,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
       await widget.store.deleteLocal(e.id);
       await _maybeSync();
     } catch (err) {
+      debugPrint('nutrition delete failed: $err');
       if (mounted) {
-        showTopBanner(context, l10n.nutritionDeleteFailed('$err'));
+        showTopBanner(context, l10n.nutritionDeleteFailed(friendlyError(l10n, err)));
       }
     }
   }

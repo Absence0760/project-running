@@ -731,6 +731,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorGeneric => 'Something went wrong. Please try again.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'You need to be signed in to do that. Sign in and try again.';
+
+  @override
   String get signInTitle => 'Sign In';
 
   @override

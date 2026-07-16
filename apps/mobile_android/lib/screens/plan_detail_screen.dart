@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -402,9 +403,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       showTopBanner(context, l10n.planDetailReplanApplied(changes.length));
       await _load();
     } catch (e) {
+      debugPrint('plan detail bulk failed: $e');
       if (!mounted) return;
       setState(() => _bulkBusy = false);
-      showTopBanner(context, l10n.planDetailBulkFailed(e.toString()));
+      showTopBanner(context, l10n.planDetailBulkFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -444,9 +446,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           context, l10n.planDetailDuplicateWeekDone(week.weekIndex + 1));
       await _load();
     } catch (e) {
+      debugPrint('plan detail bulk failed: $e');
       if (!mounted) return;
       setState(() => _bulkBusy = false);
-      showTopBanner(context, l10n.planDetailBulkFailed(e.toString()));
+      showTopBanner(context, l10n.planDetailBulkFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -505,7 +508,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       debugPrint('publishPlanAsTemplate failed: $e\n$s');
       if (!mounted) return;
       setState(() => _publishing = false);
-      showTopBanner(context, l10n.planDetailPublishFailed(e.toString()));
+      showTopBanner(context, l10n.planDetailPublishFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -544,7 +547,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       debugPrint('publishPlanToLibrary failed: $e\n$s');
       if (!mounted) return;
       setState(() => _libraryBusy = false);
-      showTopBanner(context, l10n.planDetailPublishLibraryFailed(e.toString()));
+      showTopBanner(context, l10n.planDetailPublishLibraryFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -567,7 +570,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       debugPrint('unpublishFromLibrary failed: $e\n$s');
       if (!mounted) return;
       setState(() => _libraryBusy = false);
-      showTopBanner(context, l10n.planDetailUnpublishFailed(e.toString()));
+      showTopBanner(context, l10n.planDetailUnpublishFailed(friendlyError(l10n, e)));
     }
   }
 

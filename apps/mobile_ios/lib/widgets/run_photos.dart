@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth_error.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
@@ -256,10 +257,11 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
         _uploading = false;
       });
     } catch (e) {
+      debugPrint('run photos upload error: $e');
       if (!mounted) return;
       setState(() => _uploading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).runPhotosUploadError('$e'));
+          context, AppLocalizations.of(context).runPhotosUploadError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -289,9 +291,10 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _photos = _photos.where((q) => q.id != p.id).toList());
     } catch (e) {
+      debugPrint('run photos delete error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runPhotosDeleteError('$e'));
+          context, AppLocalizations.of(context).runPhotosDeleteError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -327,9 +330,10 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
             .toList();
       });
     } catch (e) {
+      debugPrint('run photos caption error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runPhotosCaptionError('$e'));
+          context, AppLocalizations.of(context).runPhotosCaptionError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

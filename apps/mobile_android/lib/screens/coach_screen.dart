@@ -740,9 +740,10 @@ class _CoachScreenState extends State<CoachScreen> {
       await widget.api.deleteCoachArchive(archivedAt: t, planId: _planId);
       return true;
     } catch (e) {
+      debugPrint('coach archive delete failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).coachArchiveDeleteFailed('$e'));
+            context, AppLocalizations.of(context).coachArchiveDeleteFailed(friendlyError(AppLocalizations.of(context), e)));
       }
       return false;
     }

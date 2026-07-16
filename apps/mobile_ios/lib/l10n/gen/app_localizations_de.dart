@@ -737,6 +737,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Dafür musst du angemeldet sein. Melde dich an und versuche es erneut.';
+
+  @override
   String get signInTitle => 'Anmelden';
 
   @override

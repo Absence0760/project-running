@@ -1325,6 +1325,12 @@ abstract class AppLocalizations {
   /// **'Something went wrong. Please try again.'**
   String get authErrorGeneric;
 
+  /// Friendly error shown when an action requires a signed-in account
+  ///
+  /// In en, this message translates to:
+  /// **'You need to be signed in to do that. Sign in and try again.'**
+  String get authErrorNotSignedIn;
+
   /// AppBar title for the sign-in screen
   ///
   /// In en, this message translates to:

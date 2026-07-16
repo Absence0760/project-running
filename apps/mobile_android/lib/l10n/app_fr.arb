@@ -203,6 +203,7 @@
   "authErrorInvalidCredentials": "E-mail ou mot de passe incorrect. Veuillez réessayer.",
   "authErrorRateLimited": "Trop de tentatives. Veuillez patienter un instant et réessayer.",
   "authErrorGeneric": "Une erreur s'est produite. Veuillez réessayer.",
+  "authErrorNotSignedIn": "Vous devez être connecté pour faire cela. Connectez-vous et réessayez.",
   "signInTitle": "Se connecter",
   "signInHeadline": "Synchronisez vos courses sur tous vos appareils",
   "signInSubtitle": "Connectez-vous pour sauvegarder vos courses et les consulter dans l'app web.",

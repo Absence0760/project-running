@@ -7,7 +7,13 @@ import 'l10n/gen/app_localizations.dart';
 /// `AuthApiException` toString) is developer jargon no end user should
 /// read — classify it into one of these instead so the banner can tell
 /// "wrong password" from "offline" from "rate-limited".
-enum AuthErrorKind { offline, invalidCredentials, rateLimited, generic }
+enum AuthErrorKind {
+  offline,
+  invalidCredentials,
+  rateLimited,
+  notSignedIn,
+  generic,
+}
 
 /// Classify an arbitrary auth exception. Structural / duck-typed: reads
 /// the error's `code` + `statusCode` when present (Supabase's
@@ -39,6 +45,10 @@ AuthErrorKind classifyAuthError(Object error) {
     return AuthErrorKind.invalidCredentials;
   }
 
+  // ApiClient guards throw Exception('Not authenticated') when an action
+  // needs a session — actionable ("sign in"), so don't collapse to generic.
+  if (msg.contains('not authenticated')) return AuthErrorKind.notSignedIn;
+
   return AuthErrorKind.generic;
 }
 
@@ -53,6 +63,9 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
       return l10n.authErrorInvalidCredentials;
     case AuthErrorKind.rateLimited:
       return l10n.authErrorRateLimited;
+    // "Sign in to do this" makes no sense on the sign-in screens
+    // themselves — collapse to generic there.
+    case AuthErrorKind.notSignedIn:
     case AuthErrorKind.generic:
       return l10n.authErrorGeneric;
   }
@@ -70,6 +83,8 @@ String friendlyError(AppLocalizations l10n, Object error) {
       return l10n.authErrorOffline;
     case AuthErrorKind.rateLimited:
       return l10n.authErrorRateLimited;
+    case AuthErrorKind.notSignedIn:
+      return l10n.authErrorNotSignedIn;
     case AuthErrorKind.invalidCredentials:
     case AuthErrorKind.generic:
       return l10n.authErrorGeneric;

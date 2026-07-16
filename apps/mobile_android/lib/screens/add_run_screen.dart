@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -187,10 +188,11 @@ class _AddRunScreenState extends State<AddRunScreen> {
     try {
       await widget.runStore.save(run);
     } catch (e) {
+      debugPrint('add run save failed: $e');
       if (!mounted) return;
       setState(() => _saving = false);
       showTopBanner(
-          context, AppLocalizations.of(context).addRunSaveFailed(e.toString()));
+          context, AppLocalizations.of(context).addRunSaveFailed(friendlyError(AppLocalizations.of(context), e)));
       return;
     }
 

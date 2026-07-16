@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../route_markers.dart';
 import '../route_snap.dart';
@@ -200,10 +201,11 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       }
       await _reload();
     } catch (e) {
+      debugPrint('route marker save failed: $e');
       if (mounted) {
         showTopBanner(
           context,
-          AppLocalizations.of(context).routeMarkerSaveFailed(e.toString()),
+          AppLocalizations.of(context).routeMarkerSaveFailed(friendlyError(AppLocalizations.of(context), e)),
         );
       }
     }
@@ -235,8 +237,9 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       await api.deleteRouteMarker(row.id);
       await _reload();
     } catch (e) {
+      debugPrint('route marker delete failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.routeMarkerDeleteFailed(e.toString()));
+        showTopBanner(context, l10n.routeMarkerDeleteFailed(friendlyError(l10n, e)));
       }
     }
   }

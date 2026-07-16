@@ -6,6 +6,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../auth_error.dart';
 import '../goals.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -760,7 +761,8 @@ class _RunsScreenState extends State<RunsScreen> {
         lastError = l10n.historySyncTrackFailed(failed.length);
       }
     } catch (e) {
-      lastError = e.toString();
+      debugPrint('RunsScreen sync failed: $e');
+      lastError = friendlyError(l10n, e);
     }
 
     setState(() => _syncing = false);

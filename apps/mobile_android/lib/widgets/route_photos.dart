@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth_error.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
@@ -195,9 +196,10 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
         _pendingCaptionCtrl.text = '';
       });
     } catch (e) {
+      debugPrint('route photos picker error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).routePhotosPickerError('$e'));
+          context, AppLocalizations.of(context).routePhotosPickerError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -231,10 +233,11 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
         _uploading = false;
       });
     } catch (e) {
+      debugPrint('route photos upload error: $e');
       if (!mounted) return;
       setState(() => _uploading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).routePhotosUploadError('$e'));
+          context, AppLocalizations.of(context).routePhotosUploadError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -264,9 +267,10 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _photos = _photos.where((q) => q.id != p.id).toList());
     } catch (e) {
+      debugPrint('route photos delete error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).routePhotosDeleteError('$e'));
+          context, AppLocalizations.of(context).routePhotosDeleteError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -303,9 +307,10 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
             .toList();
       });
     } catch (e) {
+      debugPrint('route photos caption error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).routePhotosCaptionError('$e'));
+          context, AppLocalizations.of(context).routePhotosCaptionError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

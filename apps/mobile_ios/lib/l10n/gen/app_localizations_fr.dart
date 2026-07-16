@@ -739,6 +739,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Une erreur s\'est produite. Veuillez réessayer.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Vous devez être connecté pour faire cela. Connectez-vous et réessayez.';
+
+  @override
   String get signInTitle => 'Se connecter';
 
   @override

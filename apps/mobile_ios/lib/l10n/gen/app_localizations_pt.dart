@@ -737,6 +737,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -11838,6 +11842,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
+
+  @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
 
   @override
   String get signInTitle => 'Entrar';

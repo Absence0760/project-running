@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -62,8 +63,9 @@ class _PlansScreenState extends State<PlansScreen> {
     try {
       await action();
     } catch (e) {
+      debugPrint('plans action failed: $e');
       if (mounted) {
-        showTopBanner(context, AppLocalizations.of(context).plansActionFailed('$e'));
+        showTopBanner(context, AppLocalizations.of(context).plansActionFailed(friendlyError(AppLocalizations.of(context), e)));
       }
       return;
     }

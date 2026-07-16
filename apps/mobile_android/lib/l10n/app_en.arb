@@ -1006,6 +1006,10 @@
   "@authErrorGeneric": {
     "description": "Friendly fallback auth error shown when sign-in/sign-up fails for an unrecognised reason"
   },
+  "authErrorNotSignedIn": "You need to be signed in to do that. Sign in and try again.",
+  "@authErrorNotSignedIn": {
+    "description": "Friendly error shown when an action requires a signed-in account"
+  },
   "signInTitle": "Sign In",
   "@signInTitle": {
     "description": "AppBar title for the sign-in screen"

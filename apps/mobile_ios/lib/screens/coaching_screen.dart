@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../auth_error.dart';
 import '../coach_load.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
@@ -80,10 +81,11 @@ class _CoachingScreenState extends State<CoachingScreen> {
         _loading = false;
       });
     } catch (e) {
+      debugPrint('coaching load error: $e');
       if (!mounted) return;
       setState(() => _loading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).coachingLoadError('$e'));
+          context, AppLocalizations.of(context).coachingLoadError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -110,8 +112,9 @@ class _CoachingScreenState extends State<CoachingScreen> {
       if (!mounted) return;
       setState(() => _pending = pending);
     } catch (e) {
+      debugPrint('coaching create invite error: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.coachingCreateInviteError('$e'));
+      showTopBanner(context, l10n.coachingCreateInviteError(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _minting = false);
     }
@@ -127,8 +130,9 @@ class _CoachingScreenState extends State<CoachingScreen> {
       if (!mounted) return;
       setState(() => _pending = _pending.where((p) => p.id != inv.id).toList());
     } catch (e) {
+      debugPrint('coaching revoke invite error: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.coachingRevokeInviteError('$e'));
+      showTopBanner(context, l10n.coachingRevokeInviteError(friendlyError(l10n, e)));
     }
   }
 
@@ -144,8 +148,9 @@ class _CoachingScreenState extends State<CoachingScreen> {
       setState(
           () => _athletes = _athletes.where((a) => a.id != link.id).toList());
     } catch (e) {
+      debugPrint('coaching remove athlete error: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.coachingRemoveAthleteError('$e'));
+      showTopBanner(context, l10n.coachingRemoveAthleteError(friendlyError(l10n, e)));
     }
   }
 
@@ -160,8 +165,9 @@ class _CoachingScreenState extends State<CoachingScreen> {
       if (!mounted) return;
       setState(() => _coaches = _coaches.where((c) => c.id != link.id).toList());
     } catch (e) {
+      debugPrint('coaching end link error: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.coachingEndLinkError('$e'));
+      showTopBanner(context, l10n.coachingEndLinkError(friendlyError(l10n, e)));
     }
   }
 

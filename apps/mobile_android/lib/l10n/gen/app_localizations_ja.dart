@@ -713,6 +713,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
 
   @override
+  String get authErrorNotSignedIn => 'この操作にはサインインが必要です。サインインしてからもう一度お試しください。';
+
+  @override
   String get signInTitle => 'サインイン';
 
   @override

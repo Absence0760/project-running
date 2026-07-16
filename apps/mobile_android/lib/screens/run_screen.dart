@@ -18,6 +18,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../auth_error.dart';
 import '../audio_cues.dart';
 import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
@@ -1079,7 +1080,7 @@ class _RunScreenState extends State<RunScreen> {
       // so a Share.share regression is observable in dev/release
       // logs without us reproducing the user's exact moment.
       debugPrint('Share.share live link failed: $e');
-      if (mounted) _showTopBanner(_l10n.runCouldNotShareLink('$e'));
+      if (mounted) _showTopBanner(_l10n.runCouldNotShareLink(friendlyError(_l10n, e)));
     }
   }
 

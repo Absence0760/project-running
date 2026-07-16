@@ -255,24 +255,30 @@ void main() {
       expect(msg, contains('creating clubs too quickly'));
     });
 
-    test('RLS denial (42501) surfaces verbatim — debugging info preserved',
-        () {
+    // The raw exception used to be interpolated into this string so a
+    // developer could read an RLS denial off the banner. That put SDK
+    // jargon in front of end users (issue #240), so the detail moved to
+    // debugPrint and the user gets classified copy — the information is
+    // preserved, just not in the UI. These cases pin that it's the
+    // generic copy and NOT a mis-classification as the rate-limit one.
+    test('RLS denial (42501) → generic copy, not the rate-limit message', () {
       final msg = formatSaveRouteError(PostgrestException(
         message: 'permission denied for table routes',
         code: '42501',
       ));
-      expect(msg, 'Save failed: PostgrestException(message: '
-          'permission denied for table routes, code: 42501, '
-          'details: null, hint: null)');
+      expect(msg, 'Save failed. Please try again.');
       expect(msg, isNot(contains('too quickly')));
+      expect(msg, isNot(contains('PostgrestException')));
+      expect(msg, isNot(contains('permission denied')));
     });
 
-    test('non-PostgrestException (network etc.) surfaces verbatim', () {
+    test('non-PostgrestException (network etc.) → generic copy, no jargon', () {
       final msg = formatSaveRouteError(Exception('connection refused'));
-      expect(msg, 'Save failed: Exception: connection refused');
+      expect(msg, 'Save failed. Please try again.');
+      expect(msg, isNot(contains('Exception')));
     });
 
-    test('a non-rate-limit P0001 still surfaces verbatim', () {
+    test('a non-rate-limit P0001 is not mistaken for the rate-limit one', () {
       // The helper is strict about both the SQLSTATE AND the message
       // format. A P0001 raised by some other trigger with a different
       // shape must NOT pretend to be the rate-limit one.
@@ -280,8 +286,8 @@ void main() {
         message: 'some other trigger said no',
         code: 'P0001',
       ));
-      expect(msg, contains('Save failed:'));
-      expect(msg, contains('some other trigger said no'));
+      expect(msg, 'Save failed. Please try again.');
+      expect(msg, isNot(contains('some other trigger said no')));
       expect(msg, isNot(contains('too quickly')));
     });
 
@@ -334,14 +340,14 @@ void main() {
     });
 
     test(
-        'unrelated StateError still surfaces verbatim — only the bootstrap '
-        'signature is translated, so debugging info isn\'t hidden', () {
+        'unrelated StateError is not translated into the bootstrap '
+        'message — only the bootstrap signature is', () {
       // Make sure we don't over-translate: a StateError unrelated to
       // the Supabase bootstrap (e.g. someone calling a method on a
-      // closed stream) should still hit the debug-friendly fallback.
+      // closed stream) must not claim the server is unreachable.
       final msg =
           formatSaveRouteError(StateError('Bad state: stream is closed'));
-      expect(msg, contains('Save failed:'));
+      expect(msg, 'Save failed. Please try again.');
       expect(msg, isNot(contains("Can't reach the server")));
     });
   });

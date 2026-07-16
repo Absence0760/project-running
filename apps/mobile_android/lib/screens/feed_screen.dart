@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../badges.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -182,10 +183,11 @@ class _FeedScreenState extends State<FeedScreen> {
         _loadingMore = false;
       });
     } catch (e) {
+      debugPrint('feed load more failed: $e');
       if (!mounted) return;
       setState(() => _loadingMore = false);
       showTopBanner(
-          context, AppLocalizations.of(context).feedLoadMoreFailed('$e'));
+          context, AppLocalizations.of(context).feedLoadMoreFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -680,10 +682,11 @@ class _EngagementFooterState extends State<_EngagementFooter> {
             ));
       }
     } catch (e) {
+      debugPrint('feed kudos update failed: $e');
       if (!mounted) return;
       setState(() => _eng = prev);
       showTopBanner(
-          context, AppLocalizations.of(context).feedKudosUpdateFailed('$e'));
+          context, AppLocalizations.of(context).feedKudosUpdateFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

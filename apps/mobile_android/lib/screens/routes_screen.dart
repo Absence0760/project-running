@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
@@ -625,12 +626,13 @@ class RoutesScreenState extends State<RoutesScreen> {
     try {
       await api.setRouteStar(route.id, next);
     } catch (e) {
+      debugPrint('routes star update failed: $e');
       // Cloud failed — revert local + surface.
       await widget.routeStore.save(route);
       if (mounted) {
         setState(() {});
         showTopBanner(
-            context, AppLocalizations.of(context).routesStarUpdateFailed('$e'));
+            context, AppLocalizations.of(context).routesStarUpdateFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }
@@ -666,9 +668,10 @@ class RoutesScreenState extends State<RoutesScreen> {
             context, AppLocalizations.of(context).routesImported(route.name));
       }
     } catch (e) {
+      debugPrint('routes import failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).routesImportFailed('$e'));
+            context, AppLocalizations.of(context).routesImportFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     }
   }

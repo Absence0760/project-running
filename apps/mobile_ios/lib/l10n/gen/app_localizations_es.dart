@@ -737,6 +737,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authErrorGeneric => 'Algo salió mal. Inténtalo de nuevo.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Debes iniciar sesión para hacer eso. Inicia sesión e inténtalo de nuevo.';
+
+  @override
   String get signInTitle => 'Iniciar sesión';
 
   @override

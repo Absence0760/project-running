@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../event_category.dart';
 import '../event_gym_template.dart';
 import '../l10n/date_format.dart';
@@ -171,10 +172,11 @@ class _EventFormState extends State<_EventForm> {
       if (!mounted) return;
       Navigator.of(context).pop<String?>('ok');
     } catch (e) {
+      debugPrint('event create failed: $e');
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.toString();
+        _error = friendlyError(AppLocalizations.of(context), e);
       });
     }
   }

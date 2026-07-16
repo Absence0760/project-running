@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:uuid/uuid.dart';
 
+import '../auth_error.dart';
 import '../elevation.dart';
 import '../geocoding.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -327,13 +328,14 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       }
       unawaited(_refreshElevation());
     } catch (e) {
+      debugPrint('route builder routing failed: $e');
       if (!mounted) return;
       // Don't surface stale errors from cancelled passes — only the
       // current generation owns the user-visible banner.
       if (myGen != _routeGeneration) return;
       setState(() => _routing = false);
       showTopBanner(
-          context, AppLocalizations.of(context).routeBuilderRoutingFailed('$e'));
+          context, AppLocalizations.of(context).routeBuilderRoutingFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -746,9 +748,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       if (!mounted) return;
       _map.move(LatLng(pos.latitude, pos.longitude), 15);
     } catch (e) {
+      debugPrint('route builder location unavailable: $e');
       if (!mounted) return;
       showTopBanner(context,
-          AppLocalizations.of(context).routeBuilderLocationUnavailable('$e'));
+          AppLocalizations.of(context).routeBuilderLocationUnavailable(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -1177,9 +1180,9 @@ String _modeLabel(AppLocalizations l10n, RouteBuilderMode m) => switch (m) {
 ///     silently in `main.dart` and a call slipped past the null-guard
 ///     on `apiClient` (defence in depth — the primary fix is to
 ///     leave `api == null` so the user can't reach this path at all).
-///   - Anything else falls through to `Save failed: <toString>` so
-///     debugging information (RLS denials, FK violations, network
-///     errors) isn't hidden by an over-eager translation.
+///   - Anything else falls through to the classified friendly copy;
+///     the raw detail (RLS denials, FK violations, network errors)
+///     stays in debugPrint only.
 String formatSaveRouteError(Object e, [BuildContext? context]) {
   if (e is PostgrestException) {
     final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
@@ -1198,9 +1201,11 @@ String formatSaveRouteError(Object e, [BuildContext? context]) {
         ? AppLocalizations.of(context).routeBuilderServerUnreachable
         : "Can't reach the server. Sign in or check your connection and try again.";
   }
+  debugPrint('route builder save failed: $e');
   return context != null
-      ? AppLocalizations.of(context).routeBuilderSaveFailed('$e')
-      : 'Save failed: $e';
+      ? AppLocalizations.of(context)
+          .routeBuilderSaveFailed(friendlyError(AppLocalizations.of(context), e))
+      : 'Save failed. Please try again.';
 }
 
 String _surfaceFor(RouteBuilderMode mode) {

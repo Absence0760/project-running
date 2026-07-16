@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../preferences.dart';
@@ -166,9 +167,10 @@ class _GearFormSheetState extends State<_GearFormSheet> {
         _wearArea = null;
       });
     } catch (e) {
+      debugPrint('gear wear log add error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).gearWearLogAddError('$e'));
+          context, AppLocalizations.of(context).gearWearLogAddError(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _wearAdding = false);
     }
@@ -184,9 +186,10 @@ class _GearFormSheetState extends State<_GearFormSheet> {
             _wearLogs = _wearLogs.where((l) => l.id != log.id).toList());
       }
     } catch (e) {
+      debugPrint('gear wear log delete error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).gearWearLogDeleteError('$e'));
+          context, AppLocalizations.of(context).gearWearLogDeleteError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -267,10 +270,11 @@ class _GearFormSheetState extends State<_GearFormSheet> {
         ),
       );
     } catch (e) {
+      debugPrint('gear form save error: $e');
       if (!mounted) return;
       setState(() => _saving = false);
       showTopBanner(
-          context, AppLocalizations.of(context).gearFormSaveError('$e'));
+          context, AppLocalizations.of(context).gearFormSaveError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

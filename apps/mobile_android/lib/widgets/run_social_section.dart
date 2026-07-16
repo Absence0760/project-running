@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../social_service.dart';
@@ -133,10 +134,11 @@ class _RunSocialSectionState extends State<RunSocialSection> {
             ));
       }
     } catch (e) {
+      debugPrint('run social kudos error: $e');
       if (!mounted) return;
       setState(() => _eng = before);
       showTopBanner(
-          context, AppLocalizations.of(context).runSocialKudosError('$e'));
+          context, AppLocalizations.of(context).runSocialKudosError(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _kudosBusy = false);
     }
@@ -177,9 +179,10 @@ class _RunSocialSectionState extends State<RunSocialSection> {
         );
       });
     } catch (e) {
+      debugPrint('run social post error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runSocialPostError('$e'));
+          context, AppLocalizations.of(context).runSocialPostError(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -216,8 +219,9 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       await widget.api.deleteRunComment(commentId);
       await _load();
     } catch (e) {
+      debugPrint('run social delete error: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.runSocialDeleteError('$e'));
+      showTopBanner(context, l10n.runSocialDeleteError(friendlyError(l10n, e)));
     } finally {
       _deletingComments.remove(commentId);
     }

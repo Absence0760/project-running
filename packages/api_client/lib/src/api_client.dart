@@ -438,6 +438,14 @@ class ApiClient {
     await _client.auth.signOut();
   }
 
+  /// Change the signed-in user's password. Keeps the auth surface on
+  /// the typed client — the settings screen previously called
+  /// `Supabase.instance.client.auth.updateUser` directly.
+  Future<void> updatePassword(String newPassword) async {
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
   /// Delete the signed-in user's account. Invokes the `delete-account`
   /// Edge Function which cascades the deletion through every public
   /// FK to `auth.users` (decisions.md §56). The caller is responsible

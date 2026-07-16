@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../auth_error.dart';
 import '../age_grade.dart';
 import '../backend_timeout.dart';
 import '../calories.dart';
@@ -347,9 +348,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       setState(() => _matchInfo = info);
       showTopBanner(context, AppLocalizations.of(context).runDetailReSnapping);
     } catch (e) {
+      debugPrint('run detail rematch failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runDetailRematchFailed(e.toString()));
+          context, AppLocalizations.of(context).runDetailRematchFailed(friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _rematchBusy = false);
     }
@@ -2148,7 +2150,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           debugPrint('makeRunPublic failed: $e');
           if (!mounted) return;
           showTopBanner(
-              context, AppLocalizations.of(context).runDetailMakePublicFailed(e.toString()));
+              context, AppLocalizations.of(context).runDetailMakePublicFailed(friendlyError(AppLocalizations.of(context), e)));
           return;
         }
       }

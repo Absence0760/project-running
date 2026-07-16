@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../widgets/top_banner.dart';
@@ -51,10 +52,11 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
         _loading = false;
       });
     } catch (e) {
+      debugPrint('gear rotation save failed: $e');
       if (!mounted) return;
       setState(() => _loading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).gearRotationSaveFailed('$e'));
+          context, AppLocalizations.of(context).gearRotationSaveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -67,7 +69,8 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
       await widget.api.createGearRotation(name);
       await _load();
     } catch (e) {
-      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed('$e'));
+      debugPrint('gear rotation save failed: $e');
+      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -81,7 +84,8 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
       await widget.api.renameGearRotation(r.id, name);
       await _load();
     } catch (e) {
-      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed('$e'));
+      debugPrint('gear rotation save failed: $e');
+      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -111,7 +115,8 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
       await widget.api.deleteGearRotation(r.id);
       await _load();
     } catch (e) {
-      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed('$e'));
+      debugPrint('gear rotation save failed: $e');
+      if (mounted) showTopBanner(context, l10n.gearRotationSaveFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -270,10 +275,11 @@ class _RotationMembersSheetState extends State<_RotationMembersSheet> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
+      debugPrint('gear rotation save failed: $e');
       if (!mounted) return;
       setState(() => _saving = false);
       showTopBanner(
-          context, AppLocalizations.of(context).gearRotationSaveFailed('$e'));
+          context, AppLocalizations.of(context).gearRotationSaveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

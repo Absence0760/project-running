@@ -84,6 +84,11 @@ void main() {
       );
       expect(classifyAuthError(Exception('boom')), AuthErrorKind.generic);
     });
+
+    test('ApiClient "Not authenticated" guard → notSignedIn', () {
+      expect(classifyAuthError(Exception('Not authenticated')),
+          AuthErrorKind.notSignedIn);
+    });
   });
 
   testWidgets('friendlyAuthError returns the localized message per kind',
@@ -116,5 +121,30 @@ void main() {
         l10n, Exception('AuthApiException(message: nope, statusCode: 500)'));
     expect(rendered.contains('AuthApiException'), isFalse);
     expect(rendered, l10n.authErrorGeneric);
+
+    // "Sign in to do this" makes no sense on the sign-in screens —
+    // notSignedIn collapses to generic there…
+    expect(friendlyAuthError(l10n, Exception('Not authenticated')),
+        l10n.authErrorGeneric);
+  });
+
+  testWidgets('friendlyError surfaces the not-signed-in message',
+      (tester) async {
+    late AppLocalizations l10n;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(builder: (context) {
+        l10n = AppLocalizations.of(context);
+        return const SizedBox();
+      }),
+    ));
+
+    // …but on every other surface (kudos, follow, submit-result) the
+    // ApiClient's Exception('Not authenticated') guard becomes an
+    // actionable "sign in" message, never "Exception: Not authenticated".
+    final rendered = friendlyError(l10n, Exception('Not authenticated'));
+    expect(rendered, l10n.authErrorNotSignedIn);
+    expect(rendered.contains('Exception'), isFalse);
   });
 }

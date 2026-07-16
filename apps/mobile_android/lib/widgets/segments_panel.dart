@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
@@ -147,9 +148,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
         _nameCtrl.clear();
       });
     } catch (e) {
+      debugPrint('segments panel create error: $e');
       if (!mounted) return;
       setState(() => _creating = false);
-      _toast(AppLocalizations.of(context).segmentsPanelCreateError('$e'));
+      _toast(AppLocalizations.of(context).segmentsPanelCreateError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -182,7 +184,8 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
         if (_openSegmentId == seg.id) _openSegmentId = null;
       });
     } catch (e) {
-      _toast(AppLocalizations.of(context).segmentsPanelDeleteError('$e'));
+      debugPrint('segments panel delete error: $e');
+      _toast(AppLocalizations.of(context).segmentsPanelDeleteError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

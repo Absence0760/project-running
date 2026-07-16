@@ -89,8 +89,10 @@ void main() {
       // confirmDismiss returned false → the row stayed.
       expect(find.byKey(const ValueKey('2026-03-01T10:00:00.000Z')),
           findsOneWidget);
-      expect(find.text("Couldn't delete archive: Exception: boom"),
-          findsOneWidget);
+      // The banner carries classified copy, not the raw exception —
+      // the SDK text lives in debugPrint only (issue #240).
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
+      expect(find.textContaining('Exception: boom'), findsNothing);
 
       // Let the banner's auto-dismiss timer fire so it isn't left
       // pending when the widget tree is disposed.
