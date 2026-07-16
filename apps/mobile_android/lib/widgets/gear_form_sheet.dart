@@ -177,6 +177,28 @@ class _GearFormSheetState extends State<_GearFormSheet> {
   Future<void> _deleteWearLog(GearWearLogRow log) async {
     final api = widget.api;
     if (api == null) return;
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.gearWearLogDeleteTitle),
+            content: Text(l10n.gearWearLogDeleteBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.gearFormCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.gearWearLogDeleteConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
     try {
       await api.deleteGearWearLog(log.id);
       if (mounted) {
