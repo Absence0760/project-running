@@ -858,6 +858,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   hrZones: parseHrZones(widget.settingsSync?.service
                       ?.effective<Map>(SettingsKeys.hrZones)),
                   now: now,
+                  settingsSync: widget.settingsSync,
                 ),
                 _buildTrainingLoadChart(runs, now, loadSeries),
                 if (_hasRecentLift(now)) _gymReadinessNote(theme, l10n),
