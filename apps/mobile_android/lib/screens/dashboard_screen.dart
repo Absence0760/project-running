@@ -57,6 +57,12 @@ class DashboardScreen extends StatefulWidget {
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
 
+  /// Starts a run from the zero-runs welcome empty state, wired by the host
+  /// (`home_screen`) to the same page jump the centre Log FAB performs
+  /// (`_pageRun`). Null when there's no host able to reach the recorder, in
+  /// which case the "Start a run" affordance is hidden rather than dead.
+  final VoidCallback? onStartRun;
+
   const DashboardScreen({
     super.key,
     this.apiClient,
@@ -67,6 +73,7 @@ class DashboardScreen extends StatefulWidget {
     required this.foodStore,
     required this.preferences,
     this.settingsSync,
+    this.onStartRun,
   });
 
   @override
@@ -631,6 +638,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: _WelcomeEmpty(
                     theme: theme,
+                    onStartRun: widget.onStartRun,
                     onAddGoal: _newGoal,
                     onImport: _openImport,
                   ),
@@ -1009,10 +1017,12 @@ class _SectionHeader extends StatelessWidget {
 
 class _WelcomeEmpty extends StatelessWidget {
   final ThemeData theme;
+  final VoidCallback? onStartRun;
   final VoidCallback onAddGoal;
   final VoidCallback onImport;
   const _WelcomeEmpty({
     required this.theme,
+    required this.onStartRun,
     required this.onAddGoal,
     required this.onImport,
   });
@@ -1040,7 +1050,21 @@ class _WelcomeEmpty extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            // Two side-by-side actions — primary "Set a goal" + the
+            // Primary CTA: start recording. The welcome copy promises
+            // "record a run" as the first path, so the empty state leads
+            // with it (the goal / import handles used to be the only
+            // actions, leaving the promised recording path with no
+            // affordance). Hidden when the host can't reach the recorder
+            // (onStartRun null) rather than shown as a dead button.
+            if (onStartRun != null) ...[
+              FilledButton.icon(
+                onPressed: onStartRun,
+                icon: const Icon(Icons.directions_run),
+                label: Text(l10n.dashboardStartRun),
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Two side-by-side secondary actions — "Set a goal" + the
             // discoverability handle to bulk-import a Strava / Garmin /
             // Health Connect history (the empty-state used to leave
             // import buried under Settings).

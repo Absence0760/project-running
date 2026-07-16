@@ -244,6 +244,49 @@ void main() {
       expect(find.text('Import runs'), findsOneWidget);
     });
 
+    testWidgets(
+        'empty state shows a Start a run action wired to the recorder when onStartRun is provided',
+        (tester) async {
+      // #253: the welcome copy promises "record a run" but the empty
+      // state used to only wire Set-a-goal / Import. With a host-provided
+      // onStartRun the primary "Start a run" CTA renders and fires the
+      // callback (home_screen jumps to the keep-alive recorder page).
+      final s = await _makeStores();
+      var started = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: DashboardScreen(
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            gymStore: LocalGymStore(),
+            foodStore: LocalFoodStore(),
+            preferences: s.prefs,
+            onStartRun: () => started++,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Start a run'), findsOneWidget);
+      await tester.tap(find.text('Start a run'));
+      await tester.pump();
+      expect(started, 1);
+    });
+
+    testWidgets('empty state hides Start a run when no onStartRun host is wired',
+        (tester) async {
+      // Fail-closed: with no host able to reach the recorder the CTA is
+      // hidden rather than shown as a dead button.
+      final s = await _makeStores();
+      await _pump(tester,
+          runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
+      expect(find.text('Start a run'), findsNothing);
+      // The other two onboarding paths still render.
+      expect(find.text('Set a goal'), findsOneWidget);
+      expect(find.text('Import runs'), findsOneWidget);
+    });
+
     testWidgets('shows section headers when store has runs', (tester) async {
       // Seed the store on disk before the screen sees it so the notifier
       // never fires during the pump.
