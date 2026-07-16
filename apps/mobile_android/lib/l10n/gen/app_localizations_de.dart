@@ -11113,4 +11113,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage =>
+      'Melde dich an, um diese Funktion zu nutzen.';
+
+  @override
+  String get signInRequiredAction => 'Anmelden';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Der Server ist derzeit nicht erreichbar. Online-Funktionen sind nicht verfügbar.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Melde dich an, um Läufe von Personen zu sehen, denen du folgst.';
 }

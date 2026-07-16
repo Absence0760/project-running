@@ -18,6 +18,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../training_service.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
 /// Truncate a coach message to a sidebar-thread title. Strips repeated
@@ -826,6 +827,17 @@ class _CoachScreenState extends State<CoachScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = theme.colorScheme;
     final hasPlan = _planId != null;
+
+    // The whole chat surface is auth-only (consent stamp, usage cap,
+    // message persistence) — a signed-out viewer would watch every
+    // RPC silently default and only learn at send time. Fail closed
+    // into the sign-in state instead (issue #237).
+    if (widget.api.userId == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.coachTitle)),
+        body: SignInRequiredState(api: widget.api, onSignedIn: _bootstrap),
+      );
+    }
 
     // GDPR Art 6(1)(a) gate. _consentChecked stays false until the
     // bootstrap fetch settles so we never flash the chat surface

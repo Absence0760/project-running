@@ -271,7 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget? _coachEntry() {
     final api = widget.apiClient;
     final training = widget.training;
-    if (api == null || training == null) return null;
+    if (api == null || api.userId == null || training == null) return null;
     return _CoachEntryCard(
       onTap: () => Navigator.push(
         context,

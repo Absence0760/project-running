@@ -31,6 +31,7 @@ import '../widgets/route_conditions.dart';
 import '../widgets/route_photos.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
 /// Pure helper — filter the viewer's club memberships down to clubs
@@ -427,7 +428,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   Future<void> _toggleBookmark() async {
     final api = widget.apiClient;
-    if (api == null || api.userId == null || _bookmarkBusy) return;
+    if (api == null || _bookmarkBusy) return;
+    if (!await ensureSignedIn(context,
+        viewerId: api?.userId, api: api, onSignedIn: _loadBookmarkState)) {
+      return;
+    }
+    if (!mounted) return;
     final before = _bookmarked ?? false;
     setState(() {
       _bookmarkBusy = true;

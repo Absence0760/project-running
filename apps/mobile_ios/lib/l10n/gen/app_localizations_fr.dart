@@ -11127,4 +11127,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage =>
+      'Connectez-vous pour utiliser cette fonctionnalité.';
+
+  @override
+  String get signInRequiredAction => 'Se connecter';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Impossible de joindre le serveur pour le moment. Les fonctionnalités en ligne sont indisponibles.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Connectez-vous pour voir les courses des personnes que vous suivez.';
 }

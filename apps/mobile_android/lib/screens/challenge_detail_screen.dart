@@ -5,6 +5,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/error_state.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
 String challengeValueLabel(AppLocalizations l10n, String metric, num value) {
@@ -91,6 +92,11 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
 
   Future<void> _join() async {
     if (_busy) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.social.currentUserId, onSignedIn: _load)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await widget.social.joinChallenge(widget.challengeId);

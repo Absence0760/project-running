@@ -7,6 +7,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../recap.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
 /// Year-in-running recap. Mobile mirror of web `/recap/[year]`.
@@ -60,6 +61,10 @@ class _RecapScreenState extends State<RecapScreen> {
   Future<void> _publishAndShare(YearInRunningRecap recap) async {
     final api = widget.api;
     if (api == null || _publishing) return;
+    if (!await ensureSignedIn(context, viewerId: api?.userId, api: api)) {
+      return;
+    }
+    if (!mounted) return;
     final l10n = AppLocalizations.of(context);
     setState(() => _publishing = true);
     try {

@@ -4,6 +4,7 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import 'club_detail_screen.dart';
 
@@ -69,6 +70,11 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
       );
       return;
     }
+    if (!await ensureSignedIn(context,
+        viewerId: widget.social.currentUserId)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;

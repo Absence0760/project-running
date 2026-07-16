@@ -3191,5 +3191,9 @@
   "simWatchAscent": "Ascenso",
   "simWatchDescent": "Descenso",
   "simWatchFixAge": "Antigüedad de la señal",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "signInRequiredMessage": "Inicia sesión para usar esta función.",
+  "signInRequiredAction": "Iniciar sesión",
+  "backendUnavailableMessage": "No se puede conectar con el servidor en este momento. Las funciones en línea no están disponibles.",
+  "feedSignedOutMessage": "Inicia sesión para ver las carreras de las personas que sigues."
 }

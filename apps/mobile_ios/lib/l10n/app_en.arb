@@ -14347,5 +14347,13 @@
   "simWatchDescent": "Descent",
   "simWatchFixAge": "Fix age",
   "simWatchSeconds": "{seconds} s",
-  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}}
+  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}},
+  "signInRequiredMessage": "Sign in to use this feature.",
+  "@signInRequiredMessage": {"description": "Generic body of the shared sign-in-required state on auth-only surfaces"},
+  "signInRequiredAction": "Sign in",
+  "@signInRequiredAction": {"description": "CTA button on the shared sign-in-required state; opens the sign-in screen"},
+  "backendUnavailableMessage": "Can't reach the server right now. Online features are unavailable.",
+  "@backendUnavailableMessage": {"description": "Body of the shared state when the backend is unreachable at launch (no sign-in CTA can help)"},
+  "feedSignedOutMessage": "Sign in to see runs from people you follow.",
+  "@feedSignedOutMessage": {"description": "Body of the sign-in-required state on the following feed"}
 }

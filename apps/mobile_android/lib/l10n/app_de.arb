@@ -3191,5 +3191,9 @@
   "simWatchAscent": "Anstieg",
   "simWatchDescent": "Abstieg",
   "simWatchFixAge": "Alter des Fix",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "signInRequiredMessage": "Melde dich an, um diese Funktion zu nutzen.",
+  "signInRequiredAction": "Anmelden",
+  "backendUnavailableMessage": "Der Server ist derzeit nicht erreichbar. Online-Funktionen sind nicht verfügbar.",
+  "feedSignedOutMessage": "Melde dich an, um Läufe von Personen zu sehen, denen du folgst."
 }

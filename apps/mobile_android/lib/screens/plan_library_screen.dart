@@ -7,7 +7,9 @@ import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
+import '../auth_error.dart';
 import '../widgets/error_state.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
 
@@ -27,6 +29,7 @@ class _PlanLibraryScreenState extends State<PlanLibraryScreen> {
   List<PublicPlanLibraryEntry> _plans = const [];
   bool _loading = true;
   bool _error = false;
+  bool _signedOut = false;
   String _query = '';
   Timer? _debounce;
 
@@ -46,8 +49,22 @@ class _PlanLibraryScreenState extends State<PlanLibraryScreen> {
     setState(() {
       _loading = true;
       _error = false;
+      _signedOut = false;
     });
     try {
+      // The training_plans template read policy requires authenticated —
+      // an anon read returns 0 rows with no error, which rendered as a
+      // false "No published plans yet.". Show the sign-in state instead
+      // (issue #237). Inside the try so a pre-init bootstrap StateError
+      // still lands on the error state rather than masquerading as a
+      // signed-out viewer.
+      if (widget.training.currentUserId == null) {
+        setState(() {
+          _signedOut = true;
+          _loading = false;
+        });
+        return;
+      }
       final plans = await widget.training
           .fetchPublicPlanLibrary(query: _query)
           .timeout(kBackendLoadTimeout);
@@ -92,7 +109,9 @@ class _PlanLibraryScreenState extends State<PlanLibraryScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _error
+                : _signedOut
+                    ? SignInRequiredState(onSignedIn: _load)
+                    : _error
                     ? ErrorState(message: l10n.planLibraryLoadError, onRetry: _load)
                     : _plans.isEmpty
                         ? Center(
@@ -212,6 +231,11 @@ class _PlanLibraryPreviewScreenState extends State<PlanLibraryPreviewScreen> {
 
   Future<void> _clone() async {
     if (_cloning) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.training.currentUserId)) {
+      return;
+    }
+    if (!mounted) return;
     final l10n = AppLocalizations.of(context);
     setState(() => _cloning = true);
     try {
@@ -227,7 +251,7 @@ class _PlanLibraryPreviewScreenState extends State<PlanLibraryPreviewScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _cloning = false);
-        showTopBanner(context, l10n.planLibraryCloneFailed(e.toString()));
+        showTopBanner(context, l10n.planLibraryCloneFailed(friendlyError(l10n, e)));
       }
     }
   }

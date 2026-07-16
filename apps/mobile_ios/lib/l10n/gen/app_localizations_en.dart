@@ -10990,4 +10990,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Sign in to use this feature.';
+
+  @override
+  String get signInRequiredAction => 'Sign in';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Can\'t reach the server right now. Online features are unavailable.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Sign in to see runs from people you follow.';
 }

@@ -11102,6 +11102,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Faça login para usar este recurso.';
+
+  @override
+  String get signInRequiredAction => 'Entrar';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Não foi possível conectar ao servidor no momento. Os recursos online estão indisponíveis.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Faça login para ver as corridas das pessoas que você segue.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -22200,4 +22214,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Faça login para usar este recurso.';
+
+  @override
+  String get signInRequiredAction => 'Entrar';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Não foi possível conectar ao servidor no momento. Os recursos online estão indisponíveis.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Faça login para ver as corridas das pessoas que você segue.';
 }

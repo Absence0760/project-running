@@ -18611,6 +18611,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{seconds} s'**
   String simWatchSeconds(int seconds);
+
+  /// Generic body of the shared sign-in-required state on auth-only surfaces
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to use this feature.'**
+  String get signInRequiredMessage;
+
+  /// CTA button on the shared sign-in-required state; opens the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get signInRequiredAction;
+
+  /// Body of the shared state when the backend is unreachable at launch (no sign-in CTA can help)
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. Online features are unavailable.'**
+  String get backendUnavailableMessage;
+
+  /// Body of the sign-in-required state on the following feed
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see runs from people you follow.'**
+  String get feedSignedOutMessage;
 }
 
 class _AppLocalizationsDelegate

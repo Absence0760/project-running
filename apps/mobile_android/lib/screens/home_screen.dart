@@ -322,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _LazyKeepAliveTab(
         builder: () => SocialScreen(
           key: const PageStorageKey('social'),
-          api: widget.apiClient ?? ApiClient(),
+          api: widget.apiClient,
           social: widget.social,
           training: widget.training,
           routeStore: widget.routeStore,

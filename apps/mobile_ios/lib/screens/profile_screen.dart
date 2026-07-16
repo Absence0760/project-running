@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -14,6 +15,7 @@ import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/run_track_preview.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import 'club_detail_screen.dart';
 import 'event_detail_screen.dart';
@@ -200,6 +202,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _toggleFollow() async {
     final summary = _summary;
     if (summary == null || _isSelf || _followBusy) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.api?.userId, api: widget.api, onSignedIn: _load)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _followBusy = true);
     final wasFollowing = summary.viewerFollows;
     // Optimistic update
@@ -226,7 +233,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Roll back on failure.
       setState(() => _summary = summary);
       showTopBanner(
-          context, AppLocalizations.of(context).profileFollowUpdateFailed('$e'));
+          context,
+          AppLocalizations.of(context).profileFollowUpdateFailed(
+              friendlyError(AppLocalizations.of(context), e)));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -510,13 +519,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.profileFollowStats(s.followerCount, s.followingCount),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                // The user_follows select is authenticated-only, so a
+                // signed-out viewer's counts are always zero — hide the
+                // line rather than present the zeros as fact.
+                if (widget.api.userId != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.profileFollowStats(s.followerCount, s.followingCount),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

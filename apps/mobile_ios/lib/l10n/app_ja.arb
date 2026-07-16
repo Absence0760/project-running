@@ -3191,5 +3191,9 @@
   "simWatchAscent": "上昇",
   "simWatchDescent": "下降",
   "simWatchFixAge": "測位からの経過",
-  "simWatchSeconds": "{seconds} 秒"
+  "simWatchSeconds": "{seconds} 秒",
+  "signInRequiredMessage": "この機能を使うにはサインインしてください",
+  "signInRequiredAction": "サインイン",
+  "backendUnavailableMessage": "現在サーバーに接続できません。オンライン機能は利用できません",
+  "feedSignedOutMessage": "フォローしている人のランを見るにはサインインしてください"
 }

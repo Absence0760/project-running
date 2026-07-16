@@ -11103,4 +11103,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Inicia sesión para usar esta función.';
+
+  @override
+  String get signInRequiredAction => 'Iniciar sesión';
+
+  @override
+  String get backendUnavailableMessage =>
+      'No se puede conectar con el servidor en este momento. Las funciones en línea no están disponibles.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Inicia sesión para ver las carreras de las personas que sigues.';
 }

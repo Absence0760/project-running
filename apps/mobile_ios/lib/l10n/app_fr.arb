@@ -3191,5 +3191,9 @@
   "simWatchAscent": "Montée",
   "simWatchDescent": "Descente",
   "simWatchFixAge": "Âge de la position",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "signInRequiredMessage": "Connectez-vous pour utiliser cette fonctionnalité.",
+  "signInRequiredAction": "Se connecter",
+  "backendUnavailableMessage": "Impossible de joindre le serveur pour le moment. Les fonctionnalités en ligne sont indisponibles.",
+  "feedSignedOutMessage": "Connectez-vous pour voir les courses des personnes que vous suivez."
 }

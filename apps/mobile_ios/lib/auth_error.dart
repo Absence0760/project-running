@@ -76,6 +76,20 @@ String friendlyError(AppLocalizations l10n, Object error) {
   }
 }
 
+/// True when [error] is the data layer's signed-out rejection — the
+/// `StateError('not signed in')` guard, a service's 'Not authenticated'
+/// throw, a 401, or the Postgres permission failure (42501) an anon
+/// request gets from an authenticated-only grant. Callers route these
+/// into the shared sign-in-required state instead of a generic error +
+/// a Retry that can never succeed.
+bool isSignedOutError(Object error) {
+  final code = _stringProp(error, (e) => e.code)?.toLowerCase();
+  if (code == '42501') return true;
+  if (_statusCode(error) == 401) return true;
+  final msg = error.toString().toLowerCase();
+  return msg.contains('not signed in') || msg.contains('not authenticated');
+}
+
 bool _looksOffline(String msg) =>
     msg.contains('failed host lookup') ||
     msg.contains('socketexception') ||

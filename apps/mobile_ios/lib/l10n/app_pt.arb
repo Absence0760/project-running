@@ -3191,5 +3191,9 @@
   "simWatchAscent": "Subida",
   "simWatchDescent": "Descida",
   "simWatchFixAge": "Idade do sinal",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "signInRequiredMessage": "Faça login para usar este recurso.",
+  "signInRequiredAction": "Entrar",
+  "backendUnavailableMessage": "Não foi possível conectar ao servidor no momento. Os recursos online estão indisponíveis.",
+  "feedSignedOutMessage": "Faça login para ver as corridas das pessoas que você segue."
 }
