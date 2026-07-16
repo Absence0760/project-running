@@ -2997,6 +2997,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runHeatmapEmptyBody => 'GPSトラック付きのランを記録またはインポートすると、ここに表示されます。';
 
   @override
+  String get runHeatmapSignedOutTitle => 'サインインして同期済みのヒートマップを表示';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'この端末で記録したランはここに表示されます。同期済みのランも含めるにはサインインしてください。';
+
+  @override
   String get runHeatmapErrorTitle => 'ヒートマップを読み込めませんでした';
 
   @override

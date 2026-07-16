@@ -8,6 +8,7 @@ import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../local_run_store.dart';
 import '../run_heatmap.dart';
 import '../tile_cache.dart';
 import '../widgets/live_run_map.dart' show currentTileUrl;
@@ -28,6 +29,13 @@ import '../widgets/live_run_map.dart' show currentTileUrl;
 class RunHeatmapScreen extends StatefulWidget {
   final ApiClient api;
 
+  /// Local runs, whose tracks are carried inline. Signed-out recording
+  /// is a supported flow, so these are a first-class source — reading
+  /// only the server told a signed-out runner with plenty of local GPS
+  /// tracks that they had never run anywhere (issue #239). Null only
+  /// where a caller has no store to hand.
+  final LocalRunStore? runStore;
+
   /// Test seam — supplies the runs newest-first without the network.
   /// Production callers leave null (the screen calls `api.getRuns`).
   final Future<List<cm.Run>> Function()? fetchRunsFn;
@@ -39,6 +47,7 @@ class RunHeatmapScreen extends StatefulWidget {
   const RunHeatmapScreen({
     super.key,
     required this.api,
+    this.runStore,
     this.fetchRunsFn,
     this.fetchTrackFn,
   });
@@ -77,6 +86,9 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
   int _totalWithTracks = 0;
   bool _mapReady = false;
   bool _didFit = false;
+  int _localCount = 0;
+
+  bool get _signedIn => widget.api.userId != null;
 
   double _zoom = 11;
 
@@ -111,7 +123,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
           final t = await _fetchTrack(paths[i]);
           if (t.isNotEmpty) {
             out.add(t);
-            if (mounted) setState(() => _trackCount = out.length);
+            if (mounted) setState(() => _trackCount = _localCount + out.length);
           }
         } catch (e) {
           // L4 best-effort — a single missing/corrupt blob must not abort
@@ -137,19 +149,40 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
       });
     }
     try {
-      final runs = await _fetchRuns();
-      final paths = <String>[];
-      for (final r in runs) {
-        final url = r.metadata?['track_url'] as String?;
-        if (url != null && url.isNotEmpty) paths.add(url);
-        if (paths.length >= _maxTracks) break;
+      // Local tracks first: they're already on disk, need no session, and
+      // a synced run's local copy saves a download of the same trace.
+      final localTracks = <List<cm.Waypoint>>[];
+      final localIds = <String>{};
+      for (final r in widget.runStore?.runs ?? const <cm.Run>[]) {
+        if (r.track.length < 2) continue;
+        localTracks.add(r.track);
+        localIds.add(r.id);
+        if (localTracks.length >= _maxTracks) break;
       }
-      _totalWithTracks = paths.length;
-      if (paths.isEmpty) {
+      _localCount = localTracks.length;
+      if (mounted && localTracks.isNotEmpty) {
+        setState(() => _trackCount = localTracks.length);
+      }
+
+      // Server runs only add what isn't already local. Signed out this
+      // returns nothing (owner-only select), which is fine — the local
+      // tracks above still light up the map.
+      final paths = <String>[];
+      if (_signedIn) {
+        final runs = await _fetchRuns();
+        for (final r in runs) {
+          if (localIds.contains(r.id)) continue;
+          final url = r.metadata?['track_url'] as String?;
+          if (url != null && url.isNotEmpty) paths.add(url);
+          if (localTracks.length + paths.length >= _maxTracks) break;
+        }
+      }
+      _totalWithTracks = localTracks.length + paths.length;
+      if (_totalWithTracks == 0) {
         if (mounted) setState(() => _empty = true);
         return;
       }
-      final tracks = await _downloadTracks(paths);
+      final tracks = [...localTracks, ...await _downloadTracks(paths)];
       final heatTracks = [
         for (final t in tracks)
           [for (final w in t) HeatLatLng(w.lat, w.lng)],
@@ -355,11 +388,20 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
                     Icon(Icons.local_fire_department,
                         size: 48, color: theme.colorScheme.outline),
                     const SizedBox(height: 8),
-                    Text(l10n.runHeatmapEmptyTitle,
+                    // Signed out with nothing local, "No mapped runs yet"
+                    // would be a claim we can't make — the server rows we
+                    // can't read may well exist (issue #239).
+                    Text(
+                        _signedIn
+                            ? l10n.runHeatmapEmptyTitle
+                            : l10n.runHeatmapSignedOutTitle,
+                        textAlign: TextAlign.center,
                         style: theme.textTheme.titleMedium),
                     const SizedBox(height: 4),
                     Text(
-                      l10n.runHeatmapEmptyBody,
+                      _signedIn
+                          ? l10n.runHeatmapEmptyBody
+                          : l10n.runHeatmapSignedOutBody,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),

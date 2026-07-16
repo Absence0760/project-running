@@ -96,6 +96,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
       builder: (_) => RoutesScreen(
         apiClient: widget.apiClient,
         routeStore: widget.routeStore,
+        runStore: widget.runStore,
         preferences: widget.preferences,
         onStartRun: widget.onStartRun,
         social: widget.social,

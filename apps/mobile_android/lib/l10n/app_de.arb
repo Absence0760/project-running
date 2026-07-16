@@ -876,6 +876,8 @@
   "runHeatmapLoadingProgress": "Deine Läufe werden geladen … {n}/{total}",
   "runHeatmapEmptyTitle": "Noch keine erfassten Läufe",
   "runHeatmapEmptyBody": "Zeichne Läufe mit GPS-Strecken auf oder importiere sie – dann leuchten sie hier auf.",
+  "runHeatmapSignedOutTitle": "Melde dich an, um deine synchronisierte Heatmap zu sehen",
+  "runHeatmapSignedOutBody": "Läufe, die auf diesem Gerät aufgezeichnet wurden, erscheinen hier. Melde dich an, um auch deine synchronisierten Läufe einzubeziehen.",
   "runHeatmapErrorTitle": "Deine Heatmap konnte nicht geladen werden",
   "runHeatmapErrorBody": "Beim Laden deiner Läufe ist etwas schiefgelaufen. Prüfe deine Verbindung und versuche es erneut.",
   "runHeatmapRetry": "Erneut versuchen",

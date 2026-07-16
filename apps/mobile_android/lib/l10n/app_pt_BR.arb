@@ -876,6 +876,8 @@
   "runHeatmapLoadingProgress": "Carregando suas corridas… {n}/{total}",
   "runHeatmapEmptyTitle": "Nenhuma corrida mapeada ainda",
   "runHeatmapEmptyBody": "Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.",
+  "runHeatmapSignedOutTitle": "Entre para ver seu mapa de calor sincronizado",
+  "runHeatmapSignedOutBody": "As corridas gravadas neste dispositivo aparecem aqui. Entre para incluir também suas corridas sincronizadas.",
   "runHeatmapErrorTitle": "Não foi possível carregar seu mapa de calor",
   "runHeatmapErrorBody": "Algo deu errado ao carregar suas corridas. Verifique sua conexão e tente novamente.",
   "runHeatmapRetry": "Tentar novamente",

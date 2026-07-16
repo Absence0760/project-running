@@ -3167,6 +3167,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Record or import runs with GPS tracks and they\'ll light up here.';
 
   @override
+  String get runHeatmapSignedOutTitle => 'Sign in to see your synced heatmap';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Runs recorded on this device show up here. Sign in to include your synced runs too.';
+
+  @override
   String get runHeatmapErrorTitle => 'Couldn\'t load your heatmap';
 
   @override

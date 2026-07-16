@@ -5372,6 +5372,18 @@ abstract class AppLocalizations {
   /// **'Record or import runs with GPS tracks and they\'ll light up here.'**
   String get runHeatmapEmptyBody;
 
+  /// Heatmap empty-state title for a signed-out viewer with no local tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see your synced heatmap'**
+  String get runHeatmapSignedOutTitle;
+
+  /// Heatmap empty-state body for a signed-out viewer — must not claim the user has never run
+  ///
+  /// In en, this message translates to:
+  /// **'Runs recorded on this device show up here. Sign in to include your synced runs too.'**
+  String get runHeatmapSignedOutBody;
+
   /// Error-state title on the personal run-track heatmap when the runs fetch fails
   ///
   /// In en, this message translates to:

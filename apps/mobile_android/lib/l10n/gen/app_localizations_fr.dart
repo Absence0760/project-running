@@ -3203,6 +3203,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'Enregistrez ou importez des courses avec des traces GPS et elles s\'illumineront ici.';
 
   @override
+  String get runHeatmapSignedOutTitle =>
+      'Connecte-toi pour voir ta carte de chaleur synchronisée';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Les courses enregistrées sur cet appareil apparaissent ici. Connecte-toi pour inclure aussi tes courses synchronisées.';
+
+  @override
   String get runHeatmapErrorTitle =>
       'Impossible de charger ta carte de chaleur';
 

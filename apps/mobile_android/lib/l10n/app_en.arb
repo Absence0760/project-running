@@ -4288,6 +4288,14 @@
   "@runHeatmapEmptyBody": {
     "description": "Empty-state body on the personal run-track heatmap"
   },
+  "runHeatmapSignedOutTitle": "Sign in to see your synced heatmap",
+  "@runHeatmapSignedOutTitle": {
+    "description": "Heatmap empty-state title for a signed-out viewer with no local tracks"
+  },
+  "runHeatmapSignedOutBody": "Runs recorded on this device show up here. Sign in to include your synced runs too.",
+  "@runHeatmapSignedOutBody": {
+    "description": "Heatmap empty-state body for a signed-out viewer — must not claim the user has never run"
+  },
   "runHeatmapErrorTitle": "Couldn't load your heatmap",
   "@runHeatmapErrorTitle": {
     "description": "Error-state title on the personal run-track heatmap when the runs fetch fails"

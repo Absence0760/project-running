@@ -3190,6 +3190,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Graba o importa carreras con rutas de GPS y se iluminarán aquí.';
 
   @override
+  String get runHeatmapSignedOutTitle =>
+      'Inicia sesión para ver tu mapa de calor sincronizado';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Las carreras grabadas en este dispositivo aparecen aquí. Inicia sesión para incluir también tus carreras sincronizadas.';
+
+  @override
   String get runHeatmapErrorTitle => 'No se pudo cargar tu mapa de calor';
 
   @override

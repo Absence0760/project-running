@@ -9,12 +9,23 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/local_run_store.dart';
 import '../lib/screens/run_heatmap_screen.dart';
 
-class _FakeApiClient extends ApiClient {}
+/// The screen reads the viewer id to decide whether to fetch server
+/// runs at all, so a fake must declare it rather than falling through
+/// to a real (uninitialised) Supabase read.
+class _FakeApiClient extends ApiClient {
+  _FakeApiClient({this.viewerId = 'u-viewer'});
+  final String? viewerId;
+  @override
+  String? get userId => viewerId;
+}
 
 cm.Run _run(String id, {String? trackUrl}) => cm.Run(
       id: id,
@@ -23,6 +34,15 @@ cm.Run _run(String id, {String? trackUrl}) => cm.Run(
       distanceMetres: 5000,
       source: cm.RunSource.app,
       metadata: trackUrl == null ? null : {'track_url': trackUrl},
+    );
+
+cm.Run _localRun(String id) => cm.Run(
+      id: id,
+      startedAt: DateTime.utc(2026, 1, 2),
+      duration: const Duration(minutes: 30),
+      distanceMetres: 5000,
+      source: cm.RunSource.app,
+      track: _track(),
     );
 
 List<cm.Waypoint> _track() => const [
@@ -35,13 +55,16 @@ Future<void> _pump(
   WidgetTester tester, {
   required Future<List<cm.Run>> Function() fetchRunsFn,
   required Future<List<cm.Waypoint>> Function(String) fetchTrackFn,
+  ApiClient? api,
+  LocalRunStore? runStore,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RunHeatmapScreen(
-        api: _FakeApiClient(),
+        api: api ?? _FakeApiClient(),
+        runStore: runStore,
         fetchRunsFn: fetchRunsFn,
         fetchTrackFn: fetchTrackFn,
       ),
@@ -129,5 +152,97 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.text(l10n.runHeatmapErrorTitle), findsNothing);
     expect(find.text(l10n.runHeatmapLegendSummaryOne(1)), findsOneWidget);
+  });
+
+  // Issue #239: signed-out recording is a supported flow, so the local
+  // store is a first-class source. Reading only the server told a runner
+  // with plenty of local GPS tracks that they had never run anywhere.
+  group('local tracks (issue #239)', () {
+    late Directory dir;
+    late LocalRunStore store;
+
+    setUp(() async {
+      dir = Directory.systemTemp.createTempSync('heatmap_runs_');
+      store = LocalRunStore();
+      await store.init(overrideDirectory: dir);
+    });
+
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    testWidgets('a signed-out viewer\'s local runs still light up the map',
+        (tester) async {
+      await tester.runAsync(() => store.save(_localRun('local-1')));
+      var serverFetches = 0;
+      await _pump(
+        tester,
+        api: _FakeApiClient(viewerId: null),
+        runStore: store,
+        fetchRunsFn: () async {
+          serverFetches++;
+          return const <cm.Run>[];
+        },
+        fetchTrackFn: (_) async => _track(),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // The cells rendered from the local track alone...
+      expect(find.text('No mapped runs yet'), findsNothing);
+      expect(find.text('Sign in to see your synced heatmap'), findsNothing);
+      // ...and signed out we never asked the server for owner-only rows.
+      expect(serverFetches, 0);
+    });
+
+    testWidgets('signed out with nothing local says sign in, not "never ran"',
+        (tester) async {
+      await _pump(
+        tester,
+        api: _FakeApiClient(viewerId: null),
+        runStore: store,
+        fetchRunsFn: () async => const <cm.Run>[],
+        fetchTrackFn: (_) async => _track(),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Sign in to see your synced heatmap'), findsOneWidget);
+      // The old copy claimed a fact we can't know while signed out.
+      expect(find.text('No mapped runs yet'), findsNothing);
+    });
+
+    testWidgets('a synced run is not downloaded twice — local copy wins',
+        (tester) async {
+      await tester.runAsync(() => store.save(_localRun('shared-1')));
+      final downloaded = <String>[];
+      await _pump(
+        tester,
+        runStore: store,
+        fetchRunsFn: () async => [_run('shared-1', trackUrl: 'u/shared-1.gz')],
+        fetchTrackFn: (p) async {
+          downloaded.add(p);
+          return _track();
+        },
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(downloaded, isEmpty);
+    });
+
+    testWidgets('signed in, local and server tracks are unioned',
+        (tester) async {
+      await tester.runAsync(() => store.save(_localRun('local-1')));
+      final downloaded = <String>[];
+      await _pump(
+        tester,
+        runStore: store,
+        fetchRunsFn: () async => [_run('server-1', trackUrl: 'u/server-1.gz')],
+        fetchTrackFn: (p) async {
+          downloaded.add(p);
+          return _track();
+        },
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(downloaded, ['u/server-1.gz']);
+      expect(find.text('No mapped runs yet'), findsNothing);
+    });
   });
 }

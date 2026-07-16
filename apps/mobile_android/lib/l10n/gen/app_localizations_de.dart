@@ -3202,6 +3202,14 @@ class AppLocalizationsDe extends AppLocalizations {
       'Zeichne Läufe mit GPS-Strecken auf oder importiere sie – dann leuchten sie hier auf.';
 
   @override
+  String get runHeatmapSignedOutTitle =>
+      'Melde dich an, um deine synchronisierte Heatmap zu sehen';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Läufe, die auf diesem Gerät aufgezeichnet wurden, erscheinen hier. Melde dich an, um auch deine synchronisierten Läufe einzubeziehen.';
+
+  @override
   String get runHeatmapErrorTitle =>
       'Deine Heatmap konnte nicht geladen werden';
 
