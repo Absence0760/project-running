@@ -78,44 +78,57 @@ class FitnessCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Each stat is Expanded so the row degrades by ellipsizing
+                // labels instead of overflowing — the expanded (tablet)
+                // dashboard mounts this card in a ~half-width grid column.
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    FitnessStat(
-                      label: l10n.fitnessStatVo2Max,
-                      value: fmt(snapshot.vo2Max),
-                      tooltip: l10n.fitnessStatVo2MaxTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatVo2Max,
+                        value: fmt(snapshot.vo2Max),
+                        tooltip: l10n.fitnessStatVo2MaxTooltip,
+                      ),
                     ),
-                    FitnessStat(
-                      label: l10n.fitnessStatVdot,
-                      value: fmt(snapshot.vdot),
-                      tooltip: l10n.fitnessStatVdotTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatVdot,
+                        value: fmt(snapshot.vdot),
+                        tooltip: l10n.fitnessStatVdotTooltip,
+                      ),
                     ),
-                    FitnessStat(
-                      label: l10n.fitnessStatRuns,
-                      value: '${snapshot.qualifyingRunCount}',
-                      tooltip: l10n.fitnessStatRunsTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatRuns,
+                        value: '${snapshot.qualifyingRunCount}',
+                        tooltip: l10n.fitnessStatRunsTooltip,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    FitnessStat(
-                      label: l10n.fitnessStatCtl,
-                      value: fmt(load?.ctl, digits: 0),
-                      tooltip: l10n.fitnessStatCtlTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatCtl,
+                        value: fmt(load?.ctl, digits: 0),
+                        tooltip: l10n.fitnessStatCtlTooltip,
+                      ),
                     ),
-                    FitnessStat(
-                      label: l10n.fitnessStatAtl,
-                      value: fmt(load?.atl, digits: 0),
-                      tooltip: l10n.fitnessStatAtlTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatAtl,
+                        value: fmt(load?.atl, digits: 0),
+                        tooltip: l10n.fitnessStatAtlTooltip,
+                      ),
                     ),
-                    FitnessStat(
-                      label: l10n.fitnessStatTsb,
-                      value: fmt(load?.tsb, digits: 0),
-                      tooltip: l10n.fitnessStatTsbTooltip,
+                    Expanded(
+                      child: FitnessStat(
+                        label: l10n.fitnessStatTsb,
+                        value: fmt(load?.tsb, digits: 0),
+                        tooltip: l10n.fitnessStatTsbTooltip,
+                      ),
                     ),
                   ],
                 ),
