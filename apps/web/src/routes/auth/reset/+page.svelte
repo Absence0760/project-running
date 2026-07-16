@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { checkPasswordPair } from '$lib/core/auth_gates';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let password = $state('');
@@ -53,12 +54,11 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
-		if (password.length < 6) {
-			error = m('authReset.errorTooShort');
-			return;
-		}
-		if (password !== confirmPassword) {
-			error = m('authReset.errorMismatch');
+		const pair = checkPasswordPair(password, confirmPassword);
+		if (!pair.ok) {
+			error = pair.reason === 'too_short'
+				? m('authReset.errorTooShort')
+				: m('authReset.errorMismatch');
 			return;
 		}
 		busy = true;
