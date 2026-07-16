@@ -60,6 +60,23 @@ description: >
      ports via net.ipv4.ip_local_reserved_ports before the first start,
      so the kernel never hands them out as ephemeral source ports
      (explicit binds are unaffected; the sysctl also covers IPv6).
+
+  4. An evanescent holder no probe can see. CI run 29523121481 (e2e
+     shard 2) hit the 54322 bind error on both attempts WITH the
+     port reservation active, and the post-failure dump — taken ~100ms
+     after the second bind failure — showed no container, no stack
+     network, and nothing on any 5432x socket in any state. Whatever
+     held the port (most plausibly a docker-daemon-internal port
+     allocation leaked by attempt 1's own rollback) had already
+     evaporated; the retry just ran too soon (~200ms after cleanup) to
+     benefit. Three changes: (a) each retry now WAITS for holders to
+     clear and then settles a few seconds instead of re-running
+     immediately, (b) a third attempt is preceded by a docker-daemon
+     restart, which drops any daemon-level port allocation that
+     `docker ps` / `docker network ls` / `ss` are all blind to, and
+     (c) forensics are captured immediately after each failed attempt
+     (including `ss -tan` for process-less TIME_WAIT states), because
+     by the end of the job the evidence is gone.
 runs:
   using: composite
   steps:
@@ -147,16 +164,40 @@ runs:
           fi
         }
 
-        for attempt in 1 2; do
+        dump_forensics() {
+          # Captured IMMEDIATELY after a failure — incident 4 showed the
+          # holder can be gone ~100ms later, so an end-of-job dump reads
+          # as "nothing was wrong". -tan (no -p) includes process-less
+          # states like TIME_WAIT that -tnp hides.
+          docker ps -a --format '{{.Names}} {{.Status}} {{.Ports}}' || true
+          ss -tan 2>/dev/null | grep -E '5432[0-9]' || true
+          docker network ls --filter "name=supabase_network_" || true
+        }
+
+        settle_ports() {
+          # Wait for any holder to clear rather than re-running start
+          # immediately (incident 4: the retry fired ~200ms after
+          # cleanup and re-hit a holder that was gone seconds later).
+          # Then give docker's port allocator a moment to settle — the
+          # holder that bit us was invisible to every probe we have.
+          for i in $(seq 1 15); do
+            [ -z "$(stack_holders)" ] && break
+            sleep 2
+          done
+          sleep 5
+        }
+
+        for attempt in 1 2 3; do
           # Gate on the real precondition — no leftover holder — before
           # each attempt. On attempt 1 of a fresh runner this is a no-op;
-          # on attempt 2 it proves the post-failure cleanup actually
+          # on later attempts it proves the post-failure cleanup actually
           # worked (ports AND the docker network it reserves through).
           busy=$(stack_holders)
           if [ -n "$busy" ]; then
             echo "::warning::stack ports/network in use before attempt $attempt:$busy"
             docker ps --format '{{.Names}} {{.Ports}}' || true
             free_ports
+            settle_ports
             busy=$(stack_holders)
             if [ -n "$busy" ]; then
               echo "::error::stack ports/network still in use after cleanup:$busy"
@@ -172,13 +213,25 @@ runs:
             exit 0
           fi
 
-          echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+          echo "::warning::supabase start attempt $attempt failed/timed out; forensics then cleanup"
+          dump_forensics
           free_ports
 
-          if [ "$attempt" = "2" ]; then
-            echo "::error::supabase start failed twice"
-            docker ps -a --format '{{.Names}} {{.Status}} {{.Ports}}' || true
-            ss -tnp 2>/dev/null | grep -E '5432[0-9]' || true
+          if [ "$attempt" = "3" ]; then
+            echo "::error::supabase start failed three times"
             exit 1
+          fi
+
+          settle_ports
+          if [ "$attempt" = "2" ]; then
+            # Last resort before the final attempt: a daemon restart
+            # drops any leaked daemon-internal port allocation that no
+            # container / network / socket probe can see (incident 4).
+            echo "restarting docker before the final attempt"
+            sudo systemctl restart docker 2>/dev/null || true
+            # The restart tears down supabase's compose state mid-flight;
+            # clear the debris so attempt 3 starts from a clean slate.
+            free_ports
+            settle_ports
           fi
         done
