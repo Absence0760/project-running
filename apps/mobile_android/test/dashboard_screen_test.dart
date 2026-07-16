@@ -538,8 +538,62 @@ void main() {
       });
     });
 
-    testWidgets('pins "Ask your coach" at the top when api + training present',
+    testWidgets(
+        'pins "Ask your coach" at the top once the runner has runs (api + training present)',
         (tester) async {
+      // #272: the coach card only renders once the runner has data — seed a
+      // run so the ListView branch (not the welcome empty state) mounts.
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+        final dir = Directory.systemTemp.createTempSync('dashboard_coach_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: _FakeApi(),
+                training: _FakeTraining(null),
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+          // The pinned entry renders at the top and is a real button (it opens
+          // CoachScreen on tap; the coach surface itself needs a live Supabase
+          // instance, which the per-screen coach test covers).
+          expect(find.text('Ask your coach'), findsOneWidget);
+          expect(
+            find.ancestor(
+              of: find.text('Ask your coach'),
+              matching: find.byType(InkWell),
+            ),
+            findsOneWidget,
+          );
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets(
+        'no coach entry on the zero-runs welcome screen even with api + training',
+        (tester) async {
+      // #272: the "Ask your coach" card used to render unconditionally above
+      // the welcome onboarding buttons for a brand-new (zero-runs) user. It
+      // must now be absent on that first screen.
       await tester.runAsync(() async {
         final s = await _makeStores();
         await tester.pumpWidget(
@@ -558,17 +612,8 @@ void main() {
           ),
         );
         await tester.pump();
-        // The pinned entry renders at the top and is a real button (it opens
-        // CoachScreen on tap; the coach surface itself needs a live Supabase
-        // instance, which the per-screen coach test covers).
-        expect(find.text('Ask your coach'), findsOneWidget);
-        expect(
-          find.ancestor(
-            of: find.text('Ask your coach'),
-            matching: find.byType(InkWell),
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Welcome!'), findsOneWidget);
+        expect(find.text('Ask your coach'), findsNothing);
       });
     });
 

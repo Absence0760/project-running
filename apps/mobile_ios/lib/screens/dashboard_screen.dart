@@ -630,11 +630,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? Column(
               children: [
                 if (actionToolbar != null) actionToolbar,
-                if (_coachEntry() case final coach?)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: coach,
-                  ),
+                // #272: no "Ask your coach" card on the brand-new zero-runs
+                // welcome screen — it used to dominate above the onboarding
+                // buttons. It returns once the runner has data (the
+                // ListView branch, gated on runs.isNotEmpty below).
                 Expanded(
                   child: _WelcomeEmpty(
                     theme: theme,
@@ -652,8 +651,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // Pinned coach entry — the resolved Coach-prominence
                 // decision puts the AI coach one persistent tap from Home
                 // (it has no bottom-nav slot). Gated on the same api +
-                // training guard as the toolbar action.
-                if (_coachEntry() case final coach?) ...[
+                // training guard as the toolbar action, plus runs.isNotEmpty
+                // (#272) so it never dominates a zero-runs first screen.
+                if (_coachEntry() case final coach? when runs.isNotEmpty) ...[
                   coach,
                   _kSectionGap,
                 ],
