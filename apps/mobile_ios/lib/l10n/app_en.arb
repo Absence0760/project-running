@@ -986,6 +986,14 @@
   "@authPasswordLabel": {
     "description": "Label for the password field on the sign-in and sign-up screens"
   },
+  "authShowPassword": "Show password",
+  "@authShowPassword": {
+    "description": "Tooltip/a11y label for the eye toggle that reveals an obscured password field"
+  },
+  "authHidePassword": "Hide password",
+  "@authHidePassword": {
+    "description": "Tooltip/a11y label for the eye toggle while the password is revealed"
+  },
   "authOrDivider": "OR",
   "@authOrDivider": {
     "description": "Divider text between the email/password form and the OAuth buttons"

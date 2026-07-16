@@ -49,6 +49,8 @@ export const messages = {
 	'login.emailPlaceholder': 'メールアドレス',
 	'login.passwordPlaceholder': 'パスワード',
 	'login.confirmPasswordPlaceholder': 'パスワードを確認',
+	'login.showPassword': 'パスワードを表示',
+	'login.hidePassword': 'パスワードを非表示',
 	'login.errorPasswordTooShort': 'パスワードは{min}文字以上で入力してください。',
 	'login.errorPasswordMismatch': 'パスワードが一致しません。',
 	'login.confirmAdult': '私は16歳以上であることを確認します。',

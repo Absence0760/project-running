@@ -719,6 +719,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authPasswordLabel => 'Senha';
 
   @override
+  String get authShowPassword => 'Mostrar senha';
+
+  @override
+  String get authHidePassword => 'Ocultar senha';
+
+  @override
   String get authOrDivider => 'OU';
 
   @override
@@ -12001,6 +12007,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get authPasswordLabel => 'Senha';
+
+  @override
+  String get authShowPassword => 'Mostrar senha';
+
+  @override
+  String get authHidePassword => 'Ocultar senha';
 
   @override
   String get authOrDivider => 'OU';

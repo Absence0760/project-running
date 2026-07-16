@@ -62,6 +62,8 @@ export const en = {
 	'login.emailPlaceholder': 'Email address',
 	'login.passwordPlaceholder': 'Password',
 	'login.confirmPasswordPlaceholder': 'Confirm password',
+	'login.showPassword': 'Show password',
+	'login.hidePassword': 'Hide password',
 	'login.errorPasswordTooShort': 'Password must be at least {min} characters.',
 	'login.errorPasswordMismatch': "Passwords don't match.",
 	'login.confirmAdult': 'I confirm I am 16 years of age or older.',

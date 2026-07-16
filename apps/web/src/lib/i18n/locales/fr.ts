@@ -52,6 +52,8 @@ export const messages = {
 	'login.emailPlaceholder': 'Adresse e-mail',
 	'login.passwordPlaceholder': 'Mot de passe',
 	'login.confirmPasswordPlaceholder': 'Confirmer le mot de passe',
+	'login.showPassword': 'Afficher le mot de passe',
+	'login.hidePassword': 'Masquer le mot de passe',
 	'login.errorPasswordTooShort': 'Le mot de passe doit contenir au moins {min} caractères.',
 	'login.errorPasswordMismatch': 'Les mots de passe ne correspondent pas.',
 	'login.confirmAdult': 'Je confirme avoir 16 ans ou plus.',

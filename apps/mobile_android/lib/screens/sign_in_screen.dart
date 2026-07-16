@@ -9,6 +9,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../apple_auth.dart';
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
 import 'sign_up_screen.dart';
 
@@ -339,13 +340,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              PasswordField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: l10n.authPasswordLabel,
-                  border: const OutlineInputBorder(),
-                ),
+                labelText: l10n.authPasswordLabel,
+                border: const OutlineInputBorder(),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),

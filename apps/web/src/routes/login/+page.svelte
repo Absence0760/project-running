@@ -39,6 +39,8 @@
 	let email = $state('');
 	let password = $state('');
 	let confirmPassword = $state('');
+	let showPassword = $state(false);
+	let showConfirmPassword = $state(false);
 	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
 	let isReset = $state($page.url.searchParams.get('reset') === '1');
 	let confirmAdult = $state(false);
@@ -374,28 +376,56 @@
 				/>
 				{#if !isReset}
 					<label for="login-password" class="visually-hidden">{m('login.passwordPlaceholder')}</label>
-					<input
-						id="login-password"
-						type="password"
-						bind:value={password}
-						placeholder={m('login.passwordPlaceholder')}
-						required
-						minlength={isSignUp ? PASSWORD_MIN_LENGTH : undefined}
-						autocomplete={isSignUp ? 'new-password' : 'current-password'}
-					/>
+					<div class="password-wrap">
+						<input
+							id="login-password"
+							type={showPassword ? 'text' : 'password'}
+							bind:value={password}
+							placeholder={m('login.passwordPlaceholder')}
+							required
+							minlength={isSignUp ? PASSWORD_MIN_LENGTH : undefined}
+							autocomplete={isSignUp ? 'new-password' : 'current-password'}
+						/>
+						<button
+							type="button"
+							class="password-toggle"
+							disabled={!hydrated}
+							onclick={() => (showPassword = !showPassword)}
+							aria-label={showPassword ? m('login.hidePassword') : m('login.showPassword')}
+							aria-pressed={showPassword}
+						>
+							<span class="material-symbols" aria-hidden="true">
+								{showPassword ? 'visibility_off' : 'visibility'}
+							</span>
+						</button>
+					</div>
 					{#if isSignUp}
 						<label for="login-confirm-password" class="visually-hidden">
 							{m('login.confirmPasswordPlaceholder')}
 						</label>
-						<input
-							id="login-confirm-password"
-							type="password"
-							bind:value={confirmPassword}
-							placeholder={m('login.confirmPasswordPlaceholder')}
-							required
-							minlength={PASSWORD_MIN_LENGTH}
-							autocomplete="new-password"
-						/>
+						<div class="password-wrap">
+							<input
+								id="login-confirm-password"
+								type={showConfirmPassword ? 'text' : 'password'}
+								bind:value={confirmPassword}
+								placeholder={m('login.confirmPasswordPlaceholder')}
+								required
+								minlength={PASSWORD_MIN_LENGTH}
+								autocomplete="new-password"
+							/>
+							<button
+								type="button"
+								class="password-toggle"
+								disabled={!hydrated}
+								onclick={() => (showConfirmPassword = !showConfirmPassword)}
+								aria-label={showConfirmPassword ? m('login.hidePassword') : m('login.showPassword')}
+								aria-pressed={showConfirmPassword}
+							>
+								<span class="material-symbols" aria-hidden="true">
+									{showConfirmPassword ? 'visibility_off' : 'visibility'}
+								</span>
+							</button>
+						</div>
 					{/if}
 				{/if}
 				{#if isSignUp}
@@ -797,8 +827,11 @@
 		text-align: start;
 	}
 
+	/* .password-wrap input is included because the visibility toggle
+	   flips a revealed field to type='text'. */
 	input[type='email'],
-	input[type='password'] {
+	input[type='password'],
+	.password-wrap input {
 		width: 100%;
 		padding: 0.7rem var(--space-md);
 		border: 1px solid var(--color-border);
@@ -811,7 +844,8 @@
 	}
 
 	input[type='email']:focus,
-	input[type='password']:focus {
+	input[type='password']:focus,
+	.password-wrap input:focus {
 		outline: none;
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
@@ -821,9 +855,48 @@
 	   outline. The :focus rule still removes the default ring on mouse
 	   focus (no visible outline on click); :focus-visible re-adds a
 	   proper one for keyboard / programmatic focus. */
-	input[type='email']:focus-visible, input[type='password']:focus-visible {
+	input[type='email']:focus-visible,
+	input[type='password']:focus-visible,
+	.password-wrap input:focus-visible {
 		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
+	}
+
+	.password-wrap {
+		position: relative;
+	}
+
+	.password-wrap input {
+		padding-inline-end: 2.9rem;
+	}
+
+	.password-toggle {
+		position: absolute;
+		top: 50%;
+		inset-inline-end: var(--space-xs);
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.3rem;
+		background: none;
+		border: none;
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+
+	.password-toggle:hover {
+		color: var(--color-text);
+	}
+
+	.password-toggle:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+
+	.password-toggle .material-symbols {
+		font-size: 20px;
 	}
 
 

@@ -1295,6 +1295,18 @@ abstract class AppLocalizations {
   /// **'Password'**
   String get authPasswordLabel;
 
+  /// Tooltip/a11y label for the eye toggle that reveals an obscured password field
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get authShowPassword;
+
+  /// Tooltip/a11y label for the eye toggle while the password is revealed
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get authHidePassword;
+
   /// Divider text between the email/password form and the OAuth buttons
   ///
   /// In en, this message translates to:

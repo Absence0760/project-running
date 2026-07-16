@@ -697,6 +697,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authPasswordLabel => 'パスワード';
 
   @override
+  String get authShowPassword => 'パスワードを表示';
+
+  @override
+  String get authHidePassword => 'パスワードを非表示';
+
+  @override
   String get authOrDivider => 'または';
 
   @override
