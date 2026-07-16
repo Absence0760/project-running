@@ -198,6 +198,8 @@
   "prefsSectionUnitsDisplay": "Einheiten & Anzeige",
   "authEmailLabel": "E-Mail",
   "authPasswordLabel": "Passwort",
+  "authShowPassword": "Passwort anzeigen",
+  "authHidePassword": "Passwort verbergen",
   "authOrDivider": "ODER",
   "authErrorOffline": "Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.",
   "authErrorInvalidCredentials": "E-Mail oder Passwort ist falsch. Bitte versuche es erneut.",

@@ -198,6 +198,8 @@
   "prefsSectionUnitsDisplay": "Unidades e exibição",
   "authEmailLabel": "E-mail",
   "authPasswordLabel": "Senha",
+  "authShowPassword": "Mostrar senha",
+  "authHidePassword": "Ocultar senha",
   "authOrDivider": "OU",
   "authErrorOffline": "Você parece estar offline. Verifique sua conexão e tente novamente.",
   "authErrorInvalidCredentials": "E-mail ou senha incorretos. Tente novamente.",

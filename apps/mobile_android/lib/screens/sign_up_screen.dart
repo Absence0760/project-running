@@ -13,6 +13,7 @@ import '../auth_error.dart';
 import '../auth_gates.dart';
 import '../auth_validation.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
 
 /// Email/password account-creation screen with Google + Apple OAuth.
@@ -381,23 +382,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              PasswordField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: l10n.authPasswordLabel,
-                  border: const OutlineInputBorder(),
-                  errorText: _passwordError,
-                ),
+                labelText: l10n.authPasswordLabel,
+                border: const OutlineInputBorder(),
+                errorText: _passwordError,
               ),
               const SizedBox(height: 12),
-              TextField(
+              PasswordField(
                 controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: l10n.signUpConfirmPasswordLabel,
-                  border: const OutlineInputBorder(),
-                ),
+                labelText: l10n.signUpConfirmPasswordLabel,
+                border: const OutlineInputBorder(),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),

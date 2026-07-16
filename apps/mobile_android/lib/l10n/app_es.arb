@@ -198,6 +198,8 @@
   "prefsSectionUnitsDisplay": "Unidades y pantalla",
   "authEmailLabel": "Correo electrónico",
   "authPasswordLabel": "Contraseña",
+  "authShowPassword": "Mostrar contraseña",
+  "authHidePassword": "Ocultar contraseña",
   "authOrDivider": "O",
   "authErrorOffline": "Parece que no tienes conexión. Comprueba tu conexión e inténtalo de nuevo.",
   "authErrorInvalidCredentials": "Correo electrónico o contraseña incorrectos. Inténtalo de nuevo.",

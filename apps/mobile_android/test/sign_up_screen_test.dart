@@ -69,6 +69,26 @@ void main() {
       expect(find.text('Confirm password'), findsOneWidget);
     });
 
+    testWidgets('password fields have independent show/hide toggles',
+        (tester) async {
+      // Issue #225 — typing a new password blind locks typo victims out
+      // of a brand-new account. Each obscured field carries its own
+      // visibility toggle.
+      await _pump(tester, _FakeApiClient());
+      TextField fieldWithLabel(String label) => tester.widget<TextField>(
+          find.ancestor(
+              of: find.text(label), matching: find.byType(TextField)));
+      expect(find.byTooltip('Show password'), findsNWidgets(2));
+      expect(fieldWithLabel('Password').obscureText, isTrue);
+      expect(fieldWithLabel('Confirm password').obscureText, isTrue);
+      // Reveal only the first (password) field — confirm stays hidden.
+      await tester.tap(find.byTooltip('Show password').first);
+      await tester.pump();
+      expect(fieldWithLabel('Password').obscureText, isFalse);
+      expect(fieldWithLabel('Confirm password').obscureText, isTrue);
+      expect(find.byTooltip('Hide password'), findsOneWidget);
+    });
+
     testWidgets('Create Account button is present', (tester) async {
       await _pump(tester, _FakeApiClient());
       expect(

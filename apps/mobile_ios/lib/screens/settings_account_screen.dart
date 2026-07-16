@@ -20,6 +20,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
 import 'import_screen.dart';
 import 'guided_runs_screen.dart';
@@ -347,18 +348,14 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                PasswordField(
                   controller: pwdCtl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                      labelText: l10n.settingsAccountNewPassword),
+                  labelText: l10n.settingsAccountNewPassword,
                 ),
                 const SizedBox(height: 8),
-                TextField(
+                PasswordField(
                   controller: confirmCtl,
-                  obscureText: true,
-                  decoration:
-                      InputDecoration(labelText: l10n.settingsAccountConfirm),
+                  labelText: l10n.settingsAccountConfirm,
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
