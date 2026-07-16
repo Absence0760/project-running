@@ -823,17 +823,38 @@ class _RunScreenState extends State<RunScreen> {
   /// routes through app settings. If foreground location is granted but
   /// background isn't, surface a one-tap deep-link to settings before the
   /// run starts (persona #57). Non-blocking — the run proceeds either
-  /// way; recording still works while the app is on screen.
+  /// way; recording still works while the app is on screen. Shows once:
+  /// a dismissal persists (issue #266) and only re-arms if always-on is
+  /// later granted then revoked.
   Future<void> _maybeNudgeBackgroundLocation() async {
     if (!Platform.isAndroid) return;
     final foreground = await Permission.location.isGranted;
     final always = await Permission.locationAlways.isGranted;
+    if (shouldRearmBackgroundLocationNudge(
+      alwaysGranted: always,
+      alreadyDismissed: widget.preferences.backgroundLocationNudgeDismissed,
+    )) {
+      try {
+        await widget.preferences.setBackgroundLocationNudgeDismissed(false);
+      } catch (e) {
+        debugPrint('clearBackgroundLocationNudgeDismissed failed: $e');
+      }
+    }
     if (!shouldNudgeBackgroundLocation(
       isAndroid: Platform.isAndroid,
       foregroundGranted: foreground,
       alwaysGranted: always,
+      alreadyDismissed: widget.preferences.backgroundLocationNudgeDismissed,
     )) {
       return;
+    }
+    // Mark dismissed up front so a crash / early-dismiss can't re-trigger
+    // it on the next run — either dialog action is an informed choice, and
+    // the re-arm above restores the nudge if the permission later regresses.
+    try {
+      await widget.preferences.setBackgroundLocationNudgeDismissed(true);
+    } catch (e) {
+      debugPrint('setBackgroundLocationNudgeDismissed failed: $e');
     }
     if (!mounted) return;
     final openSettings = await showDialog<bool>(
