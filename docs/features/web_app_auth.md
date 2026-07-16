@@ -10,7 +10,7 @@ The web app uses **Supabase Auth** end-to-end. There is no demo / mock login —
 
 Supported sign-in methods:
 
-- **Email + password** (sign-up via `/login`'s "Sign up" toggle, sign-in via the same form)
+- **Email + password** (sign-up via `/login`'s "Sign up" toggle, sign-in via the same form). Sign-up asks for the password twice — see [Password confirmation](#password-confirmation) below.
 - **Google OAuth** (`signInWithOAuth({ provider: 'google' })`) — gated behind the fail-closed `PUBLIC_GOOGLE_AUTH_ENABLED` flag (`apps/web/src/lib/core/google_auth_flag.ts`). When the flag is off (the default until the Supabase `google` provider is configured) the button renders behind a "Soon" pill and clicking it surfaces the `login.googleSoon` notice instead of starting a redirect — same treatment as the Apple button. Flip the flag (set truthy) the same day you enable the provider; local dev + e2e turn it on in `.env.development`. On mobile the equivalent gate is the presence of `GOOGLE_WEB_CLIENT_ID` — an unconfigured build shows `googleSignInSoon` on tap.
 - **Apple OAuth** — *not yet shipped on web.* The button is rendered behind a "Soon" pill and clicking it surfaces a "coming soon" toast (`apps/web/src/routes/login/+page.svelte` `handleAppleSignIn`). Apple Services-ID configuration for the web OAuth flow is the unblocking step. Apple Sign-In *is* wired on mobile via the native `sign_in_with_apple` SDK — see `apps/mobile_android/lib/screens/sign_in_screen.dart`.
 
@@ -128,6 +128,20 @@ Three sign-in methods, all hitting Supabase Auth:
 3. **Email + password** — toggles between sign-in and sign-up; both call `supabase.auth.*` directly
 
 OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` and routes to `/dashboard`.
+
+---
+
+## Password confirmation
+
+Both surfaces that **mint** a password — sign-up (`/login?signup=1`) and reset (`/auth/reset`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none.
+
+The rule: at least `MIN_PASSWORD_LENGTH` (6, matching GoTrue's default — `config.toml` sets no `minimum_password_length`), then exact equality. Length is reported first so two matching-but-too-short entries name the fixable problem. **Neither side is trimmed** — whitespace is a real password character and is exactly the typo class the confirmation catches.
+
+**Why this exists.** Sign-up used to take the password in a single field. A typo there is silently baked into the account: GoTrue hashes what was typed, the confirmation email arrives and gets clicked, and the account is then unreachable by its owner. Nothing errors on either side — to the user it's indistinguishable from a forgotten password, and the only tell on our side is a **confirmed account whose `last_sign_in_at` stays null**. That signature cost a real user on 2026-07-16; if a support case looks like it, this is the first thing to check. The gap existed because sign-up and reset were written independently and only reset grew a confirmation, which is why both now share the one helper.
+
+Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the length boundary); wiring pinned in `tests-e2e/auth/signup-confirm-password.spec.ts`.
+
+> **Mobile has not closed this gap.** `sign_up_screen.dart` still takes the password in a single field, so the same lock-out is reachable from an Android / iOS sign-up.
 
 ---
 
