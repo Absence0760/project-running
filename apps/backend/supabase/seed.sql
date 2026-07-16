@@ -929,15 +929,19 @@ INSERT INTO plan_workouts (week_id, scheduled_date, kind, target_distance_m, tar
   ('a0aa000c-0000-0000-0000-00000000000c', '2026-06-19', 'rest',     null,  null, null, null),
   ('a0aa000c-0000-0000-0000-00000000000c', '2026-06-20', 'race',     21097, 270, 5,  'MP');
 
--- Mark the week-0 long run as auto-matched to the corresponding 21km run
--- that's already in the runs table (2026-03-26 half) — close enough to the
--- Mar 29 long-run date for a "Completed" badge on the grid. Uses whichever
--- run row exists with that date (ordered by started_at desc).
+-- Mark the week-0 long run (2026-03-29) as auto-matched to the nearby
+-- 2026-03-30 12.5 km run already in the runs table — a day off the Mar 29
+-- long-run date and a close distance match, so the grid shows a "Completed"
+-- badge. The window brackets the scheduled date on both sides (Mar 29–30) so
+-- it always resolves to a real run row regardless of the plan's now()-relative
+-- shift; without this the badge silently drops off whenever the shift lands
+-- the completed cell in a different calendar month from the plan start.
+-- Ordered by started_at desc, so the closest same-window run wins.
 UPDATE plan_workouts pw
 SET completed_run_id = (
       SELECT r.id FROM runs r
       WHERE r.user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
-        AND r.started_at >= '2026-03-29' AND r.started_at < '2026-03-30'
+        AND r.started_at >= '2026-03-29' AND r.started_at < '2026-03-31'
       ORDER BY r.started_at DESC LIMIT 1
     ),
     completed_at = now()
