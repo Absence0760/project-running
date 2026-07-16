@@ -1325,6 +1325,36 @@ abstract class AppLocalizations {
   /// **'Something went wrong. Please try again.'**
   String get authErrorGeneric;
 
+  /// Friendly auth error shown when sign-up fails because the email is already registered
+  ///
+  /// In en, this message translates to:
+  /// **'That email already has an account. Sign in instead.'**
+  String get authErrorEmailExists;
+
+  /// Friendly auth error shown when sign-in fails because the email address hasn't been confirmed yet
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your email first — check your inbox for the confirmation link.'**
+  String get authErrorEmailNotConfirmed;
+
+  /// Friendly auth error shown when the server rejects a password as too weak
+  ///
+  /// In en, this message translates to:
+  /// **'That password is too weak. Use at least {minLength} characters.'**
+  String authErrorWeakPassword(int minLength);
+
+  /// Inline validation error under the sign-up email field when the entered value is not email-shaped
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get authErrorInvalidEmail;
+
+  /// Inline validation error when an entered password is shorter than the minimum length
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least {minLength} characters.'**
+  String authErrorPasswordTooShort(int minLength);
+
   /// AppBar title for the sign-in screen
   ///
   /// In en, this message translates to:
@@ -1367,6 +1397,18 @@ abstract class AppLocalizations {
   /// **'If that email is registered, we\'ve sent a reset link.'**
   String get signInResetSent;
 
+  /// Button that re-sends the signup confirmation email after an email-not-confirmed sign-in failure
+  ///
+  /// In en, this message translates to:
+  /// **'Resend confirmation email'**
+  String get signInResendConfirmation;
+
+  /// Privacy-preserving confirmation shown after re-sending the signup confirmation email
+  ///
+  /// In en, this message translates to:
+  /// **'If that email is registered, we\'ve sent a new confirmation link.'**
+  String get signInConfirmationResent;
+
   /// Apple OAuth button label on the sign-in screen
   ///
   /// In en, this message translates to:
@@ -1384,6 +1426,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Google sign-in is coming soon. For now, please use email.'**
   String get googleSignInSoon;
+
+  /// Notice shown when the Apple button is tapped but the Android web-auth flow isn't configured yet
+  ///
+  /// In en, this message translates to:
+  /// **'Apple sign-in is coming soon. For now, please use email.'**
+  String get appleSignInSoon;
 
   /// Button to dismiss the sign-in screen and use the app without an account
   ///
@@ -1462,6 +1510,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
   String get signUpErrorAcceptTerms;
+
+  /// Headline of the check-your-email state shown after a sign-up that needs email confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email'**
+  String get signUpCheckEmailTitle;
+
+  /// Body of the check-your-email state shown after a sign-up that needs email confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a confirmation link to {email}. Open it to finish setting up your account.'**
+  String signUpCheckEmailBody(String email);
+
+  /// Button on the check-your-email state that returns to the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get signUpCheckEmailBack;
 
   /// Apple OAuth button label on the sign-up screen
   ///
@@ -1606,6 +1672,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save your setup: {message}'**
   String setupSaveError(String message);
+
+  /// Hint shown next to the setup wizard's offline fail-safe exit after a save failed
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.'**
+  String get setupOfflineHint;
+
+  /// Setup wizard fail-safe exit that closes the wizard without a server write and defers the onboarding stamp
+  ///
+  /// In en, this message translates to:
+  /// **'Finish later'**
+  String get setupFinishLater;
 
   /// Setup wizard display-name step title
   ///
@@ -1828,6 +1906,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That\'s everything. Tap Open dashboard to start running.'**
   String get setupDoneHint;
+
+  /// Setup wizard final step hint when the runner picked a goal, so the primary action is Create my training plan
+  ///
+  /// In en, this message translates to:
+  /// **'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.'**
+  String get setupDoneHintGoal;
 
   /// Title of the Private visibility default option
   ///
@@ -7364,6 +7448,24 @@ abstract class AppLocalizations {
   /// **'e.g. Autumn half marathon'**
   String get planNewNameHint;
 
+  /// Inline hint below the plan-name field explaining why the Create button is disabled when the name is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Add a plan name to enable Create.'**
+  String get planNewNameRequiredHint;
+
+  /// Default plan name prefilled when the plan wizard opens preselected to a goal (from the onboarding nudge)
+  ///
+  /// In en, this message translates to:
+  /// **'{goal} plan'**
+  String planNewDefaultName(String goal);
+
+  /// Default plan name prefilled when the plan wizard opens on the beginner walk-run preset
+  ///
+  /// In en, this message translates to:
+  /// **'Walk-run to {goal}'**
+  String planNewDefaultNameBeginner(String goal);
+
   /// Goal-race dropdown label
   ///
   /// In en, this message translates to:
@@ -8828,12 +8930,6 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get settingsAccountSave;
 
-  /// Validation error when the new password is shorter than 8 characters
-  ///
-  /// In en, this message translates to:
-  /// **'Password must be at least 8 characters'**
-  String get settingsAccountPasswordTooShort;
-
   /// Validation error when the password and confirmation differ
   ///
   /// In en, this message translates to:
@@ -9156,6 +9252,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.'**
   String get settingsAccountSendErrorReportsSubtitle;
+
+  /// Label for the account display-name tile and its edit dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get settingsAccountDisplayName;
+
+  /// Helper text under the display-name field explaining the fallback
+  ///
+  /// In en, this message translates to:
+  /// **'The name other runners see. Leave blank to use \"Runner\".'**
+  String get settingsAccountDisplayNameHint;
+
+  /// Subtitle on the display-name tile when no display name is set
+  ///
+  /// In en, this message translates to:
+  /// **'Not set — you appear as \"Runner\"'**
+  String get settingsAccountDisplayNameUnset;
+
+  /// Banner confirming the display name saved
+  ///
+  /// In en, this message translates to:
+  /// **'Display name updated'**
+  String get settingsAccountDisplayNameUpdated;
+
+  /// Banner shown when the display-name save fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update your display name. Please try again.'**
+  String get settingsAccountDisplayNameUpdateFailed;
 
   /// Banner shown after enabling error reporting
   ///
@@ -10363,6 +10489,24 @@ abstract class AppLocalizations {
   /// **'This removes every zone, re-exposing all of these areas on public shares.'**
   String get privacyZonesClearAllBody;
 
+  /// Title of the unsaved-changes confirm dialog on the privacy-zones editor
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes?'**
+  String get privacyZonesDiscardTitle;
+
+  /// Body of the unsaved-changes confirm dialog on the privacy-zones editor
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved privacy zones. Leave without saving?'**
+  String get privacyZonesDiscardBody;
+
+  /// Confirm button that leaves the privacy-zones editor discarding unsaved zones
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get privacyZonesDiscard;
+
   /// AppBar title for the Settings > Preferences screen
   ///
   /// In en, this message translates to:
@@ -10963,6 +11107,12 @@ abstract class AppLocalizations {
   /// **'Your dashboard fills in once you record a run, set a goal, or import your history.'**
   String get dashboardWelcomeBody;
 
+  /// Dashboard empty-state primary button that opens the recorder to start a run
+  ///
+  /// In en, this message translates to:
+  /// **'Start a run'**
+  String get dashboardStartRun;
+
   /// Dashboard empty-state primary button to create a goal
   ///
   /// In en, this message translates to:
@@ -11058,6 +11208,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fastest {distance}'**
   String dashboardFastestDistance(String distance);
+
+  /// Muted second line under a personal-best time showing its age grade (e.g. 72.4% age grade)
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} age grade'**
+  String dashboardPbAgeGrade(String percent);
 
   /// Section header above the goals list
   ///
@@ -18689,6 +18845,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get prefsHrZonesClearConfirm;
+
+  /// Generic body of the shared sign-in-required state on auth-only surfaces
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to use this feature.'**
+  String get signInRequiredMessage;
+
+  /// CTA button on the shared sign-in-required state; opens the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get signInRequiredAction;
+
+  /// Body of the shared state when the backend is unreachable at launch (no sign-in CTA can help)
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. Online features are unavailable.'**
+  String get backendUnavailableMessage;
+
+  /// Body of the sign-in-required state on the following feed
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see runs from people you follow.'**
+  String get feedSignedOutMessage;
 }
 
 class _AppLocalizationsDelegate

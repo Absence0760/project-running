@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/auth_error.dart';
+import '../lib/auth_validation.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 
 /// Duck-typed stand-in for a Supabase `AuthException` (carries `code`
@@ -76,12 +77,50 @@ void main() {
       );
     });
 
-    test('unrecognised error → generic', () {
+    test('user_already_exists code → emailExists', () {
       expect(
         classifyAuthError(const _FakeAuthException('User already registered',
             code: 'user_already_exists', statusCode: '422')),
-        AuthErrorKind.generic,
+        AuthErrorKind.emailExists,
       );
+    });
+
+    test('"already registered" message (no code) → emailExists', () {
+      expect(
+        classifyAuthError(
+            const _FakeAuthException('User already registered')),
+        AuthErrorKind.emailExists,
+      );
+    });
+
+    test('email_not_confirmed code → emailNotConfirmed', () {
+      expect(
+        classifyAuthError(const _FakeAuthException('Email not confirmed',
+            code: 'email_not_confirmed', statusCode: '400')),
+        AuthErrorKind.emailNotConfirmed,
+      );
+    });
+
+    test('weak_password code → weakPassword', () {
+      expect(
+        classifyAuthError(const _FakeAuthException(
+            'Password should be at least 8 characters',
+            code: 'weak_password',
+            statusCode: '422')),
+        AuthErrorKind.weakPassword,
+      );
+    });
+
+    test('"password should be at least" message (no code) → weakPassword',
+        () {
+      expect(
+        classifyAuthError(const _FakeAuthException(
+            'Password should be at least 6 characters')),
+        AuthErrorKind.weakPassword,
+      );
+    });
+
+    test('unrecognised error → generic', () {
       expect(classifyAuthError(Exception('boom')), AuthErrorKind.generic);
     });
   });
@@ -108,6 +147,21 @@ void main() {
     expect(
       friendlyAuthError(l10n, const _FakeAuthException('', statusCode: '429')),
       l10n.authErrorRateLimited,
+    );
+    expect(
+      friendlyAuthError(
+          l10n, const _FakeAuthException('', code: 'user_already_exists')),
+      l10n.authErrorEmailExists,
+    );
+    expect(
+      friendlyAuthError(
+          l10n, const _FakeAuthException('', code: 'email_not_confirmed')),
+      l10n.authErrorEmailNotConfirmed,
+    );
+    expect(
+      friendlyAuthError(
+          l10n, const _FakeAuthException('', code: 'weak_password')),
+      l10n.authErrorWeakPassword(kPasswordMinLength),
     );
     expect(friendlyAuthError(l10n, Exception('boom')), l10n.authErrorGeneric);
 

@@ -618,7 +618,10 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
             const SizedBox(height: 4),
             Text(
               l10n.integrationsHrScanHint,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_scanning)
@@ -835,7 +838,10 @@ class _TreadmillScanSheetState extends State<_TreadmillScanSheet> {
             const SizedBox(height: 4),
             Text(
               l10n.integrationsTreadmillScanHint,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_scanning)

@@ -35,6 +35,11 @@ ClubView _club(String? viewerRole) => ClubView(
 /// on the RSVP write to drive the swallowed-failure banner.
 class _RsvpFailSocial extends SocialService {
   int rsvpCalls = 0;
+
+  /// The screen gates on the viewer id, so a fake must declare who is
+  /// looking rather than falling through to a real Supabase read.
+  @override
+  String? get currentUserId => 'u-viewer';
   @override
   Future<ClubView?> fetchClubBySlug(String slug) async => null;
   @override
@@ -72,6 +77,11 @@ class _RsvpFailSocial extends SocialService {
 /// Configurable fake that drives the happy paths: a club (role configurable),
 /// an athletic event, a canned attendee list, and a recording RSVP write.
 class _EventSocial extends SocialService {
+  /// The screen gates on the viewer id, so a fake must declare who is
+  /// looking rather than falling through to a real Supabase read.
+  @override
+  String? get currentUserId => 'u-viewer';
+
   _EventSocial({
     this.club,
     this.category = 'run',

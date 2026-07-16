@@ -1,8 +1,11 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../hr_zones.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../run_intensity.dart';
+import '../settings_sync.dart';
 
 /// Dashboard card surfacing how much of the runner's recent training
 /// has been spent in each HR zone — easy / moderate / hard at a glance.
@@ -22,20 +25,31 @@ class IntensityCard extends StatelessWidget {
   /// monthly view → 30 d" cadence.
   final int windowDays;
 
+  /// Optional settings service. When wired, the card falls back to
+  /// age-estimated zones (max_hr_bpm → Tanaka age → 190 bpm) if no explicit
+  /// [hrZones] were passed, and shows the same age-estimated / medication
+  /// caveat run-detail shows (#268). Null → only explicitly-passed zones
+  /// render, and no caveat (they're never age-estimated).
+  final SettingsSyncService? settingsSync;
+
   const IntensityCard({
     super.key,
     required this.runs,
     required this.hrZones,
     required this.now,
     this.windowDays = 30,
+    this.settingsSync,
   });
 
   @override
   Widget build(BuildContext context) {
-    final zones = hrZones;
-    // No zones configured → card is invisible. The Settings → HR Zones
-    // tile is the canonical configuration surface; we don't want a
-    // dashboard nag in the meantime.
+    // Prefer explicitly-passed zones; else derive age-estimated fallback
+    // cutoffs from the synced HR settings so a max-HR-only / age-only runner
+    // still sees the breakdown (mirroring run-detail).
+    final zones = hrZones ?? _deriveZonesFromSettings();
+    // No zones at all → card is invisible. The Settings → HR Zones tile is
+    // the canonical configuration surface; we don't want a dashboard nag in
+    // the meantime.
     if (zones == null) return const SizedBox.shrink();
 
     final breakdown = computeIntensityBreakdown(
@@ -86,10 +100,66 @@ class IntensityCard extends StatelessWidget {
                 color: theme.colorScheme.outline,
               ),
             ),
+            if (_zonesAreAgeEstimated()) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.runDetailHrDisclaimer,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  /// Resolve age-estimated fallback zone cutoffs from the synced HR settings
+  /// when no explicit [hrZones] were passed. Mirrors run-detail's precedence
+  /// (max_hr_bpm override → Tanaka from date_of_birth → the 190-bpm default)
+  /// so the dashboard card and the run-detail panel agree. Null when the
+  /// settings service isn't wired.
+  HrZones? _deriveZonesFromSettings() {
+    final svc = settingsSync?.service;
+    if (svc == null) return null;
+    final explicit = parseHrZones(svc.effective<Map>(SettingsKeys.hrZones));
+    if (explicit != null) return explicit;
+    final maxHr = svc.effective<num>(SettingsKeys.maxHrBpm)?.round();
+    return defaultZoneCutoffs(
+      maxHrBpm: maxHr,
+      ageYears: _ageFromDob(svc.effective<String>(SettingsKeys.dateOfBirth)),
+    );
+  }
+
+  /// Whether the zones shown fall back to an age-estimated max HR — the user
+  /// set neither an explicit hr_zones override nor a max_hr_bpm. Replicated
+  /// (a few lines, per house style) from run_detail_screen's identical check
+  /// so a runner on HR medication (beta-blockers) is told the zones may be
+  /// off. False when the settings service isn't wired (then only
+  /// explicitly-passed zones render, which are never age-estimated).
+  bool _zonesAreAgeEstimated() {
+    final svc = settingsSync?.service;
+    if (svc == null) return false;
+    final hasExplicit =
+        parseHrZones(svc.effective<Map>(SettingsKeys.hrZones)) != null;
+    final hasMaxHr = svc.effective<num>(SettingsKeys.maxHrBpm) != null;
+    return !hasExplicit && !hasMaxHr;
+  }
+
+  /// Whole years from a `YYYY-MM-DD` date_of_birth bag value, or null when
+  /// absent / unparseable / out of range.
+  static int? _ageFromDob(String? dob) {
+    if (dob == null) return null;
+    final born = DateTime.tryParse(dob);
+    if (born == null) return null;
+    final now = DateTime.now();
+    var age = now.year - born.year;
+    if (now.month < born.month ||
+        (now.month == born.month && now.day < born.day)) {
+      age--;
+    }
+    return (age >= 0 && age < 120) ? age : null;
   }
 }
 

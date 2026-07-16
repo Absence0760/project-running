@@ -90,6 +90,39 @@ class _AvatarApi extends ApiClient {
   }
 }
 
+/// Drives auth transitions for the AuthChangeAware seam (#232): user A
+/// (avatar + coach consent) signs out, then B (neither) signs in.
+class _AuthSwitchApi extends ApiClient {
+  String? uid = 'a';
+  String? email = 'a@test.com';
+  final _controller = StreamController<String?>.broadcast();
+
+  @override
+  String? get userId => uid;
+
+  @override
+  String? get userEmail => email;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  @override
+  Future<DateTime?> fetchCoachConsentAt() async =>
+      uid == 'a' ? DateTime.utc(2026, 1, 1) : null;
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => uid == null
+      ? null
+      : UserProfileRow(
+          shadowHidden: false,
+          id: uid!,
+          displayName: 'Runner',
+          avatarUrl: uid == 'a' ? 'https://example.invalid/a/avatar.png' : null,
+        );
+
+  void emit() => _controller.add(uid);
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -103,7 +136,7 @@ Future<void> _ensureSupabase() async {
   _supabaseReady = true;
 }
 
-Future<void> _pump(WidgetTester tester, _AvatarApi api) async {
+Future<void> _pump(WidgetTester tester, ApiClient api) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -204,6 +237,38 @@ void main() {
     await _pump(tester, api);
 
     expect(find.text('Profile photo'), findsOneWidget);
+    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
+  });
+
+  testWidgets(
+      'avatar + coach-consent state clears on sign-out and reloads for the next account (#232)',
+      (tester) async {
+    final api = _AuthSwitchApi();
+    await _pump(tester, api);
+
+    expect(find.text('a@test.com'), findsOneWidget);
+    expect(find.byIcon(Icons.block), findsOneWidget);
+    expect(_avatarTileIcon(Icons.delete_outline), findsOneWidget);
+
+    // Sign out on this very screen: A's consent tile must not keep
+    // rendering (it used to stay visible even while signed out), and
+    // A's avatar must not survive for whoever signs in next.
+    api.uid = null;
+    api.email = null;
+    api.emit();
+    await tester.pumpAndSettle();
+    expect(find.text('a@test.com'), findsNothing);
+    expect(find.byIcon(Icons.block), findsNothing);
+    expect(find.text('Profile photo'), findsNothing);
+
+    // Sign in as B (no consent, no avatar): B's state, not A's.
+    api.uid = 'b';
+    api.email = 'b@test.com';
+    api.emit();
+    await tester.pumpAndSettle();
+    expect(find.text('b@test.com'), findsOneWidget);
+    expect(find.byIcon(Icons.block), findsNothing);
     expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
     expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
   });
