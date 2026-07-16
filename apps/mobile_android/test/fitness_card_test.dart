@@ -252,5 +252,32 @@ void main() {
       final tip = tester.widget<Tooltip>(find.byType(Tooltip));
       expect(tip.message, contains('Running-fitness score'));
     });
+
+    testWidgets('a tap opens a dialog with the explanation, no long-press (#267)',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: FitnessStat(
+                label: 'VDOT',
+                value: '49.8',
+                tooltip: 'Running-fitness score from your best recent effort.',
+              ),
+            ),
+          ),
+        ),
+      );
+      // The explanation is not on screen until the affordance is used — and
+      // a plain tap (not a long-press) must reveal it.
+      expect(
+          find.text('Running-fitness score from your best recent effort.'),
+          findsNothing);
+      await tester.tap(find.text('VDOT'));
+      await tester.pumpAndSettle();
+      expect(
+          find.text('Running-fitness score from your best recent effort.'),
+          findsOneWidget);
+    });
   });
 }
