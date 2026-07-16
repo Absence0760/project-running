@@ -147,6 +147,21 @@ void main() {
       }
     });
 
+    testWidgets('the centre Log action shows a visible text label (#256)',
+        (tester) async {
+      // Every nav tab carries a text label; the centre Log action used to be
+      // an unlabelled "+" FAB with a tooltip only. It now caption's "Log"
+      // inside the bar so the affordance is discoverable without a hover.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final bar = find.byType(BottomAppBar);
+      expect(
+        find.descendant(of: bar, matching: find.text('Log')),
+        findsOneWidget,
+        reason: 'the centre Log action must carry a visible label in the bar',
+      );
+    });
+
     testWidgets('initial page is Home (welcome empty state)', (tester) async {
       final s = await _makeStores();
       await _pump(tester, s);
