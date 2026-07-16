@@ -875,7 +875,7 @@ class SocialService extends ChangeNotifier {
 
   Future<void> leaveClub(String clubId) async {
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) throw StateError('not signed in');
     await _c
         .from('club_members')
         .delete()
@@ -1181,7 +1181,7 @@ class SocialService extends ChangeNotifier {
 
   Future<void> clearRsvp(String eventId, DateTime instance) async {
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) throw StateError('not signed in');
     await _c
         .from('event_attendees')
         .delete()
@@ -1504,7 +1504,7 @@ class SocialService extends ChangeNotifier {
 
   Future<void> removeEventResult(String eventId, DateTime instance) async {
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) throw StateError('not signed in');
     await _c
         .from('event_results')
         .delete()

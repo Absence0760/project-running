@@ -735,6 +735,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'You need to be signed in to do that. Sign in and try again.';
 
   @override
+  String get authErrorEmailExists =>
+      'That email already has an account. Sign in instead.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirm your email first — check your inbox for the confirmation link.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'That password is too weak. Use at least $minLength characters.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Enter a valid email address.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'Password must be at least $minLength characters.';
+  }
+
+  @override
   String get signInTitle => 'Sign In';
 
   @override
@@ -759,6 +780,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'If that email is registered, we\'ve sent a reset link.';
 
   @override
+  String get signInResendConfirmation => 'Resend confirmation email';
+
+  @override
+  String get signInConfirmationResent =>
+      'If that email is registered, we\'ve sent a new confirmation link.';
+
+  @override
   String get signInWithApple => 'Sign in with Apple';
 
   @override
@@ -767,6 +795,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get googleSignInSoon =>
       'Google sign-in is coming soon. For now, please use email.';
+
+  @override
+  String get appleSignInSoon =>
+      'Apple sign-in is coming soon. For now, please use email.';
 
   @override
   String get signInContinueOffline => 'Continue offline';
@@ -809,6 +841,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get signUpErrorAcceptTerms =>
       'Please accept the Terms of Service and Privacy Policy to continue.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Check your email';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'We sent a confirmation link to $email. Open it to finish setting up your account.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Back to sign in';
 
   @override
   String get signUpContinueWithApple => 'Continue with Apple';
@@ -889,6 +932,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String setupSaveError(String message) {
     return 'Couldn\'t save your setup: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.';
+
+  @override
+  String get setupFinishLater => 'Finish later';
 
   @override
   String get setupNameTitle => 'What should we call you?';
@@ -1009,6 +1059,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get setupDoneHint =>
       'That\'s everything. Tap Open dashboard to start running.';
+
+  @override
+  String get setupDoneHintGoal =>
+      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
 
   @override
   String get privacyPrivateTitle => 'Private';
@@ -4395,6 +4449,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planNewNameHint => 'e.g. Autumn half marathon';
 
   @override
+  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal plan';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Walk-run to $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Goal race';
 
   @override
@@ -5283,10 +5350,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccountSave => 'Save';
 
   @override
-  String get settingsAccountPasswordTooShort =>
-      'Password must be at least 8 characters';
-
-  @override
   String get settingsAccountPasswordsMismatch => 'Passwords do not match';
 
   @override
@@ -5483,6 +5546,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.';
+
+  @override
+  String get settingsAccountDisplayName => 'Display name';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'The name other runners see. Leave blank to use \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Not set — you appear as \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Display name updated';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Couldn\'t update your display name. Please try again.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -6261,6 +6342,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'This removes every zone, re-exposing all of these areas on public shares.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Discard changes?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'You have unsaved privacy zones. Leave without saving?';
+
+  @override
+  String get privacyZonesDiscard => 'Discard';
+
+  @override
   String get prefsTitle => 'Preferences';
 
   @override
@@ -6587,6 +6678,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your dashboard fills in once you record a run, set a goal, or import your history.';
 
   @override
+  String get dashboardStartRun => 'Start a run';
+
+  @override
   String get dashboardSetGoal => 'Set a goal';
 
   @override
@@ -6646,6 +6740,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Fastest $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent age grade';
   }
 
   @override
@@ -11004,4 +11103,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Sign in to use this feature.';
+
+  @override
+  String get signInRequiredAction => 'Sign in';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Can\'t reach the server right now. Online features are unavailable.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Sign in to see runs from people you follow.';
 }

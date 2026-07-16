@@ -297,7 +297,8 @@ export async function handleCoach(
 	async function refundCapSlot(reason: string): Promise<void> {
 		if (config.bypassPaywallEnabled) return;
 		try {
-			await supabase.rpc('decrement_coach_usage', { p_user_id: authUserId });
+			const { error } = await supabase.rpc('decrement_coach_usage', { p_user_id: authUserId });
+			if (error) throw error;
 		} catch (e) {
 			console.error('[coach] decrement_coach_usage failed', {
 				reason,

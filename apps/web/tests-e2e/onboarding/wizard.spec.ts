@@ -374,4 +374,45 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		expect(data?.health_data_consent_at).toBeNull();
 		expect(data?.gender).toBeNull();
 	});
+
+	test('finishing with every optional section blank exits to /dashboard and a revisit does not bounce back to step 1 (#227)', async ({
+		page,
+	}) => {
+		// Regression pin for issue #227: skipping every optional section
+		// must never block the onboarded_at stamp — "Open dashboard" means
+		// the wizard is done. The revisit at the end proves the stamp
+		// actually landed server-side (the gate reads it on every load),
+		// not just that the client navigated once.
+		test.setTimeout(45_000);
+		await page.goto('/onboarding');
+
+		await expect(
+			page.getByRole('heading', { name: /What should we call you/i })
+		).toBeVisible();
+		// Steps 1-6: advance without entering or choosing anything.
+		for (let i = 0; i < 6; i++) {
+			await page.getByRole('button', { name: 'Continue' }).click();
+		}
+		// Step 7 — no goal was chosen, so only the neutral exit renders.
+		await expect(page.getByRole('heading', { name: /All set/i })).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Create my training plan' })
+		).toHaveCount(0);
+		await page.getByRole('button', { name: 'Open dashboard' }).click();
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+
+		// The stamp landed server-side — the layout gate's input.
+		const admin = getAdminClient();
+		const { data } = await admin
+			.from('user_profiles')
+			.select('onboarded_at')
+			.eq('id', USER_A.id)
+			.maybeSingle();
+		expect(data?.onboarded_at).not.toBeNull();
+
+		// A fresh load of a protected route stays put — no bounce back to
+		// the wizard's step 1.
+		await page.goto('/dashboard');
+		await expect(page).toHaveURL(/\/dashboard$/, { timeout: 5_000 });
+	});
 });

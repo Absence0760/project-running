@@ -11,8 +11,14 @@ class _FakeApiClient extends ApiClient {
   String? capturedPassword;
   String? capturedResetEmail;
   String? capturedResetRedirectTo;
+  String? capturedResendEmail;
   Object? errorToThrow;
   Object? resetErrorToThrow;
+
+  @override
+  Future<void> resendSignUpConfirmation({required String email}) async {
+    capturedResendEmail = email;
+  }
 
   @override
   Future<String> signIn({
@@ -44,6 +50,19 @@ Future<void> _pump(WidgetTester tester, _FakeApiClient client) {
       home: SignInScreen(apiClient: client),
     ),
   );
+}
+
+/// Duck-typed stand-in for a Supabase `AuthApiException` (carries `code`
+/// + `statusCode`) so the classified error branches can be exercised
+/// without importing the supabase auth types.
+class _FakeAuthException {
+  const _FakeAuthException(this.message, {this.code, this.statusCode});
+  final String message;
+  final String? code;
+  final String? statusCode;
+  @override
+  String toString() =>
+      'AuthApiException(message: $message, statusCode: $statusCode, code: $code)';
 }
 
 void main() {
@@ -115,6 +134,76 @@ void main() {
       await tester.tap(find.textContaining("Create one"));
       await tester.pumpAndSettle();
       expect(find.byType(SignUpScreen), findsOneWidget);
+    });
+
+
+    // ─────────── Apple fail-closed gate (#241) ───────────
+
+    testWidgets(
+        'Apple button shows a coming-soon notice when the web-auth flow is unconfigured',
+        (tester) async {
+      // No APPLE_SERVICE_CLIENT_ID / APPLE_REDIRECT_URI in the env →
+      // sign_in_with_apple's Android path throws before any UI opens,
+      // so the button must fail closed with the friendly notice —
+      // the same treatment as the Google gate above.
+      dotenv.loadFromString(envString: '', isOptional: true);
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      await _pump(tester, _FakeApiClient());
+      final appleBtn =
+          find.widgetWithText(OutlinedButton, 'Sign in with Apple');
+      await tester.ensureVisible(appleBtn);
+      await tester.tap(appleBtn);
+      await tester.pump();
+      expect(find.textContaining('Apple sign-in is coming soon'),
+          findsOneWidget);
+    });
+
+    // ─────────── Unconfirmed email (#242) ───────────
+
+    testWidgets(
+        'email_not_confirmed sign-in failure shows the specific message + resend button',
+        (tester) async {
+      final client = _FakeApiClient()
+        ..errorToThrow = const _FakeAuthException('Email not confirmed',
+            code: 'email_not_confirmed', statusCode: '400');
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'me@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Confirm your email first'), findsOneWidget);
+      expect(find.text('Resend confirmation email'), findsOneWidget);
+
+      await tester.tap(find.text('Resend confirmation email'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(client.capturedResendEmail, 'me@example.com');
+      // Privacy-preserving copy — must not confirm account existence.
+      expect(
+        find.textContaining('If that email is registered'),
+        findsOneWidget,
+      );
+      // Drain the top-banner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('other sign-in failures do not show the resend button',
+        (tester) async {
+      final client = _FakeApiClient()
+        ..errorToThrow = const _FakeAuthException('Invalid login credentials',
+            code: 'invalid_credentials', statusCode: '400');
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'me@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'wrongpass');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Incorrect email or password'),
+          findsOneWidget);
+      expect(find.text('Resend confirmation email'), findsNothing);
     });
 
     // ─────────── Forgot password? ───────────

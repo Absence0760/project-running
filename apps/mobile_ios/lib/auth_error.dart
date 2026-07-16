@@ -1,17 +1,25 @@
 import 'dart:io' show SocketException;
 
+import 'auth_validation.dart';
 import 'l10n/gen/app_localizations.dart';
 
 /// Friendly, actionable categories an auth failure maps to. The raw
 /// exception text (`ClientException: Failed host lookup`, a Supabase
 /// `AuthApiException` toString) is developer jargon no end user should
 /// read — classify it into one of these instead so the banner can tell
-/// "wrong password" from "offline" from "rate-limited".
+/// "wrong password" from "offline" from "rate-limited" from "that
+/// email already has an account". Web mirrors the classification in
+/// `apps/web/src/lib/core/auth_errors.ts` — keep the branches in sync.
+/// [notSignedIn] is mobile-only: it classifies the `ApiClient` session
+/// guards, which have no web counterpart.
 enum AuthErrorKind {
   offline,
   invalidCredentials,
   rateLimited,
   notSignedIn,
+  emailExists,
+  emailNotConfirmed,
+  weakPassword,
   generic,
 }
 
@@ -45,6 +53,23 @@ AuthErrorKind classifyAuthError(Object error) {
     return AuthErrorKind.invalidCredentials;
   }
 
+  if (code == 'user_already_exists' ||
+      code == 'email_exists' ||
+      msg.contains('already registered')) {
+    return AuthErrorKind.emailExists;
+  }
+
+  if (code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
+    return AuthErrorKind.emailNotConfirmed;
+  }
+
+  if (code == 'weak_password' ||
+      msg.contains('weak password') ||
+      msg.contains('password should be at least') ||
+      msg.contains('password should contain at least')) {
+    return AuthErrorKind.weakPassword;
+  }
+
   // ApiClient guards throw Exception('Not authenticated') when an action
   // needs a session — actionable ("sign in"), so don't collapse to generic.
   if (msg.contains('not authenticated')) return AuthErrorKind.notSignedIn;
@@ -63,6 +88,12 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
       return l10n.authErrorInvalidCredentials;
     case AuthErrorKind.rateLimited:
       return l10n.authErrorRateLimited;
+    case AuthErrorKind.emailExists:
+      return l10n.authErrorEmailExists;
+    case AuthErrorKind.emailNotConfirmed:
+      return l10n.authErrorEmailNotConfirmed;
+    case AuthErrorKind.weakPassword:
+      return l10n.authErrorWeakPassword(kPasswordMinLength);
     // "Sign in to do this" makes no sense on the sign-in screens
     // themselves — collapse to generic there.
     case AuthErrorKind.notSignedIn:
@@ -73,10 +104,10 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
 
 /// Map an arbitrary exception on a non-auth form screen (club, coach, plan,
 /// invite) to a localized, user-facing message. Reuses [classifyAuthError]'s
-/// offline / rate-limited detection; the invalid-credentials branch can't
-/// arise off the sign-in screens, so it collapses into the generic fallback.
-/// Route every rendered `_error =` assignment on those screens through this
-/// and keep the raw string in `debugPrint` only.
+/// offline / rate-limited detection; the credential-shaped branches can't
+/// arise off the sign-in / sign-up screens, so they collapse into the
+/// generic fallback. Route every rendered `_error =` assignment on those
+/// screens through this and keep the raw string in `debugPrint` only.
 String friendlyError(AppLocalizations l10n, Object error) {
   switch (classifyAuthError(error)) {
     case AuthErrorKind.offline:
@@ -86,9 +117,26 @@ String friendlyError(AppLocalizations l10n, Object error) {
     case AuthErrorKind.notSignedIn:
       return l10n.authErrorNotSignedIn;
     case AuthErrorKind.invalidCredentials:
+    case AuthErrorKind.emailExists:
+    case AuthErrorKind.emailNotConfirmed:
+    case AuthErrorKind.weakPassword:
     case AuthErrorKind.generic:
       return l10n.authErrorGeneric;
   }
+}
+
+/// True when [error] is the data layer's signed-out rejection — the
+/// `StateError('not signed in')` guard, a service's 'Not authenticated'
+/// throw, a 401, or the Postgres permission failure (42501) an anon
+/// request gets from an authenticated-only grant. Callers route these
+/// into the shared sign-in-required state instead of a generic error +
+/// a Retry that can never succeed.
+bool isSignedOutError(Object error) {
+  final code = _stringProp(error, (e) => e.code)?.toLowerCase();
+  if (code == '42501') return true;
+  if (_statusCode(error) == 401) return true;
+  final msg = error.toString().toLowerCase();
+  return msg.contains('not signed in') || msg.contains('not authenticated');
 }
 
 bool _looksOffline(String msg) =>

@@ -1,4 +1,5 @@
 // ignore_for_file: avoid_relative_lib_imports
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -27,6 +28,25 @@ class _FakeApi extends ApiClient {
   String? get userEmail => 'runner@test.com';
 }
 
+/// Drives auth transitions: mutate [uid]/[email], then [emit] a tick on the
+/// stream the AuthChangeAware mixin listens to (#223/#232).
+class _SwitchableApi extends ApiClient {
+  String? uid = 'u1';
+  String? email = 'runner@test.com';
+  final _controller = StreamController<String?>.broadcast();
+
+  @override
+  String? get userId => uid;
+
+  @override
+  String? get userEmail => email;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  void emit() => _controller.add(uid);
+}
+
 void main() {
   final tmpDirs = <Directory>[];
   tearDown(() {
@@ -42,7 +62,7 @@ void main() {
     return d;
   }
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester, {ApiClient? api}) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = Preferences();
     await prefs.init();
@@ -57,7 +77,7 @@ void main() {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: YouScreen(
-        apiClient: _FakeApi(),
+        apiClient: api ?? _FakeApi(),
         preferences: prefs,
         runStore: runStore,
         routeStore: routeStore,
@@ -85,6 +105,39 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('profile tile reacts to sign-out and an account switch (#223)',
+      (tester) async {
+    final api = _SwitchableApi();
+    await pump(tester, api: api);
+    expect(find.text('runner@test.com'), findsWidgets);
+
+    // Sign out (from anywhere — the account screen, a session expiry):
+    // the tile must drop the departed user's email, not render it until
+    // some unrelated rebuild.
+    api.uid = null;
+    api.email = null;
+    api.emit();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('runner@test.com'), findsNothing);
+    expect(find.text('Your profile'), findsNothing);
+
+    // Sign in as someone else: the tile shows B's email and routes to
+    // B's profile, not A's (#232 instance 3 — stale viewerId).
+    api.uid = 'u2';
+    api.email = 'other@test.com';
+    api.emit();
+    await tester.pump();
+    expect(find.text('other@test.com'), findsWidgets);
+    await tester.tap(find.text('Your profile'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester.widget<ProfileScreen>(find.byType(ProfileScreen)).userId,
+      'u2',
+    );
   });
 
   testWidgets('a settings tile drills into its sub-screen', (tester) async {

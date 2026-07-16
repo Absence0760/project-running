@@ -1010,6 +1010,36 @@
   "@authErrorNotSignedIn": {
     "description": "Friendly error shown when an action requires a signed-in account"
   },
+  "authErrorEmailExists": "That email already has an account. Sign in instead.",
+  "@authErrorEmailExists": {
+    "description": "Friendly auth error shown when sign-up fails because the email is already registered"
+  },
+  "authErrorEmailNotConfirmed": "Confirm your email first — check your inbox for the confirmation link.",
+  "@authErrorEmailNotConfirmed": {
+    "description": "Friendly auth error shown when sign-in fails because the email address hasn't been confirmed yet"
+  },
+  "authErrorWeakPassword": "That password is too weak. Use at least {minLength} characters.",
+  "@authErrorWeakPassword": {
+    "description": "Friendly auth error shown when the server rejects a password as too weak",
+    "placeholders": {
+      "minLength": {
+        "type": "int"
+      }
+    }
+  },
+  "authErrorInvalidEmail": "Enter a valid email address.",
+  "@authErrorInvalidEmail": {
+    "description": "Inline validation error under the sign-up email field when the entered value is not email-shaped"
+  },
+  "authErrorPasswordTooShort": "Password must be at least {minLength} characters.",
+  "@authErrorPasswordTooShort": {
+    "description": "Inline validation error when an entered password is shorter than the minimum length",
+    "placeholders": {
+      "minLength": {
+        "type": "int"
+      }
+    }
+  },
   "signInTitle": "Sign In",
   "@signInTitle": {
     "description": "AppBar title for the sign-in screen"
@@ -1038,6 +1068,14 @@
   "@signInResetSent": {
     "description": "Privacy-preserving confirmation shown after requesting a password reset email"
   },
+  "signInResendConfirmation": "Resend confirmation email",
+  "@signInResendConfirmation": {
+    "description": "Button that re-sends the signup confirmation email after an email-not-confirmed sign-in failure"
+  },
+  "signInConfirmationResent": "If that email is registered, we've sent a new confirmation link.",
+  "@signInConfirmationResent": {
+    "description": "Privacy-preserving confirmation shown after re-sending the signup confirmation email"
+  },
   "signInWithApple": "Sign in with Apple",
   "@signInWithApple": {
     "description": "Apple OAuth button label on the sign-in screen"
@@ -1049,6 +1087,10 @@
   "googleSignInSoon": "Google sign-in is coming soon. For now, please use email.",
   "@googleSignInSoon": {
     "description": "Notice shown when the Google button is tapped but the provider isn't configured yet"
+  },
+  "appleSignInSoon": "Apple sign-in is coming soon. For now, please use email.",
+  "@appleSignInSoon": {
+    "description": "Notice shown when the Apple button is tapped but the Android web-auth flow isn't configured yet"
   },
   "signInContinueOffline": "Continue offline",
   "@signInContinueOffline": {
@@ -1101,6 +1143,23 @@
   "signUpErrorAcceptTerms": "Please accept the Terms of Service and Privacy Policy to continue.",
   "@signUpErrorAcceptTerms": {
     "description": "Validation error shown when the terms gate is not accepted"
+  },
+  "signUpCheckEmailTitle": "Check your email",
+  "@signUpCheckEmailTitle": {
+    "description": "Headline of the check-your-email state shown after a sign-up that needs email confirmation"
+  },
+  "signUpCheckEmailBody": "We sent a confirmation link to {email}. Open it to finish setting up your account.",
+  "@signUpCheckEmailBody": {
+    "description": "Body of the check-your-email state shown after a sign-up that needs email confirmation",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "signUpCheckEmailBack": "Back to sign in",
+  "@signUpCheckEmailBack": {
+    "description": "Button on the check-your-email state that returns to the sign-in screen"
   },
   "signUpContinueWithApple": "Continue with Apple",
   "@signUpContinueWithApple": {
@@ -1207,6 +1266,14 @@
         "type": "String"
       }
     }
+  },
+  "setupOfflineHint": "Can't reach the server right now. You can finish setup later — everything here is editable in Settings.",
+  "@setupOfflineHint": {
+    "description": "Hint shown next to the setup wizard's offline fail-safe exit after a save failed"
+  },
+  "setupFinishLater": "Finish later",
+  "@setupFinishLater": {
+    "description": "Setup wizard fail-safe exit that closes the wizard without a server write and defers the onboarding stamp"
   },
   "setupNameTitle": "What should we call you?",
   "@setupNameTitle": {
@@ -1355,6 +1422,10 @@
   "setupDoneHint": "That's everything. Tap Open dashboard to start running.",
   "@setupDoneHint": {
     "description": "Setup wizard final step hint"
+  },
+  "setupDoneHintGoal": "That's everything. Create a training plan for your goal, or open the dashboard to start running.",
+  "@setupDoneHintGoal": {
+    "description": "Setup wizard final step hint when the runner picked a goal, so the primary action is Create my training plan"
   },
   "privacyPrivateTitle": "Private",
   "@privacyPrivateTitle": {
@@ -6009,6 +6080,28 @@
   "@planNewNameHint": {
     "description": "Plan-name field hint"
   },
+  "planNewNameRequiredHint": "Add a plan name to enable Create.",
+  "@planNewNameRequiredHint": {
+    "description": "Inline hint below the plan-name field explaining why the Create button is disabled when the name is empty"
+  },
+  "planNewDefaultName": "{goal} plan",
+  "@planNewDefaultName": {
+    "description": "Default plan name prefilled when the plan wizard opens preselected to a goal (from the onboarding nudge)",
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewDefaultNameBeginner": "Walk-run to {goal}",
+  "@planNewDefaultNameBeginner": {
+    "description": "Default plan name prefilled when the plan wizard opens on the beginner walk-run preset",
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
   "planNewGoalRace": "Goal race",
   "@planNewGoalRace": {
     "description": "Goal-race dropdown label"
@@ -7164,10 +7257,6 @@
   "@settingsAccountSave": {
     "description": "Save button on the Account screen dialogs"
   },
-  "settingsAccountPasswordTooShort": "Password must be at least 8 characters",
-  "@settingsAccountPasswordTooShort": {
-    "description": "Validation error when the new password is shorter than 8 characters"
-  },
   "settingsAccountPasswordsMismatch": "Passwords do not match",
   "@settingsAccountPasswordsMismatch": {
     "description": "Validation error when the password and confirmation differ"
@@ -7438,6 +7527,26 @@
   "settingsAccountSendErrorReportsSubtitle": "Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.",
   "@settingsAccountSendErrorReportsSubtitle": {
     "description": "Subtitle of the error-reporting toggle"
+  },
+  "settingsAccountDisplayName": "Display name",
+  "@settingsAccountDisplayName": {
+    "description": "Label for the account display-name tile and its edit dialog"
+  },
+  "settingsAccountDisplayNameHint": "The name other runners see. Leave blank to use \"Runner\".",
+  "@settingsAccountDisplayNameHint": {
+    "description": "Helper text under the display-name field explaining the fallback"
+  },
+  "settingsAccountDisplayNameUnset": "Not set — you appear as \"Runner\"",
+  "@settingsAccountDisplayNameUnset": {
+    "description": "Subtitle on the display-name tile when no display name is set"
+  },
+  "settingsAccountDisplayNameUpdated": "Display name updated",
+  "@settingsAccountDisplayNameUpdated": {
+    "description": "Banner confirming the display name saved"
+  },
+  "settingsAccountDisplayNameUpdateFailed": "Couldn't update your display name. Please try again.",
+  "@settingsAccountDisplayNameUpdateFailed": {
+    "description": "Banner shown when the display-name save fails"
   },
   "settingsAccountErrorReportingEnabled": "Error reporting enabled — restart the app to apply.",
   "@settingsAccountErrorReportingEnabled": {
@@ -8439,6 +8548,18 @@
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },
+  "privacyZonesDiscardTitle": "Discard changes?",
+  "@privacyZonesDiscardTitle": {
+    "description": "Title of the unsaved-changes confirm dialog on the privacy-zones editor"
+  },
+  "privacyZonesDiscardBody": "You have unsaved privacy zones. Leave without saving?",
+  "@privacyZonesDiscardBody": {
+    "description": "Body of the unsaved-changes confirm dialog on the privacy-zones editor"
+  },
+  "privacyZonesDiscard": "Discard",
+  "@privacyZonesDiscard": {
+    "description": "Confirm button that leaves the privacy-zones editor discarding unsaved zones"
+  },
   "prefsTitle": "Preferences",
   "@prefsTitle": {
     "description": "AppBar title for the Settings > Preferences screen"
@@ -8880,6 +9001,10 @@
   "@dashboardWelcomeBody": {
     "description": "Dashboard empty-state explanatory body"
   },
+  "dashboardStartRun": "Start a run",
+  "@dashboardStartRun": {
+    "description": "Dashboard empty-state primary button that opens the recorder to start a run"
+  },
   "dashboardSetGoal": "Set a goal",
   "@dashboardSetGoal": {
     "description": "Dashboard empty-state primary button to create a goal"
@@ -8963,6 +9088,15 @@
     "description": "Personal-best row label for the fastest effort at a named distance",
     "placeholders": {
       "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardPbAgeGrade": "{percent} age grade",
+  "@dashboardPbAgeGrade": {
+    "description": "Muted second line under a personal-best time showing its age grade (e.g. 72.4% age grade)",
+    "placeholders": {
+      "percent": {
         "type": "String"
       }
     }
@@ -14363,5 +14497,13 @@
   "simWatchDescent": "Descent",
   "simWatchFixAge": "Fix age",
   "simWatchSeconds": "{seconds} s",
-  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}}
+  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}},
+  "signInRequiredMessage": "Sign in to use this feature.",
+  "@signInRequiredMessage": {"description": "Generic body of the shared sign-in-required state on auth-only surfaces"},
+  "signInRequiredAction": "Sign in",
+  "@signInRequiredAction": {"description": "CTA button on the shared sign-in-required state; opens the sign-in screen"},
+  "backendUnavailableMessage": "Can't reach the server right now. Online features are unavailable.",
+  "@backendUnavailableMessage": {"description": "Body of the shared state when the backend is unreachable at launch (no sign-in CTA can help)"},
+  "feedSignedOutMessage": "Sign in to see runs from people you follow.",
+  "@feedSignedOutMessage": {"description": "Body of the sign-in-required state on the following feed"}
 }

@@ -2391,7 +2391,7 @@ class _NavGroup extends StatelessWidget {
             onPressed: onPrev,
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
           Expanded(child: child),
           IconButton(
@@ -2400,7 +2400,7 @@ class _NavGroup extends StatelessWidget {
             onPressed: onNext,
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
         ],
       ),

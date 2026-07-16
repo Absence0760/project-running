@@ -25,6 +25,7 @@ import '../session_steps.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/event_photos.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/finisher_certificate_card.dart';
@@ -413,6 +414,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final e = _event;
     final inst = _activeInstance;
     if (e == null || inst == null || _submittingResult) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.social.currentUserId, onSignedIn: _load)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _submittingResult = true);
     try {
       final picked = await showModalBottomSheet<_SubmitResultChoice>(
@@ -437,7 +443,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       debugPrint('event submit failed: $err');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).eventSubmitFailed(friendlyError(AppLocalizations.of(context), err)));
+            context,
+            AppLocalizations.of(context).eventSubmitFailed(
+                friendlyError(AppLocalizations.of(context), err)));
       }
     } finally {
       if (mounted) setState(() => _submittingResult = false);
@@ -546,6 +554,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final e = _event;
     final inst = _activeInstance;
     if (e == null || inst == null || _busy) return;
+    if (!await ensureSignedIn(context,
+        viewerId: widget.social.currentUserId, onSignedIn: _load)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       // If user taps the same status they already have for the NEXT instance,

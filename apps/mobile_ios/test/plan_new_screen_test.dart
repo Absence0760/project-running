@@ -442,4 +442,67 @@ void main() {
       expect(find.textContaining('Daniels VDOT'), findsNothing);
     });
   });
+
+  group('PlanNewScreen — beginner input surface (#262 recent-5K, #263 name)',
+      () {
+    // The form is a lazy ListView; a tall surface builds every field so its
+    // presence/absence can be asserted without scrolling.
+    Future<void> pumpTall(WidgetTester tester,
+        {GoalEvent? goal, bool beginner = false}) {
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(
+            training: TrainingService(),
+            initialGoal: goal,
+            initialBeginnerWalkRun: beginner,
+          ),
+        ),
+      );
+    }
+
+    final riegelFinder = find.textContaining('Riegel equivalence');
+
+    testWidgets('a normal plan shows the recent-5K + Riegel helper',
+        (tester) async {
+      await pumpTall(tester);
+      await tester.pump();
+      expect(riegelFinder, findsOneWidget);
+    });
+
+    testWidgets('the beginner walk-run preset hides the recent-5K + Riegel helper',
+        (tester) async {
+      // Reason (#262): a walk-run plan is duration-based intervals — a
+      // recent-5K anchor + "Riegel equivalence" jargon is meaningless to a
+      // runner who has never run a 5K. Mirrors the preview panel already
+      // hiding the pace zones + VDOT in walk-run mode.
+      await pumpTall(tester, beginner: true);
+      await tester.pump();
+      expect(riegelFinder, findsNothing);
+    });
+
+    testWidgets('the beginner preset prefills a default plan name (#263)',
+        (tester) async {
+      // Reason (#263): the onboarding nudge lands here with an empty name, so
+      // the Create button was silently disabled — a dead-end tap. The preset
+      // now seeds an editable default name so Create is reachable on arrival.
+      await pumpTall(tester, goal: GoalEvent.distance5k, beginner: true);
+      await tester.pump();
+      final field = tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Plan name'));
+      expect(field.controller?.text, 'Walk-run to 5K');
+    });
+
+    testWidgets('a no-preset plan shows the inline name-required hint (#263)',
+        (tester) async {
+      await pumpTall(tester);
+      await tester.pump();
+      expect(find.text('Add a plan name to enable Create.'), findsOneWidget);
+    });
+  });
 }

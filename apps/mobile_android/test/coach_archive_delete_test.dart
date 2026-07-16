@@ -18,6 +18,11 @@ class _ArchiveApi extends ApiClient {
   final bool throwOnDelete;
   int deleteCalls = 0;
 
+  /// The screen gates on the viewer id, so a fake must declare who is
+  /// looking rather than falling through to a real Supabase read.
+  @override
+  String? get userId => 'u-viewer';
+
   @override
   Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
 

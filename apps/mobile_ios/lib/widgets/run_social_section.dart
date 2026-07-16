@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../screens/profile_screen.dart';
 import '../social_service.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/top_banner.dart';
@@ -76,8 +77,12 @@ class _RunSocialSectionState extends State<RunSocialSection> {
             ? Future.value(null)
             : widget.api.fetchProfileSummary(viewerId),
       ]);
-      final engMap = results[0]
-          as Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>;
+      final engMap =
+          results[0]
+              as Map<
+                String,
+                ({int kudosCount, bool viewerHasKudos, int commentCount})
+              >;
       final cs = results[1] as List<RunCommentWithAuthor>;
       final viewer = results[2] as ProfileSummary?;
       final entry = engMap[widget.runId];
@@ -127,18 +132,24 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       // tab against a stale local flag) means the optimistic +/-1 drifted
       // the count. Undo the delta while keeping the corrected flag.
       if (!changed && mounted) {
-        setState(() => _eng = EngagementSummary(
-              kudosCount: before.kudosCount,
-              viewerHasKudos: !before.viewerHasKudos,
-              commentCount: before.commentCount,
-            ));
+        setState(
+          () => _eng = EngagementSummary(
+            kudosCount: before.kudosCount,
+            viewerHasKudos: !before.viewerHasKudos,
+            commentCount: before.commentCount,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('run social kudos error: $e');
       if (!mounted) return;
       setState(() => _eng = before);
       showTopBanner(
-          context, AppLocalizations.of(context).runSocialKudosError(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(context).runSocialKudosError(
+          friendlyError(AppLocalizations.of(context), e),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _kudosBusy = false);
     }
@@ -160,12 +171,9 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       // Optimistically append the new comment. Was: re-fetch the whole
       // engagement + comments list — a 200-comment thread paid for the
       // round-trip + the parent ListView rebuild on every reply.
-      final author = _viewerProfile ??
-          PublicProfile(
-            id: _viewerId!,
-            displayName: null,
-            avatarUrl: null,
-          );
+      final author =
+          _viewerProfile ??
+          PublicProfile(id: _viewerId!, displayName: null, avatarUrl: null);
       setState(() {
         if (parentId != null) _replyTo = null;
         _comments = [
@@ -182,7 +190,11 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       debugPrint('run social post error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runSocialPostError(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(context).runSocialPostError(
+          friendlyError(AppLocalizations.of(context), e),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -193,7 +205,8 @@ class _RunSocialSectionState extends State<RunSocialSection> {
   Future<void> _deleteComment(String commentId) async {
     if (_deletingComments.contains(commentId)) return;
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: Text(l10n.runSocialDeleteCommentTitle),
@@ -206,7 +219,8 @@ class _RunSocialSectionState extends State<RunSocialSection> {
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
                 child: Text(l10n.runSocialDelete),
               ),
             ],
@@ -248,6 +262,17 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     );
   }
 
+  // A harassing comment needs a one-tap path to the author's profile, where
+  // the block / report affordance lives. Mirrors the feed's author-tap.
+  void _openAuthor(String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => ProfileScreen(api: widget.api, userId: userId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -270,8 +295,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       }
     }
 
-    final isOwn = widget.runOwnerId != null &&
-        widget.runOwnerId == _viewerId;
+    final isOwn = widget.runOwnerId != null && widget.runOwnerId == _viewerId;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -309,12 +333,13 @@ class _RunSocialSectionState extends State<RunSocialSection> {
               _CommentTile(
                 entry: c,
                 canDelete: _canDelete(c.comment),
+                onAuthorTap: () => _openAuthor(c.author.id),
                 onReply: _viewerId == null
                     ? null
                     : () => setState(() {
-                          _replyTo = c.comment.id;
-                          _replyCtrl.clear();
-                        }),
+                        _replyTo = c.comment.id;
+                        _replyCtrl.clear();
+                      }),
                 onDelete: () => _deleteComment(c.comment.id),
                 onReport: _canReport(c.comment)
                     ? () => _reportComment(c.comment.id)
@@ -326,6 +351,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
                   child: _CommentTile(
                     entry: r,
                     canDelete: _canDelete(r.comment),
+                    onAuthorTap: () => _openAuthor(r.author.id),
                     onReply: null,
                     onDelete: () => _deleteComment(r.comment.id),
                     onReport: _canReport(r.comment)
@@ -405,6 +431,7 @@ class _KudosPill extends StatelessWidget {
 class _CommentTile extends StatelessWidget {
   final RunCommentWithAuthor entry;
   final bool canDelete;
+  final VoidCallback onAuthorTap;
   final VoidCallback? onReply;
   final VoidCallback onDelete;
   final VoidCallback? onReport;
@@ -413,6 +440,7 @@ class _CommentTile extends StatelessWidget {
   const _CommentTile({
     required this.entry,
     required this.canDelete,
+    required this.onAuthorTap,
     required this.onReply,
     required this.onDelete,
     this.onReport,
@@ -428,9 +456,12 @@ class _CommentTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _MiniAvatar(
-            displayName: entry.author.displayName,
-            avatarUrl: entry.author.avatarUrl,
+          GestureDetector(
+            onTap: onAuthorTap,
+            child: _MiniAvatar(
+              displayName: entry.author.displayName,
+              avatarUrl: entry.author.avatarUrl,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -440,16 +471,25 @@ class _CommentTile extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        entry.author.displayName ?? l10n.runSocialRunnerFallback,
-                        style: theme.textTheme.titleSmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: GestureDetector(
+                        onTap: onAuthorTap,
+                        child: Semantics(
+                          button: true,
+                          child: Text(
+                            entry.author.displayName ??
+                                l10n.runSocialRunnerFallback,
+                            style: theme.textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ),
                     ),
                     Text(
-                      fmtRelative(entry.comment.createdAt,
-                          localeToTag(Localizations.localeOf(context))),
+                      fmtRelative(
+                        entry.comment.createdAt,
+                        localeToTag(Localizations.localeOf(context)),
+                      ),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -501,7 +541,6 @@ class _CommentTile extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _Composer extends StatelessWidget {
@@ -553,7 +592,9 @@ class _Composer extends StatelessWidget {
             ),
             if (onCancel != null)
               TextButton(
-                  onPressed: onCancel, child: Text(l10n.runSocialCancel)),
+                onPressed: onCancel,
+                child: Text(l10n.runSocialCancel),
+              ),
           ],
         ),
       ],

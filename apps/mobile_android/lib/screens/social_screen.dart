@@ -5,6 +5,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/sign_in_required_state.dart';
 import 'challenges_screen.dart';
 import 'clubs_screen.dart';
 import 'discover_screen.dart';
@@ -29,7 +30,12 @@ import 'people_screen.dart';
 /// whichever child FAB is appropriate for the active tab (Clubs hoists
 /// "Create club").
 class SocialScreen extends StatefulWidget {
-  final ApiClient api;
+  /// Nullable like every other tab's client — null means Supabase never
+  /// initialised (env missing / init failed). The tab then fails closed
+  /// into the shared unavailable state instead of manufacturing a
+  /// default ApiClient whose every method throws, which turned all four
+  /// sub-tabs into structurally futile retry loops (issue #238).
+  final ApiClient? api;
   final SocialService social;
   final TrainingService training;
   /// Still required — `ClubsScreen` takes it to surface club-owned routes.
@@ -81,6 +87,10 @@ class _SocialScreenState extends State<SocialScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final api = widget.api;
+    if (api == null) {
+      return const Scaffold(body: SignInRequiredState(api: null));
+    }
     return Scaffold(
       appBar: AppBar(
         // No title — the bottom-nav already labels the tab "Social",
@@ -108,18 +118,18 @@ class _SocialScreenState extends State<SocialScreen>
       body: TabBarView(
         controller: _controller,
         children: [
-          FeedScreen(api: widget.api, embedded: true),
-          PeopleScreen(api: widget.api, embedded: true),
+          FeedScreen(api: api, embedded: true),
+          PeopleScreen(api: api, embedded: true),
           ClubsScreen(
             key: _clubsKey,
             social: widget.social,
             training: widget.training,
-            apiClient: widget.api,
+            apiClient: api,
             routeStore: widget.routeStore,
             embedded: true,
           ),
           DiscoverScreen(
-            api: widget.api,
+            api: api,
             social: widget.social,
             embedded: true,
           ),

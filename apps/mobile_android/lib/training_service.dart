@@ -63,6 +63,13 @@ class TrainingService extends ChangeNotifier {
   }
   String? get _uid => _c.auth.currentUser?.id;
 
+  /// Public mirror of [_uid] for screens that need the viewer id but
+  /// shouldn't be reaching into `Supabase.instance.client.auth` directly.
+  /// Throws the [_c] bootstrap guard before Supabase.initialize resolves,
+  /// same as `SocialService.currentUserId` — a pre-init read is a
+  /// bootstrap bug, not a signed-out viewer, and must not read as one.
+  String? get currentUserId => _uid;
+
   /// Persona-hunt Round 3 finding Woman #3. Reads the viewer's
   /// `user_profiles.gender` so the plan wizard can apply the
   /// gender-aware pace calibration. Returns null when the column is

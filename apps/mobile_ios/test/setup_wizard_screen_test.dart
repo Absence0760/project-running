@@ -19,11 +19,16 @@ class _FakeApi extends ApiClient {
   String? completedGender;
   DateTime? completedDob;
 
+  /// Simulates zero connectivity — both stamp writes throw, like the
+  /// real client does when the server is unreachable (issue #246).
+  bool failWrites = false;
+
   @override
   String? get userId => 'u1';
 
   @override
   Future<void> markOnboarded() async {
+    if (failWrites) throw Exception('network unreachable');
     markOnboardedCalled = true;
   }
 
@@ -35,6 +40,7 @@ class _FakeApi extends ApiClient {
     String? gender,
     required bool healthDataConsent,
   }) async {
+    if (failWrites) throw Exception('network unreachable');
     completeOnboardingCalled = true;
     completedDisplayName = displayName;
     completedUnit = preferredUnit;
@@ -124,6 +130,40 @@ void main() {
       expect(find.text(l10n.setupOpenDashboard), findsOneWidget);
     });
 
+    testWidgets(
+        'final step with a goal offers one primary CTA, not two competing buttons',
+        (tester) async {
+      // Reason (#261): the goal-keyed "Create my training plan" CTA and the
+      // nav "Open dashboard" were both FilledButtons, and the hint told the
+      // runner to "tap Open dashboard" — two competing primaries + a mismatched
+      // hint. The CTA must be the single primary; Open dashboard demotes to a
+      // secondary outlined action and the hint names the primary.
+      final api = _FakeApi();
+      await _pump(tester, api, await _prefs());
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      // Advance to the goal step (index 2) and pick a goal.
+      await tester.tap(find.text(l10n.setupContinue));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.setupContinue));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(l10n.setupGoal5k));
+      await tester.pump();
+      await tester.tap(find.text(l10n.setupGoal5k));
+      await tester.pump();
+      // Advance to the final step.
+      for (var i = 2; i < onboardingTotalSteps - 1; i++) {
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+      }
+      expect(find.widgetWithText(FilledButton, l10n.setupCreatePlanCta),
+          findsOneWidget);
+      expect(find.widgetWithText(FilledButton, l10n.setupOpenDashboard),
+          findsNothing);
+      expect(find.widgetWithText(OutlinedButton, l10n.setupOpenDashboard),
+          findsOneWidget);
+      expect(find.text(l10n.setupDoneHintGoal), findsOneWidget);
+    });
+
     testWidgets('Finish persists the answers via completeOnboarding',
         (tester) async {
       final api = _FakeApi();
@@ -175,6 +215,63 @@ void main() {
       await tester.tap(find.text(l10n.setupGenderFemale).last);
       await tester.pumpAndSettle();
       expect(find.byType(CheckboxListTile), findsOneWidget);
+    });
+
+    group('offline fail-safe exit (issue #246)', () {
+      testWidgets(
+          'a failing Skip reveals Finish later, which dismisses the wizard '
+          'with zero connectivity', (tester) async {
+        final api = _FakeApi()..failWrites = true;
+        final prefs = await _prefs();
+        await _pump(tester, api, prefs);
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        // No fail-safe exit before a save ever failed — the normal exits
+        // own the happy path.
+        expect(find.text(l10n.setupFinishLater), findsNothing);
+
+        await tester.tap(find.text(l10n.setupSkip));
+        // Drain the failure banner's auto-dismiss timer.
+        await tester.pumpAndSettle(const Duration(seconds: 4));
+
+        // Still trapped on the wizard (canPop is false) — but the
+        // fail-safe exit is now offered.
+        expect(find.text(l10n.setupPageTitle), findsOneWidget);
+        expect(find.text(l10n.setupFinishLater), findsOneWidget);
+
+        await tester.tap(find.text(l10n.setupFinishLater));
+        await tester.pumpAndSettle();
+
+        // The wizard popped without any server write, and the dismissal
+        // was recorded locally so the gate defers the stamp instead of
+        // re-pushing the wizard.
+        expect(find.text(l10n.setupPageTitle), findsNothing);
+        expect(find.text('open'), findsOneWidget);
+        expect(prefs.setupWizardDismissed, isTrue);
+        expect(api.markOnboardedCalled, isFalse);
+      });
+
+      testWidgets('a failing Finish reveals the same fail-safe exit',
+          (tester) async {
+        final api = _FakeApi()..failWrites = true;
+        final prefs = await _prefs();
+        await _pump(tester, api, prefs);
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        for (var i = 0; i < onboardingTotalSteps - 1; i++) {
+          await tester.tap(find.text(l10n.setupContinue));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text(l10n.setupOpenDashboard));
+        await tester.pumpAndSettle(const Duration(seconds: 4));
+
+        expect(find.text(l10n.setupFinishLater), findsOneWidget);
+
+        await tester.tap(find.text(l10n.setupFinishLater));
+        await tester.pumpAndSettle();
+        expect(find.text('open'), findsOneWidget);
+        expect(prefs.setupWizardDismissed, isTrue);
+      });
     });
 
     group('locale-derived unit default', () {
