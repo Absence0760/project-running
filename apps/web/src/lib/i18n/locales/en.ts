@@ -419,6 +419,7 @@ export const en = {
 	"onboarding.createPlanCta": "Create my training plan",
 	"onboarding.pushEnableError": "Could not enable notifications: {message}",
 	"onboarding.saveError": "Could not save: {message}",
+	"onboarding.notSignedIn": "You are not signed in — sign in and try again",
 	"onboarding.welcomeToast": "All set! Welcome aboard.",
 	"planDetail.backAllPlans": "All plans",
 	"planDetail.backDashboard": "Dashboard",
