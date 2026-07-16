@@ -31,6 +31,13 @@ Future<void> _ensureSupabase() async {
 }
 
 class _FakeSocialService extends SocialService {
+  /// The redeem action gates on the viewer id, so a fake must declare
+  /// who is looking rather than falling through to a real Supabase read.
+  final String? viewerId = 'u-viewer';
+
+  @override
+  String? get currentUserId => viewerId;
+
   String? capturedToken;
   Object? errorToThrow;
   String returnSlug = 'richmond-run-club';

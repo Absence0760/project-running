@@ -22,8 +22,17 @@ TrainingPlanRow _plan(String id, String name) => TrainingPlanRow(
     );
 
 class _FakeTraining extends TrainingService {
+  _FakeTraining({this.viewerId = 'u-viewer'});
+
+  /// The library gates on the viewer id (an anon read of the template
+  /// policy returns 0 rows, which used to render a false empty state),
+  /// so a fake must declare who is looking.
+  final String? viewerId;
   String? clonedTemplateId;
   String lastQuery = '';
+
+  @override
+  String? get currentUserId => viewerId;
 
   @override
   Future<List<PublicPlanLibraryEntry>> fetchPublicPlanLibrary({

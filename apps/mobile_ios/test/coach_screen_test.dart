@@ -5,12 +5,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
+import '../lib/widgets/sign_in_required_state.dart';
 import '../lib/training_service.dart';
 
 /// Reports a non-null consent timestamp so the screen renders its main
 /// (consented) Scaffold — the one whose left drawer used to swallow the
 /// back button — instead of the GDPR consent gate.
 class _ConsentedApi extends ApiClient {
+  /// The screen gates on the viewer id, so a fake must declare who is
+  /// looking rather than falling through to a real Supabase read.
+  @override
+  String? get userId => 'u-viewer';
   @override
   Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
 }
@@ -28,13 +33,28 @@ Future<void> _ensureSupabase() async {
   _supabaseReady = true;
 }
 
-Future<void> _pump(WidgetTester tester) {
+/// Signed in, but every fetch fails against the unconnected local
+/// Supabase — so `_consentAt` resolves to null. Stands in for "signed
+/// in, consent not yet given", which is what the GDPR gate is about;
+/// the chat surface itself is auth-only, so a viewer id is required to
+/// reach it at all.
+class _SignedInApi extends ApiClient {
+  @override
+  String? get userId => 'u-viewer';
+}
+
+class _SignedOutApi extends ApiClient {
+  @override
+  String? get userId => null;
+}
+
+Future<void> _pump(WidgetTester tester, {ApiClient? api}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: CoachScreen(
-        api: ApiClient(),
+        api: api ?? _SignedInApi(),
         training: TrainingService(),
       ),
     ),
@@ -79,6 +99,17 @@ void main() {
       await _pump(tester);
       expect(find.byType(DropdownButton<String>), findsNothing);
       await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('a signed-out viewer gets the sign-in state, not the chat '
+        '(issue #237)', (tester) async {
+      // The chat is auth-only (consent stamp, usage cap, message
+      // persistence). Signed out, every RPC silently defaulted and the
+      // user only found out at send time — fail closed instead.
+      await _pump(tester, api: _SignedOutApi());
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(SignInRequiredState), findsOneWidget);
+      expect(find.text('Before you chat with Coach'), findsNothing);
     });
 
     testWidgets('without coach_consent_at the chat is gated behind the GDPR '

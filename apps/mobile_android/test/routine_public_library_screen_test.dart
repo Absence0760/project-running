@@ -25,6 +25,11 @@ class _LibraryApi extends ApiClient {
   _LibraryApi(this.entries);
   final List<({GymRoutineRow routine, String? authorHandle})> entries;
 
+  /// The screen gates on the viewer id, so a fake must declare who is
+  /// looking rather than falling through to a real Supabase read.
+  @override
+  String? get userId => 'u-viewer';
+
   @override
   Future<List<({GymRoutineRow routine, String? authorHandle})>>
       fetchPublicGymRoutineLibrary({String query = ''}) async {
