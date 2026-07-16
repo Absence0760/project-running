@@ -867,13 +867,13 @@
 	}
 
 	.password-wrap input {
-		padding-right: 2.9rem;
+		padding-inline-end: 2.9rem;
 	}
 
 	.password-toggle {
 		position: absolute;
 		top: 50%;
-		right: var(--space-xs);
+		inset-inline-end: var(--space-xs);
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
