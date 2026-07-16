@@ -563,7 +563,9 @@ class ApiClient {
   /// aggregate data only (totals / badges / monthly strip) — no GPS, no
   /// per-run rows. Upserts on (user_id, period_kind, period_key) so a
   /// re-publish refreshes the same link instead of minting a new one.
-  /// Returns null when signed-out or the write fails (the caller surfaces it).
+  /// Throws [StateError] when signed out (a silent null here let the
+  /// caller show a retry loop that could never succeed); returns null
+  /// when the write fails (the caller surfaces it).
   /// `periodKind` is 'year' or 'month'; `periodKey` is '2026' or '2026-03'.
   Future<String?> publishRecap({
     required String periodKind,
@@ -571,7 +573,7 @@ class ApiClient {
     required Map<String, dynamic> snapshot,
   }) async {
     final userId = _client.auth.currentUser?.id;
-    if (userId == null) return null;
+    if (userId == null) throw StateError('not signed in');
     try {
       final data = await _client
           .from('public_recaps')
@@ -1854,7 +1856,7 @@ class ApiClient {
   /// Delete the current user's review of a route.
   Future<void> deleteRouteReview(String routeId) async {
     final userId = _client.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) throw StateError('not signed in');
     await _client
         .from(RouteReviewRow.table)
         .delete()
@@ -1893,7 +1895,7 @@ class ApiClient {
   /// Stop following `targetUserId`.
   Future<void> unfollowUser(String targetUserId) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(UserFollowRow.table)
         .delete()
@@ -1919,7 +1921,7 @@ class ApiClient {
   /// Unblock `targetUserId` via the `unblock_user` RPC.
   Future<void> unblockUser(String targetUserId) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client.rpc('unblock_user', params: {'p_target': targetUserId});
   }
 
@@ -2809,7 +2811,7 @@ class ApiClient {
     required String body,
   }) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(RunCommentRow.table)
         .update({RunCommentRow.colBody: body})
@@ -2861,7 +2863,7 @@ class ApiClient {
   /// bell decrements its badge before this fires.
   Future<void> markNotificationRead(String id) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
         .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
@@ -2873,7 +2875,7 @@ class ApiClient {
   /// Bulk mark-all-read for the viewer's unread inbox.
   Future<void> markAllNotificationsRead() async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
         .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
@@ -2884,7 +2886,7 @@ class ApiClient {
   /// Per-row dismiss.
   Future<void> deleteNotification(String id) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
         .delete()
@@ -4051,7 +4053,7 @@ class ApiClient {
   /// `(user_id, plan_id)` scope so a fresh conversation can begin.
   Future<void> archiveCoachThread({String? planId}) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     final ts = DateTime.now().toIso8601String();
     var q = _client
         .from(CoachMessageRow.table)
@@ -4116,7 +4118,7 @@ class ApiClient {
     String? planId,
   }) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     var q = _client
         .from(CoachMessageRow.table)
         .delete()
@@ -5234,7 +5236,7 @@ class ApiClient {
   /// when we drop our refresh token.
   Future<void> disconnectIntegration(String provider) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
+    if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(IntegrationRow.table)
         .delete()

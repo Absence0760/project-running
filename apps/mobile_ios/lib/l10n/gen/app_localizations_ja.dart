@@ -10677,4 +10677,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds 秒';
   }
+
+  @override
+  String get signInRequiredMessage => 'この機能を使うにはサインインしてください';
+
+  @override
+  String get signInRequiredAction => 'サインイン';
+
+  @override
+  String get backendUnavailableMessage => '現在サーバーに接続できません。オンライン機能は利用できません';
+
+  @override
+  String get feedSignedOutMessage => 'フォローしている人のランを見るにはサインインしてください';
 }
