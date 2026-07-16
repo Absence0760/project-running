@@ -175,9 +175,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Age grade (e.g. `72.4%`) for a timed best-effort PB, or null when the
   /// distance isn't a graded standard or the viewer's DOB/sex is unknown.
-  /// Uses the runner's age as of [now] (the PB's own date isn't carried into
-  /// the label→time map) and the shared `ageGradeForRun` twin helper.
-  String? _pbAgeGrade(String label, Duration time, DateTime now) {
+  /// Grades against the runner's age when the PB was set ([achievedAt]) for the
+  /// server PBs that carry a real date; falls back to [now] only for the
+  /// date-less offline track-scan. Uses the shared `ageGradeForRun` twin.
+  String? _pbAgeGrade(String label, Duration time, DateTime now,
+      {DateTime? achievedAt}) {
     final metres = _pbLabelMetres[label];
     if (metres == null) return null;
     final p = _viewerProfile;
@@ -185,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       distanceM: metres,
       durationSec: time.inSeconds.toDouble(),
       dobIso: p?.dateOfBirth?.toIso8601String(),
-      runStartIso: now.toIso8601String(),
+      runStartIso: (achievedAt ?? now).toIso8601String(),
       sex: p?.gender,
     );
     return result != null ? formatAgeGradePercent(result.percent) : null;
@@ -604,6 +606,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final displayEfforts = _serverPbs.isNotEmpty
         ? bestEffortsFromPersonalRecords(_serverPbs)
         : bestEfforts;
+    // Age each server PB against the date it was actually set; the offline
+    // track-scan path carries no date, so its grades fall back to `now`.
+    final pbDates = _serverPbs.isNotEmpty
+        ? pbAchievedAtByLabel(_serverPbs)
+        : const <String, DateTime>{};
     final hasAnyPb = longest != null || displayEfforts.isNotEmpty;
 
     final api = widget.apiClient;
@@ -829,8 +836,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               label: l10n.dashboardFastestDistance(
                                   bestEffortDistanceLabel(l10n, e.key)),
                               value: _formatDuration(e.value),
-                              subValue: switch (
-                                  _pbAgeGrade(e.key, e.value, now)) {
+                              subValue: switch (_pbAgeGrade(e.key, e.value, now,
+                                  achievedAt: pbDates[e.key])) {
                                 final ag? => l10n.dashboardPbAgeGrade(ag),
                                 _ => null,
                               },

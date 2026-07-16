@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/age_grade.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
@@ -32,8 +33,10 @@ class _FakeApiPb extends ApiClient {
           userId: 'u1',
           distance: '5k',
           bestTimeS: 1200,
-          achievedAt: DateTime.utc(2026, 4, 1),
-          updatedAt: DateTime.utc(2026, 4, 1),
+          // Deliberately an old PB so age-at-PB (26) differs from age-now (36+)
+          // — lets the test prove the grade uses achievedAt, not `now`.
+          achievedAt: DateTime.utc(2016, 4, 1),
+          updatedAt: DateTime.utc(2016, 4, 1),
         ),
       ];
 
@@ -712,7 +715,29 @@ void main() {
           await tester.pump();
 
           expect(find.text('Personal Bests'), findsOneWidget);
-          expect(find.textContaining('age grade'), findsOneWidget);
+          // Pin the date behaviour (#269 review): the grade must be computed
+          // against the runner's age when the PB was SET (2016 → age 26), not
+          // their age today. Compute both and assert the achieved-date value is
+          // the one rendered, and that it genuinely differs from the now-based
+          // value (so this assertion can actually catch a regression).
+          final dob = DateTime.utc(1990, 1, 1).toIso8601String();
+          final atPb = formatAgeGradePercent(ageGradeForRun(
+            distanceM: 5000,
+            durationSec: 1200,
+            dobIso: dob,
+            runStartIso: DateTime.utc(2016, 4, 1).toIso8601String(),
+            sex: 'male',
+          )!.percent);
+          final atNow = formatAgeGradePercent(ageGradeForRun(
+            distanceM: 5000,
+            durationSec: 1200,
+            dobIso: dob,
+            runStartIso: DateTime.now().toIso8601String(),
+            sex: 'male',
+          )!.percent);
+          expect(atPb, isNot(atNow));
+          expect(find.text('$atPb age grade'), findsOneWidget);
+          expect(find.text('$atNow age grade'), findsNothing);
         } finally {
           dir.deleteSync(recursive: true);
         }
