@@ -42,6 +42,19 @@ RunRow _run() => RunRow(
       isDnf: false,
     );
 
+/// A 100-hour, 240-mile ultra: the widest the stat cells ever get
+/// ("104:32:11" / "386.24"), which is what overflowed the row.
+RunRow _ultraRun() => RunRow(
+      id: 'r1',
+      userId: 'u1',
+      startedAt: DateTime(2026, 6, 1, 8),
+      durationS: 376331,
+      distanceM: 386243,
+      source: 'app',
+      activityType: 'run',
+      isDnf: false,
+    );
+
 UserProfileRow _author(String displayName) => UserProfileRow(
       id: 'u1',
       displayName: displayName,
@@ -122,11 +135,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // This screen carries a separate horizontal overflow further down
-      // that reproduces with a 2-character name too, so a blanket
-      // take-exception-is-null assert cannot isolate the author row.
-      // Drain it and assert the author row's own geometry instead.
-      tester.takeException();
+      expect(tester.takeException(), isNull);
 
       final nameFinder = find.text(longName);
       expect(nameFinder, findsOneWidget);
@@ -134,6 +143,26 @@ void main() {
       expect(nameWidget.maxLines, 1);
       expect(nameWidget.overflow, TextOverflow.ellipsis);
       expect(tester.getRect(nameFinder).right, lessThanOrEqualTo(360.0));
+    });
+  });
+
+  group('PublicRunScreen — stat row at a narrow width', () {
+    testWidgets('an ultra-length distance/time/pace does not overflow the row',
+        (tester) async {
+      final view = tester.view;
+      view.physicalSize = const Size(720, 1280);
+      view.devicePixelRatio = 2.0;
+      addTearDown(view.reset);
+
+      await _pumpApi(
+        tester,
+        _FakeApi(run: _ultraRun(), author: _author('Al')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
     });
   });
 }
