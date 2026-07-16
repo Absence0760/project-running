@@ -425,7 +425,7 @@ See [docs/backend/settings.md](../backend/settings.md) for the full registry of 
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Display name | ✓ | ✓ | ✓ | N/A | N/A | Mobile shows the signed-in email; dedicated display-name editor is web-only. |
+| Display name | ✓ | ✓ | ✓ | N/A | N/A | Web edits it on `/settings/account`. **Mobile twin shipped**: `settings_account_screen.dart` carries a display-name tile (dialog editor, blank clears to the "Runner" fallback) backed by `ApiClient.updateDisplayName` — a row-count-verified update with an insert fallback that throws when signed out. Previously the setup wizard was the only mobile writer, so a user who skipped it was stuck as "Runner". |
 | Email address (view) | ✓ | ✓ | ✓ | N/A | N/A | |
 | Change password | ✓ | ✓ | ✓ | N/A | N/A | All three call `supabase.auth.updateUser`. |
 | Delete account | ✓ | ✓ | ✓ | N/A | N/A | All three call the `delete-account` Edge Function. |
