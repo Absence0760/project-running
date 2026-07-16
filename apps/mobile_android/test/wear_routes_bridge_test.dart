@@ -1144,25 +1144,35 @@ void main() {
 
     test('10 rapid notifications + quiescence fires once after window',
         () async {
-      // 250ms window (not 60ms): on a slow CI runner each
-      // `await store.save(...)` writes to disk and can take
-      // 5-15ms, so 10 zero-spaced saves span 50-150ms — comfortably
-      // outside a 60ms window. CI run 26523370163 split the burst
-      // into 2 pushes when the 9th save crossed the 60ms boundary.
-      // The 5-save sibling test stays at 60ms because its explicit
-      // 5ms `Future.delayed` between saves keeps the total span
-      // <= 25ms regardless of disk latency.
+      // The burst must be SYNCHRONOUS by construction. Two prior CI
+      // flakes (runs 26523370163, 29520492396) came from `await
+      // store.save(...)` putting a disk write inside the "rapid"
+      // burst — a runner stall between two saves crosses whatever
+      // window is chosen and splits the push in two; raising the
+      // window (60ms → 250ms) only moved the flake. So: seed the 10
+      // routes on disk FIRST, then drive the bridge with 10
+      // back-to-back store notifications that involve no I/O at all.
       WearRoutesBridge.kPushDebounceWindow =
           const Duration(milliseconds: 250);
+      // 9 of the 10 routes exist before attach — the burst must change
+      // the payload exactly once, or the bridge's diff cache would
+      // (correctly) suppress a push identical to the attach push.
+      for (var i = 0; i < 9; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
       channel.pushCalls.clear();
 
-      for (var i = 0; i < 10; i++) {
-        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      // The one disk write opens the burst; the other nine
+      // notifications are synchronous re-notifies.
+      await store.save(_makeRoute(id: 'r-9', isStarred: true));
+      for (var i = 0; i < 9; i++) {
+        // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+        store.notifyListeners();
       }
-      // No spacing — but each save still resets the timer.
+      // No spacing — but each notification still resets the timer.
       // After the burst, wait past the window.
       await Future<void>.delayed(const Duration(milliseconds: 350));
 
