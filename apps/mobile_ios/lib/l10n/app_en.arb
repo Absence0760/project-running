@@ -1006,6 +1006,36 @@
   "@authErrorGeneric": {
     "description": "Friendly fallback auth error shown when sign-in/sign-up fails for an unrecognised reason"
   },
+  "authErrorEmailExists": "That email already has an account. Sign in instead.",
+  "@authErrorEmailExists": {
+    "description": "Friendly auth error shown when sign-up fails because the email is already registered"
+  },
+  "authErrorEmailNotConfirmed": "Confirm your email first — check your inbox for the confirmation link.",
+  "@authErrorEmailNotConfirmed": {
+    "description": "Friendly auth error shown when sign-in fails because the email address hasn't been confirmed yet"
+  },
+  "authErrorWeakPassword": "That password is too weak. Use at least {minLength} characters.",
+  "@authErrorWeakPassword": {
+    "description": "Friendly auth error shown when the server rejects a password as too weak",
+    "placeholders": {
+      "minLength": {
+        "type": "int"
+      }
+    }
+  },
+  "authErrorInvalidEmail": "Enter a valid email address.",
+  "@authErrorInvalidEmail": {
+    "description": "Inline validation error under the sign-up email field when the entered value is not email-shaped"
+  },
+  "authErrorPasswordTooShort": "Password must be at least {minLength} characters.",
+  "@authErrorPasswordTooShort": {
+    "description": "Inline validation error when an entered password is shorter than the minimum length",
+    "placeholders": {
+      "minLength": {
+        "type": "int"
+      }
+    }
+  },
   "signInTitle": "Sign In",
   "@signInTitle": {
     "description": "AppBar title for the sign-in screen"
@@ -1034,6 +1064,14 @@
   "@signInResetSent": {
     "description": "Privacy-preserving confirmation shown after requesting a password reset email"
   },
+  "signInResendConfirmation": "Resend confirmation email",
+  "@signInResendConfirmation": {
+    "description": "Button that re-sends the signup confirmation email after an email-not-confirmed sign-in failure"
+  },
+  "signInConfirmationResent": "If that email is registered, we've sent a new confirmation link.",
+  "@signInConfirmationResent": {
+    "description": "Privacy-preserving confirmation shown after re-sending the signup confirmation email"
+  },
   "signInWithApple": "Sign in with Apple",
   "@signInWithApple": {
     "description": "Apple OAuth button label on the sign-in screen"
@@ -1045,6 +1083,10 @@
   "googleSignInSoon": "Google sign-in is coming soon. For now, please use email.",
   "@googleSignInSoon": {
     "description": "Notice shown when the Google button is tapped but the provider isn't configured yet"
+  },
+  "appleSignInSoon": "Apple sign-in is coming soon. For now, please use email.",
+  "@appleSignInSoon": {
+    "description": "Notice shown when the Apple button is tapped but the Android web-auth flow isn't configured yet"
   },
   "signInContinueOffline": "Continue offline",
   "@signInContinueOffline": {
@@ -1097,6 +1139,23 @@
   "signUpErrorAcceptTerms": "Please accept the Terms of Service and Privacy Policy to continue.",
   "@signUpErrorAcceptTerms": {
     "description": "Validation error shown when the terms gate is not accepted"
+  },
+  "signUpCheckEmailTitle": "Check your email",
+  "@signUpCheckEmailTitle": {
+    "description": "Headline of the check-your-email state shown after a sign-up that needs email confirmation"
+  },
+  "signUpCheckEmailBody": "We sent a confirmation link to {email}. Open it to finish setting up your account.",
+  "@signUpCheckEmailBody": {
+    "description": "Body of the check-your-email state shown after a sign-up that needs email confirmation",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "signUpCheckEmailBack": "Back to sign in",
+  "@signUpCheckEmailBack": {
+    "description": "Button on the check-your-email state that returns to the sign-in screen"
   },
   "signUpContinueWithApple": "Continue with Apple",
   "@signUpContinueWithApple": {
@@ -7147,10 +7206,6 @@
   "settingsAccountSave": "Save",
   "@settingsAccountSave": {
     "description": "Save button on the Account screen dialogs"
-  },
-  "settingsAccountPasswordTooShort": "Password must be at least 8 characters",
-  "@settingsAccountPasswordTooShort": {
-    "description": "Validation error when the new password is shorter than 8 characters"
   },
   "settingsAccountPasswordsMismatch": "Passwords do not match",
   "@settingsAccountPasswordsMismatch": {

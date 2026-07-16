@@ -731,6 +731,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorGeneric => 'Something went wrong. Please try again.';
 
   @override
+  String get authErrorEmailExists =>
+      'That email already has an account. Sign in instead.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirm your email first — check your inbox for the confirmation link.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'That password is too weak. Use at least $minLength characters.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Enter a valid email address.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'Password must be at least $minLength characters.';
+  }
+
+  @override
   String get signInTitle => 'Sign In';
 
   @override
@@ -755,6 +776,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'If that email is registered, we\'ve sent a reset link.';
 
   @override
+  String get signInResendConfirmation => 'Resend confirmation email';
+
+  @override
+  String get signInConfirmationResent =>
+      'If that email is registered, we\'ve sent a new confirmation link.';
+
+  @override
   String get signInWithApple => 'Sign in with Apple';
 
   @override
@@ -763,6 +791,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get googleSignInSoon =>
       'Google sign-in is coming soon. For now, please use email.';
+
+  @override
+  String get appleSignInSoon =>
+      'Apple sign-in is coming soon. For now, please use email.';
 
   @override
   String get signInContinueOffline => 'Continue offline';
@@ -805,6 +837,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get signUpErrorAcceptTerms =>
       'Please accept the Terms of Service and Privacy Policy to continue.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Check your email';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'We sent a confirmation link to $email. Open it to finish setting up your account.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Back to sign in';
 
   @override
   String get signUpContinueWithApple => 'Continue with Apple';
@@ -5267,10 +5310,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAccountSave => 'Save';
-
-  @override
-  String get settingsAccountPasswordTooShort =>
-      'Password must be at least 8 characters';
 
   @override
   String get settingsAccountPasswordsMismatch => 'Passwords do not match';

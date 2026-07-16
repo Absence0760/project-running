@@ -1325,6 +1325,36 @@ abstract class AppLocalizations {
   /// **'Something went wrong. Please try again.'**
   String get authErrorGeneric;
 
+  /// Friendly auth error shown when sign-up fails because the email is already registered
+  ///
+  /// In en, this message translates to:
+  /// **'That email already has an account. Sign in instead.'**
+  String get authErrorEmailExists;
+
+  /// Friendly auth error shown when sign-in fails because the email address hasn't been confirmed yet
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your email first — check your inbox for the confirmation link.'**
+  String get authErrorEmailNotConfirmed;
+
+  /// Friendly auth error shown when the server rejects a password as too weak
+  ///
+  /// In en, this message translates to:
+  /// **'That password is too weak. Use at least {minLength} characters.'**
+  String authErrorWeakPassword(int minLength);
+
+  /// Inline validation error under the sign-up email field when the entered value is not email-shaped
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get authErrorInvalidEmail;
+
+  /// Inline validation error when an entered password is shorter than the minimum length
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least {minLength} characters.'**
+  String authErrorPasswordTooShort(int minLength);
+
   /// AppBar title for the sign-in screen
   ///
   /// In en, this message translates to:
@@ -1367,6 +1397,18 @@ abstract class AppLocalizations {
   /// **'If that email is registered, we\'ve sent a reset link.'**
   String get signInResetSent;
 
+  /// Button that re-sends the signup confirmation email after an email-not-confirmed sign-in failure
+  ///
+  /// In en, this message translates to:
+  /// **'Resend confirmation email'**
+  String get signInResendConfirmation;
+
+  /// Privacy-preserving confirmation shown after re-sending the signup confirmation email
+  ///
+  /// In en, this message translates to:
+  /// **'If that email is registered, we\'ve sent a new confirmation link.'**
+  String get signInConfirmationResent;
+
   /// Apple OAuth button label on the sign-in screen
   ///
   /// In en, this message translates to:
@@ -1384,6 +1426,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Google sign-in is coming soon. For now, please use email.'**
   String get googleSignInSoon;
+
+  /// Notice shown when the Apple button is tapped but the Android web-auth flow isn't configured yet
+  ///
+  /// In en, this message translates to:
+  /// **'Apple sign-in is coming soon. For now, please use email.'**
+  String get appleSignInSoon;
 
   /// Button to dismiss the sign-in screen and use the app without an account
   ///
@@ -1462,6 +1510,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
   String get signUpErrorAcceptTerms;
+
+  /// Headline of the check-your-email state shown after a sign-up that needs email confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email'**
+  String get signUpCheckEmailTitle;
+
+  /// Body of the check-your-email state shown after a sign-up that needs email confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a confirmation link to {email}. Open it to finish setting up your account.'**
+  String signUpCheckEmailBody(String email);
+
+  /// Button on the check-your-email state that returns to the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get signUpCheckEmailBack;
 
   /// Apple OAuth button label on the sign-up screen
   ///
@@ -8827,12 +8893,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save'**
   String get settingsAccountSave;
-
-  /// Validation error when the new password is shorter than 8 characters
-  ///
-  /// In en, this message translates to:
-  /// **'Password must be at least 8 characters'**
-  String get settingsAccountPasswordTooShort;
 
   /// Validation error when the password and confirmation differ
   ///

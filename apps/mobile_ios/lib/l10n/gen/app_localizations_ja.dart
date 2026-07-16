@@ -713,6 +713,26 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
 
   @override
+  String get authErrorEmailExists => 'このメールアドレスにはすでにアカウントがあります。サインインしてください。';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'まずメールアドレスを確認してください。受信トレイの確認リンクをご確認ください。';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'このパスワードは脆弱です。$minLength 文字以上にしてください。';
+  }
+
+  @override
+  String get authErrorInvalidEmail => '有効なメールアドレスを入力してください。';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'パスワードは $minLength 文字以上で入力してください。';
+  }
+
+  @override
   String get signInTitle => 'サインイン';
 
   @override
@@ -735,6 +755,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signInResetSent => 'そのメールアドレスが登録されている場合、リセット用リンクを送信しました。';
 
   @override
+  String get signInResendConfirmation => '確認メールを再送信';
+
+  @override
+  String get signInConfirmationResent => 'そのメールアドレスが登録されている場合、新しい確認リンクを送信しました。';
+
+  @override
   String get signInWithApple => 'Appleでサインイン';
 
   @override
@@ -742,6 +768,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get googleSignInSoon => 'Google でのサインインは近日対応予定です。今はメールをご利用ください。';
+
+  @override
+  String get appleSignInSoon => 'Apple でのサインインは近日対応予定です。今はメールをご利用ください。';
 
   @override
   String get signInContinueOffline => 'オフラインで続ける';
@@ -781,6 +810,17 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get signUpErrorAcceptTerms => '続けるには、利用規約とプライバシーポリシーに同意してください。';
+
+  @override
+  String get signUpCheckEmailTitle => 'メールをご確認ください';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return '$email 宛てに確認リンクを送信しました。開いてアカウントの設定を完了してください。';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'サインインに戻る';
 
   @override
   String get signUpContinueWithApple => 'Appleで続ける';
@@ -5006,9 +5046,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsAccountSave => '保存';
-
-  @override
-  String get settingsAccountPasswordTooShort => 'パスワードは8文字以上で入力してください';
 
   @override
   String get settingsAccountPasswordsMismatch => 'パスワードが一致しません';

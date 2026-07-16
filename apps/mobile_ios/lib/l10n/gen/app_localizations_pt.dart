@@ -737,6 +737,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorEmailExists =>
+      'Esse e-mail já tem uma conta. Entre em vez disso.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirme seu e-mail primeiro — procure o link de confirmação na sua caixa de entrada.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'Essa senha é muito fraca. Use pelo menos $minLength caracteres.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Digite um endereço de e-mail válido.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'A senha deve ter pelo menos $minLength caracteres.';
+  }
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -761,6 +782,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Se esse e-mail estiver cadastrado, enviamos um link de redefinição.';
 
   @override
+  String get signInResendConfirmation => 'Reenviar e-mail de confirmação';
+
+  @override
+  String get signInConfirmationResent =>
+      'Se esse e-mail estiver registrado, enviamos um novo link de confirmação.';
+
+  @override
   String get signInWithApple => 'Entrar com Apple';
 
   @override
@@ -769,6 +797,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get googleSignInSoon =>
       'O login com o Google chega em breve. Por enquanto, use o e-mail.';
+
+  @override
+  String get appleSignInSoon =>
+      'O login com a Apple chega em breve. Por enquanto, use o e-mail.';
 
   @override
   String get signInContinueOffline => 'Continuar offline';
@@ -811,6 +843,17 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get signUpErrorAcceptTerms =>
       'Aceite os Termos de Serviço e a Política de Privacidade para continuar.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Verifique seu e-mail';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'Enviamos um link de confirmação para $email. Abra-o para concluir a criação da sua conta.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Voltar para entrar';
 
   @override
   String get signUpContinueWithApple => 'Continuar com Apple';
@@ -5319,10 +5362,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsAccountSave => 'Salvar';
-
-  @override
-  String get settingsAccountPasswordTooShort =>
-      'A senha deve ter pelo menos 8 caracteres';
 
   @override
   String get settingsAccountPasswordsMismatch => 'As senhas não coincidem';
@@ -11837,6 +11876,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorEmailExists =>
+      'Esse e-mail já tem uma conta. Entre em vez disso.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirme seu e-mail primeiro — procure o link de confirmação na sua caixa de entrada.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'Essa senha é muito fraca. Use pelo menos $minLength caracteres.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Digite um endereço de e-mail válido.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'A senha deve ter pelo menos $minLength caracteres.';
+  }
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -11861,6 +11921,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Se esse e-mail estiver cadastrado, enviamos um link de redefinição.';
 
   @override
+  String get signInResendConfirmation => 'Reenviar e-mail de confirmação';
+
+  @override
+  String get signInConfirmationResent =>
+      'Se esse e-mail estiver registrado, enviamos um novo link de confirmação.';
+
+  @override
   String get signInWithApple => 'Entrar com Apple';
 
   @override
@@ -11869,6 +11936,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get googleSignInSoon =>
       'O login com o Google chega em breve. Por enquanto, use o e-mail.';
+
+  @override
+  String get appleSignInSoon =>
+      'O login com a Apple chega em breve. Por enquanto, use o e-mail.';
 
   @override
   String get signInContinueOffline => 'Continuar offline';
@@ -11911,6 +11982,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get signUpErrorAcceptTerms =>
       'Aceite os Termos de Serviço e a Política de Privacidade para continuar.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Verifique seu e-mail';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'Enviamos um link de confirmação para $email. Abra-o para concluir a criação da sua conta.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Voltar para entrar';
 
   @override
   String get signUpContinueWithApple => 'Continuar com Apple';
@@ -16417,10 +16499,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountSave => 'Salvar';
-
-  @override
-  String get settingsAccountPasswordTooShort =>
-      'A senha deve ter pelo menos 8 caracteres';
 
   @override
   String get settingsAccountPasswordsMismatch => 'As senhas não coincidem';
