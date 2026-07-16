@@ -385,23 +385,33 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                             CutoffCard(eta: cutoff, stale: stale),
                             const SizedBox(height: 16),
                           ],
+                          // Expanded, not spaceAround: an intrinsically-sized
+                          // cell has no bound for its FittedBox to scale
+                          // against, so a long value overflowed the row
+                          // instead of shrinking.
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _Metric(
-                                label: l10n.runStatDistance,
-                                value: formatDistanceForPref(_distanceM),
+                              Expanded(
+                                child: _Metric(
+                                  label: l10n.runStatDistance,
+                                  value: formatDistanceForPref(_distanceM),
+                                ),
                               ),
-                              _Metric(
-                                label: l10n.runStatTime,
-                                value:
-                                    formatLiveDuration(Duration(seconds: _elapsedS)),
+                              Expanded(
+                                child: _Metric(
+                                  label: l10n.runStatTime,
+                                  value: formatLiveDuration(
+                                      Duration(seconds: _elapsedS)),
+                                ),
                               ),
-                              _Metric(
-                                label: l10n.runStatPace,
-                                value: _distanceM > 0 && _elapsedS > 0
-                                    ? formatLivePace(_elapsedS / (_distanceM / 1000))
-                                    : '—',
+                              Expanded(
+                                child: _Metric(
+                                  label: l10n.runStatPace,
+                                  value: _distanceM > 0 && _elapsedS > 0
+                                      ? formatLivePace(
+                                          _elapsedS / (_distanceM / 1000))
+                                      : '—',
+                                ),
                               ),
                             ],
                           ),
@@ -538,10 +548,17 @@ class _Metric extends StatelessWidget {
     final theme = Theme.of(context);
     return Column(
       children: [
-        Text(value,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            )),
+        // A runner 240 miles into an ultra is exactly who a spectator is
+        // watching, and "104:32:11" is far wider than a 5K's "30:00", so
+        // scale it down to the cell rather than overflow the row. Mirrors
+        // _StatBig on run_detail_screen.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              )),
+        ),
         const SizedBox(height: 2),
         Text(
           label.toUpperCase(),
@@ -549,6 +566,8 @@ class _Metric extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
             letterSpacing: 0.6,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

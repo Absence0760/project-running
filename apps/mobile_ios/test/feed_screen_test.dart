@@ -381,4 +381,23 @@ void main() {
       expect(find.byType(ActionChip), findsNothing);
     });
   });
+
+  group('FeedScreen — stat row at a narrow width', () {
+    testWidgets('an ultra-length distance/time/pace does not overflow the card',
+        (tester) async {
+      final view = tester.view;
+      view.physicalSize = const Size(720, 1280);
+      view.devicePixelRatio = 2.0;
+      addTearDown(view.reset);
+
+      // A 100-hour, 240-mile ultra: the widest the stat cells ever get.
+      final api = _FakeApi(
+        entries: [_runEntry(distanceM: 386243, durationS: 376331)],
+      );
+      await _pump(tester, api);
+      await _settle(tester);
+
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

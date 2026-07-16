@@ -31,12 +31,13 @@ RunRow _run({
   required int durationS,
   required DateTime startedAt,
   bool isDnf = false,
+  double distanceM = 5000,
 }) => RunRow(
   id: 'r1',
   userId: 'u1',
   startedAt: startedAt,
   durationS: durationS,
-  distanceM: 5000,
+  distanceM: distanceM,
   source: 'app',
   activityType: 'run',
   isDnf: isDnf,
@@ -404,6 +405,44 @@ void main() {
         expect(find.text('Live'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       });
+    });
+  });
+
+  group('LiveSpectatorScreen — metric row at a narrow width', () {
+    testWidgets('an ultra-length distance/time/pace does not overflow the row',
+        (tester) async {
+      final view = tester.view;
+      view.physicalSize = const Size(720, 1280);
+      view.devicePixelRatio = 2.0;
+      addTearDown(view.reset);
+
+      // Mid-ultra at hour 100: the spectator's runner is 240 miles in, which
+      // is the widest the metric cells ever get. The values come off the
+      // ping, not the run row (the run row only feeds them once finished).
+      final now = DateTime.now().toUtc();
+      await _pumpApi(
+        tester,
+        _FakeApi(
+          run: _run(durationS: 376331, distanceM: 386243, startedAt: now),
+          pings: [
+            {
+              'lat': -37.8136,
+              'lng': 144.9631,
+              'distance_m': 386243,
+              'elapsed_s': 376331,
+              'at': now.toIso8601String(),
+              'coarse': false,
+            },
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Prove the row actually rendered the ultra values before asserting
+      // on overflow — a zeroed row would pass vacuously.
+      expect(find.textContaining('386'), findsWidgets);
+      expect(tester.takeException(), isNull);
     });
   });
 }
