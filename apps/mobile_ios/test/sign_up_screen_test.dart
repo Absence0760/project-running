@@ -11,9 +11,10 @@ class _FakeApiClient extends ApiClient {
   DateTime? capturedAgeConfirmedAt;
   DateTime? capturedTermsAcceptedAt;
   Object? errorToThrow;
+  bool needsEmailConfirmation = false;
 
   @override
-  Future<String> signUp({
+  Future<({String userId, bool needsEmailConfirmation})> signUp({
     required String email,
     required String password,
     DateTime? ageConfirmedAt,
@@ -24,8 +25,21 @@ class _FakeApiClient extends ApiClient {
     capturedAgeConfirmedAt = ageConfirmedAt;
     capturedTermsAcceptedAt = termsAcceptedAt;
     if (errorToThrow != null) throw errorToThrow!;
-    return 'uid-new';
+    return (userId: 'uid-new', needsEmailConfirmation: needsEmailConfirmation);
   }
+}
+
+/// Duck-typed stand-in for a Supabase `AuthApiException` (carries `code`
+/// + `statusCode`) so the server-error branches can be exercised without
+/// importing the supabase auth types.
+class _FakeAuthException {
+  const _FakeAuthException(this.message, {this.code, this.statusCode});
+  final String message;
+  final String? code;
+  final String? statusCode;
+  @override
+  String toString() =>
+      'AuthApiException(message: $message, statusCode: $statusCode, code: $code)';
 }
 
 Future<void> _pump(WidgetTester tester, _FakeApiClient client) async {
@@ -70,7 +84,7 @@ void main() {
       await _pump(tester, client);
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@b.com');
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'pass123');
+          find.widgetWithText(TextField, 'Password'), 'password1');
       // Both GDPR gates must be ticked before the API call fires.
       await tester.tap(find.byType(Checkbox).at(0));
       await tester.tap(find.byType(Checkbox).at(1));
@@ -78,7 +92,7 @@ void main() {
       await tester.tap(find.byType(FilledButton));
       await tester.pump();
       expect(client.capturedEmail, 'new@b.com');
-      expect(client.capturedPassword, 'pass123');
+      expect(client.capturedPassword, 'password1');
     });
 
     testWidgets('renders error text when signUp throws', (tester) async {
@@ -87,7 +101,7 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Email'), 'taken@b.com');
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'abc');
+          find.widgetWithText(TextField, 'Password'), 'password1');
       await tester.tap(find.byType(Checkbox).at(0));
       await tester.tap(find.byType(Checkbox).at(1));
       await tester.pump();
@@ -144,7 +158,7 @@ void main() {
       await _pump(tester, client);
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'secret');
+          find.widgetWithText(TextField, 'Password'), 'longpass1');
       // Tick ToS but NOT the age gate.
       await tester.tap(find.byType(Checkbox).at(1));
       await tester.pump();
@@ -164,7 +178,7 @@ void main() {
       await _pump(tester, client);
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'secret');
+          find.widgetWithText(TextField, 'Password'), 'longpass1');
       // Tick age but NOT terms.
       await tester.tap(find.byType(Checkbox).at(0));
       await tester.pump();
@@ -188,7 +202,7 @@ void main() {
       await _pump(tester, client);
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'secret');
+          find.widgetWithText(TextField, 'Password'), 'longpass1');
       await tester.tap(find.byType(FilledButton));
       await tester.pump();
       expect(client.capturedEmail, isNull);
@@ -211,6 +225,163 @@ void main() {
       await tester.pump();
       expect(find.textContaining('coming soon'), findsOneWidget);
       // The config check precedes the gate, so no age-gate error and no API call.
+      expect(find.textContaining('16 or older'), findsNothing);
+      expect(client.capturedEmail, isNull);
+    });
+
+
+    // ─────────── Pre-submit validation (#243) ───────────
+
+    testWidgets('malformed email shows an inline field error and no API call',
+        (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'not-an-email');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(client.capturedEmail, isNull);
+      expect(find.text('Enter a valid email address.'), findsOneWidget);
+    });
+
+    testWidgets('short password shows an inline field error and no API call',
+        (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'short7!');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(client.capturedEmail, isNull);
+      expect(find.text('Password must be at least 8 characters.'),
+          findsOneWidget);
+    });
+
+    testWidgets('inline field errors clear on the next valid submit',
+        (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'not-an-email');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'short7!');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(find.text('Enter a valid email address.'), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      // The too-short password error is still visible on the field —
+      // find the password TextField by its label instead.
+      await tester.enterText(
+          find.ancestor(
+              of: find.text('Password'), matching: find.byType(TextField)),
+          'password1');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(find.text('Enter a valid email address.'), findsNothing);
+      expect(find.text('Password must be at least 8 characters.'),
+          findsNothing);
+      expect(client.capturedEmail, 'a@b.com');
+    });
+
+    // ─────────── Server-side auth errors (#242) ───────────
+
+    testWidgets('duplicate email (confirmations disabled) shows the specific message',
+        (tester) async {
+      final client = _FakeApiClient()
+        ..errorToThrow = const _FakeAuthException('User already registered',
+            code: 'user_already_exists', statusCode: '422');
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'taken@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('already has an account'), findsOneWidget);
+      expect(find.textContaining('Something went wrong'), findsNothing);
+    });
+
+    testWidgets('weak password rejected by the server shows the specific message',
+        (tester) async {
+      final client = _FakeApiClient()
+        ..errorToThrow = const _FakeAuthException(
+            'Password should be at least 8 characters',
+            code: 'weak_password',
+            statusCode: '422');
+      await _pump(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('too weak'), findsOneWidget);
+    });
+
+    // ─────────── Obfuscated success with no session (#242) ───────────
+
+    testWidgets(
+        'signUp success without a session shows check-your-email and does not pop',
+        (tester) async {
+      // Confirmations-enabled posture: BOTH a genuine new signup and a
+      // duplicate email return success-with-no-session. Navigating as
+      // signed-in here was the "silent non-event" bug — the screen must
+      // stay up and show the check-your-email state instead.
+      final client = _FakeApiClient()..needsEmailConfirmation = true;
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'new@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(client.capturedEmail, 'new@b.com');
+      expect(find.byType(SignUpScreen), findsOneWidget);
+      expect(find.text('Check your email'), findsOneWidget);
+      expect(find.textContaining('new@b.com'), findsOneWidget);
+      expect(find.text('Back to sign in'), findsOneWidget);
+    });
+
+    // ─────────── Apple fail-closed gate (#241) ───────────
+
+    testWidgets(
+        'Apple button shows coming-soon before the gate when unconfigured',
+        (tester) async {
+      // No APPLE_SERVICE_CLIENT_ID / APPLE_REDIRECT_URI in the env →
+      // the Android web-auth flow can never succeed
+      // (sign_in_with_apple throws before any UI opens), so the button
+      // must fail closed with the friendly notice — before the GDPR
+      // gate nag, mirroring the Google precedence pinned above.
+      dotenv.loadFromString(envString: '', isOptional: true);
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      final appleBtn =
+          find.widgetWithText(OutlinedButton, 'Continue with Apple');
+      await tester.ensureVisible(appleBtn);
+      await tester.tap(appleBtn);
+      await tester.pump();
+      expect(find.textContaining('Apple sign-in is coming soon'),
+          findsOneWidget);
       expect(find.textContaining('16 or older'), findsNothing);
       expect(client.capturedEmail, isNull);
     });

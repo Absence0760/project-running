@@ -257,9 +257,20 @@ class ApiClient {
     }
   }
 
-  /// Register a new account with email/password. Returns the user ID.
+  /// Register a new account with email/password.
   ///
-  /// Throws if the address is already registered or the password is too weak.
+  /// Throws if the password is too weak, or — with email confirmations
+  /// disabled — if the address is already registered
+  /// (`user_already_exists`).
+  ///
+  /// With email confirmations ENABLED (the prod posture) GoTrue never
+  /// throws for a duplicate address: it returns an obfuscated success
+  /// with NO session (the real owner gets a "someone tried to
+  /// re-register" email) — the same success-with-no-session shape a
+  /// genuine new signup gets while its confirmation is pending. That's
+  /// why the result carries [needsEmailConfirmation]: when it's true
+  /// the caller must show the check-your-email state, never navigate
+  /// as signed-in (there is no session to be signed in with).
   ///
   /// [ageConfirmedAt] and [termsAcceptedAt] capture the moment the
   /// user ticked the consent checkboxes on the sign-up screen. They
@@ -268,7 +279,7 @@ class ApiClient {
   /// RPC immediately after signUp succeeds. Server-side enforcement
   /// of GDPR Art 8 — see migration `20260929_001` and audit/gdpr
   /// (2026-05-25) Critical.
-  Future<String> signUp({
+  Future<({String userId, bool needsEmailConfirmation})> signUp({
     required String email,
     required String password,
     DateTime? ageConfirmedAt,
@@ -299,7 +310,24 @@ class ApiClient {
     } catch (_) {
       // Tolerated — sign-in path retries.
     }
-    return response.user!.id;
+    return (
+      userId: response.user!.id,
+      needsEmailConfirmation: response.session == null,
+    );
+  }
+
+  /// Re-send the signup confirmation email for an unconfirmed address.
+  /// Backs the "Resend confirmation email" affordance shown when a
+  /// sign-in fails with `email_not_confirmed`. Like
+  /// [sendPasswordResetEmail] the underlying call succeeds whether or
+  /// not the address is registered/unconfirmed, so the caller's UI
+  /// copy must stay non-committal ("If that email is registered…").
+  Future<void> resendSignUpConfirmation({required String email}) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: kAuthDeepLinkRedirect,
+    );
   }
 
   /// Stamps `age_confirmed_at` + `terms_accepted_at` on the caller's
@@ -430,6 +458,25 @@ class ApiClient {
       return _client.auth.currentUser?.email;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Auth transitions as a stream of the signed-in user id (null =
+  /// signed out), one event per underlying `onAuthStateChange` event.
+  /// Identity-bearing screens subscribe (via the mobile apps'
+  /// `AuthChangeAware` mixin) and refetch when the id differs from
+  /// what they rendered; the payload is advisory — [userId] stays the
+  /// authoritative read, so test fakes that override [userId] remain
+  /// consistent. Same offline-safety as [userId]: when Supabase isn't
+  /// initialised this returns an empty stream rather than throwing,
+  /// degrading to "never notified" exactly as the getters degrade to
+  /// "signed out".
+  Stream<String?> get authUserChanges {
+    try {
+      return _client.auth.onAuthStateChange
+          .map((state) => state.session?.user.id);
+    } catch (_) {
+      return const Stream<String?>.empty();
     }
   }
 
@@ -2410,16 +2457,62 @@ class ApiClient {
     return UserProfileRow.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Set (or clear, when blank) the signed-in user's display name on
+  /// `user_profiles`. Mirrors web `/settings/account`'s display-name save —
+  /// the only other writer is the one-shot setup wizard, so without this a
+  /// mobile user who skipped the wizard rendered as the "Runner" fallback
+  /// everywhere with no recourse (issue #226). Same trimming as the wizard;
+  /// blank clears the column (web writes `displayName || null`).
+  /// Row-count-verified update + insert fallback per §248; throws when
+  /// signed out.
+  Future<void> updateDisplayName(String? displayName) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    final trimmed = displayName?.trim();
+    final update = <String, dynamic>{
+      UserProfileRow.colDisplayName:
+          (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+    };
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update(update)
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...update,
+      });
+    }
+  }
+
   /// Stamp `onboarded_at = now()` and nothing else — the minimum write the
   /// home-screen onboarding gate needs to stop re-showing the setup wizard.
   /// Mirrors web's `skipOnboarding` in `apps/web/src/routes/onboarding`.
   /// Every other field stays at its existing default.
+  ///
+  /// Throws when signed out (a silent return let the wizard pop as if
+  /// stamped, and the gate re-pushed it from step 1 on the next launch —
+  /// issue #227). Row-count-verified with an insert fallback per §248:
+  /// `user_profiles` rows are client-provisioned, so a plain update
+  /// against a missing row matches 0 rows and reports success.
   Future<void> markOnboarded() async {
     final uid = _client.auth.currentUser?.id;
     if (uid == null) throw StateError('not signed in');
-    await _client.from(UserProfileRow.table).update({
+    final stamp = <String, dynamic>{
       UserProfileRow.colOnboardedAt: DateTime.now().toUtc().toIso8601String(),
-    }).eq(UserProfileRow.colId, uid);
+    };
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update(stamp)
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...stamp,
+      });
+    }
   }
 
   /// Persist the post-signup setup-wizard answers and stamp `onboarded_at`
@@ -2441,6 +2534,9 @@ class ApiClient {
   /// (units, privacy default, primary goal, weight, consent-gated DOB
   /// mirror) via [SettingsService.updateUniversal] — the bag write and the
   /// profile write are independent.
+  ///
+  /// Throws when signed out and verifies the row count with an insert
+  /// fallback, same rationale as [markOnboarded] (issue #227, §248).
   Future<void> completeOnboarding({
     String? displayName,
     required String preferredUnit,
@@ -2469,10 +2565,17 @@ class ApiClient {
       update[UserProfileRow.colGender] =
           (gender != null && gender.isNotEmpty) ? gender : null;
     }
-    await _client
+    final updated = await _client
         .from(UserProfileRow.table)
         .update(update)
-        .eq(UserProfileRow.colId, uid);
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...update,
+      });
+    }
   }
 
   /// `YYYY-MM-DD` for a `date`-typed column. The wizard's DOB picker is a

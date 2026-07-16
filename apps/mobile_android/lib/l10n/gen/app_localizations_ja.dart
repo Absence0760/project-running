@@ -713,6 +713,26 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
 
   @override
+  String get authErrorEmailExists => 'このメールアドレスにはすでにアカウントがあります。サインインしてください。';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'まずメールアドレスを確認してください。受信トレイの確認リンクをご確認ください。';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'このパスワードは脆弱です。$minLength 文字以上にしてください。';
+  }
+
+  @override
+  String get authErrorInvalidEmail => '有効なメールアドレスを入力してください。';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'パスワードは $minLength 文字以上で入力してください。';
+  }
+
+  @override
   String get signInTitle => 'サインイン';
 
   @override
@@ -735,6 +755,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signInResetSent => 'そのメールアドレスが登録されている場合、リセット用リンクを送信しました。';
 
   @override
+  String get signInResendConfirmation => '確認メールを再送信';
+
+  @override
+  String get signInConfirmationResent => 'そのメールアドレスが登録されている場合、新しい確認リンクを送信しました。';
+
+  @override
   String get signInWithApple => 'Appleでサインイン';
 
   @override
@@ -742,6 +768,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get googleSignInSoon => 'Google でのサインインは近日対応予定です。今はメールをご利用ください。';
+
+  @override
+  String get appleSignInSoon => 'Apple でのサインインは近日対応予定です。今はメールをご利用ください。';
 
   @override
   String get signInContinueOffline => 'オフラインで続ける';
@@ -781,6 +810,17 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get signUpErrorAcceptTerms => '続けるには、利用規約とプライバシーポリシーに同意してください。';
+
+  @override
+  String get signUpCheckEmailTitle => 'メールをご確認ください';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return '$email 宛てに確認リンクを送信しました。開いてアカウントの設定を完了してください。';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'サインインに戻る';
 
   @override
   String get signUpContinueWithApple => 'Appleで続ける';
@@ -861,6 +901,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String setupSaveError(String message) {
     return '設定を保存できませんでした: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      '現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。';
+
+  @override
+  String get setupFinishLater => '後で完了する';
 
   @override
   String get setupNameTitle => '何とお呼びしましょうか？';
@@ -974,6 +1021,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get setupDoneHint => '以上です。「ダッシュボードを開く」をタップしてランを始めましょう。';
+
+  @override
+  String get setupDoneHintGoal =>
+      'これで完了です。目標に合わせてトレーニングプランを作成するか、ダッシュボードを開いてランを始めましょう。';
 
   @override
   String get privacyPrivateTitle => '非公開';
@@ -4154,6 +4205,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewNameHint => '例：秋のハーフマラソン';
 
   @override
+  String get planNewNameRequiredHint => '「作成」を有効にするにはプラン名を入力してください。';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal プラン';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return '$goal までウォークラン';
+  }
+
+  @override
   String get planNewGoalRace => '目標レース';
 
   @override
@@ -5008,9 +5072,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountSave => '保存';
 
   @override
-  String get settingsAccountPasswordTooShort => 'パスワードは8文字以上で入力してください';
-
-  @override
   String get settingsAccountPasswordsMismatch => 'パスワードが一致しません';
 
   @override
@@ -5201,6 +5262,23 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       '匿名化されたクラッシュ・エラーデータをSentry（米国）に送信します。オフにすると同意を撤回できます。次回起動時に適用されます。';
+
+  @override
+  String get settingsAccountDisplayName => '表示名';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      '他のランナーに表示される名前です。空欄にすると「Runner」が使われます。';
+
+  @override
+  String get settingsAccountDisplayNameUnset => '未設定 —「Runner」として表示されます';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => '表示名を更新しました';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      '表示名を更新できませんでした。もう一度お試しください。';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -5952,6 +6030,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
 
   @override
+  String get privacyZonesDiscardTitle => '変更を破棄しますか？';
+
+  @override
+  String get privacyZonesDiscardBody => '保存されていないプライバシーゾーンがあります。保存せずに終了しますか？';
+
+  @override
+  String get privacyZonesDiscard => '破棄';
+
+  @override
   String get prefsTitle => '環境設定';
 
   @override
@@ -6273,6 +6360,9 @@ class AppLocalizationsJa extends AppLocalizations {
       'ランを記録したり、目標を設定したり、履歴をインポートすると、ダッシュボードが充実します。';
 
   @override
+  String get dashboardStartRun => 'ランを開始';
+
+  @override
   String get dashboardSetGoal => '目標を設定';
 
   @override
@@ -6331,6 +6421,11 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return '最速の$distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '年齢別評価 $percent';
   }
 
   @override

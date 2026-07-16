@@ -737,6 +737,27 @@ class AppLocalizationsDe extends AppLocalizations {
       'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
 
   @override
+  String get authErrorEmailExists =>
+      'Für diese E-Mail-Adresse existiert bereits ein Konto. Melde dich stattdessen an.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Bestätige zuerst deine E-Mail-Adresse — sieh in deinem Posteingang nach dem Bestätigungslink.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'Dieses Passwort ist zu schwach. Verwende mindestens $minLength Zeichen.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Gib eine gültige E-Mail-Adresse ein.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'Das Passwort muss mindestens $minLength Zeichen lang sein.';
+  }
+
+  @override
   String get signInTitle => 'Anmelden';
 
   @override
@@ -761,6 +782,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Falls diese E-Mail registriert ist, haben wir einen Link zum Zurücksetzen gesendet.';
 
   @override
+  String get signInResendConfirmation => 'Bestätigungs-E-Mail erneut senden';
+
+  @override
+  String get signInConfirmationResent =>
+      'Falls diese E-Mail-Adresse registriert ist, haben wir einen neuen Bestätigungslink gesendet.';
+
+  @override
   String get signInWithApple => 'Mit Apple anmelden';
 
   @override
@@ -769,6 +797,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get googleSignInSoon =>
       'Anmeldung mit Google kommt bald. Nutze vorerst bitte die E-Mail-Anmeldung.';
+
+  @override
+  String get appleSignInSoon =>
+      'Anmeldung mit Apple kommt bald. Nutze vorerst bitte die E-Mail-Anmeldung.';
 
   @override
   String get signInContinueOffline => 'Offline fortfahren';
@@ -811,6 +843,17 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get signUpErrorAcceptTerms =>
       'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung, um fortzufahren.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Sieh in dein E-Mail-Postfach';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'Wir haben einen Bestätigungslink an $email gesendet. Öffne ihn, um dein Konto fertig einzurichten.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Zurück zur Anmeldung';
 
   @override
   String get signUpContinueWithApple => 'Mit Apple fortfahren';
@@ -891,6 +934,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String setupSaveError(String message) {
     return 'Einrichtung konnte nicht gespeichert werden: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      'Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.';
+
+  @override
+  String get setupFinishLater => 'Später abschließen';
 
   @override
   String get setupNameTitle => 'Wie sollen wir dich nennen?';
@@ -1011,6 +1061,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get setupDoneHint =>
       'Das war\'s. Tippe auf „Dashboard öffnen“, um loszulaufen.';
+
+  @override
+  String get setupDoneHintGoal =>
+      'Das war alles. Erstelle einen Trainingsplan für dein Ziel oder öffne das Dashboard, um mit dem Laufen zu beginnen.';
 
   @override
   String get privacyPrivateTitle => 'Privat';
@@ -4429,6 +4483,20 @@ class AppLocalizationsDe extends AppLocalizations {
   String get planNewNameHint => 'z. B. Herbst-Halbmarathon';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Gib einen Plannamen ein, um „Erstellen“ zu aktivieren.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal-Plan';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Geh-Lauf zu $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Zielrennen';
 
   @override
@@ -5331,10 +5399,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAccountSave => 'Speichern';
 
   @override
-  String get settingsAccountPasswordTooShort =>
-      'Das Passwort muss mindestens 8 Zeichen lang sein';
-
-  @override
   String get settingsAccountPasswordsMismatch =>
       'Die Passwörter stimmen nicht überein';
 
@@ -5536,6 +5600,24 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Anonymisierte Absturz- + Fehlerdaten an Sentry (USA). Deaktivieren, um die Einwilligung zu widerrufen. Gilt beim nächsten Start.';
+
+  @override
+  String get settingsAccountDisplayName => 'Anzeigename';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Der Name, den andere Läufer sehen. Leer lassen, um „Runner“ zu verwenden.';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Nicht festgelegt — du erscheinst als „Runner“';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Anzeigename aktualisiert';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Anzeigename konnte nicht aktualisiert werden. Bitte versuche es erneut.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -6325,6 +6407,16 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dadurch werden alle Zonen entfernt und alle diese Bereiche bei öffentlichen Freigaben wieder sichtbar.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Änderungen verwerfen?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Sie haben nicht gespeicherte Datenschutzzonen. Ohne Speichern verlassen?';
+
+  @override
+  String get privacyZonesDiscard => 'Verwerfen';
+
+  @override
   String get prefsTitle => 'Einstellungen';
 
   @override
@@ -6655,6 +6747,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dein Dashboard füllt sich, sobald du einen Lauf aufzeichnest, ein Ziel setzt oder deinen Verlauf importierst.';
 
   @override
+  String get dashboardStartRun => 'Lauf starten';
+
+  @override
   String get dashboardSetGoal => 'Ziel setzen';
 
   @override
@@ -6714,6 +6809,11 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Schnellste $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent Altersbewertung';
   }
 
   @override
