@@ -6331,14 +6331,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esto elimina todas las zonas y vuelve a exponer todas estas áreas en las publicaciones públicas.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Discard changes?';
+  String get privacyZonesDiscardTitle => '¿Descartar cambios?';
 
   @override
   String get privacyZonesDiscardBody =>
-      'You have unsaved privacy zones. Leave without saving?';
+      'Tienes zonas de privacidad sin guardar. ¿Salir sin guardar?';
 
   @override
-  String get privacyZonesDiscard => 'Discard';
+  String get privacyZonesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferencias';

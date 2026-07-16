@@ -6351,14 +6351,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cela supprime toutes les zones et réexpose toutes ces zones dans les partages publics.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Discard changes?';
+  String get privacyZonesDiscardTitle => 'Ignorer les modifications ?';
 
   @override
   String get privacyZonesDiscardBody =>
-      'You have unsaved privacy zones. Leave without saving?';
+      'Vous avez des zones de confidentialité non enregistrées. Quitter sans enregistrer ?';
 
   @override
-  String get privacyZonesDiscard => 'Discard';
+  String get privacyZonesDiscard => 'Ignorer';
 
   @override
   String get prefsTitle => 'Préférences';

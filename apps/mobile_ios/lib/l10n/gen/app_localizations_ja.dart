@@ -5969,14 +5969,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
 
   @override
-  String get privacyZonesDiscardTitle => 'Discard changes?';
+  String get privacyZonesDiscardTitle => '変更を破棄しますか？';
 
   @override
-  String get privacyZonesDiscardBody =>
-      'You have unsaved privacy zones. Leave without saving?';
+  String get privacyZonesDiscardBody => '保存されていないプライバシーゾーンがあります。保存せずに終了しますか？';
 
   @override
-  String get privacyZonesDiscard => 'Discard';
+  String get privacyZonesDiscard => '破棄';
 
   @override
   String get prefsTitle => '環境設定';
