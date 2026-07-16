@@ -233,7 +233,44 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
 
   void _addExercise() => setState(() => _exercises.add(_EditExercise()));
 
-  void _removeExercise(int i) {
+  bool _exerciseHasData(_EditExercise ex) {
+    if (ex.name.text.trim().isNotEmpty) return true;
+    for (final s in ex.sets) {
+      if (s.reps.text.trim().isNotEmpty) return true;
+      if (s.weight.text.trim().isNotEmpty) return true;
+      if (s.rpe.text.trim().isNotEmpty) return true;
+      if (s.duration.text.trim().isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  Future<void> _removeExercise(int i) async {
+    final ex = _exercises[i];
+    if (_exerciseHasData(ex)) {
+      final l10n = AppLocalizations.of(context);
+      final ok = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(l10n.gymEditorRemoveExerciseTitle),
+              content: Text(l10n.gymEditorRemoveExerciseBody),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(l10n.gymEditorCancel),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(ctx).colorScheme.error),
+                  child: Text(l10n.gymEditorRemoveExerciseConfirm),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!ok) return;
+    }
+    if (!mounted) return;
     setState(() {
       _exercises.removeAt(i).dispose();
       if (_exercises.isEmpty) _exercises.add(_EditExercise());
