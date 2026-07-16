@@ -257,9 +257,20 @@ class ApiClient {
     }
   }
 
-  /// Register a new account with email/password. Returns the user ID.
+  /// Register a new account with email/password.
   ///
-  /// Throws if the address is already registered or the password is too weak.
+  /// Throws if the password is too weak, or — with email confirmations
+  /// disabled — if the address is already registered
+  /// (`user_already_exists`).
+  ///
+  /// With email confirmations ENABLED (the prod posture) GoTrue never
+  /// throws for a duplicate address: it returns an obfuscated success
+  /// with NO session (the real owner gets a "someone tried to
+  /// re-register" email) — the same success-with-no-session shape a
+  /// genuine new signup gets while its confirmation is pending. That's
+  /// why the result carries [needsEmailConfirmation]: when it's true
+  /// the caller must show the check-your-email state, never navigate
+  /// as signed-in (there is no session to be signed in with).
   ///
   /// [ageConfirmedAt] and [termsAcceptedAt] capture the moment the
   /// user ticked the consent checkboxes on the sign-up screen. They
@@ -268,7 +279,7 @@ class ApiClient {
   /// RPC immediately after signUp succeeds. Server-side enforcement
   /// of GDPR Art 8 — see migration `20260929_001` and audit/gdpr
   /// (2026-05-25) Critical.
-  Future<String> signUp({
+  Future<({String userId, bool needsEmailConfirmation})> signUp({
     required String email,
     required String password,
     DateTime? ageConfirmedAt,
@@ -299,7 +310,24 @@ class ApiClient {
     } catch (_) {
       // Tolerated — sign-in path retries.
     }
-    return response.user!.id;
+    return (
+      userId: response.user!.id,
+      needsEmailConfirmation: response.session == null,
+    );
+  }
+
+  /// Re-send the signup confirmation email for an unconfirmed address.
+  /// Backs the "Resend confirmation email" affordance shown when a
+  /// sign-in fails with `email_not_confirmed`. Like
+  /// [sendPasswordResetEmail] the underlying call succeeds whether or
+  /// not the address is registered/unconfirmed, so the caller's UI
+  /// copy must stay non-committal ("If that email is registered…").
+  Future<void> resendSignUpConfirmation({required String email}) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: kAuthDeepLinkRedirect,
+    );
   }
 
   /// Stamps `age_confirmed_at` + `terms_accepted_at` on the caller's
