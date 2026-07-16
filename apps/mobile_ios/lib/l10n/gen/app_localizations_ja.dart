@@ -10582,4 +10582,44 @@ class AppLocalizationsJa extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds 秒';
   }
+
+  @override
+  String get sessionLoadError => 'セッションを読み込めませんでした。';
+
+  @override
+  String get sessionDetailLoadError => 'このセッションプランを読み込めませんでした。';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'エクササイズを削除しますか？';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'このエクササイズとすべてのセットがこのワークアウトから削除されます。';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => '削除';
+
+  @override
+  String get gearWearLogDeleteTitle => 'このメモを削除しますか？';
+
+  @override
+  String get gearWearLogDeleteBody => 'この摩耗メモは完全に削除されます。';
+
+  @override
+  String get gearWearLogDeleteConfirm => '削除';
+
+  @override
+  String get eventSubmitRunsLoadError => '最近のランを読み込めませんでした。';
+
+  @override
+  String get racesCouldNotOpenLink => 'リンクを開けませんでした。';
+
+  @override
+  String get prefsHrZonesClearTitle => '心拍ゾーンをクリアしますか？';
+
+  @override
+  String get prefsHrZonesClearBody => 'カスタム5ゾーンがクリアされます。';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'クリア';
 }

@@ -11103,4 +11103,48 @@ class AppLocalizationsEs extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get sessionLoadError => 'No se pudieron cargar las sesiones.';
+
+  @override
+  String get sessionDetailLoadError => 'No se pudo cargar este plan de sesión.';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => '¿Quitar ejercicio?';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'Este ejercicio y todas sus series se quitarán de este entrenamiento.';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => 'Quitar';
+
+  @override
+  String get gearWearLogDeleteTitle => '¿Eliminar esta nota?';
+
+  @override
+  String get gearWearLogDeleteBody =>
+      'Esta nota de desgaste se eliminará permanentemente.';
+
+  @override
+  String get gearWearLogDeleteConfirm => 'Eliminar';
+
+  @override
+  String get eventSubmitRunsLoadError =>
+      'No se pudieron cargar tus carreras recientes.';
+
+  @override
+  String get racesCouldNotOpenLink => 'No se pudo abrir ese enlace.';
+
+  @override
+  String get prefsHrZonesClearTitle =>
+      '¿Borrar las zonas de frecuencia cardíaca?';
+
+  @override
+  String get prefsHrZonesClearBody =>
+      'Se borrarán tus cinco zonas personalizadas.';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'Borrar';
 }

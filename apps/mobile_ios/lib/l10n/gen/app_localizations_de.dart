@@ -11113,4 +11113,49 @@ class AppLocalizationsDe extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get sessionLoadError => 'Sitzungen konnten nicht geladen werden.';
+
+  @override
+  String get sessionDetailLoadError =>
+      'Dieser Sitzungsplan konnte nicht geladen werden.';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'Übung entfernen?';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'Diese Übung und alle ihre Sätze werden aus diesem Workout entfernt.';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => 'Entfernen';
+
+  @override
+  String get gearWearLogDeleteTitle => 'Diese Notiz löschen?';
+
+  @override
+  String get gearWearLogDeleteBody =>
+      'Diese Verschleiß-Notiz wird endgültig gelöscht.';
+
+  @override
+  String get gearWearLogDeleteConfirm => 'Löschen';
+
+  @override
+  String get eventSubmitRunsLoadError =>
+      'Deine letzten Läufe konnten nicht geladen werden.';
+
+  @override
+  String get racesCouldNotOpenLink =>
+      'Dieser Link konnte nicht geöffnet werden.';
+
+  @override
+  String get prefsHrZonesClearTitle => 'Herzfrequenzzonen löschen?';
+
+  @override
+  String get prefsHrZonesClearBody =>
+      'Deine fünf eigenen Zonen werden gelöscht.';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'Löschen';
 }

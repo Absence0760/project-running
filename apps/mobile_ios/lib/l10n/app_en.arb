@@ -5535,9 +5535,9 @@
   "@eventWhichRunPhoto": {
     "description": "Title of the recent-run picker for an event photo"
   },
-  "eventNoRecentRuns": "No recent runs to attach a photo to.",
+  "eventNoRecentRuns": "No recent runs found. Record a run first, then come back.",
   "@eventNoRecentRuns": {
-    "description": "Empty state in the event-photo run picker"
+    "description": "Empty state in the submit-time sheet"
   },
   "eventPhotoRunnerFallback": "A runner",
   "@eventPhotoRunnerFallback": {
@@ -5744,10 +5744,6 @@
   "eventSubmitTimeSubtitle": "Pick a run to attach, or record a DNF / DNS.",
   "@eventSubmitTimeSubtitle": {
     "description": "Subtitle of the submit-time sheet"
-  },
-  "eventNoRecentRuns": "No recent runs found. Record a run first, then come back.",
-  "@eventNoRecentRuns": {
-    "description": "Empty state in the submit-time sheet"
   },
   "eventRecordDnf": "Record DNF",
   "@eventRecordDnf": {
@@ -11708,7 +11704,9 @@
   "@clubEventCertificateShareText": {
     "description": "Caption attached when sharing a finisher certificate image.",
     "placeholders": {
-      "event": { "type": "String" }
+      "event": {
+        "type": "String"
+      }
     }
   },
   "clubEventCertificateFailed": "Could not generate the certificate. Please try again.",
@@ -11739,7 +11737,9 @@
   "@clubEventCertificatePlace": {
     "description": "Placing entry in the certificate's stat row, e.g. '3rd place'.",
     "placeholders": {
-      "place": { "type": "String" }
+      "place": {
+        "type": "String"
+      }
     }
   },
   "gymEditorNewTitle": "New workout",
@@ -12159,7 +12159,14 @@
     }
   },
   "nutritionDeleteFailed": "Couldn’t delete the entry: {error}",
-  "@nutritionDeleteFailed": {"description":"Banner when deleting a logged food entry fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionDeleteFailed": {
+    "description": "Banner when deleting a logged food entry fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionOfflineQueued": "Offline — changes will sync when you reconnect",
   "nutritionOfflineCached": "Offline — showing saved entries",
   "nutritionLogTitle": "Log food",
@@ -12213,30 +12220,79 @@
   "nutritionCancel": "Cancel",
   "nutritionTemplates": "Meal templates",
   "nutritionSaveAsMeal": "Save as meal",
-  "@nutritionSaveAsMeal": {"description":"AppBar action: save today’s logged meals as a reusable template"},
+  "@nutritionSaveAsMeal": {
+    "description": "AppBar action: save today’s logged meals as a reusable template"
+  },
   "nutritionSaveAsMealTitle": "Save as a meal template",
   "nutritionTemplateName": "Template name",
   "nutritionTemplateNamePlaceholder": "e.g. Pre-run breakfast",
   "nutritionSaveTemplate": "Save meal",
   "nutritionTemplateSaved": "Meal template saved.",
   "nutritionTemplateSaveFailed": "Couldn’t save the template: {error}",
-  "@nutritionTemplateSaveFailed": {"description":"Banner when saving a meal template fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionTemplateSaveFailed": {
+    "description": "Banner when saving a meal template fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionLogTemplate": "Log",
   "nutritionTemplateLogged": "Logged {n} items from {name}.",
-  "@nutritionTemplateLogged": {"description":"Banner after logging a meal template: n items from the named template","placeholders":{"n":{"type":"int"},"name":{"type":"String"}}},
+  "@nutritionTemplateLogged": {
+    "description": "Banner after logging a meal template: n items from the named template",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionTemplateLogFailed": "Couldn’t log the template: {error}",
-  "@nutritionTemplateLogFailed": {"description":"Banner when logging a meal template fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionTemplateLogFailed": {
+    "description": "Banner when logging a meal template fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionTemplateDeleteFailed": "Couldn’t delete the template: {error}",
-  "@nutritionTemplateDeleteFailed": {"description":"Banner when deleting a meal template fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionTemplateDeleteFailed": {
+    "description": "Banner when deleting a meal template fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionTemplateItems": "{n} items",
-  "@nutritionTemplateItems": {"description":"Subtitle on a meal-template row: number of items","placeholders":{"n":{"type":"int"}}},
+  "@nutritionTemplateItems": {
+    "description": "Subtitle on a meal-template row: number of items",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionDeleteTemplate": "Delete",
   "nutritionDeleteTemplateTitle": "Delete this meal template?",
   "nutritionDeleteTemplateMessage": "{name} will be removed. Meals already logged from it stay in your diary.",
-  "@nutritionDeleteTemplateMessage": {"description":"Confirm dialog body before deleting a meal template","placeholders":{"name":{"type":"String"}}},
+  "@nutritionDeleteTemplateMessage": {
+    "description": "Confirm dialog body before deleting a meal template",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionRecipes": "Recipes",
   "nutritionSaveAsRecipe": "Save as recipe",
-  "@nutritionSaveAsRecipe": {"description":"AppBar action: save today’s logged meals as a reusable recipe (summed into one entry)"},
+  "@nutritionSaveAsRecipe": {
+    "description": "AppBar action: save today’s logged meals as a reusable recipe (summed into one entry)"
+  },
   "nutritionSaveAsRecipeTitle": "Save as a recipe",
   "nutritionRecipeName": "Recipe name",
   "nutritionRecipeNamePlaceholder": "e.g. Chicken & rice bowl",
@@ -12245,20 +12301,69 @@
   "nutritionSaveRecipe": "Save recipe",
   "nutritionRecipeSaved": "Recipe saved.",
   "nutritionRecipeSaveFailed": "Couldn’t save the recipe: {error}",
-  "@nutritionRecipeSaveFailed": {"description":"Banner when saving a recipe fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionRecipeSaveFailed": {
+    "description": "Banner when saving a recipe fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionLogRecipe": "Log",
   "nutritionRecipeLogged": "Logged {name} ({n} serving).",
-  "@nutritionRecipeLogged": {"description":"Banner after logging a recipe: n servings of the named recipe","placeholders":{"n":{"type":"int"},"name":{"type":"String"}}},
+  "@nutritionRecipeLogged": {
+    "description": "Banner after logging a recipe: n servings of the named recipe",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionRecipeLogFailed": "Couldn’t log the recipe: {error}",
-  "@nutritionRecipeLogFailed": {"description":"Banner when logging a recipe fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionRecipeLogFailed": {
+    "description": "Banner when logging a recipe fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionRecipeDeleteFailed": "Couldn’t delete the recipe: {error}",
-  "@nutritionRecipeDeleteFailed": {"description":"Banner when deleting a recipe fails","placeholders":{"error":{"type":"String"}}},
+  "@nutritionRecipeDeleteFailed": {
+    "description": "Banner when deleting a recipe fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionRecipeMeta": "{n} ingredients · {servings} servings",
-  "@nutritionRecipeMeta": {"description":"Subtitle on a recipe row: ingredient count + servings","placeholders":{"n":{"type":"int"},"servings":{"type":"num","format":"decimalPattern"}}},
+  "@nutritionRecipeMeta": {
+    "description": "Subtitle on a recipe row: ingredient count + servings",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "servings": {
+        "type": "num",
+        "format": "decimalPattern"
+      }
+    }
+  },
   "nutritionDeleteRecipe": "Delete",
   "nutritionDeleteRecipeTitle": "Delete this recipe?",
   "nutritionDeleteRecipeMessage": "{name} will be removed. Meals already logged from it stay in your diary.",
-  "@nutritionDeleteRecipeMessage": {"description":"Confirm dialog body before deleting a recipe","placeholders":{"name":{"type":"String"}}},
+  "@nutritionDeleteRecipeMessage": {
+    "description": "Confirm dialog body before deleting a recipe",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "sessionTitle": "Sessions",
   "@sessionTitle": {
     "description": "App bar title for the session-plans list (yoga/pilates/class sequences)"
@@ -13496,7 +13601,9 @@
   "@challengesPaceNeedPerDay": {
     "description": "Daily rate still needed to finish a behind-pace challenge",
     "placeholders": {
-      "rate": { "type": "String" }
+      "rate": {
+        "type": "String"
+      }
     }
   },
   "challengesEndsIn": "Ends in {n} days",
@@ -14320,20 +14427,60 @@
   "simWatchConnecting": "Connecting…",
   "simWatchDisconnect": "Disconnect",
   "simWatchConnectionFailed": "Connection failed: {error}",
-  "@simWatchConnectionFailed": {"placeholders": {"error": {"type": "String"}}},
+  "@simWatchConnectionFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "simWatchSyncAction": "Sync runs from watch",
-  "@simWatchSyncAction": {"description": "Button that pulls recorded runs off the custom watch over BLE"},
+  "@simWatchSyncAction": {
+    "description": "Button that pulls recorded runs off the custom watch over BLE"
+  },
   "simWatchSyncing": "Syncing… {done}/{total}",
-  "@simWatchSyncing": {"placeholders": {"done": {"type": "int"}, "total": {"type": "int"}}},
+  "@simWatchSyncing": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "simWatchResult": "Synced {synced} of {total} run(s) from the watch",
-  "@simWatchResult": {"placeholders": {"synced": {"type": "int"}, "total": {"type": "int"}}},
+  "@simWatchResult": {
+    "placeholders": {
+      "synced": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "simWatchSyncFailed": "Watch sync failed: {error}",
-  "@simWatchSyncFailed": {"placeholders": {"error": {"type": "String"}}},
+  "@simWatchSyncFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "simWatchPushSettingsAction": "Push settings to watch",
-  "@simWatchPushSettingsAction": {"description": "Button that pushes the user's config to the custom watch over BLE"},
+  "@simWatchPushSettingsAction": {
+    "description": "Button that pushes the user's config to the custom watch over BLE"
+  },
   "simWatchSettingsPushed": "Settings pushed to the watch",
   "simWatchPushSettingsFailed": "Settings push failed: {error}",
-  "@simWatchPushSettingsFailed": {"placeholders": {"error": {"type": "String"}}},
+  "@simWatchPushSettingsFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "simWatchNoRuns": "No runs on the watch to sync",
   "simWatchWaitingFrames": "Connected — waiting for frames…",
   "simWatchUptime": "Watch uptime",
@@ -14347,5 +14494,63 @@
   "simWatchDescent": "Descent",
   "simWatchFixAge": "Fix age",
   "simWatchSeconds": "{seconds} s",
-  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}}
+  "@simWatchSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionLoadError": "Couldn't load sessions.",
+  "@sessionLoadError": {
+    "description": "Error message when the session-plan list fails to load"
+  },
+  "sessionDetailLoadError": "Couldn't load this session plan.",
+  "@sessionDetailLoadError": {
+    "description": "Error message when a session plan detail fails to load"
+  },
+  "gymEditorRemoveExerciseTitle": "Remove exercise?",
+  "@gymEditorRemoveExerciseTitle": {
+    "description": "Title of the remove-exercise confirmation dialog in the gym composer"
+  },
+  "gymEditorRemoveExerciseBody": "This exercise and all its sets will be removed from this workout.",
+  "@gymEditorRemoveExerciseBody": {
+    "description": "Body of the remove-exercise confirmation dialog"
+  },
+  "gymEditorRemoveExerciseConfirm": "Remove",
+  "@gymEditorRemoveExerciseConfirm": {
+    "description": "Confirm button of the remove-exercise dialog"
+  },
+  "gearWearLogDeleteTitle": "Delete this note?",
+  "@gearWearLogDeleteTitle": {
+    "description": "Title of the wear-log delete confirmation dialog"
+  },
+  "gearWearLogDeleteBody": "This wear-log note will be permanently deleted.",
+  "@gearWearLogDeleteBody": {
+    "description": "Body of the wear-log delete confirmation dialog"
+  },
+  "gearWearLogDeleteConfirm": "Delete",
+  "@gearWearLogDeleteConfirm": {
+    "description": "Confirm button of the wear-log delete dialog"
+  },
+  "eventSubmitRunsLoadError": "Couldn't load your recent runs.",
+  "@eventSubmitRunsLoadError": {
+    "description": "Error when the submit-time sheet fails to load recent runs"
+  },
+  "racesCouldNotOpenLink": "Couldn't open that link.",
+  "@racesCouldNotOpenLink": {
+    "description": "Banner when a race entry/results URL cannot be opened"
+  },
+  "prefsHrZonesClearTitle": "Clear heart-rate zones?",
+  "@prefsHrZonesClearTitle": {
+    "description": "Title of the clear-HR-zones confirmation dialog"
+  },
+  "prefsHrZonesClearBody": "Your five custom zones will be cleared.",
+  "@prefsHrZonesClearBody": {
+    "description": "Body of the clear-HR-zones confirmation dialog"
+  },
+  "prefsHrZonesClearConfirm": "Clear",
+  "@prefsHrZonesClearConfirm": {
+    "description": "Confirm button of the clear-HR-zones dialog"
+  }
 }
