@@ -6735,6 +6735,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent age grade';
+  }
+
+  @override
   String get dashboardGoals => 'Metas';
 
   @override

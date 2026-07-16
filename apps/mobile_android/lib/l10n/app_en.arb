@@ -8993,6 +8993,15 @@
       }
     }
   },
+  "dashboardPbAgeGrade": "{percent} age grade",
+  "@dashboardPbAgeGrade": {
+    "description": "Muted second line under a personal-best time showing its age grade (e.g. 72.4% age grade)",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "dashboardGoals": "Goals",
   "@dashboardGoals": {
     "description": "Section header above the goals list"

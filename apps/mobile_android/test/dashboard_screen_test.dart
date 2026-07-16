@@ -20,6 +20,32 @@ class _FakeApi extends ApiClient {
   String? get userId => 'u1';
 }
 
+/// Signed-in fake that also serves an authoritative 5 km personal record plus
+/// a profile carrying DOB + sex, so the best-effort PB rows can age-grade.
+class _FakeApiPb extends ApiClient {
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<List<PersonalRecordRow>> fetchPersonalRecords() async => [
+        PersonalRecordRow(
+          userId: 'u1',
+          distance: '5k',
+          bestTimeS: 1200,
+          achievedAt: DateTime.utc(2026, 4, 1),
+          updatedAt: DateTime.utc(2026, 4, 1),
+        ),
+      ];
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
+        id: 'u1',
+        shadowHidden: false,
+        gender: 'male',
+        dateOfBirth: DateTime.utc(1990, 1, 1),
+      );
+}
+
 /// Test seam: a TrainingService that returns a canned overview from
 /// `fetchActiveOverview` without touching Supabase. Subclassing the
 /// real type keeps it a drop-in for the dashboard's
@@ -637,6 +663,59 @@ void main() {
         );
         await tester.pump();
         expect(find.text('Ask your coach'), findsNothing);
+      });
+    });
+
+    testWidgets(
+        'personal-best rows show an age grade when the viewer DOB + sex are known',
+        (tester) async {
+      // #269: the PB card used to show raw time only. With a server 5 km PR
+      // and a profile carrying DOB + sex, the fastest-distance row now also
+      // renders its age grade (via the same ageGradeForRun helper run-detail
+      // uses). A tall surface avoids scrolling to the deep PB card.
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+        final dir = Directory.systemTemp.createTempSync('dashboard_pb_ag_');
+        try {
+          // Seed a run so the full ListView (with the PB card) renders instead
+          // of the welcome empty state.
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: _FakeApiPb(),
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          // Drain the initState fetches (_serverPbs + _viewerProfile) + their
+          // setState so the fastest-distance row + its age grade render.
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.text('Personal Bests'), findsOneWidget);
+          expect(find.textContaining('age grade'), findsOneWidget);
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
       });
     });
 

@@ -11107,6 +11107,12 @@ abstract class AppLocalizations {
   /// **'Fastest {distance}'**
   String dashboardFastestDistance(String distance);
 
+  /// Muted second line under a personal-best time showing its age grade (e.g. 72.4% age grade)
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} age grade'**
+  String dashboardPbAgeGrade(String percent);
+
   /// Section header above the goals list
   ///
   /// In en, this message translates to:

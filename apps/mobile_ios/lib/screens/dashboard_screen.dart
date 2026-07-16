@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
+import '../age_grade.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -45,6 +46,22 @@ import 'recap_screen.dart';
 
 const _kCardPadding = EdgeInsets.all(20);
 const _kSectionGap = SizedBox(height: 24);
+
+/// Metres for each best-effort PB label (both the offline track-scan keys and
+/// the server `personal_records` labels). Used to age-grade a timed PB via the
+/// shared `ageGradeForRun` helper — non-standard distances simply yield no
+/// grade (matchStandardDistance returns null).
+const _pbLabelMetres = <String, double>{
+  'Mile': 1609.344,
+  '1 mi': 1609.344,
+  '1 km': 1000,
+  '5 km': 5000,
+  '8 km': 8000,
+  '10 km': 10000,
+  '12 km': 12000,
+  'Half Marathon': 21097,
+  'Marathon': 42195,
+};
 
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
@@ -109,6 +126,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// resident runs is used instead.
   List<PersonalRecordRow> _serverPbs = const [];
 
+  /// Viewer profile (DOB + sex), loaded once on mount so the best-effort PB
+  /// rows can show an age grade alongside the raw time — the same inputs
+  /// run-detail feeds `ageGradeForRun`. Null until resolved / signed out;
+  /// age grade then simply doesn't render (graceful degrade).
+  UserProfileRow? _viewerProfile;
+
   @override
   void initState() {
     super.initState();
@@ -120,6 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _refreshPlanOverview();
     _hydrateModalities();
     _loadPersonalRecords();
+    _loadViewerProfile();
   }
 
   /// Best-effort load of the server PB cache (L4 — a failure just leaves the
@@ -133,6 +157,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       debugPrint('dashboard: personal_records fetch failed: $e');
     }
+  }
+
+  /// Best-effort load of the viewer's DOB + sex for age-grading the PB rows
+  /// (L4 — a failure just omits the age grade). Sourced from the profile,
+  /// which carries both `date_of_birth` and `gender` (get_my_profile).
+  Future<void> _loadViewerProfile() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final p = await api.fetchMyProfile();
+      if (mounted) setState(() => _viewerProfile = p);
+    } catch (e) {
+      debugPrint('dashboard: profile fetch failed: $e');
+    }
+  }
+
+  /// Age grade (e.g. `72.4%`) for a timed best-effort PB, or null when the
+  /// distance isn't a graded standard or the viewer's DOB/sex is unknown.
+  /// Uses the runner's age as of [now] (the PB's own date isn't carried into
+  /// the label→time map) and the shared `ageGradeForRun` twin helper.
+  String? _pbAgeGrade(String label, Duration time, DateTime now) {
+    final metres = _pbLabelMetres[label];
+    if (metres == null) return null;
+    final p = _viewerProfile;
+    final result = ageGradeForRun(
+      distanceM: metres,
+      durationSec: time.inSeconds.toDouble(),
+      dobIso: p?.dateOfBirth?.toIso8601String(),
+      runStartIso: now.toIso8601String(),
+      sex: p?.gender,
+    );
+    return result != null ? formatAgeGradePercent(result.percent) : null;
   }
 
   @override
@@ -773,6 +829,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               label: l10n.dashboardFastestDistance(
                                   bestEffortDistanceLabel(l10n, e.key)),
                               value: _formatDuration(e.value),
+                              subValue: switch (
+                                  _pbAgeGrade(e.key, e.value, now)) {
+                                final ag? => l10n.dashboardPbAgeGrade(ag),
+                                _ => null,
+                              },
                             ),
                           ],
                         ],
@@ -1405,21 +1466,45 @@ class _PbRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _PbRow({required this.icon, required this.label, required this.value});
+
+  /// Optional muted second line under the value — the age grade for a timed
+  /// PB (#269). Null for rows with no graded standard (e.g. longest run) or
+  /// when the viewer's DOB/sex is unknown.
+  final String? subValue;
+  const _PbRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.subValue,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Icon(icon, color: theme.colorScheme.primary, size: 22),
         const SizedBox(width: 12),
         Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (subValue != null)
+              Text(
+                subValue!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+          ],
         ),
       ],
     );
