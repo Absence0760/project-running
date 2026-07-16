@@ -977,7 +977,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get setupDoneHintGoal =>
-      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
+      'これで完了です。目標に合わせてトレーニングプランを作成するか、ダッシュボードを開いてランを始めましょう。';
 
   @override
   String get privacyPrivateTitle => '非公開';
@@ -4158,16 +4158,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewNameHint => '例：秋のハーフマラソン';
 
   @override
-  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+  String get planNewNameRequiredHint => '「作成」を有効にするにはプラン名を入力してください。';
 
   @override
   String planNewDefaultName(String goal) {
-    return '$goal plan';
+    return '$goal プラン';
   }
 
   @override
   String planNewDefaultNameBeginner(String goal) {
-    return 'Walk-run to $goal';
+    return '$goal までウォークラン';
   }
 
   @override
@@ -6299,7 +6299,7 @@ class AppLocalizationsJa extends AppLocalizations {
       'ランを記録したり、目標を設定したり、履歴をインポートすると、ダッシュボードが充実します。';
 
   @override
-  String get dashboardStartRun => 'Start a run';
+  String get dashboardStartRun => 'ランを開始';
 
   @override
   String get dashboardSetGoal => '目標を設定';
@@ -6364,7 +6364,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String dashboardPbAgeGrade(String percent) {
-    return '$percent age grade';
+    return '年齢別評価 $percent';
   }
 
   @override

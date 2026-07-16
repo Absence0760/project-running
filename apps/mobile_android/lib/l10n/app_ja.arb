@@ -3194,5 +3194,11 @@
   "simWatchAscent": "上昇",
   "simWatchDescent": "下降",
   "simWatchFixAge": "測位からの経過",
-  "simWatchSeconds": "{seconds} 秒"
+  "simWatchSeconds": "{seconds} 秒",
+  "dashboardStartRun": "ランを開始",
+  "dashboardPbAgeGrade": "年齢別評価 {percent}",
+  "setupDoneHintGoal": "これで完了です。目標に合わせてトレーニングプランを作成するか、ダッシュボードを開いてランを始めましょう。",
+  "planNewNameRequiredHint": "「作成」を有効にするにはプラン名を入力してください。",
+  "planNewDefaultName": "{goal} プラン",
+  "planNewDefaultNameBeginner": "{goal} までウォークラン"
 }

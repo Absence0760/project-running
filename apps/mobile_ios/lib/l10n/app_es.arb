@@ -3194,5 +3194,11 @@
   "simWatchAscent": "Ascenso",
   "simWatchDescent": "Descenso",
   "simWatchFixAge": "Antigüedad de la señal",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "dashboardStartRun": "Iniciar una carrera",
+  "dashboardPbAgeGrade": "{percent} grado por edad",
+  "setupDoneHintGoal": "Eso es todo. Crea un plan de entrenamiento para tu objetivo o abre el panel para empezar a correr.",
+  "planNewNameRequiredHint": "Añade un nombre de plan para activar Crear.",
+  "planNewDefaultName": "Plan de {goal}",
+  "planNewDefaultNameBeginner": "Caminar-correr hasta {goal}"
 }

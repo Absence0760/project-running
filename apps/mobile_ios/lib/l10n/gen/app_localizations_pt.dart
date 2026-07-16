@@ -1014,7 +1014,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get setupDoneHintGoal =>
-      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
+      'É tudo. Cria um plano de treino para o teu objetivo ou abre o painel para começar a correr.';
 
   @override
   String get privacyPrivateTitle => 'Privada';
@@ -4426,16 +4426,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewNameHint => 'ex. Meia maratona de outono';
 
   @override
-  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+  String get planNewNameRequiredHint =>
+      'Adiciona um nome de plano para ativar Criar.';
 
   @override
   String planNewDefaultName(String goal) {
-    return '$goal plan';
+    return 'Plano de $goal';
   }
 
   @override
   String planNewDefaultNameBeginner(String goal) {
-    return 'Walk-run to $goal';
+    return 'Caminhada-corrida até $goal';
   }
 
   @override
@@ -6670,7 +6671,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
 
   @override
-  String get dashboardStartRun => 'Start a run';
+  String get dashboardStartRun => 'Iniciar uma corrida';
 
   @override
   String get dashboardSetGoal => 'Definir meta';
@@ -6736,7 +6737,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String dashboardPbAgeGrade(String percent) {
-    return '$percent age grade';
+    return '$percent classificação por idade';
   }
 
   @override
@@ -12148,6 +12149,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'É isso. Toque em “Abrir painel” para começar a correr.';
 
   @override
+  String get setupDoneHintGoal =>
+      'É tudo. Crie um plano de treino para o seu objetivo ou abra o painel para começar a correr.';
+
+  @override
   String get privacyPrivateTitle => 'Privada';
 
   @override
@@ -15556,6 +15561,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planNewNameHint => 'ex. Meia maratona de outono';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Adicione um nome de plano para ativar Criar.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return 'Plano de $goal';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Caminhada-corrida até $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Prova-alvo';
 
   @override
@@ -17786,6 +17805,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
 
   @override
+  String get dashboardStartRun => 'Iniciar uma corrida';
+
+  @override
   String get dashboardSetGoal => 'Definir meta';
 
   @override
@@ -17845,6 +17867,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Mais rápido em $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent classificação por idade';
   }
 
   @override

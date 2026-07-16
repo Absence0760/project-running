@@ -1014,7 +1014,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get setupDoneHintGoal =>
-      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
+      'Das war alles. Erstelle einen Trainingsplan für dein Ziel oder öffne das Dashboard, um mit dem Laufen zu beginnen.';
 
   @override
   String get privacyPrivateTitle => 'Privat';
@@ -4433,16 +4433,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get planNewNameHint => 'z. B. Herbst-Halbmarathon';
 
   @override
-  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+  String get planNewNameRequiredHint =>
+      'Gib einen Plannamen ein, um „Erstellen“ zu aktivieren.';
 
   @override
   String planNewDefaultName(String goal) {
-    return '$goal plan';
+    return '$goal-Plan';
   }
 
   @override
   String planNewDefaultNameBeginner(String goal) {
-    return 'Walk-run to $goal';
+    return 'Geh-Lauf zu $goal';
   }
 
   @override
@@ -6682,7 +6683,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dein Dashboard füllt sich, sobald du einen Lauf aufzeichnest, ein Ziel setzt oder deinen Verlauf importierst.';
 
   @override
-  String get dashboardStartRun => 'Start a run';
+  String get dashboardStartRun => 'Lauf starten';
 
   @override
   String get dashboardSetGoal => 'Ziel setzen';
@@ -6748,7 +6749,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String dashboardPbAgeGrade(String percent) {
-    return '$percent age grade';
+    return '$percent Altersbewertung';
   }
 
   @override
