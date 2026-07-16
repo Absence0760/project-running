@@ -5533,6 +5533,24 @@ class AppLocalizationsEs extends AppLocalizations {
       'Datos anónimos de fallos y errores a Sentry (EE. UU.). Desactiva para retirar el consentimiento. Se aplica en el próximo inicio.';
 
   @override
+  String get settingsAccountDisplayName => 'Nombre visible';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'El nombre que ven otros corredores. Déjalo en blanco para usar «Runner».';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Sin definir: apareces como «Runner»';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nombre visible actualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'No se pudo actualizar el nombre visible. Inténtalo de nuevo.';
+
+  @override
   String get settingsAccountErrorReportingEnabled =>
       'Informes de errores activados: reinicia la app para aplicar.';
 

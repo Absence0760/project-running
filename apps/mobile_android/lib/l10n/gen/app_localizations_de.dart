@@ -5545,6 +5545,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Anonymisierte Absturz- + Fehlerdaten an Sentry (USA). Deaktivieren, um die Einwilligung zu widerrufen. Gilt beim nächsten Start.';
 
   @override
+  String get settingsAccountDisplayName => 'Anzeigename';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Der Name, den andere Läufer sehen. Leer lassen, um „Runner“ zu verwenden.';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Nicht festgelegt — du erscheinst als „Runner“';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Anzeigename aktualisiert';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Anzeigename konnte nicht aktualisiert werden. Bitte versuche es erneut.';
+
+  @override
   String get settingsAccountErrorReportingEnabled =>
       'Fehlerberichte aktiviert — App neu starten, um sie anzuwenden.';
 

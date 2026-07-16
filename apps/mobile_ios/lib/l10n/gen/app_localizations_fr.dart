@@ -5552,6 +5552,24 @@ class AppLocalizationsFr extends AppLocalizations {
       'Données anonymisées de plantage et d\'erreur vers Sentry (USA). Désactive pour retirer ton consentement. Appliqué au prochain lancement.';
 
   @override
+  String get settingsAccountDisplayName => 'Nom affiché';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Le nom que voient les autres coureurs. Laisse vide pour utiliser « Runner ».';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Non défini — tu apparais comme « Runner »';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nom affiché mis à jour';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Échec de la mise à jour du nom affiché. Réessaie.';
+
+  @override
   String get settingsAccountErrorReportingEnabled =>
       'Rapports d\'erreur activés — redémarre l\'app pour appliquer.';
 

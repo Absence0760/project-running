@@ -2408,6 +2408,35 @@ class ApiClient {
     return UserProfileRow.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Set (or clear, when blank) the signed-in user's display name on
+  /// `user_profiles`. Mirrors web `/settings/account`'s display-name save —
+  /// the only other writer is the one-shot setup wizard, so without this a
+  /// mobile user who skipped the wizard rendered as the "Runner" fallback
+  /// everywhere with no recourse (issue #226). Same trimming as the wizard;
+  /// blank clears the column (web writes `displayName || null`).
+  /// Row-count-verified update + insert fallback per §248; throws when
+  /// signed out.
+  Future<void> updateDisplayName(String? displayName) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    final trimmed = displayName?.trim();
+    final update = <String, dynamic>{
+      UserProfileRow.colDisplayName:
+          (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+    };
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update(update)
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...update,
+      });
+    }
+  }
+
   /// Stamp `onboarded_at = now()` and nothing else — the minimum write the
   /// home-screen onboarding gate needs to stop re-showing the setup wizard.
   /// Mirrors web's `skipOnboarding` in `apps/web/src/routes/onboarding`.

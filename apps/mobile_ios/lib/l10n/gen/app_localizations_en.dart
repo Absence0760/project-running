@@ -5478,6 +5478,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.';
 
   @override
+  String get settingsAccountDisplayName => 'Display name';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'The name other runners see. Leave blank to use \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Not set — you appear as \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Display name updated';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Couldn\'t update your display name. Please try again.';
+
+  @override
   String get settingsAccountErrorReportingEnabled =>
       'Error reporting enabled — restart the app to apply.';
 
