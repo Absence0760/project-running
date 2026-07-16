@@ -1113,13 +1113,11 @@ void main() {
     });
 
     test('5 rapid notifications within 50ms coalesce into ONE push', () async {
-      // Real-time wait approach — FakeAsync doesn't pump platform-channel
-      // mocks. 250ms window (not 60ms): the 5ms spacing does NOT bound the
-      // burst to ~25ms, because each `await store.save(...)` also writes to
-      // disk (5-15ms on a loaded CI runner), so the span is really 50-100ms.
-      // CI run 29517668370 fired the coalesced push mid-burst against 60ms.
+      // Real-time wait approach: short window (60ms) so the
+      // tests run fast (~250ms total) and reliable — FakeAsync
+      // doesn't pump platform-channel mocks.
       WearRoutesBridge.kPushDebounceWindow =
-          const Duration(milliseconds: 250);
+          const Duration(milliseconds: 60);
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
@@ -1137,7 +1135,7 @@ void main() {
               'a push yet — timer keeps resetting');
 
       // Wait past the window.
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(channel.pushCalls, hasLength(1),
           reason: 'after the window expires with no new '
               'notifications, exactly ONE coalesced push fires');
@@ -1146,22 +1144,35 @@ void main() {
 
     test('10 rapid notifications + quiescence fires once after window',
         () async {
-      // 250ms window (not 60ms): on a slow CI runner each
-      // `await store.save(...)` writes to disk and can take
-      // 5-15ms, so 10 zero-spaced saves span 50-150ms — comfortably
-      // outside a 60ms window. CI run 26523370163 split the burst
-      // into 2 pushes when the 9th save crossed the 60ms boundary.
+      // The burst must be SYNCHRONOUS by construction. Two prior CI
+      // flakes (runs 26523370163, 29520492396) came from `await
+      // store.save(...)` putting a disk write inside the "rapid"
+      // burst — a runner stall between two saves crosses whatever
+      // window is chosen and splits the push in two; raising the
+      // window (60ms → 250ms) only moved the flake. So: seed the 10
+      // routes on disk FIRST, then drive the bridge with 10
+      // back-to-back store notifications that involve no I/O at all.
       WearRoutesBridge.kPushDebounceWindow =
           const Duration(milliseconds: 250);
+      // 9 of the 10 routes exist before attach — the burst must change
+      // the payload exactly once, or the bridge's diff cache would
+      // (correctly) suppress a push identical to the attach push.
+      for (var i = 0; i < 9; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
       channel.pushCalls.clear();
 
-      for (var i = 0; i < 10; i++) {
-        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      // The one disk write opens the burst; the other nine
+      // notifications are synchronous re-notifies.
+      await store.save(_makeRoute(id: 'r-9', isStarred: true));
+      for (var i = 0; i < 9; i++) {
+        // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+        store.notifyListeners();
       }
-      // No spacing — but each save still resets the timer.
+      // No spacing — but each notification still resets the timer.
       // After the burst, wait past the window.
       await Future<void>.delayed(const Duration(milliseconds: 350));
 
