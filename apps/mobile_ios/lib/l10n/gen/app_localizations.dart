@@ -1829,6 +1829,12 @@ abstract class AppLocalizations {
   /// **'That\'s everything. Tap Open dashboard to start running.'**
   String get setupDoneHint;
 
+  /// Setup wizard final step hint when the runner picked a goal, so the primary action is Create my training plan
+  ///
+  /// In en, this message translates to:
+  /// **'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.'**
+  String get setupDoneHintGoal;
+
   /// Title of the Private visibility default option
   ///
   /// In en, this message translates to:
@@ -7364,6 +7370,24 @@ abstract class AppLocalizations {
   /// **'e.g. Autumn half marathon'**
   String get planNewNameHint;
 
+  /// Inline hint below the plan-name field explaining why the Create button is disabled when the name is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Add a plan name to enable Create.'**
+  String get planNewNameRequiredHint;
+
+  /// Default plan name prefilled when the plan wizard opens preselected to a goal (from the onboarding nudge)
+  ///
+  /// In en, this message translates to:
+  /// **'{goal} plan'**
+  String planNewDefaultName(String goal);
+
+  /// Default plan name prefilled when the plan wizard opens on the beginner walk-run preset
+  ///
+  /// In en, this message translates to:
+  /// **'Walk-run to {goal}'**
+  String planNewDefaultNameBeginner(String goal);
+
   /// Goal-race dropdown label
   ///
   /// In en, this message translates to:
@@ -10363,6 +10387,24 @@ abstract class AppLocalizations {
   /// **'This removes every zone, re-exposing all of these areas on public shares.'**
   String get privacyZonesClearAllBody;
 
+  /// Title of the unsaved-changes confirm dialog on the privacy-zones editor
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes?'**
+  String get privacyZonesDiscardTitle;
+
+  /// Body of the unsaved-changes confirm dialog on the privacy-zones editor
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved privacy zones. Leave without saving?'**
+  String get privacyZonesDiscardBody;
+
+  /// Confirm button that leaves the privacy-zones editor discarding unsaved zones
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get privacyZonesDiscard;
+
   /// AppBar title for the Settings > Preferences screen
   ///
   /// In en, this message translates to:
@@ -10962,6 +11004,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your dashboard fills in once you record a run, set a goal, or import your history.'**
   String get dashboardWelcomeBody;
+
+  /// Dashboard empty-state primary button that opens the recorder to start a run
+  ///
+  /// In en, this message translates to:
+  /// **'Start a run'**
+  String get dashboardStartRun;
 
   /// Dashboard empty-state primary button to create a goal
   ///

@@ -1013,6 +1013,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'É isso. Toque em “Abrir painel” para começar a correr.';
 
   @override
+  String get setupDoneHintGoal =>
+      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
+
+  @override
   String get privacyPrivateTitle => 'Privada';
 
   @override
@@ -4422,6 +4426,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewNameHint => 'ex. Meia maratona de outono';
 
   @override
+  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal plan';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Walk-run to $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Prova-alvo';
 
   @override
@@ -6315,6 +6332,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Discard changes?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'You have unsaved privacy zones. Leave without saving?';
+
+  @override
+  String get privacyZonesDiscard => 'Discard';
+
+  @override
   String get prefsTitle => 'Preferências';
 
   @override
@@ -6641,6 +6668,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get dashboardWelcomeBody =>
       'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
+
+  @override
+  String get dashboardStartRun => 'Start a run';
 
   @override
   String get dashboardSetGoal => 'Definir meta';

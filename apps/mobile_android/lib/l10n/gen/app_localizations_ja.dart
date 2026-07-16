@@ -976,6 +976,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get setupDoneHint => '以上です。「ダッシュボードを開く」をタップしてランを始めましょう。';
 
   @override
+  String get setupDoneHintGoal =>
+      'That\'s everything. Create a training plan for your goal, or open the dashboard to start running.';
+
+  @override
   String get privacyPrivateTitle => '非公開';
 
   @override
@@ -4154,6 +4158,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewNameHint => '例：秋のハーフマラソン';
 
   @override
+  String get planNewNameRequiredHint => 'Add a plan name to enable Create.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return '$goal plan';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Walk-run to $goal';
+  }
+
+  @override
   String get planNewGoalRace => '目標レース';
 
   @override
@@ -5952,6 +5969,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
 
   @override
+  String get privacyZonesDiscardTitle => 'Discard changes?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'You have unsaved privacy zones. Leave without saving?';
+
+  @override
+  String get privacyZonesDiscard => 'Discard';
+
+  @override
   String get prefsTitle => '環境設定';
 
   @override
@@ -6271,6 +6298,9 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get dashboardWelcomeBody =>
       'ランを記録したり、目標を設定したり、履歴をインポートすると、ダッシュボードが充実します。';
+
+  @override
+  String get dashboardStartRun => 'Start a run';
 
   @override
   String get dashboardSetGoal => '目標を設定';
