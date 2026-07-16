@@ -136,6 +136,20 @@ class _EventSocial extends SocialService {
       Supabase.instance.client.channel('test-$eventId');
 }
 
+/// Drives the Submit-time sheet's failure path: a recent-runs fetch that
+/// always throws, so the sheet must show the error + retry affordance
+/// instead of spinning forever.
+class _RecentRunsFailSocial extends _EventSocial {
+  _RecentRunsFailSocial({super.club});
+  int fetchRecentRunsCalls = 0;
+
+  @override
+  Future<List<RecentRunRow>> fetchRecentRuns({int limit = 20}) async {
+    fetchRecentRunsCalls++;
+    throw Exception('network down');
+  }
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -445,6 +459,35 @@ void main() {
       expect(canMarkEventAttendance(_club('owner'), 'run'), isFalse);
       expect(canMarkEventAttendance(_club('owner'), 'cycle'), isFalse);
       expect(canMarkEventAttendance(_club('owner'), 'social'), isFalse);
+    });
+  });
+
+  group('Submit-time sheet — recent-runs load failure', () {
+    testWidgets(
+        'a fetchRecentRuns failure shows the error + retry, not a stuck spinner',
+        (tester) async {
+      final social = _RecentRunsFailSocial(club: _club('member'));
+      await pumpEvent(tester, social);
+
+      final submit = find.widgetWithText(FilledButton, 'Submit my time');
+      expect(submit, findsOneWidget);
+      await tester.tap(submit);
+      await tester.pump(); // start the bottom-sheet route transition
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(social.fetchRecentRunsCalls, 1);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text("Couldn't load your recent runs."), findsOneWidget);
+
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(social.fetchRecentRunsCalls, 2);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text("Couldn't load your recent runs."), findsOneWidget);
     });
   });
 }
