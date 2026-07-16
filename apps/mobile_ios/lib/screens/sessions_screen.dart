@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
+import '../widgets/error_state.dart';
 import 'session_detail_screen.dart';
 
 /// Read-only list of the user's session plans (session_planner.md P1). Tapping a
@@ -21,6 +22,7 @@ class SessionsScreen extends StatefulWidget {
 
 class _SessionsScreenState extends State<SessionsScreen> {
   bool _loading = true;
+  bool _error = false;
   List<SessionPlanRow> _plans = const [];
 
   @override
@@ -30,12 +32,25 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 
   Future<void> _load() async {
-    final plans = await widget.api.fetchSessionPlans();
-    if (!mounted) return;
     setState(() {
-      _plans = plans;
-      _loading = false;
+      _loading = true;
+      _error = false;
     });
+    try {
+      final plans = await widget.api.fetchSessionPlans();
+      if (!mounted) return;
+      setState(() {
+        _plans = plans;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('SessionsScreen._load failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = true;
+      });
+    }
   }
 
   @override
@@ -45,36 +60,38 @@ class _SessionsScreenState extends State<SessionsScreen> {
       appBar: AppBar(title: Text(l10n.sessionTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _plans.isEmpty
-              ? _EmptyState(l10n: l10n)
-              : ListView.builder(
-                  itemCount: _plans.length,
-                  itemBuilder: (context, i) {
-                    final p = _plans[i];
-                    final subtitleParts = <String>[
-                      if (p.discipline != null) p.discipline!,
-                      if (p.estDurationMin != null)
-                        l10n.sessionEstDuration(p.estDurationMin!),
-                    ];
-                    return ListTile(
-                      title: Text(p.title.isEmpty ? l10n.sessionUntitled : p.title),
-                      subtitle: subtitleParts.isEmpty
-                          ? null
-                          : Text(subtitleParts.join(' · ')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => SessionDetailScreen(
-                            api: widget.api,
-                            gymStore: widget.gymStore,
-                            planId: p.id,
-                            titleHint: p.title,
+          : _error
+              ? ErrorState(message: l10n.sessionLoadError, onRetry: _load)
+              : _plans.isEmpty
+                  ? _EmptyState(l10n: l10n)
+                  : ListView.builder(
+                      itemCount: _plans.length,
+                      itemBuilder: (context, i) {
+                        final p = _plans[i];
+                        final subtitleParts = <String>[
+                          if (p.discipline != null) p.discipline!,
+                          if (p.estDurationMin != null)
+                            l10n.sessionEstDuration(p.estDurationMin!),
+                        ];
+                        return ListTile(
+                          title: Text(p.title.isEmpty ? l10n.sessionUntitled : p.title),
+                          subtitle: subtitleParts.isEmpty
+                              ? null
+                              : Text(subtitleParts.join(' · ')),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => SessionDetailScreen(
+                                api: widget.api,
+                                gymStore: widget.gymStore,
+                                planId: p.id,
+                                titleHint: p.title,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                        );
+                      },
+                    ),
     );
   }
 }

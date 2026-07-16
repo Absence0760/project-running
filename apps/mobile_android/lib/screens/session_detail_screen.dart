@@ -11,6 +11,7 @@ import '../event_gym_template.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../session_steps.dart';
+import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
 /// Read-only mobile view of a session plan's expanded sequence
@@ -47,6 +48,7 @@ SessionItemKind sessionKindFromString(String raw) {
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _loading = true;
+  bool _error = false;
   String? _title;
   String? _discipline;
   List<SessionStep> _steps = const [];
@@ -62,41 +64,55 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _load() async {
-    final data = await widget.api.fetchSessionPlan(widget.planId);
-    if (!mounted) return;
-    if (data == null) {
-      setState(() => _loading = false);
-      return;
-    }
-    final input = SessionPlanInput(
-      blocks: [
-        for (final b in data.blocks)
-          SessionPlanBlockInput(id: b.id, position: b.position, name: b.name),
-      ],
-      items: [
-        for (final it in data.items)
-          SessionPlanItemInput(
-            id: it.id,
-            blockId: it.blockId,
-            position: it.position,
-            movementName: it.movementName,
-            kind: sessionKindFromString(it.kind),
-            durationS: it.durationS,
-            reps: it.reps,
-            perSide: it.perSide,
-            tempo: it.tempo,
-            cue: it.cue,
-          ),
-      ],
-    );
     setState(() {
-      _title = data.plan.title;
-      _discipline = data.plan.discipline;
-      _steps = expandSessionSteps(input).steps;
-      _isPublic = data.plan.isPublic;
-      _isOwner = widget.api.userId == data.plan.authorId;
-      _loading = false;
+      _loading = true;
+      _error = false;
     });
+    try {
+      final data = await widget.api.fetchSessionPlan(widget.planId);
+      if (!mounted) return;
+      if (data == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      final input = SessionPlanInput(
+        blocks: [
+          for (final b in data.blocks)
+            SessionPlanBlockInput(id: b.id, position: b.position, name: b.name),
+        ],
+        items: [
+          for (final it in data.items)
+            SessionPlanItemInput(
+              id: it.id,
+              blockId: it.blockId,
+              position: it.position,
+              movementName: it.movementName,
+              kind: sessionKindFromString(it.kind),
+              durationS: it.durationS,
+              reps: it.reps,
+              perSide: it.perSide,
+              tempo: it.tempo,
+              cue: it.cue,
+            ),
+        ],
+      );
+      setState(() {
+        _title = data.plan.title;
+        _discipline = data.plan.discipline;
+        _steps = expandSessionSteps(input).steps;
+        _isPublic = data.plan.isPublic;
+        _isOwner = widget.api.userId == data.plan.authorId;
+        _loading = false;
+      });
+    } catch (e, s) {
+      debugPrint('SessionDetailScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
+      }
+    }
   }
 
   Future<void> _toggleVisibility() async {
@@ -208,7 +224,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _steps.isEmpty
+          : _error
+              ? ErrorState(message: l10n.sessionDetailLoadError, onRetry: _load)
+              : _steps.isEmpty
               ? Center(child: Text(l10n.sessionNotFound))
               : ListView(
                   padding: const EdgeInsets.all(16),
