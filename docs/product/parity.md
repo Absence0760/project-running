@@ -58,6 +58,7 @@ See [features § Cloud sync and auth](features.md#cloud-sync-and-auth).
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Email / password sign-in | ✓ | ✓ | ✓ | ✗ | ✗ | Watches authenticate by piggy-backing on the paired phone's Supabase session (handed over via Watch Connectivity / companion app), not through a native sign-in UI. |
+| Password show/hide toggle | ✓ | ✓ | Partial | N/A | N/A | Mobile: every obscured field via `PasswordField` (sign-up, sign-in, change-password dialog). Web: `/login` only — `/auth/reset` + the settings change-password fields still type blind (#225 follow-up). |
 | Google OAuth | ✓ | Partial | ✓ | ✗ | ✗ | iOS: scaffolded, needs provider credentials. |
 | Apple OAuth | ✓ | Partial | ✗ | ✗ | ✗ | Android: native `sign_in_with_apple` SDK via `sign_in_screen.dart`. iOS: behind `_kAppleSignInEnabled = false` pending Services ID setup. Web: button rendered behind a "Soon" pill, `handleAppleSignIn` surfaces a "coming soon" toast — Apple Services-ID configuration for the web OAuth flow is the unblocking step. |
 | Auth callback / deep-link handler | ✓ | ✓ | ✓ | N/A | N/A | Watches never handle the OAuth redirect directly. |

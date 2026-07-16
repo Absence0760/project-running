@@ -145,6 +145,12 @@ Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the len
 
 On mobile the contract is pinned in `test/auth_gates_test.dart` (17 mirror cases, one per web case) and the wiring in `test/sign_up_screen_test.dart`. Mobile has no e2e tier by design (`docs/testing/testing.md § What's not covered`), so the widget test is the wiring pin.
 
+## Password visibility toggle
+
+Every obscured field on `/login` (the sign-in/up password + the sign-up confirm field) carries a show/hide eye toggle (issue #225) — the password that mints an account shouldn't be typed blind. The toggle flips the input between `type='password'` and `type='text'`, carries a state-tracking localized `aria-label` (`login.showPassword` / `login.hidePassword` in all six locales), and is `disabled` until hydration — a pre-hydration click would silently do nothing, same treatment as the submit button. Wiring pinned in `tests-e2e/auth/password-visibility.spec.ts`. `/auth/reset` and the `/settings/account` change-password fields don't have the toggle yet — `parity.md` tracks the gap.
+
+On mobile every obscured field routes through `widgets/password_field.dart` (`PasswordField`) — sign-up (password + confirm), sign-in, and the settings change-password dialog — with the `authShowPassword` / `authHidePassword` ARB keys as the toggle's tooltip / a11y label. Pinned in `test/password_field_test.dart` plus the independent-toggles case in `test/sign_up_screen_test.dart`.
+
 ---
 
 ## Email confirmation redirect (signup gap)
