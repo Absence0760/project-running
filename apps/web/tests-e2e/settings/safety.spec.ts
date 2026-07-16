@@ -241,6 +241,63 @@ test.describe('/settings/safety', () => {
 			await ctx.close();
 		}
 	});
+
+	test('the confirm controls stay disabled until hydration, so a click is never dropped', async ({
+		browser,
+	}) => {
+		// The page is prerendered: the prompt paints before Svelte wires
+		// onclick. Without the mount gate the button looks live in the
+		// static HTML, so a click that lands first is silently dropped and
+		// the card sits on 'prompt' forever. Stalling the JS makes that
+		// window wide enough to assert on — a loaded CI runner hits the
+		// same window by accident, which is what made this flake.
+		const admin = getAdminClient();
+		const email = `hydrate-${Date.now()}@safe.local`;
+		const { error: insErr } = await admin
+			.from('safety_contacts')
+			.insert({ owner_id: USER_A.id, contact_email: email, contact_phone: '+447700900125' });
+		expect(insErr).toBeNull();
+		const { data: row } = await admin
+			.from('safety_contacts')
+			.select('confirm_token')
+			.eq('owner_id', USER_A.id)
+			.eq('contact_email', email)
+			.single();
+		const token = (row as { confirm_token: string }).confirm_token;
+
+		const ctx = await browser.newContext();
+		const anon = await ctx.newPage();
+		await anon.route(/\.js(\?.*)?$/, async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 2_000));
+			await route.continue();
+		});
+		try {
+			await anon.goto(`/safety/confirm?token=${token}`);
+			const card = anon.getByTestId('safety-confirm-card');
+			const button = anon.getByTestId('safety-confirm-button');
+			// Prompt is painted, but the controls are inert until mount.
+			await expect(card).toHaveAttribute('data-state', 'prompt', { timeout: 5_000 });
+			await expect(button).toBeDisabled();
+
+			// Playwright's actionability check now waits out hydration
+			// rather than firing into a dead handler.
+			await anon.getByTestId('safety-confirm-sms').check();
+			await button.click();
+			await expect(card).toHaveAttribute('data-state', 'success', { timeout: 5_000 });
+
+			// The opt-in tick survived hydration — proving the checkbox
+			// gate keeps bind:checked and the DOM in agreement.
+			const { data: after } = await admin
+				.from('safety_contacts')
+				.select('sms_opt_in_at')
+				.eq('owner_id', USER_A.id)
+				.eq('contact_email', email)
+				.single();
+			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
+		} finally {
+			await ctx.close();
+		}
+	});
 });
 
 test.describe('/settings/safety — overdue alert pref', () => {
