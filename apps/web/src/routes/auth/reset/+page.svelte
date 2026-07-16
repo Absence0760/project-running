@@ -4,6 +4,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { checkPasswordPair } from '$lib/core/auth_gates';
+	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let password = $state('');
@@ -57,7 +58,7 @@
 		const pair = checkPasswordPair(password, confirmPassword);
 		if (!pair.ok) {
 			error = pair.reason === 'too_short'
-				? m('authReset.errorTooShort')
+				? m('authReset.errorTooShort', { min: PASSWORD_MIN_LENGTH })
 				: m('authReset.errorMismatch');
 			return;
 		}
@@ -113,7 +114,7 @@
 						bind:value={password}
 						placeholder={m('authReset.newPasswordPlaceholder')}
 						required
-						minlength="6"
+						minlength={PASSWORD_MIN_LENGTH}
 						autocomplete="new-password"
 					/>
 					<input
@@ -121,7 +122,7 @@
 						bind:value={confirmPassword}
 						placeholder={m('authReset.confirmPasswordPlaceholder')}
 						required
-						minlength="6"
+						minlength={PASSWORD_MIN_LENGTH}
 						autocomplete="new-password"
 					/>
 					<button type="submit" class="btn btn-primary reset-cta" disabled={busy}>

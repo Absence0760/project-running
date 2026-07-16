@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_change_aware.dart';
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -16,7 +17,7 @@ import 'settings_screen.dart';
 /// bottom-nav destination. A profile header tile (own profile) sits above the
 /// unchanged [SettingsScreen] body so its section tiles keep working as-is;
 /// folding Settings in here is what frees its old standalone bottom-nav slot.
-class YouScreen extends StatelessWidget {
+class YouScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
   final LocalRunStore? runStore;
@@ -39,9 +40,21 @@ class YouScreen extends StatelessWidget {
   });
 
   @override
+  State<YouScreen> createState() => _YouScreenState();
+}
+
+class _YouScreenState extends State<YouScreen>
+    with AuthChangeAware<YouScreen> {
+  @override
+  ApiClient? get authApi => widget.apiClient;
+
+  @override
+  void onAuthUserChanged(String? userId) => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final api = apiClient;
+    final api = widget.apiClient;
     final viewerId = api?.userId;
     return Scaffold(
       body: SafeArea(
@@ -65,14 +78,14 @@ class YouScreen extends StatelessWidget {
               ),
             Expanded(
               child: SettingsScreen(
-                apiClient: apiClient,
-                preferences: preferences,
-                runStore: runStore,
-                routeStore: routeStore,
-                gearStore: gearStore,
-                heartRate: heartRate,
-                treadmill: treadmill,
-                settingsSync: settingsSync,
+                apiClient: widget.apiClient,
+                preferences: widget.preferences,
+                runStore: widget.runStore,
+                routeStore: widget.routeStore,
+                gearStore: widget.gearStore,
+                heartRate: widget.heartRate,
+                treadmill: widget.treadmill,
+                settingsSync: widget.settingsSync,
               ),
             ),
           ],

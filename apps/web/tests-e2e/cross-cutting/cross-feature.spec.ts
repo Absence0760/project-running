@@ -126,11 +126,11 @@ test.describe('runs ↔ plans on /plans/[id]', () => {
 			page.getByRole('heading', { level: 1, name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 
-		// Snapshot the seeded completion count. The seed has exactly
-		// one .day.completed (from completed_run_id on the week-0
-		// long-run match in seed.sql lines ~496-510).
+		// Snapshot the seeded completion count. The seed marks two
+		// .day.completed via completed_run_id — the week-0 (2026-03-29)
+		// and week-1 (2026-04-05) long-run matches in seed.sql.
 		const completedBefore = await page.locator('.day.completed').count();
-		expect(completedBefore).toBe(1);
+		expect(completedBefore).toBe(2);
 
 		// Click the first non-rest, non-completed day-link. Day order
 		// matches workout-scheduled-date order, so picking .first()

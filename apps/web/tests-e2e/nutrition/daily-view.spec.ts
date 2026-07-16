@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { waterStorageKey } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -78,10 +79,7 @@ test.describe('/nutrition — daily grouping + water decrement', () => {
 		await page.goto('/nutrition');
 
 		// Start from a clean per-day counter (the tracker is client-only).
-		await page.evaluate(() => {
-			const d = new Date();
-			localStorage.removeItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
-		});
+		await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 		await page.reload();
 
 		const units = page.locator('.water-units');
@@ -100,10 +98,7 @@ test.describe('/nutrition — daily grouping + water decrement', () => {
 		await expect(units).toContainText('0 × 250 ml');
 
 		// Cleanup so the shared seed user starts clean next run.
-		await page.evaluate(() => {
-			const d = new Date();
-			localStorage.removeItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
-		});
+		await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 	});
 
 	test('a manual entry with no slot picked defaults to Breakfast', async ({ page }) => {

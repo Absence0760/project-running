@@ -146,10 +146,9 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
           _loadedWeightKg = weightVal;
         }
       } else {
-        // Art 7(3) withdrawal: nulls consent + height and erases the weight
-        // series.
+        // Art 7(3) withdrawal: one RPC nulls consent + the Art 9 profile
+        // columns and erases the weight series atomically.
         await api.withdrawHealthDataConsent();
-        await api.clearBodyWeightHistory();
         _consentAt = null;
         _loadedWeightKg = null;
         _heightCtl.clear();

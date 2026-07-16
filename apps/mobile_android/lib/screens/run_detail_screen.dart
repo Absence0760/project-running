@@ -820,173 +820,180 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           // to the linked route's planned path. Manual-entry runs with no
           // route attached skip the map entirely.
           if (run.track.isNotEmpty || _linkedRoute != null)
-            SizedBox(
-              height: 280,
-              child: Stack(
-                children: [
-                  ValueListenableBuilder<int?>(
-                    valueListenable: _replayIndex,
-                    builder: (context, replayIndex, _) {
-                      // Prefer the matched line when the worker has
-                      // produced one. Stats (splits, elevation, HR
-                      // zones) keep deriving from the raw `run.track`
-                      // because those are properties of what the
-                      // runner did, not how the projected line is
-                      // drawn — switching the visual layer must not
-                      // alter the numbers. The "Show raw GPS track"
-                      // preference forces the raw line for verification.
-                      final mapTrack = displayedRunTrack(
-                        run.track,
-                        _matchInfo,
-                        showRaw: widget.preferences.showRawTrack,
-                      );
-                      // The replay index advances over `run.track`, but
-                      // the line on screen is `mapTrack` — the matched
-                      // line when the worker produced one, with a
-                      // different length + coords. Feed the dot a point
-                      // and index that both reference the DISPLAYED
-                      // track so the smoothed-dot snap lands it on the
-                      // rendered polyline (same reasoning as the
-                      // `hoverIdx` gate below). Identity remap when the
-                      // map is showing the raw track.
-                      final dotIndex = replayDotIndex(
-                        replayIndex,
-                        run.track.length,
-                        mapTrack.length,
-                      );
-                      return LiveRunMap(
-                        track: mapTrack,
-                        plannedRoute: mapTrack.isEmpty
-                            ? _linkedRoute?.waypoints
-                            : null,
-                        followRunner: false,
-                        activity: mapTrack.isNotEmpty ? _activityType : null,
-                        currentPosition:
-                            dotIndex != null ? mapTrack[dotIndex] : null,
-                        // Authoritative index for the smoothed-dot
-                        // snap — loop routes (start == end coord)
-                        // need the explicit index, otherwise the
-                        // lat/lng scan would return the start point
-                        // for every end-of-track scrub.
-                        currentPositionIndex: dotIndex,
-                        showDecorations: mapTrack.isNotEmpty,
-                        useMilesForDecorations:
-                            widget.preferences.unit == DistanceUnit.mi,
-                        totalDistanceM: run.distanceMetres,
-                        onSegmentSelect: mapTrack.isNotEmpty
-                            ? (seg) => setState(() => _selectedSegment = seg)
-                            : null,
-                        // Linked cursor: paints a pulsing marker at
-                        // the elevation chart's current pointer index
-                        // on the live track. Gated on track === mapTrack
-                        // alignment — the chart reads run.track, but
-                        // the map sometimes shows the matched track,
-                        // which has a different index space. Only feed
-                        // the marker when the two are the same.
-                        hoverIdx: identical(mapTrack, run.track)
-                            ? _chartHoverIdx
-                            : null,
-                      );
-                    },
-                  ),
-                  if (_selectedSegment != null)
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 12,
-                      child: _SegmentStatsCard(
-                        segment: _selectedSegment!,
-                        unit: widget.preferences.unit,
-                        onDismiss: () =>
-                            setState(() => _selectedSegment = null),
-                      ),
+            // Keep the map alive across ListView scroll. A bare list child is
+            // disposed once it scrolls past the cache extent, tearing down the
+            // FlutterMap + MapController; scrolling back rebuilt it from
+            // scratch — a visible tile reload plus a jank spike. Keeping it
+            // alive also pauses its pulse ticker while off-screen.
+            _KeepAliveMap(
+              child: SizedBox(
+                height: 280,
+                child: Stack(
+                  children: [
+                    ValueListenableBuilder<int?>(
+                      valueListenable: _replayIndex,
+                      builder: (context, replayIndex, _) {
+                        // Prefer the matched line when the worker has
+                        // produced one. Stats (splits, elevation, HR
+                        // zones) keep deriving from the raw `run.track`
+                        // because those are properties of what the
+                        // runner did, not how the projected line is
+                        // drawn — switching the visual layer must not
+                        // alter the numbers. The "Show raw GPS track"
+                        // preference forces the raw line for verification.
+                        final mapTrack = displayedRunTrack(
+                          run.track,
+                          _matchInfo,
+                          showRaw: widget.preferences.showRawTrack,
+                        );
+                        // The replay index advances over `run.track`, but
+                        // the line on screen is `mapTrack` — the matched
+                        // line when the worker produced one, with a
+                        // different length + coords. Feed the dot a point
+                        // and index that both reference the DISPLAYED
+                        // track so the smoothed-dot snap lands it on the
+                        // rendered polyline (same reasoning as the
+                        // `hoverIdx` gate below). Identity remap when the
+                        // map is showing the raw track.
+                        final dotIndex = replayDotIndex(
+                          replayIndex,
+                          run.track.length,
+                          mapTrack.length,
+                        );
+                        return LiveRunMap(
+                          track: mapTrack,
+                          plannedRoute: mapTrack.isEmpty
+                              ? _linkedRoute?.waypoints
+                              : null,
+                          followRunner: false,
+                          activity: mapTrack.isNotEmpty ? _activityType : null,
+                          currentPosition:
+                              dotIndex != null ? mapTrack[dotIndex] : null,
+                          // Authoritative index for the smoothed-dot
+                          // snap — loop routes (start == end coord)
+                          // need the explicit index, otherwise the
+                          // lat/lng scan would return the start point
+                          // for every end-of-track scrub.
+                          currentPositionIndex: dotIndex,
+                          showDecorations: mapTrack.isNotEmpty,
+                          useMilesForDecorations:
+                              widget.preferences.unit == DistanceUnit.mi,
+                          totalDistanceM: run.distanceMetres,
+                          onSegmentSelect: mapTrack.isNotEmpty
+                              ? (seg) => setState(() => _selectedSegment = seg)
+                              : null,
+                          // Linked cursor: paints a pulsing marker at
+                          // the elevation chart's current pointer index
+                          // on the live track. Gated on track === mapTrack
+                          // alignment — the chart reads run.track, but
+                          // the map sometimes shows the matched track,
+                          // which has a different index space. Only feed
+                          // the marker when the two are the same.
+                          hoverIdx: identical(mapTrack, run.track)
+                              ? _chartHoverIdx
+                              : null,
+                        );
+                      },
                     ),
-                  Builder(
-                    builder: (context) {
-                      final kind = matchPillKind(_matchInfo,
-                          offline: _matchOffline);
-                      if (kind == MatchPillKind.hidden) {
-                        return const SizedBox.shrink();
-                      }
-                      return Positioned(
-                        top: 12,
+                    if (_selectedSegment != null)
+                      Positioned(
                         left: 12,
-                        child: _MatchStatusPill(
-                          kind: kind,
-                          // RLS on `run_matched_tracks` only returns the
-                          // row to the owner, so a non-null `_matchInfo`
-                          // already implies the viewer is the owner.
-                          // The RPC self-gates with 42501 anyway as a
-                          // defence in depth.
-                          onRematch: widget.apiClient == null
-                              ? null
-                              : _handleRematch,
-                          busy: _rematchBusy,
-                        ),
-                      );
-                    },
-                  ),
-                  if (run.track.length >= 2)
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: FloatingActionButton.small(
-                        heroTag: 'run-trace-replay',
-                        onPressed: _toggleReplay,
-                        tooltip: _replayController?.isAnimating == true
-                            ? l10n.runDetailPauseReplay
-                            : l10n.runDetailReplay,
-                        child: Icon(
-                          _replayController?.isAnimating == true
-                              ? Icons.pause
-                              : Icons.play_arrow,
+                        right: 12,
+                        bottom: 12,
+                        child: _SegmentStatsCard(
+                          segment: _selectedSegment!,
+                          unit: widget.preferences.unit,
+                          onDismiss: () =>
+                              setState(() => _selectedSegment = null),
                         ),
                       ),
+                    Builder(
+                      builder: (context) {
+                        final kind = matchPillKind(_matchInfo,
+                            offline: _matchOffline);
+                        if (kind == MatchPillKind.hidden) {
+                          return const SizedBox.shrink();
+                        }
+                        return Positioned(
+                          top: 12,
+                          left: 12,
+                          child: _MatchStatusPill(
+                            kind: kind,
+                            // RLS on `run_matched_tracks` only returns the
+                            // row to the owner, so a non-null `_matchInfo`
+                            // already implies the viewer is the owner.
+                            // The RPC self-gates with 42501 anyway as a
+                            // defence in depth.
+                            onRematch: widget.apiClient == null
+                                ? null
+                                : _handleRematch,
+                            busy: _rematchBusy,
+                          ),
+                        );
+                      },
                     ),
-                  if (_loadingTrack)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(l10n.runDetailLoadingGps,
-                                  style: const TextStyle(fontSize: 12)),
-                            ],
+                    if (run.track.length >= 2)
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: FloatingActionButton.small(
+                          heroTag: 'run-trace-replay',
+                          onPressed: _toggleReplay,
+                          tooltip: _replayController?.isAnimating == true
+                              ? l10n.runDetailPauseReplay
+                              : l10n.runDetailReplay,
+                          child: Icon(
+                            _replayController?.isAnimating == true
+                                ? Icons.pause
+                                : Icons.play_arrow,
                           ),
                         ),
                       ),
-                    ),
-                  if (_trackFetchFailed && run.track.isEmpty)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.cloud_off, size: 14,
-                                  color: Theme.of(context).colorScheme.outline),
-                              const SizedBox(width: 8),
-                              Text(l10n.runDetailGpsUnavailable,
-                                  style: const TextStyle(fontSize: 12)),
-                            ],
+                    if (_loadingTrack)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(l10n.runDetailLoadingGps,
+                                    style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                    if (_trackFetchFailed && run.track.isEmpty)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.cloud_off, size: 14,
+                                    color: Theme.of(context).colorScheme.outline),
+                                const SizedBox(width: 8),
+                                Text(l10n.runDetailGpsUnavailable,
+                                    style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
 
@@ -3009,3 +3016,28 @@ void applyDnfFlag(Map<String, dynamic> metadata, bool dnf) {
   }
 }
 
+
+/// Preserves its child's State when it scrolls out of the enclosing
+/// ListView's cache extent. Wraps the run-detail map so the FlutterMap +
+/// MapController aren't disposed and rebuilt (with a full tile reload) on
+/// every scroll past it. Same `AutomaticKeepAliveClientMixin` idiom as
+/// `_LazyKeepAliveTab` on the home shell.
+class _KeepAliveMap extends StatefulWidget {
+  final Widget child;
+  const _KeepAliveMap({required this.child});
+
+  @override
+  State<_KeepAliveMap> createState() => _KeepAliveMapState();
+}
+
+class _KeepAliveMapState extends State<_KeepAliveMap>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}

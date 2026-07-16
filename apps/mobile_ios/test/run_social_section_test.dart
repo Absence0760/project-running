@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/screens/profile_screen.dart';
 import '../lib/widgets/run_social_section.dart';
 
 /// Renders the viewer's own comment (so the delete affordance shows)
@@ -23,7 +24,7 @@ class _CommentApi extends ApiClient {
 
   @override
   Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
-      fetchEngagementSummaries(List<String> runIds) async => {};
+  fetchEngagementSummaries(List<String> runIds) async => {};
 
   @override
   Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
@@ -37,8 +38,9 @@ class _CommentApi extends ApiClient {
 
   @override
   Future<List<RunCommentWithAuthor>> fetchRunCommentsWithAuthors(
-      String runId,
-      {int limit = 200}) async {
+    String runId, {
+    int limit = 200,
+  }) async {
     if (_deleted) return const [];
     return [
       RunCommentWithAuthor(
@@ -82,10 +84,7 @@ Future<void> _pump(WidgetTester tester) {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
-        body: RunSocialSection(
-          api: ApiClient(),
-          runId: 'fake-run-id',
-        ),
+        body: RunSocialSection(api: ApiClient(), runId: 'fake-run-id'),
       ),
     ),
   );
@@ -135,14 +134,14 @@ class _SocialApi extends ApiClient {
 
   @override
   Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
-      fetchEngagementSummaries(List<String> runIds) async => {
-            for (final id in runIds)
-              id: (
-                kudosCount: kudosCount,
-                viewerHasKudos: viewerHasKudos,
-                commentCount: commentCount,
-              ),
-          };
+  fetchEngagementSummaries(List<String> runIds) async => {
+    for (final id in runIds)
+      id: (
+        kudosCount: kudosCount,
+        viewerHasKudos: viewerHasKudos,
+        commentCount: commentCount,
+      ),
+  };
 
   @override
   Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
@@ -156,8 +155,9 @@ class _SocialApi extends ApiClient {
 
   @override
   Future<List<RunCommentWithAuthor>> fetchRunCommentsWithAuthors(
-      String runId,
-      {int limit = 200}) async => seedComments;
+    String runId, {
+    int limit = 200,
+  }) async => seedComments;
 
   @override
   Future<bool> giveKudos(String runId) async {
@@ -195,8 +195,11 @@ class _SocialApi extends ApiClient {
   }
 }
 
-Future<void> _pumpApi(WidgetTester tester, ApiClient api,
-    {String? runOwnerId}) async {
+Future<void> _pumpApi(
+  WidgetTester tester,
+  ApiClient api, {
+  String? runOwnerId,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -218,19 +221,18 @@ RunCommentWithAuthor _comment(
   String authorId = 'someone-else',
   String body = 'nice run',
   String? parentId,
-}) =>
-    RunCommentWithAuthor(
-      comment: RunCommentRow(
-        id: id,
-        runId: 'fake-run-id',
-        authorId: authorId,
-        body: body,
-        parentCommentId: parentId,
-        createdAt: DateTime(2026, 1, 1),
-        updatedAt: DateTime(2026, 1, 1),
-      ),
-      author: PublicProfile(id: authorId, displayName: authorId),
-    );
+}) => RunCommentWithAuthor(
+  comment: RunCommentRow(
+    id: id,
+    runId: 'fake-run-id',
+    authorId: authorId,
+    body: body,
+    parentCommentId: parentId,
+    createdAt: DateTime(2026, 1, 1),
+    updatedAt: DateTime(2026, 1, 1),
+  ),
+  author: PublicProfile(id: authorId, displayName: authorId),
+);
 
 void main() {
   setUpAll(_ensureSupabase);
@@ -243,8 +245,9 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('empty thread renders the no-comments hint + composer',
-        (tester) async {
+    testWidgets('empty thread renders the no-comments hint + composer', (
+      tester,
+    ) async {
       final api = _SocialApi();
       await _pumpApi(tester, api);
       expect(find.text('No comments yet.'), findsOneWidget);
@@ -264,8 +267,9 @@ void main() {
       expect(find.text('No comments yet.'), findsNothing);
     });
 
-    testWidgets('signed-out viewer (userId == null) hides the composer',
-        (tester) async {
+    testWidgets('signed-out viewer (userId == null) hides the composer', (
+      tester,
+    ) async {
       final api = _SocialApi(viewer: null);
       await _pumpApi(tester, api);
       // No composer TextField for anon.
@@ -274,24 +278,27 @@ void main() {
   });
 
   group('RunSocialSection — kudos', () {
-    testWidgets('tapping the pill optimistically increments + calls giveKudos',
-        (tester) async {
-      final api = _SocialApi(kudosCount: 2, viewerHasKudos: false);
-      await _pumpApi(tester, api);
-      expect(find.text('2'), findsOneWidget);
+    testWidgets(
+      'tapping the pill optimistically increments + calls giveKudos',
+      (tester) async {
+        final api = _SocialApi(kudosCount: 2, viewerHasKudos: false);
+        await _pumpApi(tester, api);
+        expect(find.text('2'), findsOneWidget);
 
-      await tester.tap(find.byType(TextButton).first);
-      await tester.pump();
-      // Optimistic bump before the await resolves.
-      expect(find.text('3'), findsOneWidget);
-      await tester.pumpAndSettle();
-      expect(api.giveCalls, 1);
-      expect(api.rescindCalls, 0);
-      expect(find.text('3'), findsOneWidget);
-    });
+        await tester.tap(find.byType(TextButton).first);
+        await tester.pump();
+        // Optimistic bump before the await resolves.
+        expect(find.text('3'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(api.giveCalls, 1);
+        expect(api.rescindCalls, 0);
+        expect(find.text('3'), findsOneWidget);
+      },
+    );
 
-    testWidgets('kudos pill carries an accessibility label for its state',
-        (tester) async {
+    testWidgets('kudos pill carries an accessibility label for its state', (
+      tester,
+    ) async {
       final api = _SocialApi(kudosCount: 2, viewerHasKudos: false);
       await _pumpApi(tester, api);
       // Not-yet-kudoed → "give" label.
@@ -299,8 +306,9 @@ void main() {
       expect(find.bySemanticsLabel('Remove kudos'), findsNothing);
     });
 
-    testWidgets('kudoed pill exposes the remove-kudos accessibility label',
-        (tester) async {
+    testWidgets('kudoed pill exposes the remove-kudos accessibility label', (
+      tester,
+    ) async {
       final api = _SocialApi(kudosCount: 5, viewerHasKudos: true);
       await _pumpApi(tester, api);
       expect(find.bySemanticsLabel('Remove kudos'), findsOneWidget);
@@ -319,8 +327,9 @@ void main() {
       expect(find.text('4'), findsOneWidget);
     });
 
-    testWidgets('a no-op give (already kudoed elsewhere) undoes the +1 drift',
-        (tester) async {
+    testWidgets('a no-op give (already kudoed elsewhere) undoes the +1 drift', (
+      tester,
+    ) async {
       // The viewer kudoed this run from another tab, so the server
       // already has the row, but this widget's local flag is stale
       // (viewerHasKudos: false, count excludes their kudos). Tapping
@@ -343,70 +352,77 @@ void main() {
       expect(find.text('2'), findsOneWidget);
     });
 
-    testWidgets('a no-op rescind (already un-kudoed elsewhere) undoes the -1 drift',
-        (tester) async {
-      // Symmetric to the no-op give: the viewer un-kudoed this run from
-      // another tab, so the server row is already gone, but this widget's
-      // local flag is stale (viewerHasKudos: true). Tapping fires a delete
-      // that matches nothing → rescindKudos returns false → the UI must NOT
-      // keep the optimistic -1.
-      final api = _SocialApi(
-        kudosCount: 5,
-        viewerHasKudos: true,
-        rescindReturnsNoOp: true,
-      );
-      await _pumpApi(tester, api);
-      expect(find.text('5'), findsOneWidget);
+    testWidgets(
+      'a no-op rescind (already un-kudoed elsewhere) undoes the -1 drift',
+      (tester) async {
+        // Symmetric to the no-op give: the viewer un-kudoed this run from
+        // another tab, so the server row is already gone, but this widget's
+        // local flag is stale (viewerHasKudos: true). Tapping fires a delete
+        // that matches nothing → rescindKudos returns false → the UI must NOT
+        // keep the optimistic -1.
+        final api = _SocialApi(
+          kudosCount: 5,
+          viewerHasKudos: true,
+          rescindReturnsNoOp: true,
+        );
+        await _pumpApi(tester, api);
+        expect(find.text('5'), findsOneWidget);
 
-      await tester.tap(find.byType(TextButton).first);
-      await tester.pumpAndSettle();
-      expect(api.rescindCalls, 1);
-      // Count reconciled back to 5 (no real change) — the optimistic -1 did
-      // NOT stick on a delete that matched nothing.
-      expect(find.text('4'), findsNothing);
-      expect(find.text('5'), findsOneWidget);
-    });
+        await tester.tap(find.byType(TextButton).first);
+        await tester.pumpAndSettle();
+        expect(api.rescindCalls, 1);
+        // Count reconciled back to 5 (no real change) — the optimistic -1 did
+        // NOT stick on a delete that matched nothing.
+        expect(find.text('4'), findsNothing);
+        expect(find.text('5'), findsOneWidget);
+      },
+    );
 
-    testWidgets('a failed give rolls back the optimistic bump + shows a banner',
-        (tester) async {
-      final api = _SocialApi(
-        kudosCount: 2,
-        viewerHasKudos: false,
-        throwOnGive: true,
-      );
-      await _pumpApi(tester, api);
+    testWidgets(
+      'a failed give rolls back the optimistic bump + shows a banner',
+      (tester) async {
+        final api = _SocialApi(
+          kudosCount: 2,
+          viewerHasKudos: false,
+          throwOnGive: true,
+        );
+        await _pumpApi(tester, api);
 
-      await tester.tap(find.byType(TextButton).first);
-      await tester.pumpAndSettle();
-      expect(api.giveCalls, 1);
-      // Rolled back to the pre-tap count.
-      expect(find.text('2'), findsOneWidget);
-      expect(find.text('3'), findsNothing);
-      expect(find.textContaining('kudos'), findsWidgets);
-      await tester.pump(const Duration(seconds: 4));
-    });
+        await tester.tap(find.byType(TextButton).first);
+        await tester.pumpAndSettle();
+        expect(api.giveCalls, 1);
+        // Rolled back to the pre-tap count.
+        expect(find.text('2'), findsOneWidget);
+        expect(find.text('3'), findsNothing);
+        expect(find.textContaining('kudos'), findsWidgets);
+        await tester.pump(const Duration(seconds: 4));
+      },
+    );
 
-    testWidgets('a failed un-kudos rolls back the optimistic decrement + shows a banner',
-        (tester) async {
-      final api = _SocialApi(
-        kudosCount: 5,
-        viewerHasKudos: true,
-        throwOnRescind: true,
-      );
-      await _pumpApi(tester, api);
+    testWidgets(
+      'a failed un-kudos rolls back the optimistic decrement + shows a banner',
+      (tester) async {
+        final api = _SocialApi(
+          kudosCount: 5,
+          viewerHasKudos: true,
+          throwOnRescind: true,
+        );
+        await _pumpApi(tester, api);
 
-      await tester.tap(find.byType(TextButton).first);
-      await tester.pumpAndSettle();
-      expect(api.rescindCalls, 1);
-      // Rolled back to the pre-tap count.
-      expect(find.text('5'), findsOneWidget);
-      expect(find.text('4'), findsNothing);
-      expect(find.textContaining('kudos'), findsWidgets);
-      await tester.pump(const Duration(seconds: 4));
-    });
+        await tester.tap(find.byType(TextButton).first);
+        await tester.pumpAndSettle();
+        expect(api.rescindCalls, 1);
+        // Rolled back to the pre-tap count.
+        expect(find.text('5'), findsOneWidget);
+        expect(find.text('4'), findsNothing);
+        expect(find.textContaining('kudos'), findsWidgets);
+        await tester.pump(const Duration(seconds: 4));
+      },
+    );
 
-    testWidgets('owner viewing own run cannot kudos (pill disabled, no call)',
-        (tester) async {
+    testWidgets('owner viewing own run cannot kudos (pill disabled, no call)', (
+      tester,
+    ) async {
       final api = _SocialApi(viewer: 'owner-1', kudosCount: 1);
       await _pumpApi(tester, api, runOwnerId: 'owner-1');
       // The pill is disabled; tapping it does nothing.
@@ -418,8 +434,9 @@ void main() {
   });
 
   group('RunSocialSection — comment post', () {
-    testWidgets('posting a comment appends it optimistically + bumps count',
-        (tester) async {
+    testWidgets('posting a comment appends it optimistically + bumps count', (
+      tester,
+    ) async {
       final api = _SocialApi(commentCount: 0);
       await _pumpApi(tester, api);
       await tester.enterText(find.byType(TextField), 'first comment');
@@ -431,8 +448,9 @@ void main() {
       expect(find.text('No comments yet.'), findsNothing);
     });
 
-    testWidgets('blank / whitespace comment does not call addRunComment',
-        (tester) async {
+    testWidgets('blank / whitespace comment does not call addRunComment', (
+      tester,
+    ) async {
       final api = _SocialApi();
       await _pumpApi(tester, api);
       await tester.enterText(find.byType(TextField), '   ');
@@ -441,8 +459,9 @@ void main() {
       expect(api.addCalls, 0);
     });
 
-    testWidgets('double-submit guard — second tap while posting is a no-op',
-        (tester) async {
+    testWidgets('double-submit guard — second tap while posting is a no-op', (
+      tester,
+    ) async {
       final api = _SocialApi()..addGate = Completer<void>();
       await _pumpApi(tester, api);
       await tester.enterText(find.byType(TextField), 'busy comment');
@@ -461,8 +480,9 @@ void main() {
       expect(find.text('busy comment'), findsOneWidget);
     });
 
-    testWidgets('a failed post surfaces a banner and does not append',
-        (tester) async {
+    testWidgets('a failed post surfaces a banner and does not append', (
+      tester,
+    ) async {
       final api = _SocialApi(throwOnAdd: true);
       await _pumpApi(tester, api);
       await tester.enterText(find.byType(TextField), 'doomed');
@@ -493,12 +513,13 @@ void main() {
     }
 
     Finder confirmDelete() => find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.widgetWithText(TextButton, 'Delete'),
-        );
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(TextButton, 'Delete'),
+    );
 
-    testWidgets('Cancel keeps the comment and never calls delete',
-        (tester) async {
+    testWidgets('Cancel keeps the comment and never calls delete', (
+      tester,
+    ) async {
       final api = _CommentApi();
       await pumpLoaded(tester, api);
       expect(find.text('e2e-comment-body'), findsOneWidget);
@@ -526,8 +547,9 @@ void main() {
       expect(find.text('e2e-comment-body'), findsNothing);
     });
 
-    testWidgets('a failed delete surfaces a banner and keeps the comment',
-        (tester) async {
+    testWidgets('a failed delete surfaces a banner and keeps the comment', (
+      tester,
+    ) async {
       final api = _CommentApi(throwOnDelete: true);
       await pumpLoaded(tester, api);
 
@@ -546,23 +568,27 @@ void main() {
   });
 
   group('RunSocialSection — report comment (E2)', () {
-    testWidgets("another user's comment carries a Report flag that opens the sheet",
-        (tester) async {
-      final api = _SocialApi(
-        seedComments: [_comment('c1', authorId: 'someone-else')],
-      );
-      await _pumpApi(tester, api);
+    testWidgets(
+      "another user's comment carries a Report flag that opens the sheet",
+      (tester) async {
+        final api = _SocialApi(
+          seedComments: [_comment('c1', authorId: 'someone-else')],
+        );
+        await _pumpApi(tester, api);
 
-      final flag = find.byTooltip('Report comment');
-      expect(flag, findsOneWidget);
+        final flag = find.byTooltip('Report comment');
+        expect(flag, findsOneWidget);
 
-      await tester.tap(flag);
-      await tester.pumpAndSettle();
-      // The report sheet opened with the comment-specific title.
-      expect(find.text('Report comment'), findsWidgets);
-      expect(find.widgetWithText(FilledButton, 'Submit report'),
-          findsOneWidget);
-    });
+        await tester.tap(flag);
+        await tester.pumpAndSettle();
+        // The report sheet opened with the comment-specific title.
+        expect(find.text('Report comment'), findsWidgets);
+        expect(
+          find.widgetWithText(FilledButton, 'Submit report'),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('own comment shows no Report flag', (tester) async {
       final api = _SocialApi(
@@ -581,23 +607,26 @@ void main() {
       expect(find.byTooltip('Report comment'), findsNothing);
     });
 
-    testWidgets("another user's reply carries the reply-specific Report label",
-        (tester) async {
-      final api = _SocialApi(
-        seedComments: [
-          _comment('c1', authorId: 'someone-else'),
-          _comment('r1', authorId: 'third-user', parentId: 'c1'),
-        ],
-      );
-      await _pumpApi(tester, api);
-      expect(find.byTooltip('Report comment'), findsOneWidget);
-      expect(find.byTooltip('Report reply'), findsOneWidget);
-    });
+    testWidgets(
+      "another user's reply carries the reply-specific Report label",
+      (tester) async {
+        final api = _SocialApi(
+          seedComments: [
+            _comment('c1', authorId: 'someone-else'),
+            _comment('r1', authorId: 'third-user', parentId: 'c1'),
+          ],
+        );
+        await _pumpApi(tester, api);
+        expect(find.byTooltip('Report comment'), findsOneWidget);
+        expect(find.byTooltip('Report reply'), findsOneWidget);
+      },
+    );
   });
 
   group('RunSocialSection — comment action tap targets (a11y >=48dp)', () {
-    testWidgets('inline Reply + Delete meet the 48dp minimum hit target',
-        (tester) async {
+    testWidgets('inline Reply + Delete meet the 48dp minimum hit target', (
+      tester,
+    ) async {
       final api = _CommentApi();
       await tester.pumpWidget(
         MaterialApp(
@@ -616,6 +645,28 @@ void main() {
       expect(del, findsOneWidget);
       expect(tester.getSize(reply).height, greaterThanOrEqualTo(48.0));
       expect(tester.getSize(del).height, greaterThanOrEqualTo(48.0));
+    });
+  });
+
+  group('RunSocialSection — comment author tap (harassment defence)', () {
+    testWidgets('tapping the comment author name opens their ProfileScreen', (
+      tester,
+    ) async {
+      final api = _SocialApi(
+        seedComments: [_comment('c1', authorId: 'someone-else')],
+      );
+      await _pumpApi(tester, api);
+
+      // Author display name renders (see `_comment`: displayName == authorId).
+      expect(find.text('someone-else'), findsOneWidget);
+      await tester.tap(find.text('someone-else'));
+      // Not pumpAndSettle: ProfileScreen's own load hangs on the fake api.
+      await tester.pump();
+      await tester.pump();
+
+      final profile = find.byType(ProfileScreen);
+      expect(profile, findsOneWidget);
+      expect(tester.widget<ProfileScreen>(profile).userId, 'someone-else');
     });
   });
 }

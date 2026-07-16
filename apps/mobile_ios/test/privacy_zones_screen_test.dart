@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,17 +11,17 @@ import '../lib/screens/privacy_zones_screen.dart';
 import '../lib/settings_sync.dart';
 
 Position _fakePosition({double lat = 37.53, double lng = -77.45}) => Position(
-      latitude: lat,
-      longitude: lng,
-      timestamp: DateTime.now(),
-      accuracy: 5,
-      altitude: 0,
-      altitudeAccuracy: 0,
-      heading: 0,
-      headingAccuracy: 0,
-      speed: 0,
-      speedAccuracy: 0,
-    );
+  latitude: lat,
+  longitude: lng,
+  timestamp: DateTime.now(),
+  accuracy: 5,
+  altitude: 0,
+  altitudeAccuracy: 0,
+  heading: 0,
+  headingAccuracy: 0,
+  speed: 0,
+  speedAccuracy: 0,
+);
 
 Future<({SettingsSyncService sync})> _makeSync() async {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,7 +69,9 @@ void main() {
       expect(find.text('Save'), findsOneWidget);
     });
 
-    testWidgets('renders a place-search field + a Locate-me FAB', (tester) async {
+    testWidgets('renders a place-search field + a Locate-me FAB', (
+      tester,
+    ) async {
       // Both were missing — the picker had no way to navigate to the
       // user's area, so on a self-hosted-tiles setup it opened on a
       // far-away default and looked like a blank map.
@@ -80,21 +83,25 @@ void main() {
       expect(find.byIcon(Icons.my_location), findsOneWidget);
     });
 
-    testWidgets('typing surfaces place results (Nominatim fallback)',
-        (tester) async {
+    testWidgets('typing surfaces place results (Nominatim fallback)', (
+      tester,
+    ) async {
       final s = await _makeSync();
       Future<String> stub(Uri _) async => jsonEncode([
-            {
-              'display_name': 'Richmond, Virginia',
-              'lat': '37.5407',
-              'lon': '-77.4360',
-            },
-          ]);
+        {
+          'display_name': 'Richmond, Virginia',
+          'lat': '37.5407',
+          'lon': '-77.4360',
+        },
+      ]);
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: PrivacyZonesScreen(settingsSync: s.sync, geocodingFetcher: stub),
+          home: PrivacyZonesScreen(
+            settingsSync: s.sync,
+            geocodingFetcher: stub,
+          ),
         ),
       );
       await tester.pump();
@@ -107,8 +114,9 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('Locate FAB invokes the locate seam without crashing',
-        (tester) async {
+    testWidgets('Locate FAB invokes the locate seam without crashing', (
+      tester,
+    ) async {
       final s = await _makeSync();
       var calls = 0;
       await tester.pumpWidget(
@@ -129,6 +137,95 @@ void main() {
       await tester.pump();
       expect(calls, greaterThanOrEqualTo(1));
       await tester.pump(const Duration(seconds: 1));
+    });
+  });
+
+  group('PrivacyZonesScreen — unsaved-changes guard', () {
+    // Pushes the screen over a root route so a guarded pop can be observed
+    // returning to the root. pumpAndSettle hangs on the map, so pump fixed
+    // durations instead (per the mobile-test gotcha).
+    Future<void> pushScreen(
+      WidgetTester tester,
+      SettingsSyncService sync,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PrivacyZonesScreen(settingsSync: sync),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('back with a freshly drawn zone shows the discard confirm', (
+      tester,
+    ) async {
+      final s = await _makeSync();
+      await pushScreen(tester, s.sync);
+
+      // Drawing a zone (map tap) marks the editor dirty.
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump(const Duration(seconds: 1));
+
+      // System back is intercepted by the PopScope guard.
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Discard changes?'), findsOneWidget);
+      // Cancelling keeps the editor mounted (nothing discarded).
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(PrivacyZonesScreen), findsOneWidget);
+      expect(find.text('Discard changes?'), findsNothing);
+    });
+
+    testWidgets('confirming discard leaves the editor', (tester) async {
+      final s = await _makeSync();
+      await pushScreen(tester, s.sync);
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      // Popped back to the root route.
+      expect(find.byType(PrivacyZonesScreen), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+
+    testWidgets('back with no edits pops without a confirm', (tester) async {
+      final s = await _makeSync();
+      await pushScreen(tester, s.sync);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(PrivacyZonesScreen), findsNothing);
     });
   });
 }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MIN_PASSWORD_LENGTH, checkPasswordPair, checkSignUpGates } from './auth_gates.js';
+import { PASSWORD_MIN_LENGTH } from './auth_rules.js';
 
 test('sign-in mode: ok regardless of checkbox state', () => {
 	assert.deepEqual(checkSignUpGates(false, false, false), { ok: true });
@@ -39,12 +40,14 @@ test('sign-up mode: both unchecked → fails with adult reason first '
 // and an account its owner can never sign into, so the cases below pin
 // the contract fairly hard: precedence, exactness, and the boundary.
 
-test('MIN_PASSWORD_LENGTH is 6, matching GoTrue\'s default', () => {
-	// config.toml sets no minimum_password_length, so GoTrue's default
-	// of 6 governs. The sign-up input's minlength and /auth/reset both
-	// hard-code 6 too; if this constant moves, those move with it or a
-	// password this helper accepts gets rejected by the auth server.
-	assert.equal(MIN_PASSWORD_LENGTH, 6);
+test('MIN_PASSWORD_LENGTH re-exports the canonical PASSWORD_MIN_LENGTH', () => {
+	// The floor lives in auth_rules.ts and the server enforces it via
+	// minimum_password_length in config.toml (prod: the dashboard Auth
+	// settings). If the pair check drifted to its own number, a password
+	// this helper accepts could get rejected by the auth server — the
+	// exact opaque failure checkPasswordPair exists to prevent.
+	assert.equal(MIN_PASSWORD_LENGTH, PASSWORD_MIN_LENGTH);
+	assert.equal(MIN_PASSWORD_LENGTH, 8);
 });
 
 test('matching passwords over the minimum → ok', () => {
@@ -141,11 +144,11 @@ test('matching non-ASCII passwords → ok, and near-misses still mismatch', () =
 });
 
 test('length counts UTF-16 code units, so a short emoji password is accepted', () => {
-	// '🏃🏃🏃' is 3 glyphs but 6 code units, so .length clears the
+	// '🏃🏃🏃🏃' is 4 glyphs but 8 code units, so .length clears the
 	// minimum. Documented rather than defended: GoTrue measures the
 	// same way, so this helper and the auth server agree — which is the
 	// property that actually matters.
-	const emoji = '🏃🏃🏃';
+	const emoji = '🏃🏃🏃🏃';
 	assert.equal(emoji.length, MIN_PASSWORD_LENGTH);
 	assert.deepEqual(checkPasswordPair(emoji, emoji), { ok: true });
 });

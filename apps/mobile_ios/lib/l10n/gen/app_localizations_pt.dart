@@ -737,6 +737,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorEmailExists =>
+      'Esse e-mail já tem uma conta. Entre em vez disso.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirme seu e-mail primeiro — procure o link de confirmação na sua caixa de entrada.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'Essa senha é muito fraca. Use pelo menos $minLength caracteres.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Digite um endereço de e-mail válido.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'A senha deve ter pelo menos $minLength caracteres.';
+  }
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -761,6 +782,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Se esse e-mail estiver cadastrado, enviamos um link de redefinição.';
 
   @override
+  String get signInResendConfirmation => 'Reenviar e-mail de confirmação';
+
+  @override
+  String get signInConfirmationResent =>
+      'Se esse e-mail estiver registrado, enviamos um novo link de confirmação.';
+
+  @override
   String get signInWithApple => 'Entrar com Apple';
 
   @override
@@ -769,6 +797,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get googleSignInSoon =>
       'O login com o Google chega em breve. Por enquanto, use o e-mail.';
+
+  @override
+  String get appleSignInSoon =>
+      'O login com a Apple chega em breve. Por enquanto, use o e-mail.';
 
   @override
   String get signInContinueOffline => 'Continuar offline';
@@ -816,11 +848,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signUpConfirmPasswordLabel => 'Confirme a senha';
 
   @override
-  String get signUpErrorPasswordTooShort =>
-      'A senha precisa ter pelo menos 6 caracteres.';
+  String signUpErrorPasswordTooShort(int min) {
+    return 'A senha precisa ter pelo menos $min caracteres.';
+  }
 
   @override
   String get signUpErrorPasswordMismatch => 'As senhas não coincidem.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Verifique seu e-mail';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'Enviamos um link de confirmação para $email. Abra-o para concluir a criação da sua conta.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Voltar para entrar';
 
   @override
   String get signUpContinueWithApple => 'Continuar com Apple';
@@ -901,6 +945,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String setupSaveError(String message) {
     return 'Não foi possível salvar sua configuração: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
 
   @override
   String get setupNameTitle => 'Como devemos te chamar?';
@@ -1021,6 +1072,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get setupDoneHint =>
       'É isso. Toque em “Abrir painel” para começar a correr.';
+
+  @override
+  String get setupDoneHintGoal =>
+      'É tudo. Cria um plano de treino para o teu objetivo ou abre o painel para começar a correr.';
 
   @override
   String get privacyPrivateTitle => 'Privada';
@@ -4432,6 +4487,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewNameHint => 'ex. Meia maratona de outono';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Adiciona um nome de plano para ativar Criar.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return 'Plano de $goal';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Caminhada-corrida até $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Prova-alvo';
 
   @override
@@ -5331,10 +5400,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAccountSave => 'Salvar';
 
   @override
-  String get settingsAccountPasswordTooShort =>
-      'A senha deve ter pelo menos 8 caracteres';
-
-  @override
   String get settingsAccountPasswordsMismatch => 'As senhas não coincidem';
 
   @override
@@ -5535,6 +5600,24 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Dados anonimizados de falhas e erros para o Sentry (EUA). Desative para retirar o consentimento. Aplica-se na próxima inicialização.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nome de exibição';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'O nome que outros corredores veem. Deixe em branco para usar \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Não definido — você aparece como \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nome de exibição atualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Falha ao atualizar o nome de exibição. Tente novamente.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -6325,6 +6408,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Descartar alterações?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Você tem zonas de privacidade não salvas. Sair sem salvar?';
+
+  @override
+  String get privacyZonesDiscard => 'Descartar';
+
+  @override
   String get prefsTitle => 'Preferências';
 
   @override
@@ -6653,6 +6746,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
 
   @override
+  String get dashboardStartRun => 'Iniciar uma corrida';
+
+  @override
   String get dashboardSetGoal => 'Definir meta';
 
   @override
@@ -6712,6 +6808,11 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Mais rápido em $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent classificação por idade';
   }
 
   @override
@@ -11112,6 +11213,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Faça login para usar este recurso.';
+
+  @override
+  String get signInRequiredAction => 'Entrar';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Não foi possível conectar ao servidor no momento. Os recursos online estão indisponíveis.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Faça login para ver as corridas das pessoas que você segue.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -11847,6 +11962,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorEmailExists =>
+      'Esse e-mail já tem uma conta. Entre em vez disso.';
+
+  @override
+  String get authErrorEmailNotConfirmed =>
+      'Confirme seu e-mail primeiro — procure o link de confirmação na sua caixa de entrada.';
+
+  @override
+  String authErrorWeakPassword(int minLength) {
+    return 'Essa senha é muito fraca. Use pelo menos $minLength caracteres.';
+  }
+
+  @override
+  String get authErrorInvalidEmail => 'Digite um endereço de e-mail válido.';
+
+  @override
+  String authErrorPasswordTooShort(int minLength) {
+    return 'A senha deve ter pelo menos $minLength caracteres.';
+  }
+
+  @override
   String get signInTitle => 'Entrar';
 
   @override
@@ -11871,6 +12007,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Se esse e-mail estiver cadastrado, enviamos um link de redefinição.';
 
   @override
+  String get signInResendConfirmation => 'Reenviar e-mail de confirmação';
+
+  @override
+  String get signInConfirmationResent =>
+      'Se esse e-mail estiver registrado, enviamos um novo link de confirmação.';
+
+  @override
   String get signInWithApple => 'Entrar com Apple';
 
   @override
@@ -11879,6 +12022,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get googleSignInSoon =>
       'O login com o Google chega em breve. Por enquanto, use o e-mail.';
+
+  @override
+  String get appleSignInSoon =>
+      'O login com a Apple chega em breve. Por enquanto, use o e-mail.';
 
   @override
   String get signInContinueOffline => 'Continuar offline';
@@ -11926,11 +12073,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get signUpConfirmPasswordLabel => 'Confirme a senha';
 
   @override
-  String get signUpErrorPasswordTooShort =>
-      'A senha precisa ter pelo menos 6 caracteres.';
+  String signUpErrorPasswordTooShort(int min) {
+    return 'A senha precisa ter pelo menos $min caracteres.';
+  }
 
   @override
   String get signUpErrorPasswordMismatch => 'As senhas não coincidem.';
+
+  @override
+  String get signUpCheckEmailTitle => 'Verifique seu e-mail';
+
+  @override
+  String signUpCheckEmailBody(String email) {
+    return 'Enviamos um link de confirmação para $email. Abra-o para concluir a criação da sua conta.';
+  }
+
+  @override
+  String get signUpCheckEmailBack => 'Voltar para entrar';
 
   @override
   String get signUpContinueWithApple => 'Continuar com Apple';
@@ -12011,6 +12170,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String setupSaveError(String message) {
     return 'Não foi possível salvar sua configuração: $message';
   }
+
+  @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
 
   @override
   String get setupNameTitle => 'Como devemos te chamar?';
@@ -12131,6 +12297,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get setupDoneHint =>
       'É isso. Toque em “Abrir painel” para começar a correr.';
+
+  @override
+  String get setupDoneHintGoal =>
+      'É tudo. Crie um plano de treino para o seu objetivo ou abra o painel para começar a correr.';
 
   @override
   String get privacyPrivateTitle => 'Privada';
@@ -15541,6 +15711,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planNewNameHint => 'ex. Meia maratona de outono';
 
   @override
+  String get planNewNameRequiredHint =>
+      'Adicione um nome de plano para ativar Criar.';
+
+  @override
+  String planNewDefaultName(String goal) {
+    return 'Plano de $goal';
+  }
+
+  @override
+  String planNewDefaultNameBeginner(String goal) {
+    return 'Caminhada-corrida até $goal';
+  }
+
+  @override
   String get planNewGoalRace => 'Prova-alvo';
 
   @override
@@ -16439,10 +16623,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get settingsAccountSave => 'Salvar';
 
   @override
-  String get settingsAccountPasswordTooShort =>
-      'A senha deve ter pelo menos 8 caracteres';
-
-  @override
   String get settingsAccountPasswordsMismatch => 'As senhas não coincidem';
 
   @override
@@ -16643,6 +16823,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Dados anonimizados de falhas e erros para o Sentry (EUA). Desative para retirar o consentimento. Aplica-se na próxima inicialização.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nome de exibição';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'O nome que outros corredores veem. Deixe em branco para usar \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Não definido — você aparece como \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nome de exibição atualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Falha ao atualizar o nome de exibição. Tente novamente.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -17433,6 +17631,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
+  String get privacyZonesDiscardTitle => 'Descartar alterações?';
+
+  @override
+  String get privacyZonesDiscardBody =>
+      'Você tem zonas de privacidade não salvas. Sair sem salvar?';
+
+  @override
+  String get privacyZonesDiscard => 'Descartar';
+
+  @override
   String get prefsTitle => 'Preferências';
 
   @override
@@ -17761,6 +17969,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
 
   @override
+  String get dashboardStartRun => 'Iniciar uma corrida';
+
+  @override
   String get dashboardSetGoal => 'Definir meta';
 
   @override
@@ -17820,6 +18031,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String dashboardFastestDistance(String distance) {
     return 'Mais rápido em $distance';
+  }
+
+  @override
+  String dashboardPbAgeGrade(String percent) {
+    return '$percent classificação por idade';
   }
 
   @override
@@ -22220,4 +22436,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get signInRequiredMessage => 'Faça login para usar este recurso.';
+
+  @override
+  String get signInRequiredAction => 'Entrar';
+
+  @override
+  String get backendUnavailableMessage =>
+      'Não foi possível conectar ao servidor no momento. Os recursos online estão indisponíveis.';
+
+  @override
+  String get feedSignedOutMessage =>
+      'Faça login para ver as corridas das pessoas que você segue.';
 }

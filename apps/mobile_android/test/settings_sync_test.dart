@@ -13,6 +13,37 @@ Future<Preferences> freshPrefs() async {
   return p;
 }
 
+class _MemCache implements SettingsCache {
+  final Map<String, Map<String, dynamic>> universal = {};
+  final Map<String, Map<String, dynamic>> device = {};
+
+  @override
+  Map<String, dynamic>? readUniversal(String userId) => universal[userId];
+  @override
+  Map<String, dynamic>? readDevice(String userId, String deviceId) =>
+      device['$userId/$deviceId'];
+  @override
+  Future<void> writeUniversal(String userId, Map<String, dynamic> prefs) async =>
+      universal[userId] = prefs;
+  @override
+  Future<void> writeDevice(
+          String userId, String deviceId, Map<String, dynamic> prefs) async =>
+      device['$userId/$deviceId'] = prefs;
+  @override
+  List<PendingSettingsChange> readPending(String userId, String deviceId) =>
+      const [];
+  @override
+  Future<void> appendPending(
+      String userId, String deviceId, PendingSettingsChange change) async {}
+  @override
+  Future<void> clearPending(String userId, String deviceId) async {}
+  @override
+  Future<void> dropUser(String userId) async {
+    universal.remove(userId);
+    device.removeWhere((k, _) => k.startsWith('$userId/'));
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -318,6 +349,74 @@ void main() {
       await svc.updateDevice({'key': 'value'});
 
       expect(svc.synced, isFalse);
+    });
+  });
+
+  group('onSignedOut account reset (issue #231)', () {
+    // The sign-in overlay only overwrites keys PRESENT in the next
+    // account's bag, so any bag-mirrored pref left set at sign-out
+    // carries the prior account's value into the next account.
+    test('resets the bag-mirrored Preferences to defaults', () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      await prefs.setPrivacyDefault('public');
+      await prefs.setBodyWeightKg(82.5);
+      await prefs.setUseMiles(true);
+      await prefs.setDefaultActivityType('cycle');
+      await prefs.setCarbsPerHourG(90);
+      await prefs.setFluidPerHourMl(750);
+      await prefs.setAudioCues(false);
+      await prefs.setSplitIntervalMetres(800);
+      await prefs.upsertGoal(RunGoal(
+        id: newGoalId(),
+        period: GoalPeriod.week,
+        distanceMetres: 40000,
+      ));
+      await prefs.setRunsLastFetchedAt(DateTime.utc(2026, 7, 1));
+
+      await svc.onSignedOut();
+
+      expect(prefs.privacyDefault, 'private',
+          reason: "A's public-by-default must not make B's runs public");
+      expect(prefs.newRunsArePublic, isFalse);
+      expect(prefs.bodyWeightKg, isNull,
+          reason: "A's body weight must not drive B's calorie estimates");
+      expect(prefs.useMiles, isFalse);
+      expect(prefs.defaultActivityType, 'run');
+      expect(prefs.carbsPerHourG, 60, reason: 'documented fueling default');
+      expect(prefs.fluidPerHourMl, 500);
+      expect(prefs.audioCues, isTrue);
+      expect(prefs.splitIntervalMetres, 0);
+      expect(prefs.goals, isEmpty,
+          reason: "A's goals must not render as B's");
+      expect(prefs.runsLastFetchedAt, isNull,
+          reason: "clearing the watermark forces B's first fetch down the "
+              'FULL path — a delta against A\'s timestamp would skip '
+              "B's older history");
+    });
+
+    test('drops the prior user\'s cached bags when the id is known',
+        () async {
+      final prefs = await freshPrefs();
+      final cache = _MemCache();
+      await cache.writeUniversal('user-a', {'privacy_zones': []});
+      final svc = SettingsSyncService(preferences: prefs, cache: cache);
+
+      await svc.onSignedOut(priorUserId: 'user-a');
+
+      expect(cache.readUniversal('user-a'), isNull,
+          reason: "A's cached bag (privacy zones included) must not stay "
+              'on disk after sign-out');
+    });
+
+    test('reset is idempotent and safe with no cache / no prior id',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+      await svc.onSignedOut();
+      await svc.onSignedOut(priorUserId: null);
+      expect(prefs.privacyDefault, 'private');
     });
   });
 }

@@ -138,7 +138,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   String _waterKey() {
     final d = DateTime.now();
-    return 'water_ml_${d.year}-${d.month}-${d.day}';
+    // User-scoped (issue #231): a shared device's next account must not
+    // inherit — or increment — the prior account's water count.
+    final uid = widget.api?.userId ?? 'anon';
+    return 'water_ml_${uid}_${d.year}-${d.month}-${d.day}';
   }
 
   Future<void> _loadWater() async {

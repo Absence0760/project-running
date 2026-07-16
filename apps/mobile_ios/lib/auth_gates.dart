@@ -11,11 +11,15 @@
 /// the same information as a nullable reason (null = the pair is good).
 library;
 
-/// GoTrue's default minimum. `config.toml` sets no
-/// `minimum_password_length`, so a shorter password is rejected by the auth
-/// server anyway — checking here turns an opaque API error into a
-/// field-level message.
-const int minPasswordLength = 6;
+import 'auth_validation.dart';
+
+/// The canonical minimum from `auth_validation.dart`, re-exported under the
+/// parity-pair name (`MIN_PASSWORD_LENGTH` on the web side, itself a
+/// re-export of `auth_rules.ts`). The server enforces the same floor via
+/// `minimum_password_length` in `apps/backend/supabase/config.toml` (prod:
+/// the dashboard Auth settings) — checking here turns an opaque API error
+/// into a field-level message.
+const int minPasswordLength = kPasswordMinLength;
 
 /// A stable, locale-independent reason a password pair was rejected. The
 /// caller resolves it to a localized message — the keys differ per surface,

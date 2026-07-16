@@ -65,7 +65,7 @@
 			<tr><td>locale</td><td>Language preference</td><td>Persistent</td></tr>
 			<tr><td>settings_cache_* (per user/device)</td><td>Offline-first cache of your account settings, plus a pending-changes queue drained when you're back online</td><td>Until sign-out</td></tr>
 			<tr><td>runs_filters_v1 / routes_filters_v1</td><td>Your list filters, so they survive navigation</td><td>Persistent</td></tr>
-			<tr><td>water_ml_&lt;date&gt;</td><td>Today's water-tracker total (stays on this device)</td><td>Per day</td></tr>
+			<tr><td>water_ml_&lt;user&gt;_&lt;date&gt;</td><td>Today's water-tracker total (stays on this device)</td><td>Per day</td></tr>
 			<tr><td>Layout keys (panel widths, goal migration)</td><td>Remember resizable-panel positions; migrate legacy locally-stored goals into your account</td><td>Persistent</td></tr>
 		</tbody>
 	</table>

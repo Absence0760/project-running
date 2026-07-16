@@ -50,6 +50,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
   double _draftRadius = 150;
   final _mapController = MapController();
   bool _saving = false;
+  // Zones are edited in memory and only persisted on Save; a swipe/back
+  // before Save silently dropped drawn zones, so guard the exit.
+  bool _dirty = false;
 
   final _searchCtl = TextEditingController();
   List<PlaceResult> _searchResults = const [];
@@ -108,6 +111,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
         privacyZonesKey: _zones.map((z) => z.toJson()).toList(),
       });
       if (!mounted) return;
+      _dirty = false;
       showTopBanner(context, l10n.privacyZonesSaved);
     } catch (e) {
       if (!mounted) return;
@@ -119,6 +123,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
 
   void _addZoneAt(LatLng tap) {
     setState(() {
+      _dirty = true;
       _zones = [
         ..._zones,
         PrivacyZone(
@@ -134,7 +139,8 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
   // shares, so removing one — or clearing all — confirms first.
   Future<void> _confirmRemoveZone(int index) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: Text(l10n.privacyZonesRemoveTitle),
@@ -147,19 +153,26 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
                 child: Text(l10n.privacyZonesRemoveSemantics),
               ),
             ],
           ),
         ) ??
         false;
-    if (ok && mounted) setState(() => _zones = [..._zones]..removeAt(index));
+    if (ok && mounted) {
+      setState(() {
+        _dirty = true;
+        _zones = [..._zones]..removeAt(index);
+      });
+    }
   }
 
   Future<void> _confirmClearAll() async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: Text(l10n.privacyZonesClearAllTitle),
@@ -172,14 +185,45 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
                 child: Text(l10n.privacyZonesClearAll),
               ),
             ],
           ),
         ) ??
         false;
-    if (ok && mounted) setState(() => _zones = []);
+    if (ok && mounted) {
+      setState(() {
+        _dirty = true;
+        _zones = [];
+      });
+    }
+  }
+
+  Future<bool> _confirmDiscard() async {
+    final l10n = AppLocalizations.of(context);
+    return await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.privacyZonesDiscardTitle),
+            content: Text(l10n.privacyZonesDiscardBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.prefsCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: Text(l10n.privacyZonesDiscard),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   // ── Location ─────────────────────────────────────────────────────────
@@ -204,8 +248,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
       }
       final last = await Geolocator.getLastKnownPosition();
       if (last != null) _applyFix(last);
-      final pos = await Geolocator.getCurrentPosition()
-          .timeout(const Duration(seconds: 5));
+      final pos = await Geolocator.getCurrentPosition().timeout(
+        const Duration(seconds: 5),
+      );
       _applyFix(pos);
     } catch (_) {
       // Silent — the FAB is the user-initiated retry.
@@ -235,7 +280,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     } catch (e) {
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).privacyZonesLocationUnavailable(e));
+        context,
+        AppLocalizations.of(context).privacyZonesLocationUnavailable(e),
+      );
     }
   }
 
@@ -296,212 +343,228 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     final theme = Theme.of(context);
     final initial = _zones.isNotEmpty
         ? LatLng(_zones.first.lat, _zones.first.lng)
-        : (_userLatLng ?? const LatLng(51.5074, -0.1278)); // London-ish fallback
+        : (_userLatLng ??
+              const LatLng(51.5074, -0.1278)); // London-ish fallback
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.privacyZonesTitle),
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child: Text(l10n.privacyZonesSave),
-            ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.small(
-        heroTag: 'privacy_zones_locate_fab',
-        tooltip: l10n.privacyZonesLocateMe,
-        onPressed: _locate,
-        child: const Icon(Icons.my_location),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              l10n.privacyZonesHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtl,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                hintText: l10n.privacyZonesSearchHint,
-                prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final leave = await _confirmDiscard();
+        if (leave && mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.privacyZonesTitle),
+          actions: [
+            if (_saving)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              TextButton(onPressed: _save, child: Text(l10n.privacyZonesSave)),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.small(
+          heroTag: 'privacy_zones_locate_fab',
+          tooltip: l10n.privacyZonesLocateMe,
+          onPressed: _locate,
+          child: const Icon(Icons.my_location),
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                l10n.privacyZonesHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Text(l10n.privacyZonesRadius, style: theme.textTheme.labelLarge),
-                Expanded(
-                  child: Slider(
-                    min: 50,
-                    max: 500,
-                    divisions: 9,
-                    value: _draftRadius,
-                    label: l10n.privacyZonesRadiusMeters(_draftRadius.round()),
-                    onChanged: (v) => setState(() => _draftRadius = v),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: TextField(
+                controller: _searchCtl,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: l10n.privacyZonesSearchHint,
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                Text(l10n.privacyZonesRadiusMeters(_draftRadius.round())),
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: initial,
-                    initialZoom: 14,
-                    onMapReady: () {
-                      _mapReady = true;
-                      if (_userLatLng != null &&
-                          !_centeredOnce &&
-                          _zones.isEmpty) {
-                        _centeredOnce = true;
-                        _mapController.move(_userLatLng!, 14);
-                      }
-                    },
-                    onPositionChanged: (pos, hasGesture) {
-                      if (hasGesture) _centeredOnce = true;
-                    },
-                    onTap: (_, latlng) => _addZoneAt(latlng),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Text(
+                    l10n.privacyZonesRadius,
+                    style: theme.textTheme.labelLarge,
                   ),
-                  children: [
-                    TileLayer(
-                      // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM in
-                      // that order, matching every other map surface in
-                      // the app. Hardcoded OSM pre-May-2026 made the
-                      // privacy-zones picker the only map that worked on
-                      // a Protomaps-only dev setup, which masked the
-                      // resolveTileUrl regression.
-                      urlTemplate: currentTileUrl(),
-                      userAgentPackageName: 'com.threkir.app',
-                      // Shared disk-backed tile cache (see TileCache in
-                      // tile_cache.dart). Without it, panning the zone
-                      // picker re-downloads tiles every session AND
-                      // flutter_map logs a "Using fallback freshness age"
-                      // warning per tile.
-                      tileProvider: CachedTileProvider(
-                        store: TileCache.store,
-                        maxStale: const Duration(days: 30),
-                        dio: TileCache.dio,
+                  Expanded(
+                    child: Slider(
+                      min: 50,
+                      max: 500,
+                      divisions: 9,
+                      value: _draftRadius,
+                      label: l10n.privacyZonesRadiusMeters(
+                        _draftRadius.round(),
                       ),
+                      onChanged: (v) => setState(() => _draftRadius = v),
                     ),
-                    CircleLayer(
-                      circles: [
-                        for (final z in _zones)
-                          CircleMarker(
-                            point: LatLng(z.lat, z.lng),
-                            radius: z.radiusM,
-                            useRadiusInMeter: true,
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.25),
-                            borderColor: theme.colorScheme.primary,
-                            borderStrokeWidth: 2,
-                          ),
-                      ],
+                  ),
+                  Text(l10n.privacyZonesRadiusMeters(_draftRadius.round())),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: initial,
+                      initialZoom: 14,
+                      onMapReady: () {
+                        _mapReady = true;
+                        if (_userLatLng != null &&
+                            !_centeredOnce &&
+                            _zones.isEmpty) {
+                          _centeredOnce = true;
+                          _mapController.move(_userLatLng!, 14);
+                        }
+                      },
+                      onPositionChanged: (pos, hasGesture) {
+                        if (hasGesture) _centeredOnce = true;
+                      },
+                      onTap: (_, latlng) => _addZoneAt(latlng),
                     ),
-                    MarkerLayer(
-                      markers: [
-                        for (var i = 0; i < _zones.length; i++)
-                          Marker(
-                            point: LatLng(_zones[i].lat, _zones[i].lng),
-                            width: 48,
-                            height: 48,
-                            child: Semantics(
-                              button: true,
-                              label: AppLocalizations.of(context)
-                                  .privacyZonesRemoveSemantics,
-                              child: GestureDetector(
-                                onTap: () => _confirmRemoveZone(i),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.cancel,
-                                    color: theme.colorScheme.primary,
+                    children: [
+                      TileLayer(
+                        // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM in
+                        // that order, matching every other map surface in
+                        // the app. Hardcoded OSM pre-May-2026 made the
+                        // privacy-zones picker the only map that worked on
+                        // a Protomaps-only dev setup, which masked the
+                        // resolveTileUrl regression.
+                        urlTemplate: currentTileUrl(),
+                        userAgentPackageName: 'com.threkir.app',
+                        // Shared disk-backed tile cache (see TileCache in
+                        // tile_cache.dart). Without it, panning the zone
+                        // picker re-downloads tiles every session AND
+                        // flutter_map logs a "Using fallback freshness age"
+                        // warning per tile.
+                        tileProvider: CachedTileProvider(
+                          store: TileCache.store,
+                          maxStale: const Duration(days: 30),
+                          dio: TileCache.dio,
+                        ),
+                      ),
+                      CircleLayer(
+                        circles: [
+                          for (final z in _zones)
+                            CircleMarker(
+                              point: LatLng(z.lat, z.lng),
+                              radius: z.radiusM,
+                              useRadiusInMeter: true,
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.25,
+                              ),
+                              borderColor: theme.colorScheme.primary,
+                              borderStrokeWidth: 2,
+                            ),
+                        ],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          for (var i = 0; i < _zones.length; i++)
+                            Marker(
+                              point: LatLng(_zones[i].lat, _zones[i].lng),
+                              width: 48,
+                              height: 48,
+                              child: Semantics(
+                                button: true,
+                                label: AppLocalizations.of(
+                                  context,
+                                ).privacyZonesRemoveSemantics,
+                                child: GestureDetector(
+                                  onTap: () => _confirmRemoveZone(i),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.cancel,
+                                      color: theme.colorScheme.primary,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (_searchOpen && _searchResults.isNotEmpty)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Material(
-                      elevation: 4,
-                      child: ListView(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
-                        children: [
-                          for (final r in _searchResults)
-                            ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.place),
-                              title: Text(
-                                r.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () => _onSearchResultTap(r),
-                            ),
                         ],
                       ),
+                    ],
+                  ),
+                  if (_searchOpen && _searchResults.isNotEmpty)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: Material(
+                        elevation: 4,
+                        child: ListView(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          children: [
+                            for (final r in _searchResults)
+                              ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.place),
+                                title: Text(
+                                  r.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () => _onSearchResultTap(r),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          if (_zones.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: theme.colorScheme.surfaceContainerHighest,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.privacyZonesCount(_zones.length),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _confirmClearAll,
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(l10n.privacyZonesClearAll),
-                  ),
                 ],
               ),
             ),
-        ],
+            if (_zones.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.privacyZonesCount(_zones.length),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _confirmClearAll,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: Text(l10n.privacyZonesClearAll),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

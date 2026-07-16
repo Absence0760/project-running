@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/auth_gates.dart';
+import '../lib/auth_validation.dart';
 
 // Mirror of the checkPasswordPair half of
 // `apps/web/src/lib/core/auth_gates.test.ts` — 17 cases, one per web test.
@@ -9,11 +10,14 @@ import '../lib/auth_gates.dart';
 // contract fairly hard: precedence, exactness, and the boundary.
 void main() {
   group('checkPasswordPair', () {
-    test('minPasswordLength is 6, matching GoTrue\'s default', () {
-      // config.toml sets no minimum_password_length, so GoTrue's default of
-      // 6 governs. If this constant moves, a password this helper accepts
-      // gets rejected by the auth server.
-      expect(minPasswordLength, 6);
+    test('minPasswordLength re-exports the canonical kPasswordMinLength', () {
+      // The floor lives in auth_validation.dart and the server enforces it
+      // via minimum_password_length in config.toml (prod: the dashboard Auth
+      // settings). If the pair check drifted to its own number, a password
+      // this helper accepts could get rejected by the auth server — the
+      // exact opaque failure checkPasswordPair exists to prevent.
+      expect(minPasswordLength, kPasswordMinLength);
+      expect(minPasswordLength, 8);
     });
 
     test('matching passwords over the minimum → ok', () {
@@ -109,12 +113,12 @@ void main() {
     });
 
     test('length counts UTF-16 code units, so a short emoji password is accepted', () {
-      // '🏃🏃🏃' is 3 glyphs but 6 code units, so .length clears the minimum.
+      // '🏃🏃🏃🏃' is 4 glyphs but 8 code units, so .length clears the minimum.
       // Documented rather than defended: GoTrue measures the same way, so
       // this helper and the auth server agree — the property that matters.
       // Dart's String.length is UTF-16 code units too, so the twin agrees
       // with web here by construction.
-      const emoji = '🏃🏃🏃';
+      const emoji = '🏃🏃🏃🏃';
       expect(emoji.length, minPasswordLength);
       expect(checkPasswordPair(emoji, emoji), isNull);
     });

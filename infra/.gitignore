@@ -30,3 +30,8 @@ envs/*/secrets.enc.yaml
 *.plain.*
 # terraform state rm / state surgery writes timestamped backups
 *.tfstate.*.backup
+
+# Saved plan files (terraform plan -out=...) are consumed one-shot artifacts
+# and can embed resolved secret values — never commit them.
+tfplan
+*.tfplan

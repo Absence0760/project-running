@@ -121,6 +121,28 @@ void main() {
     }
   });
 
+  group('hint text token meets WCAG AA', () {
+    // Settings hint text (sign-in-to-edit, BLE scan hints) uses
+    // colorScheme.onSurfaceVariant, not a hardcoded Colors.grey (~2.42:1 on
+    // parchment, below the 4.5:1 floor). Pin that the token clears AA against
+    // both the surface and scaffold background in each theme.
+    for (final entry in {
+      'light': AppTheme.light,
+      'dark': AppTheme.dark,
+    }.entries) {
+      test('onSurfaceVariant in ${entry.key}', () {
+        final theme = entry.value;
+        final fg = theme.colorScheme.onSurfaceVariant;
+        for (final bg in {theme.colorScheme.surface, theme.scaffoldBackgroundColor}) {
+          final ratio = _contrast(fg, bg);
+          expect(ratio, greaterThanOrEqualTo(4.5),
+              reason:
+                  'hint text onSurfaceVariant contrast $ratio in ${entry.key} fails AA');
+        }
+      });
+    }
+  });
+
   group('AdherencePill meets WCAG AA', () {
     for (final adherence in ['completed', 'partial']) {
       testWidgets('$adherence pill', (tester) async {
