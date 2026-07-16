@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { confirmSafetyContactByToken } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
@@ -10,6 +11,14 @@
 	const token = page.url.searchParams.get('token');
 	let phase = $state<Phase>(token ? 'prompt' : 'missing');
 	let smsOptIn = $state(false);
+	// The page is prerendered, so the prompt (and its controls) exist in the
+	// static HTML before Svelte wires onclick / bind:checked. Gate both on
+	// mount: a pre-hydration click would otherwise be silently dropped and a
+	// pre-hydration tick would not reach smsOptIn.
+	let hydrated = $state(false);
+	onMount(() => {
+		hydrated = true;
+	});
 
 	async function confirm() {
 		if (!token) return;
@@ -46,10 +55,20 @@
 		</p>
 		{#if phase === 'prompt'}
 			<label class="sms-opt">
-				<input type="checkbox" bind:checked={smsOptIn} data-testid="safety-confirm-sms" />
+				<input
+					type="checkbox"
+					bind:checked={smsOptIn}
+					disabled={!hydrated}
+					data-testid="safety-confirm-sms"
+				/>
 				<span>{m('safety.confirmSmsLabel')}</span>
 			</label>
-			<button class="btn-primary" onclick={confirm} data-testid="safety-confirm-button">
+			<button
+				class="btn-primary"
+				onclick={confirm}
+				disabled={!hydrated}
+				data-testid="safety-confirm-button"
+			>
 				{m('safetyConfirm.confirmButton')}
 			</button>
 		{:else if phase !== 'working'}
