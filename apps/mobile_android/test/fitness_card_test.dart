@@ -106,6 +106,48 @@ void main() {
       expect(find.byIcon(Icons.health_and_safety), findsOneWidget);
     });
 
+    testWidgets('stat rows survive a narrow grid-column mount without overflow',
+        (tester) async {
+      // The expanded (tablet) dashboard mounts this card in a ~half-width
+      // grid column. The #267 info glyphs + tap padding widened each
+      // FitnessStat and made the three-stat rows overflow there — the rows
+      // must flex (ellipsizing labels) instead of overflowing.
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(
+          distance: 5000,
+          durationS: 1500,
+          startedAt: now.subtract(const Duration(days: 25)),
+        ),
+        _r(
+          distance: 5000,
+          durationS: 1300,
+          startedAt: now.subtract(const Duration(days: 5)),
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 468,
+                child: SingleChildScrollView(
+                  child: FitnessCard(runs: runs, now: now),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('VDOT'), findsOneWidget);
+      expect(find.text('Form (TSB)'), findsOneWidget);
+    });
+
     testWidgets('CTL/ATL/TSB come from the training-load series, not computeSnapshot',
         (tester) async {
       // round-5 pro: the card must read the SAME series the chart shows so
