@@ -61,7 +61,7 @@ class _RecapScreenState extends State<RecapScreen> {
   Future<void> _publishAndShare(YearInRunningRecap recap) async {
     final api = widget.api;
     if (api == null || _publishing) return;
-    if (!await ensureSignedIn(context, viewerId: api?.userId, api: api)) {
+    if (!await ensureSignedIn(context, viewerId: api.userId, api: api)) {
       return;
     }
     if (!mounted) return;

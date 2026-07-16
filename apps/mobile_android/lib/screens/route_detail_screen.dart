@@ -430,7 +430,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final api = widget.apiClient;
     if (api == null || _bookmarkBusy) return;
     if (!await ensureSignedIn(context,
-        viewerId: api?.userId, api: api, onSignedIn: _loadBookmarkState)) {
+        viewerId: api.userId, api: api, onSignedIn: _loadBookmarkState)) {
       return;
     }
     if (!mounted) return;

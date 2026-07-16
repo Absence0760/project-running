@@ -203,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final summary = _summary;
     if (summary == null || _isSelf || _followBusy) return;
     if (!await ensureSignedIn(context,
-        viewerId: widget.api?.userId, api: widget.api, onSignedIn: _load)) {
+        viewerId: widget.api.userId, api: widget.api, onSignedIn: _load)) {
       return;
     }
     if (!mounted) return;
