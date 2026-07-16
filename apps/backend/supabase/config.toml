@@ -11,6 +11,13 @@ site_url = "http://localhost:7777"
 additional_redirect_urls = ["http://localhost:7777/auth/callback", "http://localhost:7779/auth/callback"]
 enable_signup = true
 
+# The clients (web PASSWORD_MIN_LENGTH, mobile kPasswordMinLength) both
+# gate at 8. GoTrue's own default is 6, so without this line a password
+# the clients reject would still be accepted by any other caller —
+# change all three together (prod sets this in the dashboard's Auth
+# settings, which config.toml does not reach).
+minimum_password_length = 8
+
 [auth.email]
 enable_confirmations = false
 
