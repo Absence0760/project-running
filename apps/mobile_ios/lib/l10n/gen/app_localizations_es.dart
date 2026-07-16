@@ -2187,6 +2187,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailMakePublic => 'Hacer pública';
 
   @override
+  String get runDetailMakePrivate => 'Hacer privada';
+
+  @override
+  String get runDetailMakePrivateTitle => '¿Hacer privada esta carrera?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'El enlace público para compartir y la página de espectadores en directo dejarán de funcionar. Quien abra un enlace antiguo ya no verá esta carrera.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'No se pudo hacer privada la carrera: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'La carrera ahora es privada';
+
+  @override
   String get runDetailDeleteTitle => '¿Eliminar carrera?';
 
   @override

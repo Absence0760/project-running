@@ -2931,6 +2931,31 @@
   "@runDetailMakePublic": {
     "description": "Confirm action in the make-run-public dialog"
   },
+  "runDetailMakePrivate": "Make private",
+  "@runDetailMakePrivate": {
+    "description": "Overflow-menu action + confirm button that flips a shared run back to private"
+  },
+  "runDetailMakePrivateTitle": "Make this run private?",
+  "@runDetailMakePrivateTitle": {
+    "description": "Title of the make-run-private confirmation dialog"
+  },
+  "runDetailMakePrivateBody": "The public share link and the live spectator page will stop working. Anyone opening an old link will no longer see this run.",
+  "@runDetailMakePrivateBody": {
+    "description": "Body of the make-run-private confirmation dialog"
+  },
+  "runDetailMakePrivateFailed": "Could not make run private: {error}",
+  "@runDetailMakePrivateFailed": {
+    "description": "Banner shown when flipping a run back to private fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailMadePrivate": "Run is now private",
+  "@runDetailMadePrivate": {
+    "description": "Banner shown after a run was flipped back to private"
+  },
   "runDetailDeleteTitle": "Delete run?",
   "@runDetailDeleteTitle": {
     "description": "Title of the single-run delete confirmation dialog"
