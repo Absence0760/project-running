@@ -59,6 +59,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   bool _avatarBusy = false;
   final ImagePicker _avatarPicker = ImagePicker();
 
+  String? _displayName;
+  bool _displayNameBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,9 +109,63 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     if (api == null || api.userId == null) return;
     try {
       final profile = await api.fetchMyProfile();
-      if (mounted) setState(() => _avatarUrl = profile?.avatarUrl);
+      if (mounted) {
+        setState(() {
+          _avatarUrl = profile?.avatarUrl;
+          _displayName = profile?.displayName;
+        });
+      }
     } catch (_) {
       // Non-fatal: the tile falls back to the email initial.
+    }
+  }
+
+  Future<void> _editDisplayName() async {
+    final api = widget.apiClient;
+    final l10n = AppLocalizations.of(context);
+    if (api == null || api.userId == null) {
+      showTopBanner(context, l10n.settingsAccountSignInToSync);
+      return;
+    }
+    final ctl = TextEditingController(text: _displayName ?? '');
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.settingsAccountDisplayName),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: l10n.settingsAccountDisplayName,
+            helperText: l10n.settingsAccountDisplayNameHint,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.settingsAccountCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: Text(l10n.settingsAccountSave),
+          ),
+        ],
+      ),
+    );
+    if (saved == null || !mounted) return;
+    final trimmed = saved.trim();
+    setState(() => _displayNameBusy = true);
+    try {
+      await api.updateDisplayName(trimmed);
+      if (!mounted) return;
+      setState(() => _displayName = trimmed.isEmpty ? null : trimmed);
+      showTopBanner(context, l10n.settingsAccountDisplayNameUpdated);
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.settingsAccountDisplayNameUpdateFailed);
+    } finally {
+      if (mounted) setState(() => _displayNameBusy = false);
     }
   }
 
@@ -618,6 +675,24 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                           )
                         : const Icon(Icons.photo_camera_outlined),
                 onTap: _avatarBusy ? null : _pickAvatar,
+              ),
+            if (signedIn)
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(l10n.settingsAccountDisplayName),
+                subtitle: Text(
+                  (_displayName != null && _displayName!.isNotEmpty)
+                      ? _displayName!
+                      : l10n.settingsAccountDisplayNameUnset,
+                ),
+                trailing: _displayNameBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_outlined),
+                onTap: _displayNameBusy ? null : _editDisplayName,
               ),
             if (signedIn)
               ListTile(

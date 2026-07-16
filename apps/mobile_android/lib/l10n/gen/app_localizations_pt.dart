@@ -893,6 +893,13 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
+
+  @override
   String get setupNameTitle => 'Como devemos te chamar?';
 
   @override
@@ -5543,6 +5550,24 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Dados anonimizados de falhas e erros para o Sentry (EUA). Desative para retirar o consentimento. Aplica-se na próxima inicialização.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nome de exibição';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'O nome que outros corredores veem. Deixe em branco para usar \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Não definido — você aparece como \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nome de exibição atualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Falha ao atualizar o nome de exibição. Tente novamente.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>
@@ -12029,6 +12054,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
+
+  @override
+  String get setupFinishLater => 'Concluir mais tarde';
+
+  @override
   String get setupNameTitle => 'Como devemos te chamar?';
 
   @override
@@ -16677,6 +16709,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Dados anonimizados de falhas e erros para o Sentry (EUA). Desative para retirar o consentimento. Aplica-se na próxima inicialização.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nome de exibição';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'O nome que outros corredores veem. Deixe em branco para usar \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Não definido — você aparece como \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nome de exibição atualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Falha ao atualizar o nome de exibição. Tente novamente.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

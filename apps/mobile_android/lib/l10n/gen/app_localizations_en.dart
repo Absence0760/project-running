@@ -887,6 +887,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.';
+
+  @override
+  String get setupFinishLater => 'Finish later';
+
+  @override
   String get setupNameTitle => 'What should we call you?';
 
   @override
@@ -5486,6 +5493,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.';
+
+  @override
+  String get settingsAccountDisplayName => 'Display name';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'The name other runners see. Leave blank to use \"Runner\".';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Not set — you appear as \"Runner\"';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Display name updated';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Couldn\'t update your display name. Please try again.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

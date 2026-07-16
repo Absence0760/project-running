@@ -893,6 +893,13 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'No se puede conectar con el servidor ahora mismo. Puedes terminar la configuración más tarde — todo esto se puede editar en Ajustes.';
+
+  @override
+  String get setupFinishLater => 'Terminar más tarde';
+
+  @override
   String get setupNameTitle => '¿Cómo te llamamos?';
 
   @override
@@ -5542,6 +5549,24 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Datos anónimos de fallos y errores a Sentry (EE. UU.). Desactiva para retirar el consentimiento. Se aplica en el próximo inicio.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nombre visible';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'El nombre que ven otros corredores. Déjalo en blanco para usar «Runner».';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Sin definir: apareces como «Runner»';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nombre visible actualizado';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'No se pudo actualizar el nombre visible. Inténtalo de nuevo.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

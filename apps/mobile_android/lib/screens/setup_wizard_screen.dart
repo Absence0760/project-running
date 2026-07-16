@@ -65,6 +65,13 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
 
   bool _saving = false;
 
+  // Flipped on the first failed Skip/Finish write. Reveals the offline
+  // fail-safe exit: the route blocks the back gesture (canPop false) and
+  // both regular exits are server writes, so losing connectivity while the
+  // wizard is open would otherwise trap the user with no way out but
+  // killing the app (issue #246 — basics always work).
+  bool _saveFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,9 +123,22 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
+      setState(() {
+        _saving = false;
+        _saveFailed = true;
+      });
       showTopBanner(context, l10n.setupSaveError(e.toString()));
     }
+  }
+
+  /// Server-free fail-safe exit (issue #246). Records the dismissal
+  /// locally and defers the `onboarded_at` stamp — the home-screen gate
+  /// retries [ApiClient.markOnboarded] on each launch until one lands
+  /// instead of re-pushing the wizard. Works with zero connectivity.
+  Future<void> _finishLater() async {
+    await widget.preferences.setSetupWizardDismissed(true);
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   /// Final "Open dashboard". Persists every answer, stamps `onboarded_at`.
@@ -177,7 +197,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       Navigator.of(context).pop(createPlan ? _primaryGoal : null);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
+      setState(() {
+        _saving = false;
+        _saveFailed = true;
+      });
       showTopBanner(context, l10n.setupSaveError(e.toString()));
     }
   }
@@ -213,6 +236,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
                   child: _buildStep(theme, l10n),
                 ),
               ),
+              if (_saveFailed) _buildOfflineExit(theme, l10n),
               _buildNav(l10n),
             ],
           ),
@@ -464,6 +488,28 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         const SizedBox(height: 20),
         child,
       ],
+    );
+  }
+
+  Widget _buildOfflineExit(ThemeData theme, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              l10n.setupOfflineHint,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: _saving ? null : _finishLater,
+            child: Text(l10n.setupFinishLater),
+          ),
+        ],
+      ),
     );
   }
 

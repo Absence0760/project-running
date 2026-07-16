@@ -896,6 +896,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Impossible de joindre le serveur pour le moment. Vous pouvez terminer la configuration plus tard — tout est modifiable dans les Réglages.';
+
+  @override
+  String get setupFinishLater => 'Terminer plus tard';
+
+  @override
   String get setupNameTitle => 'Comment doit-on vous appeler ?';
 
   @override
@@ -5561,6 +5568,24 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Données anonymisées de plantage et d\'erreur vers Sentry (USA). Désactive pour retirer ton consentement. Appliqué au prochain lancement.';
+
+  @override
+  String get settingsAccountDisplayName => 'Nom affiché';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Le nom que voient les autres coureurs. Laisse vide pour utiliser « Runner ».';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Non défini — tu apparais comme « Runner »';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Nom affiché mis à jour';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Échec de la mise à jour du nom affiché. Réessaie.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

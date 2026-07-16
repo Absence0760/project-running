@@ -145,6 +145,28 @@
 		return auth.user != null;
 	}
 
+	/// Row-count-verified profile write with an insert fallback (ADR 248).
+	/// `user_profiles` rows are client-provisioned, so a plain update
+	/// against a user whose row hasn't materialised yet (OAuth / email-
+	/// confirmation timing) matches 0 rows and reports success — the
+	/// wizard then navigated to /dashboard, the gate re-read a still-null
+	/// `onboarded_at`, and bounced the user back to step 1 with every
+	/// answer lost (issue #227). Throws so both callers surface the toast.
+	async function stampProfile(profileUpdate: Record<string, unknown>): Promise<void> {
+		const { data: updatedRows, error } = await supabase
+			.from('user_profiles')
+			.update(profileUpdate)
+			.eq('id', auth.user!.id)
+			.select('id');
+		if (error) throw error;
+		if (!updatedRows?.length) {
+			const { error: insertError } = await supabase
+				.from('user_profiles')
+				.insert({ id: auth.user!.id, ...profileUpdate });
+			if (insertError) throw insertError;
+		}
+	}
+
 	/// Full page navigation rather than client-side `goto` so the
 	/// layout's onboarding-gate $effect can't race the auth-store
 	/// refresh — the next page load re-bootstraps auth from the
@@ -172,14 +194,15 @@
 	/// test budget.
 	async function skipOnboarding(): Promise<void> {
 		if (saving) return;
-		if (!(await ensureAuthUser())) return;
+		if (!(await ensureAuthUser())) {
+			// Never bail silently — a button that does nothing reads as a
+			// broken exit and strands the user on the wizard (issue #227).
+			showToast(m('onboarding.saveError', { message: m('onboarding.notSignedIn') }), 'error');
+			return;
+		}
 		saving = true;
 		try {
-			const { error } = await supabase
-				.from('user_profiles')
-				.update({ onboarded_at: new Date().toISOString() })
-				.eq('id', auth.user!.id);
-			if (error) throw error;
+			await stampProfile({ onboarded_at: new Date().toISOString() });
 			navigateToDashboard();
 		} catch (e) {
 			showToast(m('onboarding.saveError', { message: (e as Error).message }), 'error');
@@ -196,7 +219,11 @@
 	/// default. Stamps `onboarded_at` so the gate releases.
 	async function finishAndExit(dest: string = '/dashboard'): Promise<void> {
 		if (saving) return;
-		if (!(await ensureAuthUser())) return;
+		if (!(await ensureAuthUser())) {
+			// Same no-silent-bail contract as skipOnboarding (issue #227).
+			showToast(m('onboarding.saveError', { message: m('onboarding.notSignedIn') }), 'error');
+			return;
+		}
 		saving = true;
 		try {
 			// 1. Universal prefs bag (units + goal + weight + privacy).
@@ -256,15 +283,13 @@
 			}
 
 			// Issue both writes in parallel — the bag write doesn't
-			// depend on the profile write and vice versa.
-			const [, profileResult] = await Promise.all([
+			// depend on the profile write and vice versa. stampProfile
+			// throws on error AND on a 0-row update (issue #227), so a
+			// stamp that never landed can't navigate.
+			await Promise.all([
 				updateUniversal(auth.user!.id, bagChanges),
-				supabase
-					.from('user_profiles')
-					.update(profileUpdate)
-					.eq('id', auth.user!.id),
+				stampProfile(profileUpdate),
 			]);
-			if (profileResult.error) throw profileResult.error;
 
 			showToast(m('onboarding.welcomeToast'), 'success');
 			// Full page navigation (same rationale as navigateToDashboard) so the

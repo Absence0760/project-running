@@ -863,6 +863,13 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      '現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。';
+
+  @override
+  String get setupFinishLater => '後で完了する';
+
+  @override
   String get setupNameTitle => '何とお呼びしましょうか？';
 
   @override
@@ -5218,6 +5225,23 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       '匿名化されたクラッシュ・エラーデータをSentry（米国）に送信します。オフにすると同意を撤回できます。次回起動時に適用されます。';
+
+  @override
+  String get settingsAccountDisplayName => '表示名';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      '他のランナーに表示される名前です。空欄にすると「Runner」が使われます。';
+
+  @override
+  String get settingsAccountDisplayNameUnset => '未設定 —「Runner」として表示されます';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => '表示名を更新しました';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      '表示名を更新できませんでした。もう一度お試しください。';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

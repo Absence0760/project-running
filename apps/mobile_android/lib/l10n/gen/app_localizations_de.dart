@@ -893,6 +893,13 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get setupOfflineHint =>
+      'Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.';
+
+  @override
+  String get setupFinishLater => 'Später abschließen';
+
+  @override
   String get setupNameTitle => 'Wie sollen wir dich nennen?';
 
   @override
@@ -5554,6 +5561,24 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsAccountSendErrorReportsSubtitle =>
       'Anonymisierte Absturz- + Fehlerdaten an Sentry (USA). Deaktivieren, um die Einwilligung zu widerrufen. Gilt beim nächsten Start.';
+
+  @override
+  String get settingsAccountDisplayName => 'Anzeigename';
+
+  @override
+  String get settingsAccountDisplayNameHint =>
+      'Der Name, den andere Läufer sehen. Leer lassen, um „Runner“ zu verwenden.';
+
+  @override
+  String get settingsAccountDisplayNameUnset =>
+      'Nicht festgelegt — du erscheinst als „Runner“';
+
+  @override
+  String get settingsAccountDisplayNameUpdated => 'Anzeigename aktualisiert';
+
+  @override
+  String get settingsAccountDisplayNameUpdateFailed =>
+      'Anzeigename konnte nicht aktualisiert werden. Bitte versuche es erneut.';
 
   @override
   String get settingsAccountErrorReportingEnabled =>

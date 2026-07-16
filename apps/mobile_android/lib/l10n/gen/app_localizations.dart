@@ -1607,6 +1607,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save your setup: {message}'**
   String setupSaveError(String message);
 
+  /// Hint shown next to the setup wizard's offline fail-safe exit after a save failed
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.'**
+  String get setupOfflineHint;
+
+  /// Setup wizard fail-safe exit that closes the wizard without a server write and defers the onboarding stamp
+  ///
+  /// In en, this message translates to:
+  /// **'Finish later'**
+  String get setupFinishLater;
+
   /// Setup wizard display-name step title
   ///
   /// In en, this message translates to:
@@ -9180,6 +9192,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.'**
   String get settingsAccountSendErrorReportsSubtitle;
+
+  /// Label for the account display-name tile and its edit dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get settingsAccountDisplayName;
+
+  /// Helper text under the display-name field explaining the fallback
+  ///
+  /// In en, this message translates to:
+  /// **'The name other runners see. Leave blank to use \"Runner\".'**
+  String get settingsAccountDisplayNameHint;
+
+  /// Subtitle on the display-name tile when no display name is set
+  ///
+  /// In en, this message translates to:
+  /// **'Not set — you appear as \"Runner\"'**
+  String get settingsAccountDisplayNameUnset;
+
+  /// Banner confirming the display name saved
+  ///
+  /// In en, this message translates to:
+  /// **'Display name updated'**
+  String get settingsAccountDisplayNameUpdated;
+
+  /// Banner shown when the display-name save fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update your display name. Please try again.'**
+  String get settingsAccountDisplayNameUpdateFailed;
 
   /// Banner shown after enabling error reporting
   ///
