@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -5,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/age_grade.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
@@ -18,6 +20,73 @@ import '../lib/training_service.dart';
 class _FakeApi extends ApiClient {
   @override
   String? get userId => 'u1';
+}
+
+/// Drives auth transitions for the AuthChangeAware seam (#232): mutate
+/// [uid], then [emit] a tick. Records which user each PB / profile fetch ran
+/// as so the refetch-on-transition contract is pinned, not just the clear.
+class _SwitchableApi extends ApiClient {
+  String? uid = 'u1';
+  final _controller = StreamController<String?>.broadcast();
+  final pbFetchesAs = <String?>[];
+  final profileFetchesAs = <String?>[];
+
+  @override
+  String? get userId => uid;
+
+  @override
+  Stream<String?> get authUserChanges => _controller.stream;
+
+  @override
+  Future<List<PersonalRecordRow>> fetchPersonalRecords() async {
+    pbFetchesAs.add(uid);
+    return const [];
+  }
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async {
+    profileFetchesAs.add(uid);
+    return uid == null ? null : UserProfileRow(id: uid!, shadowHidden: false);
+  }
+
+  void emit() => _controller.add(uid);
+}
+
+/// Test seam: a TrainingService whose overview can be swapped mid-test —
+/// mirrors the server returning nothing once the plan's owner signed out.
+class _SwitchableTraining extends TrainingService {
+  ActivePlanOverview? overview;
+  _SwitchableTraining(this.overview);
+  @override
+  Future<ActivePlanOverview?> fetchActiveOverview() async => overview;
+}
+
+/// Signed-in fake that also serves an authoritative 5 km personal record plus
+/// a profile carrying DOB + sex, so the best-effort PB rows can age-grade.
+class _FakeApiPb extends ApiClient {
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<List<PersonalRecordRow>> fetchPersonalRecords() async => [
+        PersonalRecordRow(
+          userId: 'u1',
+          distance: '5k',
+          bestTimeS: 1200,
+          // Deliberately an old PB so age-at-PB (26) differs from age-now (36+)
+          // — lets the test prove the grade uses achievedAt, not `now`.
+          achievedAt: DateTime.utc(2016, 4, 1),
+          updatedAt: DateTime.utc(2016, 4, 1),
+        ),
+      ];
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
+        id: 'u1',
+        shadowHidden: false,
+        gender: 'male',
+        dateOfBirth: DateTime.utc(1990, 1, 1),
+      );
 }
 
 /// Test seam: a TrainingService that returns a canned overview from
@@ -244,6 +313,49 @@ void main() {
       expect(find.text('Import runs'), findsOneWidget);
     });
 
+    testWidgets(
+        'empty state shows a Start a run action wired to the recorder when onStartRun is provided',
+        (tester) async {
+      // #253: the welcome copy promises "record a run" but the empty
+      // state used to only wire Set-a-goal / Import. With a host-provided
+      // onStartRun the primary "Start a run" CTA renders and fires the
+      // callback (home_screen jumps to the keep-alive recorder page).
+      final s = await _makeStores();
+      var started = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: DashboardScreen(
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            gymStore: LocalGymStore(),
+            foodStore: LocalFoodStore(),
+            preferences: s.prefs,
+            onStartRun: () => started++,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Start a run'), findsOneWidget);
+      await tester.tap(find.text('Start a run'));
+      await tester.pump();
+      expect(started, 1);
+    });
+
+    testWidgets('empty state hides Start a run when no onStartRun host is wired',
+        (tester) async {
+      // Fail-closed: with no host able to reach the recorder the CTA is
+      // hidden rather than shown as a dead button.
+      final s = await _makeStores();
+      await _pump(tester,
+          runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
+      expect(find.text('Start a run'), findsNothing);
+      // The other two onboarding paths still render.
+      expect(find.text('Set a goal'), findsOneWidget);
+      expect(find.text('Import runs'), findsOneWidget);
+    });
+
     testWidgets('shows section headers when store has runs', (tester) async {
       // Seed the store on disk before the screen sees it so the notifier
       // never fires during the pump.
@@ -454,6 +566,76 @@ void main() {
       });
     });
 
+    testWidgets(
+        'clears plan overview + refetches per-user caches on sign-out (#232)',
+        (tester) async {
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir =
+            Directory.systemTemp.createTempSync('dashboard_auth_switch_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          final api = _SwitchableApi();
+          final training = _SwitchableTraining(_overviewWithTodayWorkout());
+
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: api,
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+                training: training,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+          expect(find.text("TODAY'S WORKOUT"), findsOneWidget);
+          expect(api.pbFetchesAs, ['u1']);
+          // Several loaders want the profile (age-grade inputs + nutrition
+          // targets), so assert who they ran as rather than how many there
+          // were — the count is not the contract.
+          expect(api.profileFetchesAs, isNotEmpty);
+          expect(api.profileFetchesAs, everyElement('u1'));
+          final profileFetchesOnMount = api.profileFetchesAs.length;
+
+          // Sign out: the prior user's plan card must clear instead of
+          // rendering for whoever looks at the dashboard next, and the
+          // loaders re-run so an account switch fetches as the new user.
+          api.uid = null;
+          training.overview = null;
+          api.emit();
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+          expect(find.text("TODAY'S WORKOUT"), findsNothing);
+          expect(api.pbFetchesAs, ['u1', null]);
+          // The age-grade inputs (DOB + sex) are per-user too: a stale profile
+          // would grade the next user's PBs against this user's birth date.
+          final refetched = api.profileFetchesAs.skip(profileFetchesOnMount);
+          expect(refetched, isNotEmpty);
+          expect(refetched, everyElement(isNull));
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
     testWidgets('does not show Personal Bests section when runs have no track',
         (tester) async {
       // A run with distanceMetres == 0 has no GPS track, so fastestWindowOf
@@ -495,8 +677,62 @@ void main() {
       });
     });
 
-    testWidgets('pins "Ask your coach" at the top when api + training present',
+    testWidgets(
+        'pins "Ask your coach" at the top once the runner has runs (api + training present)',
         (tester) async {
+      // #272: the coach card only renders once the runner has data — seed a
+      // run so the ListView branch (not the welcome empty state) mounts.
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+        final dir = Directory.systemTemp.createTempSync('dashboard_coach_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: _FakeApi(),
+                training: _FakeTraining(null),
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+          // The pinned entry renders at the top and is a real button (it opens
+          // CoachScreen on tap; the coach surface itself needs a live Supabase
+          // instance, which the per-screen coach test covers).
+          expect(find.text('Ask your coach'), findsOneWidget);
+          expect(
+            find.ancestor(
+              of: find.text('Ask your coach'),
+              matching: find.byType(InkWell),
+            ),
+            findsOneWidget,
+          );
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets(
+        'no coach entry on the zero-runs welcome screen even with api + training',
+        (tester) async {
+      // #272: the "Ask your coach" card used to render unconditionally above
+      // the welcome onboarding buttons for a brand-new (zero-runs) user. It
+      // must now be absent on that first screen.
       await tester.runAsync(() async {
         final s = await _makeStores();
         await tester.pumpWidget(
@@ -515,17 +751,8 @@ void main() {
           ),
         );
         await tester.pump();
-        // The pinned entry renders at the top and is a real button (it opens
-        // CoachScreen on tap; the coach surface itself needs a live Supabase
-        // instance, which the per-screen coach test covers).
-        expect(find.text('Ask your coach'), findsOneWidget);
-        expect(
-          find.ancestor(
-            of: find.text('Ask your coach'),
-            matching: find.byType(InkWell),
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Welcome!'), findsOneWidget);
+        expect(find.text('Ask your coach'), findsNothing);
       });
     });
 
@@ -549,6 +776,81 @@ void main() {
         );
         await tester.pump();
         expect(find.text('Ask your coach'), findsNothing);
+      });
+    });
+
+    testWidgets(
+        'personal-best rows show an age grade when the viewer DOB + sex are known',
+        (tester) async {
+      // #269: the PB card used to show raw time only. With a server 5 km PR
+      // and a profile carrying DOB + sex, the fastest-distance row now also
+      // renders its age grade (via the same ageGradeForRun helper run-detail
+      // uses). A tall surface avoids scrolling to the deep PB card.
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+        final dir = Directory.systemTemp.createTempSync('dashboard_pb_ag_');
+        try {
+          // Seed a run so the full ListView (with the PB card) renders instead
+          // of the welcome empty state.
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                apiClient: _FakeApiPb(),
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          // Drain the initState fetches (_serverPbs + _viewerProfile) + their
+          // setState so the fastest-distance row + its age grade render.
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.text('Personal Bests'), findsOneWidget);
+          // Pin the date behaviour (#269 review): the grade must be computed
+          // against the runner's age when the PB was SET (2016 → age 26), not
+          // their age today. Compute both and assert the achieved-date value is
+          // the one rendered, and that it genuinely differs from the now-based
+          // value (so this assertion can actually catch a regression).
+          final dob = DateTime.utc(1990, 1, 1).toIso8601String();
+          final atPb = formatAgeGradePercent(ageGradeForRun(
+            distanceM: 5000,
+            durationSec: 1200,
+            dobIso: dob,
+            runStartIso: DateTime.utc(2016, 4, 1).toIso8601String(),
+            sex: 'male',
+          )!.percent);
+          final atNow = formatAgeGradePercent(ageGradeForRun(
+            distanceM: 5000,
+            durationSec: 1200,
+            dobIso: dob,
+            runStartIso: DateTime.now().toIso8601String(),
+            sex: 'male',
+          )!.percent);
+          expect(atPb, isNot(atNow));
+          expect(find.text('$atPb age grade'), findsOneWidget);
+          expect(find.text('$atNow age grade'), findsNothing);
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
       });
     });
 

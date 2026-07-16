@@ -361,7 +361,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         return _stepShell(
           theme,
           title: l10n.setupDoneTitle,
-          hint: l10n.setupDoneHint,
+          // When a goal was picked the body hosts the primary "Create my
+          // training plan" CTA, so the hint names that action; otherwise
+          // "Open dashboard" in the nav is the primary and the hint names it.
+          hint: _primaryGoal == null ? l10n.setupDoneHint : l10n.setupDoneHintGoal,
           // A goal-keyed CTA into the plan wizard (runner-new discoverability
           // nudge) when the runner picked a goal; a plain finish otherwise.
           child: _primaryGoal == null
@@ -533,10 +536,19 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
               onPressed: _saving ? null : _next,
               child: Text(l10n.setupContinue),
             )
-          else
+          // On the final step, when the runner picked a goal the body hosts
+          // the primary "Create my training plan" CTA — so "Open dashboard"
+          // demotes to a secondary action here to avoid two competing primary
+          // buttons. With no goal, finishing is the one primary action.
+          else if (_primaryGoal == null)
             FilledButton(
               onPressed: _saving ? null : _finish,
               child: Text(_saving ? l10n.setupSaving : l10n.setupOpenDashboard),
+            )
+          else
+            OutlinedButton(
+              onPressed: _saving ? null : _finish,
+              child: Text(l10n.setupOpenDashboard),
             ),
         ],
       ),

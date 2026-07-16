@@ -1,8 +1,12 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
+import '../lib/settings_sync.dart';
 import '../lib/widgets/intensity_card.dart';
 
 Run _r({
@@ -19,11 +23,38 @@ Run _r({
       metadata: avgBpm == null ? null : {'avg_bpm': avgBpm},
     );
 
+/// Seeds a universal-bag value for [effective]; everything else falls through
+/// to the caller's fallback. Never touches Supabase.
+class _FakeSettingsService extends SettingsService {
+  _FakeSettingsService(this._values)
+      : super(deviceId: 'test-device', platform: 'android');
+
+  final Map<String, dynamic> _values;
+
+  @override
+  T? effective<T>(String key, {T? fallback}) =>
+      _values.containsKey(key) ? _values[key] as T? : fallback;
+}
+
+class _FakeSettingsSync extends SettingsSyncService {
+  _FakeSettingsSync(Preferences prefs, this._service)
+      : super(preferences: prefs);
+
+  final SettingsService? _service;
+
+  @override
+  bool get synced => true;
+
+  @override
+  SettingsService? get service => _service;
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required List<Run> runs,
   required List<int>? hrZones,
   required DateTime now,
+  SettingsSyncService? settingsSync,
 }) {
   return tester.pumpWidget(
     MaterialApp(
@@ -35,6 +66,7 @@ Future<void> _pump(
             runs: runs,
             hrZones: hrZones,
             now: now,
+            settingsSync: settingsSync,
           ),
         ),
       ),
@@ -151,6 +183,81 @@ void main() {
         now: now,
       );
       expect(find.text('<1%'), findsOneWidget);
+    });
+  });
+
+  group('IntensityCard age-estimated caveat (#268)', () {
+    Preferences? prefs;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      prefs = Preferences();
+      await prefs!.init();
+    });
+
+    final hrRuns = [
+      _r(startedAt: DateTime(2026, 4, 30, 12), durationS: 1200, avgBpm: 145),
+    ];
+
+    testWidgets(
+        'derives fallback zones + shows the caveat when neither hr_zones nor max_hr is set',
+        (tester) async {
+      // No explicit hrZones passed, but settingsSync is wired with an empty
+      // bag → the card derives age-estimated cutoffs, renders, and discloses.
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: null,
+        now: DateTime(2026, 5, 1, 12),
+        settingsSync: _FakeSettingsSync(prefs!, _FakeSettingsService({})),
+      );
+      expect(find.text('TRAINING INTENSITY'), findsOneWidget,
+          reason: 'derived zones should render the breakdown');
+      expect(find.textContaining('age-estimated max HR'), findsOneWidget);
+    });
+
+    testWidgets('hides the caveat when a max_hr_bpm override is set',
+        (tester) async {
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: null,
+        now: DateTime(2026, 5, 1, 12),
+        settingsSync:
+            _FakeSettingsSync(prefs!, _FakeSettingsService({'max_hr_bpm': 185})),
+      );
+      expect(find.text('TRAINING INTENSITY'), findsOneWidget);
+      expect(find.textContaining('age-estimated max HR'), findsNothing);
+    });
+
+    testWidgets('hides the caveat when explicit hr_zones are set',
+        (tester) async {
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: null,
+        now: DateTime(2026, 5, 1, 12),
+        settingsSync: _FakeSettingsSync(
+          prefs!,
+          _FakeSettingsService({
+            'hr_zones': {'z1': 110, 'z2': 130, 'z3': 150, 'z4': 170, 'z5': 190},
+          }),
+        ),
+      );
+      expect(find.text('TRAINING INTENSITY'), findsOneWidget);
+      expect(find.textContaining('age-estimated max HR'), findsNothing);
+    });
+
+    testWidgets('no caveat when settingsSync is not wired (explicit zones only)',
+        (tester) async {
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: const [114, 133, 152, 171, 190],
+        now: DateTime(2026, 5, 1, 12),
+      );
+      expect(find.text('TRAINING INTENSITY'), findsOneWidget);
+      expect(find.textContaining('age-estimated max HR'), findsNothing);
     });
   });
 }

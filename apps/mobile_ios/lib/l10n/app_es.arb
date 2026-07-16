@@ -1715,6 +1715,9 @@
   "privacyZonesRemoveSemantics": "Eliminar zona de privacidad",
   "privacyZonesClearAllTitle": "¿Borrar todas las zonas de privacidad?",
   "privacyZonesClearAllBody": "Esto elimina todas las zonas y vuelve a exponer todas estas áreas en las publicaciones públicas.",
+  "privacyZonesDiscardTitle": "¿Descartar cambios?",
+  "privacyZonesDiscardBody": "Tienes zonas de privacidad sin guardar. ¿Salir sin guardar?",
+  "privacyZonesDiscard": "Descartar",
   "prefsTitle": "Preferencias",
   "prefsUnitMetric": "km, m",
   "prefsUnitImperial": "mi, ft",
@@ -3198,5 +3201,11 @@
   "simWatchAscent": "Ascenso",
   "simWatchDescent": "Descenso",
   "simWatchFixAge": "Antigüedad de la señal",
-  "simWatchSeconds": "{seconds} s"
+  "simWatchSeconds": "{seconds} s",
+  "dashboardStartRun": "Iniciar una carrera",
+  "dashboardPbAgeGrade": "{percent} grado por edad",
+  "setupDoneHintGoal": "Eso es todo. Crea un plan de entrenamiento para tu objetivo o abre el panel para empezar a correr.",
+  "planNewNameRequiredHint": "Añade un nombre de plan para activar Crear.",
+  "planNewDefaultName": "Plan de {goal}",
+  "planNewDefaultNameBeginner": "Caminar-correr hasta {goal}"
 }

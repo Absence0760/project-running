@@ -130,6 +130,40 @@ void main() {
       expect(find.text(l10n.setupOpenDashboard), findsOneWidget);
     });
 
+    testWidgets(
+        'final step with a goal offers one primary CTA, not two competing buttons',
+        (tester) async {
+      // Reason (#261): the goal-keyed "Create my training plan" CTA and the
+      // nav "Open dashboard" were both FilledButtons, and the hint told the
+      // runner to "tap Open dashboard" — two competing primaries + a mismatched
+      // hint. The CTA must be the single primary; Open dashboard demotes to a
+      // secondary outlined action and the hint names the primary.
+      final api = _FakeApi();
+      await _pump(tester, api, await _prefs());
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      // Advance to the goal step (index 2) and pick a goal.
+      await tester.tap(find.text(l10n.setupContinue));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.setupContinue));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(l10n.setupGoal5k));
+      await tester.pump();
+      await tester.tap(find.text(l10n.setupGoal5k));
+      await tester.pump();
+      // Advance to the final step.
+      for (var i = 2; i < onboardingTotalSteps - 1; i++) {
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+      }
+      expect(find.widgetWithText(FilledButton, l10n.setupCreatePlanCta),
+          findsOneWidget);
+      expect(find.widgetWithText(FilledButton, l10n.setupOpenDashboard),
+          findsNothing);
+      expect(find.widgetWithText(OutlinedButton, l10n.setupOpenDashboard),
+          findsOneWidget);
+      expect(find.text(l10n.setupDoneHintGoal), findsOneWidget);
+    });
+
     testWidgets('Finish persists the answers via completeOnboarding',
         (tester) async {
       final api = _FakeApi();

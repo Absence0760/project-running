@@ -94,6 +94,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   List<_TemplateOption> _templates = const [];
   bool _cloning = false;
   bool _creatingStarter = false;
+  bool _nameDefaulted = false;
 
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
@@ -117,6 +118,26 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       setState(() => _viewerAge = a);
     });
     _loadTemplates();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // When the wizard opens preselected to a goal (the onboarding "create my
+    // training plan" nudge) the name field would otherwise be empty, leaving
+    // the Create button silently disabled on arrival — a dead-end tap. Seed a
+    // sensible, editable default so the preset lands ready to create. Needs a
+    // localized string, so it runs here (context-ready) not in initState.
+    if (!_nameDefaulted &&
+        _nameCtrl.text.isEmpty &&
+        (widget.initialGoal != null || widget.initialBeginnerWalkRun)) {
+      _nameDefaulted = true;
+      final l10n = AppLocalizations.of(context);
+      final goal = goalEventLabel(_goal);
+      _nameCtrl.text = _beginnerWalkRun
+          ? l10n.planNewDefaultNameBeginner(goal)
+          : l10n.planNewDefaultName(goal);
+    }
   }
 
   /// Best-effort fetch of every plan template the viewer can adopt across
@@ -395,6 +416,16 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             // name) only un-disables on the next unrelated rebuild.
             onChanged: (_) => setState(() {}),
           ),
+          if (_nameCtrl.text.trim().isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                l10n.planNewNameRequiredHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           DropdownButtonFormField<GoalEvent>(
             initialValue: _goal,
@@ -473,49 +504,58 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             title: Text(l10n.planNewBeginnerTitle),
             subtitle: Text(l10n.planNewBeginnerSubtitle),
           ),
-          const SizedBox(height: 12),
-          _SectionLabel(l10n.planNewRecent5kSection),
-          Row(
-            children: [
-              Expanded(
-                child: _numField(
-                  _recent5kMinCtrl, 'min',
-                  (v) => setState(() => _recent5kMin = v), 0, 59),
-              ),
-              const Text(' : '),
-              Expanded(
-                child: _numField(
-                  _recent5kSecCtrl, 'sec',
-                  (v) => setState(() => _recent5kSec = v), 0, 59),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.planNewRecent5kHelp,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+          // A beginner walk-run plan is duration-based intervals — its paces
+          // aren't anchored on a 5K time, and a runner who ticked "New to
+          // running?" has no recent 5K to enter and can't parse "Riegel
+          // equivalence". Hide the whole recent-5K helper here, mirroring the
+          // VDOT / pace-pill panel that `_buildPreview` already hides in
+          // walk-run mode.
+          if (!_beginnerWalkRun) ...[
+            const SizedBox(height: 12),
+            _SectionLabel(l10n.planNewRecent5kSection),
+            Row(
+              children: [
+                Expanded(
+                  child: _numField(
+                    _recent5kMinCtrl, 'min',
+                    (v) => setState(() => _recent5kMin = v), 0, 59),
+                ),
+                const Text(' : '),
+                Expanded(
+                  child: _numField(
+                    _recent5kSecCtrl, 'sec',
+                    (v) => setState(() => _recent5kSec = v), 0, 59),
+                ),
+              ],
             ),
-          ),
-          if (_recent5kTotal != null)
-            CheckboxListTile(
-              value: _recent5kConfirmed,
-              onChanged: (v) => setState(() => _recent5kConfirmed = v ?? false),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(l10n.planNewRecent5kConfirm),
+            const SizedBox(height: 4),
+            Text(
+              l10n.planNewRecent5kHelp,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
-          if (_recent5kNeedsConfirm)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                l10n.planNewRecent5kWarning,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+            if (_recent5kTotal != null)
+              CheckboxListTile(
+                value: _recent5kConfirmed,
+                onChanged: (v) =>
+                    setState(() => _recent5kConfirmed = v ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(l10n.planNewRecent5kConfirm),
+              ),
+            if (_recent5kNeedsConfirm)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  l10n.planNewRecent5kWarning,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
+          ],
           const SizedBox(height: 16),
           _numField(
             _weekOverrideCtrl,

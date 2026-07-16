@@ -3,6 +3,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
+import '../auth_change_aware.dart';
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -108,7 +109,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with AuthChangeAware<HomeScreen> {
   // PageView page indices. The bottom nav exposes four destinations
   // (Home / Fitness / Social / You) plus a centre Log action; the Run page
   // has no nav destination but stays a keep-alive PageView page so an
@@ -195,6 +197,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _setupWizardShown = false;
+
+  @override
+  ApiClient? get authApi => widget.apiClient;
+
+  /// The post-frame wizard gate in initState only covers a session that
+  /// was already signed in at launch. The normal signup flow — launch
+  /// signed out, create the account from Settings — and a fresh account
+  /// signing in over a previous session both arrive here instead, so the
+  /// gate re-arms and re-runs per identity (the server-side onboarded_at
+  /// check keeps it from ever showing twice for the same user).
+  @override
+  void onAuthUserChanged(String? userId) {
+    _setupWizardShown = false;
+    if (userId != null) _maybeShowSetupWizard();
+  }
 
   Future<void> _maybeShowSetupWizard() async {
     final api = widget.apiClient;
@@ -284,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
           foodStore: widget.foodStore,
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
+          onStartRun: () => _performLogAction(LogAction.run),
         ),
       ),
       _LazyKeepAliveTab(
@@ -527,8 +545,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   selected: index == _pageFitness,
                   onTap: () => _goToPage(_pageFitness),
                 ),
-                // Gap under the docked Log FAB.
-                const SizedBox(width: 56),
+                // The docked centre Log FAB fills this 56 dp slot; the caption
+                // gives the centre action a visible text label like every other
+                // nav destination, so it isn't the one unlabelled "+" (#256).
+                SizedBox(width: 56, child: _CentreLogLabel(label: l10n.navLog)),
                 _BottomNavItem(
                   icon: Icons.public,
                   label: l10n.navSocial,
@@ -594,6 +614,43 @@ class _BottomNavItem extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The caption under the docked centre Log FAB. The FAB itself is the tap
+/// target and occupies the icon slot; this renders the label at the same
+/// baseline as the sibling nav labels so the centre action carries visible
+/// text, not just a tooltip (#256). Marked [ExcludeSemantics] so the reader
+/// doesn't double-announce over the FAB's own semantics label.
+class _CentreLogLabel extends StatelessWidget {
+  final String label;
+  const _CentreLogLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 64,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Transparent stand-in for the 24 dp icon the sibling nav items
+          // render, so this label lines up with theirs while the floating
+          // FAB visually fills the space above it.
+          const SizedBox(height: 24),
+          const SizedBox(height: 2),
+          ExcludeSemantics(
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
