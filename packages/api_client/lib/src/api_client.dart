@@ -2412,12 +2412,29 @@ class ApiClient {
   /// home-screen onboarding gate needs to stop re-showing the setup wizard.
   /// Mirrors web's `skipOnboarding` in `apps/web/src/routes/onboarding`.
   /// Every other field stays at its existing default.
+  ///
+  /// Throws when signed out (a silent return let the wizard pop as if
+  /// stamped, and the gate re-pushed it from step 1 on the next launch —
+  /// issue #227). Row-count-verified with an insert fallback per §248:
+  /// `user_profiles` rows are client-provisioned, so a plain update
+  /// against a missing row matches 0 rows and reports success.
   Future<void> markOnboarded() async {
     final uid = _client.auth.currentUser?.id;
-    if (uid == null) return;
-    await _client.from(UserProfileRow.table).update({
+    if (uid == null) throw StateError('not signed in');
+    final stamp = <String, dynamic>{
       UserProfileRow.colOnboardedAt: DateTime.now().toUtc().toIso8601String(),
-    }).eq(UserProfileRow.colId, uid);
+    };
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update(stamp)
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...stamp,
+      });
+    }
   }
 
   /// Persist the post-signup setup-wizard answers and stamp `onboarded_at`
@@ -2439,6 +2456,9 @@ class ApiClient {
   /// (units, privacy default, primary goal, weight, consent-gated DOB
   /// mirror) via [SettingsService.updateUniversal] — the bag write and the
   /// profile write are independent.
+  ///
+  /// Throws when signed out and verifies the row count with an insert
+  /// fallback, same rationale as [markOnboarded] (issue #227, §248).
   Future<void> completeOnboarding({
     String? displayName,
     required String preferredUnit,
@@ -2447,7 +2467,7 @@ class ApiClient {
     required bool healthDataConsent,
   }) async {
     final uid = _client.auth.currentUser?.id;
-    if (uid == null) return;
+    if (uid == null) throw StateError('not signed in');
     if (healthDataConsent) {
       await grantHealthDataConsent();
     }
@@ -2467,10 +2487,17 @@ class ApiClient {
       update[UserProfileRow.colGender] =
           (gender != null && gender.isNotEmpty) ? gender : null;
     }
-    await _client
+    final updated = await _client
         .from(UserProfileRow.table)
         .update(update)
-        .eq(UserProfileRow.colId, uid);
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        ...update,
+      });
+    }
   }
 
   /// `YYYY-MM-DD` for a `date`-typed column. The wizard's DOB picker is a
