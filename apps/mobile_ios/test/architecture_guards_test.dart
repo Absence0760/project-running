@@ -2515,22 +2515,26 @@ void main() {
     // These tests guard the Play-policy + SDK-34/35 manifest plumbing
     // that the audit pass identified as submission blockers. The
     // checks short-circuit on the iOS twin (no android/ directory).
-    test('READ_MEDIA_IMAGES is declared', () {
+    test('READ_MEDIA_IMAGES is not declared', () {
       final file =
           File('android/app/src/main/AndroidManifest.xml');
       if (!file.existsSync()) return;
       final body = file.readAsStringSync();
-      // image_picker (run-photo upload) on Android 13+ requests this
-      // at runtime when the photo-picker module is unavailable. Play
-      // Data Safety reviewers cross-check the Photos & videos
-      // disclosure against the actual <uses-permission> set.
+      // image_picker uses the Android Photo Picker unconditionally on
+      // API 33+, which is the only API level READ_MEDIA_IMAGES exists
+      // at — so no picker path can reach it at minSdk 26. Declaring it
+      // buys nothing and forces a broad-media-access justification plus
+      // a Photos & videos Data Safety entry; Play rejects the release
+      // for an undeclared photo/video permission that the app never
+      // needed.
       expect(
         body,
-        contains(
-            '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"'),
+        isNot(contains(
+            '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"')),
         reason:
-            'AndroidManifest.xml must declare READ_MEDIA_IMAGES so '
-            'the runtime ask matches the Play Data Safety form.',
+            'AndroidManifest.xml must NOT declare READ_MEDIA_IMAGES — '
+            'image_picker goes through the Android Photo Picker on every '
+            'API level that has the permission.',
       );
     });
 

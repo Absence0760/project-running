@@ -27,15 +27,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- image_picker (run photos) on Android 13+ (API 33+) reads the
-         user's photos through the photo picker; READ_MEDIA_IMAGES is
-         required for the legacy gallery path the picker falls back to
-         on devices without the photo-picker module. Without it the
-         Play Data Safety form's "Photos and videos - read" entry
-         doesn't line up with what the binary actually requests at
-         runtime and Play flags the mismatch. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
     <!-- Camera: barcode scan for the nutrition log fast-path (mobile_scanner).
          Declared optional (android:required="false") so the app still installs
          on a camera-less device — the scan affordance degrades to the
