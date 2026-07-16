@@ -158,6 +158,28 @@ double haversineMetres(
   return r * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
 
+/// Bracket key → dashboard PB label, and the shortest-first display order.
+/// Shared by [bestEffortsFromPersonalRecords] and [pbAchievedAtByLabel] so the
+/// time map and the achieved-date map stay keyed identically.
+const _pbBracketLabels = <String, String>{
+  '1_mile': 'Mile',
+  '5k': '5 km',
+  '8k': '8 km',
+  '10k': '10 km',
+  '12k': '12 km',
+  'half_marathon': 'Half Marathon',
+  'marathon': 'Marathon',
+};
+const _pbBracketOrder = <String, int>{
+  '1_mile': 0,
+  '5k': 1,
+  '8k': 2,
+  '10k': 3,
+  '12k': 4,
+  'half_marathon': 5,
+  'marathon': 6,
+};
+
 /// Map the trigger-maintained `personal_records` cache rows to the dashboard's
 /// label→Duration best-effort map, ordered shortest distance first. This is
 /// the authoritative all-history source the dashboard prefers over scanning
@@ -167,28 +189,23 @@ double haversineMetres(
 /// label + ordering. Unknown brackets are dropped.
 Map<String, Duration> bestEffortsFromPersonalRecords(
     List<PersonalRecordRow> records) {
-  const labels = <String, String>{
-    '1_mile': 'Mile',
-    '5k': '5 km',
-    '8k': '8 km',
-    '10k': '10 km',
-    '12k': '12 km',
-    'half_marathon': 'Half Marathon',
-    'marathon': 'Marathon',
-  };
-  const order = <String, int>{
-    '1_mile': 0,
-    '5k': 1,
-    '8k': 2,
-    '10k': 3,
-    '12k': 4,
-    'half_marathon': 5,
-    'marathon': 6,
-  };
-  final known = records.where((r) => labels.containsKey(r.distance)).toList()
-    ..sort(
-        (a, b) => (order[a.distance] ?? 99).compareTo(order[b.distance] ?? 99));
+  final known = records
+      .where((r) => _pbBracketLabels.containsKey(r.distance))
+      .toList()
+    ..sort((a, b) => (_pbBracketOrder[a.distance] ?? 99)
+        .compareTo(_pbBracketOrder[b.distance] ?? 99));
   return {
-    for (final r in known) labels[r.distance]!: Duration(seconds: r.bestTimeS),
+    for (final r in known)
+      _pbBracketLabels[r.distance]!: Duration(seconds: r.bestTimeS),
   };
 }
+
+/// The date each PB best-effort was achieved, keyed by the same label as
+/// [bestEffortsFromPersonalRecords]. Age grade is age-sensitive, so the
+/// dashboard uses the runner's age *when the PB was set* — not today — for the
+/// server-sourced PBs that carry a real `achieved_at`. Unknown brackets drop.
+Map<String, DateTime> pbAchievedAtByLabel(List<PersonalRecordRow> records) => {
+      for (final r in records)
+        if (_pbBracketLabels.containsKey(r.distance))
+          _pbBracketLabels[r.distance]!: r.achievedAt,
+    };

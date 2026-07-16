@@ -812,6 +812,43 @@ void main() {
     });
   });
 
+  group('run-detail map survives ListView scroll', () {
+    test('the map card is wrapped in a keep-alive so scroll does not rebuild it',
+        () {
+      // Reason: the run-detail map is a live FlutterMap rendered as an
+      // ordinary ListView child. A bare list child is disposed once it
+      // scrolls past the cache extent, tearing down the FlutterMap +
+      // MapController; scrolling back rebuilt it from scratch — a visible
+      // tile reload plus a jank spike (GitHub #274). The fix wraps the map
+      // card in a keep-alive (AutomaticKeepAliveClientMixin, wantKeepAlive
+      // => true), which both preserves its State and pauses its pulse ticker
+      // while off-screen. Catches a regression that unwraps the map.
+      final source =
+          File('lib/screens/run_detail_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('class _KeepAliveMap'),
+        reason: 'The run-detail map must keep a _KeepAliveMap wrapper so the '
+            'ListView does not dispose + rebuild the FlutterMap on scroll.',
+      );
+      expect(
+        source,
+        contains('AutomaticKeepAliveClientMixin'),
+        reason: '_KeepAliveMap must mix in AutomaticKeepAliveClientMixin — '
+            'that is what keeps the map State alive past the cache extent.',
+      );
+      // The map (LiveRunMap, inside the SizedBox card) must sit UNDER the
+      // wrapper: _KeepAliveMap( must appear before the map's LiveRunMap in
+      // source order. If LiveRunMap moves ahead of the wrapper, the card is
+      // a bare list child again and the reload regression is back.
+      final wrapIdx = source.indexOf('_KeepAliveMap(');
+      final mapIdx = source.indexOf('LiveRunMap(');
+      expect(wrapIdx >= 0 && wrapIdx < mapIdx, isTrue,
+          reason: '_KeepAliveMap( must wrap the map card (appear before '
+              'LiveRunMap in source order).');
+    });
+  });
+
   group('privacy-zone removal confirms before erasing', () {
     test('privacy_zones_screen gates remove + clear-all behind a confirm', () {
       // Reason: a privacy zone hides the user's tracks near a sensitive

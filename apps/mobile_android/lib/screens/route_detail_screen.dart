@@ -1206,7 +1206,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                     tooltip: l10n.routeDetailReportReview,
                                     visualDensity: VisualDensity.compact,
                                     padding: const EdgeInsets.only(left: 8),
-                                    constraints: const BoxConstraints(),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 48,
+                                      minHeight: 48,
+                                    ),
                                     color: theme.colorScheme.outline,
                                     onPressed: () => showReportSheet(
                                       context,
