@@ -8,7 +8,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../apple_auth.dart';
 import '../auth_error.dart';
+import '../auth_validation.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
@@ -29,6 +31,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
+  String? _emailError;
+  String? _passwordError;
+
+  /// Set when signUp succeeded WITHOUT a session — a confirmation email
+  /// is pending (genuine new account) or the address already had an
+  /// account (GoTrue's obfuscated duplicate response, deliberately the
+  /// same shape so sign-up can't be used to enumerate accounts). The
+  /// build swaps the form for the check-your-email notice; we must NOT
+  /// pop(true) / fire onSignedIn because no session exists.
+  String? _confirmationSentTo;
 
   /// GDPR Article 8 — users under 16 require parental consent for
   /// data processing in the EU. We block sign-up at the client until
@@ -73,14 +85,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signUp() async {
+    final l10n = AppLocalizations.of(context);
+    // Pre-submit validation with inline per-field feedback — an
+    // obviously malformed email or a too-short password never leaves
+    // the device only to bounce back as a server error (#243). The
+    // minimum mirrors web's minlength + the Supabase
+    // minimum_password_length setting (see auth_validation.dart).
+    final email = _emailController.text.trim();
+    final emailOk = looksLikeEmail(email);
+    final passwordOk = _passwordController.text.length >= kPasswordMinLength;
+    setState(() {
+      _emailError = emailOk ? null : l10n.authErrorInvalidEmail;
+      _passwordError =
+          passwordOk ? null : l10n.authErrorPasswordTooShort(kPasswordMinLength);
+    });
+    if (!emailOk || !passwordOk) return;
     if (!_confirmAdult) {
-      setState(() =>
-          _error = AppLocalizations.of(context).signUpErrorConfirmAge);
+      setState(() => _error = l10n.signUpErrorConfirmAge);
       return;
     }
     if (!_acceptTerms) {
-      setState(() =>
-          _error = AppLocalizations.of(context).signUpErrorAcceptTerms);
+      setState(() => _error = l10n.signUpErrorAcceptTerms);
       return;
     }
     setState(() {
@@ -92,13 +117,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
       // the checkboxes; ApiClient.signUp persists them server-side
       // via the confirm_age_and_terms RPC. See audit/gdpr Critical.
       final stamp = DateTime.now().toUtc();
-      await widget.apiClient.signUp(
-        email: _emailController.text.trim(),
+      final result = await widget.apiClient.signUp(
+        email: email,
         password: _passwordController.text,
         ageConfirmedAt: stamp,
         termsAcceptedAt: stamp,
       );
-      if (mounted) Navigator.pop(context, true);
+      if (!mounted) return;
+      if (result.needsEmailConfirmation) {
+        // No session — email confirmation pending (or the address is
+        // already registered; GoTrue's obfuscated response looks the
+        // same on purpose). Show the check-your-email state; popping
+        // true here would tell the caller a signed-in session exists.
+        setState(() => _confirmationSentTo = email);
+        return;
+      }
+      Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signUp failed: $e');
       if (mounted) {
@@ -193,6 +227,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signInWithApple() async {
+    if (!appleSignInAvailable()) {
+      // The Android web-fallback flow hard-requires an Apple Services
+      // ID + return URL (see apple_auth.dart); without them the plugin
+      // throws before any UI opens. Fail closed with the coming-soon
+      // notice — before the gate nag, mirroring the Google path.
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).appleSignInSoon);
+      }
+      return;
+    }
     if (!_checkGates()) return;
     setState(() {
       _loading = true;
@@ -204,6 +248,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        webAuthenticationOptions: appleWebAuthOptions(),
       );
       final idToken = credential.identityToken;
       if (idToken == null) {
@@ -235,6 +280,48 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    if (_confirmationSentTo != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.signUpTitle)),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 48),
+                Icon(Icons.mark_email_unread_outlined,
+                    size: 64, color: theme.colorScheme.primary),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.signUpCheckEmailTitle,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.signUpCheckEmailBody(_confirmationSentTo!),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Pop WITHOUT a result — no session exists yet, so the
+                // caller must not treat this as a signed-in return.
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(l10n.signUpCheckEmailBack),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final appleFirst = Platform.isIOS;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.signUpTitle)),
@@ -269,6 +356,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: l10n.authEmailLabel,
                   border: const OutlineInputBorder(),
+                  errorText: _emailError,
                 ),
               ),
               const SizedBox(height: 12),
@@ -278,6 +366,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: l10n.authPasswordLabel,
                   border: const OutlineInputBorder(),
+                  errorText: _passwordError,
                 ),
               ),
               if (_error != null) ...[

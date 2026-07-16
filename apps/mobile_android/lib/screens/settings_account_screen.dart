@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth_validation.dart';
 import '../backup.dart';
 import '../exif_strip.dart';
 import '../backup_server_client.dart';
@@ -290,9 +291,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               ),
               FilledButton(
                 onPressed: () {
-                  if (pwdCtl.text.length < 8) {
-                    setInner(() =>
-                        error = l10n.settingsAccountPasswordTooShort);
+                  if (pwdCtl.text.length < kPasswordMinLength) {
+                    setInner(() => error =
+                        l10n.authErrorPasswordTooShort(kPasswordMinLength));
                     return;
                   }
                   if (pwdCtl.text != confirmCtl.text) {

@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../apple_auth.dart';
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
@@ -31,6 +32,11 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _loading = false;
   String? _error;
 
+  /// Classified kind of the auth failure behind [_error], when it came
+  /// from [friendlyAuthError]. Drives kind-specific affordances — the
+  /// "Resend confirmation email" button on `email_not_confirmed`.
+  AuthErrorKind? _errorKind;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -42,6 +48,7 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _errorKind = null;
     });
     try {
       await widget.apiClient.signIn(
@@ -53,8 +60,48 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (e) {
       debugPrint('SignInScreen._signIn failed: $e');
       if (mounted) {
-        setState(() => _error =
-            friendlyAuthError(AppLocalizations.of(context), e));
+        setState(() {
+          _errorKind = classifyAuthError(e);
+          _error = friendlyAuthError(AppLocalizations.of(context), e);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Re-send the signup confirmation email to the address in the email
+  /// field. Only reachable from the `email_not_confirmed` error state.
+  /// Same privacy-preserving copy contract as [_sendPasswordReset].
+  Future<void> _resendConfirmation() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() {
+        _error = AppLocalizations.of(context).signInResetNeedEmail;
+        _errorKind = null;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _errorKind = null;
+    });
+    try {
+      await widget.apiClient.resendSignUpConfirmation(email: email);
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        AppLocalizations.of(context).signInConfirmationResent,
+        duration: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      debugPrint('SignInScreen._resendConfirmation failed: $e');
+      if (mounted) {
+        setState(() {
+          _errorKind = classifyAuthError(e);
+          _error = friendlyAuthError(AppLocalizations.of(context), e);
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -72,12 +119,14 @@ class _SignInScreenState extends State<SignInScreen> {
     if (email.isEmpty || !email.contains('@')) {
       setState(() {
         _error = AppLocalizations.of(context).signInResetNeedEmail;
+        _errorKind = null;
       });
       return;
     }
     setState(() {
       _loading = true;
       _error = null;
+      _errorKind = null;
     });
     try {
       var webBase =
@@ -105,8 +154,10 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (e) {
       debugPrint('SignInScreen._sendPasswordReset failed: $e');
       if (mounted) {
-        setState(() => _error =
-            friendlyAuthError(AppLocalizations.of(context), e));
+        setState(() {
+          _errorKind = classifyAuthError(e);
+          _error = friendlyAuthError(AppLocalizations.of(context), e);
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -124,13 +175,17 @@ class _SignInScreenState extends State<SignInScreen> {
       // friendly coming-soon notice instead of a raw configuration error.
       // Mirrors web's PUBLIC_GOOGLE_AUTH_ENABLED fail-closed gate.
       if (mounted) {
-        setState(() => _error = AppLocalizations.of(context).googleSignInSoon);
+        setState(() {
+          _error = AppLocalizations.of(context).googleSignInSoon;
+          _errorKind = null;
+        });
       }
       return;
     }
     setState(() {
       _loading = true;
       _error = null;
+      _errorKind = null;
     });
     try {
       // google_sign_in 7.x: singleton + one-time initialize() before any
@@ -164,8 +219,10 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (e) {
       debugPrint('SignInScreen._signInWithGoogle failed: $e');
       if (mounted) {
-        setState(() => _error =
-            friendlyAuthError(AppLocalizations.of(context), e));
+        setState(() {
+          _errorKind = classifyAuthError(e);
+          _error = friendlyAuthError(AppLocalizations.of(context), e);
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -180,13 +237,26 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   /// Apple Sign-In via the native flow on iOS, web fallback on Android.
-  /// Needs a Services ID in the Apple Developer portal + the Apple auth
-  /// provider enabled in Supabase. The flow returns an Apple identity
-  /// token that we hand to `Supabase.auth.signInWithIdToken` directly.
+  /// The Android web flow hard-requires `webAuthenticationOptions` (an
+  /// Apple Services ID + allow-listed return URL, env-provisioned — see
+  /// `apple_auth.dart`); until they're configured the button fails
+  /// closed with the same coming-soon notice as the Google gate. The
+  /// flow returns an Apple identity token that we hand to
+  /// `Supabase.auth.signInWithIdToken` directly.
   Future<void> _signInWithApple() async {
+    if (!appleSignInAvailable()) {
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).appleSignInSoon;
+          _errorKind = null;
+        });
+      }
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
+      _errorKind = null;
     });
     try {
       final credential = await SignInWithApple.getAppleIDCredential(
@@ -194,6 +264,7 @@ class _SignInScreenState extends State<SignInScreen> {
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        webAuthenticationOptions: appleWebAuthOptions(),
       );
       final idToken = credential.identityToken;
       if (idToken == null) {
@@ -209,8 +280,10 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (e) {
       debugPrint('SignInScreen._signInWithApple failed: $e');
       if (mounted) {
-        setState(() => _error =
-            friendlyAuthError(AppLocalizations.of(context), e));
+        setState(() {
+          _errorKind = classifyAuthError(e);
+          _error = friendlyAuthError(AppLocalizations.of(context), e);
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -280,6 +353,14 @@ class _SignInScreenState extends State<SignInScreen> {
                   _error!,
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
+                if (_errorKind == AuthErrorKind.emailNotConfirmed)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _loading ? null : _resendConfirmation,
+                      child: Text(l10n.signInResendConfirmation),
+                    ),
+                  ),
               ],
               const SizedBox(height: 24),
               FilledButton(
