@@ -51,7 +51,7 @@ You are **read-only**. Reporting is the deliverable.
     - `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` — chest strap
     - `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` (Android 14+) — explicit type
     - `POST_NOTIFICATIONS` (Android 13+)
-    - `READ_MEDIA_IMAGES` (Android 13+) — for run-photos picker
+    - `READ_MEDIA_IMAGES` — deliberately NOT declared; image_picker uses the Android Photo Picker on API 33+, so no picker path needs it. Declaring it triggers a Play photo/video permissions declaration for capability the app never uses. Pinned by `architecture_guards_test.dart`.
     - `health.READ_*` — Health Connect
     - `INTERNET`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` — straightforward
 14. **Foreground service types.** Android 14 (SDK 34) requires every foreground service to declare a type. `location` for the run-recording service; `dataSync` for background sync. Check `service` blocks in `AndroidManifest.xml`.
