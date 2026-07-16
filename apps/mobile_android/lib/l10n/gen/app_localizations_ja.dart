@@ -713,6 +713,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
 
   @override
+  String get authErrorNotSignedIn => 'この操作にはサインインが必要です。サインインしてからもう一度お試しください。';
+
+  @override
   String get authErrorEmailExists => 'このメールアドレスにはすでにアカウントがあります。サインインしてください。';
 
   @override
@@ -1049,6 +1052,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'ランを開始';
+
+  @override
+  String get runLastRunOpenA11yLabel => '前回のランの詳細を開く';
 
   @override
   String get runChooseRoute => 'ルートを選択';
@@ -3040,6 +3046,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runHeatmapEmptyBody => 'GPSトラック付きのランを記録またはインポートすると、ここに表示されます。';
+
+  @override
+  String get runHeatmapSignedOutTitle => 'サインインして同期済みのヒートマップを表示';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'この端末で記録したランはここに表示されます。同期済みのランも含めるにはサインインしてください。';
 
   @override
   String get runHeatmapErrorTitle => 'ヒートマップを読み込めませんでした';
@@ -10677,6 +10690,46 @@ class AppLocalizationsJa extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds 秒';
   }
+
+  @override
+  String get sessionLoadError => 'セッションを読み込めませんでした。';
+
+  @override
+  String get sessionDetailLoadError => 'このセッションプランを読み込めませんでした。';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'エクササイズを削除しますか？';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'このエクササイズとすべてのセットがこのワークアウトから削除されます。';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => '削除';
+
+  @override
+  String get gearWearLogDeleteTitle => 'このメモを削除しますか？';
+
+  @override
+  String get gearWearLogDeleteBody => 'この摩耗メモは完全に削除されます。';
+
+  @override
+  String get gearWearLogDeleteConfirm => '削除';
+
+  @override
+  String get eventSubmitRunsLoadError => '最近のランを読み込めませんでした。';
+
+  @override
+  String get racesCouldNotOpenLink => 'リンクを開けませんでした。';
+
+  @override
+  String get prefsHrZonesClearTitle => '心拍ゾーンをクリアしますか？';
+
+  @override
+  String get prefsHrZonesClearBody => 'カスタム5ゾーンがクリアされます。';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'クリア';
 
   @override
   String get signInRequiredMessage => 'この機能を使うにはサインインしてください';

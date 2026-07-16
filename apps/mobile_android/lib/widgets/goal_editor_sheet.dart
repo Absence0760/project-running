@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -348,8 +349,9 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     try {
       await widget.preferences.upsertGoal(goal);
     } catch (e) {
+      debugPrint('goal editor save failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.goalEditorSaveFailed('$e'));
+        showTopBanner(context, l10n.goalEditorSaveFailed(friendlyError(l10n, e)));
         setState(() => _saving = false);
       }
       return;
@@ -395,8 +397,9 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     try {
       await widget.preferences.removeGoal(id);
     } catch (e) {
+      debugPrint('goal editor save failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.goalEditorSaveFailed('$e'));
+        showTopBanner(context, l10n.goalEditorSaveFailed(friendlyError(l10n, e)));
         setState(() => _saving = false);
       }
       return;

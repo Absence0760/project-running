@@ -5,7 +5,12 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import { checkSignUpGates, type SignUpGateReason } from '$lib/core/auth_gates';
+	import {
+		checkPasswordPair,
+		checkSignUpGates,
+		type PasswordPairReason,
+		type SignUpGateReason,
+	} from '$lib/core/auth_gates';
 	import { classifyAuthError, authErrorMessageKey } from '$lib/core/auth_errors';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
@@ -22,11 +27,18 @@
 		return reason === 'adult' ? m('login.gateAdult') : m('login.gateTerms');
 	}
 
+	function passwordMessage(reason: PasswordPairReason): string {
+		return reason === 'too_short'
+			? m('login.errorPasswordTooShort', { min: PASSWORD_MIN_LENGTH })
+			: m('login.errorPasswordMismatch');
+	}
+
 	let error = $state('');
 	let info = $state('');
 	let loading = $state(false);
 	let email = $state('');
 	let password = $state('');
+	let confirmPassword = $state('');
 	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
 	let isReset = $state($page.url.searchParams.get('reset') === '1');
 	let confirmAdult = $state(false);
@@ -126,6 +138,15 @@
 			const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
 			if (!gate.ok) {
 				error = gateMessage(gate.reason);
+				return;
+			}
+			// Before signUp, not after: a mistyped password that
+			// reaches GoTrue is hashed and stored, the confirmation
+			// mail goes out, and the account is then unreachable by
+			// its owner with no error anywhere to show for it.
+			const pair = checkPasswordPair(password, confirmPassword);
+			if (!pair.ok) {
+				error = passwordMessage(pair.reason);
 				return;
 			}
 		}
@@ -362,6 +383,20 @@
 						minlength={isSignUp ? PASSWORD_MIN_LENGTH : undefined}
 						autocomplete={isSignUp ? 'new-password' : 'current-password'}
 					/>
+					{#if isSignUp}
+						<label for="login-confirm-password" class="visually-hidden">
+							{m('login.confirmPasswordPlaceholder')}
+						</label>
+						<input
+							id="login-confirm-password"
+							type="password"
+							bind:value={confirmPassword}
+							placeholder={m('login.confirmPasswordPlaceholder')}
+							required
+							minlength={PASSWORD_MIN_LENGTH}
+							autocomplete="new-password"
+						/>
+					{/if}
 				{/if}
 				{#if isSignUp}
 					<label class="signup-check">
@@ -408,7 +443,7 @@
 				</p>
 				{#if !isSignUp}
 					<p class="toggle-mode">
-						<button type="button" class="link-btn" onclick={() => { isReset = true; error = ''; password = ''; }}>
+						<button type="button" class="link-btn" onclick={() => { isReset = true; error = ''; password = ''; confirmPassword = ''; }}>
 							{m('login.kicker.reset')}
 						</button>
 					</p>

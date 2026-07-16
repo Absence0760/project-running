@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'top_banner.dart';
 
@@ -57,9 +58,10 @@ class _RunGearChipsState extends State<RunGearChips> {
     try {
       myGear = await widget.api.fetchMyGearWithDistance();
     } catch (e) {
+      debugPrint('run gear chips load error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runGearChipsLoadError('$e'));
+          context, AppLocalizations.of(context).runGearChipsLoadError(friendlyError(AppLocalizations.of(context), e)));
       return;
     }
     if (!mounted) return;
@@ -153,9 +155,10 @@ class _RunGearChipsState extends State<RunGearChips> {
       await widget.api.setRunGear(widget.runId, saved.toList());
       await _load();
     } catch (e) {
+      debugPrint('run gear chips save error: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).runGearChipsSaveError('$e'));
+          context, AppLocalizations.of(context).runGearChipsSaveError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

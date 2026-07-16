@@ -737,6 +737,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
+
+  @override
   String get authErrorEmailExists =>
       'Esse e-mail já tem uma conta. Entre em vez disso.';
 
@@ -1092,6 +1096,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'Iniciar corrida';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
 
   @override
   String get runChooseRoute => 'Escolher rota';
@@ -3236,6 +3243,14 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get runHeatmapEmptyBody =>
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapSignedOutTitle =>
+      'Entre para ver seu mapa de calor sincronizado';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'As corridas gravadas neste dispositivo aparecem aqui. Entre para incluir também suas corridas sincronizadas.';
 
   @override
   String get runHeatmapErrorTitle =>
@@ -11204,6 +11219,50 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get sessionLoadError => 'Não foi possível carregar as sessões.';
+
+  @override
+  String get sessionDetailLoadError =>
+      'Não foi possível carregar este plano de sessão.';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'Remover exercício?';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'Este exercício e todas as suas séries serão removidos deste treino.';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => 'Remover';
+
+  @override
+  String get gearWearLogDeleteTitle => 'Excluir esta nota?';
+
+  @override
+  String get gearWearLogDeleteBody =>
+      'Esta nota de desgaste será excluída permanentemente.';
+
+  @override
+  String get gearWearLogDeleteConfirm => 'Excluir';
+
+  @override
+  String get eventSubmitRunsLoadError =>
+      'Não foi possível carregar suas corridas recentes.';
+
+  @override
+  String get racesCouldNotOpenLink => 'Não foi possível abrir esse link.';
+
+  @override
+  String get prefsHrZonesClearTitle => 'Limpar zonas de frequência cardíaca?';
+
+  @override
+  String get prefsHrZonesClearBody =>
+      'Suas cinco zonas personalizadas serão limpas.';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'Limpar';
+
+  @override
   String get signInRequiredMessage => 'Faça login para usar este recurso.';
 
   @override
@@ -11951,6 +12010,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
+
+  @override
   String get authErrorEmailExists =>
       'Esse e-mail já tem uma conta. Entre em vez disso.';
 
@@ -12306,6 +12369,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runStartA11yLabel => 'Iniciar corrida';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
 
   @override
   String get runChooseRoute => 'Escolher rota';
@@ -14449,6 +14515,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runHeatmapEmptyBody =>
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapSignedOutTitle =>
+      'Entre para ver seu mapa de calor sincronizado';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'As corridas gravadas neste dispositivo aparecem aqui. Entre para incluir também suas corridas sincronizadas.';
 
   @override
   String get runHeatmapErrorTitle =>
@@ -22414,6 +22488,50 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get sessionLoadError => 'Não foi possível carregar as sessões.';
+
+  @override
+  String get sessionDetailLoadError =>
+      'Não foi possível carregar este plano de sessão.';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'Remover exercício?';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'Este exercício e todas as suas séries serão removidos deste treino.';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => 'Remover';
+
+  @override
+  String get gearWearLogDeleteTitle => 'Excluir esta nota?';
+
+  @override
+  String get gearWearLogDeleteBody =>
+      'Esta nota de desgaste será excluída permanentemente.';
+
+  @override
+  String get gearWearLogDeleteConfirm => 'Excluir';
+
+  @override
+  String get eventSubmitRunsLoadError =>
+      'Não foi possível carregar suas corridas recentes.';
+
+  @override
+  String get racesCouldNotOpenLink => 'Não foi possível abrir esse link.';
+
+  @override
+  String get prefsHrZonesClearTitle => 'Limpar zonas de frequência cardíaca?';
+
+  @override
+  String get prefsHrZonesClearBody =>
+      'Suas cinco zonas personalizadas serão limpas.';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'Limpar';
 
   @override
   String get signInRequiredMessage => 'Faça login para usar este recurso.';

@@ -8,9 +8,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth_change_aware.dart';
+import '../auth_error.dart';
 import '../auth_validation.dart';
 import '../backup.dart';
 import '../exif_strip.dart';
@@ -202,8 +202,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         maxHeight: 1024,
       );
     } catch (e) {
+      debugPrint('settings account avatar failed: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
+      showTopBanner(context, l10n.settingsAccountAvatarFailed(friendlyError(l10n, e)));
       return;
     }
     if (f == null) return;
@@ -227,9 +228,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       });
       showTopBanner(context, l10n.settingsAccountAvatarSaved);
     } catch (e) {
+      debugPrint('settings account avatar failed: $e');
       if (!mounted) return;
       setState(() => _avatarBusy = false);
-      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
+      showTopBanner(context, l10n.settingsAccountAvatarFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -267,9 +269,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       });
       showTopBanner(context, l10n.settingsAccountAvatarRemoved);
     } catch (e) {
+      debugPrint('settings account avatar failed: $e');
       if (!mounted) return;
       setState(() => _avatarBusy = false);
-      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
+      showTopBanner(context, l10n.settingsAccountAvatarFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -284,9 +287,12 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       setState(() => _coachConsentAt = null);
       showTopBanner(context, l10n.settingsAccountCoachConsentWithdrawn);
     } catch (e) {
+      debugPrint('SettingsAccountScreen coach-consent withdraw failed: $e');
       if (mounted) {
         showTopBanner(
-            context, l10n.settingsAccountCoachConsentWithdrawFailed(e.toString()));
+            context,
+            l10n.settingsAccountCoachConsentWithdrawFailed(
+                friendlyError(l10n, e)));
       }
     } finally {
       if (mounted) setState(() => _coachConsentWithdrawing = false);
@@ -389,13 +395,16 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     if (ok != true) return;
     if (!mounted) return;
     try {
-      await Supabase.instance.client.auth
-          .updateUser(UserAttributes(password: pwdCtl.text));
+      final api = widget.apiClient;
+      if (api == null) throw Exception('Not authenticated');
+      await api.updatePassword(pwdCtl.text);
       if (!mounted) return;
       showTopBanner(context, l10n.settingsAccountPasswordUpdated);
     } catch (e) {
+      debugPrint('SettingsAccountScreen password update failed: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountPasswordUpdateFailed(e));
+      showTopBanner(context,
+          l10n.settingsAccountPasswordUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -466,8 +475,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         setState(() {});
       }
     } catch (e) {
+      debugPrint('SettingsAccountScreen delete account failed: $e');
       if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountDeleteFailed(e));
+      showTopBanner(
+          context, l10n.settingsAccountDeleteFailed(friendlyError(l10n, e)));
     }
   }
 

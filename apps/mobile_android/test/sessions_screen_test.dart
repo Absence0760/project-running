@@ -66,6 +66,27 @@ class _FakeApi extends ApiClient {
   }
 }
 
+class _FailingApi extends ApiClient {
+  @override
+  Future<List<SessionPlanRow>> fetchSessionPlans() async {
+    throw Exception('network down');
+  }
+}
+
+class _FailThenSucceedApi extends ApiClient {
+  _FailThenSucceedApi(this.plans);
+
+  final List<SessionPlanRow> plans;
+  int calls = 0;
+
+  @override
+  Future<List<SessionPlanRow>> fetchSessionPlans() async {
+    calls++;
+    if (calls == 1) throw Exception('network down');
+    return plans;
+  }
+}
+
 Widget _wrap(Widget child) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -105,6 +126,43 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Morning Flow'), findsOneWidget);
       expect(find.textContaining('Vinyasa'), findsOneWidget);
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'fetch failure renders the error state instead of a stuck spinner',
+      (tester) async {
+    final dir = Directory.systemTemp.createTempSync('sessions_error');
+    try {
+      final gym = await _gymStore(dir);
+      await tester.pumpWidget(
+          _wrap(SessionsScreen(api: _FailingApi(), gymStore: gym)));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text("Couldn't load sessions."), findsOneWidget);
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('tapping retry after a failure re-fetches and shows the list',
+      (tester) async {
+    final dir = Directory.systemTemp.createTempSync('sessions_retry');
+    try {
+      final gym = await _gymStore(dir);
+      final api = _FailThenSucceedApi([_plan('p1', 'Morning Flow')]);
+      await tester.pumpWidget(_wrap(SessionsScreen(api: api, gymStore: gym)));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text("Couldn't load sessions."), findsOneWidget);
+
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text("Couldn't load sessions."), findsNothing);
+      expect(find.text('Morning Flow'), findsOneWidget);
+      expect(api.calls, 2);
     } finally {
       dir.deleteSync(recursive: true);
     }

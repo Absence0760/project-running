@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
 import 'top_banner.dart';
@@ -138,7 +139,10 @@ class _ReportSheetState extends State<_ReportSheet> {
       final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
       setState(() => _error = friendly ?? e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('report submit failed: $e');
+      if (mounted) {
+        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

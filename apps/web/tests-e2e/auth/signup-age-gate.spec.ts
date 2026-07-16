@@ -28,7 +28,10 @@ test.describe('Signup age gate + ToS acceptance', () => {
 
 		const submit = page.getByRole('button', { name: 'Sign Up' });
 		const email = page.getByPlaceholder('Email address');
-		const password = page.getByPlaceholder('Password');
+		// exact: true — getByPlaceholder is a case-insensitive substring
+		// match by default, so a bare 'Password' also matches the
+		// sign-up-only 'Confirm password' field and trips strict mode.
+		const password = page.getByPlaceholder('Password', { exact: true });
 		const ageBox = page.getByLabel(/I confirm I am 16 years of age or older/);
 		const termsBox = page.getByLabel(/I have read and agree to the/);
 

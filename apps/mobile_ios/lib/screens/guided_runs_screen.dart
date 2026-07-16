@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../audio_cues.dart';
 import '../guided_runs.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -127,8 +128,9 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
     try {
       await _audioCues.speakGuidedCue(text);
     } catch (e) {
+      debugPrint('guided run preview error: $e');
       if (!mounted) return;
-      showTopBanner(context, AppLocalizations.of(context).guidedRunPreviewError('$e'));
+      showTopBanner(context, AppLocalizations.of(context).guidedRunPreviewError(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

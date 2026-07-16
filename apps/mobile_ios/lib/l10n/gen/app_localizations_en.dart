@@ -731,6 +731,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorGeneric => 'Something went wrong. Please try again.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'You need to be signed in to do that. Sign in and try again.';
+
+  @override
   String get authErrorEmailExists =>
       'That email already has an account. Sign in instead.';
 
@@ -1085,6 +1089,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'Start run';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Open last run details';
 
   @override
   String get runChooseRoute => 'Choose route';
@@ -3212,6 +3219,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get runHeatmapEmptyBody =>
       'Record or import runs with GPS tracks and they\'ll light up here.';
+
+  @override
+  String get runHeatmapSignedOutTitle => 'Sign in to see your synced heatmap';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Runs recorded on this device show up here. Sign in to include your synced runs too.';
 
   @override
   String get runHeatmapErrorTitle => 'Couldn\'t load your heatmap';
@@ -11089,6 +11103,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String simWatchSeconds(int seconds) {
     return '$seconds s';
   }
+
+  @override
+  String get sessionLoadError => 'Couldn\'t load sessions.';
+
+  @override
+  String get sessionDetailLoadError => 'Couldn\'t load this session plan.';
+
+  @override
+  String get gymEditorRemoveExerciseTitle => 'Remove exercise?';
+
+  @override
+  String get gymEditorRemoveExerciseBody =>
+      'This exercise and all its sets will be removed from this workout.';
+
+  @override
+  String get gymEditorRemoveExerciseConfirm => 'Remove';
+
+  @override
+  String get gearWearLogDeleteTitle => 'Delete this note?';
+
+  @override
+  String get gearWearLogDeleteBody =>
+      'This wear-log note will be permanently deleted.';
+
+  @override
+  String get gearWearLogDeleteConfirm => 'Delete';
+
+  @override
+  String get eventSubmitRunsLoadError => 'Couldn\'t load your recent runs.';
+
+  @override
+  String get racesCouldNotOpenLink => 'Couldn\'t open that link.';
+
+  @override
+  String get prefsHrZonesClearTitle => 'Clear heart-rate zones?';
+
+  @override
+  String get prefsHrZonesClearBody => 'Your five custom zones will be cleared.';
+
+  @override
+  String get prefsHrZonesClearConfirm => 'Clear';
 
   @override
   String get signInRequiredMessage => 'Sign in to use this feature.';

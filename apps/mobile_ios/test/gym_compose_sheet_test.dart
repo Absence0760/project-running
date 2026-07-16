@@ -524,4 +524,93 @@ void main() {
       f.dir.deleteSync(recursive: true);
     }
   });
+
+  testWidgets(
+      'tapping trash on an exercise with data shows a confirm dialog; '
+      'Cancel keeps the exercise and its typed sets', (tester) async {
+    final f = await _store('remove_cancel_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(1), 'Squat'); // exercise name
+      await tester.enterText(fields.at(2), '5'); // reps
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Remove exercise?'), findsOneWidget);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pump();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Squat'), findsOneWidget);
+      expect(find.text('5'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'confirming the remove-exercise dialog removes the exercise and its sets',
+      (tester) async {
+    final f = await _store('remove_confirm_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(1), 'Squat'); // exercise name
+      await tester.enterText(fields.at(2), '5'); // reps
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Remove')));
+      await tester.pump();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Squat'), findsNothing);
+      expect(find.text('5'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'tapping trash on an empty exercise block removes it with no confirmation dialog',
+      (tester) async {
+    final f = await _store('remove_empty_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      // The block auto-refills with a fresh blank exercise, not zero blocks.
+      expect(find.byType(TextField), findsWidgets);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
 }

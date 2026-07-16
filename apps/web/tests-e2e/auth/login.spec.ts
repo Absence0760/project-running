@@ -65,7 +65,10 @@ test.describe('/login', () => {
 			const submit = page.getByRole('button', { name: 'Sign Up' });
 
 			await page.getByPlaceholder('Email address').fill(email);
-			await page.getByPlaceholder('Password').fill(password);
+			// exact: true — a bare 'Password' also substring-matches the
+			// sign-up-only 'Confirm password' field.
+			await page.getByPlaceholder('Password', { exact: true }).fill(password);
+			await page.getByPlaceholder('Confirm password').fill(password);
 
 			// Age gate + ToS acceptance: both required to enable Submit.
 			// Re-verify the disabled-until-checked contract here so a

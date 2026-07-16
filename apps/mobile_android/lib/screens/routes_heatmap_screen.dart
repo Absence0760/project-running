@@ -10,6 +10,7 @@ import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../auth_error.dart';
 import '../distance_bands.dart';
 import '../geocoding.dart';
 import '../heatmap_clustering.dart';
@@ -504,9 +505,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       setState(() => _userLatLng = ll);
       _scheduleRefresh();
     } catch (e) {
+      debugPrint('heatmap location unavailable: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).heatmapLocationUnavailable('$e'));
+          context, AppLocalizations.of(context).heatmapLocationUnavailable(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

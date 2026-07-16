@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../exercise_history.dart';
 import '../exercise_records.dart' show DatedGymSet;
 import '../gym_progression.dart';
@@ -366,7 +367,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       if (mounted) {
         showTopBanner(
           context,
-          AppLocalizations.of(context).gymVisibilityFailed('$e'),
+          AppLocalizations.of(context).gymVisibilityFailed(friendlyError(AppLocalizations.of(context), e)),
         );
       }
     } finally {
@@ -412,8 +413,9 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       await _maybeSync();
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      debugPrint('gym delete failed: $e');
       if (mounted) {
-        showTopBanner(context, l10n.gymDeleteFailed('$e'));
+        showTopBanner(context, l10n.gymDeleteFailed(friendlyError(l10n, e)));
       }
     }
   }

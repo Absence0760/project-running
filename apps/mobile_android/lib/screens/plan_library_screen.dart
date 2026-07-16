@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
-import '../auth_error.dart';
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
@@ -249,6 +249,7 @@ class _PlanLibraryPreviewScreenState extends State<PlanLibraryPreviewScreen> {
         ),
       );
     } catch (e) {
+      debugPrint('plan library clone failed: $e');
       if (mounted) {
         setState(() => _cloning = false);
         showTopBanner(context, l10n.planLibraryCloneFailed(friendlyError(l10n, e)));
