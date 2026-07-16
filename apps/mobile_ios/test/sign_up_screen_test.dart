@@ -46,11 +46,13 @@ Future<void> _pump(WidgetTester tester, _FakeApiClient client) async {
 
 void main() {
   group('SignUpScreen', () {
-    testWidgets('renders email and password fields', (tester) async {
+    testWidgets('renders email, password and confirm-password fields',
+        (tester) async {
       await _pump(tester, _FakeApiClient());
-      expect(find.byType(TextField), findsNWidgets(2));
+      expect(find.byType(TextField), findsNWidgets(3));
       expect(find.text('Email'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
+      expect(find.text('Confirm password'), findsOneWidget);
     });
 
     testWidgets('Create Account button is present', (tester) async {
@@ -71,6 +73,8 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@b.com');
       await tester.enterText(
           find.widgetWithText(TextField, 'Password'), 'pass123');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'pass123');
       // Both GDPR gates must be ticked before the API call fires.
       await tester.tap(find.byType(Checkbox).at(0));
       await tester.tap(find.byType(Checkbox).at(1));
@@ -86,8 +90,12 @@ void main() {
       await _pump(tester, client);
       await tester.enterText(
           find.widgetWithText(TextField, 'Email'), 'taken@b.com');
+      // Must be a valid pair — the password check now sits in front of the
+      // API call, so a short or mismatched pair never reaches signUp.
       await tester.enterText(
-          find.widgetWithText(TextField, 'Password'), 'abc');
+          find.widgetWithText(TextField, 'Password'), 'abc123');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'abc123');
       await tester.tap(find.byType(Checkbox).at(0));
       await tester.tap(find.byType(Checkbox).at(1));
       await tester.pump();
@@ -96,6 +104,81 @@ void main() {
       // A synthetic Exception classifies as generic — the raw text is
       // replaced by a friendly, user-facing message (auth_error.dart).
       expect(find.textContaining('Something went wrong'), findsOneWidget);
+    });
+
+    // ─────────── password confirmation ───────────
+    //
+    // A typo in a single-field sign-up was silently baked into the account:
+    // GoTrue hashes whatever was typed, the confirmation mail goes out and
+    // gets clicked, and the account is then permanently unreachable by its
+    // owner with nothing erroring on either side. These pin the wiring; the
+    // rule itself is unit-tested in auth_gates_test.dart.
+
+    Future<void> submitPair(
+      WidgetTester tester,
+      String password,
+      String confirm,
+    ) async {
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), password);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), confirm);
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+    }
+
+    testWidgets('mismatched passwords block signUp and surface the mismatch',
+        (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await submitPair(tester, 'runner123', 'runenr123');
+      // The account must not be created — this is the whole point.
+      expect(client.capturedEmail, isNull);
+      expect(find.textContaining("Passwords don't match"), findsOneWidget);
+    });
+
+    testWidgets('a too-short pair reports the length, not the mismatch',
+        (tester) async {
+      // Precedence pin: telling someone whose real problem is a
+      // 3-character password that the passwords don't match sends them
+      // round the loop again.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await submitPair(tester, 'abc', 'xyz');
+      expect(client.capturedEmail, isNull);
+      expect(find.textContaining('at least 6 characters'), findsOneWidget);
+      expect(find.textContaining("Passwords don't match"), findsNothing);
+    });
+
+    testWidgets('a trailing space is a real difference', (tester) async {
+      // The headline typo class. Trimming would call these equal and store
+      // whichever string was passed on, so the saved password would differ
+      // from what the user believes they typed.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await submitPair(tester, 'secret1 ', 'secret1');
+      expect(client.capturedEmail, isNull);
+      expect(find.textContaining("Passwords don't match"), findsOneWidget);
+    });
+
+    testWidgets('the mismatch error clears once the pair is corrected',
+        (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await submitPair(tester, 'runner123', 'runenr123');
+      expect(find.textContaining("Passwords don't match"), findsOneWidget);
+      // Fix the confirmation and resubmit — the error must not latch.
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'runner123');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(find.textContaining("Passwords don't match"), findsNothing);
+      expect(client.capturedEmail, 'a@b.com');
+      expect(client.capturedPassword, 'runner123');
     });
 
     // ─────────── GDPR Art 8 gates ───────────

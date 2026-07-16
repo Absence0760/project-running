@@ -9,6 +9,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../auth_error.dart';
+import '../auth_gates.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
@@ -27,6 +28,7 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _loading = false;
   String? _error;
 
@@ -67,9 +69,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _termsTap.dispose();
     _privacyTap.dispose();
     super.dispose();
+  }
+
+  String _passwordMessage(PasswordPairReason reason) {
+    final l10n = AppLocalizations.of(context);
+    return reason == PasswordPairReason.tooShort
+        ? l10n.signUpErrorPasswordTooShort
+        : l10n.signUpErrorPasswordMismatch;
   }
 
   Future<void> _signUp() async {
@@ -81,6 +91,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!_acceptTerms) {
       setState(() =>
           _error = AppLocalizations.of(context).signUpErrorAcceptTerms);
+      return;
+    }
+    // Before signUp, not after: a mistyped password that reaches GoTrue is
+    // hashed and stored, the confirmation mail goes out, and the account is
+    // then unreachable by its owner with no error anywhere to show for it.
+    final pair = checkPasswordPair(
+      _passwordController.text,
+      _confirmPasswordController.text,
+    );
+    if (pair != null) {
+      setState(() => _error = _passwordMessage(pair));
       return;
     }
     setState(() {
@@ -277,6 +298,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: l10n.authPasswordLabel,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: l10n.signUpConfirmPasswordLabel,
                   border: const OutlineInputBorder(),
                 ),
               ),

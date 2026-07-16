@@ -807,6 +807,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Please accept the Terms of Service and Privacy Policy to continue.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Confirm password';
+
+  @override
+  String get signUpErrorPasswordTooShort =>
+      'Password must be at least 6 characters.';
+
+  @override
+  String get signUpErrorPasswordMismatch => 'Passwords don\'t match.';
+
+  @override
   String get signUpContinueWithApple => 'Continue with Apple';
 
   @override

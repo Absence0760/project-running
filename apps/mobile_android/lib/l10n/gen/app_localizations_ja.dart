@@ -783,6 +783,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signUpErrorAcceptTerms => '続けるには、利用規約とプライバシーポリシーに同意してください。';
 
   @override
+  String get signUpConfirmPasswordLabel => 'パスワードを確認';
+
+  @override
+  String get signUpErrorPasswordTooShort => 'パスワードは6文字以上で入力してください。';
+
+  @override
+  String get signUpErrorPasswordMismatch => 'パスワードが一致しません。';
+
+  @override
   String get signUpContinueWithApple => 'Appleで続ける';
 
   @override

@@ -813,6 +813,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Acepta las Condiciones del servicio y la Política de privacidad para continuar.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Confirma la contraseña';
+
+  @override
+  String get signUpErrorPasswordTooShort =>
+      'La contraseña debe tener al menos 6 caracteres.';
+
+  @override
+  String get signUpErrorPasswordMismatch => 'Las contraseñas no coinciden.';
+
+  @override
   String get signUpContinueWithApple => 'Continuar con Apple';
 
   @override

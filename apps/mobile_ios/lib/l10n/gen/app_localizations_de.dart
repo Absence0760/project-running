@@ -813,6 +813,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung, um fortzufahren.';
 
   @override
+  String get signUpConfirmPasswordLabel => 'Passwort bestätigen';
+
+  @override
+  String get signUpErrorPasswordTooShort =>
+      'Das Passwort muss mindestens 6 Zeichen lang sein.';
+
+  @override
+  String get signUpErrorPasswordMismatch =>
+      'Die Passwörter stimmen nicht überein.';
+
+  @override
   String get signUpContinueWithApple => 'Mit Apple fortfahren';
 
   @override

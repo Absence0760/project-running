@@ -1463,6 +1463,24 @@ abstract class AppLocalizations {
   /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
   String get signUpErrorAcceptTerms;
 
+  /// Label for the password-confirmation field on the sign-up screen. Sign-up is the only surface that mints a password on mobile, so this is not shared with the sign-in screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get signUpConfirmPasswordLabel;
+
+  /// Validation error shown when the chosen password is shorter than the minimum
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 6 characters.'**
+  String get signUpErrorPasswordTooShort;
+
+  /// Validation error shown when the password and its confirmation differ
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords don\'t match.'**
+  String get signUpErrorPasswordMismatch;
+
   /// Apple OAuth button label on the sign-up screen
   ///
   /// In en, this message translates to:
