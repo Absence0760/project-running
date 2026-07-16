@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/geocoding.dart';
@@ -132,5 +133,71 @@ void main() {
       find.textContaining("RunSignUp import isn't available yet"),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'tapping Register with no handler app for the URL surfaces a banner instead of doing nothing',
+      (tester) async {
+    const launcher = MethodChannel('plugins.flutter.io/url_launcher');
+    var launchCalls = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(launcher, (call) async {
+      // canLaunch reports no handler is registered for the URL; a real
+      // launch call would be a bug in _launch since it should short-circuit.
+      if (call.method == 'canLaunch') return false;
+      if (call.method == 'launch' || call.method == 'launchUrl') {
+        launchCalls++;
+        return false;
+      }
+      return null;
+    });
+    addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(launcher, null));
+
+    final service = _FakeRaceService(
+      results: [_listing('r5', 'Broken Link 10k')],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Register'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text("Couldn't open that link."), findsOneWidget);
+    expect(launchCalls, 0);
+
+    // showTopBanner leaves a pending auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('tapping Register with a malformed URL surfaces a banner rather than throwing',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [
+        RaceListingView(
+          id: 'r6',
+          provider: 'manual',
+          providerRaceId: null,
+          name: 'Malformed URL 5k',
+          raceDate: '2027-09-12',
+          distanceM: null,
+          locationLabel: null,
+          entryUrl: '::not a valid uri::',
+          resultsUrl: null,
+          isVerified: true,
+          distanceMAway: null,
+        ),
+      ],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Register'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text("Couldn't open that link."), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
   });
 }
