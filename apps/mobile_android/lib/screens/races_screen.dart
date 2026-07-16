@@ -268,12 +268,12 @@ class _RaceCard extends StatelessWidget {
               children: [
                 if (race.entryUrl != null)
                   OutlinedButton(
-                    onPressed: () => _launch(race.entryUrl!),
+                    onPressed: () => _launch(context, race.entryUrl!),
                     child: Text(l.racesRegister),
                   ),
                 if (race.resultsUrl != null)
                   OutlinedButton(
-                    onPressed: () => _launch(race.resultsUrl!),
+                    onPressed: () => _launch(context, race.resultsUrl!),
                     child: Text(l.racesViewResults),
                   ),
                 FilledButton(onPressed: onImport, child: Text(l.racesImportResult)),
@@ -285,8 +285,26 @@ class _RaceCard extends StatelessWidget {
     );
   }
 
-  void _launch(String url) {
-    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  Future<void> _launch(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    var ok = false;
+    if (uri != null) {
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          ok = true;
+        } else {
+          debugPrint('RacesScreen: no handler available for $url');
+        }
+      } catch (e) {
+        debugPrint('RacesScreen: launch failed for $url: $e');
+      }
+    } else {
+      debugPrint('RacesScreen: could not parse URL: $url');
+    }
+    if (!ok && context.mounted) {
+      showTopBanner(context, AppLocalizations.of(context).racesCouldNotOpenLink);
+    }
   }
 }
 

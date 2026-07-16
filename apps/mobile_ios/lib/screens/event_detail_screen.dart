@@ -1570,6 +1570,7 @@ class _SubmitTimeSheet extends StatefulWidget {
 class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
   List<RecentRunRow> _runs = const [];
   bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
@@ -1578,8 +1579,13 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
   }
 
   Future<void> _load() async {
-    final runs = await widget.social.fetchRecentRuns(limit: 20);
-    if (mounted) setState(() { _runs = runs; _loading = false; });
+    setState(() { _loading = true; _error = false; });
+    try {
+      final runs = await widget.social.fetchRecentRuns(limit: 20);
+      if (mounted) setState(() { _runs = runs; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _error = true; });
+    }
   }
 
   @override
@@ -1607,6 +1613,26 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
                 padding: EdgeInsets.all(24),
                 child: CircularProgressIndicator(),
               ))
+            else if (_error)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.eventSubmitRunsLoadError,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(l10n.errorStateRetry),
+                    ),
+                  ],
+                ),
+              )
             else if (_runs.isEmpty)
               Text(
                 l10n.eventNoRecentRuns,

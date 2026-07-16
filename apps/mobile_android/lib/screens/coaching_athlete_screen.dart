@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
@@ -68,7 +69,9 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       showTopBanner(
-          context, AppLocalizations.of(context).coachingAthleteLoadError('$e'));
+          context,
+          AppLocalizations.of(context).coachingAthleteLoadError(
+              friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
