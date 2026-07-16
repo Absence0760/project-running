@@ -731,6 +731,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorGeneric => 'Something went wrong. Please try again.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'You need to be signed in to do that. Sign in and try again.';
+
+  @override
   String get authErrorEmailExists =>
       'That email already has an account. Sign in instead.';
 
@@ -1085,6 +1089,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'Start run';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Open last run details';
 
   @override
   String get runChooseRoute => 'Choose route';
@@ -3212,6 +3219,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get runHeatmapEmptyBody =>
       'Record or import runs with GPS tracks and they\'ll light up here.';
+
+  @override
+  String get runHeatmapSignedOutTitle => 'Sign in to see your synced heatmap';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Runs recorded on this device show up here. Sign in to include your synced runs too.';
 
   @override
   String get runHeatmapErrorTitle => 'Couldn\'t load your heatmap';

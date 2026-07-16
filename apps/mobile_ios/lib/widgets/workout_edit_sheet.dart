@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_labels.dart';
@@ -187,10 +188,11 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('workout edit save error: $e');
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = l10n.workoutEditSaveError('$e');
+          _error = l10n.workoutEditSaveError(friendlyError(l10n, e));
         });
       }
     }

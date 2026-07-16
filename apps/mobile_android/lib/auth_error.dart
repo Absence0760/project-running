@@ -10,10 +10,13 @@ import 'l10n/gen/app_localizations.dart';
 /// "wrong password" from "offline" from "rate-limited" from "that
 /// email already has an account". Web mirrors the classification in
 /// `apps/web/src/lib/core/auth_errors.ts` — keep the branches in sync.
+/// [notSignedIn] is mobile-only: it classifies the `ApiClient` session
+/// guards, which have no web counterpart.
 enum AuthErrorKind {
   offline,
   invalidCredentials,
   rateLimited,
+  notSignedIn,
   emailExists,
   emailNotConfirmed,
   weakPassword,
@@ -67,6 +70,10 @@ AuthErrorKind classifyAuthError(Object error) {
     return AuthErrorKind.weakPassword;
   }
 
+  // ApiClient guards throw Exception('Not authenticated') when an action
+  // needs a session — actionable ("sign in"), so don't collapse to generic.
+  if (msg.contains('not authenticated')) return AuthErrorKind.notSignedIn;
+
   return AuthErrorKind.generic;
 }
 
@@ -87,6 +94,9 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
       return l10n.authErrorEmailNotConfirmed;
     case AuthErrorKind.weakPassword:
       return l10n.authErrorWeakPassword(kPasswordMinLength);
+    // "Sign in to do this" makes no sense on the sign-in screens
+    // themselves — collapse to generic there.
+    case AuthErrorKind.notSignedIn:
     case AuthErrorKind.generic:
       return l10n.authErrorGeneric;
   }
@@ -104,6 +114,8 @@ String friendlyError(AppLocalizations l10n, Object error) {
       return l10n.authErrorOffline;
     case AuthErrorKind.rateLimited:
       return l10n.authErrorRateLimited;
+    case AuthErrorKind.notSignedIn:
+      return l10n.authErrorNotSignedIn;
     case AuthErrorKind.invalidCredentials:
     case AuthErrorKind.emailExists:
     case AuthErrorKind.emailNotConfirmed:

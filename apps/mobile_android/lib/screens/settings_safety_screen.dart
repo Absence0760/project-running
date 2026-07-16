@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../off_route_alert.dart';
 import '../settings_sync.dart';
@@ -96,7 +97,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
           ?.updateUniversal({SettingsKeys.safetyOverdueMinutes: minutes});
       _banner(l10n.safetyOverdueSaved);
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -107,7 +109,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await widget.settingsSync
           ?.updateDevice({SettingsKeys.autoLiveShare: value});
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -118,7 +121,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await widget.settingsSync
           ?.updateUniversal({SettingsKeys.safetyOffRouteAlerts: value});
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -168,7 +172,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await _reload();
       _banner(l10n.safetyAddedToast);
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _adding = false);
     }
@@ -201,7 +206,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await _reload();
       _banner(l10n.safetyRemovedToast);
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -215,7 +221,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await _reload();
       _banner(l10n.safetyConfirmedToast);
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _respondingId = null);
     }
@@ -231,7 +238,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await _reload();
       _banner(l10n.safetyDeclinedToast);
     } catch (e) {
-      _banner(l10n.safetyAddFailed(e.toString()));
+      debugPrint('safety add failed: $e');
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _respondingId = null);
     }

@@ -737,6 +737,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
+
+  @override
   String get authErrorEmailExists =>
       'Esse e-mail já tem uma conta. Entre em vez disso.';
 
@@ -1092,6 +1096,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'Iniciar corrida';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
 
   @override
   String get runChooseRoute => 'Escolher rota';
@@ -3236,6 +3243,14 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get runHeatmapEmptyBody =>
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapSignedOutTitle =>
+      'Entre para ver seu mapa de calor sincronizado';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'As corridas gravadas neste dispositivo aparecem aqui. Entre para incluir também suas corridas sincronizadas.';
 
   @override
   String get runHeatmapErrorTitle =>
@@ -11951,6 +11966,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get authErrorGeneric => 'Algo deu errado. Tente novamente.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Você precisa estar conectado para fazer isso. Entre e tente novamente.';
+
+  @override
   String get authErrorEmailExists =>
       'Esse e-mail já tem uma conta. Entre em vez disso.';
 
@@ -12306,6 +12325,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runStartA11yLabel => 'Iniciar corrida';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Abrir os detalhes da última corrida';
 
   @override
   String get runChooseRoute => 'Escolher rota';
@@ -14449,6 +14471,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runHeatmapEmptyBody =>
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapSignedOutTitle =>
+      'Entre para ver seu mapa de calor sincronizado';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'As corridas gravadas neste dispositivo aparecem aqui. Entre para incluir também suas corridas sincronizadas.';
 
   @override
   String get runHeatmapErrorTitle =>

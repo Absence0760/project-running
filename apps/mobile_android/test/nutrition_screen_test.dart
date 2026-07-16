@@ -43,6 +43,26 @@ Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
   return (store: store, dir: dir);
 }
 
+/// Real file I/O driven from a tap has no completion hook to await, so poll
+/// the observable end-state rather than sleeping a fixed duration — a fixed
+/// wait races a loaded CI runner, which then tears the temp dir down while
+/// the write is still in flight (CI run 29517668370).
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() done, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!done()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timed out after $timeout waiting for the expected state');
+    }
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
+}
+
 Widget _app(LocalFoodStore store) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -143,8 +163,8 @@ void main() {
       );
       await tester.runAsync(() async {
         await tester.tap(confirm);
-        await Future<void>.delayed(const Duration(milliseconds: 200));
       });
+      await _pumpUntil(tester, () => f.store.rows.isEmpty);
       await tester.pumpAndSettle();
 
       expect(find.text('Oats'), findsNothing);
@@ -259,8 +279,9 @@ void main() {
       );
       await tester.runAsync(() async {
         await tester.tap(confirm);
-        await Future<void>.delayed(const Duration(milliseconds: 200));
       });
+      await _pumpUntil(
+          tester, () => find.text('My breakfast').evaluate().isNotEmpty);
       await tester.pumpAndSettle();
 
       // Saved exactly once: the template section shows the one row, and the

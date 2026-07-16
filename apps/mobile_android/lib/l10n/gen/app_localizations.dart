@@ -1325,6 +1325,12 @@ abstract class AppLocalizations {
   /// **'Something went wrong. Please try again.'**
   String get authErrorGeneric;
 
+  /// Friendly error shown when an action requires a signed-in account
+  ///
+  /// In en, this message translates to:
+  /// **'You need to be signed in to do that. Sign in and try again.'**
+  String get authErrorNotSignedIn;
+
   /// Friendly auth error shown when sign-up fails because the email is already registered
   ///
   /// In en, this message translates to:
@@ -1960,6 +1966,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start run'**
   String get runStartA11yLabel;
+
+  /// Screen-reader label for the tappable recent-run card on the start-run screen
+  ///
+  /// In en, this message translates to:
+  /// **'Open last run details'**
+  String get runLastRunOpenA11yLabel;
 
   /// Idle-screen button to pick a route to follow when no route is selected
   ///
@@ -5443,6 +5455,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Record or import runs with GPS tracks and they\'ll light up here.'**
   String get runHeatmapEmptyBody;
+
+  /// Heatmap empty-state title for a signed-out viewer with no local tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see your synced heatmap'**
+  String get runHeatmapSignedOutTitle;
+
+  /// Heatmap empty-state body for a signed-out viewer — must not claim the user has never run
+  ///
+  /// In en, this message translates to:
+  /// **'Runs recorded on this device show up here. Sign in to include your synced runs too.'**
+  String get runHeatmapSignedOutBody;
 
   /// Error-state title on the personal run-track heatmap when the runs fetch fails
   ///

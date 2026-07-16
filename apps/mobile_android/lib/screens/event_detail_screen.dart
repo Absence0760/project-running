@@ -440,6 +440,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
       await _load();
     } catch (err) {
+      debugPrint('event submit failed: $err');
       if (mounted) {
         showTopBanner(
             context,
@@ -460,9 +461,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       await widget.social.removeEventResult(e.row.id, inst);
       await _load();
     } catch (err) {
+      debugPrint('event remove result failed: $err');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).eventRemoveResultFailed('$err'));
+            context, AppLocalizations.of(context).eventRemoveResultFailed(friendlyError(AppLocalizations.of(context), err)));
       }
     } finally {
       if (mounted) setState(() => _submittingResult = false);
@@ -506,9 +508,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         setState(() => _raceSession = row);
       }
     } catch (err) {
+      debugPrint('event race control failed: $err');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).eventRaceControlFailed('$err'));
+            context, AppLocalizations.of(context).eventRaceControlFailed(friendlyError(AppLocalizations.of(context), err)));
       }
     } finally {
       if (mounted) setState(() => _raceBusy = false);
@@ -1204,6 +1207,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
       await widget.onSubmit(body);
       _ctrl.clear();
     } catch (e) {
+      debugPrint('event post update failed: $e');
       // Without the explicit catch this was `try/finally` — the
       // onSubmit failure propagated up as an uncaught Future error,
       // logged silently by Flutter, and the user saw no banner. The
@@ -1211,7 +1215,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
       // above only fires on success.
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).eventPostUpdateFailed('$e'));
+            context, AppLocalizations.of(context).eventPostUpdateFailed(friendlyError(AppLocalizations.of(context), e)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);

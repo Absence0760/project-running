@@ -737,6 +737,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
 
   @override
+  String get authErrorNotSignedIn =>
+      'Dafür musst du angemeldet sein. Melde dich an und versuche es erneut.';
+
+  @override
   String get authErrorEmailExists =>
       'Für diese E-Mail-Adresse existiert bereits ein Konto. Melde dich stattdessen an.';
 
@@ -1092,6 +1096,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runStartA11yLabel => 'Lauf starten';
+
+  @override
+  String get runLastRunOpenA11yLabel => 'Details des letzten Laufs öffnen';
 
   @override
   String get runChooseRoute => 'Route wählen';
@@ -3247,6 +3254,14 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get runHeatmapEmptyBody =>
       'Zeichne Läufe mit GPS-Strecken auf oder importiere sie – dann leuchten sie hier auf.';
+
+  @override
+  String get runHeatmapSignedOutTitle =>
+      'Melde dich an, um deine synchronisierte Heatmap zu sehen';
+
+  @override
+  String get runHeatmapSignedOutBody =>
+      'Läufe, die auf diesem Gerät aufgezeichnet wurden, erscheinen hier. Melde dich an, um auch deine synchronisierten Läufe einzubeziehen.';
 
   @override
   String get runHeatmapErrorTitle =>

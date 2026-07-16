@@ -158,13 +158,14 @@ class _ThrowingApi extends _FakeApi {
       throw Exception('feed down');
 }
 
-/// Fake whose kudos write throws, to drive the optimistic-rollback banner.
+/// Fake whose kudos write throws the ApiClient signed-out guard, to drive
+/// the optimistic-rollback banner + the friendly-error classification.
 class _KudosFailApi extends _FakeApi {
   _KudosFailApi({super.entries, super.engagement});
   @override
   Future<bool> giveKudos(String runId) async {
     giveCalls++;
-    throw Exception('kudos down');
+    throw Exception('Not authenticated');
   }
 }
 
@@ -353,8 +354,12 @@ void main() {
       expect(find.text('4'), findsOneWidget);
       expect(find.byIcon(Icons.favorite_border), findsOneWidget);
       expect(api.giveCalls, 1);
-      // The failure is surfaced, not swallowed.
+      // The failure is surfaced, not swallowed — and classified: the
+      // banner carries the friendly sign-in message, never the raw
+      // "Exception: Not authenticated" (issue #240).
       expect(find.textContaining('Could not update kudos'), findsOneWidget);
+      expect(find.textContaining('signed in'), findsOneWidget);
+      expect(find.textContaining('Exception'), findsNothing);
       await tester.pump(const Duration(seconds: 4)); // drain banner timer
     });
   });
