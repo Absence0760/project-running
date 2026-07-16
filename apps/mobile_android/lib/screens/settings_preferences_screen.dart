@@ -847,7 +847,30 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, <String, int>{}),
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                    context: ctx,
+                    builder: (confirmCtx) => AlertDialog(
+                      title: Text(l10n.prefsHrZonesClearTitle),
+                      content: Text(l10n.prefsHrZonesClearBody),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(confirmCtx, false),
+                          child: Text(l10n.prefsCancel),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(confirmCtx, true),
+                          style: TextButton.styleFrom(
+                              foregroundColor:
+                                  Theme.of(confirmCtx).colorScheme.error),
+                          child: Text(l10n.prefsHrZonesClearConfirm),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+              if (ok && ctx.mounted) Navigator.pop(ctx, <String, int>{});
+            },
             child: Text(l10n.prefsClear),
           ),
           TextButton(
