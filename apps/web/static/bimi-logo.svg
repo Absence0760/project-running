@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.2" baseProfile="tiny-ps" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Threkir</title>
+  <defs>
+    <linearGradient id="tkGrad" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FE5932"/>
+      <stop offset="0.58" stop-color="#FE5932"/>
+      <stop offset="1" stop-color="#A01E77"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#tkGrad)"/>
+  <g fill="#ffffff" fill-rule="evenodd" transform="translate(512 512) scale(7.6) translate(-54.5 -50)">
+    <path d="M30 10 H44 V90 H30 Z M44 29 H58 A21 21 0 0 1 58 71 H44 Z M44 42 H56 A8 8 0 0 1 56 58 H44 Z"/>
+  </g>
+</svg>
