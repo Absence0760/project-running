@@ -293,11 +293,11 @@ void main() {
           reason: 'female easy / male easy ratio out of 2-5% band: $ratio');
     });
 
-    test('nonbinary falls back to the unmodified curve', () {
+    test('prefer_not_to_say falls back to the unmodified curve', () {
       final male = pacesFromGoalPace(240);
-      final nb = pacesFromGoalPace(240, 'nonbinary');
-      expect(nb.easy, male.easy);
-      expect(nb.repetition, male.repetition);
+      final pnts = pacesFromGoalPace(240, 'prefer_not_to_say');
+      expect(pnts.easy, male.easy);
+      expect(pnts.repetition, male.repetition);
     });
   });
 

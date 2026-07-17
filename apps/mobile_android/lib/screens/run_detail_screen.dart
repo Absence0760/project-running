@@ -237,7 +237,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           .maybeSingle();
       final g = row?['gender'] as String?;
       if (!mounted) return;
-      if (g == 'male' || g == 'female' || g == 'nonbinary') {
+      if (g == 'male' || g == 'female' || g == 'prefer_not_to_say') {
         setState(() => _viewerGender = g);
       }
     } catch (_) {

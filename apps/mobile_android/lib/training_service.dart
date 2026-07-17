@@ -96,7 +96,7 @@ class TrainingService extends ChangeNotifier {
           .eq('id', uid)
           .maybeSingle();
       final g = row?['gender'] as String?;
-      if (g == 'male' || g == 'female' || g == 'nonbinary') return g;
+      if (g == 'male' || g == 'female' || g == 'prefer_not_to_say') return g;
     } catch (_) {
       /* L4 best-effort — fall back to null on any failure,
          including the not-yet-initialised StateError thrown by

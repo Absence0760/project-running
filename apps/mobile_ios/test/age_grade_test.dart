@@ -84,8 +84,8 @@ void main() {
     expect(computeAgeGrade(distanceM: 5000, durationSec: 1200, age: 4, sex: 'male'), null);
     expect(computeAgeGrade(distanceM: 5000, durationSec: 1200, age: 100, sex: 'male'), null);
     expect(computeAgeGrade(distanceM: 5000, durationSec: 0, age: 40, sex: 'male'), null);
-    // non-binary / unset sex has no standard
-    expect(computeAgeGrade(distanceM: 5000, durationSec: 1200, age: 40, sex: 'nonbinary'), null);
+    // withheld / unset sex has no standard
+    expect(computeAgeGrade(distanceM: 5000, durationSec: 1200, age: 40, sex: 'prefer_not_to_say'), null);
   });
 
   test('ageGradeForRun: end-to-end from DOB + run start, null when sex unknown', () {

@@ -534,9 +534,6 @@ class _TierFilters extends StatelessWidget {
                 DropdownMenuItem(
                     value: 'female',
                     child: Text(l10n.segmentsPanelGenderWomen)),
-                DropdownMenuItem(
-                    value: 'nonbinary',
-                    child: Text(l10n.segmentsPanelGenderNonbinary)),
               ],
               onChanged: onGenderChanged,
             ),

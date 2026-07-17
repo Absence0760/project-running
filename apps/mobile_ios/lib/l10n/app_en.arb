@@ -1404,10 +1404,6 @@
   "@setupGenderMale": {
     "description": "Setup wizard male gender option"
   },
-  "setupGenderNonbinary": "Non-binary",
-  "@setupGenderNonbinary": {
-    "description": "Setup wizard non-binary gender option"
-  },
   "setupDobLabel": "Date of birth",
   "@setupDobLabel": {
     "description": "Setup wizard date-of-birth field label"
@@ -10190,10 +10186,6 @@
   "segmentsPanelGenderWomen": "Women",
   "@segmentsPanelGenderWomen": {
     "description": "Leaderboard gender filter: women"
-  },
-  "segmentsPanelGenderNonbinary": "Nonbinary",
-  "@segmentsPanelGenderNonbinary": {
-    "description": "Leaderboard gender filter: nonbinary"
   },
   "segmentsPanelAllAges": "All ages",
   "@segmentsPanelAllAges": {

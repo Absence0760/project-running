@@ -32,10 +32,8 @@ void main() {
     expect(mifflinStJeorBmr(70, 178, 35, 'female'), 1642.5 - 5 - 161);
   });
 
-  test('mifflinStJeorBmr — neutral offset (-78) for nonbinary / withheld / unknown',
-      () {
+  test('mifflinStJeorBmr — neutral offset (-78) for withheld / unknown', () {
     final neutral = 10 * 70 + 6.25 * 178 - 5 * 35 - 78;
-    expect(mifflinStJeorBmr(70, 178, 35, 'nonbinary'), neutral);
     expect(mifflinStJeorBmr(70, 178, 35, 'prefer_not_to_say'), neutral);
     expect(mifflinStJeorBmr(70, 178, 35, null), neutral);
   });
