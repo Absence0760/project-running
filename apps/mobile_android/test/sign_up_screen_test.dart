@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -471,6 +472,105 @@ void main() {
       expect(find.text('Check your email'), findsOneWidget);
       expect(find.textContaining('new@b.com'), findsOneWidget);
       expect(find.text('Back to sign in'), findsOneWidget);
+    });
+
+    // ─────────── Autofill + keyboard submit (#244) ───────────
+
+    testWidgets('fields declare autofill hints in an AutofillGroup',
+        (tester) async {
+      await _pump(tester, _FakeApiClient());
+      final emailFinder = find.widgetWithText(TextField, 'Email');
+      expect(
+        find.ancestor(of: emailFinder, matching: find.byType(AutofillGroup)),
+        findsWidgets,
+      );
+      final email = tester.widget<TextField>(emailFinder);
+      expect(email.autofillHints, contains(AutofillHints.email));
+      expect(email.textInputAction, TextInputAction.next);
+      final password = tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Password'));
+      expect(password.autofillHints, contains(AutofillHints.newPassword));
+      expect(password.textInputAction, TextInputAction.next);
+      final confirm = tester.widget<TextField>(
+          find.widgetWithText(TextField, 'Confirm password'));
+      expect(confirm.autofillHints, contains(AutofillHints.newPassword));
+      expect(confirm.textInputAction, TextInputAction.done);
+    });
+
+    testWidgets('next chains focus email → password → confirm',
+        (tester) async {
+      await _pump(tester, _FakeApiClient());
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+      final password = tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Password'));
+      expect(password.focusNode?.hasFocus, isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+      final confirm = tester.widget<TextField>(
+          find.widgetWithText(TextField, 'Confirm password'));
+      expect(confirm.focusNode?.hasFocus, isTrue);
+    });
+
+    testWidgets('done on the confirm field submits sign-up', (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'password1');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(client.capturedEmail, 'a@b.com');
+      expect(client.capturedPassword, 'password1');
+    });
+
+    testWidgets('successful sign-up commits the autofill context',
+        (tester) async {
+      // Confirmation-pending path included — the account exists as soon
+      // as signUp succeeds, so the password manager save prompt must
+      // fire here too.
+      final client = _FakeApiClient()..needsEmailConfirmation = true;
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'new@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      tester.testTextInput.log.clear();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(
+        tester.testTextInput.log.map((c) => c.method),
+        contains('TextInput.finishAutofillContext'),
+      );
+    });
+
+    testWidgets('a blocked sign-up does not commit the autofill context',
+        (tester) async {
+      // Mismatched pair → no account created → no save prompt.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await submitPair(tester, 'runner123', 'runenr123');
+      tester.testTextInput.log.clear();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(client.capturedEmail, isNull);
+      expect(
+        tester.testTextInput.log.map((c) => c.method),
+        isNot(contains('TextInput.finishAutofillContext')),
+      );
     });
 
     // ─────────── Apple fail-closed gate (#241) ───────────

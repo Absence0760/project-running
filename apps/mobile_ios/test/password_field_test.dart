@@ -47,5 +47,37 @@ void main() {
       expect(_field(tester).obscureText, isTrue);
       expect(find.byTooltip('Show password'), findsOneWidget);
     });
+
+    testWidgets(
+        'forwards autofill hints, keyboard action, focus node and onSubmitted',
+        (tester) async {
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      String? submitted;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PasswordField(
+              controller: TextEditingController(),
+              labelText: 'Password',
+              focusNode: focus,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (v) => submitted = v,
+            ),
+          ),
+        ),
+      );
+      final field = _field(tester);
+      expect(field.focusNode, same(focus));
+      expect(field.autofillHints, contains(AutofillHints.newPassword));
+      expect(field.textInputAction, TextInputAction.done);
+      await tester.enterText(find.byType(TextField), 'hunter2secret');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(submitted, 'hunter2secret');
+    });
   });
 }

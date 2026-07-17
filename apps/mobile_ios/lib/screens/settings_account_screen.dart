@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:api_client/api_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -338,54 +339,69 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     final l10n = AppLocalizations.of(context);
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
+    final confirmFocus = FocusNode();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         String? error;
         return StatefulBuilder(
-          builder: (ctx, setInner) => AlertDialog(
-            title: Text(l10n.settingsAccountChangePassword),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                PasswordField(
-                  controller: pwdCtl,
-                  labelText: l10n.settingsAccountNewPassword,
+          builder: (ctx, setInner) {
+            void submit() {
+              if (pwdCtl.text.length < kPasswordMinLength) {
+                setInner(() => error =
+                    l10n.authErrorPasswordTooShort(kPasswordMinLength));
+                return;
+              }
+              if (pwdCtl.text != confirmCtl.text) {
+                setInner(
+                    () => error = l10n.settingsAccountPasswordsMismatch);
+                return;
+              }
+              Navigator.pop(ctx, true);
+            }
+
+            return AlertDialog(
+              title: Text(l10n.settingsAccountChangePassword),
+              content: AutofillGroup(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PasswordField(
+                      controller: pwdCtl,
+                      labelText: l10n.settingsAccountNewPassword,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => confirmFocus.requestFocus(),
+                    ),
+                    const SizedBox(height: 8),
+                    PasswordField(
+                      controller: confirmCtl,
+                      focusNode: confirmFocus,
+                      labelText: l10n.settingsAccountConfirm,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(error!,
+                          style: const TextStyle(color: Colors.red)),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 8),
-                PasswordField(
-                  controller: confirmCtl,
-                  labelText: l10n.settingsAccountConfirm,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(l10n.settingsAccountCancel),
                 ),
-                if (error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(error!, style: const TextStyle(color: Colors.red)),
-                ],
+                FilledButton(
+                  onPressed: submit,
+                  child: Text(l10n.settingsAccountSave),
+                ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(l10n.settingsAccountCancel),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (pwdCtl.text.length < kPasswordMinLength) {
-                    setInner(() => error =
-                        l10n.authErrorPasswordTooShort(kPasswordMinLength));
-                    return;
-                  }
-                  if (pwdCtl.text != confirmCtl.text) {
-                    setInner(
-                        () => error = l10n.settingsAccountPasswordsMismatch);
-                    return;
-                  }
-                  Navigator.pop(ctx, true);
-                },
-                child: Text(l10n.settingsAccountSave),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -395,6 +411,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       final api = widget.apiClient;
       if (api == null) throw Exception('Not authenticated');
       await api.updatePassword(pwdCtl.text);
+      // Commits the autofill session so the platform password manager
+      // offers to update the stored credential.
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       showTopBanner(context, l10n.settingsAccountPasswordUpdated);
     } catch (e) {

@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -30,6 +31,7 @@ class SignInScreen extends StatefulWidget {
 class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _loading = false;
   String? _error;
 
@@ -42,6 +44,7 @@ class _SignInScreenState extends State<SignInScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -56,6 +59,9 @@ class _SignInScreenState extends State<SignInScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      // Commits the autofill session so the platform password manager
+      // offers to save the credentials that just worked.
+      TextInput.finishAutofillContext();
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -330,20 +336,36 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: l10n.authEmailLabel,
-                  border: const OutlineInputBorder(),
+              AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                      decoration: InputDecoration(
+                        labelText: l10n.authEmailLabel,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    PasswordField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      labelText: l10n.authPasswordLabel,
+                      border: const OutlineInputBorder(),
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) {
+                        if (!_loading) _signIn();
+                      },
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              PasswordField(
-                controller: _passwordController,
-                labelText: l10n.authPasswordLabel,
-                border: const OutlineInputBorder(),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
