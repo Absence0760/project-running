@@ -15,6 +15,7 @@ import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/dashboard_screen.dart';
 import '../lib/training_service.dart';
+import '../lib/widgets/mileage_trend_card.dart';
 
 /// Signed-in fake so the gated coach entry renders.
 class _FakeApi extends ApiClient {
@@ -851,6 +852,143 @@ void main() {
         } finally {
           dir.deleteSync(recursive: true);
         }
+      });
+    });
+
+    group('expanded (tablet) layout', () {
+      const leadRowKey = Key('dashboardExpandedLeadRow');
+      const chartColumnsKey = Key('dashboardExpandedChartColumns');
+
+      Finder contentCap() => find.byWidgetPredicate(
+          (w) => w is ConstrainedBox && w.constraints.maxWidth == 1100);
+
+      Future<void> pumpSeeded(
+        WidgetTester tester,
+        Directory dir, {
+        TrainingService? training,
+      }) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final seedStore = LocalRunStore();
+        await seedStore.init(overrideDirectory: dir);
+        await seedStore.save(_run(id: 'r1'));
+
+        final runStore = LocalRunStore();
+        await runStore.init(overrideDirectory: dir);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: DashboardScreen(
+              runStore: runStore,
+              routeStore: LocalRouteStore(),
+              gymStore: LocalGymStore(),
+              foodStore: LocalFoodStore(),
+              preferences: prefs,
+              training: training,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        await tester.pump();
+      }
+
+      testWidgets(
+          'expanded width caps content and pairs lead cards + chart columns',
+          (tester) async {
+        // 2560x1440 physical at DPR 2 → 1280x720 logical: a 10" tablet
+        // in landscape, WidthClass.expanded.
+        tester.view.physicalSize = const Size(2560, 1440);
+        tester.view.devicePixelRatio = 2.0;
+        addTearDown(tester.view.reset);
+
+        await tester.runAsync(() async {
+          final dir =
+              Directory.systemTemp.createTempSync('dashboard_expanded_');
+          try {
+            await pumpSeeded(tester, dir,
+                training: _FakeTraining(_overviewWithTodayWorkout()));
+
+            expect(contentCap(), findsOneWidget);
+            // Today's workout and Goals share the lead row instead of
+            // stacking full-width.
+            expect(find.byKey(leadRowKey), findsOneWidget);
+            expect(
+              find.descendant(
+                  of: find.byKey(leadRowKey),
+                  matching: find.text("TODAY'S WORKOUT")),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                  of: find.byKey(leadRowKey), matching: find.text('Goals')),
+              findsOneWidget,
+            );
+
+            // The chart cards flow into the two-column grid below the
+            // stat strip.
+            await tester.scrollUntilVisible(find.byKey(chartColumnsKey), 300,
+                scrollable: find.byType(Scrollable).first);
+            expect(find.byKey(chartColumnsKey), findsOneWidget);
+            expect(
+              find.descendant(
+                  of: find.byKey(chartColumnsKey),
+                  matching: find.byType(MileageTrendCard)),
+              findsOneWidget,
+            );
+          } finally {
+            dir.deleteSync(recursive: true);
+          }
+        });
+      });
+
+      testWidgets(
+          'expanded with no lead cards renders goals full-width (no empty cell)',
+          (tester) async {
+        tester.view.physicalSize = const Size(2560, 1440);
+        tester.view.devicePixelRatio = 2.0;
+        addTearDown(tester.view.reset);
+
+        await tester.runAsync(() async {
+          final dir =
+              Directory.systemTemp.createTempSync('dashboard_expanded_lead_');
+          try {
+            // No training service + empty gym/food stores → no workout
+            // card and no modality cards, so the lead row must not
+            // mount at all (a grid cell can't reserve space for a
+            // hidden card).
+            await pumpSeeded(tester, dir);
+            expect(find.byKey(leadRowKey), findsNothing);
+            expect(find.text('Goals'), findsOneWidget);
+            expect(contentCap(), findsOneWidget);
+          } finally {
+            dir.deleteSync(recursive: true);
+          }
+        });
+      });
+
+      testWidgets('default (medium) surface keeps the stacked layout',
+          (tester) async {
+        // The flutter_test default surface is 800dp logical — medium,
+        // which must stay on the phone composition.
+        await tester.runAsync(() async {
+          final dir =
+              Directory.systemTemp.createTempSync('dashboard_stacked_');
+          try {
+            await pumpSeeded(tester, dir);
+            expect(find.byKey(leadRowKey), findsNothing);
+            expect(find.byKey(chartColumnsKey), findsNothing);
+            expect(contentCap(), findsNothing);
+            expect(find.text('Goals'), findsOneWidget);
+            expect(find.text('WEEK'), findsOneWidget);
+          } finally {
+            dir.deleteSync(recursive: true);
+          }
+        });
       });
     });
 

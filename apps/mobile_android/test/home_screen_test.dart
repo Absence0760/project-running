@@ -333,4 +333,51 @@ void main() {
       expect(find.byType(SetupWizardScreen), findsOneWidget);
     });
   });
+
+  group('HomeScreen expanded (tablet) shell', () {
+    testWidgets('expanded swaps the BottomAppBar for a NavigationRail',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final s = await _makeStores();
+      await _pump(tester, s);
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byType(BottomAppBar), findsNothing);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.text('Home'), findsWidgets);
+      expect(find.text('Fitness'), findsOneWidget);
+    });
+
+    testWidgets('rail destinations navigate and the Log FAB fans the dial',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final s = await _makeStores();
+      await _pump(tester, s);
+      await tester.tap(find.text('Fitness'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Runs'), findsWidgets);
+      // The Fitness page contributes its own Add-run FAB, so scope to the
+      // rail's Log tooltip.
+      await tester.tap(find.byTooltip('Log'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byTooltip('Log food'), findsOneWidget);
+      final fab = tester.getCenter(find.byTooltip('Log'));
+      final item = tester.getCenter(find.byTooltip('Log food'));
+      expect(item.dx, greaterThan(fab.dx));
+      await tester.tapAt(const Offset(1200, 700));
+      await tester.pump();
+    });
+
+    testWidgets('medium width keeps the phone shell', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byType(BottomAppBar), findsOneWidget);
+    });
+  });
 }

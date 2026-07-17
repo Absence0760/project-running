@@ -528,6 +528,90 @@ void main() {
     });
   });
 
+  group('RunsScreen expanded (tablet) layout', () {
+    Future<LocalRunStore> seedThirty() async {
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_grid_');
+      // ignore: invalid_use_of_visible_for_testing_member
+      return LocalRunStore()..debugSeed(_makeRuns(30), dir: _runsDir!);
+    }
+
+    Future<void> pumpSized(WidgetTester tester, LocalRunStore runStore) async {
+      final prefs = Preferences();
+      await prefs.init();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    testWidgets('run-list mode renders the rows as a card grid at ≥840dp',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final runStore = await seedThirty();
+      await pumpSized(tester, runStore);
+
+      // The grid recomposition replaces the single-column ListView.
+      expect(find.byType(SliverGrid), findsWidgets);
+      expect(find.byType(ListView), findsNothing);
+      // Tiles flow into columns: the first two rows sit side by side at
+      // the same vertical offset (impossible in the single-column list).
+      final tiles = find.byType(ListTile);
+      expect(tiles, findsAtLeastNWidgets(2));
+      final first = tester.getTopLeft(tiles.at(0));
+      final second = tester.getTopLeft(tiles.at(1));
+      expect(second.dy, first.dy);
+      expect(second.dx, greaterThan(first.dx));
+
+      // Load-more still surfaces below the grid and reveals the rest.
+      await tester.scrollUntilVisible(
+        find.text('Load 20 more'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Load 20 more'));
+      await tester.pump();
+      expect(find.text('Load 20 more'), findsNothing);
+    });
+
+    testWidgets('long-press on a grid tile still enters selection mode',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final runStore = await seedThirty();
+      await pumpSized(tester, runStore);
+
+      await tester.longPress(find.byType(ListTile).first);
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+    });
+
+    testWidgets('medium width keeps the single-column list (no grid)',
+        (tester) async {
+      // Default flutter_test surface is 800dp logical — WidthClass.medium.
+      final runStore = await seedThirty();
+      await pumpSized(tester, runStore);
+
+      expect(find.byType(SliverGrid), findsNothing);
+      expect(find.byType(ListView), findsOneWidget);
+    });
+  });
+
   group('RunsScreen filter persistence', () {
     testWidgets('hydrates custom date range from SharedPreferences on mount',
         (tester) async {
