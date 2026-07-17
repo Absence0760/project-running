@@ -412,6 +412,56 @@ None of this sends in prod until an operator:
    code path is built and fail-closed (SMTP unset → nothing sends, and even
    with SMTP every recipient is hard-gated on the per-stream opt-IN pref + the
    suppression block).
+6. (For the **sender brand logo**, BIMI — issue #211) so inbox clients render
+   the Threkir mark next to `noreply@threkir.com` instead of a generic letter
+   avatar. See § Sender brand logo (BIMI) below for the two fail-closed gates.
+
+## Sender brand logo (BIMI)
+
+Mail from `noreply@threkir.com` (both the Go worker's product mail and the
+`auth-email` GoTrue leg) shows a generic letter avatar in inboxes because the
+domain publishes no [BIMI](https://bimigroup.org/) record. BIMI (Brand
+Indicators for Message Identification) is a display-only DNS hint: a `TXT`
+record at `default._bimi.threkir.com` points at a hosted SVG logo, and a
+conforming inbox renders it beside authenticated mail.
+
+The code side is built and committed:
+
+- **Logo asset** — `apps/web/static/bimi-logo.svg`, served at
+  `https://threkir.com/bimi-logo.svg` off the apex CloudFront distribution.
+  It conforms to the **SVG Tiny 1.2 Portable/Secure (SVG P/S)** profile BIMI
+  requires: `version="1.2"` + `baseProfile="tiny-ps"`, a `<title>`, a square
+  `viewBox`, a solid (non-transparent) background, and no scripts / external
+  references / animation. It reuses the brand mark from `logo-mark.svg`; if a
+  dedicated brand-approved BIMI SVG is later produced it should replace this
+  file at the same path (the DNS record is unaffected).
+- **DNS record** — the `bimi` entry in `infra/dns/terraform.tfvars`
+  (`email_auth_records`), Terraformed alongside the SPF/DKIM/DMARC set so a DR
+  rebuild restores it: `v=BIMI1; l=https://threkir.com/bimi-logo.svg;`.
+
+**Two fail-closed prerequisites gate an actual logo render — neither is code:**
+
+1. **DMARC at enforcement — CURRENTLY A BLOCKER.** BIMI requires the domain's
+   DMARC policy to be at enforcement (`p=quarantine` or `p=reject`) and **not**
+   `sp=none`. The Terraformed `_dmarc.threkir.com` record is still
+   **`v=DMARC1; p=none;`** (its inline note plans a tighten to `p=quarantine`
+   once Resend + Migadu have authenticated for 48h+). Until DMARC is raised,
+   **no mailbox provider will honour the BIMI record** — the logo will not
+   appear regardless of the record or the VMC. This is left at `p=none`
+   deliberately: raising DMARC enforcement can bounce/quarantine legitimate
+   mail if SPF/DKIM alignment isn't already passing for every sender on the
+   domain, so it must be a deliberate, monitored change (watch aggregate/`rua`
+   reports first), not a side effect of shipping BIMI. **Do not flip it to
+   `p=quarantine`/`p=reject` until alignment is confirmed passing.**
+2. **Verified Mark Certificate (VMC) — paid, deploy-gate.** Gmail and other
+   VMC-requiring inboxes additionally need a paid VMC (a trademark-backed
+   certificate from a BIMI-authorized CA, e.g. Entrust/DigiCert; requires a
+   registered trademark on the logo). The `a=` field of the BIMI record is left
+   **unset** until the VMC PEM is purchased and hosted — then it's appended:
+   `… l=…; a=https://threkir.com/bimi-vmc.pem;`. With `a=` unset, the logo still
+   renders in clients that don't demand a VMC; Gmail lights up only once `a=`
+   is filled. This is fail-closed by construction — record the VMC purchase +
+   `a=` fill as a pre-deploy checklist item, not a "blocked" stub.
 
 ## Where the code lives
 
