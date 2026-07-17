@@ -10,6 +10,7 @@ class MainActivity : FlutterActivity() {
         WearAuthBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         WearRoutesBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         RunNotificationBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
+        BatterySettingsBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         // #14: the activity may have just been (re)launched by tapping a
         // Pause/Resume/Stop button on the run notification — forward that
         // action to Dart now that the engine + bridge exist.
