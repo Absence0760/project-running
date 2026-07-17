@@ -2190,6 +2190,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailMakePublic => 'Tornar pública';
 
   @override
+  String get runDetailMakePrivate => 'Tornar privada';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Tornar esta corrida privada?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'O link público de partilha e a página de espectadores ao vivo deixarão de funcionar. Quem abrir um link antigo deixará de ver esta corrida.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Não foi possível tornar a corrida privada: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'A corrida agora é privada';
+
+  @override
   String get runDetailDeleteTitle => 'Excluir corrida?';
 
   @override
@@ -13485,6 +13503,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailMakePublic => 'Tornar pública';
+
+  @override
+  String get runDetailMakePrivate => 'Tornar privada';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Tornar esta corrida privada?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'O link público de compartilhamento e a página de espectadores ao vivo deixarão de funcionar. Quem abrir um link antigo não verá mais esta corrida.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Não foi possível tornar a corrida privada: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'A corrida agora é privada';
 
   @override
   String get runDetailDeleteTitle => 'Excluir corrida?';

@@ -2200,6 +2200,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailMakePublic => 'Rendre publique';
 
   @override
+  String get runDetailMakePrivate => 'Rendre privée';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Rendre cette course privée ?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'Le lien de partage public et la page des spectateurs en direct cesseront de fonctionner. Toute personne ouvrant un ancien lien ne verra plus cette course.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Impossible de rendre la course privée : $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'La course est désormais privée';
+
+  @override
   String get runDetailDeleteTitle => 'Supprimer la course ?';
 
   @override

@@ -2197,6 +2197,24 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailMakePublic => 'Öffentlich machen';
 
   @override
+  String get runDetailMakePrivate => 'Privat machen';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Diesen Lauf privat machen?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'Der öffentliche Freigabelink und die Live-Zuschauerseite funktionieren dann nicht mehr. Wer einen alten Link öffnet, sieht diesen Lauf nicht mehr.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Lauf konnte nicht privat gemacht werden: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'Der Lauf ist jetzt privat';
+
+  @override
   String get runDetailDeleteTitle => 'Lauf löschen?';
 
   @override

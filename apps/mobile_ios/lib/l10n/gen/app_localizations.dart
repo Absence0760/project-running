@@ -3761,6 +3761,36 @@ abstract class AppLocalizations {
   /// **'Make public'**
   String get runDetailMakePublic;
 
+  /// Overflow-menu action + confirm button that flips a shared run back to private
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get runDetailMakePrivate;
+
+  /// Title of the make-run-private confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make this run private?'**
+  String get runDetailMakePrivateTitle;
+
+  /// Body of the make-run-private confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'The public share link and the live spectator page will stop working. Anyone opening an old link will no longer see this run.'**
+  String get runDetailMakePrivateBody;
+
+  /// Banner shown when flipping a run back to private fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not make run private: {error}'**
+  String runDetailMakePrivateFailed(String error);
+
+  /// Banner shown after a run was flipped back to private
+  ///
+  /// In en, this message translates to:
+  /// **'Run is now private'**
+  String get runDetailMadePrivate;
+
   /// Title of the single-run delete confirmation dialog
   ///
   /// In en, this message translates to:

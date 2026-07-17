@@ -2175,6 +2175,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailMakePublic => 'Make public';
 
   @override
+  String get runDetailMakePrivate => 'Make private';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Make this run private?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'The public share link and the live spectator page will stop working. Anyone opening an old link will no longer see this run.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Could not make run private: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'Run is now private';
+
+  @override
   String get runDetailDeleteTitle => 'Delete run?';
 
   @override

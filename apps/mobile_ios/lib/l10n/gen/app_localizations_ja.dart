@@ -2088,6 +2088,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailMakePublic => '公開する';
 
   @override
+  String get runDetailMakePrivate => '非公開にする';
+
+  @override
+  String get runDetailMakePrivateTitle => 'このランを非公開にしますか？';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      '公開共有リンクとライブ観戦ページは利用できなくなります。古いリンクを開いてもこのランは表示されません。';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'ランを非公開にできませんでした: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'ランは非公開になりました';
+
+  @override
   String get runDetailDeleteTitle => 'ランを削除しますか？';
 
   @override
