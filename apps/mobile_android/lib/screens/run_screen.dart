@@ -57,6 +57,7 @@ import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/ghost_pacer.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/safety_nudge_banner.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/upcoming_event_card.dart';
@@ -416,6 +417,11 @@ class _RunScreenState extends State<RunScreen> {
   // (the detector also latches once-per-run).
   OffRouteAlertDetector? _offRouteAlertDetector;
   bool _offRouteAlertFiring = false;
+
+  // Solo-safety nudge — a persistent, dismissible in-tree banner (not a
+  // transient toast) so it can't be missed. Set true by _maybeShowSafetyNudge
+  // at run start; cleared when the runner acts.
+  bool _safetyNudgeVisible = false;
 
   // Distance remaining on selected route
   double? _routeRemaining;
@@ -1217,13 +1223,15 @@ class _RunScreenState extends State<RunScreen> {
     }));
   }
 
-  /// One-time (throttled) dismissible prompt to share a live link when a
-  /// solo run starts after dark with no live share attached — the
-  /// safety-net gap for runners who never turned on auto-live-share
-  /// (docs/features/safety.md, persona-woman). The decision is the pure
-  /// `shouldNudgeSoloSafety` twin; this method only gathers inputs,
-  /// surfaces the banner, and stamps the throttle pref. Entirely L4:
-  /// wrapped so any failure here can never disturb the recording.
+  /// Throttled, dismissible prompt to share a live link when a solo run
+  /// starts after dark with no live share attached — the safety-net gap
+  /// for runners who never turned on auto-live-share (docs/features/safety.md,
+  /// persona-woman). The decision is the pure `shouldSurfaceSoloSafetyNudge`
+  /// twin; this method only gathers inputs and flips the persistent-banner
+  /// flag. The banner stays until the runner acts (`_onSafetyNudgeShare` /
+  /// `_dismissSafetyNudge`), and only an action stamps the throttle — a
+  /// missed nudge is never suppressed. Entirely L4: wrapped so any failure
+  /// here can never disturb the recording.
   void _maybeShowSafetyNudge() {
     try {
       final service = widget.settingsSync?.service;
@@ -1232,38 +1240,52 @@ class _RunScreenState extends State<RunScreen> {
       if (service == null) return;
 
       final now = DateTime.now();
-      final nowMs = now.millisecondsSinceEpoch;
       final dismissedIso =
           service.effective<String>(SettingsKeys.safetyNudgeDismissedAt);
-      final dismissedAtMs =
+      final lastActedAtMs =
           DateTime.tryParse(dismissedIso ?? '')?.millisecondsSinceEpoch;
 
-      final should = shouldNudgeSoloSafety(SoloSafetyNudgeInput(
+      final should = shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput(
         nowLocalMinutes: now.hour * 60 + now.minute,
         autoLiveShareOn: _autoLiveShareEnabled,
         isBroadcast: _liveBroadcaster?.isActive ?? false,
-        nudgeDismissed: nudgeThrottled(dismissedAtMs, nowMs),
+        lastActedAtMs: lastActedAtMs,
+        nowMs: now.millisecondsSinceEpoch,
       ));
       if (!should || !mounted) return;
 
-      // Stamp the throttle window as soon as it's surfaced — the banner
-      // is transient and dismissible, so "shown once" is the throttle
-      // anchor. Fire-and-forget; a failed write just means it may
-      // resurface next run, which is the safe direction.
-      service.updateDevice(
-        {SettingsKeys.safetyNudgeDismissedAt: now.toUtc().toIso8601String()},
-      ).catchError((Object e) {
-        debugPrint('safety nudge stamp failed: $e');
-      });
-
-      _showTopBanner(
-        _l10n.runSafetyNudgeSolo,
-        duration: const Duration(seconds: 6),
-        actionLabel: _l10n.runSafetyNudgeShareAction,
-        onAction: () => unawaited(_shareLiveLink()),
-      );
+      setState(() => _safetyNudgeVisible = true);
     } catch (e) {
       debugPrint('safety nudge failed: $e');
+    }
+  }
+
+  /// "Share" action on the persistent safety banner: stamp the throttle,
+  /// hide the banner, and share the live link.
+  void _onSafetyNudgeShare() {
+    _dismissSafetyNudge();
+    unawaited(_shareLiveLink());
+  }
+
+  /// "Not now" action (or any acted-on dismissal) on the persistent safety
+  /// banner: hide it and stamp the throttle so it stays suppressed for the
+  /// window. Stamping ONLY on an action (not on show) is the fix — a nudge
+  /// the runner never engaged with must resurface next dark solo run.
+  void _dismissSafetyNudge() {
+    if (mounted) setState(() => _safetyNudgeVisible = false);
+    try {
+      final service = widget.settingsSync?.service;
+      if (service == null) return;
+      // Fire-and-forget; a failed write just risks re-surfacing next run,
+      // which is the safe direction.
+      service.updateDevice({
+        SettingsKeys.safetyNudgeDismissedAt:
+            DateTime.now().toUtc().toIso8601String(),
+      }).catchError((Object e) {
+        debugPrint('safety nudge stamp failed: $e');
+      });
+    } catch (e) {
+      debugPrint('safety nudge stamp failed: $e');
     }
   }
 
@@ -2669,6 +2691,7 @@ class _RunScreenState extends State<RunScreen> {
       _offRouteWarned = false;
       _offRouteAlertDetector = null;
       _offRouteAlertFiring = false;
+      _safetyNudgeVisible = false;
       _routeRemaining = null;
       _lastPaceAlertAt = null;
     });
@@ -3424,6 +3447,21 @@ class _RunScreenState extends State<RunScreen> {
             );
           },
         ),
+
+        // Solo-run safety nudge — a persistent, dismissible action card
+        // (not a 6-second toast) so an after-dark solo runner can't miss
+        // it. Sits below the compact status banners. Acting on it (Share /
+        // Not now) stamps the throttle; merely showing it does not.
+        if (_safetyNudgeVisible)
+          Positioned(
+            top: 108,
+            left: 12,
+            right: 12,
+            child: SafetyNudgeBanner(
+              onShare: _onSafetyNudgeShare,
+              onDismiss: _dismissSafetyNudge,
+            ),
+          ),
         if (_permissionLost)
           Positioned(
             top: 60,
