@@ -2199,6 +2199,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailDeleteBody => 'This cannot be undone.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Couldn\'t delete from the cloud; the run is kept for now — will retry when back online.';
+
+  @override
   String get runDetailSuggestLink => 'Link';
 
   @override

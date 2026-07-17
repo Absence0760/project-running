@@ -615,6 +615,7 @@
   "runDetailMadePrivate": "ランは非公開になりました",
   "runDetailDeleteTitle": "ランを削除しますか？",
   "runDetailDeleteBody": "この操作は元に戻せません。",
+  "runDetailDeleteQueued": "クラウドから削除できませんでした。ランは一時的に保持され、オンライン復帰時に再試行します。",
   "runDetailSuggestLink": "リンク",
   "runDetailSuggestDismiss": "閉じる",
   "runDetailSuggestRanRoute": "走ったのは ",

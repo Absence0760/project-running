@@ -3803,6 +3803,12 @@ abstract class AppLocalizations {
   /// **'This cannot be undone.'**
   String get runDetailDeleteBody;
 
+  /// Banner shown when the cloud-side delete of a run fails: the run stays on the device and the delete is queued for the sync retry
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete from the cloud; the run is kept for now — will retry when back online.'**
+  String get runDetailDeleteQueued;
+
   /// Confirm action on the auto-link route-suggestion banner
   ///
   /// In en, this message translates to:
