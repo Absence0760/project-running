@@ -1135,6 +1135,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runShareLiveLink => 'Compartilhar link ao vivo';
 
   @override
+  String get runLiveShareNeedsSignIn =>
+      'Inicie sessão para partilhar uma ligação de rastreio em direto.';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'Não foi possível iniciar o rastreio em direto — toque em Partilhar para tentar novamente.';
+
+  @override
   String get runTrainingPlans => 'Planos de treino';
 
   @override
@@ -12452,6 +12460,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runShareLiveLink => 'Compartilhar link ao vivo';
+
+  @override
+  String get runLiveShareNeedsSignIn =>
+      'Faça login para compartilhar um link de rastreamento ao vivo.';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'Não foi possível iniciar o rastreamento ao vivo — toque em Compartilhar para tentar novamente.';
 
   @override
   String get runTrainingPlans => 'Planos de treino';

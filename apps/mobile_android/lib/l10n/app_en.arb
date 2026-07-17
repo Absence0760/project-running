@@ -1508,6 +1508,14 @@
   "@runShareLiveLink": {
     "description": "Idle-screen button that shares a live spectator link for the run"
   },
+  "runLiveShareNeedsSignIn": "Sign in to share a live tracking link.",
+  "@runLiveShareNeedsSignIn": {
+    "description": "Shown when a signed-out user tries to share a live tracking link, which cannot broadcast"
+  },
+  "runLiveShareNotStarted": "Live tracking couldn't start — tap Share to retry.",
+  "@runLiveShareNotStarted": {
+    "description": "Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead"
+  },
   "runTrainingPlans": "Training plans",
   "@runTrainingPlans": {
     "description": "Idle-screen button opening the training-plans list when no active plan exists"

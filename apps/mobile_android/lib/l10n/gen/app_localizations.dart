@@ -2033,6 +2033,18 @@ abstract class AppLocalizations {
   /// **'Share live link'**
   String get runShareLiveLink;
 
+  /// Shown when a signed-out user tries to share a live tracking link, which cannot broadcast
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to share a live tracking link.'**
+  String get runLiveShareNeedsSignIn;
+
+  /// Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead
+  ///
+  /// In en, this message translates to:
+  /// **'Live tracking couldn\'t start — tap Share to retry.'**
+  String get runLiveShareNotStarted;
+
   /// Idle-screen button opening the training-plans list when no active plan exists
   ///
   /// In en, this message translates to:

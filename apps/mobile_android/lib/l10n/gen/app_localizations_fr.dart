@@ -1140,6 +1140,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runShareLiveLink => 'Partager le lien en direct';
 
   @override
+  String get runLiveShareNeedsSignIn =>
+      'Connectez-vous pour partager un lien de suivi en direct.';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'Le suivi en direct n\'a pas pu démarrer — appuyez sur Partager pour réessayer.';
+
+  @override
   String get runTrainingPlans => 'Plans d\'entraînement';
 
   @override
