@@ -87,6 +87,27 @@ class RunNotificationBridge(
                 post(title, text, bigText, paused)
                 result.success(null)
             }
+            "update_split" -> {
+                @Suppress("UNCHECKED_CAST")
+                val args = call.arguments as? Map<String, Any?>
+                if (args == null) {
+                    result.error("bad_args", "update_split needs a Map", null)
+                    return
+                }
+                if (!hasPostNotificationsPermission()) {
+                    result.error(
+                        "no_permission",
+                        "POST_NOTIFICATIONS not granted",
+                        null,
+                    )
+                    return
+                }
+                val title = args["title"] as? String
+                    ?: context.getString(R.string.run_notif_title_fallback)
+                val text = args["text"] as? String ?: ""
+                postSplit(title, text)
+                result.success(null)
+            }
             "ready" -> {
                 dartReady = true
                 pendingAction?.let { methodChannel.invokeMethod("action", it) }
@@ -94,8 +115,14 @@ class RunNotificationBridge(
                 result.success(null)
             }
             "clear" -> {
+                val nm = NotificationManagerCompat.from(context)
+                nm.cancel(GEOLOCATOR_NOTIFICATION_ID)
+                nm.cancel(SPLIT_NOTIFICATION_ID)
+                result.success(null)
+            }
+            "clear_split" -> {
                 NotificationManagerCompat.from(context)
-                    .cancel(GEOLOCATOR_NOTIFICATION_ID)
+                    .cancel(SPLIT_NOTIFICATION_ID)
                 result.success(null)
             }
             else -> result.notImplemented()
@@ -165,17 +192,46 @@ class RunNotificationBridge(
         )
     }
 
-    private fun post(title: String, text: String, bigText: String?, paused: Boolean) {
-        // Tapping the notification body returns the user to MainActivity.
+    /// PendingIntent that returns the user to MainActivity when the
+    /// notification body is tapped.
+    private fun openAppIntent(): PendingIntent {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val pending = PendingIntent.getActivity(
+        return PendingIntent.getActivity(
             context,
             0,
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+    }
+
+    /// Post the per-split notification (#303). Always the SAME fixed id
+    /// — distinct from the ongoing run row — so a new split replaces the
+    /// previous one in place instead of stacking one row per kilometre.
+    /// Non-ongoing + auto-cancel + timed-out: the row dismisses itself
+    /// and never demands a manual swipe. Run start / stop cancel it so
+    /// a split can't outlive its run.
+    private fun postSplit(title: String, text: String) {
+        val builder = NotificationCompat.Builder(context, GEOLOCATOR_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setTimeoutAfter(SPLIT_TIMEOUT_MS)
+            .setContentIntent(openAppIntent())
+        NotificationManagerCompat.from(context)
+            .notify(SPLIT_NOTIFICATION_ID, builder.build())
+    }
+
+    private fun post(title: String, text: String, bigText: String?, paused: Boolean) {
+        val pending = openAppIntent()
 
         val builder = NotificationCompat.Builder(context, GEOLOCATOR_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -237,6 +293,12 @@ class RunNotificationBridge(
         // stops applying silently — update here if you see a second row.
         private const val GEOLOCATOR_CHANNEL_ID = "geolocator_channel_01"
         private const val GEOLOCATOR_NOTIFICATION_ID = 75415
+
+        // #303: the per-split row. Any fixed id distinct from the
+        // geolocator ongoing id works — fixed is the point: every split
+        // replaces the previous row instead of stacking.
+        private const val SPLIT_NOTIFICATION_ID = 75416
+        private const val SPLIT_TIMEOUT_MS = 20_000L
 
         // #14: notification-action plumbing. MainActivity reads
         // EXTRA_RUN_ACTION off a relaunch intent and forwards it here.

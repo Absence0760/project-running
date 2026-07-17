@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { englishBadge, type AchievementTier } from '$lib/social/badges';
@@ -34,33 +35,35 @@
 	<meta name="twitter:description" content={description} />
 </svelte:head>
 
-<main class="share-badge">
-	{#if hasBadge}
-		<div class="badge-card tier-{tier}">
-			<span class="badge-icon material-symbols" aria-hidden="true">{resolved?.icon}</span>
-			<h1 class="badge-label">{label}</h1>
-			<p class="badge-desc">{resolved?.desc}</p>
-			<span class="badge-tier">{tier.toUpperCase()}</span>
-			{#if data.displayName}
-				<p class="badge-by">{data.displayName}</p>
-			{/if}
-			{#if earned}
-				<p class="badge-date">{m('badges.earnedOn', { date: earned })}</p>
-			{/if}
-		</div>
-	{:else}
-		<div class="badge-card not-found">
-			<span class="badge-icon material-symbols" aria-hidden="true">military_tech</span>
-			<h1 class="badge-label">{m('badges.section.title')}</h1>
-			<p class="badge-desc">{m('badges.notFound')}</p>
-		</div>
-	{/if}
-	<a class="cta" href={auth.loggedIn ? '/dashboard' : '/'}>{m('badges.shareCta')}</a>
-</main>
+<SharePageShell>
+	<main class="share-badge">
+		{#if hasBadge}
+			<div class="badge-card tier-{tier}">
+				<span class="badge-icon material-symbols" aria-hidden="true">{resolved?.icon}</span>
+				<h1 class="badge-label">{label}</h1>
+				<p class="badge-desc">{resolved?.desc}</p>
+				<span class="badge-tier">{tier.toUpperCase()}</span>
+				{#if data.displayName}
+					<p class="badge-by">{data.displayName}</p>
+				{/if}
+				{#if earned}
+					<p class="badge-date">{m('badges.earnedOn', { date: earned })}</p>
+				{/if}
+			</div>
+		{:else}
+			<div class="badge-card not-found">
+				<span class="badge-icon material-symbols" aria-hidden="true">military_tech</span>
+				<h1 class="badge-label">{m('badges.section.title')}</h1>
+				<p class="badge-desc">{m('badges.notFound')}</p>
+			</div>
+		{/if}
+		<a class="cta" href={auth.loggedIn ? '/dashboard' : '/'}>{m('badges.shareCta')}</a>
+	</main>
+</SharePageShell>
 
 <style>
 	.share-badge {
-		min-height: 100vh;
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;

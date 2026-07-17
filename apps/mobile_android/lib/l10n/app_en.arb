@@ -546,6 +546,14 @@
   "@peopleFollowButton": {
     "description": "Follow-toggle button label when not following the person"
   },
+  "peopleSignedOutMessage": "Sign in to search for and follow other runners.",
+  "@peopleSignedOutMessage": {
+    "description": "Body of the signed-out state on the People screen; people search is auth-gated so a signed-out search can only fail"
+  },
+  "peopleSuggestionsLoadFailed": "Could not load suggestions.",
+  "@peopleSuggestionsLoadFailed": {
+    "description": "Error-state message when the suggested-people list fails to load"
+  },
   "readinessCardHeader": "READINESS",
   "@readinessCardHeader": {
     "description": "Header label on the dashboard readiness-to-run card"
@@ -2930,6 +2938,31 @@
   "runDetailMakePublic": "Make public",
   "@runDetailMakePublic": {
     "description": "Confirm action in the make-run-public dialog"
+  },
+  "runDetailMakePrivate": "Make private",
+  "@runDetailMakePrivate": {
+    "description": "Overflow-menu action + confirm button that flips a shared run back to private"
+  },
+  "runDetailMakePrivateTitle": "Make this run private?",
+  "@runDetailMakePrivateTitle": {
+    "description": "Title of the make-run-private confirmation dialog"
+  },
+  "runDetailMakePrivateBody": "The public share link and the live spectator page will stop working. Anyone opening an old link will no longer see this run.",
+  "@runDetailMakePrivateBody": {
+    "description": "Body of the make-run-private confirmation dialog"
+  },
+  "runDetailMakePrivateFailed": "Could not make run private: {error}",
+  "@runDetailMakePrivateFailed": {
+    "description": "Banner shown when flipping a run back to private fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailMadePrivate": "Run is now private",
+  "@runDetailMadePrivate": {
+    "description": "Banner shown after a run was flipped back to private"
   },
   "runDetailDeleteTitle": "Delete run?",
   "@runDetailDeleteTitle": {
@@ -11588,6 +11621,10 @@
   "planPhaseRace": "Race week",
   "@planPhaseRace": {
     "description": "Training plan phase label: race week"
+  },
+  "planPhaseGraduation": "Graduation week",
+  "@planPhaseGraduation": {
+    "description": "Training plan phase label: the final week of a beginner walk-run plan, when the runner first covers the distance continuously"
   },
   "runBackgroundLocationNudgeTitle": "Allow location all the time",
   "@runBackgroundLocationNudgeTitle": {

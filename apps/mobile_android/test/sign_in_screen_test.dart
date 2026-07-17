@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -304,6 +305,92 @@ void main() {
       // A synthetic Exception (not a real SocketException) classifies as
       // generic — the point is that some readable message surfaces.
       expect(find.textContaining('Something went wrong'), findsOneWidget);
+    });
+
+    // ─────────── Autofill + keyboard submit (#244) ───────────
+
+    testWidgets('credential fields declare autofill hints in an AutofillGroup',
+        (tester) async {
+      await _pump(tester, _FakeApiClient());
+      final emailFinder = find.widgetWithText(TextField, 'Email');
+      final passwordFinder = find.widgetWithText(TextField, 'Password');
+      expect(
+        find.ancestor(of: emailFinder, matching: find.byType(AutofillGroup)),
+        findsWidgets,
+      );
+      expect(
+        find.ancestor(
+            of: passwordFinder, matching: find.byType(AutofillGroup)),
+        findsWidgets,
+      );
+      final email = tester.widget<TextField>(emailFinder);
+      expect(email.autofillHints, contains(AutofillHints.email));
+      expect(email.textInputAction, TextInputAction.next);
+      final password = tester.widget<TextField>(passwordFinder);
+      expect(password.autofillHints, contains(AutofillHints.password));
+      expect(password.textInputAction, TextInputAction.done);
+    });
+
+    testWidgets('next on the email field moves focus to the password field',
+        (tester) async {
+      await _pump(tester, _FakeApiClient());
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+      final password = tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Password'));
+      expect(password.focusNode?.hasFocus, isTrue);
+    });
+
+    testWidgets('done on the password field submits sign-in', (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'secret12');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(client.capturedEmail, 'a@b.com');
+      expect(client.capturedPassword, 'secret12');
+    });
+
+    testWidgets('successful sign-in commits the autofill context',
+        (tester) async {
+      // finishAutofillContext is what makes the platform password
+      // manager offer to save the credentials that just worked.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'secret12');
+      tester.testTextInput.log.clear();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(
+        tester.testTextInput.log.map((c) => c.method),
+        contains('TextInput.finishAutofillContext'),
+      );
+    });
+
+    testWidgets('a failed sign-in does not commit the autofill context',
+        (tester) async {
+      final client = _FakeApiClient()
+        ..errorToThrow = Exception('Invalid credentials');
+      await _pump(tester, client);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'wrongpass');
+      tester.testTextInput.log.clear();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(
+        tester.testTextInput.log.map((c) => c.method),
+        isNot(contains('TextInput.finishAutofillContext')),
+      );
     });
   });
 }

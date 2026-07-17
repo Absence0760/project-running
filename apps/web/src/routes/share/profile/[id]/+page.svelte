@@ -2,6 +2,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import {
 		buildProfileJsonLd,
 		buildProfileShareCanonical,
@@ -41,11 +42,7 @@
 	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
-<div class="share-page">
-	<header class="share-header">
-		<a href="/" class="share-logo">Threkir</a>
-	</header>
-
+<SharePageShell>
 	{#if hasProfile}
 		<section class="hero">
 			<div class="avatar-wrap">
@@ -79,32 +76,9 @@
 			<a class="btn btn-primary" href="/login?signup=1">{m('shareRun.ctaButton')}</a>
 		</section>
 	{/if}
-
-	<footer class="share-footer">
-		<a href="/">{m('shareRun.footerHome')}</a>
-		<span class="dot">&middot;</span>
-		<a href="/login">{m('shareRun.signIn')}</a>
-	</footer>
-</div>
+</SharePageShell>
 
 <style>
-	.share-page {
-		min-height: 100vh;
-		background: var(--color-bg);
-		display: flex;
-		flex-direction: column;
-	}
-	.share-header {
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
-	}
-	.share-logo {
-		font-weight: 700;
-		font-size: 1.15rem;
-		color: var(--color-primary);
-		text-decoration: none;
-	}
 	.hero {
 		max-width: 48rem;
 		margin: 0 auto;
@@ -133,10 +107,6 @@
 	}
 	.hero-actions {
 		margin-top: var(--space-md);
-	}
-	.dot {
-		color: var(--color-text-tertiary);
-		margin: 0 0.3rem;
 	}
 	.content {
 		max-width: 48rem;
@@ -189,26 +159,7 @@
 		margin: 0 auto var(--space-md);
 		line-height: 1.5;
 	}
-	.share-footer {
-		margin-top: auto;
-		padding: var(--space-lg) var(--space-md);
-		border-top: 1px solid var(--color-border);
-		text-align: center;
-		font-size: 0.85rem;
-		color: var(--color-text-tertiary);
-		background: var(--color-surface);
-	}
-	.share-footer a {
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-	.share-footer a:hover {
-		color: var(--color-primary);
-	}
 	@media (min-width: 48rem) {
-		.share-header {
-			padding: var(--space-md) var(--space-xl);
-		}
 		.hero {
 			padding: var(--space-2xl) var(--space-xl) var(--space-lg);
 		}

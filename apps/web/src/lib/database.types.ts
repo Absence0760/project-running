@@ -5781,6 +5781,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_push_subscription: {
+        Args: {
+          p_device_id: string
+          p_label?: string
+          p_platform?: string
+          p_subscription: Json
+        }
+        Returns: undefined
+      }
       set_run_expected_return: {
         Args: { p_expected_return_at: string; p_run_id: string }
         Returns: boolean
@@ -5862,7 +5871,7 @@ export type Database = {
         | "distance_half"
         | "distance_full"
         | "custom"
-      plan_phase: "base" | "build" | "peak" | "taper" | "race"
+      plan_phase: "base" | "build" | "peak" | "taper" | "race" | "graduation"
       workout_kind:
         | "easy"
         | "long"
@@ -6010,7 +6019,7 @@ export const Constants = {
         "distance_full",
         "custom",
       ],
-      plan_phase: ["base", "build", "peak", "taper", "race"],
+      plan_phase: ["base", "build", "peak", "taper", "race", "graduation"],
       workout_kind: [
         "easy",
         "long",

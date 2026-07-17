@@ -24,4 +24,5 @@ String planPhaseLabel(AppLocalizations l10n, PlanPhase p) => switch (p) {
       PlanPhase.peak => l10n.planPhasePeak,
       PlanPhase.taper => l10n.planPhaseTaper,
       PlanPhase.race => l10n.planPhaseRace,
+      PlanPhase.graduation => l10n.planPhaseGraduation,
     };

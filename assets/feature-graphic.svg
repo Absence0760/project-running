@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FE5932"/>
+      <stop offset="0.58" stop-color="#FE5932"/>
+      <stop offset="1" stop-color="#A01E77"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <g fill="#ffffff" fill-rule="evenodd" transform="translate(300 236) scale(3.4) translate(-54.5 -50)">
+    <path d="M30 10 H44 V90 H30 Z M44 29 H58 A21 21 0 0 1 58 71 H44 Z M44 42 H56 A8 8 0 0 1 56 58 H44 Z"/>
+  </g>
+  <text x="392" y="236" fill="#ffffff"
+        font-family="Noto Sans, Cantarell, sans-serif"
+        font-size="128" font-weight="700" letter-spacing="-3"
+        dominant-baseline="central">Threkir</text>
+  <text x="398" y="352" fill="#ffffff" fill-opacity="0.92"
+        font-family="Noto Sans, Cantarell, sans-serif"
+        font-size="40" font-weight="400" letter-spacing="0.5"
+        dominant-baseline="central">Run. Train. Together.</text>
+</svg>

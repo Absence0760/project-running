@@ -821,7 +821,7 @@
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.dateOfBirth')}</span>
-					<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
+					<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} disabled={!healthDataConsent} />
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.heightCm')}</span>

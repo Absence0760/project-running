@@ -217,6 +217,24 @@ void main() {
       expect(find.byType(CheckboxListTile), findsOneWidget);
     });
 
+    testWidgets('DOB picker opens in year-selection mode', (tester) async {
+      // Reason (#222): a birth year sits decades back, so the picker must
+      // open on the year grid — the day-grid default forces paging month
+      // by month (or spotting the tap-the-header affordance) to reach it.
+      final api = _FakeApi();
+      await _pump(tester, api, await _prefs());
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+      }
+      await tester.ensureVisible(find.text(l10n.setupDobPlaceholder));
+      await tester.pump();
+      await tester.tap(find.text(l10n.setupDobPlaceholder));
+      await tester.pumpAndSettle();
+      expect(find.byType(YearPicker), findsOneWidget);
+    });
+
     group('offline fail-safe exit (issue #246)', () {
       testWidgets(
           'a failing Skip reveals Finish later, which dismisses the wizard '

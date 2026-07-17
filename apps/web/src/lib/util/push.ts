@@ -4,7 +4,12 @@
 /// keyed by the browser's persistent device id (`getDeviceId()`). That
 /// table is already row-per-device and RLS-scoped to the user, so
 /// no schema change is needed; revoking a device on `/settings/devices`
-/// also wipes its push registration.
+/// also wipes its push registration. Writes go through the atomic
+/// `set_push_subscription` RPC (migration 20270419_001) — a single-key
+/// jsonb_set/minus on the row — so persisting a subscription can never
+/// clobber the device's other prefs the way a whole-bag read-merge-write
+/// could (issue #235), and its result is checked so a failed registration
+/// surfaces to the caller instead of leaving the toggle lying.
 ///
 /// Server-side delivery (the other leg) ships in the Go worker's `web_push`
 /// job handler (apps/job_worker/internal/handler_web_push.go, migration
@@ -18,7 +23,8 @@
 import { env } from '$env/dynamic/public';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
-import { getDeviceId } from '../settings/settings';
+import { detectPlatform, deviceLabel, getDeviceId } from '../settings/settings';
+import type { Json } from '../database.types';
 
 // Pulled via dynamic env so the build doesn't fail when the key
 // isn't set — the UI then renders the "not configured" hint.
@@ -70,8 +76,10 @@ function urlBase64ToUint8Array(input: string): Uint8Array {
 
 /// Subscribe to push if not already, persist the subscription onto
 /// `user_device_settings.prefs.push_subscription`, and return the
-/// stored shape. Throws on permission denial or registration error
-/// so the caller can surface a toast.
+/// stored shape. Throws on permission denial, registration error, or a
+/// failed server persist so the caller can surface a toast — a
+/// subscription the server never learned about would deliver nothing
+/// while the toggle claims push is on.
 export async function subscribeToPush(): Promise<StoredPushSubscription> {
 	if (!isPushSupported()) throw new Error('Push not supported on this build');
 	const userId = auth.user?.id;
@@ -104,17 +112,18 @@ export async function subscribeToPush(): Promise<StoredPushSubscription> {
 		registered_at: new Date().toISOString(),
 	};
 
-	await persistSubscription(userId, stored);
+	await persistSubscription(stored);
 	return stored;
 }
 
 /// Drop the local subscription + clear the entry from device prefs.
-/// Best-effort — failures only log because the user's intent is "stop
-/// receiving" and a stale row in the table is harmless until the next
-/// expiry.
+/// The browser-side unsubscribe stays best-effort (a dead endpoint
+/// self-prunes when the worker's send 404/410s), but the server-side
+/// clear throws on failure so the caller can surface it — the enqueue
+/// trigger keys off the stored row, so a stale registration keeps
+/// manufacturing doomed web_push jobs until it's actually cleared.
 export async function unsubscribeFromPush(): Promise<void> {
-	const userId = auth.user?.id;
-	if (!('serviceWorker' in navigator) || !userId) return;
+	if (!('serviceWorker' in navigator) || !auth.user?.id) return;
 	const reg = await navigator.serviceWorker.getRegistration('/');
 	const sub = await reg?.pushManager.getSubscription();
 	if (sub) {
@@ -124,11 +133,7 @@ export async function unsubscribeFromPush(): Promise<void> {
 			console.warn('push unsubscribe failed', e);
 		}
 	}
-	try {
-		await persistSubscription(userId, null);
-	} catch (e) {
-		console.warn('push subscription clear failed', e);
-	}
+	await persistSubscription(null);
 }
 
 /// Whether this browser/device currently has a saved subscription.
@@ -140,30 +145,12 @@ export async function getCurrentSubscription(): Promise<PushSubscription | null>
 	return (await reg?.pushManager.getSubscription()) ?? null;
 }
 
-async function persistSubscription(
-	userId: string,
-	sub: StoredPushSubscription | null,
-): Promise<void> {
-	const deviceId = getDeviceId();
-	// Read–merge–write to avoid clobbering other prefs on the row.
-	const { data: existing } = await supabase
-		.from('user_device_settings')
-		.select('prefs')
-		.eq('user_id', userId)
-		.eq('device_id', deviceId)
-		.maybeSingle();
-	const prefs: Record<string, unknown> = (existing?.prefs as Record<string, unknown>) ?? {};
-	if (sub) prefs.push_subscription = sub;
-	else delete prefs.push_subscription;
-	await supabase
-		.from('user_device_settings')
-		.upsert(
-			{
-				user_id: userId,
-				device_id: deviceId,
-				prefs,
-				updated_at: new Date().toISOString(),
-			},
-			{ onConflict: 'user_id,device_id' },
-		);
+async function persistSubscription(sub: StoredPushSubscription | null): Promise<void> {
+	const { error } = await supabase.rpc('set_push_subscription', {
+		p_device_id: getDeviceId(),
+		p_subscription: sub as unknown as Json,
+		p_platform: detectPlatform(),
+		p_label: deviceLabel(),
+	});
+	if (error) throw error;
 }
