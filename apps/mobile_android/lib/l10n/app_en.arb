@@ -1508,6 +1508,14 @@
   "@runShareLiveLink": {
     "description": "Idle-screen button that shares a live spectator link for the run"
   },
+  "runLiveShareNeedsSignIn": "Sign in to share a live tracking link.",
+  "@runLiveShareNeedsSignIn": {
+    "description": "Shown when a signed-out user tries to share a live tracking link, which cannot broadcast"
+  },
+  "runLiveShareNotStarted": "Live tracking couldn't start — tap Share to retry.",
+  "@runLiveShareNotStarted": {
+    "description": "Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead"
+  },
   "runTrainingPlans": "Training plans",
   "@runTrainingPlans": {
     "description": "Idle-screen button opening the training-plans list when no active plan exists"
@@ -9020,9 +9028,17 @@
   "@prefsKeepScreenOn": {
     "description": "Toggle title for keeping the screen on during a run"
   },
-  "prefsKeepScreenOnSubtitle": "Hold a wakelock during a run",
+  "prefsKeepScreenOnSubtitle": "Keeps the display lit for the whole run. Uses noticeably more battery on long efforts.",
   "@prefsKeepScreenOnSubtitle": {
-    "description": "Subtitle of the keep-screen-on toggle"
+    "description": "Subtitle of the keep-screen-on toggle, disclosing its battery cost"
+  },
+  "prefsDimScreenWhileRecording": "Dim screen while recording",
+  "@prefsDimScreenWhileRecording": {
+    "description": "Toggle title for dimming the map while recording to save battery"
+  },
+  "prefsDimScreenWhileRecordingSubtitle": "Darken the map during a run to save battery. Stats stay readable.",
+  "@prefsDimScreenWhileRecordingSubtitle": {
+    "description": "Subtitle of the dim-screen-while-recording toggle"
   },
   "prefsAdvancedGps": "Advanced GPS",
   "@prefsAdvancedGps": {

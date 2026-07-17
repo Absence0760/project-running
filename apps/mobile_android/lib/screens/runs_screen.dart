@@ -6,6 +6,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../goals.dart';
 import '../l10n/date_format.dart';
@@ -130,6 +131,13 @@ const String _kRunsFiltersKey = 'runs_filters_v1';
 /// list view is the cold-start frame, and pulling 200 rows over a
 /// flaky cellular connection blocks the rest of the home screen.
 const int _kRunsPageSize = 20;
+
+/// Expanded-width (≥840dp) run-grid tile sizing. The cap mirrors web
+/// `/runs`'s `repeat(auto-fill, minmax(22rem, 1fr))` card grid: at
+/// tablet content widths it yields 2–3 columns with tiles no narrower
+/// than ~380dp. The fixed extent matches a two-line `_RunTile` card.
+const double _kRunGridMaxTileWidth = 560;
+const double _kRunGridTileExtent = 96;
 
 /// Single leading-slot width for every `_RunTile` variant (track
 /// preview, selecting checkbox, or activity icon fallback). Locking
@@ -1237,22 +1245,35 @@ class _RunsScreenState extends State<RunsScreen> {
       return _EmptyRuns(theme: theme, l10n: l10n);
     }
 
-    final Widget content = _timelineMode
-        ? ActivityTimelineList(
-            activities: _kind == _HistoryKind.all
-                ? _activities
-                : _activities
-                    .where((a) => a.kind == _kind.name)
-                    .toList(growable: false),
-            unit: unit,
-            onTapRun: _openActivityRun,
-            onTapLift: _openActivityLift,
-            onRefresh: _refreshAll,
-          )
-        : RefreshIndicator(
-            onRefresh: _refreshAll,
-            child: _buildRunList(theme, l10n, unit),
-          );
+    Widget content;
+    if (_timelineMode) {
+      content = ActivityTimelineList(
+        activities: _kind == _HistoryKind.all
+            ? _activities
+            : _activities
+                .where((a) => a.kind == _kind.name)
+                .toList(growable: false),
+        unit: unit,
+        onTapRun: _openActivityRun,
+        onTapLift: _openActivityLift,
+        onRefresh: _refreshAll,
+      );
+      // Single-column reading surface — cap + center it on expanded
+      // widths so timeline rows don't stretch across a whole tablet.
+      if (widthClassOf(context) == WidthClass.expanded) {
+        content = Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+            child: content,
+          ),
+        );
+      }
+    } else {
+      content = RefreshIndicator(
+        onRefresh: _refreshAll,
+        child: _buildRunList(theme, l10n, unit),
+      );
+    }
 
     if (!_showChips) return content;
     return Column(
@@ -1399,88 +1420,23 @@ class _RunsScreenState extends State<RunsScreen> {
         : buildHistoryItems(_visible,
             now: DateTime.now(),
             localeTag: localeToTag(Localizations.localeOf(context)));
+    if (widthClassOf(context) == WidthClass.expanded) {
+      return _buildRunGrid(theme, l10n, unit, items,
+          emptyAfterFilter: emptyAfterFilter, showLoadMore: showLoadMore);
+    }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount:
           items.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
       itemBuilder: (context, index) {
         if (showLoadMore && index == items.length + 1) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: _loadingMore
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : OutlinedButton.icon(
-                      onPressed: _loadMore,
-                      icon: const Icon(Icons.expand_more),
-                      label: Text(l10n.historyLoadMore(_kRunsPageSize)),
-                    ),
-            ),
-          );
+          return _loadMoreFooter(l10n);
         }
         if (index == 0) {
-          return _RunsFilterHeader(
-            l10n: l10n,
-            rangeLabel: _activeRangeLabel(l10n),
-            visibleCount: _visible.length,
-            showRangeRow: widget.titleText != null,
-            summary: summariseRuns(_filtered),
-            unit: unit,
-            activityFilter: _activityFilter,
-            sourceFilter: _sourceFilter,
-            onActivityChanged: (v) {
-              setState(() {
-                _activityFilter = v;
-                _resetPaging();
-                _recompute();
-              });
-              _persistFilters();
-            },
-            onSourceChanged: (v) {
-              setState(() {
-                _sourceFilter = v;
-                _resetPaging();
-                _recompute();
-              });
-              _persistFilters();
-            },
-          );
+          return _filterHeader(l10n, unit);
         }
         if (emptyAfterFilter && index == 1) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 48),
-            child: Column(
-              children: [
-                Icon(Icons.event_busy,
-                    size: 48, color: theme.colorScheme.outline),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.historyNoMatch,
-                  style: theme.textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _activityFilter = null;
-                      _sourceFilter = null;
-                      _range = _RunsRange.all;
-                      _customFrom = null;
-                      _customTo = null;
-                      _resetPaging();
-                      _recompute();
-                    });
-                    _persistFilters();
-                  },
-                  child: Text(l10n.historyClearFilters),
-                ),
-              ],
-            ),
-          );
+          return _noMatchState(theme, l10n);
         }
         final itemIndex = index - 1;
         if (itemIndex < 0 || itemIndex >= items.length) {
@@ -1490,44 +1446,188 @@ class _RunsScreenState extends State<RunsScreen> {
         if (item is HistoryMonthHeader) {
           return _MonthHeaderRow(label: item.label);
         }
-        final run = (item as HistoryRun).run;
-        return _RunTile(
-          key: ValueKey(run.id),
-          api: widget.apiClient,
-          run: run,
-          unit: unit,
-          theme: theme,
-          isUnsynced: _unsyncedIds.contains(run.id),
-          selecting: _selecting,
-          selected: _selected.contains(run.id),
-          onTap: () async {
-            if (_selecting) {
-              _toggleSelection(run.id);
-              return;
-            }
-            // `run` may be a track-less summary (a row outside the resident
-            // window) — hydrate the full run before opening detail.
-            final full = await widget.runStore.runById(run.id) ?? run;
-            if (!context.mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RunDetailScreen(
-                  run: full,
-                  runStore: widget.runStore,
-                  routeStore: widget.routeStore,
-                  preferences: widget.preferences,
-                  apiClient: widget.apiClient,
-                  settingsSync: widget.settingsSync,
-                ),
+        return _runTile((item as HistoryRun).run, theme, unit);
+      },
+    );
+  }
+
+  /// Expanded-width run list: the same header / month-section / footer
+  /// scaffolding, with each month's runs flowed into a responsive card
+  /// grid instead of one full-width column. Tiles, selection, paging,
+  /// and filters are shared with the phone list — only the sliver
+  /// composition differs.
+  Widget _buildRunGrid(
+    ThemeData theme,
+    AppLocalizations l10n,
+    DistanceUnit unit,
+    List<HistoryItem> items, {
+    required bool emptyAfterFilter,
+    required bool showLoadMore,
+  }) {
+    final slivers = <Widget>[
+      SliverToBoxAdapter(child: _filterHeader(l10n, unit)),
+      if (emptyAfterFilter)
+        SliverToBoxAdapter(child: _noMatchState(theme, l10n)),
+    ];
+    var i = 0;
+    while (i < items.length) {
+      final item = items[i];
+      if (item is HistoryMonthHeader) {
+        slivers.add(SliverToBoxAdapter(child: _MonthHeaderRow(label: item.label)));
+        i++;
+        continue;
+      }
+      final start = i;
+      while (i < items.length && items[i] is HistoryRun) {
+        i++;
+      }
+      final runs = [
+        for (var j = start; j < i; j++) (items[j] as HistoryRun).run,
+      ];
+      slivers.add(
+        SliverGrid(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: _kRunGridMaxTileWidth,
+            mainAxisExtent: _kRunGridTileExtent,
+            crossAxisSpacing: 12,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, idx) => _runTile(runs[idx], theme, unit),
+            childCount: runs.length,
+          ),
+        ),
+      );
+    }
+    if (showLoadMore) {
+      slivers.add(SliverToBoxAdapter(child: _loadMoreFooter(l10n)));
+    }
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverMainAxisGroup(slivers: slivers),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterHeader(AppLocalizations l10n, DistanceUnit unit) {
+    return _RunsFilterHeader(
+      l10n: l10n,
+      rangeLabel: _activeRangeLabel(l10n),
+      visibleCount: _visible.length,
+      showRangeRow: widget.titleText != null,
+      summary: summariseRuns(_filtered),
+      unit: unit,
+      activityFilter: _activityFilter,
+      sourceFilter: _sourceFilter,
+      onActivityChanged: (v) {
+        setState(() {
+          _activityFilter = v;
+          _resetPaging();
+          _recompute();
+        });
+        _persistFilters();
+      },
+      onSourceChanged: (v) {
+        setState(() {
+          _sourceFilter = v;
+          _resetPaging();
+          _recompute();
+        });
+        _persistFilters();
+      },
+    );
+  }
+
+  Widget _noMatchState(ThemeData theme, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(Icons.event_busy,
+              size: 48, color: theme.colorScheme.outline),
+          const SizedBox(height: 12),
+          Text(
+            l10n.historyNoMatch,
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _activityFilter = null;
+                _sourceFilter = null;
+                _range = _RunsRange.all;
+                _customFrom = null;
+                _customTo = null;
+                _resetPaging();
+                _recompute();
+              });
+              _persistFilters();
+            },
+            child: Text(l10n.historyClearFilters),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadMoreFooter(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: _loadingMore
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : OutlinedButton.icon(
+                onPressed: _loadMore,
+                icon: const Icon(Icons.expand_more),
+                label: Text(l10n.historyLoadMore(_kRunsPageSize)),
               ),
-            );
-          },
-          onLongPress: () {
-            if (_selecting) return;
-            _enterSelection(run.id);
-          },
+      ),
+    );
+  }
+
+  Widget _runTile(Run run, ThemeData theme, DistanceUnit unit) {
+    return _RunTile(
+      key: ValueKey(run.id),
+      api: widget.apiClient,
+      run: run,
+      unit: unit,
+      theme: theme,
+      isUnsynced: _unsyncedIds.contains(run.id),
+      selecting: _selecting,
+      selected: _selected.contains(run.id),
+      onTap: () async {
+        if (_selecting) {
+          _toggleSelection(run.id);
+          return;
+        }
+        // `run` may be a track-less summary (a row outside the resident
+        // window) — hydrate the full run before opening detail.
+        final full = await widget.runStore.runById(run.id) ?? run;
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RunDetailScreen(
+              run: full,
+              runStore: widget.runStore,
+              routeStore: widget.routeStore,
+              preferences: widget.preferences,
+              apiClient: widget.apiClient,
+              settingsSync: widget.settingsSync,
+            ),
+          ),
         );
+      },
+      onLongPress: () {
+        if (_selecting) return;
+        _enterSelection(run.id);
       },
     );
   }

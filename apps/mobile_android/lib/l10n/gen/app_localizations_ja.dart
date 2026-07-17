@@ -1089,6 +1089,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runShareLiveLink => 'ライブリンクを共有';
 
   @override
+  String get runLiveShareNeedsSignIn => 'ライブトラッキングのリンクを共有するにはサインインしてください。';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'ライブトラッキングを開始できませんでした。「共有」をタップして再試行してください。';
+
+  @override
   String get runTrainingPlans => 'トレーニングプラン';
 
   @override
@@ -6379,7 +6386,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsKeepScreenOn => '画面をオンのままにする';
 
   @override
-  String get prefsKeepScreenOnSubtitle => 'ラン中はウェイクロックを保持します';
+  String get prefsKeepScreenOnSubtitle =>
+      'ラン中は画面を点灯したままにします。長時間のランではバッテリー消費が大きくなります。';
+
+  @override
+  String get prefsDimScreenWhileRecording => '記録中に画面を暗くする';
+
+  @override
+  String get prefsDimScreenWhileRecordingSubtitle =>
+      'ラン中にマップを暗くしてバッテリーを節約します。統計情報は引き続き見やすく表示されます。';
 
   @override
   String get prefsAdvancedGps => '高度なGPS';

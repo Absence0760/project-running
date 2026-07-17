@@ -28,6 +28,7 @@ For the unit / widget test suites that run automatically, see [testing.md](testi
 - [Privacy zones](#privacy-zones)
 - [Paywall and RevenueCat](#paywall-and-revenuecat)
 - [Backup, restore, account deletion, GDPR export](#backup-restore-account-deletion-gdpr-export)
+- [Tablet / expanded-width layouts (mobile)](#tablet--expanded-width-layouts-mobile)
 - [Cross-platform fixture contract](#cross-platform-fixture-contract)
 
 ---
@@ -403,6 +404,20 @@ See [paywall.md](../features/paywall.md) for the full tier matrix and feature ga
 | GDPR export (Edge Function, GPX zip) | Same EF with `{format:'gpx'}` | Same response shape; the signed URL downloads a `.zip` containing one `.gpx` per run plus a `manifest.json`. GPX 1.1 with `<ele>`, `<time>`, and `<gpxtpx:hr>` extensions when the source data carries them. |
 | GDPR export (rate limit) | Hit the EF 3× as a free user within an hour | Third call returns 429 with `Retry-After`. |
 | Account deletion | Web `/settings/account` → Delete account | `delete-account` EF runs admin delete (User JWT + service role); cascading FKs clear `runs`, `routes`, `clubs` membership, etc. |
+
+---
+
+## Tablet / expanded-width layouts (mobile)
+
+Use a ≥840dp-logical-width device: a 10" tablet AVD (e.g. Pixel Tablet) in landscape, a resizable-emulator profile, or a desktop-class window on iPadOS. The `expanded` recompositions gate on `widthClassOf(context)` (decisions §256) — a phone in landscape (<840dp logical) must keep every phone layout.
+
+| Surface | What to test |
+|---|---|
+| Nav shell | BottomAppBar + docked Log FAB are replaced by a left `NavigationRail` (Home / Fitness / Social / You) with the Log button in the rail's leading slot. Tapping Log fans the speed-dial to the right of the button; rail destinations switch pages; a live recording survives switching. |
+| Home dashboard | Content column caps at 1100dp and centers; today's-workout / modality cards pair with Goals in a lead row; the chart cards flow into two columns. Rotate to portrait (<840dp) → stacked phone layout returns. |
+| Run detail | For a run with a track: map renders as a full-height left pane (~55% width) with the stats/sections scrolling beside it; replay, segment tap, and match pill still work inside the pane. |
+| Runs list | Run-list mode flows tiles into a 2–3 column card grid grouped under month headers; long-press still enters bulk-select; Load more still pages. |
+| Feed / timeline / plan detail | Single-column surfaces center and cap (feed + Fitness→All timeline at 720dp, plan detail at 900dp) instead of stretching full-bleed. |
 
 ---
 

@@ -45,9 +45,8 @@ function getServiceRoleKey() {
 // `pointsPerSegment` points between each. Adds small jitter so the
 // polyline looks like real GPS data instead of a straight-edged
 // connect-the-dots line.
-function densifyTrack(waypoints, pointsPerSegment, baseTs) {
+function densifyTrack(waypoints, pointsPerSegment, baseTs, durationS) {
 	const pts = [];
-	let cumSec = 0;
 	for (let i = 0; i < waypoints.length - 1; i++) {
 		const a = waypoints[i];
 		const b = waypoints[i + 1];
@@ -61,25 +60,27 @@ function densifyTrack(waypoints, pointsPerSegment, baseTs) {
 			const ele = a.ele != null && b.ele != null
 				? Math.round(a.ele + (b.ele - a.ele) * t)
 				: undefined;
-			const ts = new Date(baseTs.getTime() + cumSec * 1000).toISOString();
 			// Synthesise a believable HR profile: low-150s at the
 			// start, drifting up to mid-160s on hills, plus tiny
 			// per-point variation.
 			const bpm = Math.round(152 + (ele != null ? (ele - 50) * 0.02 : 0) + (Math.random() - 0.5) * 4);
-			pts.push({ lat, lng, ele, ts, bpm });
-			cumSec += 6; // ~6s between points = realistic GPS sample rate
+			pts.push({ lat, lng, ele, bpm });
 		}
 	}
 	// Close the polyline by appending the final waypoint.
 	const last = waypoints[waypoints.length - 1];
-	pts.push({
-		lat: last.lat,
-		lng: last.lng,
-		ele: last.ele,
-		ts: new Date(baseTs.getTime() + cumSec * 1000).toISOString(),
-		bpm: 158,
-	});
-	return pts;
+	pts.push({ lat: last.lat, lng: last.lng, ele: last.ele, bpm: 158 });
+	// Spread timestamps evenly across the run row's real duration so
+	// derived stats (moving time, pace-vs-moving, cadence) come out
+	// believable instead of implying an 8-minute 10K. Falls back to a
+	// 6 s cadence when the row has no duration to anchor to.
+	const stepMs = durationS
+		? (durationS * 1000) / (pts.length - 1)
+		: 6000;
+	return pts.map((p, i) => ({
+		...p,
+		ts: new Date(baseTs.getTime() + Math.round(i * stepMs)).toISOString(),
+	}));
 }
 
 // Run plan — id + the waypoint shape from seed.sql. Each id MUST
@@ -376,9 +377,22 @@ for (const spec of REPEAT_SPEC) {
 	}
 }
 
-async function uploadTrack(serviceRoleKey, run) {
+async function fetchRunDurations(serviceRoleKey) {
+	const url = `${SUPABASE_URL}/rest/v1/runs?select=id,duration_s&user_id=eq.${SEED_USER_ID}`;
+	const res = await fetch(url, {
+		headers: { Authorization: `Bearer ${serviceRoleKey}`, apikey: serviceRoleKey },
+	});
+	if (!res.ok) {
+		console.error(`Failed to read run durations: ${res.status} ${await res.text()}`);
+		return {};
+	}
+	const rows = await res.json();
+	return Object.fromEntries(rows.map((r) => [r.id, r.duration_s]));
+}
+
+async function uploadTrack(serviceRoleKey, run, durationS) {
 	const path = `${SEED_USER_ID}/${run.id}.json.gz`;
-	const track = densifyTrack(run.waypoints, 4, run.startedAt);
+	const track = densifyTrack(run.waypoints, 4, run.startedAt, durationS);
 	const json = JSON.stringify(track);
 	const gz = gzipSync(Buffer.from(json));
 
@@ -403,10 +417,11 @@ async function uploadTrack(serviceRoleKey, run) {
 
 async function main() {
 	const key = getServiceRoleKey();
+	const durations = await fetchRunDurations(key);
 	console.log(`Uploading ${PLAN.length} run tracks to ${SUPABASE_URL}/storage/v1/object/runs/`);
 	let ok = 0;
 	for (const run of PLAN) {
-		if (await uploadTrack(key, run)) ok++;
+		if (await uploadTrack(key, run, durations[run.id])) ok++;
 	}
 	console.log(`\n${ok}/${PLAN.length} tracks uploaded.`);
 	if (ok < PLAN.length) process.exit(1);

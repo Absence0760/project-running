@@ -35,18 +35,21 @@ export function movingTimeSeconds(
 
 /**
  * Total positive elevation gain in metres. Sums upward deltas between
- * consecutive track points, ignoring descents.
+ * successive points that carry an elevation, ignoring descents.
  *
- * Waypoints without an `ele` value are skipped.
+ * Waypoints without an `ele` value are skipped, but the last valid elevation
+ * is carried forward across the gap so an intermittent altitude dropout (tree
+ * cover, tunnels, satellite reacquisition over a long ultra) doesn't silently
+ * zero out the real climb spanning the missing samples.
  */
 export function elevationGainMetres(track: TrackPoint[] | null | undefined): number {
 	if (!track || track.length < 2) return 0;
 	let gain = 0;
-	for (let i = 1; i < track.length; i++) {
-		const prev = track[i - 1].ele;
-		const curr = track[i].ele;
-		if (prev == null || curr == null) continue;
-		if (curr > prev) gain += curr - prev;
+	let lastEle: number | null = null;
+	for (const p of track) {
+		if (p.ele == null) continue;
+		if (lastEle != null && p.ele > lastEle) gain += p.ele - lastEle;
+		lastEle = p.ele;
 	}
 	return Math.round(gain);
 }

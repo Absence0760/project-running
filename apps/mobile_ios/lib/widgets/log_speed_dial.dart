@@ -22,6 +22,14 @@ const List<Offset> _kSlotUnits = [
   Offset(0.74, 0.67), // right, a bit lower
 ];
 
+// Slot units when fanning from an [anchor] (the NavigationRail Log button on
+// expanded layouts): a shallow arc opening to the right of the anchor.
+const List<Offset> _kAnchoredSlotUnits = [
+  Offset(1, 0), // directly right — the recent action
+  Offset(0.67, 0.74), // right, above
+  Offset(0.67, -0.74), // right, below
+];
+
 /// Fan the three capture actions (Run / Lift / Food) out as icon-only buttons
 /// in a shallow arc around the centre Log FAB, over a dismiss scrim. Resolves
 /// to the picked [LogAction], or null on scrim tap / back — same contract as
@@ -30,6 +38,7 @@ const List<Offset> _kSlotUnits = [
 Future<LogAction?> showLogSpeedDial({
   required BuildContext context,
   LogAction? recent,
+  Offset? anchor,
 }) {
   final overlay = Overlay.of(context);
   final completer = Completer<LogAction?>();
@@ -39,6 +48,7 @@ Future<LogAction?> showLogSpeedDial({
     builder: (_) => _LogSpeedDial(
       recent: recent,
       fabCentreFromBottom: fabCentreFromBottom,
+      anchor: anchor,
       onClose: (action) {
         entry.remove();
         if (!completer.isCompleted) completer.complete(action);
@@ -52,11 +62,17 @@ Future<LogAction?> showLogSpeedDial({
 class _LogSpeedDial extends StatefulWidget {
   final LogAction? recent;
   final double fabCentreFromBottom;
+
+  /// Global centre of the launching button. Null means the default
+  /// bottom-docked centre FAB; non-null fans the arc to the right of the
+  /// anchor instead (the NavigationRail Log button on expanded layouts).
+  final Offset? anchor;
   final void Function(LogAction? action) onClose;
 
   const _LogSpeedDial({
     required this.recent,
     required this.fabCentreFromBottom,
+    required this.anchor,
     required this.onClose,
   });
 
@@ -139,7 +155,8 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
       LogAction.lift => (Icons.fitness_center, l10n.logLift),
       LogAction.food => (Icons.restaurant, l10n.logFood),
     };
-    final unit = _kSlotUnits[index];
+    final unit =
+        widget.anchor == null ? _kSlotUnits[index] : _kAnchoredSlotUnits[index];
     // Stagger the entrance so the icons pop out of the button in turn.
     final start = (index / count) * 0.4;
     final anim = CurvedAnimation(
@@ -175,9 +192,13 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
         final v = anim.value;
         final dx = unit.dx * _kArcRadius * v;
         final up = unit.dy * _kArcRadius * v;
+        final anchor = widget.anchor;
         return Positioned(
-          left: centreX + dx - _kItemSize / 2,
-          bottom: widget.fabCentreFromBottom + up - _kItemSize / 2,
+          left: (anchor?.dx ?? centreX) + dx - _kItemSize / 2,
+          bottom: anchor == null
+              ? widget.fabCentreFromBottom + up - _kItemSize / 2
+              : null,
+          top: anchor == null ? null : anchor.dy - up - _kItemSize / 2,
           child: Opacity(
             opacity: _controller.value.clamp(0.0, 1.0),
             child: Transform.scale(scale: 0.6 + 0.4 * _controller.value, child: child),

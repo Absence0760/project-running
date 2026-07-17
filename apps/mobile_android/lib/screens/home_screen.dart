@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 
+import '../adaptive_width.dart';
 import '../audio_cues.dart';
 import '../auth_change_aware.dart';
 import '../ble_heart_rate.dart';
@@ -421,11 +422,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// Tap on the centre Log button. When the user has opted to keep Run as
   /// the one-tap primary action, this starts a run directly; otherwise it
   /// opens the Log capture sheet.
-  void _onLogTap() {
+  void _onLogTap({Offset? anchor}) {
     if (widget.preferences.keepRunPrimary) {
       _performLogAction(LogAction.run);
     } else {
-      _openLogMenu();
+      _openLogMenu(anchor: anchor);
     }
   }
 
@@ -433,9 +434,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// the full menu (so gym / nutrition stay reachable); otherwise it
   /// repeats the last logged modality — preserving the one-gesture "start a
   /// run" muscle memory for a pure runner.
-  void _onLogLongPress() {
+  void _onLogLongPress({Offset? anchor}) {
     if (widget.preferences.keepRunPrimary) {
-      _openLogMenu();
+      _openLogMenu(anchor: anchor);
     } else {
       _performLogAction(
           logActionFromWire(widget.preferences.lastLogType) ?? LogAction.run);
@@ -445,10 +446,11 @@ class _HomeScreenState extends State<HomeScreen>
   // The centre Log button fans the three capture actions up above itself
   // (speed-dial) rather than opening a bottom sheet; the History Log FAB keeps
   // the sheet.
-  Future<void> _openLogMenu() async {
+  Future<void> _openLogMenu({Offset? anchor}) async {
     final picked = await showLogSpeedDial(
       context: context,
       recent: logActionFromWire(widget.preferences.lastLogType),
+      anchor: anchor,
     );
     if (picked != null) _performLogAction(picked);
   }
@@ -473,55 +475,78 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // PageView replaces IndexedStack so the user can swipe left/right
-      // between tabs. Each child is wrapped in `_KeepAlive` so the state
-      // of a tab (scroll position, live run recorder, in-flight fetches)
-      // survives being swiped off-screen — the same guarantee IndexedStack
-      // gave us for free.
-      //
-      // BillingIssueBanner sits above the PageView so it surfaces on
-      // every authed tab when a Pro user has a failed renewal payment
-      // sitting in the store's grace period. Cleared automatically
-      // when the revenuecat-webhook fires RENEWAL / EXPIRATION /
-      // CANCELLATION. Mirrors web's root-layout banner; renders
-      // nothing when the flag is null or the user is on the free
-      // tier — zero footprint in the common case.
-      body: Column(
-        children: [
-          BillingIssueBanner(apiClient: widget.apiClient),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: _onPageChanged,
-              physics: const PageScrollPhysics(),
-              children: _pages,
-            ),
+    // PageView replaces IndexedStack so the user can swipe left/right
+    // between tabs. Each child is wrapped in `_KeepAlive` so the state
+    // of a tab (scroll position, live run recorder, in-flight fetches)
+    // survives being swiped off-screen — the same guarantee IndexedStack
+    // gave us for free.
+    //
+    // BillingIssueBanner sits above the PageView so it surfaces on
+    // every authed tab when a Pro user has a failed renewal payment
+    // sitting in the store's grace period. Cleared automatically
+    // when the revenuecat-webhook fires RENEWAL / EXPIRATION /
+    // CANCELLATION. Mirrors web's root-layout banner; renders
+    // nothing when the flag is null or the user is on the free
+    // tier — zero footprint in the common case.
+    final body = Column(
+      children: [
+        BillingIssueBanner(apiClient: widget.apiClient),
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            physics: const PageScrollPhysics(),
+            children: _pages,
           ),
-        ],
-      ),
-      // The raised centre "+" is the Log action (multi_modal.md § Bottom
-      // nav). FloatingActionButton has no long-press, so the GestureDetector
-      // wrapper claims that gesture while the button keeps the tap; the
-      // Semantics label makes the action explicit for screen readers, and
-      // the 56 dp FAB clears the >=48 dp target.
-      floatingActionButton: Builder(
-        builder: (context) {
-          final l10n = AppLocalizations.of(context);
-          return GestureDetector(
-            onLongPress: _onLogLongPress,
-            child: Semantics(
-              button: true,
-              label: l10n.logA11yLabel,
-              child: FloatingActionButton(
-                onPressed: _onLogTap,
-                tooltip: l10n.navLog,
-                child: const Icon(Icons.add),
-              ),
+        ),
+      ],
+    );
+    if (widthClassOf(context) == WidthClass.expanded) {
+      return Scaffold(
+        body: Row(
+          children: [
+            ValueListenableBuilder<int>(
+              valueListenable: _currentIndex,
+              builder: (context, index, _) {
+                final l10n = AppLocalizations.of(context);
+                return NavigationRail(
+                  selectedIndex: _railIndexFor(index),
+                  onDestinationSelected: (i) => _goToPage(_railPages[i]),
+                  labelType: NavigationRailLabelType.all,
+                  leading: Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 24),
+                    child: _logFab(anchored: true),
+                  ),
+                  destinations: [
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.dashboard),
+                      label: Text(l10n.navHome),
+                    ),
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.fitness_center),
+                      label: Text(l10n.navFitness),
+                    ),
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.public),
+                      label: Text(l10n.navSocial),
+                    ),
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.person),
+                      label: Text(l10n.navYou),
+                    ),
+                  ],
+                );
+              },
             ),
-          );
-        },
-      ),
+            const VerticalDivider(width: 1),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+    return Scaffold(
+      body: body,
+      floatingActionButton: _logFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: _currentIndex,
@@ -566,6 +591,48 @@ class _HomeScreenState extends State<HomeScreen>
           );
         },
       ),
+    );
+  }
+
+  static const _railPages = [_pageHome, _pageFitness, _pageSocial, _pageYou];
+
+  int? _railIndexFor(int pageIndex) {
+    final i = _railPages.indexOf(pageIndex);
+    return i == -1 ? null : i;
+  }
+
+  // The raised "+" is the Log action (multi_modal.md § Bottom nav) — the
+  // docked centre FAB on phones, the NavigationRail leading button on
+  // expanded layouts. FloatingActionButton has no long-press, so the
+  // GestureDetector wrapper claims that gesture while the button keeps the
+  // tap; the Semantics label makes the action explicit for screen readers,
+  // and the 56 dp FAB clears the >=48 dp target. When [anchored], the
+  // speed-dial fans from the button's own position instead of the
+  // bottom-centre dock.
+  Widget _logFab({bool anchored = false}) {
+    return Builder(
+      builder: (fabContext) {
+        final l10n = AppLocalizations.of(fabContext);
+        Offset? anchorOf() {
+          if (!anchored) return null;
+          final box = fabContext.findRenderObject() as RenderBox?;
+          if (box == null || !box.hasSize) return null;
+          return box.localToGlobal(box.size.center(Offset.zero));
+        }
+
+        return GestureDetector(
+          onLongPress: () => _onLogLongPress(anchor: anchorOf()),
+          child: Semantics(
+            button: true,
+            label: l10n.logA11yLabel,
+            child: FloatingActionButton(
+              onPressed: () => _onLogTap(anchor: anchorOf()),
+              tooltip: l10n.navLog,
+              child: const Icon(Icons.add),
+            ),
+          ),
+        );
+      },
     );
   }
 }

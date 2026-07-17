@@ -546,7 +546,9 @@ class TrainingService extends ChangeNotifier {
         .cast<PlanWorkoutRow?>()
         .firstOrNull;
     final active = res.workouts.where((w) => w.kind != 'rest').toList();
-    final done = active.where((w) => w.completedRunId != null).length;
+    final done = active
+        .where((w) => w.completedRunId != null || w.manuallyCompleted)
+        .length;
     final pct = active.isEmpty ? 0 : (100 * done / active.length).round();
     final startDate = parseIsoDate(toIsoDate(plan.startDate));
     final dayIndex = DateTime.now().difference(startDate).inDays;

@@ -275,6 +275,10 @@ class SettingsSyncService extends ChangeNotifier {
     if (keep is bool && keep != preferences.keepScreenOn) {
       preferences.setKeepScreenOn(keep);
     }
+    final dim = prefs[SettingsKeys.dimScreenWhileRecording];
+    if (dim is bool && dim != preferences.dimScreenWhileRecording) {
+      preferences.setDimScreenWhileRecording(dim);
+    }
   }
 
   /// Push the user's race-fueling intake rates to the universal bag so they
@@ -295,6 +299,16 @@ class SettingsSyncService extends ChangeNotifier {
     if (s == null) return;
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.keepScreenOn: preferences.keepScreenOn,
+    });
+    notifyListeners();
+  }
+
+  /// Push the user's dim-screen-while-recording toggle to the device bag.
+  Future<void> pushDimScreenWhileRecording() async {
+    final s = _settings;
+    if (s == null) return;
+    await s.updateDevice(<String, dynamic>{
+      SettingsKeys.dimScreenWhileRecording: preferences.dimScreenWhileRecording,
     });
     notifyListeners();
   }

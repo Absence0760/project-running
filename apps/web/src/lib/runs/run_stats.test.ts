@@ -106,13 +106,28 @@ test('elevationGainMetres — sums positive deltas only', () => {
 	assert.equal(elevationGainMetres(pts), 35);
 });
 
-test('elevationGainMetres — null / undefined elevations skipped', () => {
+test('elevationGainMetres — climb across a missing-elevation gap is carried forward', () => {
 	const pts: TrackPoint[] = [
 		{ lat: 0, lng: 0, ele: 100 },
 		{ lat: 0, lng: 0.001 }, // missing ele
 		{ lat: 0, lng: 0.002, ele: 110 },
 	];
-	assert.equal(elevationGainMetres(pts), 0);
+	// The runner climbed 10 m across the dropout; skipping the gap entirely
+	// (the old adjacent-pair behaviour) wrongly reported 0.
+	assert.equal(elevationGainMetres(pts), 10);
+});
+
+test('elevationGainMetres — carries the last valid elevation across a multi-point gap', () => {
+	const pts: TrackPoint[] = [
+		{ lat: 0, lng: 0, ele: 100 },
+		{ lat: 0, lng: 0.001 }, // missing ele
+		{ lat: 0, lng: 0.002 }, // missing ele
+		{ lat: 0, lng: 0.003, ele: 130 },
+		{ lat: 0, lng: 0.004, ele: 120 }, // descent, ignored
+		{ lat: 0, lng: 0.005, ele: 125 },
+	];
+	// +30 across the gap, then +5 after the descent = 35.
+	assert.equal(elevationGainMetres(pts), 35);
 });
 
 test('elevationGainMetres — empty / single-point input returns 0', () => {

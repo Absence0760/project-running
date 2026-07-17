@@ -2033,6 +2033,18 @@ abstract class AppLocalizations {
   /// **'Share live link'**
   String get runShareLiveLink;
 
+  /// Shown when a signed-out user tries to share a live tracking link, which cannot broadcast
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to share a live tracking link.'**
+  String get runLiveShareNeedsSignIn;
+
+  /// Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead
+  ///
+  /// In en, this message translates to:
+  /// **'Live tracking couldn\'t start — tap Share to retry.'**
+  String get runLiveShareNotStarted;
+
   /// Idle-screen button opening the training-plans list when no active plan exists
   ///
   /// In en, this message translates to:
@@ -11131,11 +11143,23 @@ abstract class AppLocalizations {
   /// **'Keep screen on'**
   String get prefsKeepScreenOn;
 
-  /// Subtitle of the keep-screen-on toggle
+  /// Subtitle of the keep-screen-on toggle, disclosing its battery cost
   ///
   /// In en, this message translates to:
-  /// **'Hold a wakelock during a run'**
+  /// **'Keeps the display lit for the whole run. Uses noticeably more battery on long efforts.'**
   String get prefsKeepScreenOnSubtitle;
+
+  /// Toggle title for dimming the map while recording to save battery
+  ///
+  /// In en, this message translates to:
+  /// **'Dim screen while recording'**
+  String get prefsDimScreenWhileRecording;
+
+  /// Subtitle of the dim-screen-while-recording toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Darken the map during a run to save battery. Stats stay readable.'**
+  String get prefsDimScreenWhileRecordingSubtitle;
 
   /// Toggle title for advanced GPS
   ///

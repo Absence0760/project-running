@@ -399,6 +399,8 @@ GPS continues while the app is backgrounded via an Android foreground service sp
 
 `FOREGROUND_SERVICE_LOCATION` is required on Android 14+ for location-type foreground services. `POST_NOTIFICATIONS` is required on Android 13+ to display the service's notification at all.
 
+The app's own `<service>` override for `com.baseflow.geolocator.GeolocatorLocationService` (declared with `tools:node="merge"`, primarily to surface `foregroundServiceType="location"` in the compiled manifest) also pins **`android:stopWithTask="false"`**. The plugin declares neither this attribute nor an `onTaskRemoved()` override, so without it swiping the app card off Recents mid-run tears down the foreground GPS service and its hosting process, and recording dies silently — data still survives via the 10 s incremental save + 48 h resumable-partial recovery, but the run has stopped and the runner isn't told. `stopWithTask="false"` keeps the service (and process) running so an active run survives the swipe. Pinned by the `stopWithTask=false` guard in `apps/mobile_android/test/architecture_guards_test.dart` (issue #250).
+
 Practical requirements on the device:
 
 - Location permission must be granted as **"Allow all the time"**, not "While using the app" — the latter stops feeding fixes the moment the app is backgrounded, regardless of the foreground service.

@@ -99,14 +99,27 @@ void main() {
       expect(computeElevationGain(track), 13);
     });
 
-    test('skips segments where either end lacks an elevation reading', () {
+    test('carries the last valid elevation across a missing-reading gap', () {
       final track = [
         wp(0, 0, ele: 10),
         wp(0, 0.001), // no elevation
         wp(0, 0.002, ele: 20),
       ];
-      // The middle segment can't contribute because one end is null.
-      expect(computeElevationGain(track), 0);
+      // The runner climbed 10 m across the dropout; skipping the gap
+      // entirely (the old adjacent-pair behaviour) wrongly reported 0.
+      expect(computeElevationGain(track), 10);
+    });
+
+    test('carries across a multi-point gap and still ignores descents', () {
+      final track = [
+        wp(0, 0, ele: 100),
+        wp(0, 0.001), // no elevation
+        wp(0, 0.002), // no elevation
+        wp(0, 0.003, ele: 130), // +30 across the gap
+        wp(0, 0.004, ele: 120), // -10, ignored
+        wp(0, 0.005, ele: 125), // +5
+      ];
+      expect(computeElevationGain(track), 35);
     });
   });
 }

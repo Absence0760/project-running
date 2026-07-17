@@ -19,7 +19,7 @@ class TodaysWorkoutCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final w = overview.todayWorkout!;
     final kind = workoutKindFromDb(w.kind);
-    final done = w.completedRunId != null;
+    final done = w.completedRunId != null || w.manuallyCompleted;
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),

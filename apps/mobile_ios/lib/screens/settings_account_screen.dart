@@ -228,8 +228,11 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     try {
       final raw = await f.readAsBytes();
       // Strip EXIF/GPS before the bytes leave the device — the avatars bucket
-      // is public with no server-side strip worker (mirrors web + run-photos).
-      final clean = stripJpegExif(Uint8List.fromList(raw));
+      // is public with no server-side strip worker, so this is the ONLY strip.
+      // Dispatch by content type so a PNG/WebP avatar is stripped too, not
+      // just JPEG (an unstripped PNG/WebP would ship a home coordinate to the
+      // logged-out public profile).
+      final clean = stripImageExif(Uint8List.fromList(raw), contentType);
       final url = await api.uploadAvatar(bytes: clean, contentType: contentType);
       if (!mounted) return;
       setState(() {
