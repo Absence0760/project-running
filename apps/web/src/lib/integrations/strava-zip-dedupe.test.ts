@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildStravaDedupeSet } from './strava-zip-dedupe';
+import { buildStravaDedupeSet, collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedupe';
 
 test('buildStravaDedupeSet — adds metadata.strava_id', () => {
 	const seen = buildStravaDedupeSet([
@@ -94,4 +94,40 @@ test('buildStravaDedupeSet — handles mixed batch of new + legacy rows', () => 
 	assert.equal(seen.has('1'), true);
 	assert.equal(seen.has('2'), true);
 	assert.equal(seen.has('3'), true);
+});
+
+test('collectStravaDedupeSet — pages past the 1000-row PostgREST cap', async () => {
+	// A high-volume migrant with 2,500 existing Strava runs. A single
+	// unbounded read would return only ~1000, so ~1500 would be re-imported
+	// as duplicates. The pager must see every one.
+	const TOTAL = 2500;
+	const all: StravaDedupeRow[] = Array.from({ length: TOTAL }, (_, i) => ({
+		metadata: { strava_id: String(i) },
+		external_id: `strava:${i}`,
+	}));
+	let calls = 0;
+	const seen = await collectStravaDedupeSet((from, to) => {
+		calls++;
+		return Promise.resolve(all.slice(from, to + 1)); // inclusive range
+	});
+	assert.equal(seen.size, TOTAL, 'every existing run must be in the dedupe set');
+	assert.equal(seen.has('0'), true);
+	assert.equal(seen.has('2499'), true);
+	assert.equal(calls, 3, '2500 rows over a 1000-row page = 3 pages');
+});
+
+test('collectStravaDedupeSet — stops on a null (error) page without throwing', async () => {
+	const seen = await collectStravaDedupeSet(() => Promise.resolve(null));
+	assert.equal(seen.size, 0);
+});
+
+test('collectStravaDedupeSet — a short final page ends the loop', async () => {
+	const page = [{ metadata: { strava_id: '7' }, external_id: 'strava:7' }];
+	let calls = 0;
+	const seen = await collectStravaDedupeSet((from, to) => {
+		calls++;
+		return Promise.resolve(page.slice(from, to + 1));
+	});
+	assert.equal(seen.has('7'), true);
+	assert.equal(calls, 1, 'a page shorter than pageSize ends paging');
 });
