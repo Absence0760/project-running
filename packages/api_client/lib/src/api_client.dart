@@ -1192,8 +1192,12 @@ class ApiClient {
       // `last_modified_at` lives in metadata as an ISO-8601 string stamped
       // by LocalRunStore on every write. `->>` projects the JSON field as
       // text; Postgres lexicographic-compares ISO-8601 strings correctly.
+      // The key must NOT be quoted in PostgREST filter syntax — a quoted
+      // key is treated as the literal JSON key `'last_modified_at'`
+      // (quotes included), which matches nothing and silently turns every
+      // delta pull into an empty result.
       query = query.gt(
-        "${RunRow.colMetadata}->>'last_modified_at'",
+        '${RunRow.colMetadata}->>last_modified_at',
         updatedSince.toIso8601String(),
       );
     }
@@ -1978,9 +1982,12 @@ class ApiClient {
         .map<String>((e) => e[UserFollowRow.colFollowerId] as String)
         .toList();
     if (ids.isEmpty) return const [];
+    // Cross-user reads must stay inside the granted column set
+    // (migration 20260707_001) — a bare select() requests revoked
+    // columns and PostgREST rejects the whole read with 42501.
     final profiles = await _client
         .from(UserProfileRow.table)
-        .select()
+        .select('id, display_name, avatar_url, created_at')
         .inFilter(UserProfileRow.colId, ids);
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
@@ -2003,9 +2010,12 @@ class ApiClient {
         .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
         .toList();
     if (ids.isEmpty) return const [];
+    // Same granted-column constraint as fetchFollowers — a bare
+    // select() here broke the entire feed (42501) once 20260707_001
+    // locked the cross-user grant down.
     final profiles = await _client
         .from(UserProfileRow.table)
-        .select()
+        .select('id, display_name, avatar_url, created_at')
         .inFilter(UserProfileRow.colId, ids);
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
