@@ -247,14 +247,14 @@ test('pacesFromGoalPace: female calibration shifts every band ~3% slower', () =>
 	);
 });
 
-test('pacesFromGoalPace: nonbinary falls back to the unmodified curve', () => {
-	// We do not have a validated calibration for non-binary athletes;
+test('pacesFromGoalPace: prefer_not_to_say falls back to the unmodified curve', () => {
+	// We do not have a validated calibration without a stated sex;
 	// applying a wrong adjustment is worse than no adjustment. Pin
 	// the conservative default so a future contributor doesn't
 	// silently fork this branch.
 	const male = pacesFromGoalPace(240);
-	const nb = pacesFromGoalPace(240, 'nonbinary');
-	assert.deepStrictEqual(nb, male);
+	const pnts = pacesFromGoalPace(240, 'prefer_not_to_say');
+	assert.deepStrictEqual(pnts, male);
 });
 
 test('resolveTrainingPaces: a recent 5k beats a goal time as the anchor', () => {

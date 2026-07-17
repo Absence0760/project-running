@@ -289,7 +289,6 @@ test('crownLabel: no filter → "Fastest overall"', () => {
 test('crownLabel: gender only', () => {
 	assert.equal(crownLabel('male', null), 'Fastest man');
 	assert.equal(crownLabel('female', null), 'Fastest woman');
-	assert.equal(crownLabel('nonbinary', null), 'Fastest nonbinary runner');
 });
 
 test('crownLabel: age band only', () => {
@@ -300,10 +299,6 @@ test('crownLabel: age band only', () => {
 test('crownLabel: gender + age band combined', () => {
 	assert.equal(crownLabel('female', '30-34'), 'Fastest woman 30-34');
 	assert.equal(crownLabel('male', '75+'), 'Fastest man 75+');
-	assert.equal(
-		crownLabel('nonbinary', '18-19'),
-		'Fastest nonbinary runner 18-19',
-	);
 });
 
 // ─── computeGlobalSegmentEffort (free-standing catalogue geometry) ───

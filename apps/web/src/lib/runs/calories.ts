@@ -18,7 +18,7 @@
 
 /// Optional gender hint for the calorie estimate. Matches the
 /// `gender` column on `user_profiles`.
-export type CalorieGender = 'male' | 'female' | 'nonbinary' | null;
+export type CalorieGender = 'male' | 'female' | 'prefer_not_to_say' | null;
 
 /// Default body weight used when the runner hasn't set
 /// `user_settings.prefs.body_weight_kg`. Median for an adult runner;
@@ -46,7 +46,7 @@ export const ACTIVITY_KCAL_PER_KG_PER_KM: Record<string, number> = {
 /// expenditure at the same MET intensity, per the cross-formula
 /// reconciliation between Daniels (running) + Compendium of Physical
 /// Activities (MET-based) + the female-vs-male offsets each surfaces.
-/// `male` / `null` / `nonbinary` use the unmodified curve.
+/// `male` / `null` / `prefer_not_to_say` use the unmodified curve.
 ///
 /// Why uniform 0.95 rather than per-pace adjustment:
 ///  - The literature suggests 3-8% depending on speed + slope; a

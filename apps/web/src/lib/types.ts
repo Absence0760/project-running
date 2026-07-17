@@ -154,9 +154,10 @@ export type RouteCondition = Omit<RouteConditionRow, 'condition' | 'severity'> &
 	severity: RouteConditionSeverity;
 };
 
-export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_tier'> & {
+export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_tier' | 'gender'> & {
 	preferred_unit: PreferredUnit | null;
 	subscription_tier: SubscriptionTier | null;
+	gender: Gender | null;
 };
 
 // The string columns below ARE enforced by CHECK constraints in the database
@@ -227,6 +228,7 @@ export function parseRouteSurface(raw: string | null | undefined): RouteSurface 
 
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';
 export type PreferredUnit = 'km' | 'mi';
+export type Gender = 'male' | 'female' | 'prefer_not_to_say';
 export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
 
 export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';

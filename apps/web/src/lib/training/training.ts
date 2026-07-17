@@ -180,7 +180,7 @@ export interface TrainingPaces {
 
 /// Optional gender hint for pace derivation. Matches the `gender`
 /// column on `user_profiles`. Persona-hunt Round 3 finding Woman #3.
-export type TrainingGender = 'male' | 'female' | 'nonbinary' | null;
+export type TrainingGender = 'male' | 'female' | 'prefer_not_to_say' | null;
 
 // Female runners' actual VDOT plotted on Daniels' male-default curve
 // under-predicts their training paces by ~3%. Applied as a uniform
@@ -197,10 +197,10 @@ export type TrainingGender = 'male' | 'female' | 'nonbinary' | null;
 //  - The conservative direction (slower) is the right error mode —
 //    over-prescribing female athletes' paces is the harm we're fixing.
 //
-// `male` and `null` use the original (male-derived) curve. `nonbinary`
-// also defaults to the original — no validated calibration exists for
-// non-binary athletes, and a wrong adjustment is worse than no
-// adjustment.
+// `male` and `null` use the original (male-derived) curve.
+// `prefer_not_to_say` also defaults to the original — no validated
+// calibration exists without a stated sex, and a wrong adjustment is
+// worse than no adjustment.
 const FEMALE_PACE_CALIBRATION = 1.03;
 
 function genderPaceMultiplier(gender: TrainingGender | undefined): number {

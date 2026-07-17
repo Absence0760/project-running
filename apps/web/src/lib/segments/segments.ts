@@ -237,7 +237,7 @@ export const SEGMENT_AGE_BANDS = [
 ] as const;
 export type SegmentAgeBand = (typeof SEGMENT_AGE_BANDS)[number];
 
-export type SegmentGenderFilter = 'male' | 'female' | 'nonbinary';
+export type SegmentGenderFilter = 'male' | 'female';
 
 /**
  * Tooltip / aria-label for the KOM/QOM crown badge. Describes which
@@ -250,13 +250,7 @@ export function crownLabel(
 	ageFilter: SegmentAgeBand | null,
 ): string {
 	const subject =
-		genderFilter == null
-			? null
-			: genderFilter === 'male'
-				? 'man'
-				: genderFilter === 'female'
-					? 'woman'
-					: 'nonbinary runner';
+		genderFilter == null ? null : genderFilter === 'male' ? 'man' : 'woman';
 	if (subject == null && ageFilter == null) return 'Fastest overall';
 	if (subject != null && ageFilter == null) return `Fastest ${subject}`;
 	if (subject == null && ageFilter != null) return `Fastest ${ageFilter}`;
