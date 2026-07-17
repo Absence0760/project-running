@@ -18,6 +18,8 @@ Each guide is a markdown / MDsvex file committed in the repo, loaded by a build-
 
 `/learn` is **shell-less + anon** in `routes/+layout.svelte` (a marketing surface, never wrapped in the app sidebar — the `path.startsWith('/learn')` prefix in `isShellless`, which `isAnonAllowed` is a superset of).
 
+All three learn routes render the **same public-site chrome as the landing page** via the shared `PublicHeader` / `PublicFooter` components (issue #212): wordmark logo + Apps / Features / Learn nav + a Sign In pill (which flips to "Open app" → `/dashboard` for a signed-in visitor after hydration), and the landing footer's tagline + nav/legal links. The landing page consumes the same components with `PublicHeader`'s `overlay` prop (transparent, white-on-dark, absolutely positioned over the hero); learn uses the default solid variant (themed surface + border, theme-swapped wordmark). Nav anchors are root-anchored (`/#apps`, `/#features`) so they resolve from `/learn`. Both components are prerender-safe — the static HTML bakes the signed-out state and the auth store swaps it client-side.
+
 ## Where the code lives
 
 ```
@@ -32,6 +34,8 @@ apps/web/src/lib/learn/
 apps/web/src/lib/components/
   GuideCard.svelte     # hub/category preview card (.card-elevated)
   LearnCta.svelte      # end-of-article CTA card (feature link + sign-up)
+  PublicHeader.svelte  # shared public-site nav (landing overlay variant + solid learn variant)
+  PublicFooter.svelte  # shared public-site footer (tagline + nav/legal links)
 apps/web/static/og-default.png   # 1200x630 branded OG fallback card
 ```
 
@@ -97,4 +101,4 @@ Two layers:
 ## Tests
 
 - Unit (`npx tsx --test`): `guides.test.ts`, `learn_meta.test.ts`, `sitemap.test.ts` (extended).
-- Playwright (`apps/web/tests-e2e/learn/`): `hub`, `article`, `seo`, `category`, `cta-links-resolve`, `localized-prose` (localized body + H1, English fallback + notice, localized hub-card title).
+- Playwright (`apps/web/tests-e2e/learn/`): `hub`, `article`, `seo`, `category`, `cta-links-resolve`, `localized-prose` (localized body + H1, English fallback + notice, localized hub-card title), `chrome` (the shared PublicHeader/PublicFooter landing chrome on all three learn routes).
