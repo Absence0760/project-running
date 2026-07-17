@@ -6787,7 +6787,15 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prefsKeepScreenOnSubtitle =>
-      'Maintient un wakelock pendant une course';
+      'Garde l\'écran allumé pendant toute la course. Consomme nettement plus de batterie sur les longues sorties.';
+
+  @override
+  String get prefsDimScreenWhileRecording =>
+      'Assombrir l\'écran pendant l\'enregistrement';
+
+  @override
+  String get prefsDimScreenWhileRecordingSubtitle =>
+      'Assombrit la carte pendant une course pour économiser la batterie. Les statistiques restent lisibles.';
 
   @override
   String get prefsAdvancedGps => 'GPS avancé';

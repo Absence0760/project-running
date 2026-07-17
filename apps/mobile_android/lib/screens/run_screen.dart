@@ -67,6 +67,18 @@ import 'plans_screen.dart';
 import 'run_detail_screen.dart';
 import 'workout_detail_screen.dart';
 
+/// Whether the recording view should darken the live map to save battery
+/// (issue #271). Only while actually recording (not during the countdown,
+/// which paints its own scrim) and only when the wakelock is holding the
+/// screen on — with the display already free to sleep there is nothing to
+/// dim.
+bool shouldDimRecordingMap({
+  required bool isCountdown,
+  required bool keepScreenOn,
+  required bool dimWhileRecording,
+}) =>
+    !isCountdown && keepScreenOn && dimWhileRecording;
+
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
 /// auto-pause, countdown, and optional route following.
 class RunScreen extends StatefulWidget {
@@ -3277,6 +3289,22 @@ class _RunScreenState extends State<RunScreen> {
             ghostPosition: _computeGhostPosition(),
           ),
         ),
+
+        // Battery-saver dim: darken the bright live map (the dominant
+        // draw) while recording, leaving the stats + controls that render
+        // in later Stack children at full brightness. IgnorePointer keeps
+        // map pan/zoom working through the scrim. Only meaningful with the
+        // wakelock holding the screen on (issue #271).
+        if (shouldDimRecordingMap(
+          isCountdown: isCountdown,
+          keepScreenOn: widget.preferences.keepScreenOn,
+          dimWhileRecording: widget.preferences.dimScreenWhileRecording,
+        ))
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: ColoredBox(color: Color(0x99000000)),
+            ),
+          ),
 
         // Countdown chrome — scrim + digit + cancel hint, layered on top
         // of the same map. Tap-anywhere cancels and resets to idle.

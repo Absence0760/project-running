@@ -9028,9 +9028,17 @@
   "@prefsKeepScreenOn": {
     "description": "Toggle title for keeping the screen on during a run"
   },
-  "prefsKeepScreenOnSubtitle": "Hold a wakelock during a run",
+  "prefsKeepScreenOnSubtitle": "Keeps the display lit for the whole run. Uses noticeably more battery on long efforts.",
   "@prefsKeepScreenOnSubtitle": {
-    "description": "Subtitle of the keep-screen-on toggle"
+    "description": "Subtitle of the keep-screen-on toggle, disclosing its battery cost"
+  },
+  "prefsDimScreenWhileRecording": "Dim screen while recording",
+  "@prefsDimScreenWhileRecording": {
+    "description": "Toggle title for dimming the map while recording to save battery"
+  },
+  "prefsDimScreenWhileRecordingSubtitle": "Darken the map during a run to save battery. Stats stay readable.",
+  "@prefsDimScreenWhileRecordingSubtitle": {
+    "description": "Subtitle of the dim-screen-while-recording toggle"
   },
   "prefsAdvancedGps": "Advanced GPS",
   "@prefsAdvancedGps": {

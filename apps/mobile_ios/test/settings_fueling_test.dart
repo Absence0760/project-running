@@ -83,10 +83,15 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Carbs per hour'),
+      find.widgetWithText(ListTile, 'Carbs per hour'),
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    // Fully reveal the tile before tapping: scrollUntilVisible can leave it on
+    // the bottom fold with its centre off-screen, so the tap misses and the
+    // editor dialog never opens (any tile added above it shifts it there).
+    await tester.ensureVisible(find.widgetWithText(ListTile, 'Carbs per hour'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'Carbs per hour'));
     await tester.pumpAndSettle();
 

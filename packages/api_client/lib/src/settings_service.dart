@@ -133,6 +133,10 @@ class SettingsKeys {
   static const voiceFeedbackIntervalKm = 'voice_feedback_interval_km';
   static const hapticFeedbackEnabled = 'haptic_feedback_enabled';
   static const keepScreenOn = 'keep_screen_on';
+  /// Dim the live map while recording (only when [keepScreenOn] is on) so
+  /// an always-lit display costs less battery on a long run. Default off.
+  /// Read by run_screen while building the recording view.
+  static const dimScreenWhileRecording = 'dim_screen_while_recording';
   /// Start a live broadcast automatically when a run starts on THIS
   /// device (docs/features/safety.md). Default off — a live share makes
   /// the in-progress run publicly viewable by link, so it must be an
