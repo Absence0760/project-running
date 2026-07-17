@@ -613,7 +613,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         .expand((x) => x)
         .where((w) => w.kind != 'rest' && !_isWorkoutSkipped(w))
         .toList();
-    final done = allActive.where((w) => w.completedRunId != null).length;
+    final done = allActive.where(_isWorkoutCompleted).length;
     final pct =
         allActive.isEmpty ? 0 : (100 * done / allActive.length).round();
 
@@ -1050,7 +1050,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                 if (wo.targetPaceSecPerKm != null)
                   Text('@ ${fmtPace(wo.targetPaceSecPerKm)}',
                       style: TextStyle(color: theme.colorScheme.outline)),
-                if (wo.completedRunId != null) ...[
+                if (_isWorkoutCompleted(wo)) ...[
                   const SizedBox(width: 10),
                   Icon(Icons.check_circle,
                       color: theme.colorScheme.primary, size: 18),
@@ -1181,7 +1181,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   style: theme.textTheme.bodySmall),
               const SizedBox(width: 6),
             ],
-            if (wo.completedRunId != null)
+            if (_isWorkoutCompleted(wo))
               Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 16)
             else if (isSkipped)
               Icon(Icons.skip_next, color: theme.colorScheme.outline, size: 16),
