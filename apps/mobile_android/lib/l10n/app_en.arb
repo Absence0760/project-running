@@ -7328,6 +7328,39 @@
       }
     }
   },
+  "settingsAccountChangeEmail": "Change email",
+  "@settingsAccountChangeEmail": {
+    "description": "Tile title and dialog title for changing the account email"
+  },
+  "settingsAccountNewEmail": "New email",
+  "@settingsAccountNewEmail": {
+    "description": "Label for the new-email field in the change-email dialog"
+  },
+  "settingsAccountEmailChangeInvalid": "Enter a valid email address that's different from your current one.",
+  "@settingsAccountEmailChangeInvalid": {
+    "description": "Validation error when the new email is malformed or unchanged"
+  },
+  "settingsAccountEmailChangePending": "Confirmation pending. Check both your old inbox ({old}) and your new inbox ({newEmail}) and follow the link in each to finish the change. Your email won't change until you confirm from both.",
+  "@settingsAccountEmailChangePending": {
+    "description": "Persistent note + banner after an email change is requested; names both inboxes",
+    "placeholders": {
+      "old": {
+        "type": "Object"
+      },
+      "newEmail": {
+        "type": "Object"
+      }
+    }
+  },
+  "settingsAccountEmailChangeFailed": "Couldn't start the email change: {error}",
+  "@settingsAccountEmailChangeFailed": {
+    "description": "Banner shown when starting the email change fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "settingsAccountDeleteTitle": "Delete account?",
   "@settingsAccountDeleteTitle": {
     "description": "Title of the delete-account confirmation dialog"

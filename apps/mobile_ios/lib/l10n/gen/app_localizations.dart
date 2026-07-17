@@ -9044,6 +9044,36 @@ abstract class AppLocalizations {
   /// **'Could not update password: {error}'**
   String settingsAccountPasswordUpdateFailed(Object error);
 
+  /// Tile title and dialog title for changing the account email
+  ///
+  /// In en, this message translates to:
+  /// **'Change email'**
+  String get settingsAccountChangeEmail;
+
+  /// Label for the new-email field in the change-email dialog
+  ///
+  /// In en, this message translates to:
+  /// **'New email'**
+  String get settingsAccountNewEmail;
+
+  /// Validation error when the new email is malformed or unchanged
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address that\'s different from your current one.'**
+  String get settingsAccountEmailChangeInvalid;
+
+  /// Persistent note + banner after an email change is requested; names both inboxes
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation pending. Check both your old inbox ({old}) and your new inbox ({newEmail}) and follow the link in each to finish the change. Your email won\'t change until you confirm from both.'**
+  String settingsAccountEmailChangePending(Object old, Object newEmail);
+
+  /// Banner shown when starting the email change fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start the email change: {error}'**
+  String settingsAccountEmailChangeFailed(Object error);
+
   /// Title of the delete-account confirmation dialog
   ///
   /// In en, this message translates to:
