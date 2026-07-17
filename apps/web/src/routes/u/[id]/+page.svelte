@@ -413,14 +413,20 @@
 		if (rowBusy.has(targetId)) return;
 		const wasFollowing = viewerFollows.has(targetId);
 		rowBusy = new Set([...rowBusy, targetId]);
-		// Optimistic flip — the action targets the row, not the page-
-		// level profile, so the header counts only adjust when the
-		// viewer is on their OWN profile (the rare case where this row
-		// IS the page).
+		// Optimistic flip of the row's follow state.
 		const next = new Set(viewerFollows);
 		if (wasFollowing) next.delete(targetId);
 		else next.add(targetId);
 		viewerFollows = next;
+		// When viewing our OWN profile, a row toggle changes OUR following
+		// count — reflect it in the header immediately (the followers/following
+		// lists on the own profile are exactly the viewer's own graph), or the
+		// count stays frozen until a reload.
+		if (isSelf && profile) {
+			profile.following_count = wasFollowing
+				? Math.max(profile.following_count - 1, 0)
+				: profile.following_count + 1;
+		}
 		try {
 			if (wasFollowing) await unfollowUser(targetId);
 			else await followUser(targetId);
@@ -430,6 +436,11 @@
 			if (wasFollowing) rollback.add(targetId);
 			else rollback.delete(targetId);
 			viewerFollows = rollback;
+			if (isSelf && profile) {
+				profile.following_count = wasFollowing
+					? profile.following_count + 1
+					: Math.max(profile.following_count - 1, 0);
+			}
 			showToast(m('profile.updateFollowError', { error: String(e) }), 'error');
 		} finally {
 			const done = new Set(rowBusy);

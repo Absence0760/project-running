@@ -18,7 +18,7 @@ import { parseFitBuffer } from './garmin-fit';
 import { saveRun, addRunPhoto } from '../core/data';
 import { TABLES, METADATA_KEYS } from '../core/schema';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
-import { buildStravaDedupeSet } from './strava-zip-dedupe';
+import { collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
 import { classifyStravaMember } from './strava-zip-classify';
 import { classifyStravaRow } from './strava-zip-disposition';
@@ -91,11 +91,21 @@ export async function importStravaZip(
 		throw new Error('activities.csv is missing required columns (Activity ID / Filename).');
 	}
 
-	const { data: existing } = await supabase
-		.from(TABLES.runs)
-		.select('metadata, external_id')
-		.eq('user_id', uid);
-	const seen = buildStravaDedupeSet(existing ?? []);
+	// Page the dedupe read: an unbounded PostgREST SELECT caps at 1000 rows, so
+	// a high-volume migrant (1000+ existing runs) re-importing a refreshed ZIP
+	// would otherwise compare against an arbitrary slice and silently re-import
+	// everything past the cap as duplicates. Mirrors garmin-zip's paging guard.
+	const seen = await collectStravaDedupeSet((from, to) =>
+		supabase
+			.from(TABLES.runs)
+			.select('metadata, external_id')
+			.eq('user_id', uid)
+			.order('started_at', { ascending: false })
+			.range(from, to)
+			.then(({ data, error }): StravaDedupeRow[] | null =>
+				error ? null : (data as StravaDedupeRow[]),
+			),
+	);
 
 	const dataRows = rows.slice(1);
 	const progress: StravaZipProgress = {

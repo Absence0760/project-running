@@ -1137,6 +1137,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runShareLiveLink => 'Compartir enlace en vivo';
 
   @override
+  String get runLiveShareNeedsSignIn =>
+      'Inicia sesión para compartir un enlace de seguimiento en vivo.';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'No se pudo iniciar el seguimiento en vivo: toca Compartir para reintentar.';
+
+  @override
   String get runTrainingPlans => 'Planes de entrenamiento';
 
   @override

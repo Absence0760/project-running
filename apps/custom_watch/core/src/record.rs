@@ -1074,11 +1074,18 @@ impl Recorder {
         // finish crossing can happen.
         self.pacer.on_distance(self.distance_m, self.elapsed_s());
 
-        // Auto-lap: the fix that carries the current lap past the boundary
-        // closes it. The overshoot stays in the closed lap and the next lap
-        // starts at the closing fix's totals, so however long an accepted
-        // segment is (a throttled GNSS mode allows multi-hundred-metre legs),
-        // at most one lap closes per fix and no distance is lost.
+        // Auto-lap: close one lap per full AUTO_LAP_DISTANCE_M the current lap
+        // has crossed. A single accepted fix in a throttled GNSS mode can span
+        // several kilometre boundaries after a dropout, so this must close more
+        // than one lap — a bare `if` closed only ONE and merged the rest into
+        // one giant lap, silently corrupting the lap counter/index and every
+        // split from that point on. Every boundary but the last lands on the
+        // exact kilometre line (proportional time slice); the last close keeps
+        // the established single-boundary behaviour — the overshoot stays in
+        // the closed lap and the next lap opens at the closing fix's totals.
+        while self.distance_m - self.lap_start_distance_m >= 2.0 * AUTO_LAP_DISTANCE_M {
+            self.close_lap_at(self.lap_start_distance_m + AUTO_LAP_DISTANCE_M);
+        }
         if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
             self.close_lap();
         }
@@ -1100,17 +1107,42 @@ impl Recorder {
     /// anchor the next one at the current totals. Shared by the auto-lap
     /// boundary and the manual [`lap`](Recorder::lap).
     fn close_lap(&mut self) {
+        self.close_lap_at(self.distance_m);
+    }
+
+    /// Close the current lap at `close_distance_m` (`lap_start_distance_m <
+    /// close_distance_m <= self.distance_m`), attributing a distance-
+    /// proportional slice of the open lap's elapsed/moving time to it and
+    /// re-anchoring the next lap there. Closing at the full `self.distance_m`
+    /// (the manual-lap and single-boundary case) takes the whole open lap with
+    /// no remainder — identical to the old body. Closing at an intermediate
+    /// kilometre boundary is what lets a single throttled-mode fix that spans
+    /// several boundaries after a GNSS dropout close one lap per boundary
+    /// instead of merging them all into one giant lap (which silently corrupts
+    /// the lap counter/index and every split thereafter).
+    fn close_lap_at(&mut self, close_distance_m: f64) {
         let elapsed = self.elapsed_s();
+        let lap_distance = close_distance_m - self.lap_start_distance_m;
+        let open_distance = self.distance_m - self.lap_start_distance_m;
+        let frac = if open_distance > 0.0 {
+            (lap_distance / open_distance).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let open_elapsed = elapsed.saturating_sub(self.lap_start_elapsed_s);
+        let open_moving = self.moving_s - self.lap_start_moving_s;
+        let lap_elapsed = libm::round(open_elapsed as f64 * frac) as u32;
+        let lap_moving = libm::round(open_moving as f64 * frac) as u32;
         self.last_lap = Some(Lap {
             index: self.lap_index,
-            distance_m: self.distance_m - self.lap_start_distance_m,
-            elapsed_s: elapsed.saturating_sub(self.lap_start_elapsed_s),
-            moving_s: self.moving_s - self.lap_start_moving_s,
+            distance_m: lap_distance,
+            elapsed_s: lap_elapsed,
+            moving_s: lap_moving,
         });
         self.lap_index = self.lap_index.saturating_add(1);
-        self.lap_start_distance_m = self.distance_m;
-        self.lap_start_elapsed_s = elapsed;
-        self.lap_start_moving_s = self.moving_s;
+        self.lap_start_distance_m = close_distance_m;
+        self.lap_start_elapsed_s = self.lap_start_elapsed_s.saturating_add(lap_elapsed);
+        self.lap_start_moving_s = self.lap_start_moving_s.saturating_add(lap_moving);
     }
 
     fn elapsed_s(&self) -> u32 {
@@ -1616,6 +1648,33 @@ mod tests {
         assert_eq!(last.index, 1);
         assert!(last.distance_m >= AUTO_LAP_DISTANCE_M);
         assert_eq!(s.lap_distance_m, 0.0);
+    }
+
+    #[test]
+    fn throttled_auto_lap_closes_one_lap_per_boundary_in_a_single_fix() {
+        // Expedition mode (60 s fixes) after a ~5 min GNSS dropout: a single
+        // accepted fix carries the lap ~2.5 km at once, spanning TWO kilometre
+        // boundaries. Regression guard for the merge bug — a bare `if` closed
+        // only one lap, leaving a 2.5 km "lap" and a permanently-off counter.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        // ~2.5 km north in one 300 s gap (5 missed 60 s fixes): ~8.3 m/s, under
+        // the 10 m/s ceiling × 300 s, so the interval jump gate accepts it.
+        r.on_fix(&fix(40.0 + 0.0225, -105.0, 4.0, 300));
+        let s = r.snapshot();
+        // Two boundaries crossed → two laps closed → now on lap 3, instead of
+        // the pre-fix behaviour of a single merged ~2.5 km lap (lap == 2).
+        assert_eq!(s.lap, 3, "a 2.5 km single-fix jump must close two laps");
+        // The first (intermediate) close landed on the exact kilometre line;
+        // the last close absorbed the overshoot, keeping the established model
+        // (overshoot in the closed lap, open lap reset to 0).
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.index, 2);
+        assert!(last.distance_m >= AUTO_LAP_DISTANCE_M);
+        assert_eq!(s.lap_distance_m, 0.0);
+        assert!((s.distance_m - 2500.0).abs() < 60.0);
     }
 
     #[test]

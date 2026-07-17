@@ -20,6 +20,7 @@
 	import { isSundayIso, nextSundayIso } from '$lib/training/plan_start';
 	import { parsePlanMarkdown, parsePlanJson } from '$lib/training/plan_serialize';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { ageFromDob } from '$lib/nutrition/nutrition_targets';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
 	import { paceMinutesSeconds } from '$lib/format/pace_format';
@@ -47,16 +48,11 @@
 		const g = (data as { gender?: string | null } | null)?.gender;
 		if (g === 'male' || g === 'female' || g === 'nonbinary') viewerGender = g;
 		const dob = (data as { date_of_birth?: string | null } | null)?.date_of_birth;
-		if (dob) {
-			const born = new Date(dob);
-			if (!Number.isNaN(born.getTime())) {
-				const now = new Date();
-				let age = now.getFullYear() - born.getFullYear();
-				const m = now.getMonth() - born.getMonth();
-				if (m < 0 || (m === 0 && now.getDate() < born.getDate())) age--;
-				if (age >= 0 && age < 120) viewerAge = age;
-			}
-		}
+		// Parse by calendar components — new Date('YYYY-MM-DD') is UTC midnight,
+		// and reading it back through local getters shifts the birthday a day
+		// early in negative-UTC offsets, misfiring the masters (50) gate.
+		const age = ageFromDob(dob, Date.now());
+		if (age !== null) viewerAge = age;
 	});
 
 	const METRES_PER_MILE = 1609.344;

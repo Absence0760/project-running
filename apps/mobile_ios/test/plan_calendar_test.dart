@@ -98,4 +98,32 @@ void main() {
     // The completed marker is the small filled tick icon.
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
+
+  testWidgets('shows a tick on a manually-completed workout (no linked run)',
+      (tester) async {
+    final start = DateTime(2024, 4, 1);
+    final end = DateTime(2024, 4, 30);
+    final wo = PlanWorkoutRow(
+      id: 'wo1',
+      weekId: 'wk1',
+      scheduledDate: DateTime(2024, 4, 10),
+      kind: 'tempo',
+      targetDistanceM: 8000,
+      completedRunId: null,
+      manuallyCompleted: true,
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: PlanCalendar(
+          startDate: start,
+          endDate: end,
+          workouts: [wo],
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+  });
 }

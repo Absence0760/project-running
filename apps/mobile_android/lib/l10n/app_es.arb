@@ -320,6 +320,8 @@
   "runChooseRoute": "Elegir ruta",
   "runChangeRoute": "Cambiar ruta",
   "runShareLiveLink": "Compartir enlace en vivo",
+  "runLiveShareNeedsSignIn": "Inicia sesión para compartir un enlace de seguimiento en vivo.",
+  "runLiveShareNotStarted": "No se pudo iniciar el seguimiento en vivo: toca Compartir para reintentar.",
   "runTrainingPlans": "Planes de entrenamiento",
   "runTapToCancel": "Toca para cancelar",
   "runFirstRunPrompt": "Tu primera carrera está a un toque.",

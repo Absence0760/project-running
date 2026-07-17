@@ -320,6 +320,8 @@
   "runChooseRoute": "Escolher rota",
   "runChangeRoute": "Trocar rota",
   "runShareLiveLink": "Compartilhar link ao vivo",
+  "runLiveShareNeedsSignIn": "Inicie sessão para partilhar uma ligação de rastreio em direto.",
+  "runLiveShareNotStarted": "Não foi possível iniciar o rastreio em direto — toque em Partilhar para tentar novamente.",
   "runTrainingPlans": "Planos de treino",
   "runTapToCancel": "Toque para cancelar",
   "runFirstRunPrompt": "Sua primeira corrida está a um toque de distância.",
