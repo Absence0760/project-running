@@ -5403,6 +5403,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountChangeEmail => 'Change email';
+
+  @override
+  String get settingsAccountNewEmail => 'New email';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Enter a valid email address that\'s different from your current one.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmation pending. Check both your old inbox ($old) and your new inbox ($newEmail) and follow the link in each to finish the change. Your email won\'t change until you confirm from both.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Couldn\'t start the email change: $error';
+  }
+
+  @override
   String get settingsAccountDeleteTitle => 'Delete account?';
 
   @override

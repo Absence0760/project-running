@@ -493,6 +493,20 @@ class ApiClient {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  /// Start a change of the signed-in user's email. GoTrue's secure email
+  /// change sends a confirmation link to BOTH the current and the new
+  /// address; the account email only flips once both are followed, so
+  /// the caller surfaces a "confirmation pending" state rather than
+  /// treating this as an immediate change. Mirrors the web
+  /// `/settings/account` `handleChangeEmail`.
+  Future<void> updateEmail(String newEmail) async {
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.auth.updateUser(
+      UserAttributes(email: newEmail),
+      emailRedirectTo: kAuthDeepLinkRedirect,
+    );
+  }
+
   /// Delete the signed-in user's account. Invokes the `delete-account`
   /// Edge Function which cascades the deletion through every public
   /// FK to `auth.users` (decisions.md §56). The caller is responsible

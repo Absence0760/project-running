@@ -84,6 +84,59 @@
 	let passwordStatus = $state<string | null>(null);
 	let passwordError = $state<string | null>(null);
 
+	// Change-email flow. `auth.updateUser({ email })` starts GoTrue's
+	// secure double-confirmation: a link goes to BOTH the current and the
+	// new address, and the account email only flips once both are
+	// followed. Until then `auth.user.email` still reads the old address —
+	// so we surface an explicit "confirmation pending" state rather than
+	// optimistically showing the new one as if it had taken effect.
+	let emailEditing = $state(false);
+	let newEmail = $state('');
+	let emailChanging = $state(false);
+	let emailChangeError = $state<string | null>(null);
+	let pendingEmail = $state<string | null>(null);
+	// Snapshot the address at request time: `auth.updateUser` writes the
+	// SDK's returned user back into the session store, so reading
+	// `auth.user.email` afterwards is not a reliable "old address".
+	let pendingOldEmail = $state('');
+
+	// Loose email-shape check matching the browser's <input type="email">
+	// semantics (one @ with non-space text either side); the server stays
+	// the authority. Twin of mobile's looksLikeEmail (auth_validation.dart).
+	function looksLikeEmail(value: string): boolean {
+		return /^[^\s@]+@[^\s@]+$/.test(value.trim());
+	}
+
+	async function handleChangeEmail() {
+		emailChangeError = null;
+		const target = newEmail.trim();
+		const current = auth.user?.email ?? '';
+		if (!looksLikeEmail(target) || target.toLowerCase() === current.toLowerCase()) {
+			emailChangeError = m('settingsAccount.emailChangeInvalid');
+			return;
+		}
+		emailChanging = true;
+		const { error } = await supabase.auth.updateUser(
+			{ email: target },
+			{ emailRedirectTo: `${window.location.origin}/auth/callback` },
+		);
+		emailChanging = false;
+		if (error) {
+			emailChangeError = m('settingsAccount.emailChangeFailed', { error: error.message });
+			return;
+		}
+		pendingOldEmail = current;
+		pendingEmail = target;
+		emailEditing = false;
+		newEmail = '';
+	}
+
+	function cancelEmailChange() {
+		emailEditing = false;
+		newEmail = '';
+		emailChangeError = null;
+	}
+
 	let parkrunImporting = $state(false);
 
 	/// Kick the existing `parkrun-import` Edge Function with the
@@ -749,6 +802,57 @@
 			<label>
 				<span class="label-text">{m('settingsAccount.email')}</span>
 				<input type="email" value={auth.user?.email ?? ''} disabled />
+				{#if !emailEditing}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm email-change-btn"
+						onclick={() => {
+							emailEditing = true;
+							emailChangeError = null;
+						}}
+						data-testid="change-email"
+					>
+						{m('settingsAccount.changeEmail')}
+					</button>
+				{:else}
+					<input
+						type="email"
+						bind:value={newEmail}
+						placeholder={m('settingsAccount.newEmailPlaceholder')}
+						autocomplete="email"
+						data-testid="new-email-input"
+					/>
+					<div class="btn-row email-change-actions">
+						<button
+							type="button"
+							class="btn btn-primary btn-sm"
+							onclick={handleChangeEmail}
+							disabled={emailChanging || !newEmail}
+							data-testid="submit-email-change"
+						>
+							{emailChanging
+								? m('settingsAccount.emailChangeSending')
+								: m('settingsAccount.emailChangeSubmit')}
+						</button>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={cancelEmailChange}
+							disabled={emailChanging}
+						>
+							{m('settingsAccount.emailChangeCancel')}
+						</button>
+					</div>
+				{/if}
+				{#if emailChangeError}<p class="error-text" role="alert">{emailChangeError}</p>{/if}
+				{#if pendingEmail}
+					<p class="ok-text" data-testid="email-change-pending">
+						{m('settingsAccount.emailChangePending', {
+							old: pendingOldEmail,
+							new: pendingEmail,
+						})}
+					</p>
+				{/if}
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.parkrunNumber')}</span>
@@ -1171,6 +1275,8 @@
 	.consent-checkbox input { margin-top: 0.2rem; flex-shrink: 0; width: auto; }
 	.consent-recorded { font-size: 0.8rem; }
 	.btn-save { width: auto; }
+	.email-change-btn { margin-top: var(--space-xs); align-self: flex-start; }
+	.email-change-actions { margin-top: var(--space-xs); }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }

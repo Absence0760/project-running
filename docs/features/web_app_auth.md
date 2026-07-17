@@ -145,6 +145,16 @@ Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the len
 
 On mobile the contract is pinned in `test/auth_gates_test.dart` (17 mirror cases, one per web case) and the wiring in `test/sign_up_screen_test.dart`. Mobile has no e2e tier by design (`docs/testing/testing.md § What's not covered`), so the widget test is the wiring pin.
 
+## Change email
+
+A signed-in user can migrate their account to a new address from `/settings/account` (issue #245) — the escape hatch for someone who has lost access to their sign-up mailbox and would otherwise have to delete + re-register, losing all history. The email field stays read-only; a **Change email** affordance reveals a new-address input that calls `supabase.auth.updateUser({ email }, { emailRedirectTo: ${origin}/auth/callback })`. This starts GoTrue's **secure email change**: a confirmation link goes to **both** the current and the new address, and `auth.user.email` does not flip until both are followed. Because the SDK writes its returned user back into the session store, the "old address" shown in the pending note is **snapshotted at request time** (`pendingOldEmail`), not read back off the store. The UI validates the new address client-side first (loose `<input type="email">`-shape check, must differ from the current one — the server stays the authority) and, on a successful request, collapses the editor and shows a persistent **confirmation-pending** banner naming both inboxes.
+
+The confirmation mails themselves are rendered by the `auth-email` Edge Function's `email_change` (to the new address) + `email_change_current` (to the current address) catalogue keys — present in all six locales, with the secure double-send fan-out handled by `planSends` in `functions/auth-email/lib.ts`. No backend change was needed for #245; the templates already existed.
+
+Wiring pinned in `tests-e2e/settings/account.spec.ts` (`change email — request path`): the reject branch (unchanged/invalid address, no request fired) and the request branch (PUT `/auth/v1/user` **stubbed** so USER_A's real address isn't rotated out from under the other specs, then asserting the pending state).
+
+**Mobile** mirrors this: a **Change email** tile on `settings_account_screen.dart` opens a dialog with the same validation → `ApiClient.updateEmail(newEmail)` (`updateUser` with `emailRedirectTo: kAuthDeepLinkRedirect`) → a persistent pending note on the tile subtitle. Pinned in `test/settings_account_email_test.dart`. The `looksLikeEmail` shape check reuses `auth_validation.dart`.
+
 ## Password visibility toggle
 
 Every obscured field on `/login` (the sign-in/up password + the sign-up confirm field) carries a show/hide eye toggle (issue #225) — the password that mints an account shouldn't be typed blind. The toggle flips the input between `type='password'` and `type='text'`, carries a state-tracking localized `aria-label` (`login.showPassword` / `login.hidePassword` in all six locales), and is `disabled` until hydration — a pre-hydration click would silently do nothing, same treatment as the submit button. Wiring pinned in `tests-e2e/auth/password-visibility.spec.ts`. `/auth/reset` and the `/settings/account` change-password fields don't have the toggle yet — `parity.md` tracks the gap.

@@ -429,6 +429,7 @@ See [docs/backend/settings.md](../backend/settings.md) for the full registry of 
 |---|---|---|---|---|---|---|
 | Display name | ✓ | ✓ | ✓ | N/A | N/A | Web edits it on `/settings/account`. **Mobile twin shipped**: `settings_account_screen.dart` carries a display-name tile (dialog editor, blank clears to the "Runner" fallback) backed by `ApiClient.updateDisplayName` — a row-count-verified update with an insert fallback that throws when signed out. Previously the setup wizard was the only mobile writer, so a user who skipped it was stuck as "Runner". |
 | Email address (view) | ✓ | ✓ | ✓ | N/A | N/A | |
+| Change email | ✓ | ✓ | ✓ | N/A | N/A | All three call `supabase.auth.updateUser({ email })` (mobile via `ApiClient.updateEmail`), starting GoTrue's secure double-confirmation (link to both the old + new address). Web: a Change-email affordance on `/settings/account` reveals a new-address input + a persistent confirmation-pending banner naming both inboxes. Mobile: a Change-email tile → dialog → pending subtitle. Backend mail is the `auth-email` EF's `email_change` + `email_change_current` templates (all six locales, already present). See `web_app_auth.md § Change email`; issue #245. |
 | Change password | ✓ | ✓ | ✓ | N/A | N/A | All three call `supabase.auth.updateUser`. |
 | Delete account | ✓ | ✓ | ✓ | N/A | N/A | All three call the `delete-account` Edge Function. |
 | Sign out | ✓ | ✓ | ✓ | N/A | N/A | Watches sign out when the paired phone does. |
