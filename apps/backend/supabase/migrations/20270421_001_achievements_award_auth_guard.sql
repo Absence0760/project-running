@@ -23,7 +23,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_role            text := coalesce(current_setting('request.jwt.claim.role', true), '');
+  v_role            text := coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  );
   v_longest_run_m   double precision;
   v_lifetime_m      double precision;
   v_best_streak     integer;
@@ -31,11 +35,17 @@ declare
   v_plan_count      integer;
   v_run_id          uuid;
 begin
-  -- Ownership guard: only the row-owning user (auth.uid() = p_user) or a
-  -- service_role caller (webhook / worker inserts, auth.uid() null) may derive
-  -- another user's achievements. Mirrors the sibling p_user RPCs.
-  if v_role <> 'service_role' and auth.uid() is distinct from p_user then
-    raise exception 'award_achievements_for_user: not authorized' using errcode = '42501';
+  -- Ownership guard: service_role (webhook / worker inserts) and direct-SQL /
+  -- empty-role callers (the statement-level triggers running in the row-owner's
+  -- own write, and seed.sql) are trusted. Every other role (authenticated,
+  -- anon, future custom roles) must be the row owner. Mirrors the sibling
+  -- p_user RPC refresh_personal_records_for_user's guard exactly — an
+  -- empty-role bypass is what keeps seed.sql / trigger inserts working while
+  -- still blocking a cross-user call over an authenticated JWT.
+  if v_role <> 'service_role' and v_role <> '' then
+    if auth.uid() is null or auth.uid() is distinct from p_user then
+      raise exception 'award_achievements_for_user: not authorized' using errcode = '42501';
+    end if;
   end if;
 
   -- Serialize per-user so concurrent trigger fires don't double-derive.
