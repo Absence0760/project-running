@@ -14,6 +14,15 @@ void main() {
       expect(orderedPlanPhases(weeks), ['base', 'build', 'peak', 'taper']);
     });
 
+    test('a walk-run plan orders build before graduation', () {
+      final weeks = [
+        const PlanProgressWeek('graduation'),
+        const PlanProgressWeek('build'),
+        const PlanProgressWeek('build'),
+      ];
+      expect(orderedPlanPhases(weeks), ['build', 'graduation']);
+    });
+
     test('empty plan yields no phases', () {
       expect(orderedPlanPhases(const []), <String>[]);
     });

@@ -739,6 +739,18 @@ class ApiClient {
         .eq(RunRow.colId, runId);
   }
 
+  /// Flip a run back to private so the `/share/run/{id}` page and the
+  /// live-spectator link stop resolving. Inverse of [makeRunPublic] —
+  /// the live-broadcast stop path re-asserts is_public=true, so without
+  /// this a live-shared run had no way back to private on mobile.
+  /// Owner-only via RLS; idempotent on an already-private run.
+  Future<void> makeRunPrivate(String runId) async {
+    await _client
+        .from(RunRow.table)
+        .update({RunRow.colIsPublic: false})
+        .eq(RunRow.colId, runId);
+  }
+
   /// Batch-save a list of runs. Uploads tracks in parallel groups of
   /// [uploadConcurrency] and upserts rows in chunks of [rowChunkSize].
   ///

@@ -76,6 +76,22 @@ class _SlowShareApi extends ApiClient {
   }
 }
 
+/// Signed-in fake that records makeRunPrivate calls; optionally throws
+/// so the failure banner path can be driven without a backend.
+class _MakePrivateApi extends ApiClient {
+  int calls = 0;
+  bool shouldThrow = false;
+
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<void> makeRunPrivate(String runId) async {
+    calls += 1;
+    if (shouldThrow) throw Exception('offline');
+  }
+}
+
 /// Returns a seeded universal-bag value for [effective]; everything else
 /// falls through to the caller's fallback. Never touches Supabase.
 class _FakeSettingsService extends SettingsService {
@@ -222,6 +238,104 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
       });
+    });
+
+    testWidgets('make-private confirms then calls makeRunPrivate',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _MakePrivateApi();
+      await _pump(tester, run, apiClient: api);
+
+      // Open the overflow menu → Make private. Timed pumps (not
+      // pumpAndSettle, which spins the LiveRunMap pulse animation).
+      await tester.tap(find.byTooltip('More'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Make private'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The confirm dialog gates the flip — nothing called yet.
+      expect(find.text('Make this run private?'), findsOneWidget);
+      expect(api.calls, 0);
+
+      // Dialog-scoped finder — the menu item and the confirm button
+      // share the 'Make private' label.
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Make private'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(api.calls, 1);
+      expect(find.text('Run is now private'), findsOneWidget);
+
+      // Drain the banner auto-dismiss timer before teardown.
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('make-private cancel leaves the run untouched',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _MakePrivateApi();
+      await _pump(tester, run, apiClient: api);
+
+      await tester.tap(find.byTooltip('More'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Make private'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(api.calls, 0);
+      expect(find.text('Run is now private'), findsNothing);
+    });
+
+    testWidgets('make-private failure surfaces the error banner',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _MakePrivateApi()..shouldThrow = true;
+      await _pump(tester, run, apiClient: api);
+
+      await tester.tap(find.byTooltip('More'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Make private'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Make private'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(api.calls, 1);
+      expect(find.textContaining('Could not make run private'),
+          findsOneWidget);
+      expect(find.text('Run is now private'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('make-private is hidden when signed out', (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      await _pump(tester, run);
+
+      await tester.tap(find.byTooltip('More'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Save as route'), findsOneWidget);
+      expect(find.text('Make private'), findsNothing);
     });
 
     testWidgets('save-as-route shows an error banner when the store throws',

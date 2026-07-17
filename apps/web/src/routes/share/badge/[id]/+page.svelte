@@ -34,33 +34,65 @@
 	<meta name="twitter:description" content={description} />
 </svelte:head>
 
-<main class="share-badge">
-	{#if hasBadge}
-		<div class="badge-card tier-{tier}">
-			<span class="badge-icon material-symbols" aria-hidden="true">{resolved?.icon}</span>
-			<h1 class="badge-label">{label}</h1>
-			<p class="badge-desc">{resolved?.desc}</p>
-			<span class="badge-tier">{tier.toUpperCase()}</span>
-			{#if data.displayName}
-				<p class="badge-by">{data.displayName}</p>
-			{/if}
-			{#if earned}
-				<p class="badge-date">{m('badges.earnedOn', { date: earned })}</p>
-			{/if}
-		</div>
-	{:else}
-		<div class="badge-card not-found">
-			<span class="badge-icon material-symbols" aria-hidden="true">military_tech</span>
-			<h1 class="badge-label">{m('badges.section.title')}</h1>
-			<p class="badge-desc">{m('badges.notFound')}</p>
-		</div>
-	{/if}
-	<a class="cta" href={auth.loggedIn ? '/dashboard' : '/'}>{m('badges.shareCta')}</a>
-</main>
+<div class="share-page">
+	<header class="share-header">
+		<a href="/" class="share-logo">Threkir</a>
+	</header>
+
+	<main class="share-badge">
+		{#if hasBadge}
+			<div class="badge-card tier-{tier}">
+				<span class="badge-icon material-symbols" aria-hidden="true">{resolved?.icon}</span>
+				<h1 class="badge-label">{label}</h1>
+				<p class="badge-desc">{resolved?.desc}</p>
+				<span class="badge-tier">{tier.toUpperCase()}</span>
+				{#if data.displayName}
+					<p class="badge-by">{data.displayName}</p>
+				{/if}
+				{#if earned}
+					<p class="badge-date">{m('badges.earnedOn', { date: earned })}</p>
+				{/if}
+			</div>
+		{:else}
+			<div class="badge-card not-found">
+				<span class="badge-icon material-symbols" aria-hidden="true">military_tech</span>
+				<h1 class="badge-label">{m('badges.section.title')}</h1>
+				<p class="badge-desc">{m('badges.notFound')}</p>
+			</div>
+		{/if}
+		<a class="cta" href={auth.loggedIn ? '/dashboard' : '/'}>{m('badges.shareCta')}</a>
+	</main>
+
+	<footer class="share-footer">
+		<a href="/">{m('shareRun.footerHome')}</a>
+		<span class="dot">&middot;</span>
+		<a href="/login">{m('shareRun.signIn')}</a>
+	</footer>
+</div>
 
 <style>
-	.share-badge {
+	.share-page {
 		min-height: 100vh;
+		background: var(--color-bg);
+		display: flex;
+		flex-direction: column;
+	}
+
+	.share-header {
+		padding: var(--space-sm) var(--space-md);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
+	.share-logo {
+		font-weight: 700;
+		font-size: 1.15rem;
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+
+	.share-badge {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -123,5 +155,35 @@
 	.cta {
 		color: var(--color-primary);
 		font-weight: 600;
+	}
+
+	.share-footer {
+		margin-top: auto;
+		padding: var(--space-lg) var(--space-md);
+		border-top: 1px solid var(--color-border);
+		text-align: center;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		background: var(--color-surface);
+	}
+
+	.share-footer a {
+		color: var(--color-text-secondary);
+		text-decoration: none;
+	}
+
+	.share-footer a:hover {
+		color: var(--color-primary);
+	}
+
+	.dot {
+		color: var(--color-text-tertiary);
+		margin: 0 0.3rem;
+	}
+
+	@media (min-width: 48rem) {
+		.share-header {
+			padding: var(--space-md) var(--space-xl);
+		}
 	}
 </style>

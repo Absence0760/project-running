@@ -4,6 +4,8 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
+	import PublicHeader from '$lib/components/PublicHeader.svelte';
+	import PublicFooter from '$lib/components/PublicFooter.svelte';
 	import { buildOrganizationJsonLd, buildWebSiteJsonLd } from '$lib/share/site_meta';
 	import { normaliseSiteUrl } from '$lib/share/share_meta';
 
@@ -77,17 +79,7 @@
 		<span>{m('landing.loading')}</span>
 	</div>
 {:else}
-<nav class="landing-nav">
-	<a href="/" class="landing-logo" aria-label="Threkir">
-		<img src="/wordmark-light.svg" alt="Threkir" class="landing-wordmark" />
-	</a>
-	<div class="nav-links">
-		<a href="#apps" class="nav-link">{m('landing.navApps')}</a>
-		<a href="#features" class="nav-link">{m('landing.navFeatures')}</a>
-		<a href="/learn" class="nav-link">{m('landing.navLearn')}</a>
-		<a href="/login" class="nav-signin">{m('landing.signIn')}</a>
-	</div>
-</nav>
+<PublicHeader overlay />
 
 <main class="hero">
 	<h1>{m('landing.heroLine1')}<br />{m('landing.heroLine2')}<br />{m('landing.heroLine3')}</h1>
@@ -151,19 +143,7 @@
 	<a href="/login" class="btn btn-primary btn-lg">{m('landing.signInToContinue')}</a>
 </section>
 
-<footer class="landing-footer">
-	<span>&copy; Threkir — {m('landing.footerTagline')}</span>
-	<div class="footer-links">
-		<a href="/login">{m('landing.signIn')}</a>
-		<a href="#apps">{m('landing.navApps')}</a>
-		<a href="#features">{m('landing.navFeatures')}</a>
-		<a href="/learn">{m('landing.navLearn')}</a>
-		<a href="/privacy">{m('landing.footerPrivacy')}</a>
-		<a href="/terms">{m('landing.footerTerms')}</a>
-		<a href="/cookie-notice">{m('landing.footerCookies')}</a>
-		<a href="/health-data-notice">{m('landing.footerHealthData')}</a>
-	</div>
-</footer>
+<PublicFooter />
 {/if}
 
 <style>
@@ -174,62 +154,6 @@
 		min-height: 100vh;
 		color: var(--color-text-tertiary);
 		background: var(--color-bg);
-	}
-
-	.landing-nav {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-lg) var(--space-2xl);
-		position: absolute;
-		top: 0;
-		inset-inline-start: 0;
-		inset-inline-end: 0;
-		z-index: 10;
-	}
-
-	.landing-logo {
-		display: flex;
-		align-items: center;
-		text-decoration: none;
-	}
-	.landing-wordmark {
-		height: 2rem;
-		width: auto;
-		display: block;
-	}
-
-	.nav-links {
-		display: flex;
-		align-items: center;
-		gap: var(--space-lg);
-	}
-
-	.nav-link {
-		color: rgba(255, 255, 255, 0.72);
-		font-size: 0.9rem;
-		font-weight: 500;
-		transition: color var(--transition-fast);
-	}
-
-	.nav-link:hover {
-		color: #ffffff;
-	}
-
-	.nav-signin {
-		font-weight: 500;
-		color: rgba(255, 255, 255, 0.8);
-		padding: var(--space-sm) var(--space-lg);
-		border: 1px solid rgba(255, 255, 255, 0.25);
-		border-radius: var(--radius-md);
-		transition: all var(--transition-fast);
-		backdrop-filter: blur(8px);
-	}
-
-	.nav-signin:hover {
-		border-color: rgba(255, 255, 255, 0.6);
-		color: #ffffff;
-		background: rgba(255, 255, 255, 0.1);
 	}
 
 	.hero {
@@ -540,31 +464,6 @@
 		font-size: 1.05rem;
 	}
 
-	.landing-footer {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-lg) var(--space-2xl);
-		color: var(--color-text-tertiary);
-		font-size: 0.85rem;
-		background: var(--color-bg);
-		border-top: 1px solid var(--color-border);
-	}
-
-	.footer-links {
-		display: flex;
-		gap: var(--space-lg);
-	}
-
-	.footer-links a {
-		color: var(--color-text-secondary);
-		transition: color var(--transition-fast);
-	}
-
-	.footer-links a:hover {
-		color: var(--color-text);
-	}
-
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
 	}
@@ -576,9 +475,7 @@
 
 	@media (max-width: 768px) {
 		h1 { font-size: 2.5rem; }
-		.nav-link { display: none; }
 		.section-head h2 { font-size: 1.75rem; }
 		.apps-grid { grid-template-columns: 1fr; }
-		.landing-footer { flex-direction: column; gap: var(--space-sm); }
 	}
 </style>

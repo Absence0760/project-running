@@ -1,0 +1,11 @@
+-- Add the 'graduation' plan phase for beginner walk-run (C25K) plans.
+--
+-- A walk-run plan has no goal race, so its final week was mislabelled
+-- 'race' — surfacing "Race week" to a beginner who never signed up for one
+-- (issue #273). 'graduation' is the terminal phase of a walk-run plan: the
+-- week the runner first covers the distance continuously.
+--
+-- plan_phase is a Postgres enum (migration 20260419_001), so this is an
+-- ALTER TYPE ADD VALUE. The new value isn't referenced elsewhere in this
+-- migration, so it's safe inside the migration transaction (PG 12+).
+alter type plan_phase add value if not exists 'graduation';

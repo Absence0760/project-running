@@ -832,6 +832,7 @@ tests-e2e/
   share/
     run.spec.ts                — /share/run/[id] anon + authed-non-owner view; private-run not-found for anon; sign-up CTA click-through; run-meta render
     route.spec.ts              — /share/route/[id] anon view
+    badge.spec.ts              — /share/badge/[id] share-page chrome: header logo + footer home/sign-in links on both the found and not-available states
   u/
     profile.spec.ts            — /u/[id] (self vs cross-user view, Followers + Following tab list rendering + click-through)
     notifications.spec.ts      — /u/[me]?tab=notifications inbox: list renders, Mark all read empties Unread filter

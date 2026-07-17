@@ -37,20 +37,21 @@ test.describe('/ (landing)', () => {
 	});
 
 	test('top nav anchor links jump to in-page sections', async ({ page }) => {
-		// The "Apps" + "Features" nav links use #apps / #features
-		// fragment scrolls. Pin the targets exist so a refactor that
-		// renames a section id surfaces here.
+		// The "Apps" + "Features" nav links use /#apps / /#features
+		// fragment scrolls (root-anchored so the shared PublicHeader
+		// resolves them from /learn too). Pin the targets exist so a
+		// refactor that renames a section id surfaces here.
 		await page.goto('/');
 		await expect(page.locator('section#apps')).toBeVisible();
 		await expect(page.locator('section#features')).toBeVisible();
 		// Nav links carry the matching href.
 		await expect(page.getByRole('link', { name: 'Apps' }).first()).toHaveAttribute(
 			'href',
-			'#apps'
+			'/#apps'
 		);
 		await expect(page.getByRole('link', { name: 'Features' }).first()).toHaveAttribute(
 			'href',
-			'#features'
+			'/#features'
 		);
 	});
 

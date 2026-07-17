@@ -787,6 +787,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               switch (action) {
                 case 'save_as_route':
                   _saveAsRoute();
+                case 'make_private':
+                  _makePrivate();
                 case 'delete':
                   _confirmDelete(context);
               }
@@ -800,6 +802,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   title: Text(l10n.runDetailSaveAsRoute),
                 ),
               ),
+              if (widget.apiClient?.userId != null)
+                PopupMenuItem(
+                  value: 'make_private',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.lock_outline),
+                    title: Text(l10n.runDetailMakePrivate),
+                  ),
+                ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'delete',
@@ -2175,6 +2186,50 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         _sharing = false;
       }
     }
+  }
+
+  /// Flip the run back to private. The live-broadcast stop path
+  /// re-asserts is_public=true (run_screen._stop) and the auto_live_share
+  /// pref can flip a run public without a per-run tap, so this is the
+  /// undo. Offered whenever signed in — the mobile Run model doesn't
+  /// surface is_public and makeRunPrivate is idempotent, mirroring the
+  /// always-prompt Share idiom above.
+  Future<void> _makePrivate() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('make-private-confirm-dialog'),
+        title: Text(l10n.runDetailMakePrivateTitle),
+        content: Text(l10n.runDetailMakePrivateBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.runDetailCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.runDetailMakePrivate),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await api.makeRunPrivate(run.id);
+    } catch (e) {
+      debugPrint('makeRunPrivate failed: $e');
+      if (!mounted) return;
+      showTopBanner(
+          context,
+          AppLocalizations.of(context).runDetailMakePrivateFailed(
+              friendlyError(AppLocalizations.of(context), e)));
+      return;
+    }
+    if (!mounted) return;
+    showTopBanner(context, AppLocalizations.of(context).runDetailMadePrivate);
   }
 
   /// Returns true when the user confirms making this run public. The

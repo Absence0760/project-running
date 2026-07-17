@@ -204,3 +204,38 @@ test('plans/new loads club templates with one batched query, not one per club', 
 		'fetchClubTemplatesForClubs must filter all club ids in ONE query.',
 	);
 });
+
+test('setRunPublic is a real toggle: writes the caller boolean and surfaces errors', () => {
+	// Reason: the one-way makeRunPublic it replaces hardcoded
+	// `is_public: true`, so a live-shared run could never be made
+	// private again (issue #251 — a solo runner's location trace stayed
+	// public with no undo). The function must write the caller's
+	// boolean, scope the update to the one run id, and throw on the
+	// supabase error (supabase-js resolves {error}, it never throws —
+	// dropping the check silently swallows a failed revoke while the
+	// UI reports "Run is now private").
+	const source = read('src/lib/core/data.ts');
+	const fnMatch = source.match(/export async function setRunPublic[\s\S]*?\n}/);
+	assert.ok(fnMatch, 'Could not locate setRunPublic — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/\.update\(\{ is_public: isPublic \}\)/,
+		'setRunPublic must write the isPublic parameter — a hardcoded true resurrects the no-undo bug.',
+	);
+	assert.match(
+		body,
+		/\.eq\('id', id\)/,
+		'setRunPublic must scope the update to the single run id.',
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'setRunPublic must throw the supabase error — callers surface it as a toast, not a silent no-op.',
+	);
+	assert.doesNotMatch(
+		source,
+		/makeRunPublic\(/,
+		'The one-way makeRunPublic must stay deleted — visibility flips go through the bidirectional setRunPublic.',
+	);
+});

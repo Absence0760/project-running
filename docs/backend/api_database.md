@@ -898,6 +898,8 @@ Author-only RLS on all three tables + the EXISTS parent gates + the full-tree ca
 
 Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
 
+Two key-targeted RPCs write the `push_subscription` device pref atomically (PostgREST can't express a jsonb key write in a PATCH, and a whole-bag read-merge-write can clobber the row's other prefs — issue #235): **`set_push_subscription(p_device_id, p_subscription, p_platform default 'web', p_label default null)`** — SECURITY INVOKER, `authenticated`-only, `auth.uid()`-scoped; a single `jsonb_set` (or `- 'push_subscription'` when `p_subscription` is NULL / jsonb `'null'`) with an insert arm for a not-yet-provisioned device row (migration `20270419_001`, the web subscribe/unsubscribe path in `apps/web/src/lib/util/push.ts`); and **`clear_push_subscription(p_user_id, p_device_id)`** — SECURITY DEFINER, `service_role`-only; the Go worker's dead-endpoint prune (migration `20261219_001`). Pinned by `set_push_subscription_test.sql` + `web_push_channel_test.sql`.
+
 #### `device_tokens`
 
 Push-notification device tokens. One row per (user, device). Prepared in

@@ -659,6 +659,18 @@ abstract class AppLocalizations {
   /// **'Follow'**
   String get peopleFollowButton;
 
+  /// Body of the signed-out state on the People screen; people search is auth-gated so a signed-out search can only fail
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to search for and follow other runners.'**
+  String get peopleSignedOutMessage;
+
+  /// Error-state message when the suggested-people list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load suggestions.'**
+  String get peopleSuggestionsLoadFailed;
+
   /// Header label on the dashboard readiness-to-run card
   ///
   /// In en, this message translates to:
@@ -3748,6 +3760,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Make public'**
   String get runDetailMakePublic;
+
+  /// Overflow-menu action + confirm button that flips a shared run back to private
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get runDetailMakePrivate;
+
+  /// Title of the make-run-private confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make this run private?'**
+  String get runDetailMakePrivateTitle;
+
+  /// Body of the make-run-private confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'The public share link and the live spectator page will stop working. Anyone opening an old link will no longer see this run.'**
+  String get runDetailMakePrivateBody;
+
+  /// Banner shown when flipping a run back to private fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not make run private: {error}'**
+  String runDetailMakePrivateFailed(String error);
+
+  /// Banner shown after a run was flipped back to private
+  ///
+  /// In en, this message translates to:
+  /// **'Run is now private'**
+  String get runDetailMadePrivate;
 
   /// Title of the single-run delete confirmation dialog
   ///
@@ -14261,6 +14303,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Race week'**
   String get planPhaseRace;
+
+  /// Training plan phase label: the final week of a beginner walk-run plan, when the runner first covers the distance continuously
+  ///
+  /// In en, this message translates to:
+  /// **'Graduation week'**
+  String get planPhaseGraduation;
 
   /// Title of the dialog nudging Android users to grant always-on location before a run
   ///
