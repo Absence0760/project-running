@@ -744,6 +744,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       initialDate: current ?? DateTime(now.year - 30, now.month, now.day),
       firstDate: DateTime(now.year - 120),
       lastDate: now,
+      initialDatePickerMode: DatePickerMode.year,
       helpText: AppLocalizations.of(context).prefsDateOfBirth,
     );
     if (picked == null) return;
