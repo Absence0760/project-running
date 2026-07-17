@@ -257,15 +257,26 @@ step.
 
 - **Trigger (pure, twinned).** `shouldNudgeSoloSafety` in
   `apps/web/src/lib/safety/safety_nudge.ts` ↔ `apps/mobile_android/lib/safety_nudge.dart`
-  (TS↔Dart parity pair, 14 mirror tests each) returns true only when the
+  (TS↔Dart parity pair, 24 mirror tests each) returns true only when the
   run is genuinely unprotected AND after dark AND not throttled:
   `autoLiveShareOn` off, `isBroadcast` false (no manual share before GO),
-  `nudgeDismissed` false, and `isNightWindow(nowLocalMinutes)` true. Night
-  is a **fixed 20:00–06:00 local window** (`isNightWindow`), deliberately
-  *not* astronomical sunrise/sunset — no new astronomy dependency,
-  deterministic, and erring toward nudging slightly early in summer is
-  harmless where silently missing a dark run is not. Every guard is
-  fail-closed (any suppressor wins), so a covered runner is never prompted.
+  `nudgeDismissed` false, and `isDarkOutside(nowLocalMinutes, latitude, dayOfYear)`
+  true. "Dark" is the **fixed 20:00–06:00 local window** (`isNightWindow`,
+  the deterministic floor) **OR** a **seasonal sunrise/sunset test**
+  (`isSunDown`) when the runner's latitude + day-of-year are known — the
+  latter catches genuinely-dark pre-dawn winter runs at higher latitudes
+  (e.g. a 06:30 December run at 60°N, sunrise ~09:00), which the old
+  fixed-only window silently missed (issue #265). `isSunDown` derives
+  sunrise/sunset from the solar declination + latitude, assuming solar noon
+  at local 12:00; it deliberately ignores longitude-within-timezone /
+  equation-of-time / DST (~1 h of clock error) because it only ever ADDS
+  darkness on top of the fixed floor, so the window widens, never narrows,
+  and no run that nudged before stops nudging. Polar day → never dark, polar
+  night → always dark. A null `latitude`/`dayOfYear` (no GPS fix yet)
+  degrades to exactly the fixed window. Still no astronomy dependency (a few
+  lines of trig), and erring toward nudging slightly early is harmless where
+  silently missing a dark run is not. Every guard is fail-closed (any
+  suppressor wins), so a covered runner is never prompted.
 - **Throttle.** `nudgeThrottled(dismissedAtMs, nowMs)` suppresses the nudge
   for `safetyNudgeThrottleMs` (30 days) after it's surfaced. The device
   pref `safety_nudge_dismissed_at` (D scope, ISO-8601, [settings.md](../backend/settings.md))

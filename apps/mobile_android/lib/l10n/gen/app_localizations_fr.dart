@@ -2224,6 +2224,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailDeleteBody => 'Cette action est irréversible.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Échec de la suppression dans le cloud ; la course est conservée pour l\'instant — nouvelle tentative une fois en ligne.';
+
+  @override
   String get runDetailSuggestLink => 'Associer';
 
   @override
@@ -5473,6 +5477,26 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Impossible de mettre à jour le mot de passe : $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'Changer d\'e-mail';
+
+  @override
+  String get settingsAccountNewEmail => 'Nouvel e-mail';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Saisissez une adresse e-mail valide et différente de l\'actuelle.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmation en attente. Vérifiez à la fois votre ancienne boîte de réception ($old) et la nouvelle ($newEmail), et suivez le lien dans chacune pour finaliser le changement. Votre e-mail ne changera pas tant que vous ne l\'aurez pas confirmé depuis les deux.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Impossible de démarrer le changement d\'e-mail : $error';
   }
 
   @override

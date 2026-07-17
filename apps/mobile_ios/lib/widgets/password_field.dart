@@ -12,6 +12,10 @@ class PasswordField extends StatefulWidget {
   final String labelText;
   final String? errorText;
   final InputBorder? border;
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
 
   const PasswordField({
     super.key,
@@ -19,6 +23,10 @@ class PasswordField extends StatefulWidget {
     required this.labelText,
     this.errorText,
     this.border,
+    this.autofillHints,
+    this.textInputAction,
+    this.onSubmitted,
+    this.focusNode,
   });
 
   @override
@@ -33,9 +41,13 @@ class _PasswordFieldState extends State<PasswordField> {
     final l10n = AppLocalizations.of(context);
     return TextField(
       controller: widget.controller,
+      focusNode: widget.focusNode,
       obscureText: _obscure,
       autocorrect: false,
       enableSuggestions: false,
+      autofillHints: widget.autofillHints,
+      textInputAction: widget.textInputAction,
+      onSubmitted: widget.onSubmitted,
       decoration: InputDecoration(
         labelText: widget.labelText,
         border: widget.border,

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:api_client/api_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -63,6 +64,14 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
 
   String? _displayName;
   bool _displayNameBusy = false;
+
+  // Change-email flow: GoTrue's secure email change confirms from BOTH
+  // the old and the new address, so the account email doesn't flip until
+  // both links are followed. We surface a persistent "confirmation
+  // pending" note rather than treating it as done. Snapshotted at request
+  // time so the note is stable regardless of later auth-store churn.
+  String? _pendingEmailNew;
+  String _pendingEmailOld = '';
 
   @override
   void initState() {
@@ -338,54 +347,69 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     final l10n = AppLocalizations.of(context);
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
+    final confirmFocus = FocusNode();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         String? error;
         return StatefulBuilder(
-          builder: (ctx, setInner) => AlertDialog(
-            title: Text(l10n.settingsAccountChangePassword),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                PasswordField(
-                  controller: pwdCtl,
-                  labelText: l10n.settingsAccountNewPassword,
+          builder: (ctx, setInner) {
+            void submit() {
+              if (pwdCtl.text.length < kPasswordMinLength) {
+                setInner(() => error =
+                    l10n.authErrorPasswordTooShort(kPasswordMinLength));
+                return;
+              }
+              if (pwdCtl.text != confirmCtl.text) {
+                setInner(
+                    () => error = l10n.settingsAccountPasswordsMismatch);
+                return;
+              }
+              Navigator.pop(ctx, true);
+            }
+
+            return AlertDialog(
+              title: Text(l10n.settingsAccountChangePassword),
+              content: AutofillGroup(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PasswordField(
+                      controller: pwdCtl,
+                      labelText: l10n.settingsAccountNewPassword,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => confirmFocus.requestFocus(),
+                    ),
+                    const SizedBox(height: 8),
+                    PasswordField(
+                      controller: confirmCtl,
+                      focusNode: confirmFocus,
+                      labelText: l10n.settingsAccountConfirm,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(error!,
+                          style: const TextStyle(color: Colors.red)),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 8),
-                PasswordField(
-                  controller: confirmCtl,
-                  labelText: l10n.settingsAccountConfirm,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(l10n.settingsAccountCancel),
                 ),
-                if (error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(error!, style: const TextStyle(color: Colors.red)),
-                ],
+                FilledButton(
+                  onPressed: submit,
+                  child: Text(l10n.settingsAccountSave),
+                ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(l10n.settingsAccountCancel),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (pwdCtl.text.length < kPasswordMinLength) {
-                    setInner(() => error =
-                        l10n.authErrorPasswordTooShort(kPasswordMinLength));
-                    return;
-                  }
-                  if (pwdCtl.text != confirmCtl.text) {
-                    setInner(
-                        () => error = l10n.settingsAccountPasswordsMismatch);
-                    return;
-                  }
-                  Navigator.pop(ctx, true);
-                },
-                child: Text(l10n.settingsAccountSave),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -395,6 +419,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       final api = widget.apiClient;
       if (api == null) throw Exception('Not authenticated');
       await api.updatePassword(pwdCtl.text);
+      // Commits the autofill session so the platform password manager
+      // offers to update the stored credential.
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       showTopBanner(context, l10n.settingsAccountPasswordUpdated);
     } catch (e) {
@@ -402,6 +429,81 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       if (!mounted) return;
       showTopBanner(context,
           l10n.settingsAccountPasswordUpdateFailed(friendlyError(l10n, e)));
+    }
+  }
+
+  Future<void> _changeEmail() async {
+    final l10n = AppLocalizations.of(context);
+    final api = widget.apiClient;
+    final current = api?.userEmail ?? '';
+    final emailCtl = TextEditingController();
+    final target = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String? error;
+        return StatefulBuilder(
+          builder: (ctx, setInner) => AlertDialog(
+            title: Text(l10n.settingsAccountChangeEmail),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: emailCtl,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: l10n.settingsAccountNewEmail,
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.settingsAccountCancel),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final v = emailCtl.text.trim();
+                  if (!looksLikeEmail(v) ||
+                      v.toLowerCase() == current.toLowerCase()) {
+                    setInner(() =>
+                        error = l10n.settingsAccountEmailChangeInvalid);
+                    return;
+                  }
+                  Navigator.pop(ctx, v);
+                },
+                child: Text(l10n.settingsAccountSave),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (target == null) return;
+    if (!mounted) return;
+    try {
+      if (api == null) throw Exception('Not authenticated');
+      await api.updateEmail(target);
+      if (!mounted) return;
+      setState(() {
+        _pendingEmailOld = current;
+        _pendingEmailNew = target;
+      });
+      showTopBanner(
+        context,
+        l10n.settingsAccountEmailChangePending(current, target),
+      );
+    } catch (e) {
+      debugPrint('SettingsAccountScreen email update failed: $e');
+      if (!mounted) return;
+      showTopBanner(context,
+          l10n.settingsAccountEmailChangeFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -832,6 +934,16 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
             ],
             if (signedIn) ...[
               const Divider(),
+              ListTile(
+                leading: const Icon(Icons.alternate_email),
+                title: Text(l10n.settingsAccountChangeEmail),
+                subtitle: _pendingEmailNew == null
+                    ? null
+                    : Text(l10n.settingsAccountEmailChangePending(
+                        _pendingEmailOld, _pendingEmailNew!)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _changeEmail,
+              ),
               ListTile(
                 leading: const Icon(Icons.lock_outline),
                 title: Text(l10n.settingsAccountChangePassword),

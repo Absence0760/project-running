@@ -2219,6 +2219,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailDeleteBody => 'Esto no se puede deshacer.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'No se pudo eliminar de la nube; la carrera se conserva por ahora — se reintentará al volver a estar en línea.';
+
+  @override
   String get runDetailSuggestLink => 'Vincular';
 
   @override
@@ -5454,6 +5458,26 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'No se pudo actualizar la contraseña: $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'Cambiar correo';
+
+  @override
+  String get settingsAccountNewEmail => 'Nuevo correo';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Introduce una dirección de correo válida y distinta de la actual.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmación pendiente. Revisa tanto tu correo anterior ($old) como el nuevo ($newEmail) y sigue el enlace en ambos para completar el cambio. Tu correo no cambiará hasta que confirmes desde los dos.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'No se pudo iniciar el cambio de correo: $error';
   }
 
   @override

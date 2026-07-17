@@ -2339,7 +2339,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         try {
           await api.deleteRun(run);
         } catch (e) {
-          debugPrint('run_detail: remote delete failed (local will still delete): $e');
+          debugPrint('run_detail: remote delete failed, queued for retry: $e');
+          // Keep the local copy — deleting it while the cloud row survives
+          // makes the run resurrect on the next resync (and keeps a shared
+          // public link alive). Queue the delete for SyncService to retry;
+          // on success the retry also removes the local copy. Mirrors the
+          // runs_screen bulk-delete path (data-sync audit P0-1).
+          await widget.runStore.markPendingRemoteDelete(
+            run.id,
+            ownerUserId: api.userId,
+          );
+          if (context.mounted) {
+            showTopBanner(context, l10n.runDetailDeleteQueued);
+          }
+          return;
         }
       }
       await widget.runStore.delete(run.id);

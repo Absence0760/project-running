@@ -2222,6 +2222,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dies kann nicht rückgängig gemacht werden.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Löschen in der Cloud fehlgeschlagen; der Lauf bleibt vorerst erhalten – wird erneut versucht, sobald du wieder online bist.';
+
+  @override
   String get runDetailSuggestLink => 'Verknüpfen';
 
   @override
@@ -5467,6 +5471,26 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Passwort konnte nicht aktualisiert werden: $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'E-Mail ändern';
+
+  @override
+  String get settingsAccountNewEmail => 'Neue E-Mail-Adresse';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Gib eine gültige E-Mail-Adresse ein, die sich von deiner aktuellen unterscheidet.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Bestätigung ausstehend. Prüfe sowohl dein altes Postfach ($old) als auch dein neues Postfach ($newEmail) und folge in beiden dem Link, um die Änderung abzuschließen. Deine E-Mail-Adresse ändert sich erst, wenn du beide bestätigst.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Die E-Mail-Änderung konnte nicht gestartet werden: $error';
   }
 
   @override

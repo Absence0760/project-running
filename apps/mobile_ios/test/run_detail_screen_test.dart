@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -90,6 +91,40 @@ class _MakePrivateApi extends ApiClient {
   Future<void> makeRunPrivate(String runId) async {
     calls += 1;
     if (shouldThrow) throw Exception('offline');
+  }
+}
+
+/// Signed-in fake whose `deleteRun` always throws — the flaky-signal /
+/// offline cloud delete of issue #252.
+class _DeleteFailApi extends ApiClient {
+  int calls = 0;
+
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<RunMatchInfo?> fetchRunMatchedTrack(String runId) async => null;
+
+  @override
+  Future<void> deleteRun(Run run) async {
+    calls += 1;
+    throw Exception('network down');
+  }
+}
+
+/// Signed-in fake whose `deleteRun` succeeds.
+class _DeleteOkApi extends ApiClient {
+  int calls = 0;
+
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<RunMatchInfo?> fetchRunMatchedTrack(String runId) async => null;
+
+  @override
+  Future<void> deleteRun(Run run) async {
+    calls += 1;
   }
 }
 
@@ -659,6 +694,161 @@ void main() {
       expect(mapRect.height, closeTo(280, 1));
       final distanceRect = tester.getRect(find.text('Distance'));
       expect(distanceRect.top, greaterThan(mapRect.bottom));
+    });
+  });
+
+  group('RunDetailScreen — delete', () {
+    // The delete flow's runAsync window pumps the real event loop,
+    // which surfaces the connectivity_plus EventChannel's
+    // MissingPluginException (harmlessly swallowed under pure
+    // fake-async) as an unexpected test exception. Stub the stream so
+    // the channel activates cleanly.
+    const connectivityChannel =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+    setUp(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(
+        connectivityChannel,
+        MockStreamHandler.inline(onListen: (arguments, events) {}),
+      );
+    });
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityChannel, null);
+    });
+
+    Future<LocalRunStore> pumpForDelete(
+      WidgetTester tester,
+      Run run, {
+      ApiClient? apiClient,
+    }) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      _runsDir = Directory.systemTemp.createTempSync('run_detail_delete_test_');
+      final runStore = LocalRunStore();
+      await tester.runAsync(
+          () => runStore.init(overrideDirectory: _runsDir));
+      runStore.debugSeed([run], dir: _runsDir);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RunDetailScreen(
+                      run: run,
+                      runStore: runStore,
+                      routeStore: LocalRouteStore(),
+                      preferences: prefs,
+                      apiClient: apiClient,
+                    ),
+                  ),
+                ),
+                child: const Text('open detail'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open detail'));
+      // Timed pumps, not pumpAndSettle — LiveRunMap's pulse animation
+      // never settles.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      return runStore;
+    }
+
+    Future<void> deleteViaMenu(WidgetTester tester) async {
+      // The whole interaction runs inside runAsync so the store file
+      // I/O awaited by the delete flow (sidecar persist / run-file
+      // delete) completes in the tap's zone — the same pattern as the
+      // share in-flight-guard test above.
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('More'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.text('Delete run'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        // Confirm in the dialog (scoped to the FilledButton so the menu
+        // item's identical label can't match).
+        await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+      // Two 300 ms pumps: the first finishes the dialog dismissal, the
+      // second carries the pop's route transition to completion.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets(
+        'failed cloud delete keeps the run locally, queues a retry '
+        'tombstone, and surfaces a banner', (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _DeleteFailApi();
+      final runStore = await pumpForDelete(tester, run, apiClient: api);
+
+      await deleteViaMenu(tester);
+
+      expect(api.calls, 1);
+      // Run NOT removed locally — the cloud row still exists, so a local
+      // delete would just resurrect on the next resync.
+      expect(runStore.runs.map((r) => r.id), contains(run.id));
+      // Tombstoned for the SyncService retry, stamped with the owner.
+      expect(runStore.pendingRemoteDeleteIds, contains(run.id));
+      expect(runStore.debugPendingRemoteDeleteOwner(run.id), 'user-1');
+      // Failure surfaced, screen not popped.
+      expect(find.textContaining("Couldn't delete from the cloud"),
+          findsOneWidget);
+      expect(find.byType(RunDetailScreen), findsOneWidget);
+
+      // A resync that pulls the still-live server row must not clear the
+      // tombstone — the queued delete survives so it can't zombie back.
+      await tester.runAsync(() => runStore.saveFromRemote(run));
+      expect(runStore.pendingRemoteDeleteIds, contains(run.id));
+
+      // Drain the banner auto-dismiss timer before teardown.
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets(
+        'successful cloud delete removes the run locally, queues nothing, '
+        'and pops', (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _DeleteOkApi();
+      final runStore = await pumpForDelete(tester, run, apiClient: api);
+
+      await deleteViaMenu(tester);
+
+      expect(api.calls, 1);
+      // Gone locally and nothing queued: the cloud row was removed, so
+      // a resync has nothing to pull back.
+      expect(runStore.runs, isEmpty);
+      expect(runStore.summaries, isEmpty);
+      expect(runStore.pendingRemoteDeleteIds, isEmpty);
+      expect(find.byType(RunDetailScreen), findsNothing);
+      expect(find.text('open detail'), findsOneWidget);
+    });
+
+    testWidgets('signed-out delete stays local-only and pops',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final runStore = await pumpForDelete(tester, run);
+
+      await deleteViaMenu(tester);
+
+      expect(runStore.runs, isEmpty);
+      expect(runStore.pendingRemoteDeleteIds, isEmpty);
+      expect(find.byType(RunDetailScreen), findsNothing);
     });
   });
 }

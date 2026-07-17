@@ -2112,6 +2112,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailDeleteBody => 'この操作は元に戻せません。';
 
   @override
+  String get runDetailDeleteQueued =>
+      'クラウドから削除できませんでした。ランは一時的に保持され、オンライン復帰時に再試行します。';
+
+  @override
   String get runDetailSuggestLink => 'リンク';
 
   @override
@@ -5134,6 +5138,26 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'パスワードを更新できませんでした：$error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'メールアドレスを変更';
+
+  @override
+  String get settingsAccountNewEmail => '新しいメールアドレス';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      '現在のアドレスと異なる有効なメールアドレスを入力してください。';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return '確認待ちです。以前の受信トレイ（$old）と新しい受信トレイ（$newEmail）の両方を確認し、それぞれのリンクを開いて変更を完了してください。両方で確認するまでメールアドレスは変更されません。';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'メールアドレスの変更を開始できませんでした：$error';
   }
 
   @override

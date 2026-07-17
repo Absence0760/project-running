@@ -883,9 +883,9 @@ class _RunScreenState extends State<RunScreen> {
   /// (Samsung Stamina, Xiaomi, OnePlus) freeze the recording foreground
   /// service mid-run unless the app is exempted from battery optimisation,
   /// silently truncating a long effort. Surface a single dismissible hint
-  /// pointing the user at the exemption. Android-only, non-blocking — the run
-  /// proceeds either way. Wrapped so a settings-deep-link failure can't abort
-  /// the run start.
+  /// deep-linking to the battery-optimisation settings (App Info as the
+  /// fallback). Android-only, non-blocking — the run proceeds either way.
+  /// Wrapped so a settings-deep-link failure can't abort the run start.
   Future<void> _maybeShowBatteryOptHint() async {
     if (!shouldShowBatteryOptHint(
       isAndroid: Platform.isAndroid,
@@ -919,11 +919,10 @@ class _RunScreenState extends State<RunScreen> {
       ),
     );
     if (openSettings == true) {
-      try {
-        await openAppSettings();
-      } catch (e) {
-        debugPrint('openAppSettings (battery opt) failed: $e');
-      }
+      await openBatteryOptimisationExemption(
+        isAndroid: Platform.isAndroid,
+        openAppSettingsFallback: openAppSettings,
+      );
     }
   }
 
@@ -1240,6 +1239,8 @@ class _RunScreenState extends State<RunScreen> {
 
       final should = shouldNudgeSoloSafety(SoloSafetyNudgeInput(
         nowLocalMinutes: now.hour * 60 + now.minute,
+        latitude: _currentPosition?.lat,
+        dayOfYear: now.difference(DateTime(now.year)).inDays + 1,
         autoLiveShareOn: _autoLiveShareEnabled,
         isBroadcast: _liveBroadcaster?.isActive ?? false,
         nudgeDismissed: nudgeThrottled(dismissedAtMs, nowMs),
@@ -1328,6 +1329,11 @@ class _RunScreenState extends State<RunScreen> {
   /// in each caller (a fresh run zeroes it; a resume continues from the
   /// persisted total).
   void _attachRecordingSideEffects() {
+    // A previous run's split row survives in the shade across sessions
+    // (it outlives the foreground service); drop it so this run starts
+    // with a clean shade (#303). Bridge swallows its own failures (L4).
+    _lockScreen.clearSplit();
+
     // Auto-live-share (docs/features/safety.md): the device pref starts
     // the broadcast on every run start, so the overdue escalation has a
     // telemetry stream to watch and a partner has a link to follow. L4 —
@@ -2044,11 +2050,17 @@ class _RunScreenState extends State<RunScreen> {
           final tail = _activityType.usesSpeed
               ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
               : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
-          _showTopBanner(
-            _l10n.runSplitTick(
-              UnitFormat.distance(totalDistanceMetres, unit),
-              tail,
-            ),
+          final splitText = _l10n.runSplitTick(
+            UnitFormat.distance(totalDistanceMetres, unit),
+            tail,
+          );
+          _showTopBanner(splitText);
+          // Shade twin of the banner (#303): one fixed native id, so
+          // each split replaces the previous row instead of stacking,
+          // and the row auto-dismisses instead of demanding a swipe.
+          _lockScreen.updateSplit(
+            title: _activityType.label,
+            text: splitText,
           );
           if (widget.preferences.audioCues) {
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(

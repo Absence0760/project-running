@@ -1569,6 +1569,53 @@ void main() {
       );
     });
 
+    test('split notification reuses one fixed transient id, cleared with the run (#303)', () {
+      // Reason: the per-km split row used to stack — a new notification
+      // per kilometre, persisting across runs, burying the shade. The
+      // fix pins a single fixed SPLIT_NOTIFICATION_ID (distinct from the
+      // geolocator ongoing id) so each split replaces in place, makes the
+      // row transient (auto-cancel + timeout, never ongoing), and cancels
+      // it on run stop ("clear") as well as run start (clear_split from
+      // Dart). Shared host file — skip on the iOS twin.
+      final file = File(
+        'android/app/src/main/kotlin/com/threkir/app/RunNotificationBridge.kt',
+      );
+      if (!file.existsSync()) return;
+      final source = file.readAsStringSync();
+
+      final idDecl = RegExp(
+        r'SPLIT_NOTIFICATION_ID\s*=\s*(\d+)',
+      ).firstMatch(source);
+      expect(idDecl, isNotNull,
+          reason: 'the split row must post on a named fixed id constant');
+      expect(idDecl!.group(1), isNot('75415'),
+          reason: 'the split id must be distinct from the geolocator '
+              'ongoing-run id or splits would clobber the live stats row');
+
+      final postSplit = source.substring(source.indexOf('fun postSplit'));
+      final postSplitBody =
+          postSplit.substring(0, postSplit.indexOf('fun post('));
+      expect(postSplitBody, contains('.notify(SPLIT_NOTIFICATION_ID'),
+          reason: 'every split reposts on the SAME id — replace in '
+              'place, never one row per kilometre');
+      expect(postSplitBody, contains('.setAutoCancel(true)'),
+          reason: 'the split row must dismiss on tap');
+      expect(postSplitBody, contains('.setTimeoutAfter('),
+          reason: 'the split row must time itself out — it never '
+              'demands a manual swipe');
+      expect(postSplitBody, contains('.setOngoing(false)'),
+          reason: 'a split is transient, not an ongoing row');
+
+      final clearBranch = source.substring(source.indexOf('"clear" ->'));
+      final clearBody =
+          clearBranch.substring(0, clearBranch.indexOf('"clear_split"'));
+      expect(clearBody, contains('cancel(SPLIT_NOTIFICATION_ID)'),
+          reason: 'run stop must clear the split row too, so it cannot '
+              'outlive its run');
+      expect(source, contains('"clear_split"'),
+          reason: 'run start clears a previous run\'s leftover split row');
+    });
+
     test('RunNotificationBridge sources its user-facing strings from resources', () {
       // audit/i18n-readiness W-OS-3: the channel name (shown in system
       // notification settings), the title fallback, and the lock-screen

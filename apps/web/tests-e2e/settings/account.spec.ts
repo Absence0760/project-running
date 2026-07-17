@@ -169,4 +169,65 @@ test.describe('/settings/account', () => {
 			await expect(page.getByText('Passwords do not match.')).toHaveCount(0);
 		});
 	});
+
+	// Change-email request path. `auth.updateUser({ email })` starts
+	// GoTrue's secure double-confirmation (a link to BOTH the old and
+	// the new address) — issue #245. The PUT /auth/v1/user call is
+	// STUBBED so the spec verifies the request → pending-UI seam without
+	// actually rotating USER_A's real address out from under every other
+	// spec that signs in as them.
+	test.describe('change email — request path', () => {
+		test('an invalid or unchanged address is rejected before any request', async ({
+			page
+		}) => {
+			let sawRequest = false;
+			await page.route('**/auth/v1/user', async (route) => {
+				if (route.request().method() === 'PUT') sawRequest = true;
+				await route.continue();
+			});
+
+			await page.goto('/settings/account');
+			await page.getByTestId('change-email').click();
+			// Same address as the current one — the guard must catch it
+			// (a no-op change-email would still fire GoTrue mail).
+			await page.getByTestId('new-email-input').fill(USER_A.email);
+			await page.getByTestId('submit-email-change').click();
+
+			await expect(page.locator('[role="alert"]')).toBeVisible();
+			await expect(page.getByTestId('email-change-pending')).toHaveCount(0);
+			expect(sawRequest).toBe(false);
+		});
+
+		test('a valid new address requests the change and shows the pending state', async ({
+			page
+		}) => {
+			await page.route('**/auth/v1/user', async (route) => {
+				if (route.request().method() !== 'PUT') {
+					await route.continue();
+					return;
+				}
+				// GoTrue returns the user row unchanged (email flips only
+				// after both confirmations); a bare 200 is enough for the
+				// SDK to resolve without an error.
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ id: '00000000-0000-0000-0000-000000000000' })
+				});
+			});
+
+			await page.goto('/settings/account');
+			await page.getByTestId('change-email').click();
+			const next = `e2e-change-${Date.now()}@test.local`;
+			await page.getByTestId('new-email-input').fill(next);
+			await page.getByTestId('submit-email-change').click();
+
+			// The pending banner names both inboxes; the editor collapses.
+			const pending = page.getByTestId('email-change-pending');
+			await expect(pending).toBeVisible();
+			await expect(pending).toContainText(next);
+			await expect(pending).toContainText(USER_A.email);
+			await expect(page.getByTestId('new-email-input')).toHaveCount(0);
+		});
+	});
 });

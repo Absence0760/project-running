@@ -2199,6 +2199,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailDeleteBody => 'This cannot be undone.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Couldn\'t delete from the cloud; the run is kept for now — will retry when back online.';
+
+  @override
   String get runDetailSuggestLink => 'Link';
 
   @override
@@ -5400,6 +5404,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Could not update password: $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'Change email';
+
+  @override
+  String get settingsAccountNewEmail => 'New email';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Enter a valid email address that\'s different from your current one.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmation pending. Check both your old inbox ($old) and your new inbox ($newEmail) and follow the link in each to finish the change. Your email won\'t change until you confirm from both.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Couldn\'t start the email change: $error';
   }
 
   @override

@@ -2214,6 +2214,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailDeleteBody => 'Isso não pode ser desfeito.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Não foi possível excluir da nuvem; a corrida foi mantida por enquanto — será tentado novamente quando você estiver online.';
+
+  @override
   String get runDetailSuggestLink => 'Vincular';
 
   @override
@@ -5455,6 +5459,26 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Não foi possível atualizar a senha: $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'Alterar e-mail';
+
+  @override
+  String get settingsAccountNewEmail => 'Novo e-mail';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Informe um endereço de e-mail válido e diferente do atual.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmação pendente. Verifique tanto sua caixa de entrada antiga ($old) quanto a nova ($newEmail) e siga o link em cada uma para concluir a alteração. Seu e-mail só muda depois que você confirmar nas duas.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Não foi possível iniciar a alteração de e-mail: $error';
   }
 
   @override
@@ -13532,6 +13556,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get runDetailDeleteBody => 'Isso não pode ser desfeito.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Não foi possível excluir da nuvem; a corrida foi mantida por enquanto — será tentado novamente quando você estiver online.';
+
+  @override
   String get runDetailSuggestLink => 'Vincular';
 
   @override
@@ -16772,6 +16800,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Não foi possível atualizar a senha: $error';
+  }
+
+  @override
+  String get settingsAccountChangeEmail => 'Alterar e-mail';
+
+  @override
+  String get settingsAccountNewEmail => 'Novo e-mail';
+
+  @override
+  String get settingsAccountEmailChangeInvalid =>
+      'Informe um endereço de e-mail válido e diferente do atual.';
+
+  @override
+  String settingsAccountEmailChangePending(Object old, Object newEmail) {
+    return 'Confirmação pendente. Verifique tanto sua caixa de entrada antiga ($old) quanto a nova ($newEmail) e siga o link em cada uma para concluir a alteração. Seu e-mail só muda depois que você confirmar nas duas.';
+  }
+
+  @override
+  String settingsAccountEmailChangeFailed(Object error) {
+    return 'Não foi possível iniciar a alteração de e-mail: $error';
   }
 
   @override
