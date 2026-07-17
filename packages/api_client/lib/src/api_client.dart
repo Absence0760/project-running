@@ -501,7 +501,10 @@ class ApiClient {
   /// `/settings/account` `handleChangeEmail`.
   Future<void> updateEmail(String newEmail) async {
     if (userId == null) throw Exception('Not authenticated');
-    await _client.auth.updateUser(UserAttributes(email: newEmail));
+    await _client.auth.updateUser(
+      UserAttributes(email: newEmail),
+      emailRedirectTo: kAuthDeepLinkRedirect,
+    );
   }
 
   /// Delete the signed-in user's account. Invokes the `delete-account`
