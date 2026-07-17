@@ -10,6 +10,8 @@
 	import { getGuide, isEnglishFallback } from '$lib/learn/guides';
 	import { getCategory } from '$lib/learn/categories';
 	import LearnCta from '$lib/components/LearnCta.svelte';
+	import PublicHeader from '$lib/components/PublicHeader.svelte';
+	import PublicFooter from '$lib/components/PublicFooter.svelte';
 
 	let { data } = $props();
 
@@ -64,12 +66,7 @@
 </svelte:head>
 
 <div class="learn-page">
-	<header class="learn-header">
-		<a href="/" class="learn-logo">Threkir</a>
-		<nav class="learn-nav">
-			<a href="/login">{m('learn.signIn')}</a>
-		</nav>
-	</header>
+	<PublicHeader />
 
 	<article class="learn-article">
 		<nav class="breadcrumb" aria-label={m('learn.breadcrumbNav')}>
@@ -96,11 +93,7 @@
 		<LearnCta feature={data.guide.cta?.feature} />
 	</article>
 
-	<footer class="learn-footer">
-		<a href="/learn">{m('learn.breadcrumbLearn')}</a>
-		<span class="dot">&middot;</span>
-		<a href="/login">{m('learn.signIn')}</a>
-	</footer>
+	<PublicFooter />
 </div>
 
 <style>
@@ -109,32 +102,6 @@
 		background: var(--color-bg);
 		display: flex;
 		flex-direction: column;
-	}
-
-	.learn-header {
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.learn-logo {
-		font-weight: 700;
-		font-size: 1.15rem;
-		color: var(--color-primary);
-		text-decoration: none;
-	}
-
-	.learn-nav a {
-		font-size: 0.9rem;
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-
-	.learn-nav a:hover {
-		color: var(--color-primary);
 	}
 
 	.learn-article {
@@ -233,34 +200,7 @@
 		font-weight: 700;
 	}
 
-	.dot {
-		color: var(--color-text-tertiary);
-		margin: 0 0.3rem;
-	}
-
-	.learn-footer {
-		margin-top: auto;
-		padding: var(--space-lg) var(--space-md);
-		border-top: 1px solid var(--color-border);
-		text-align: center;
-		font-size: 0.85rem;
-		color: var(--color-text-tertiary);
-		background: var(--color-surface);
-	}
-
-	.learn-footer a {
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-
-	.learn-footer a:hover {
-		color: var(--color-primary);
-	}
-
 	@media (min-width: 48rem) {
-		.learn-header {
-			padding: var(--space-md) var(--space-xl);
-		}
 		.learn-article {
 			padding: var(--space-2xl) var(--space-md);
 		}
