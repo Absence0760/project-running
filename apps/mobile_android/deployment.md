@@ -30,7 +30,7 @@ The release workflow always lands at the **Internal track**. Manual promotion to
 
 1. **Pay the $25 developer registration fee.** One time, per Google account. **The login identity is a dedicated Gmail** (e.g. `threkir.app@gmail.com`), **not** a branded `@threkir.com` address — see § Account identity below for why. Set the Play Console *contact* addresses to `google@` / `support@` / `privacy@threkir.com` so the domain still shows up on the operator-facing side.
 2. **Create the app.** Play Console → Create app. Name, default language (en-GB), Type: App, Free.
-3. **Fill the Store listing.** Short description, long description, screenshots (need at least 2 phone screenshots, 1 7"+ tablet, 1 10"+ tablet for newer Play guidelines), feature graphic (1024×500 PNG), app icon (512×512 PNG).
+3. **Fill the Store listing.** Short description, long description, screenshots (need at least 2 phone screenshots, 1 7"+ tablet, 1 10"+ tablet for newer Play guidelines), feature graphic (1024×500 PNG — committed at `assets/feature-graphic.png`, regenerate from the SVG source with `assets/gen-feature-graphic.sh`), app icon (512×512 PNG).
 4. **Privacy policy URL.** Required for any app that touches location. Host at `threkir.com/privacy` — see § Privacy policy below.
 5. **App content questionnaire.** Click through every "Privacy", "Ads", "Target audience", "Data safety" form. **Data safety is non-trivial** — see § Data safety below.
 6. **App access.** Provide test credentials (`runner@test.com` / `testtest` against a *staging* Supabase project — never production seed). The Play review team uses these to access functionality behind sign-in.
