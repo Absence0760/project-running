@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -29,6 +30,10 @@ import '../widgets/plan_calendar.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/workout_edit_sheet.dart';
 import 'workout_detail_screen.dart';
+
+/// Wider than kContentMaxWidth — the week grid and calendar read better with
+/// more room than a prose column.
+const double _kExpandedBodyMaxWidth = 900;
 
 /// Web `isWorkoutCompleted` twin — a planned workout is done when a tracked
 /// run is linked OR the runner manually marked it complete.
@@ -616,6 +621,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final done = allActive.where((w) => w.completedRunId != null).length;
     final pct =
         allActive.isEmpty ? 0 : (100 * done / allActive.length).round();
+    final body = _bodyList(
+        theme, l10n, p, pct, done, allActive.length, currentWeek, todayWorkout);
 
     return Scaffold(
       appBar: AppBar(
@@ -654,40 +661,54 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            _heroCard(theme, l10n, p, pct, done, allActive.length),
-            if (todayWorkout != null) ...[
-              const SizedBox(height: 12),
-              _todayCard(theme, l10n, p, todayWorkout),
-            ],
-            ..._progressSection(theme, l10n,
-                _weeks.isNotEmpty ? _weeks[currentWeek].phase : null),
-            ..._adherenceSection(theme, l10n, p),
-            ..._replanSection(theme, l10n, p),
-            if (_weeks.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              CurrentWeekStrip(
-                startDate: p.startDate,
-                weekIndex: _weeks[currentWeek].weekIndex,
-                weekWorkouts: _byWeek[_weeks[currentWeek].id] ?? const [],
-                onSelect: _openWorkout,
+        child: widthClassOf(context) != WidthClass.expanded
+            ? body
+            : Center(
+                child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: _kExpandedBodyMaxWidth),
+                  child: body,
+                ),
               ),
-            ],
-            const SizedBox(height: 16),
-            PlanCalendar(
-              startDate: p.startDate,
-              endDate: p.endDate,
-              workouts: _byWeek.values.expand((x) => x).toList(),
-              onSelect: _openWorkout,
-            ),
-            const SizedBox(height: 16),
-            for (final w in _weeks)
-              _weekCard(theme, l10n, p, w, currentWeek),
-          ],
-        ),
       ),
+    );
+  }
+
+  Widget _bodyList(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
+      int pct, int done, int total, int currentWeek,
+      PlanWorkoutRow? todayWorkout) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        _heroCard(theme, l10n, p, pct, done, total),
+        if (todayWorkout != null) ...[
+          const SizedBox(height: 12),
+          _todayCard(theme, l10n, p, todayWorkout),
+        ],
+        ..._progressSection(theme, l10n,
+            _weeks.isNotEmpty ? _weeks[currentWeek].phase : null),
+        ..._adherenceSection(theme, l10n, p),
+        ..._replanSection(theme, l10n, p),
+        if (_weeks.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          CurrentWeekStrip(
+            startDate: p.startDate,
+            weekIndex: _weeks[currentWeek].weekIndex,
+            weekWorkouts: _byWeek[_weeks[currentWeek].id] ?? const [],
+            onSelect: _openWorkout,
+          ),
+        ],
+        const SizedBox(height: 16),
+        PlanCalendar(
+          startDate: p.startDate,
+          endDate: p.endDate,
+          workouts: _byWeek.values.expand((x) => x).toList(),
+          onSelect: _openWorkout,
+        ),
+        const SizedBox(height: 16),
+        for (final w in _weeks)
+          _weekCard(theme, l10n, p, w, currentWeek),
+      ],
     );
   }
 

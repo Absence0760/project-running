@@ -682,6 +682,7 @@ class _RunAppState extends State<RunApp> {
       builder: (context, _) {
         return MaterialApp(
           title: 'Threkir',
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: themeModeNotifier.value,

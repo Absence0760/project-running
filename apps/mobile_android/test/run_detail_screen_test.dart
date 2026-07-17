@@ -13,6 +13,7 @@ import '../lib/preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/run_detail_screen.dart';
 import '../lib/settings_sync.dart';
+import '../lib/widgets/live_run_map.dart';
 
 late Directory _runsDir;
 
@@ -615,6 +616,49 @@ void main() {
         ),
       );
       expect(find.text('Set max HR'), findsNothing);
+    });
+  });
+
+  // ───────── adaptive width: expanded two-pane vs stacked layout ─────────
+  //
+  // Timed pumps only — LiveRunMap fetches tiles (which fail under
+  // flutter_test) and runs a repeating pulse animation, so pumpAndSettle
+  // would hang (same constraint as live_run_map_test.dart).
+  group('RunDetailScreen — expanded two-pane layout', () {
+    testWidgets('map renders beside the stats column at >=840dp',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final run = _run(withTrack: true);
+      await _pump(tester, run);
+
+      final mapRect = tester.getRect(find.byType(LiveRunMap));
+      final distanceRect = tester.getRect(find.text('Distance'));
+      // Stats column starts to the right of the map pane, vertically
+      // overlapping it — side by side, not stacked.
+      expect(distanceRect.left, greaterThanOrEqualTo(mapRect.right));
+      expect(distanceRect.top, greaterThan(mapRect.top));
+      expect(distanceRect.top, lessThan(mapRect.bottom));
+      // The map pane fills the height under the AppBar (not the 280dp
+      // strip) and takes ~55% of the 1280dp logical width.
+      expect(mapRect.height, greaterThan(400));
+      expect(mapRect.width, closeTo(1280 * 0.55, 24));
+      // The map keeps its overlays in the pane.
+      expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    });
+
+    testWidgets('a compact surface keeps the stacked layout', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final run = _run(withTrack: true);
+      await _pump(tester, run);
+
+      final mapRect = tester.getRect(find.byType(LiveRunMap));
+      expect(mapRect.height, closeTo(280, 1));
+      final distanceRect = tester.getRect(find.text('Distance'));
+      expect(distanceRect.top, greaterThan(mapRect.bottom));
     });
   });
 }
