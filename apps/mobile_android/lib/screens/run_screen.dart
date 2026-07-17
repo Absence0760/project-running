@@ -67,6 +67,18 @@ import 'plans_screen.dart';
 import 'run_detail_screen.dart';
 import 'workout_detail_screen.dart';
 
+/// Whether the recording view should darken the live map to save battery
+/// (issue #271). Only while actually recording (not during the countdown,
+/// which paints its own scrim) and only when the wakelock is holding the
+/// screen on — with the display already free to sleep there is nothing to
+/// dim.
+bool shouldDimRecordingMap({
+  required bool isCountdown,
+  required bool keepScreenOn,
+  required bool dimWhileRecording,
+}) =>
+    !isCountdown && keepScreenOn && dimWhileRecording;
+
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
 /// auto-pause, countdown, and optional route following.
 class RunScreen extends StatefulWidget {
@@ -342,6 +354,11 @@ class _RunScreenState extends State<RunScreen> {
   // when an authenticated ApiClient is available — anonymous /
   // offline-only sessions skip the broadcaster entirely.
   LiveBroadcaster? _liveBroadcaster;
+  // The runner explicitly asked to share this run's live link. Kept so the
+  // broadcast is (re)attached when the run starts even if the pre-GO begin
+  // failed transiently and the auto-live-share pref is off — otherwise a
+  // shared link would stay permanently dead (persona-woman safety finding).
+  bool _liveShareRequested = false;
 
   // GPS signal state. If snapshots stop arriving for > _gpsLostThreshold we
   // show a banner warning the runner so they're not surprised at stop time.
@@ -1084,14 +1101,21 @@ class _RunScreenState extends State<RunScreen> {
   /// the runner starts pushing pings — that's a documented behaviour
   /// of `apps/web/src/routes/live/[run_id]`.
   Future<void> _shareLiveLink() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      // A /live link only ever goes live for a signed-in broadcaster; sharing
+      // one while signed out hands the recipient a permanently dead link.
+      if (mounted) _showTopBanner(_l10n.runLiveShareNeedsSignIn);
+      return;
+    }
     _runId ??= _uuid.v4();
     final base = _liveLinkBase();
     final url = '$base/live/${_runId!}';
 
-    // Best-effort — sharing the URL must succeed even if the
-    // server-side stub create fails (offline tap, transient 5xx). The
-    // user can re-tap once back online.
-    await _startLiveBroadcast();
+    // Record the intent before the (best-effort) begin so a transient failure
+    // here is recovered when the run starts, even if auto-live-share is off.
+    _liveShareRequested = true;
+    final started = await _startLiveBroadcast();
 
     try {
       await Share.share(url, subject: _l10n.runShareSubject);
@@ -1101,6 +1125,14 @@ class _RunScreenState extends State<RunScreen> {
       // logs without us reproducing the user's exact moment.
       debugPrint('Share.share live link failed: $e');
       if (mounted) _showTopBanner(_l10n.runCouldNotShareLink(friendlyError(_l10n, e)));
+      return;
+    }
+
+    if (!started && mounted) {
+      // Don't let a failed begin masquerade as a working live link. When idle,
+      // the intent flag makes the run retry the broadcast on GO; mid-run the
+      // runner can re-tap Share. Either way, disclose that it isn't live yet.
+      _showTopBanner(_l10n.runLiveShareNotStarted);
     }
   }
 
@@ -1338,9 +1370,16 @@ class _RunScreenState extends State<RunScreen> {
     // the broadcast on every run start, so the overdue escalation has a
     // telemetry stream to watch and a partner has a link to follow. L4 —
     // fire-and-forget in its own catch path; a failed share must never
-    // touch the recording. A manual "Share live link" before GO already
-    // attached the broadcaster — skip the duplicate begin.
-    if (_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)) {
+    // touch the recording. Also (re)attach when the runner manually asked to
+    // share this run's link (_liveShareRequested): a successful pre-GO begin
+    // already left the broadcaster active so the `!isActive` guard skips it,
+    // but a transient pre-GO failure is recovered here instead of leaving the
+    // shared link dead.
+    if (shouldStartBroadcastOnRunStart(
+      autoLiveShareEnabled: _autoLiveShareEnabled,
+      liveShareRequested: _liveShareRequested,
+      broadcasterActive: _liveBroadcaster?.isActive ?? false,
+    )) {
       unawaited(_startLiveBroadcast().then((attached) {
         if (attached && mounted) {
           _showTopBanner(_l10n.runAutoLiveShareStarted);
@@ -3251,6 +3290,22 @@ class _RunScreenState extends State<RunScreen> {
           ),
         ),
 
+        // Battery-saver dim: darken the bright live map (the dominant
+        // draw) while recording, leaving the stats + controls that render
+        // in later Stack children at full brightness. IgnorePointer keeps
+        // map pan/zoom working through the scrim. Only meaningful with the
+        // wakelock holding the screen on (issue #271).
+        if (shouldDimRecordingMap(
+          isCountdown: isCountdown,
+          keepScreenOn: widget.preferences.keepScreenOn,
+          dimWhileRecording: widget.preferences.dimScreenWhileRecording,
+        ))
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: ColoredBox(color: Color(0x99000000)),
+            ),
+          ),
+
         // Countdown chrome — scrim + digit + cancel hint, layered on top
         // of the same map. Tap-anywhere cancels and resets to idle.
         if (isCountdown)
@@ -4391,15 +4446,26 @@ String _formatAgo(BuildContext context, DateTime when) {
   return l10n.runAgoMonths(months);
 }
 
+/// Whether the run-start wiring should (re)attach the live broadcast: either
+/// the device auto-live-share pref is on, or the runner manually asked to share
+/// this run's link — unless a broadcast is already active. The manual-request
+/// arm is what stops a shared link from staying dead when the pre-GO begin
+/// failed transiently and auto-live-share is off (persona-woman safety fix).
+@visibleForTesting
+bool shouldStartBroadcastOnRunStart({
+  required bool autoLiveShareEnabled,
+  required bool liveShareRequested,
+  required bool broadcasterActive,
+}) =>
+    (autoLiveShareEnabled || liveShareRequested) && !broadcasterActive;
+
 String _formatKm(double metres) =>
     formatFixed(metres / 1000, 2, activeLocaleTag);
 
 String _formatPace(Duration duration, double metres) {
   if (metres < 10) return '--:--';
   final secondsPerKm = duration.inSeconds / (metres / 1000);
-  final m = secondsPerKm ~/ 60;
-  final s = (secondsPerKm % 60).round();
-  return '$m:${s.toString().padLeft(2, '0')}';
+  return UnitFormat.pace(secondsPerKm, DistanceUnit.km);
 }
 
 class _LastRunCard extends StatelessWidget {

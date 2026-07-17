@@ -54,4 +54,35 @@ test.describe('cross-user follows', () => {
 		await expect(followBtn).not.toContainText('Following', { timeout: 5_000 });
 		await expect(followerCountText).toHaveText(String(before));
 	});
+
+	test('unfollowing from the own-profile row updates the Following header count live', async ({
+		page
+	}) => {
+		// First, make morgan follow runner so the own-profile Following list
+		// has a row to toggle. Restored at the end of the test.
+		await page.goto(`/u/${USER_A.id}`);
+		const followBtn = page.locator('button.btn-follow');
+		await expect(followBtn).toBeVisible({ timeout: 10_000 });
+		if (!(await followBtn.textContent())?.includes('Following')) {
+			await followBtn.click();
+			await expect(followBtn).toContainText('Following', { timeout: 5_000 });
+		}
+
+		// Now open morgan's OWN profile, Following tab.
+		await page.goto(`/u/${USER_C_PRO.id}?tab=following`);
+		const followingCount = page
+			.locator('button.count', { hasText: 'Following' })
+			.locator('.count-num');
+		const before = parseInt((await followingCount.textContent()) ?? '0', 10);
+		expect(before).toBeGreaterThanOrEqual(1);
+
+		// Unfollow runner via the row toggle. The header count must decrement
+		// immediately, with no reload — the bug was that viewerFollows flipped
+		// but profile.following_count stayed frozen.
+		const runnerRow = page.locator('.person-row', {
+			has: page.locator(`a[href="/u/${USER_A.id}"]`)
+		});
+		await runnerRow.locator('button.person-toggle').click();
+		await expect(followingCount).toHaveText(String(before - 1), { timeout: 5_000 });
+	});
 });

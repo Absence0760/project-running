@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../lib/adaptive_width.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
@@ -278,6 +279,31 @@ void main() {
     await pump(tester, withGym: true, api: api);
     expect(api.gymFetches, greaterThan(0),
         reason: 'History should hydrate the gym store on mount');
+  });
+
+  testWidgets('expanded width caps the timeline at kContentMaxWidth',
+      (tester) async {
+    tester.view.physicalSize = const Size(2560, 1440);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.reset);
+    await pump(tester,
+        runs: [runRow('r1')],
+        lifts: [liftRow('l1', 'Leg day')],
+        meals: [mealRow('m1', 'Rice bowl')]);
+    expect(find.byType(ActivityTimelineList), findsOneWidget);
+    expect(
+        tester.getSize(find.byType(ActivityTimelineList)).width,
+        kContentMaxWidth);
+  });
+
+  testWidgets('phone/medium width leaves the timeline full-bleed',
+      (tester) async {
+    // Default flutter_test surface is 800dp logical — WidthClass.medium.
+    await pump(tester,
+        runs: [runRow('r1')],
+        lifts: [liftRow('l1', 'Leg day')],
+        meals: [mealRow('m1', 'Rice bowl')]);
+    expect(tester.getSize(find.byType(ActivityTimelineList)).width, 800);
   });
 
   /// Mount the run-list (Runs sub-tab) shape with the Routes + Plans AppBar

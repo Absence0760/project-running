@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../age_grade.dart';
 import '../backend_timeout.dart';
@@ -827,485 +828,514 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
       body: SafeArea(
         top: false,
-        child: ListView(
-        children: [
-          // Map: show the recorded track if we have one; otherwise fall back
-          // to the linked route's planned path. Manual-entry runs with no
-          // route attached skip the map entirely.
-          if (run.track.isNotEmpty || _linkedRoute != null)
-            // Keep the map alive across ListView scroll. A bare list child is
-            // disposed once it scrolls past the cache extent, tearing down the
-            // FlutterMap + MapController; scrolling back rebuilt it from
-            // scratch — a visible tile reload plus a jank spike. Keeping it
-            // alive also pauses its pulse ticker while off-screen.
-            _KeepAliveMap(
-              child: SizedBox(
-                height: 280,
-                child: Stack(
-                  children: [
-                    ValueListenableBuilder<int?>(
-                      valueListenable: _replayIndex,
-                      builder: (context, replayIndex, _) {
-                        // Prefer the matched line when the worker has
-                        // produced one. Stats (splits, elevation, HR
-                        // zones) keep deriving from the raw `run.track`
-                        // because those are properties of what the
-                        // runner did, not how the projected line is
-                        // drawn — switching the visual layer must not
-                        // alter the numbers. The "Show raw GPS track"
-                        // preference forces the raw line for verification.
-                        final mapTrack = displayedRunTrack(
-                          run.track,
-                          _matchInfo,
-                          showRaw: widget.preferences.showRawTrack,
-                        );
-                        // The replay index advances over `run.track`, but
-                        // the line on screen is `mapTrack` — the matched
-                        // line when the worker produced one, with a
-                        // different length + coords. Feed the dot a point
-                        // and index that both reference the DISPLAYED
-                        // track so the smoothed-dot snap lands it on the
-                        // rendered polyline (same reasoning as the
-                        // `hoverIdx` gate below). Identity remap when the
-                        // map is showing the raw track.
-                        final dotIndex = replayDotIndex(
-                          replayIndex,
-                          run.track.length,
-                          mapTrack.length,
-                        );
-                        return LiveRunMap(
-                          track: mapTrack,
-                          plannedRoute: mapTrack.isEmpty
-                              ? _linkedRoute?.waypoints
-                              : null,
-                          followRunner: false,
-                          activity: mapTrack.isNotEmpty ? _activityType : null,
-                          currentPosition:
-                              dotIndex != null ? mapTrack[dotIndex] : null,
-                          // Authoritative index for the smoothed-dot
-                          // snap — loop routes (start == end coord)
-                          // need the explicit index, otherwise the
-                          // lat/lng scan would return the start point
-                          // for every end-of-track scrub.
-                          currentPositionIndex: dotIndex,
-                          showDecorations: mapTrack.isNotEmpty,
-                          useMilesForDecorations:
-                              widget.preferences.unit == DistanceUnit.mi,
-                          totalDistanceM: run.distanceMetres,
-                          onSegmentSelect: mapTrack.isNotEmpty
-                              ? (seg) => setState(() => _selectedSegment = seg)
-                              : null,
-                          // Linked cursor: paints a pulsing marker at
-                          // the elevation chart's current pointer index
-                          // on the live track. Gated on track === mapTrack
-                          // alignment — the chart reads run.track, but
-                          // the map sometimes shows the matched track,
-                          // which has a different index space. Only feed
-                          // the marker when the two are the same.
-                          hoverIdx: identical(mapTrack, run.track)
-                              ? _chartHoverIdx
-                              : null,
-                        );
-                      },
-                    ),
-                    if (_selectedSegment != null)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 12,
-                        child: _SegmentStatsCard(
-                          segment: _selectedSegment!,
-                          unit: widget.preferences.unit,
-                          onDismiss: () =>
-                              setState(() => _selectedSegment = null),
-                        ),
-                      ),
-                    Builder(
-                      builder: (context) {
-                        final kind = matchPillKind(_matchInfo,
-                            offline: _matchOffline);
-                        if (kind == MatchPillKind.hidden) {
-                          return const SizedBox.shrink();
-                        }
-                        return Positioned(
-                          top: 12,
-                          left: 12,
-                          child: _MatchStatusPill(
-                            kind: kind,
-                            // RLS on `run_matched_tracks` only returns the
-                            // row to the owner, so a non-null `_matchInfo`
-                            // already implies the viewer is the owner.
-                            // The RPC self-gates with 42501 anyway as a
-                            // defence in depth.
-                            onRematch: widget.apiClient == null
-                                ? null
-                                : _handleRematch,
-                            busy: _rematchBusy,
-                          ),
-                        );
-                      },
-                    ),
-                    if (run.track.length >= 2)
-                      Positioned(
-                        bottom: 12,
-                        right: 12,
-                        child: FloatingActionButton.small(
-                          heroTag: 'run-trace-replay',
-                          onPressed: _toggleReplay,
-                          tooltip: _replayController?.isAnimating == true
-                              ? l10n.runDetailPauseReplay
-                              : l10n.runDetailReplay,
-                          child: Icon(
-                            _replayController?.isAnimating == true
-                                ? Icons.pause
-                                : Icons.play_arrow,
-                          ),
-                        ),
-                      ),
-                    if (_loadingTrack)
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(l10n.runDetailLoadingGps,
-                                    style: const TextStyle(fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_trackFetchFailed && run.track.isEmpty)
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.cloud_off, size: 14,
-                                    color: Theme.of(context).colorScheme.outline),
-                                const SizedBox(width: 8),
-                                Text(l10n.runDetailGpsUnavailable,
-                                    style: const TextStyle(fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Auto-link suggestion: only renders when run.routeId is null
-          // AND the track confidently overlaps a saved route. Same
-          // policy as web: dismissable, one-tap link.
-          if (_suggestedRoute != null && run.routeId == null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: _RouteSuggestBanner(
-                routeName: _suggestedRoute!.name,
-                onLink: _linkingRoute ? null : _acceptSuggestedRoute,
-                onDismiss: () => setState(() => _suggestedRoute = null),
-              ),
-            ),
-
-          // Activity type + notes
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(
-              children: [
-                Icon(_activityType.icon, size: 18, color: theme.colorScheme.outline),
-                const SizedBox(width: 6),
-                Text(
-                  _activityType.label,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-                if (_disciplineLabel != null) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.terrain, size: 16, color: theme.colorScheme.outline),
-                  const SizedBox(width: 4),
-                  Text(
-                    _disciplineLabel!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (_notes.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(_notes, style: theme.textTheme.bodyMedium),
-            ),
-
-          // Primary stats — each cell is Expanded so a long value like
-          // "1:15:30" can't push the row past the screen edge. For runs
-          // with no GPS track (manual entries, summary imports) the
-          // "Moving" column is dropped — it's identical to "Time" and
-          // four cells are too tight on a phone.
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _StatBig(
-                    label: l10n.runStatDistance,
-                    value: UnitFormat.distanceValue(run.distanceMetres, unit),
-                    unit: UnitFormat.distanceLabel(unit),
-                  ),
-                ),
-                Expanded(
-                  child: _StatBig(
-                    label: l10n.runStatTime,
-                    value: _formatDuration(run.duration),
-                  ),
-                ),
-                if (_showMovingTime)
-                  Expanded(
-                    child: _StatBig(
-                      label: l10n.runStatMoving,
-                      value: _formatDuration(_movingTime),
-                    ),
-                  ),
-                Expanded(
-                  child: _StatBig(
-                    label: _activityType.usesSpeed
-                        ? l10n.runStatAvgSpeed
-                        : l10n.runStatPace,
-                    value: _activityType.usesSpeed
-                        ? UnitFormat.speed(_movingPaceSecPerKm, unit)
-                        : UnitFormat.pace(_movingPaceSecPerKm, unit),
-                    unit: _activityType.usesSpeed
-                        ? UnitFormat.speedLabel(unit)
-                        : UnitFormat.paceLabel(unit),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Secondary stats
-          if (run.track.length >= 2 || _hasElevation) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: Row(
-                children: [
-                  if (_hasElevation) ...[
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.trending_up,
-                        label: l10n.runDetailStatElevGain,
-                        value: '${_elevationGain.round()}m',
-                      ),
-                    ),
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.trending_down,
-                        label: l10n.runDetailStatElevLoss,
-                        value: '${_elevationLoss.round()}m',
-                      ),
-                    ),
-                  ],
-                  if (_showGradeAdjustedPace)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.terrain,
-                        label: l10n.runDetailStatGradeAdjPace,
-                        value:
-                            '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
-                      ),
-                    ),
-                  if (_showCalories)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.local_fire_department,
-                        label: l10n.runStatCalories,
-                        value: '$_estimatedCalories ${l10n.runUnitKcal}',
-                      ),
-                    ),
-                  if (_steps > 0)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.directions_walk,
-                        label: l10n.runStatSteps,
-                        value: '$_steps',
-                      ),
-                    ),
-                  if (_cadence > 0)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.speed,
-                        label: l10n.runStatCadence,
-                        value: '$_cadence ${l10n.runUnitSpm}',
-                      ),
-                    ),
-                  if (_avgBpm > 0)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.favorite,
-                        label: l10n.runDetailStatAvgHr,
-                        value: '$_avgBpm ${l10n.runUnitBpm}',
-                      ),
-                    ),
-                  if (_ageGrade != null)
-                    Expanded(
-                      child: _StatSmall(
-                        icon: Icons.emoji_events,
-                        label: l10n.runDetailStatAgeGrade,
-                        value: _ageGrade!,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-
-          const Divider(),
-
-          // Route comparison — show PB and attempt history when this run
-          // was done on a saved route.
-          ..._buildRouteComparison(theme, l10n, unit),
-
-          // Elevation chart
-          if (_hasElevation) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(l10n.runDetailSectionElevation,
-                  style: theme.textTheme.titleMedium),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _ElevationChart(
-                track: run.track,
-                theme: theme,
-                unit: unit,
-                onHoverIdx: (idx) =>
-                    setState(() => _chartHoverIdx = idx),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-          ],
-
-          // Laps
-          if (_laps.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(l10n.runDetailSectionLaps,
-                  style: theme.textTheme.titleMedium),
-            ),
-            ..._buildLaps(theme, l10n, unit),
-            const Divider(),
-          ],
-
-          // Running Dynamics — Garmin HRM-Pro / Run pod metrics off an
-          // imported FIT session (persona round-5 garmin F2).
-          if (_buildRunningDynamics(theme, l10n).isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(l10n.runDetailSectionRunningDynamics,
-                  style: theme.textTheme.titleMedium),
-            ),
-            ..._buildRunningDynamics(theme, l10n),
-            const Divider(),
-          ],
-
-          // Best efforts — auto-detect fastest 1k, 1mi, 5k, 10k, HM, M
-          if (run.track.length >= 2) ...[
-            ..._buildBestEfforts(theme, l10n, unit),
-          ],
-
-          // Structured-workout review — only when the recorder linked
-          // this run to a planned plan_workouts row.
-          WorkoutReviewSection(metadata: run.metadata),
-
-          // HR zone breakdown — only when the track carries per-point bpm
-          // (Strava streams, FIT/TCX imports, future watch recorders).
-          ..._buildHrZoneBreakdown(theme, l10n),
-
-          // Splits — only when there's a track to compute them from.
-          if (run.track.length >= 2) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(l10n.runDetailSectionSplits,
-                  style: theme.textTheme.titleMedium),
-            ),
-            ..._buildSplits(theme, l10n, unit),
-          ],
-
-          // Segment efforts — auto-generated client-side when this run
-          // is linked to a saved route the viewer owns (decisions §37).
-          if (widget.apiClient != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(l10n.runDetailSectionSegments,
-                  style: theme.textTheme.titleMedium),
-            ),
-            RunSegmentEfforts(
-              api: widget.apiClient!,
-              runId: run.id,
-              runOwnerId: widget.apiClient!.userId,
-              routeId: run.routeId,
-              track: run.track,
-            ),
-          ],
-
-          // Local RunDetail only opens runs owned by the viewer, so the
-          // viewer is also the run owner — gates "delete any comment".
-          if (widget.apiClient != null && widget.apiClient!.userId != null) ...[
-            RunRaceSection(
-              service: _raceService,
-              runId: run.id,
-              startedAt: run.startedAt.toIso8601String(),
-              distanceM: run.distanceMetres,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: RunGearChips(
-                api: widget.apiClient!,
-                runId: run.id,
-                runOwnerId: widget.apiClient!.userId!,
-              ),
-            ),
-            RunSocialSection(
-              api: widget.apiClient!,
-              runId: run.id,
-              runOwnerId: widget.apiClient!.userId,
-            ),
-            RunPhotos(
-              api: widget.apiClient!,
-              runId: run.id,
-              runOwnerId: widget.apiClient!.userId!,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FundraiserSection(social: _social, runId: run.id),
-            ),
-          ],
-
-          const SizedBox(height: 32),
-        ],
-        ),
+        child: _buildBody(theme, l10n, unit),
       ),
     );
+  }
+
+  Widget _buildBody(ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
+    final hasMap = run.track.isNotEmpty || _linkedRoute != null;
+    final sections = _buildSections(theme, l10n, unit);
+    // Expanded (>= 840dp — a landscape tablet) mirrors the web run-detail
+    // composition: the map as a full-height left pane (~55%) with the
+    // sections scrolling beside it, instead of a 280dp strip that pushes
+    // every stat below the fold. Compact and medium keep the stacked list.
+    if (hasMap && widthClassOf(context) == WidthClass.expanded) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 11, child: _buildMapStack(l10n)),
+          Expanded(flex: 9, child: ListView(children: sections)),
+        ],
+      );
+    }
+    return ListView(
+      children: [
+        // Map: show the recorded track if we have one; otherwise fall back
+        // to the linked route's planned path. Manual-entry runs with no
+        // route attached skip the map entirely.
+        if (hasMap)
+          // Keep the map alive across ListView scroll. A bare list child is
+          // disposed once it scrolls past the cache extent, tearing down the
+          // FlutterMap + MapController; scrolling back rebuilt it from
+          // scratch — a visible tile reload plus a jank spike. Keeping it
+          // alive also pauses its pulse ticker while off-screen.
+          _KeepAliveMap(
+            child: SizedBox(
+              height: 280,
+              child: _buildMapStack(l10n),
+            ),
+          ),
+        ...sections,
+      ],
+    );
+  }
+
+  Widget _buildMapStack(AppLocalizations l10n) {
+    return Stack(
+      children: [
+        ValueListenableBuilder<int?>(
+          valueListenable: _replayIndex,
+          builder: (context, replayIndex, _) {
+            // Prefer the matched line when the worker has
+            // produced one. Stats (splits, elevation, HR
+            // zones) keep deriving from the raw `run.track`
+            // because those are properties of what the
+            // runner did, not how the projected line is
+            // drawn — switching the visual layer must not
+            // alter the numbers. The "Show raw GPS track"
+            // preference forces the raw line for verification.
+            final mapTrack = displayedRunTrack(
+              run.track,
+              _matchInfo,
+              showRaw: widget.preferences.showRawTrack,
+            );
+            // The replay index advances over `run.track`, but
+            // the line on screen is `mapTrack` — the matched
+            // line when the worker produced one, with a
+            // different length + coords. Feed the dot a point
+            // and index that both reference the DISPLAYED
+            // track so the smoothed-dot snap lands it on the
+            // rendered polyline (same reasoning as the
+            // `hoverIdx` gate below). Identity remap when the
+            // map is showing the raw track.
+            final dotIndex = replayDotIndex(
+              replayIndex,
+              run.track.length,
+              mapTrack.length,
+            );
+            return LiveRunMap(
+              track: mapTrack,
+              plannedRoute: mapTrack.isEmpty
+                  ? _linkedRoute?.waypoints
+                  : null,
+              followRunner: false,
+              activity: mapTrack.isNotEmpty ? _activityType : null,
+              currentPosition:
+                  dotIndex != null ? mapTrack[dotIndex] : null,
+              // Authoritative index for the smoothed-dot
+              // snap — loop routes (start == end coord)
+              // need the explicit index, otherwise the
+              // lat/lng scan would return the start point
+              // for every end-of-track scrub.
+              currentPositionIndex: dotIndex,
+              showDecorations: mapTrack.isNotEmpty,
+              useMilesForDecorations:
+                  widget.preferences.unit == DistanceUnit.mi,
+              totalDistanceM: run.distanceMetres,
+              onSegmentSelect: mapTrack.isNotEmpty
+                  ? (seg) => setState(() => _selectedSegment = seg)
+                  : null,
+              // Linked cursor: paints a pulsing marker at
+              // the elevation chart's current pointer index
+              // on the live track. Gated on track === mapTrack
+              // alignment — the chart reads run.track, but
+              // the map sometimes shows the matched track,
+              // which has a different index space. Only feed
+              // the marker when the two are the same.
+              hoverIdx: identical(mapTrack, run.track)
+                  ? _chartHoverIdx
+                  : null,
+            );
+          },
+        ),
+        if (_selectedSegment != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: _SegmentStatsCard(
+              segment: _selectedSegment!,
+              unit: widget.preferences.unit,
+              onDismiss: () =>
+                  setState(() => _selectedSegment = null),
+            ),
+          ),
+        Builder(
+          builder: (context) {
+            final kind = matchPillKind(_matchInfo,
+                offline: _matchOffline);
+            if (kind == MatchPillKind.hidden) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              top: 12,
+              left: 12,
+              child: _MatchStatusPill(
+                kind: kind,
+                // RLS on `run_matched_tracks` only returns the
+                // row to the owner, so a non-null `_matchInfo`
+                // already implies the viewer is the owner.
+                // The RPC self-gates with 42501 anyway as a
+                // defence in depth.
+                onRematch: widget.apiClient == null
+                    ? null
+                    : _handleRematch,
+                busy: _rematchBusy,
+              ),
+            );
+          },
+        ),
+        if (run.track.length >= 2)
+          Positioned(
+            bottom: 12,
+            right: 12,
+            child: FloatingActionButton.small(
+              heroTag: 'run-trace-replay',
+              onPressed: _toggleReplay,
+              tooltip: _replayController?.isAnimating == true
+                  ? l10n.runDetailPauseReplay
+                  : l10n.runDetailReplay,
+              child: Icon(
+                _replayController?.isAnimating == true
+                    ? Icons.pause
+                    : Icons.play_arrow,
+              ),
+            ),
+          ),
+        if (_loadingTrack)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(l10n.runDetailLoadingGps,
+                        style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (_trackFetchFailed && run.track.isEmpty)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_off, size: 14,
+                        color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(width: 8),
+                    Text(l10n.runDetailGpsUnavailable,
+                        style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<Widget> _buildSections(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
+    return [
+      // Auto-link suggestion: only renders when run.routeId is null
+      // AND the track confidently overlaps a saved route. Same
+      // policy as web: dismissable, one-tap link.
+      if (_suggestedRoute != null && run.routeId == null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: _RouteSuggestBanner(
+            routeName: _suggestedRoute!.name,
+            onLink: _linkingRoute ? null : _acceptSuggestedRoute,
+            onDismiss: () => setState(() => _suggestedRoute = null),
+          ),
+        ),
+
+      // Activity type + notes
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Row(
+          children: [
+            Icon(_activityType.icon, size: 18, color: theme.colorScheme.outline),
+            const SizedBox(width: 6),
+            Text(
+              _activityType.label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+            if (_disciplineLabel != null) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.terrain, size: 16, color: theme.colorScheme.outline),
+              const SizedBox(width: 4),
+              Text(
+                _disciplineLabel!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (_notes.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          child: Text(_notes, style: theme.textTheme.bodyMedium),
+        ),
+
+      // Primary stats — each cell is Expanded so a long value like
+      // "1:15:30" can't push the row past the screen edge. For runs
+      // with no GPS track (manual entries, summary imports) the
+      // "Moving" column is dropped — it's identical to "Time" and
+      // four cells are too tight on a phone.
+      Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Expanded(
+              child: _StatBig(
+                label: l10n.runStatDistance,
+                value: UnitFormat.distanceValue(run.distanceMetres, unit),
+                unit: UnitFormat.distanceLabel(unit),
+              ),
+            ),
+            Expanded(
+              child: _StatBig(
+                label: l10n.runStatTime,
+                value: _formatDuration(run.duration),
+              ),
+            ),
+            if (_showMovingTime)
+              Expanded(
+                child: _StatBig(
+                  label: l10n.runStatMoving,
+                  value: _formatDuration(_movingTime),
+                ),
+              ),
+            Expanded(
+              child: _StatBig(
+                label: _activityType.usesSpeed
+                    ? l10n.runStatAvgSpeed
+                    : l10n.runStatPace,
+                value: _activityType.usesSpeed
+                    ? UnitFormat.speed(_movingPaceSecPerKm, unit)
+                    : UnitFormat.pace(_movingPaceSecPerKm, unit),
+                unit: _activityType.usesSpeed
+                    ? UnitFormat.speedLabel(unit)
+                    : UnitFormat.paceLabel(unit),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // Secondary stats
+      if (run.track.length >= 2 || _hasElevation) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Row(
+            children: [
+              if (_hasElevation) ...[
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.trending_up,
+                    label: l10n.runDetailStatElevGain,
+                    value: '${_elevationGain.round()}m',
+                  ),
+                ),
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.trending_down,
+                    label: l10n.runDetailStatElevLoss,
+                    value: '${_elevationLoss.round()}m',
+                  ),
+                ),
+              ],
+              if (_showGradeAdjustedPace)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.terrain,
+                    label: l10n.runDetailStatGradeAdjPace,
+                    value:
+                        '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
+                  ),
+                ),
+              if (_showCalories)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.local_fire_department,
+                    label: l10n.runStatCalories,
+                    value: '$_estimatedCalories ${l10n.runUnitKcal}',
+                  ),
+                ),
+              if (_steps > 0)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.directions_walk,
+                    label: l10n.runStatSteps,
+                    value: '$_steps',
+                  ),
+                ),
+              if (_cadence > 0)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.speed,
+                    label: l10n.runStatCadence,
+                    value: '$_cadence ${l10n.runUnitSpm}',
+                  ),
+                ),
+              if (_avgBpm > 0)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.favorite,
+                    label: l10n.runDetailStatAvgHr,
+                    value: '$_avgBpm ${l10n.runUnitBpm}',
+                  ),
+                ),
+              if (_ageGrade != null)
+                Expanded(
+                  child: _StatSmall(
+                    icon: Icons.emoji_events,
+                    label: l10n.runDetailStatAgeGrade,
+                    value: _ageGrade!,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+
+      const Divider(),
+
+      // Route comparison — show PB and attempt history when this run
+      // was done on a saved route.
+      ..._buildRouteComparison(theme, l10n, unit),
+
+      // Elevation chart
+      if (_hasElevation) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Text(l10n.runDetailSectionElevation,
+              style: theme.textTheme.titleMedium),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _ElevationChart(
+            track: run.track,
+            theme: theme,
+            unit: unit,
+            onHoverIdx: (idx) =>
+                setState(() => _chartHoverIdx = idx),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+      ],
+
+      // Laps
+      if (_laps.isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Text(l10n.runDetailSectionLaps,
+              style: theme.textTheme.titleMedium),
+        ),
+        ..._buildLaps(theme, l10n, unit),
+        const Divider(),
+      ],
+
+      // Running Dynamics — Garmin HRM-Pro / Run pod metrics off an
+      // imported FIT session (persona round-5 garmin F2).
+      if (_buildRunningDynamics(theme, l10n).isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Text(l10n.runDetailSectionRunningDynamics,
+              style: theme.textTheme.titleMedium),
+        ),
+        ..._buildRunningDynamics(theme, l10n),
+        const Divider(),
+      ],
+
+      // Best efforts — auto-detect fastest 1k, 1mi, 5k, 10k, HM, M
+      if (run.track.length >= 2) ...[
+        ..._buildBestEfforts(theme, l10n, unit),
+      ],
+
+      // Structured-workout review — only when the recorder linked
+      // this run to a planned plan_workouts row.
+      WorkoutReviewSection(metadata: run.metadata),
+
+      // HR zone breakdown — only when the track carries per-point bpm
+      // (Strava streams, FIT/TCX imports, future watch recorders).
+      ..._buildHrZoneBreakdown(theme, l10n),
+
+      // Splits — only when there's a track to compute them from.
+      if (run.track.length >= 2) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Text(l10n.runDetailSectionSplits,
+              style: theme.textTheme.titleMedium),
+        ),
+        ..._buildSplits(theme, l10n, unit),
+      ],
+
+      // Segment efforts — auto-generated client-side when this run
+      // is linked to a saved route the viewer owns (decisions §37).
+      if (widget.apiClient != null) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Text(l10n.runDetailSectionSegments,
+              style: theme.textTheme.titleMedium),
+        ),
+        RunSegmentEfforts(
+          api: widget.apiClient!,
+          runId: run.id,
+          runOwnerId: widget.apiClient!.userId,
+          routeId: run.routeId,
+          track: run.track,
+        ),
+      ],
+
+      // Local RunDetail only opens runs owned by the viewer, so the
+      // viewer is also the run owner — gates "delete any comment".
+      if (widget.apiClient != null && widget.apiClient!.userId != null) ...[
+        RunRaceSection(
+          service: _raceService,
+          runId: run.id,
+          startedAt: run.startedAt.toIso8601String(),
+          distanceM: run.distanceMetres,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: RunGearChips(
+            api: widget.apiClient!,
+            runId: run.id,
+            runOwnerId: widget.apiClient!.userId!,
+          ),
+        ),
+        RunSocialSection(
+          api: widget.apiClient!,
+          runId: run.id,
+          runOwnerId: widget.apiClient!.userId,
+        ),
+        RunPhotos(
+          api: widget.apiClient!,
+          runId: run.id,
+          runOwnerId: widget.apiClient!.userId!,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FundraiserSection(social: _social, runId: run.id),
+        ),
+      ],
+
+      const SizedBox(height: 32),
+    ];
   }
 
   ActivityType get _activityType =>

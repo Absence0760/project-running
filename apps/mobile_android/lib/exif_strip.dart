@@ -13,9 +13,12 @@ import 'dart:typed_data';
 /// This is a lossless marker-walk: it removes only APP1 (`0xFFE1`) and
 /// copies every other segment — including the JFIF header (APP0) and any
 /// ICC colour profile (APP2) — and the compressed scan data verbatim, so
-/// image quality and colour are untouched. Non-JPEG input (PNG, etc.) is
-/// returned unchanged; PNGs don't carry camera GPS and the server-side
-/// strip remains the backstop for any format this doesn't handle.
+/// image quality and colour are untouched. PNG and WebP carry GPS in their
+/// own metadata chunks — handled by [stripPngMetadata] / [stripWebpMetadata];
+/// dispatch by MIME through [stripImageExif]. The avatars bucket has no
+/// server-side strip worker, so this client strip is the *only* strip for a
+/// PNG/WebP profile photo — an unstripped format there would leak a home
+/// coordinate to the logged-out public profile.
 Uint8List stripJpegExif(Uint8List input) {
   // Must start with SOI (FFD8) to be a JPEG.
   if (input.length < 4 || input[0] != 0xFF || input[1] != 0xD8) return input;
@@ -76,4 +79,112 @@ Uint8List stripJpegExif(Uint8List input) {
   // don't pay an allocation for a no-op.
   if (!strippedAny) return input;
   return out.toBytes();
+}
+
+const _pngSig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+const _pngMetaChunks = {'eXIf', 'tEXt', 'zTXt', 'iTXt'};
+
+/// Strip metadata chunks (`eXIf`, `tEXt`, `zTXt`, `iTXt`) from a PNG buffer.
+/// PNG has carried an `eXIf` chunk — routinely populated with GPS by phone
+/// camera pipelines — since the 2017 spec update. Lossless chunk-walk: every
+/// structural chunk (IHDR, PLTE, IDAT, IEND, …) is copied verbatim, only the
+/// metadata chunks are dropped. Non-PNG input is returned unchanged. Keep in
+/// lockstep with the web twin.
+Uint8List stripPngMetadata(Uint8List input) {
+  if (input.length < 8) return input;
+  for (var k = 0; k < 8; k++) {
+    if (input[k] != _pngSig[k]) return input;
+  }
+
+  final out = BytesBuilder(copy: false);
+  out.add(input.sublist(0, 8)); // signature
+  var i = 8;
+  var strippedAny = false;
+  while (i + 12 <= input.length) {
+    final len =
+        (input[i] << 24) | (input[i + 1] << 16) | (input[i + 2] << 8) | input[i + 3];
+    final type = String.fromCharCodes(input.sublist(i + 4, i + 8));
+    final chunkEnd = i + 12 + len; // length(4) + type(4) + data(len) + crc(4)
+    if (len < 0 || chunkEnd > input.length) {
+      out.add(input.sublist(i));
+      break;
+    }
+    if (_pngMetaChunks.contains(type)) {
+      strippedAny = true;
+    } else {
+      out.add(input.sublist(i, chunkEnd));
+      if (type == 'IEND') break;
+    }
+    i = chunkEnd;
+  }
+
+  if (!strippedAny) return input;
+  return out.toBytes();
+}
+
+/// Strip the `EXIF` and `XMP ` chunks from a WebP (RIFF) buffer, clearing the
+/// matching VP8X feature-flag bits and fixing up the RIFF file-size field.
+/// WebP carries a standard RIFF `EXIF` chunk that camera pipelines populate
+/// with GPS. Lossless: image-data chunks (VP8/VP8L/ALPH/ANIM/…) are copied
+/// verbatim. Non-WebP input is returned unchanged. Keep in lockstep with web.
+Uint8List stripWebpMetadata(Uint8List input) {
+  if (input.length < 12) return input;
+  // 'RIFF' .... 'WEBP'
+  if (input[0] != 0x52 || input[1] != 0x49 || input[2] != 0x46 || input[3] != 0x46) {
+    return input;
+  }
+  if (input[8] != 0x57 || input[9] != 0x45 || input[10] != 0x42 || input[11] != 0x50) {
+    return input;
+  }
+
+  final out = <int>[];
+  out.addAll(input.sublist(0, 12)); // 'RIFF' + size + 'WEBP'
+  var i = 12;
+  var strippedAny = false;
+  var vp8xStart = -1;
+  while (i + 8 <= input.length) {
+    final fourcc = String.fromCharCodes(input.sublist(i, i + 4));
+    final size =
+        input[i + 4] | (input[i + 5] << 8) | (input[i + 6] << 16) | (input[i + 7] << 24);
+    final chunkEnd = i + 8 + size + (size & 1); // chunks pad to an even size
+    if (size < 0 || chunkEnd > input.length) {
+      out.addAll(input.sublist(i));
+      break;
+    }
+    if (fourcc == 'EXIF' || fourcc == 'XMP ') {
+      strippedAny = true;
+    } else {
+      if (fourcc == 'VP8X') vp8xStart = out.length;
+      out.addAll(input.sublist(i, chunkEnd));
+    }
+    i = chunkEnd;
+  }
+
+  if (!strippedAny) return input;
+  // Clear the EXIF (bit 3) + XMP (bit 2) feature flags in the VP8X payload so
+  // a decoder doesn't go looking for chunks we removed.
+  if (vp8xStart >= 0) out[vp8xStart + 8] &= ~0x0C;
+  // Rewrite the RIFF file size (LE, excludes the leading 'RIFF' + size field).
+  final newSize = out.length - 8;
+  out[4] = newSize & 0xff;
+  out[5] = (newSize >> 8) & 0xff;
+  out[6] = (newSize >> 16) & 0xff;
+  out[7] = (newSize >> 24) & 0xff;
+  return Uint8List.fromList(out);
+}
+
+/// Strip location-bearing metadata from an image buffer, dispatched by MIME.
+/// JPEG → APP1 marker-walk, PNG → metadata-chunk walk, WebP → RIFF-chunk walk.
+/// Any other type is returned unchanged.
+Uint8List stripImageExif(Uint8List input, String mime) {
+  switch (mime) {
+    case 'image/jpeg':
+      return stripJpegExif(input);
+    case 'image/png':
+      return stripPngMetadata(input);
+    case 'image/webp':
+      return stripWebpMetadata(input);
+    default:
+      return input;
+  }
 }

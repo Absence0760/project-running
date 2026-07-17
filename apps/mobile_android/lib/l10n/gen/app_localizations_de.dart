@@ -1133,6 +1133,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runShareLiveLink => 'Live-Link teilen';
 
   @override
+  String get runLiveShareNeedsSignIn =>
+      'Melde dich an, um einen Live-Tracking-Link zu teilen.';
+
+  @override
+  String get runLiveShareNotStarted =>
+      'Live-Tracking konnte nicht gestartet werden – tippe zum erneuten Versuch auf Teilen.';
+
+  @override
   String get runTrainingPlans => 'Trainingspläne';
 
   @override
@@ -6767,7 +6775,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get prefsKeepScreenOnSubtitle =>
-      'Während eines Laufs einen Wakelock halten';
+      'Hält das Display während des gesamten Laufs an. Verbraucht bei langen Läufen deutlich mehr Akku.';
+
+  @override
+  String get prefsDimScreenWhileRecording =>
+      'Bildschirm beim Aufzeichnen abdunkeln';
+
+  @override
+  String get prefsDimScreenWhileRecordingSubtitle =>
+      'Dunkelt die Karte während eines Laufs ab, um Akku zu sparen. Die Werte bleiben lesbar.';
 
   @override
   String get prefsAdvancedGps => 'Erweitertes GPS';

@@ -328,4 +328,33 @@ void main() {
       expect(find.textContaining('Longest long run'), findsNothing);
     });
   });
+
+  group('PlanDetailScreen — adaptive width', () {
+    _FakeTraining training() {
+      final start = _mondayThisWeek();
+      return _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 40000)],
+        [_wo('wo0', 'w0', start.add(const Duration(days: 1)), 'easy', 8000)],
+      );
+    }
+
+    testWidgets('expanded surface caps the scrollable body at 900dp',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      await _pump(tester, training: training(), social: _FakeSocial(const []));
+      // 1280dp surface → the body ListView is centered + capped at 900dp.
+      expect(tester.getSize(find.byType(ListView).first).width, 900);
+    });
+
+    testWidgets('compact surface keeps the body full width', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await _pump(tester, training: training(), social: _FakeSocial(const []));
+      expect(tester.getSize(find.byType(ListView).first).width, 400);
+    });
+  });
 }

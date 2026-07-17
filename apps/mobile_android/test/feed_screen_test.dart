@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../lib/adaptive_width.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/feed_screen.dart';
 import '../lib/widgets/error_state.dart';
@@ -282,7 +283,7 @@ void main() {
       await _settle(tester);
       // The empty state renders with the groups glyph and no toolbar.
       expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
-      expect(find.byType(SegmentedButton<String>), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
     });
 
     testWidgets('follows but no activity shows the toolbar + empty body',
@@ -296,7 +297,7 @@ void main() {
       );
       await _settle(tester);
       // Toolbar shows because there ARE follows.
-      expect(find.byType(SegmentedButton<String>), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsWidgets);
       expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
     });
   });
@@ -403,6 +404,43 @@ void main() {
       await _settle(tester);
 
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('FeedScreen — adaptive width', () {
+    testWidgets('expanded surface caps the feed column at kContentMaxWidth',
+        (tester) async {
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        _FakeApi(
+          entries: [_runEntry()],
+          followees: [_profileRow('u-1', 'Alex Runner')],
+        ),
+      );
+      await _settle(tester);
+      // 1280dp surface, 720dp column, minus the list's 12dp side padding.
+      expect(tester.getSize(find.byType(Card).first).width,
+          kContentMaxWidth - 24);
+    });
+
+    testWidgets('compact surface keeps the feed card full width',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        _FakeApi(
+          entries: [_runEntry()],
+          followees: [_profileRow('u-1', 'Alex Runner')],
+        ),
+      );
+      await _settle(tester);
+      // 400dp surface minus the list's 12dp side padding.
+      expect(tester.getSize(find.byType(Card).first).width, 400 - 24);
     });
   });
 }

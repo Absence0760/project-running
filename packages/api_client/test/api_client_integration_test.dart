@@ -358,6 +358,46 @@ void main() {
       expect(downloaded.last.lng, closeTo(8.56, 0.001));
     });
 
+    test('getRuns(updatedSince:) delta filter matches metadata.last_modified_at',
+        () async {
+      // Regression: the PostgREST filter key was written as
+      // `metadata->>'last_modified_at'` — the quoted key is treated as a
+      // literal JSON key named `'last_modified_at'` (quotes included),
+      // which matches nothing, so EVERY delta pull silently returned []
+      // and multi-device edits never arrived after the cold load.
+      final id = '00000000-0000-0000-0001-' + DateTime.now()
+              .microsecondsSinceEpoch
+              .toRadixString(16)
+              .padLeft(12, '0')
+              .substring(0, 12);
+      final stamp = DateTime.now().toUtc();
+      final run = Run(
+        id: id,
+        startedAt: stamp,
+        duration: const Duration(minutes: 30),
+        distanceMetres: 6000,
+        track: const [],
+        source: RunSource.app,
+        metadata: {
+          'activity_type': 'run',
+          'last_modified_at': stamp.toIso8601String(),
+        },
+      );
+      inserted.add(id);
+      await api.saveRun(run);
+
+      final since = stamp.subtract(const Duration(minutes: 1));
+      final delta = await api.getRuns(limit: 200, updatedSince: since);
+      expect(delta.map((r) => r.id), contains(id),
+          reason: 'a run stamped after `updatedSince` must be returned '
+              'by the delta pull.');
+
+      final afterStamp = stamp.add(const Duration(minutes: 1));
+      final none = await api.getRuns(limit: 200, updatedSince: afterStamp);
+      expect(none.map((r) => r.id), isNot(contains(id)),
+          reason: 'a run stamped before `updatedSince` must be excluded.');
+    });
+
     test(
         'fetchPublicProfile stays within the user_profiles column grant '
         '(no 42501)', () async {
@@ -378,6 +418,25 @@ void main() {
               'the authenticated grant (e.g. preferred_unit).');
       expect(profile!.id, userId);
       expect(profile.displayName, isNotEmpty);
+    });
+
+    test(
+        'fetchFollowing / fetchFollowers stay within the user_profiles '
+        'column grant (no 42501)', () async {
+      // Regression for "Could not load feed.": both helpers hydrated
+      // follow edges with a bare select() on user_profiles, which
+      // requests revoked columns and 42501s — killing the whole feed
+      // (fetchFollowing is inside the feed's Future.wait) and the
+      // profile Followers/Following tabs. The seed user follows two
+      // accounts, so a successful narrowed read returns both.
+      final following = await api.fetchFollowing(userId!);
+      expect(following, hasLength(greaterThanOrEqualTo(2)),
+          reason: 'fetchFollowing must succeed for the seed user; a '
+              '42501 here means the profile hydrate drifted back onto '
+              'a revoked user_profiles column.');
+      expect(following.first.displayName, isNotEmpty);
+      final followers = await api.fetchFollowers(userId!);
+      expect(followers, isNotNull);
     });
 
     test('fetchProfileSummary loads for the seed user (profile screen '

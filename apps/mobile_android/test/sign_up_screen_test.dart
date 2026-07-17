@@ -474,6 +474,57 @@ void main() {
       expect(find.text('Back to sign in'), findsOneWidget);
     });
 
+    testWidgets(
+        'signUp success WITH a live session pops true (confirmations disabled)',
+        (tester) async {
+      // Confirmations-disabled posture (local dev): signUp returns a live
+      // session, so the immediate-signed-in flow must keep working — the
+      // screen pops back to the caller with `true` and never shows the
+      // check-your-email state. Guards the confirmation branch from
+      // regressing the signed-in path.
+      final client = _FakeApiClient();
+      bool? popResult;
+      await tester.binding.setSurfaceSize(const Size(400, 1200));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (ctx) => Scaffold(
+              body: TextButton(
+                onPressed: () async {
+                  popResult = await Navigator.push<bool>(
+                    ctx,
+                    MaterialPageRoute(
+                      builder: (_) => SignUpScreen(apiClient: client),
+                    ),
+                  );
+                },
+                child: const Text('go'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('go'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Email'), 'new@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'password1');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Confirm password'), 'password1');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(client.capturedEmail, 'new@b.com');
+      expect(find.byType(SignUpScreen), findsNothing);
+      expect(find.text('Check your email'), findsNothing);
+      expect(popResult, isTrue);
+    });
+
     // ─────────── Autofill + keyboard submit (#244) ───────────
 
     testWidgets('fields declare autofill hints in an AutofillGroup',

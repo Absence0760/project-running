@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../badges.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -233,110 +234,119 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildBody(ThemeData theme) {
-    return _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _loadError != null
-              ? ErrorState(
-                  message: AppLocalizations.of(context).feedLoadError,
-                  onRetry: _loadInitial,
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_badgeAwards.isNotEmpty) _buildBadgeStrip(theme),
-                    if (_followees.isNotEmpty) _buildToolbar(theme),
-                    Expanded(
-                      child: _entries.isEmpty
-                          ? (widget.api.userId == null
-                              // A signed-out viewer's following feed is
-                              // empty by definition, and the "follow other
-                              // runners" copy invites an action they can't
-                              // take. Only the EMPTY state gates — entries
-                              // still render signed out when there are any.
-                              ? SignInRequiredState(
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_loadError != null) {
+      return ErrorState(
+        message: AppLocalizations.of(context).feedLoadError,
+        onRetry: _loadInitial,
+      );
+    }
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_badgeAwards.isNotEmpty) _buildBadgeStrip(theme),
+        if (_followees.isNotEmpty) _buildToolbar(theme),
+        Expanded(
+          child: _entries.isEmpty
+              ? (widget.api.userId == null
+                  // A signed-out viewer's following feed is
+                  // empty by definition, and the "follow other
+                  // runners" copy invites an action they can't
+                  // take. Only the EMPTY state gates — entries
+                  // still render signed out when there are any.
+                  ? SignInRequiredState(
+                      api: widget.api,
+                      message: AppLocalizations.of(context)
+                          .feedSignedOutMessage,
+                      onSignedIn: _loadInitial,
+                    )
+                  : _buildEmpty(theme))
+              : RefreshIndicator(
+                  onRefresh: _loadInitial,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      if (n.metrics.pixels >=
+                              n.metrics.maxScrollExtent - 200 &&
+                          !_loadingMore &&
+                          !_exhausted) {
+                        _loadMore();
+                      }
+                      return false;
+                    },
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount:
+                          _entries.length + (_exhausted ? 0 : 1),
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (_, i) {
+                        if (i >= _entries.length) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: _loadingMore
+                                  ? const CircularProgressIndicator()
+                                  : TextButton(
+                                      onPressed: _loadMore,
+                                      child: Text(
+                                          AppLocalizations.of(
+                                                  context)
+                                              .feedLoadMore),
+                                    ),
+                            ),
+                          );
+                        }
+                        final entry = _entries[i];
+                        void openAuthor() => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProfileScreen(
                                   api: widget.api,
-                                  message: AppLocalizations.of(context)
-                                      .feedSignedOutMessage,
-                                  onSignedIn: _loadInitial,
-                                )
-                              : _buildEmpty(theme))
-                          : RefreshIndicator(
-                              onRefresh: _loadInitial,
-                              child: NotificationListener<ScrollNotification>(
-                                onNotification: (n) {
-                                  if (n.metrics.pixels >=
-                                          n.metrics.maxScrollExtent - 200 &&
-                                      !_loadingMore &&
-                                      !_exhausted) {
-                                    _loadMore();
-                                  }
-                                  return false;
-                                },
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.all(12),
-                                  itemCount:
-                                      _entries.length + (_exhausted ? 0 : 1),
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 12),
-                                  itemBuilder: (_, i) {
-                                    if (i >= _entries.length) {
-                                      return Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(12),
-                                          child: _loadingMore
-                                              ? const CircularProgressIndicator()
-                                              : TextButton(
-                                                  onPressed: _loadMore,
-                                                  child: Text(
-                                                      AppLocalizations.of(
-                                                              context)
-                                                          .feedLoadMore),
-                                                ),
-                                        ),
-                                      );
-                                    }
-                                    final entry = _entries[i];
-                                    void openAuthor() => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => ProfileScreen(
-                                              api: widget.api,
-                                              userId: entry.author.id,
-                                            ),
-                                          ),
-                                        );
-                                    if (entry is LiftFeedEntry) {
-                                      return _LiftEntryCard(
-                                        key: ValueKey(entry.id),
-                                        entry: entry,
-                                        onAuthorTap: openAuthor,
-                                      );
-                                    }
-                                    final run = entry as RunFeedEntry;
-                                    return _EntryCard(
-                                      key: ValueKey(run.run.id),
-                                      api: widget.api,
-                                      entry: FeedEntry(
-                                          run: run.run, author: run.author),
-                                      initialEngagement: _engagement[run.run.id],
-                                      onAuthorTap: openAuthor,
-                                      onCardTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => PublicRunScreen(
-                                            api: widget.api,
-                                            runId: run.run.id,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  userId: entry.author.id,
                                 ),
                               ),
+                            );
+                        if (entry is LiftFeedEntry) {
+                          return _LiftEntryCard(
+                            key: ValueKey(entry.id),
+                            entry: entry,
+                            onAuthorTap: openAuthor,
+                          );
+                        }
+                        final run = entry as RunFeedEntry;
+                        return _EntryCard(
+                          key: ValueKey(run.run.id),
+                          api: widget.api,
+                          entry: FeedEntry(
+                              run: run.run, author: run.author),
+                          initialEngagement: _engagement[run.run.id],
+                          onAuthorTap: openAuthor,
+                          onCardTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PublicRunScreen(
+                                api: widget.api,
+                                runId: run.run.id,
+                              ),
                             ),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                );
+                  ),
+                ),
+        ),
+      ],
+    );
+    if (widthClassOf(context) != WidthClass.expanded) return content;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+        child: content,
+      ),
+    );
   }
 
   Widget _buildBadgeStrip(ThemeData theme) {
@@ -386,17 +396,27 @@ class _FeedScreenState extends State<FeedScreen> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          SegmentedButton<String>(
-            segments: _activities
-                .map((a) => ButtonSegment<String>(
-                      value: a.value,
-                      icon: Icon(a.icon),
+          // A SegmentedButton can't fit six icon+label segments on a
+          // ~400dp phone — labels wrap letter-per-line. Scrollable
+          // chips match the run-list filter idiom instead.
+          SizedBox(
+            height: 40,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final a in _activities) ...[
+                    ChoiceChip(
+                      avatar: Icon(a.icon, size: 18),
                       label: Text(_activityLabel(l10n, a.value)),
-                    ))
-                .toList(),
-            selected: {_activityFilter},
-            onSelectionChanged: (s) => _setActivity(s.first),
-            showSelectedIcon: false,
+                      selected: _activityFilter == a.value,
+                      onSelected: (_) => _setActivity(a.value),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
           ),
           DropdownButton<String>(
             value: _authorFilter,

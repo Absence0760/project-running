@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
+import '../adaptive_width.dart';
 import '../age_grade.dart';
 import '../auth_change_aware.dart';
 import '../goals.dart';
@@ -63,6 +64,10 @@ const _pbLabelMetres = <String, double>{
   'Half Marathon': 21097,
   'Marathon': 42195,
 };
+
+/// Wider than [kContentMaxWidth] because the expanded dashboard is a
+/// multi-column composition (mirrors web /dashboard), not a reading column.
+const double _kExpandedMaxWidth = 1100;
 
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
@@ -706,6 +711,326 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           );
 
+    final Widget content;
+    if (runs.isEmpty && goals.isEmpty) {
+      content = Column(
+        children: [
+          if (actionToolbar != null) actionToolbar,
+          // #272: no "Ask your coach" card on the brand-new zero-runs
+          // welcome screen — it used to dominate above the onboarding
+          // buttons. It returns once the runner has data (the
+          // non-empty branch, gated on runs.isNotEmpty below).
+          Expanded(
+            child: _WelcomeEmpty(
+              theme: theme,
+              onStartRun: widget.onStartRun,
+              onAddGoal: _newGoal,
+              onImport: _openImport,
+            ),
+          ),
+        ],
+      );
+    } else {
+      // Pinned coach entry — the resolved Coach-prominence decision puts
+      // the AI coach one persistent tap from Home (it has no bottom-nav
+      // slot). Gated on the same api + training guard as the toolbar
+      // action, plus runs.isNotEmpty (#272) so it never dominates a
+      // zero-runs first screen.
+      final coach = runs.isNotEmpty ? _coachEntry() : null;
+      // Active-plan hero: surface the day's structured workout above
+      // goals so a plan-runner sees what's next before scrolling. Hidden
+      // when no active plan or no workout today.
+      final workoutCard = _planOverview?.todayWorkout != null
+          ? TodaysWorkoutCard(
+              overview: _planOverview!,
+              onTap: _openTodayWorkout,
+            )
+          : null;
+      final goalsSection = _goalsSection(theme, unit, runs, goals, now);
+      // Compact 3-column stat strip — replaced the previous stacked
+      // "This Week" / "This Month" / "All Time" cards (~480 px each +
+      // section headers). Same data, same tap-through into PeriodSummary
+      // for week / month; all-time has no period summary so it isn't
+      // tappable.
+      final periodRow = Row(
+        children: [
+          Expanded(
+            child: _PeriodStatCard(
+              label: l10n.dashboardPeriodWeek,
+              distanceMetres: weekDistance,
+              runCount: weekRunCount,
+              vertMetres: weekVert,
+              unit: unit,
+              onTap: () => _openPeriodSummary(PeriodType.week),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _PeriodStatCard(
+              label: l10n.dashboardPeriodMonth,
+              distanceMetres: monthDistance,
+              runCount: monthRunCount,
+              vertMetres: monthVert,
+              unit: unit,
+              onTap: () => _openPeriodSummary(PeriodType.month),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _PeriodStatCard(
+              label: l10n.dashboardPeriodAllTime,
+              distanceMetres: allDistance,
+              runCount: runs.length,
+              vertMetres: allVert,
+              unit: unit,
+              onTap: () => _openPeriodSummary(PeriodType.all),
+            ),
+          ),
+        ],
+      );
+      final thisWeekCard = Card(
+        child: Padding(
+          padding: _kCardPadding,
+          child: ThisWeekStrip(
+            runs: runs,
+            unit: unit,
+            weekStartDay: _weekStartDay,
+            now: now,
+          ),
+        ),
+      );
+      final streakCard = Card(
+        child: Padding(
+          padding: _kCardPadding,
+          child: _StreakRow(runs: runs),
+        ),
+      );
+      final mileageCard = MileageTrendCard(runs: runs, unit: unit, now: now);
+      final heatmapCard = Card(
+        child: Padding(
+          padding: _kCardPadding,
+          child: _RunHeatmap(
+            runs: runs,
+            weeks: 20,
+            onWeekTap: (anchor) =>
+                _openPeriodSummary(PeriodType.week, anchor),
+          ),
+        ),
+      );
+      final pbCard = hasAnyPb
+          ? Card(
+              child: Padding(
+                padding: _kCardPadding,
+                child: Column(
+                  children: [
+                    if (longest != null)
+                      _PbRow(
+                        icon: Icons.straighten,
+                        label: l10n.dashboardLongestRun,
+                        value: UnitFormat.distance(
+                            longest.distanceMetres, unit),
+                      ),
+                    for (final e in displayEfforts.entries) ...[
+                      const SizedBox(height: 12),
+                      _PbRow(
+                        icon: Icons.emoji_events,
+                        label: l10n.dashboardFastestDistance(
+                            bestEffortDistanceLabel(l10n, e.key)),
+                        value: _formatDuration(e.value),
+                        subValue: switch (_pbAgeGrade(e.key, e.value, now,
+                            achievedAt: pbDates[e.key])) {
+                          final ag? => l10n.dashboardPbAgeGrade(ag),
+                          _ => null,
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            )
+          : null;
+      final fitnessCard = FitnessCard(
+          runs: runs, now: now, hrPrefs: _hrPrefs(), loadSeries: loadSeries);
+      final predictorCard = RacePredictorCard(runs: runs, now: now);
+      final readinessCard = ReadinessCard(
+          runs: runs, now: now, hrPrefs: _hrPrefs(), loadSeries: loadSeries);
+      final intensityCard = IntensityCard(
+        runs: runs,
+        hrZones: parseHrZones(
+            widget.settingsSync?.service?.effective<Map>(SettingsKeys.hrZones)),
+        now: now,
+        settingsSync: widget.settingsSync,
+      );
+      final loadChart = _buildTrainingLoadChart(runs, now, loadSeries);
+      final gymNote = _hasRecentLift(now) ? _gymReadinessNote(theme, l10n) : null;
+      // Recent lifts trend list — self-hides for a pure runner (empty
+      // gym store), mirrors web /dashboard's recent-lifts card.
+      final liftsCard = widget.gymStore.workouts.isNotEmpty
+          ? RecentLiftsCard(
+              workouts: widget.gymStore.workouts,
+              onOpenWorkout: _openGymWorkout,
+              onViewAll: _openGym,
+            )
+          : null;
+
+      if (widthClassOf(context) == WidthClass.expanded) {
+        // Tablet-landscape recomposition (mirrors web /dashboard's
+        // multi-column card grid): the lead cards pair up with goals,
+        // the chart cards flow into two vertical columns. Blocks
+        // alternate columns; internally self-hiding cards render
+        // zero-height so a hidden card never reserves a grid cell.
+        final modalityBody = _todayModalityBody();
+        final left = <Widget>[];
+        final right = <Widget>[];
+        var slot = 0;
+        void addBlock(Widget block, {bool gapAfter = false}) {
+          final col = slot.isEven ? left : right;
+          col.add(block);
+          if (gapAfter) col.add(_kSectionGap);
+          slot++;
+        }
+
+        addBlock(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [_SectionHeader(l10n.dashboardSectionStreak), streakCard],
+          ),
+          gapAfter: true,
+        );
+        addBlock(mileageCard, gapAfter: true);
+        addBlock(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SectionHeader(l10n.dashboardSectionLast20Weeks),
+              heatmapCard,
+            ],
+          ),
+          gapAfter: true,
+        );
+        if (pbCard != null) {
+          addBlock(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SectionHeader(l10n.dashboardSectionPersonalBests),
+                pbCard,
+              ],
+            ),
+            gapAfter: true,
+          );
+        }
+        addBlock(fitnessCard);
+        addBlock(predictorCard);
+        addBlock(readinessCard);
+        addBlock(intensityCard);
+        addBlock(Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [loadChart, if (gymNote != null) gymNote],
+        ));
+        if (liftsCard != null) addBlock(liftsCard);
+
+        content = Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kExpandedMaxWidth),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                if (actionToolbar != null) actionToolbar,
+                if (coach != null) ...[coach, _kSectionGap],
+                if (workoutCard != null || modalityBody != null)
+                  Row(
+                    key: const Key('dashboardExpandedLeadRow'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (workoutCard != null) workoutCard,
+                            if (workoutCard != null && modalityBody != null)
+                              _kSectionGap,
+                            if (modalityBody != null) modalityBody,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: goalsSection),
+                    ],
+                  )
+                else
+                  goalsSection,
+                _kSectionGap,
+                periodRow,
+                _kSectionGap,
+                thisWeekCard,
+                _kSectionGap,
+                Row(
+                  key: const Key('dashboardExpandedChartColumns'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: left,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: right,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        content = ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            if (actionToolbar != null) actionToolbar,
+            if (coach != null) ...[coach, _kSectionGap],
+            if (workoutCard != null) ...[workoutCard, _kSectionGap],
+            // Today's logged non-run modalities (gym + nutrition).
+            // Self-hiding: each card only renders when that modality was
+            // logged today, so a pure runner sees nothing new here
+            // (multi_modal.md § Home, anti-clutter checklist).
+            ..._todayModalitySection(),
+            goalsSection,
+            _kSectionGap,
+            periodRow,
+            _kSectionGap,
+            thisWeekCard,
+            _kSectionGap,
+            _SectionHeader(l10n.dashboardSectionStreak),
+            streakCard,
+            _kSectionGap,
+            mileageCard,
+            _kSectionGap,
+            _SectionHeader(l10n.dashboardSectionLast20Weeks),
+            heatmapCard,
+            _kSectionGap,
+            if (pbCard != null) ...[
+              _SectionHeader(l10n.dashboardSectionPersonalBests),
+              pbCard,
+              _kSectionGap,
+            ],
+            fitnessCard,
+            predictorCard,
+            readinessCard,
+            intensityCard,
+            loadChart,
+            if (gymNote != null) gymNote,
+            if (liftsCard != null) ...[_kSectionGap, liftsCard],
+          ],
+        );
+      }
+    }
+
     return Scaffold(
       // No AppBar — the bottom-nav already labels this tab "Home" and
       // the action buttons (Coach / Feed / Profile) hoist inline at
@@ -714,198 +1039,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       // that inset implicitly before).
       body: SafeArea(
         bottom: false,
-        child: runs.isEmpty && goals.isEmpty
-          ? Column(
-              children: [
-                if (actionToolbar != null) actionToolbar,
-                // #272: no "Ask your coach" card on the brand-new zero-runs
-                // welcome screen — it used to dominate above the onboarding
-                // buttons. It returns once the runner has data (the
-                // ListView branch, gated on runs.isNotEmpty below).
-                Expanded(
-                  child: _WelcomeEmpty(
-                    theme: theme,
-                    onStartRun: widget.onStartRun,
-                    onAddGoal: _newGoal,
-                    onImport: _openImport,
-                  ),
-                ),
-              ],
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                if (actionToolbar != null) actionToolbar,
-                // Pinned coach entry — the resolved Coach-prominence
-                // decision puts the AI coach one persistent tap from Home
-                // (it has no bottom-nav slot). Gated on the same api +
-                // training guard as the toolbar action, plus runs.isNotEmpty
-                // (#272) so it never dominates a zero-runs first screen.
-                if (_coachEntry() case final coach? when runs.isNotEmpty) ...[
-                  coach,
-                  _kSectionGap,
-                ],
-                // Active-plan hero: surface the day's structured
-                // workout above goals so a plan-runner sees what's
-                // next before scrolling. Hidden when no active plan
-                // or no workout today.
-                if (_planOverview?.todayWorkout != null) ...[
-                  TodaysWorkoutCard(
-                    overview: _planOverview!,
-                    onTap: _openTodayWorkout,
-                  ),
-                  _kSectionGap,
-                ],
-                // Today's logged non-run modalities (gym + nutrition).
-                // Self-hiding: each card only renders when that modality was
-                // logged today, so a pure runner sees nothing new here
-                // (multi_modal.md § Home, anti-clutter checklist).
-                ..._todayModalitySection(),
-                _goalsSection(theme, unit, runs, goals, now),
-                _kSectionGap,
-                // Compact 3-column stat strip — replaced the previous
-                // stacked "This Week" / "This Month" / "All Time"
-                // cards (~480 px each + section headers). Same data,
-                // same tap-through into PeriodSummary for week / month;
-                // all-time has no period summary so it isn't tappable.
-                Row(
-                  children: [
-                    Expanded(
-                      child: _PeriodStatCard(
-                        label: l10n.dashboardPeriodWeek,
-                        distanceMetres: weekDistance,
-                        runCount: weekRunCount,
-                        vertMetres: weekVert,
-                        unit: unit,
-                        onTap: () => _openPeriodSummary(PeriodType.week),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _PeriodStatCard(
-                        label: l10n.dashboardPeriodMonth,
-                        distanceMetres: monthDistance,
-                        runCount: monthRunCount,
-                        vertMetres: monthVert,
-                        unit: unit,
-                        onTap: () => _openPeriodSummary(PeriodType.month),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _PeriodStatCard(
-                        label: l10n.dashboardPeriodAllTime,
-                        distanceMetres: allDistance,
-                        runCount: runs.length,
-                        vertMetres: allVert,
-                        unit: unit,
-                        onTap: () => _openPeriodSummary(PeriodType.all),
-                      ),
-                    ),
-                  ],
-                ),
-                _kSectionGap,
-                Card(
-                  child: Padding(
-                    padding: _kCardPadding,
-                    child: ThisWeekStrip(
-                      runs: runs,
-                      unit: unit,
-                      weekStartDay: _weekStartDay,
-                      now: now,
-                    ),
-                  ),
-                ),
-                _kSectionGap,
-                _SectionHeader(l10n.dashboardSectionStreak),
-                Card(
-                  child: Padding(
-                    padding: _kCardPadding,
-                    child: _StreakRow(runs: runs),
-                  ),
-                ),
-                _kSectionGap,
-                MileageTrendCard(runs: runs, unit: unit, now: now),
-                _kSectionGap,
-                _SectionHeader(l10n.dashboardSectionLast20Weeks),
-                Card(
-                  child: Padding(
-                    padding: _kCardPadding,
-                    child: _RunHeatmap(
-                      runs: runs,
-                      weeks: 20,
-                      onWeekTap: (anchor) =>
-                          _openPeriodSummary(PeriodType.week, anchor),
-                    ),
-                  ),
-                ),
-                _kSectionGap,
-                if (hasAnyPb) ...[
-                  _SectionHeader(l10n.dashboardSectionPersonalBests),
-                  Card(
-                    child: Padding(
-                      padding: _kCardPadding,
-                      child: Column(
-                        children: [
-                          if (longest != null)
-                            _PbRow(
-                              icon: Icons.straighten,
-                              label: l10n.dashboardLongestRun,
-                              value: UnitFormat.distance(
-                                  longest.distanceMetres, unit),
-                            ),
-                          for (final e in displayEfforts.entries) ...[
-                            const SizedBox(height: 12),
-                            _PbRow(
-                              icon: Icons.emoji_events,
-                              label: l10n.dashboardFastestDistance(
-                                  bestEffortDistanceLabel(l10n, e.key)),
-                              value: _formatDuration(e.value),
-                              subValue: switch (_pbAgeGrade(e.key, e.value, now,
-                                  achievedAt: pbDates[e.key])) {
-                                final ag? => l10n.dashboardPbAgeGrade(ag),
-                                _ => null,
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  _kSectionGap,
-                ],
-                FitnessCard(
-                    runs: runs,
-                    now: now,
-                    hrPrefs: _hrPrefs(),
-                    loadSeries: loadSeries),
-                RacePredictorCard(runs: runs, now: now),
-                ReadinessCard(
-                    runs: runs,
-                    now: now,
-                    hrPrefs: _hrPrefs(),
-                    loadSeries: loadSeries),
-                IntensityCard(
-                  runs: runs,
-                  hrZones: parseHrZones(widget.settingsSync?.service
-                      ?.effective<Map>(SettingsKeys.hrZones)),
-                  now: now,
-                  settingsSync: widget.settingsSync,
-                ),
-                _buildTrainingLoadChart(runs, now, loadSeries),
-                if (_hasRecentLift(now)) _gymReadinessNote(theme, l10n),
-                // Recent lifts trend list — self-hides for a pure runner (empty
-                // gym store), mirrors web /dashboard's recent-lifts card.
-                if (widget.gymStore.workouts.isNotEmpty) ...[
-                  _kSectionGap,
-                  RecentLiftsCard(
-                    workouts: widget.gymStore.workouts,
-                    onOpenWorkout: _openGymWorkout,
-                    onViewAll: _openGym,
-                  ),
-                ],
-              ],
-            ),
+        child: content,
       ),
     );
   }
@@ -913,12 +1047,12 @@ class _DashboardScreenState extends State<DashboardScreen>
   /// The "today's logged modalities" block — gym + nutrition cards, each
   /// self-hiding when that modality has no data today. Renders the two
   /// 2-up on phones wide enough (multi_modal.md § Home density rules) when
-  /// both are present, full-width otherwise. Empty list when neither logged.
-  List<Widget> _todayModalitySection() {
+  /// both are present, full-width otherwise. Null when neither logged.
+  Widget? _todayModalityBody() {
     final lift = _todaysLift;
     final food = _todaysFood;
     final hasFood = food.isNotEmpty;
-    if (lift == null && !hasFood) return const [];
+    if (lift == null && !hasFood) return null;
 
     final gymCard = lift == null
         ? null
@@ -954,6 +1088,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         ],
       );
     }
+    return body;
+  }
+
+  List<Widget> _todayModalitySection() {
+    final body = _todayModalityBody();
+    if (body == null) return const [];
     return [body, _kSectionGap];
   }
 

@@ -187,6 +187,12 @@ class Preferences extends ChangeNotifier {
   // Defaults true so existing users keep the wakelock-on-during-run
   // behaviour they're used to.
   static const _kKeepScreenOn = 'keep_screen_on';
+  // Mirrors the device-scoped `dim_screen_while_recording` settings-bag
+  // key. When on (and keep-screen-on is also on) the run screen dims the
+  // live map while recording so an always-lit display costs less battery
+  // on a long run. Defaults false — the historical behaviour is a
+  // full-brightness screen.
+  static const _kDimScreenWhileRecording = 'dim_screen_while_recording';
   // Per-device, never synced: write completed runs back to Android
   // Health Connect so they flow on to Google Fit / Samsung Health / etc.
   // Off by default — writing user data to a third-party store is opt-in
@@ -297,6 +303,7 @@ class Preferences extends ChangeNotifier {
   String _defaultActivityType = 'run';
   String _voiceFeedbackVerbosity = 'full';
   bool _keepScreenOn = true;
+  bool _dimScreenWhileRecording = false;
   bool _writeToHealthConnect = false;
   ThemeMode _themeMode = ThemeMode.dark;
   Locale? _locale;
@@ -334,6 +341,12 @@ class Preferences extends ChangeNotifier {
   /// Whether the run screen should hold a wakelock while recording.
   /// Mirrors the device-scoped `keep_screen_on` settings-bag key.
   bool get keepScreenOn => _keepScreenOn;
+
+  /// Whether the run screen dims the live map while recording to save
+  /// battery. Only takes effect while [keepScreenOn] is on (with the
+  /// screen already allowed to sleep there is nothing to dim). Mirrors
+  /// the device-scoped `dim_screen_while_recording` settings-bag key.
+  bool get dimScreenWhileRecording => _dimScreenWhileRecording;
 
   /// Whether completed runs are written back to Android Health Connect
   /// (persona #36). Local-only, off by default, Android-only at the call
@@ -537,6 +550,7 @@ class Preferences extends ChangeNotifier {
     await setAudioCues(true);
     await setSplitIntervalMetres(0);
     await setKeepScreenOn(true);
+    await setDimScreenWhileRecording(false);
   }
 
   /// Whether the one-time OEM battery-optimisation hint has been shown. Many
@@ -596,6 +610,8 @@ class Preferences extends ChangeNotifier {
     _voiceFeedbackVerbosity =
         _prefs.getString(_kVoiceFeedbackVerbosity) ?? 'full';
     _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
+    _dimScreenWhileRecording =
+        _prefs.getBool(_kDimScreenWhileRecording) ?? false;
     _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
     _locale = localeFromTag(_prefs.getString(_kLocale));
     final bw = _prefs.getDouble(_kBodyWeightKg);
@@ -711,6 +727,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setKeepScreenOn(bool v) async {
     _keepScreenOn = v;
     await _prefs.setBool(_kKeepScreenOn, v);
+    notifyListeners();
+  }
+
+  Future<void> setDimScreenWhileRecording(bool v) async {
+    _dimScreenWhileRecording = v;
+    await _prefs.setBool(_kDimScreenWhileRecording, v);
     notifyListeners();
   }
 

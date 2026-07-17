@@ -38,6 +38,7 @@
 		type RouteMatchCandidate,
 	} from '$lib/core/data';
 	import { applyRunMetadataPatch } from '$lib/core/data_normalise';
+	import { ageFromDob } from '$lib/nutrition/nutrition_targets';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
@@ -212,14 +213,12 @@
 				const dob = effective<string>(settings, 'date_of_birth');
 				if (typeof dob === 'string') {
 					viewerDobIso = dob;
-					const born = new Date(dob);
-					if (!Number.isNaN(born.getTime())) {
-						const now = new Date();
-						let age = now.getFullYear() - born.getFullYear();
-						const m = now.getMonth() - born.getMonth();
-						if (m < 0 || (m === 0 && now.getDate() < born.getDate())) age--;
-						if (age >= 0 && age < 120) viewerAgeYears = age;
-					}
+					// Parse by calendar components — new Date('YYYY-MM-DD') is UTC
+					// midnight, and reading it back through local getters shifts the
+					// birthday a day early in negative-UTC offsets, skewing the Tanaka
+					// HR-max fallback used for the HR-zone breakdown.
+					const age = ageFromDob(dob, Date.now());
+					if (age !== null) viewerAgeYears = age;
 				}
 				const bw = effective<number>(settings, 'body_weight_kg');
 				if (typeof bw === 'number' && bw > 0) bodyWeightKg = bw;

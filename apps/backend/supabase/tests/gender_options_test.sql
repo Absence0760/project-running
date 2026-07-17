@@ -1,4 +1,4 @@
--- pgtap suite for the narrowed user_profiles.gender CHECK (migration 20270421_001).
+-- pgtap suite for the narrowed user_profiles.gender CHECK (migration 20270421_002).
 --
 -- gender drops the `nonbinary` option end-to-end (issue #220). The CHECK is
 -- role-independent, so this exercises it as the default (superuser) role rather

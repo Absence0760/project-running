@@ -1139,6 +1139,18 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               },
             ),
             SwitchListTile(
+              title: Text(l10n.prefsDimScreenWhileRecording),
+              subtitle: Text(l10n.prefsDimScreenWhileRecordingSubtitle),
+              value: prefs.dimScreenWhileRecording,
+              onChanged: prefs.keepScreenOn
+                  ? (v) async {
+                      await prefs.setDimScreenWhileRecording(v);
+                      await widget.settingsSync
+                          ?.pushDimScreenWhileRecording();
+                    }
+                  : null,
+            ),
+            SwitchListTile(
               title: Text(l10n.prefsAdvancedGps),
               subtitle: Text(l10n.prefsAdvancedGpsSubtitle),
               value: prefs.advancedGps,
