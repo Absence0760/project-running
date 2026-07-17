@@ -184,6 +184,15 @@
             android:name="com.baseflow.geolocator.GeolocatorLocationService"
             android:foregroundServiceType="location"
             tools:node="merge" />
+
+        <!-- Receives the lock-screen Pause/Resume/Stop notification-action
+             broadcasts (issue #270). A broadcast target (vs a getActivity
+             PendingIntent that launches MainActivity) lets the buttons fire
+             on a locked phone WITHOUT the keyguard unlock prompt. Not
+             exported: only our own app-internal PendingIntent triggers it. -->
+        <receiver
+            android:name=".RunActionReceiver"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
