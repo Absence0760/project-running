@@ -43,22 +43,39 @@ void main() {
     });
 
     test('auto-live-share hook is opt-in, L4-isolated, and duplicate-safe', () {
-      // Reason: docs/features/safety.md — the auto_live_share device pref
-      // starts a broadcast at _begin(). Three load-bearing properties:
-      // (1) fail-closed opt-in (the pref gate, default false), (2) a manual
-      // pre-GO share must not double-begin (isActive guard), and (3) the
-      // whole thing is fire-and-forget with its own error path so a share
-      // failure can never touch the L0/L1 recording.
+      // Reason: docs/features/safety.md — the auto_live_share device pref (and
+      // a manual "Share live link") start a broadcast at _begin(). Three
+      // load-bearing properties: (1) fail-closed opt-in — the gate fires only
+      // when the pref is on OR the runner explicitly asked to share, both
+      // default-false; (2) a manual pre-GO share must not double-begin
+      // (broadcasterActive guard); (3) the whole thing is fire-and-forget with
+      // its own error path so a share failure can never touch L0/L1 recording.
+      //
+      // The gate lives in the pure, @visibleForTesting
+      // shouldStartBroadcastOnRunStart helper (unit-tested in
+      // run_screen_broadcast_test.dart). Pin its exact formula so the opt-in +
+      // duplicate-safe semantics can't silently drift.
       expect(
         source.contains(
-            '_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)'),
+            '(autoLiveShareEnabled || liveShareRequested) && !broadcasterActive'),
         isTrue,
-        reason: 'the _begin() hook must gate on the pref AND skip an '
-            'already-attached broadcaster',
+        reason: 'the run-start gate must fire only on the pref OR an explicit '
+            'share request, and must skip an already-attached broadcaster',
       );
-      final hookIdx = source.indexOf(
-          '_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)');
-      final hookWindow = source.substring(hookIdx, hookIdx + 500);
+      // _attachRecordingSideEffects routes the run-start hook through that gate
+      // and starts the broadcast fire-and-forget in its own catch path.
+      final sideEffects = _extractMethodBody(
+        source,
+        r'void _attachRecordingSideEffects\(\)\s*\{',
+      );
+      final gateIdx = sideEffects.indexOf('shouldStartBroadcastOnRunStart(');
+      expect(
+        gateIdx,
+        greaterThan(-1),
+        reason: 'the _begin() hook must gate through '
+            'shouldStartBroadcastOnRunStart',
+      );
+      final hookWindow = sideEffects.substring(gateIdx, gateIdx + 500);
       expect(
         hookWindow.contains('unawaited(_startLiveBroadcast()'),
         isTrue,
