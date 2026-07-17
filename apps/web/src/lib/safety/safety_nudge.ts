@@ -25,10 +25,13 @@
 export const SAFETY_NUDGE_DUSK_MINUTES = 20 * 60;
 export const SAFETY_NUDGE_DAWN_MINUTES = 6 * 60;
 
-/// How long surfacing the nudge suppresses it before it can resurface.
-/// Long enough that a runner who has seen (and understood) the prompt is
-/// not nagged every night, short enough that a lapsed habit gets an
-/// occasional reminder. The nudge is otherwise dismissible on sight.
+/// How long ACTING on the nudge (sharing a link or explicitly dismissing
+/// it) suppresses it before it can resurface. Long enough that a runner who
+/// has engaged with the prompt is not nagged every night, short enough that
+/// a lapsed habit gets an occasional reminder. Deliberately anchored on the
+/// runner's *action*, not on merely surfacing the banner — a nudge a runner
+/// never engaged with (a transient banner they missed) must NOT be
+/// suppressed for a month.
 export const SAFETY_NUDGE_THROTTLE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /// True when `nowLocalMinutes` falls in the dusk→dawn window. Wraps
@@ -40,13 +43,14 @@ export function isNightWindow(nowLocalMinutes: number): boolean {
 	return m >= SAFETY_NUDGE_DUSK_MINUTES || m < SAFETY_NUDGE_DAWN_MINUTES;
 }
 
-/// True when the nudge was last surfaced recently enough that it should
-/// stay suppressed. `dismissedAtMs` null (never surfaced) is never
+/// True when the nudge was last ACTED on (shared or dismissed) recently
+/// enough that it should stay suppressed. `actedAtMs` null (never acted on,
+/// including a nudge that was merely shown and then missed) is never
 /// throttled; a future-dated stamp (clock skew) reads as recent and
 /// throttles rather than spamming.
-export function nudgeThrottled(dismissedAtMs: number | null, nowMs: number): boolean {
-	if (dismissedAtMs == null) return false;
-	return nowMs - dismissedAtMs < SAFETY_NUDGE_THROTTLE_MS;
+export function nudgeThrottled(actedAtMs: number | null, nowMs: number): boolean {
+	if (actedAtMs == null) return false;
+	return nowMs - actedAtMs < SAFETY_NUDGE_THROTTLE_MS;
 }
 
 export interface SoloSafetyNudgeInput {
@@ -58,7 +62,7 @@ export interface SoloSafetyNudgeInput {
 	/// Whether a live broadcast is already active for this run (the
 	/// runner shared a link manually before pressing GO).
 	isBroadcast: boolean;
-	/// Whether the nudge is currently throttled (surfaced within the
+	/// Whether the nudge is currently throttled (acted on within the
 	/// window). Compute with `nudgeThrottled`.
 	nudgeDismissed: boolean;
 }
@@ -71,4 +75,37 @@ export function shouldNudgeSoloSafety(input: SoloSafetyNudgeInput): boolean {
 	if (input.isBroadcast) return false;
 	if (input.nudgeDismissed) return false;
 	return isNightWindow(input.nowLocalMinutes);
+}
+
+export interface SoloSafetyNudgeSurfaceInput {
+	/// Local time of day the run started, in minutes since midnight.
+	nowLocalMinutes: number;
+	/// The `auto_live_share` device pref — when on, every run already
+	/// broadcasts, so there is nothing to nudge.
+	autoLiveShareOn: boolean;
+	/// Whether a live broadcast is already active for this run.
+	isBroadcast: boolean;
+	/// When the runner last ACTED on the nudge (shared or dismissed it),
+	/// epoch ms, or null if they never have. This is deliberately NOT the
+	/// time the nudge was last *shown* — a persistent banner a runner
+	/// never engaged with must resurface, not stay suppressed for the
+	/// full throttle window.
+	lastActedAtMs: number | null;
+	/// Current wall-clock, epoch ms — the throttle reference.
+	nowMs: number;
+}
+
+/// Whether to surface the persistent solo-safety banner right now. Folds
+/// the throttle composition (`nudgeThrottled` on the acted-on stamp) into
+/// the `shouldNudgeSoloSafety` guards so the caller can't re-introduce the
+/// "throttle from shown, not from acted-on" bug by feeding a shown-at
+/// timestamp — the parameter is named `lastActedAtMs` to make the contract
+/// explicit at the call site.
+export function shouldSurfaceSoloSafetyNudge(input: SoloSafetyNudgeSurfaceInput): boolean {
+	return shouldNudgeSoloSafety({
+		nowLocalMinutes: input.nowLocalMinutes,
+		autoLiveShareOn: input.autoLiveShareOn,
+		isBroadcast: input.isBroadcast,
+		nudgeDismissed: nudgeThrottled(input.lastActedAtMs, input.nowMs),
+	});
 }

@@ -4,6 +4,7 @@ import {
 	isNightWindow,
 	nudgeThrottled,
 	shouldNudgeSoloSafety,
+	shouldSurfaceSoloSafetyNudge,
 	SAFETY_NUDGE_DUSK_MINUTES,
 	SAFETY_NUDGE_DAWN_MINUTES,
 	SAFETY_NUDGE_THROTTLE_MS,
@@ -47,7 +48,7 @@ test('out-of-range minutes normalise into the day', () => {
 	assert.equal(isNightWindow(-1), true, '-1 wraps to 23:59, night');
 });
 
-test('never-surfaced nudge is not throttled', () => {
+test('never-acted-on nudge is not throttled', () => {
 	assert.equal(nudgeThrottled(null, NOW), false);
 });
 
@@ -76,10 +77,52 @@ test('an already-broadcasting run is not nudged', () => {
 	assert.equal(nudgeAt(22 * 60, { isBroadcast: true }), false);
 });
 
-test('a throttled (recently surfaced) nudge stays suppressed', () => {
+test('a throttled (recently acted-on) nudge stays suppressed', () => {
 	assert.equal(nudgeAt(22 * 60, { nudgeDismissed: true }), false);
 });
 
 test('every suppressor is independent — daylight alone suppresses', () => {
 	assert.equal(nudgeAt(9 * 60, { autoLiveShareOn: false, isBroadcast: false }), false);
+});
+
+function surfaceAt(
+	minutes: number,
+	over: Partial<Parameters<typeof shouldSurfaceSoloSafetyNudge>[0]> = {},
+) {
+	return shouldSurfaceSoloSafetyNudge({
+		nowLocalMinutes: minutes,
+		autoLiveShareOn: false,
+		isBroadcast: false,
+		lastActedAtMs: null,
+		nowMs: NOW,
+		...over,
+	});
+}
+
+test('surfaces a solo after-dark run never acted on', () => {
+	assert.equal(surfaceAt(22 * 60), true);
+});
+
+test('a nudge acted on within the window stays suppressed', () => {
+	assert.equal(
+		surfaceAt(22 * 60, { lastActedAtMs: NOW - (SAFETY_NUDGE_THROTTLE_MS - 1) }),
+		false,
+	);
+});
+
+test('a nudge acted on longer ago than the window resurfaces', () => {
+	assert.equal(
+		surfaceAt(22 * 60, { lastActedAtMs: NOW - SAFETY_NUDGE_THROTTLE_MS }),
+		true,
+	);
+});
+
+test('a future-dated acted-on stamp (clock skew) stays suppressed', () => {
+	assert.equal(surfaceAt(22 * 60, { lastActedAtMs: NOW + 5_000 }), false);
+});
+
+test('daylight / broadcast / auto-share each suppress the surface decision', () => {
+	assert.equal(surfaceAt(12 * 60), false);
+	assert.equal(surfaceAt(22 * 60, { isBroadcast: true }), false);
+	assert.equal(surfaceAt(22 * 60, { autoLiveShareOn: true }), false);
 });

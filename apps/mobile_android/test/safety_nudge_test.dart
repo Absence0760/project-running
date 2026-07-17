@@ -75,11 +75,50 @@ void main() {
     expect(nudgeAt(22 * 60, isBroadcast: true), false);
   });
 
-  test('a throttled (recently surfaced) nudge stays suppressed', () {
+  test('a throttled (recently acted-on) nudge stays suppressed', () {
     expect(nudgeAt(22 * 60, nudgeDismissed: true), false);
   });
 
   test('every suppressor is independent — daylight alone suppresses', () {
     expect(nudgeAt(9 * 60, autoLiveShareOn: false, isBroadcast: false), false);
+  });
+
+  bool surfaceAt(
+    int minutes, {
+    bool autoLiveShareOn = false,
+    bool isBroadcast = false,
+    int? lastActedAtMs,
+  }) {
+    return shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput(
+      nowLocalMinutes: minutes,
+      autoLiveShareOn: autoLiveShareOn,
+      isBroadcast: isBroadcast,
+      lastActedAtMs: lastActedAtMs,
+      nowMs: now,
+    ));
+  }
+
+  test('surfaces a solo after-dark run never acted on', () {
+    expect(surfaceAt(22 * 60), true);
+  });
+
+  test('a nudge acted on within the window stays suppressed', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now - (safetyNudgeThrottleMs - 1)),
+        false);
+  });
+
+  test('a nudge acted on longer ago than the window resurfaces', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now - safetyNudgeThrottleMs), true);
+  });
+
+  test('a future-dated acted-on stamp (clock skew) stays suppressed', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now + 5000), false);
+  });
+
+  test('daylight / broadcast / auto-share each suppress the surface decision',
+      () {
+    expect(surfaceAt(12 * 60), false);
+    expect(surfaceAt(22 * 60, isBroadcast: true), false);
+    expect(surfaceAt(22 * 60, autoLiveShareOn: true), false);
   });
 }
