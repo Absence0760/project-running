@@ -4385,9 +4385,7 @@ String _formatKm(double metres) =>
 String _formatPace(Duration duration, double metres) {
   if (metres < 10) return '--:--';
   final secondsPerKm = duration.inSeconds / (metres / 1000);
-  final m = secondsPerKm ~/ 60;
-  final s = (secondsPerKm % 60).round();
-  return '$m:${s.toString().padLeft(2, '0')}';
+  return UnitFormat.pace(secondsPerKm, DistanceUnit.km);
 }
 
 class _LastRunCard extends StatelessWidget {
