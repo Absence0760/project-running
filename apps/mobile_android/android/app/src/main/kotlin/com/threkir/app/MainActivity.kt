@@ -9,5 +9,6 @@ class MainActivity : FlutterActivity() {
         WearAuthBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         WearRoutesBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         RunNotificationBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
+        BatterySettingsBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

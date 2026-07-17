@@ -2112,6 +2112,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailDeleteBody => 'この操作は元に戻せません。';
 
   @override
+  String get runDetailDeleteQueued =>
+      'クラウドから削除できませんでした。ランは一時的に保持され、オンライン復帰時に再試行します。';
+
+  @override
   String get runDetailSuggestLink => 'リンク';
 
   @override

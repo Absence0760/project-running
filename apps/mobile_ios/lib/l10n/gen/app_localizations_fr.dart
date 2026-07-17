@@ -2224,6 +2224,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailDeleteBody => 'Cette action est irréversible.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Échec de la suppression dans le cloud ; la course est conservée pour l\'instant — nouvelle tentative une fois en ligne.';
+
+  @override
   String get runDetailSuggestLink => 'Associer';
 
   @override

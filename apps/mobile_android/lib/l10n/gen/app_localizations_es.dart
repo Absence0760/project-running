@@ -2219,6 +2219,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailDeleteBody => 'Esto no se puede deshacer.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'No se pudo eliminar de la nube; la carrera se conserva por ahora — se reintentará al volver a estar en línea.';
+
+  @override
   String get runDetailSuggestLink => 'Vincular';
 
   @override

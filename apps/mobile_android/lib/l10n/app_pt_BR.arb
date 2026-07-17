@@ -615,6 +615,7 @@
   "runDetailMadePrivate": "A corrida agora é privada",
   "runDetailDeleteTitle": "Excluir corrida?",
   "runDetailDeleteBody": "Isso não pode ser desfeito.",
+  "runDetailDeleteQueued": "Não foi possível excluir da nuvem; a corrida foi mantida por enquanto — será tentado novamente quando você estiver online.",
   "runDetailSuggestLink": "Vincular",
   "runDetailSuggestDismiss": "Dispensar",
   "runDetailSuggestRanRoute": "Parece que você correu ",

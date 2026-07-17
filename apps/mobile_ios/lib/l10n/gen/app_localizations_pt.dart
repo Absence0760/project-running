@@ -2214,6 +2214,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailDeleteBody => 'Isso não pode ser desfeito.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Não foi possível excluir da nuvem; a corrida foi mantida por enquanto — será tentado novamente quando você estiver online.';
+
+  @override
   String get runDetailSuggestLink => 'Vincular';
 
   @override
@@ -13550,6 +13554,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailDeleteBody => 'Isso não pode ser desfeito.';
+
+  @override
+  String get runDetailDeleteQueued =>
+      'Não foi possível excluir da nuvem; a corrida foi mantida por enquanto — será tentado novamente quando você estiver online.';
 
   @override
   String get runDetailSuggestLink => 'Vincular';
