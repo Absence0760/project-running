@@ -578,6 +578,23 @@ test.describe('/settings/preferences', () => {
 			page.locator('.section-hint', { hasText: /added to your goal automatically/i })
 		).toBeVisible();
 	});
+
+	test('Date of birth input caps at today and leaves birth years unbounded', async ({
+		page
+	}) => {
+		// A birth year decades back must stay reachable through the native
+		// picker: no `min` fencing off realistic birth years, and a `max`
+		// of today blocking future DOBs — mirrors the /onboarding DOB
+		// field (issue #222).
+		await page.goto('/settings/preferences');
+		const dob = page.getByLabel('Date of birth', { exact: true });
+		const max = await dob.getAttribute('max');
+		expect(max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(Math.abs(Date.parse(`${max}T00:00:00Z`) - Date.now())).toBeLessThan(
+			48 * 3600 * 1000
+		);
+		expect(await dob.getAttribute('min')).toBeNull();
+	});
 });
 
 test.describe('/settings/preferences — anon', () => {
