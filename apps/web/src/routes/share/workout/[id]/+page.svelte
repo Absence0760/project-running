@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { formatDateStable } from '$lib/share/share_meta';
 	import type { SharedWorkoutSet } from '$lib/share/share_workout_lookup';
@@ -67,11 +68,7 @@
 	<meta name="twitter:description" content={description} />
 </svelte:head>
 
-<div class="share-page">
-	<header class="share-header">
-		<a href="/" class="share-logo">Threkir</a>
-	</header>
-
+<SharePageShell>
 	{#if hasWorkout}
 		<section class="hero">
 			<p class="kicker">{m('shareWorkout.heroKicker')}</p>
@@ -135,35 +132,9 @@
 			<a class="btn btn-primary" href="/login?signup=1">{m('shareWorkout.ctaButton')}</a>
 		</section>
 	{/if}
-
-	<footer class="share-footer">
-		<a href="/">{m('shareWorkout.footerHome')}</a>
-		<span class="dot">&middot;</span>
-		<a href="/login">{m('shareWorkout.signIn')}</a>
-	</footer>
-</div>
+</SharePageShell>
 
 <style>
-	.share-page {
-		min-height: 100vh;
-		background: var(--color-bg);
-		display: flex;
-		flex-direction: column;
-	}
-
-	.share-header {
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
-	}
-
-	.share-logo {
-		font-weight: 700;
-		font-size: 1.15rem;
-		color: var(--color-primary);
-		text-decoration: none;
-	}
-
 	.hero {
 		max-width: 48rem;
 		margin: 0 auto;
@@ -192,11 +163,6 @@
 		font-size: 0.95rem;
 		color: var(--color-text-secondary);
 		margin: 0;
-	}
-
-	.dot {
-		color: var(--color-text-tertiary);
-		margin: 0 0.3rem;
 	}
 
 	.content {
@@ -323,27 +289,7 @@
 		line-height: 1.5;
 	}
 
-	.share-footer {
-		margin-top: auto;
-		padding: var(--space-lg) var(--space-md);
-		border-top: 1px solid var(--color-border);
-		text-align: center;
-		font-size: 0.85rem;
-		color: var(--color-text-tertiary);
-		background: var(--color-surface);
-	}
-	.share-footer a {
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-	.share-footer a:hover {
-		color: var(--color-primary);
-	}
-
 	@media (min-width: 48rem) {
-		.share-header {
-			padding: var(--space-md) var(--space-xl);
-		}
 		.hero {
 			padding: var(--space-2xl) var(--space-xl) var(--space-lg);
 		}
