@@ -82,4 +82,50 @@ void main() {
       expect(foodTop, lessThan(runTop));
     });
   });
+
+  group('showLogSpeedDial — anchored fan (NavigationRail Log button)', () {
+    const anchor = Offset(56, 300);
+
+    testWidgets(
+        'fans right of the anchor: recent directly right, the others above and below',
+        (tester) async {
+      await tester.pumpWidget(_harness((context) {
+        showLogSpeedDial(
+            context: context, recent: LogAction.food, anchor: anchor);
+      }));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final food = tester.getCenter(find.byIcon(Icons.restaurant));
+      final run = tester.getCenter(find.byIcon(Icons.directions_run));
+      final lift = tester.getCenter(find.byIcon(Icons.fitness_center));
+
+      // The rail sits at the left edge, so the whole arc opens rightward —
+      // every item's centre lands right of the anchor.
+      for (final c in [food, run, lift]) {
+        expect(c.dx, greaterThan(anchor.dx));
+      }
+      // The recent action rides the directly-right slot at the anchor's own
+      // height; the remaining two split above and below it.
+      expect(food.dy, closeTo(anchor.dy, 1));
+      final others = [run.dy, lift.dy]..sort();
+      expect(others.first, lessThan(anchor.dy));
+      expect(others.last, greaterThan(anchor.dy));
+    });
+
+    testWidgets('anchored pick resolves and tears the overlay down',
+        (tester) async {
+      LogAction? result;
+      await tester.pumpWidget(_harness((context) async {
+        result = await showLogSpeedDial(context: context, anchor: anchor);
+      }));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Log run'));
+      await tester.pumpAndSettle();
+      expect(result, LogAction.run);
+      expect(find.byTooltip('Log run'), findsNothing);
+    });
+  });
 }
