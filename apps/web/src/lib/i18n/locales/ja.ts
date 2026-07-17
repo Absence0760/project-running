@@ -3298,6 +3298,7 @@ export const messages = {
 	"planPhase.peak": "ピーク",
 	"planPhase.taper": "テーパリング",
 	"planPhase.race": "レース週",
+	"planPhase.graduation": "修了週",
 	"authCallback.failed": "認証に失敗しました: {error}",
 	"authCallback.backToLogin": "ログインに戻る",
 	"authCallback.signingIn": "サインインしています...",

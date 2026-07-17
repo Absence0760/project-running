@@ -2350,6 +2350,7 @@
   "planPhasePeak": "Pic",
   "planPhaseTaper": "Affûtage",
   "planPhaseRace": "Semaine de course",
+  "planPhaseGraduation": "Semaine de fin de programme",
   "runBackgroundLocationNudgeTitle": "Autoriser la localisation en permanence",
   "runBackgroundLocationNudgeBody": "Android n'a autorisé la localisation que lorsque l'application est ouverte. Pour une distance précise lorsque votre écran est éteint, réglez l'accès à la localisation sur « Toujours autoriser » dans les Réglages. Vous pouvez démarrer quand même — l'enregistrement fonctionne tant que l'application est à l'écran.",
   "runBatteryOptHintTitle": "Maintenir l'enregistrement actif en arrière-plan",

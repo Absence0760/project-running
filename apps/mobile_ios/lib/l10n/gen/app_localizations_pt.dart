@@ -8600,6 +8600,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planPhaseRace => 'Semana de prova';
 
   @override
+  String get planPhaseGraduation => 'Semana de conclusão';
+
+  @override
   String get runBackgroundLocationNudgeTitle =>
       'Permitir localização o tempo todo';
 
@@ -19886,6 +19889,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planPhaseRace => 'Semana de prova';
+
+  @override
+  String get planPhaseGraduation => 'Semana de conclusão';
 
   @override
   String get runBackgroundLocationNudgeTitle =>

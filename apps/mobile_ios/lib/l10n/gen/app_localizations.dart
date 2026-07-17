@@ -14262,6 +14262,12 @@ abstract class AppLocalizations {
   /// **'Race week'**
   String get planPhaseRace;
 
+  /// Training plan phase label: the final week of a beginner walk-run plan, when the runner first covers the distance continuously
+  ///
+  /// In en, this message translates to:
+  /// **'Graduation week'**
+  String get planPhaseGraduation;
+
   /// Title of the dialog nudging Android users to grant always-on location before a run
   ///
   /// In en, this message translates to:

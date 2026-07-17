@@ -24,7 +24,7 @@ export type WorkoutKind =
 	| 'walk_run'
 	| 'race'
 	| 'rest';
-export type PlanPhase = 'base' | 'build' | 'peak' | 'taper' | 'race';
+export type PlanPhase = 'base' | 'build' | 'peak' | 'taper' | 'race' | 'graduation';
 
 export const GOAL_DISTANCES_M: Record<Exclude<GoalEvent, 'custom'>, number> = {
 	distance_5k: 5000,
@@ -602,7 +602,7 @@ function generateWalkRunPlan(
 		}
 		weeks.push({
 			week_index: i,
-			phase: i === totalWeeks - 1 ? 'race' : 'build',
+			phase: i === totalWeeks - 1 ? 'graduation' : 'build',
 			target_volume_m: workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0),
 			notes:
 				i === totalWeeks - 1

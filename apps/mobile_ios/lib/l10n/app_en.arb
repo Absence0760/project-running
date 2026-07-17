@@ -11589,6 +11589,10 @@
   "@planPhaseRace": {
     "description": "Training plan phase label: race week"
   },
+  "planPhaseGraduation": "Graduation week",
+  "@planPhaseGraduation": {
+    "description": "Training plan phase label: the final week of a beginner walk-run plan, when the runner first covers the distance continuously"
+  },
   "runBackgroundLocationNudgeTitle": "Allow location all the time",
   "@runBackgroundLocationNudgeTitle": {
     "description": "Title of the dialog nudging Android users to grant always-on location before a run"

@@ -5862,7 +5862,7 @@ export type Database = {
         | "distance_half"
         | "distance_full"
         | "custom"
-      plan_phase: "base" | "build" | "peak" | "taper" | "race"
+      plan_phase: "base" | "build" | "peak" | "taper" | "race" | "graduation"
       workout_kind:
         | "easy"
         | "long"
@@ -6010,7 +6010,7 @@ export const Constants = {
         "distance_full",
         "custom",
       ],
-      plan_phase: ["base", "build", "peak", "taper", "race"],
+      plan_phase: ["base", "build", "peak", "taper", "race", "graduation"],
       workout_kind: [
         "easy",
         "long",
