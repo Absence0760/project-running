@@ -682,10 +682,16 @@ export async function setRoutePublic(id: string, isPublic: boolean): Promise<voi
 	if (error) throw error;
 }
 
-export async function makeRunPublic(id: string): Promise<void> {
+/// Flip a run's visibility. Bidirectional (public ↔ private) like its
+/// `setRoutePublic` sibling — the one-way `makeRunPublic` it replaces
+/// left a live-shared run permanently exposed (issue #251). Flipping
+/// to private revokes the /share/run link and the /live spectator
+/// page. RLS guards ownership; the caller should still gate the UI
+/// so non-owners never see the control.
+export async function setRunPublic(id: string, isPublic: boolean): Promise<void> {
 	const { error } = await supabase
 		.from(TABLES.runs)
-		.update({ is_public: true })
+		.update({ is_public: isPublic })
 		.eq('id', id);
 	if (error) throw error;
 }

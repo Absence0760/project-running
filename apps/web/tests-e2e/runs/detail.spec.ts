@@ -320,6 +320,111 @@ test.describe('/runs/[id]', () => {
 		}
 	});
 
+	test('Make private revokes a shared run: chip flips, DB flips, anon /share 404s', async ({
+		page,
+		context
+	}) => {
+		// Issue #251: once a run was live-shared there was no way back —
+		// data.ts only had the one-way makeRunPublic. The owner toolbar
+		// now shows a "Make private" lock button on public runs, gated
+		// by a ConfirmDialog that warns the share link + live spectator
+		// page stop working. Pin the full revoke round-trip so a
+		// regression in setRunPublic(id, false) (or its RLS policy)
+		// surfaces as a still-reachable /share page.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: true
+		});
+
+		try {
+			await page.goto(`/runs/${planted}`);
+			await expect(page.locator('.visibility-chip.is-public'))
+				.toContainText('Public', { timeout: 10_000 });
+
+			await page.locator('button[title="Make private"]').click();
+
+			const dialog = page.locator('[data-testid="make-private-confirm-dialog"]');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await expect(dialog).toContainText('Make this run private?');
+			await dialog.getByRole('button', { name: 'Make private', exact: true }).click();
+
+			await expect(page.locator('.toast', { hasText: /Run is now private/ }))
+				.toBeVisible({ timeout: 10_000 });
+
+			// In-page: the chip flips to Private without a reload and the
+			// revoke affordance disappears (it only renders on public runs).
+			await expect(page.locator('.visibility-chip:not(.is-public)'))
+				.toContainText('Private', { timeout: 5_000 });
+			await expect(page.locator('button[title="Make private"]')).toHaveCount(0);
+
+			// Backend: runs.is_public flipped off.
+			const admin = getAdminClient();
+			const { data: row } = await admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', planted)
+				.single();
+			expect(row?.is_public).toBe(false);
+
+			// Anon /share/run/[id] no longer resolves — the whole point
+			// of the revoke. Fresh anon context so we don't carry auth.
+			const anonContext = await context.browser()!.newContext({
+				storageState: { cookies: [], origins: [] }
+			});
+			const anonPage = await anonContext.newPage();
+			try {
+				await anonPage.goto(`/share/run/${planted}`);
+				// Same not-found copy share/run.spec.ts pins for private runs
+				// — a positive assertion, so a slow-loading share page can't
+				// fake a pass.
+				await expect(anonPage.getByText('Run not found.'))
+					.toBeVisible({ timeout: 10_000 });
+				await expect(anonPage.locator('.run-meta')).toHaveCount(0);
+			} finally {
+				await anonContext.close();
+			}
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
+	test('Make private dialog Cancel keeps the run public', async ({ page }) => {
+		// Mirror of the share-consent cancel pin above: dismissing the
+		// revoke dialog must not call setRunPublic. A refactor that
+		// flips visibility on Cancel surfaces here.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: true
+		});
+
+		try {
+			await page.goto(`/runs/${planted}`);
+			await page.locator('button[title="Make private"]').click();
+
+			const dialog = page.locator('[data-testid="make-private-confirm-dialog"]');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+			const admin = getAdminClient();
+			const { data: row } = await admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', planted)
+				.single();
+			expect(row?.is_public).toBe(true);
+
+			await expect(
+				page.locator('.toast', { hasText: /Run is now private/ })
+			).toHaveCount(0);
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
 	test('run without a GPS track shows a real empty-state instead of a fake Melbourne circle', async ({
 		page
 	}) => {
