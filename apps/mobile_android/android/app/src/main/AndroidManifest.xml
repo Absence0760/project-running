@@ -178,11 +178,20 @@
              reads the AS-COMPILED manifest and the type must appear here
              to satisfy the Background Location justification cross-check.
              /audit/app-store-privacy May 2026 High closeout.
-             tools:node="merge" so the plugin's attributes (export,
-             stopWithTask, etc.) stay intact. -->
+             tools:node="merge" so the plugin's other attributes (enabled,
+             exported) stay intact.
+
+             stopWithTask MUST be false: the plugin declares neither this
+             attribute nor an onTaskRemoved() override, so nothing keeps the
+             foreground GPS service alive when the user swipes the app card
+             off Recents mid-run — the recording foreground service (and its
+             hosting process) is torn down and recording dies silently. false
+             tells the system to leave the service running so an active run
+             survives the swipe. (issue #250.) -->
         <service
             android:name="com.baseflow.geolocator.GeolocatorLocationService"
             android:foregroundServiceType="location"
+            android:stopWithTask="false"
             tools:node="merge" />
     </application>
     <!-- Required to query activities that can process text, see:
