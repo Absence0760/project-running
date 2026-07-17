@@ -116,7 +116,10 @@
 			return;
 		}
 		emailChanging = true;
-		const { error } = await supabase.auth.updateUser({ email: target });
+		const { error } = await supabase.auth.updateUser(
+			{ email: target },
+			{ emailRedirectTo: `${window.location.origin}/auth/callback` },
+		);
 		emailChanging = false;
 		if (error) {
 			emailChangeError = m('settingsAccount.emailChangeFailed', { error: error.message });
