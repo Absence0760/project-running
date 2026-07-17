@@ -7,7 +7,7 @@
 -- and the 'achievement' notification on a new award.
 
 begin;
-select plan(16);
+select plan(17);
 
 -- ── Synthetic users ─────────────────────────────────────────────────────────
 do $$
@@ -179,6 +179,17 @@ select ok(
   exists (select 1 from achievements
             where user_id = '99999999-9999-9999-9999-9999aaaa0001' and is_public = true),
   'another user can see U''s public badges'
+);
+
+-- A non-owner cannot invoke the award RPC against another user's id — the
+-- SECURITY DEFINER function bypasses RLS, so its own ownership guard (+ the
+-- revoked execute grant) is the only thing stopping forced writes /
+-- notification spam / a resource-abuse DoS on an arbitrary account.
+select throws_ok(
+  $$select award_achievements_for_user('99999999-9999-9999-9999-9999aaaa0001')$$,
+  '42501',
+  null,
+  'a non-owner cannot invoke award_achievements_for_user against another user'
 );
 
 -- Non-owner cannot flip U's visibility (update affects 0 rows → silently no-op,
