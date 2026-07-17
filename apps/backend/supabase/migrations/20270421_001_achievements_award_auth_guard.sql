@@ -7,14 +7,18 @@
 -- hammering several full scans over the victim's runs/PRs/plans under a
 -- per-victim advisory lock (an unrate-limited resource-abuse vector). No client
 -- ever calls this RPC directly — the only real callers are the statement-level
--- triggers (20270404_001), which run inside the row-owner's own write (or as
--- service_role for webhook/worker inserts), so both pass the guard.
+-- triggers (20270404_001). Most run inside the row-owner's own write, but the
+-- training_plans trigger also fires for a DIFFERENT user when a coach assigns a
+-- plan (assign_plan_to_athlete inserts the athlete's row inside the coach's
+-- session), so an `auth.uid() = p_user` ownership check would wrongly reject
+-- that legitimate cross-user path.
 --
 -- Re-emit the full 20270208_001 body (bare-body rule: never hand-edit that
--- migration) with the same ownership guard every sibling p_user RPC carries
--- (refresh_personal_records_for_user / check_rate_limit / *_coach_usage), and
--- drop the pointless `authenticated` execute grant so the RPC isn't reachable
--- from a user JWT at all.
+-- migration) with a context guard keyed on pg_trigger_depth() instead: every
+-- legitimate call arrives via a trigger (depth > 0); a direct call over a user
+-- JWT is the abuse vector, and is blocked both by the guard (at depth 0, only
+-- service_role / direct-SQL pass) and by dropping the execute grant below so the
+-- RPC isn't reachable from a user JWT at all.
 
 create or replace function award_achievements_for_user(p_user uuid)
 returns setof achievements
@@ -35,17 +39,18 @@ declare
   v_plan_count      integer;
   v_run_id          uuid;
 begin
-  -- Ownership guard: service_role (webhook / worker inserts) and direct-SQL /
-  -- empty-role callers (the statement-level triggers running in the row-owner's
-  -- own write, and seed.sql) are trusted. Every other role (authenticated,
-  -- anon, future custom roles) must be the row owner. Mirrors the sibling
-  -- p_user RPC refresh_personal_records_for_user's guard exactly — an
-  -- empty-role bypass is what keeps seed.sql / trigger inserts working while
-  -- still blocking a cross-user call over an authenticated JWT.
-  if v_role <> 'service_role' and v_role <> '' then
-    if auth.uid() is null or auth.uid() is distinct from p_user then
-      raise exception 'award_achievements_for_user: not authorized' using errcode = '42501';
-    end if;
+  -- Abuse guard. The only legitimate callers are the statement-level award
+  -- triggers (20270404_001), which always run at pg_trigger_depth() > 0 —
+  -- including the ones that legitimately fire for a user who is NOT the caller
+  -- (assign_plan_to_athlete inserts the athlete's training_plans row inside the
+  -- coach's session; its own consent gate is the authorization). So we canNOT
+  -- gate on auth.uid() = p_user the way the sibling p_user RPCs do — award has a
+  -- legitimate cross-user trigger path they don't. The real abuse vector is a
+  -- DIRECT call over a user JWT (already blocked by the revoked execute grant
+  -- below); block it here too as defence in depth: at trigger depth 0, only
+  -- service_role and direct-SQL/empty-role (seed.sql, admin psql) callers pass.
+  if pg_trigger_depth() = 0 and v_role <> 'service_role' and v_role <> '' then
+    raise exception 'award_achievements_for_user: not authorized' using errcode = '42501';
   end if;
 
   -- Serialize per-user so concurrent trigger fires don't double-derive.
