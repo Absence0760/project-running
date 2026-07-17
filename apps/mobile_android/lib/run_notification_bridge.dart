@@ -73,12 +73,43 @@ class RunNotificationBridge {
   /// Cancel the replacement notification. Called from `_stop` and
   /// `_discard` in `run_screen` so the lock-screen row disappears the
   /// moment the run ends, even if the geolocator foreground-service
-  /// teardown races the UI transition.
+  /// teardown races the UI transition. The native side also cancels
+  /// the split row so a finished run leaves nothing in the shade.
   Future<void> clear() async {
     try {
       await _channel.invokeMethod<void>('clear');
     } catch (e) {
       debugPrint('RunNotificationBridge.clear failed: $e');
+    }
+  }
+
+  /// Post the per-split notification. The native side uses a single
+  /// fixed id (distinct from the ongoing-run row) so each new split
+  /// replaces the previous one instead of stacking one notification
+  /// per kilometre, and marks it auto-cancelling + timed-out so it
+  /// never needs a manual swipe (#303).
+  Future<void> updateSplit({
+    required String title,
+    required String text,
+  }) async {
+    try {
+      await _channel.invokeMethod<void>('update_split', {
+        'title': title,
+        'text': text,
+      });
+    } catch (e) {
+      debugPrint('RunNotificationBridge.updateSplit failed: $e');
+    }
+  }
+
+  /// Cancel any leftover split notification. Called when a run starts
+  /// so a previous run's split row can't linger into the next session
+  /// (#303) — `clear` covers the stop/discard side.
+  Future<void> clearSplit() async {
+    try {
+      await _channel.invokeMethod<void>('clear_split');
+    } catch (e) {
+      debugPrint('RunNotificationBridge.clearSplit failed: $e');
     }
   }
 }
