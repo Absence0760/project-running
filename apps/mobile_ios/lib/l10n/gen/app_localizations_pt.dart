@@ -6753,7 +6753,14 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prefsKeepScreenOnSubtitle =>
-      'Mantém um wakelock durante uma corrida';
+      'Mantém a tela ligada durante toda a corrida. Consome bem mais bateria em treinos longos.';
+
+  @override
+  String get prefsDimScreenWhileRecording => 'Escurecer a tela ao gravar';
+
+  @override
+  String get prefsDimScreenWhileRecordingSubtitle =>
+      'Escurece o mapa durante a corrida para poupar bateria. As estatísticas continuam legíveis.';
 
   @override
   String get prefsAdvancedGps => 'GPS avançado';
@@ -18090,7 +18097,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsKeepScreenOnSubtitle =>
-      'Mantém um wakelock durante uma corrida';
+      'Mantém a tela ligada durante toda a corrida. Consome bem mais bateria em treinos longos.';
+
+  @override
+  String get prefsDimScreenWhileRecording => 'Escurecer a tela ao gravar';
+
+  @override
+  String get prefsDimScreenWhileRecordingSubtitle =>
+      'Escurece o mapa durante a corrida para poupar bateria. As estatísticas continuam legíveis.';
 
   @override
   String get prefsAdvancedGps => 'GPS avançado';
