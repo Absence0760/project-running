@@ -89,15 +89,18 @@ double _perpDistanceMetres(Waypoint point, Waypoint a, Waypoint b) {
 }
 
 /// Total positive elevation change across the track, in metres. Waypoints
-/// without elevation readings are skipped.
+/// without elevation readings are skipped, but the last valid elevation is
+/// carried forward across the gap so an intermittent altitude dropout (tree
+/// cover, tunnels, satellite reacquisition over a long ultra) doesn't silently
+/// zero out the real climb spanning the missing samples.
 double computeElevationGain(List<Waypoint> track) {
   double gain = 0;
-  for (int i = 1; i < track.length; i++) {
-    final prev = track[i - 1].elevationMetres;
-    final curr = track[i].elevationMetres;
-    if (prev != null && curr != null && curr > prev) {
-      gain += curr - prev;
-    }
+  double? lastEle;
+  for (final p in track) {
+    final ele = p.elevationMetres;
+    if (ele == null) continue;
+    if (lastEle != null && ele > lastEle) gain += ele - lastEle;
+    lastEle = ele;
   }
   return gain;
 }
