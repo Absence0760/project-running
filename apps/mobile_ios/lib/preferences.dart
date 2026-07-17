@@ -200,6 +200,9 @@ class Preferences extends ChangeNotifier {
 
   static const _kBatteryOptHintShown = 'battery_opt_hint_shown';
 
+  static const _kBackgroundLocationNudgeDismissed =
+      'background_location_nudge_dismissed';
+
   static const _kNotifDeniedHintShown = 'notif_denied_hint_shown';
 
   // Stable per-install identifier used to scope `user_device_settings`
@@ -546,6 +549,17 @@ class Preferences extends ChangeNotifier {
 
   Future<void> setBatteryOptHintShown() async {
     await _prefs.setBool(_kBatteryOptHintShown, true);
+  }
+
+  /// Whether the pre-run background-location nudge has been dismissed.
+  /// Denying "Allow all the time" is a deliberate choice, so one dismissal
+  /// silences the dialog; the flag is cleared once always-on is observed
+  /// granted, so a later revocation re-arms the nudge (issue #266).
+  bool get backgroundLocationNudgeDismissed =>
+      _prefs.getBool(_kBackgroundLocationNudgeDismissed) ?? false;
+
+  Future<void> setBackgroundLocationNudgeDismissed(bool value) async {
+    await _prefs.setBool(_kBackgroundLocationNudgeDismissed, value);
   }
 
   /// Whether the one-time "notifications are off, the live run notification

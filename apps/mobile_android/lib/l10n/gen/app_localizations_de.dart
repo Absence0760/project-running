@@ -371,6 +371,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get peopleFollowButton => 'Folgen';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Melde dich an, um andere Läufer zu suchen und ihnen zu folgen.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'Vorschläge konnten nicht geladen werden.';
+
+  @override
   String get readinessCardHeader => 'BEREITSCHAFT';
 
   @override
@@ -2187,6 +2195,24 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runDetailMakePublic => 'Öffentlich machen';
+
+  @override
+  String get runDetailMakePrivate => 'Privat machen';
+
+  @override
+  String get runDetailMakePrivateTitle => 'Diesen Lauf privat machen?';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      'Der öffentliche Freigabelink und die Live-Zuschauerseite funktionieren dann nicht mehr. Wer einen alten Link öffnet, sieht diesen Lauf nicht mehr.';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'Lauf konnte nicht privat gemacht werden: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'Der Lauf ist jetzt privat';
 
   @override
   String get runDetailDeleteTitle => 'Lauf löschen?';
@@ -8610,6 +8636,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Wettkampfwoche';
+
+  @override
+  String get planPhaseGraduation => 'Abschlusswoche';
 
   @override
   String get runBackgroundLocationNudgeTitle => 'Standort immer zulassen';

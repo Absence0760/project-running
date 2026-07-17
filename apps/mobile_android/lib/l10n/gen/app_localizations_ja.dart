@@ -362,6 +362,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get peopleFollowButton => 'フォロー';
 
   @override
+  String get peopleSignedOutMessage => '他のランナーを検索してフォローするにはサインインしてください';
+
+  @override
+  String get peopleSuggestionsLoadFailed => 'おすすめを読み込めませんでした。';
+
+  @override
   String get readinessCardHeader => 'レディネス';
 
   @override
@@ -2080,6 +2086,24 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runDetailMakePublic => '公開する';
+
+  @override
+  String get runDetailMakePrivate => '非公開にする';
+
+  @override
+  String get runDetailMakePrivateTitle => 'このランを非公開にしますか？';
+
+  @override
+  String get runDetailMakePrivateBody =>
+      '公開共有リンクとライブ観戦ページは利用できなくなります。古いリンクを開いてもこのランは表示されません。';
+
+  @override
+  String runDetailMakePrivateFailed(String error) {
+    return 'ランを非公開にできませんでした: $error';
+  }
+
+  @override
+  String get runDetailMadePrivate => 'ランは非公開になりました';
 
   @override
   String get runDetailDeleteTitle => 'ランを削除しますか？';
@@ -8154,6 +8178,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'レース週';
+
+  @override
+  String get planPhaseGraduation => '修了週';
 
   @override
   String get runBackgroundLocationNudgeTitle => '位置情報を常に許可';

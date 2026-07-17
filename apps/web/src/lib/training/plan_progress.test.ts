@@ -19,6 +19,12 @@ test('orderedPlanPhases: de-dupes and sorts into canonical order', () => {
 	assert.deepEqual(orderedPlanPhases(weeks), ['base', 'build', 'peak', 'taper']);
 });
 
+test('orderedPlanPhases: a walk-run plan orders build before graduation', () => {
+	// A beginner walk-run plan is build weeks then a terminal graduation week.
+	const weeks = [{ phase: 'graduation' }, { phase: 'build' }, { phase: 'build' }];
+	assert.deepEqual(orderedPlanPhases(weeks), ['build', 'graduation']);
+});
+
 test('orderedPlanPhases: empty plan yields no phases', () => {
 	assert.deepEqual(orderedPlanPhases([]), []);
 });

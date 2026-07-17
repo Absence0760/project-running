@@ -10,7 +10,7 @@ library;
 /// Canonical phase ordering. Plans don't always use every phase, and the
 /// rows aren't guaranteed to be stored in order, so the marker derives its
 /// sequence from this rather than from row order.
-const List<String> planPhaseOrder = ['base', 'build', 'peak', 'taper', 'race'];
+const List<String> planPhaseOrder = ['base', 'build', 'peak', 'taper', 'race', 'graduation'];
 
 /// A plan week as far as the phase marker cares — only its phase string.
 class PlanProgressWeek {

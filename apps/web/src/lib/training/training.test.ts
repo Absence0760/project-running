@@ -86,6 +86,10 @@ test('generatePlan(beginnerWalkRun): every session is a walk_run workout', () =>
 	const wk9 = plan.weeks[8].workouts.find((w) => w.kind === 'walk_run')!;
 	assert.equal(wk9.structure?.repeats?.count, 1);
 	assert.equal(wk9.structure?.repeats?.recovery_duration_s, undefined);
+	// #273: the final week is a graduation, not a race — a beginner walk-run
+	// plan has no goal race, so labelling it 'race' ("Race week") misleads.
+	assert.equal(plan.weeks[8].phase, 'graduation');
+	assert.equal(plan.weeks[0].phase, 'build');
 });
 
 // Persona round-5 runner-new: a default 5k beginner plan arrives with
@@ -304,7 +308,7 @@ test('resolveTrainingPaces: marathon-only goal time yields valid pace set', () =
 // ─────────────────────── Phases ───────────────────────
 
 test('phaseFor: a 16-week plan is ~30/40/20/10 base/build/peak/taper', () => {
-	const counts = { base: 0, build: 0, peak: 0, taper: 0, race: 0 };
+	const counts = { base: 0, build: 0, peak: 0, taper: 0, race: 0, graduation: 0 };
 	for (let i = 0; i < 16; i++) counts[phaseFor(i, 16)]++;
 	assert.equal(counts.race, 1, 'race week is last');
 	assert.ok(counts.base >= 4 && counts.base <= 5);

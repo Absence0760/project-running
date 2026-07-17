@@ -119,6 +119,22 @@ test.describe('/settings/account', () => {
 		});
 	});
 
+	test('Date of birth input caps at today and leaves birth years unbounded', async ({
+		page
+	}) => {
+		// Mirrors /settings/preferences + /onboarding: `max` of today
+		// blocks a future DOB, and no `min` fences off realistic birth
+		// years decades back (issue #222).
+		await page.goto('/settings/account');
+		const dob = page.getByLabel('Date of Birth', { exact: true });
+		const max = await dob.getAttribute('max');
+		expect(max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(Math.abs(Date.parse(`${max}T00:00:00Z`) - Date.now())).toBeLessThan(
+			48 * 3600 * 1000
+		);
+		expect(await dob.getAttribute('min')).toBeNull();
+	});
+
 	// Change-password validation. This section MINTS a password
 	// (updateUser), so it shares checkPasswordPair with /login?signup=1
 	// and /auth/reset — see web_app_auth.md § Password confirmation.
