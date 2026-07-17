@@ -32,15 +32,40 @@ Parse `$ARGUMENTS`:
 - A `label:` filter (`label:bug`) → restrict the candidate pool.
 - `single-pr` anywhere → consolidate all fixes into **one** PR instead of one-per-issue (see step 5).
 
-List candidates and pick the batch:
+List candidates:
 
 ```
 gh issue list --state open --limit 40 --json number,title,labels,body
 ```
 
-Choose issues that pass the **actionable bar**: a concrete, bounded, code-level fix with a clear root cause; not blocked on a product call or a compliance sign-off; not a duplicate/discussion. Prefer `bug` over `enhancement` when choosing freely. Read each candidate's body — skip anything whose "fix" is really "decide what we want."
+**Then exclude any issue that already has a fixing PR** — this is mandatory, and it is what keeps a re-run (or a run alongside other sessions) from duplicating or re-fixing work. `gh issue list` does NOT show linked PRs, so query them explicitly. The authoritative signal is GitHub's **`closedByPullRequestsReferences`** (the PRs whose "Fixes/Closes #N" keyword links them to the issue) — NOT a bare cross-reference (a PR that merely *mentions* the issue in passing):
 
-If fewer than the requested count are actionable, take what qualifies and say so — don't pad the batch with issues that need a decision.
+```
+gh api graphql -f query='
+query($owner:String!,$repo:String!){
+  repository(owner:$owner,name:$repo){
+    issues(states:OPEN, first:40, orderBy:{field:CREATED_AT, direction:DESC}){
+      nodes{
+        number
+        closedByPullRequestsReferences(first:5, includeClosedPrs:true){
+          nodes{ number state url }
+        }
+      }
+    }
+  }
+}' -f owner=<OWNER> -f repo=<REPO>
+```
+
+Derive `<OWNER>`/`<REPO>` from `gh repo view --json owner,name`. Then apply the filter:
+
+- **Skip** an issue if any linked PR's `state` is **`OPEN`** (a fix is in flight — e.g. a previous run of this command, or another session) **or `MERGED`** (already fixed; the issue just wasn't auto-closed). Re-fixing either duplicates work.
+- **Do NOT skip** on a PR whose only linked state is **`CLOSED`** (an abandoned fix attempt) — that issue is fair game again. Say in the report that you're re-attempting it and why.
+- **Do NOT skip** on a bare cross-reference / mention alone (a PR saying "related to #N" without a closing keyword). That's why the query uses `closedByPullRequestsReferences`, not `timelineItems(CROSS_REFERENCED_EVENT)`.
+- If the user passed **explicit issue numbers**, still run this check and warn (don't silently proceed) when one already has an open/merged fixing PR — the user may not realise it's already handled; let them confirm before you duplicate it.
+
+From the survivors, choose issues that pass the **actionable bar**: a concrete, bounded, code-level fix with a clear root cause; not blocked on a product call or a compliance sign-off; not a duplicate/discussion. Prefer `bug` over `enhancement` when choosing freely. Read each candidate's body — skip anything whose "fix" is really "decide what we want."
+
+If fewer than the requested count survive both filters, take what qualifies and say so — don't pad the batch with issues that need a decision or already have a fix in flight.
 
 ### 2. Confirm before spending (checkpoint)
 
@@ -72,6 +97,8 @@ Don't trust a "done" — for each returned fix, sanity-check: the cited root cau
 
 Push is a distinct action — the command opening PRs is authorized by the user invoking it, but never `--force` and never touch `main` directly.
 
+**Re-check `closedByPullRequestsReferences` for the issue immediately before opening its PR.** The fan-out takes minutes; another session may have opened a fixing PR in that window. If one appeared, don't open a duplicate — report the collision and drop the fix (or, if yours is clearly better, link both and let the user decide).
+
 - **Default — one PR per issue** (recommended; matches branch protection + the PR-title lint's one-`type(scope)` rule, and keeps unrelated changes independently reviewable/revertable):
   ```
   git push -u origin <agent-branch>
@@ -87,6 +114,7 @@ One compact table: issue # → PR URL → test result → CI status. Note any is
 
 ## Guardrails
 
+- **Never re-fix an issue that already has an open or merged fixing PR** (step 1's `closedByPullRequestsReferences` filter, re-checked at step 5). This is the anti-duplication invariant — it must survive re-runs and concurrent sessions.
 - **Fixes only what the issues describe.** No scope creep, no drive-by refactors bundled in.
 - **Never merge the PRs** — opening them is the deliverable; merge is the user's call.
 - **A dropped issue is a fine outcome.** Reporting "3 of 5 were actionable; the other 2 need a product decision" is better than shipping two guesses.
