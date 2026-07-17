@@ -1328,6 +1328,11 @@ class _RunScreenState extends State<RunScreen> {
   /// in each caller (a fresh run zeroes it; a resume continues from the
   /// persisted total).
   void _attachRecordingSideEffects() {
+    // A previous run's split row survives in the shade across sessions
+    // (it outlives the foreground service); drop it so this run starts
+    // with a clean shade (#303). Bridge swallows its own failures (L4).
+    _lockScreen.clearSplit();
+
     // Auto-live-share (docs/features/safety.md): the device pref starts
     // the broadcast on every run start, so the overdue escalation has a
     // telemetry stream to watch and a partner has a link to follow. L4 —
@@ -2044,11 +2049,17 @@ class _RunScreenState extends State<RunScreen> {
           final tail = _activityType.usesSpeed
               ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
               : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
-          _showTopBanner(
-            _l10n.runSplitTick(
-              UnitFormat.distance(totalDistanceMetres, unit),
-              tail,
-            ),
+          final splitText = _l10n.runSplitTick(
+            UnitFormat.distance(totalDistanceMetres, unit),
+            tail,
+          );
+          _showTopBanner(splitText);
+          // Shade twin of the banner (#303): one fixed native id, so
+          // each split replaces the previous row instead of stacking,
+          // and the row auto-dismisses instead of demanding a swipe.
+          _lockScreen.updateSplit(
+            title: _activityType.label,
+            text: splitText,
           );
           if (widget.preferences.audioCues) {
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(

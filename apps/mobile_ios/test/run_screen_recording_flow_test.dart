@@ -591,6 +591,88 @@ void main() {
       }
       tester.takeException();
     });
+
+    testWidgets(
+        'split posts reuse update_split and run start clears leftovers (#303)',
+        (tester) async {
+      // Capture every RunNotificationBridge channel call so we can pin the
+      // split-notification contract: run start sends clear_split (a
+      // previous run's split row can't leak into this one), and each
+      // completed split routes through update_split — the single-fixed-id
+      // replace-in-place path — never a stacking post per kilometre.
+      final bridgeCalls = <MethodCall>[];
+      mockMethodChannel('run_app/run_notification', (call) async {
+        bridgeCalls.add(call);
+        return null;
+      });
+
+      final s = await makeStores();
+      // 50 m splits so a short synthetic track crosses two boundaries.
+      await s.prefs.setSplitIntervalMetres(50);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // drain LiveRunMap tile-fetch noise
+
+      expect(bridgeCalls.map((c) => c.method), contains('clear_split'),
+          reason: 'beginning a run must drop any split row left over '
+              'from a previous run');
+      expect(bridgeCalls.where((c) => c.method == 'update_split'), isEmpty,
+          reason: 'no split has been completed yet');
+
+      // ~108 m of accepted fixes → the 50 m and 100 m boundaries.
+      for (var i = 0; i < 10; i++) {
+        geolocator.emit(_pos(metresEast: i * 12.0, secondsFromStart: i * 2));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+
+      final splits =
+          bridgeCalls.where((c) => c.method == 'update_split').toList();
+      expect(splits, hasLength(2),
+          reason: 'two crossed boundaries → exactly two update_split '
+              'posts, each replacing the last on the fixed native id');
+      for (final c in splits) {
+        final args = c.arguments as Map;
+        expect(args['title'], isNotEmpty);
+        expect(args['text'], isNotEmpty);
+      }
+
+      // Drain the split top-banner timers (3 s each) before teardown.
+      await tester.pump(const Duration(seconds: 4));
+      tester.takeException();
+
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
   });
 
   group('RunScreen — resume a process-killed partial', () {
