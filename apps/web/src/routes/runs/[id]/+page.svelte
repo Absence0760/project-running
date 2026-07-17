@@ -25,7 +25,7 @@
 	import {
 		fetchRunById,
 		deleteRun,
-		makeRunPublic,
+		setRunPublic,
 		updateRunMetadata,
 		saveRunAsRoute,
 		fetchWorkout,
@@ -111,6 +111,7 @@
 	let editIsDnf = $state(false);
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
+	let showMakePrivateConfirm = $state(false);
 	let showReportRun = $state(false);
 	let showNameRoute = $state(false);
 	let routeNameInput = $state('');
@@ -534,7 +535,7 @@
 		shareBusy = true;
 		showShareConfirm = false;
 		try {
-			await makeRunPublic(run.id);
+			await setRunPublic(run.id, true);
 			// Reflect the flip in-page immediately — the visibility chip and
 			// the share button both read `run.is_public` and would otherwise
 			// keep showing "Private" / "Make public" until a reload.
@@ -544,6 +545,21 @@
 			showToast(m('runDetail.shareLinkCopied'), 'success');
 		} catch (e) {
 			showToast(m('runDetail.shareFailed', { error: String(e) }), 'error');
+		} finally {
+			shareBusy = false;
+		}
+	}
+
+	async function confirmMakePrivate() {
+		if (!run || shareBusy) return;
+		shareBusy = true;
+		showMakePrivateConfirm = false;
+		try {
+			await setRunPublic(run.id, false);
+			run = { ...run, is_public: false } as Run;
+			showToast(m('runDetail.madePrivate'), 'success');
+		} catch (e) {
+			showToast(m('runDetail.makePrivateFailed', { error: String(e) }), 'error');
 		} finally {
 			shareBusy = false;
 		}
@@ -1285,6 +1301,17 @@
 						>
 							<span class="material-symbols">share</span>
 						</button>
+						{#if run.is_public}
+							<button
+								class="icon-btn"
+								aria-label={m('runDetail.makePrivate')}
+								title={m('runDetail.makePrivate')}
+								onclick={() => (showMakePrivateConfirm = true)}
+								disabled={shareBusy}
+							>
+								<span class="material-symbols">lock</span>
+							</button>
+						{/if}
 						<button
 							class="icon-btn"
 							aria-label={m('runDetail.downloadGpxAria')}
@@ -1861,6 +1888,17 @@
 	onconfirm={proceedShare}
 	oncancel={() => (showShareConfirm = false)}
 	data-testid="share-confirm-dialog"
+/>
+
+<ConfirmDialog
+	open={showMakePrivateConfirm}
+	title={m('runDetail.makePrivateDialogTitle')}
+	message={m('runDetail.makePrivateDialogMessage')}
+	confirmLabel={m('runDetail.makePrivate')}
+	onconfirm={confirmMakePrivate}
+	oncancel={() => (showMakePrivateConfirm = false)}
+	data-testid="make-private-confirm-dialog"
+	danger
 />
 
 <!-- Off-screen share card. 1080 square, rendered to PNG by
