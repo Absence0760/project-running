@@ -889,9 +889,9 @@ class _RunScreenState extends State<RunScreen> {
   /// (Samsung Stamina, Xiaomi, OnePlus) freeze the recording foreground
   /// service mid-run unless the app is exempted from battery optimisation,
   /// silently truncating a long effort. Surface a single dismissible hint
-  /// pointing the user at the exemption. Android-only, non-blocking — the run
-  /// proceeds either way. Wrapped so a settings-deep-link failure can't abort
-  /// the run start.
+  /// deep-linking to the battery-optimisation settings (App Info as the
+  /// fallback). Android-only, non-blocking — the run proceeds either way.
+  /// Wrapped so a settings-deep-link failure can't abort the run start.
   Future<void> _maybeShowBatteryOptHint() async {
     if (!shouldShowBatteryOptHint(
       isAndroid: Platform.isAndroid,
@@ -925,11 +925,10 @@ class _RunScreenState extends State<RunScreen> {
       ),
     );
     if (openSettings == true) {
-      try {
-        await openAppSettings();
-      } catch (e) {
-        debugPrint('openAppSettings (battery opt) failed: $e');
-      }
+      await openBatteryOptimisationExemption(
+        isAndroid: Platform.isAndroid,
+        openAppSettingsFallback: openAppSettings,
+      );
     }
   }
 
@@ -1247,6 +1246,8 @@ class _RunScreenState extends State<RunScreen> {
 
       final should = shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput(
         nowLocalMinutes: now.hour * 60 + now.minute,
+        latitude: _currentPosition?.lat,
+        dayOfYear: now.difference(DateTime(now.year)).inDays + 1,
         autoLiveShareOn: _autoLiveShareEnabled,
         isBroadcast: _liveBroadcaster?.isActive ?? false,
         lastActedAtMs: lastActedAtMs,

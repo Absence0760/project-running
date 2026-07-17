@@ -3,14 +3,22 @@ import 'package:mobile_android/safety_nudge.dart';
 
 const int now = 1700000000000;
 
+// A December day (mid-winter, northern hemisphere) and a June day.
+const int dec21 = 355;
+const int jun21 = 172;
+
 bool nudgeAt(
   int minutes, {
+  double? latitude,
+  int? dayOfYear,
   bool autoLiveShareOn = false,
   bool isBroadcast = false,
   bool nudgeDismissed = false,
 }) {
   return shouldNudgeSoloSafety(SoloSafetyNudgeInput(
     nowLocalMinutes: minutes,
+    latitude: latitude,
+    dayOfYear: dayOfYear,
     autoLiveShareOn: autoLiveShareOn,
     isBroadcast: isBroadcast,
     nudgeDismissed: nudgeDismissed,
@@ -85,12 +93,16 @@ void main() {
 
   bool surfaceAt(
     int minutes, {
+    double? latitude,
+    int? dayOfYear,
     bool autoLiveShareOn = false,
     bool isBroadcast = false,
     int? lastActedAtMs,
   }) {
     return shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput(
       nowLocalMinutes: minutes,
+      latitude: latitude,
+      dayOfYear: dayOfYear,
       autoLiveShareOn: autoLiveShareOn,
       isBroadcast: isBroadcast,
       lastActedAtMs: lastActedAtMs,
@@ -120,5 +132,62 @@ void main() {
     expect(surfaceAt(12 * 60), false);
     expect(surfaceAt(22 * 60, isBroadcast: true), false);
     expect(surfaceAt(22 * 60, autoLiveShareOn: true), false);
+  });
+
+  test('the surface decision inherits the seasonal darkness', () {
+    expect(surfaceAt(7 * 60, latitude: 60, dayOfYear: dec21), true);
+    expect(surfaceAt(6 * 60 + 30, latitude: 60, dayOfYear: jun21), false);
+  });
+
+  test('winter pre-dawn at high latitude is dark (sun still down)', () {
+    expect(isSunDown(7 * 60, 60, dec21), true,
+        reason: '07:00 at 60°N in December is before sunrise');
+  });
+
+  test('winter midday at high latitude is light', () {
+    expect(isSunDown(12 * 60, 60, dec21), false,
+        reason: 'the sun is up at solar noon even in deep winter');
+  });
+
+  test('summer 06:30 at high latitude is already light', () {
+    expect(isSunDown(6 * 60 + 30, 60, jun21), false,
+        reason: 'high-latitude summer sun rises well before 06:30');
+  });
+
+  test('polar night is always dark', () {
+    expect(isSunDown(12 * 60, 80, dec21), true,
+        reason: 'the sun never rises at 80°N in December');
+  });
+
+  test('polar day (midnight sun) is never dark', () {
+    expect(isSunDown(0, 80, jun21), false,
+        reason: 'the sun never sets at 80°N in June');
+  });
+
+  test('isDarkOutside falls back to the fixed window when latitude is unknown', () {
+    expect(isDarkOutside(22 * 60, null, null), true,
+        reason: 'the fixed dusk window still fires');
+    expect(isDarkOutside(12 * 60, null, null), false,
+        reason: 'midday with no fix is not dark');
+  });
+
+  test('isDarkOutside adds seasonal darkness the fixed window misses', () {
+    expect(isDarkOutside(7 * 60, 60, dec21), true,
+        reason: 'a dark winter pre-dawn run is now dark');
+    expect(isDarkOutside(6 * 60 + 30, 60, jun21), false,
+        reason: 'a bright summer dawn run is not');
+  });
+
+  test('nudges a dark winter pre-7am run at high latitude (the issue #265 case)', () {
+    expect(nudgeAt(7 * 60, latitude: 60, dayOfYear: dec21), true);
+  });
+
+  test('does not nudge a bright summer 06:30 run at high latitude', () {
+    expect(nudgeAt(6 * 60 + 30, latitude: 60, dayOfYear: jun21), false);
+  });
+
+  test('a covered runner is not nudged even in winter darkness', () {
+    expect(nudgeAt(7 * 60, latitude: 60, dayOfYear: dec21, autoLiveShareOn: true),
+        false);
   });
 }

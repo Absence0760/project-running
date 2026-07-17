@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	isNightWindow,
+	isSunDown,
+	isDarkOutside,
 	nudgeThrottled,
 	shouldNudgeSoloSafety,
 	shouldSurfaceSoloSafetyNudge,
@@ -12,9 +14,15 @@ import {
 
 const NOW = 1_700_000_000_000;
 
+// A December day (mid-winter, northern hemisphere) and a June day.
+const DEC_21 = 355;
+const JUN_21 = 172;
+
 function nudgeAt(minutes: number, over: Partial<Parameters<typeof shouldNudgeSoloSafety>[0]> = {}) {
 	return shouldNudgeSoloSafety({
 		nowLocalMinutes: minutes,
+		latitude: null,
+		dayOfYear: null,
 		autoLiveShareOn: false,
 		isBroadcast: false,
 		nudgeDismissed: false,
@@ -91,6 +99,8 @@ function surfaceAt(
 ) {
 	return shouldSurfaceSoloSafetyNudge({
 		nowLocalMinutes: minutes,
+		latitude: null,
+		dayOfYear: null,
 		autoLiveShareOn: false,
 		isBroadcast: false,
 		lastActedAtMs: null,
@@ -125,4 +135,51 @@ test('daylight / broadcast / auto-share each suppress the surface decision', () 
 	assert.equal(surfaceAt(12 * 60), false);
 	assert.equal(surfaceAt(22 * 60, { isBroadcast: true }), false);
 	assert.equal(surfaceAt(22 * 60, { autoLiveShareOn: true }), false);
+});
+
+test('the surface decision inherits the seasonal darkness', () => {
+	assert.equal(surfaceAt(7 * 60, { latitude: 60, dayOfYear: DEC_21 }), true);
+	assert.equal(surfaceAt(6 * 60 + 30, { latitude: 60, dayOfYear: JUN_21 }), false);
+});
+
+test('winter pre-dawn at high latitude is dark (sun still down)', () => {
+	assert.equal(isSunDown(7 * 60, 60, DEC_21), true, '07:00 at 60°N in December is before sunrise');
+});
+
+test('winter midday at high latitude is light', () => {
+	assert.equal(isSunDown(12 * 60, 60, DEC_21), false, 'the sun is up at solar noon even in deep winter');
+});
+
+test('summer 06:30 at high latitude is already light', () => {
+	assert.equal(isSunDown(6 * 60 + 30, 60, JUN_21), false, 'high-latitude summer sun rises well before 06:30');
+});
+
+test('polar night is always dark', () => {
+	assert.equal(isSunDown(12 * 60, 80, DEC_21), true, 'the sun never rises at 80°N in December');
+});
+
+test('polar day (midnight sun) is never dark', () => {
+	assert.equal(isSunDown(0, 80, JUN_21), false, 'the sun never sets at 80°N in June');
+});
+
+test('isDarkOutside falls back to the fixed window when latitude is unknown', () => {
+	assert.equal(isDarkOutside(22 * 60, null, null), true, 'the fixed dusk window still fires');
+	assert.equal(isDarkOutside(12 * 60, null, null), false, 'midday with no fix is not dark');
+});
+
+test('isDarkOutside adds seasonal darkness the fixed window misses', () => {
+	assert.equal(isDarkOutside(7 * 60, 60, DEC_21), true, 'a dark winter pre-dawn run is now dark');
+	assert.equal(isDarkOutside(6 * 60 + 30, 60, JUN_21), false, 'a bright summer dawn run is not');
+});
+
+test('nudges a dark winter pre-7am run at high latitude (the issue #265 case)', () => {
+	assert.equal(nudgeAt(7 * 60, { latitude: 60, dayOfYear: DEC_21 }), true);
+});
+
+test('does not nudge a bright summer 06:30 run at high latitude', () => {
+	assert.equal(nudgeAt(6 * 60 + 30, { latitude: 60, dayOfYear: JUN_21 }), false);
+});
+
+test('a covered runner is not nudged even in winter darkness', () => {
+	assert.equal(nudgeAt(7 * 60, { latitude: 60, dayOfYear: DEC_21, autoLiveShareOn: true }), false);
 });

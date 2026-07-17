@@ -2222,6 +2222,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dies kann nicht rückgängig gemacht werden.';
 
   @override
+  String get runDetailDeleteQueued =>
+      'Löschen in der Cloud fehlgeschlagen; der Lauf bleibt vorerst erhalten – wird erneut versucht, sobald du wieder online bist.';
+
+  @override
   String get runDetailSuggestLink => 'Verknüpfen';
 
   @override
