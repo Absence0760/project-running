@@ -32,6 +32,28 @@ email_auth_records = {
   mx    = { name = "send", type = "MX", records = ["10 feedback-smtp.us-east-1.amazonses.com"] }
   dmarc = { name = "_dmarc", type = "TXT", records = ["v=DMARC1; p=none;"] }
 
+  # ── BIMI: sender brand logo for noreply@threkir.com (issue #211) ──
+  # `l=` points at the apex-served SVG (SVG Tiny PS profile);
+  # apps/web/static/bimi-logo.svg → https://threkir.com/bimi-logo.svg via
+  # CloudFront. BIMI is a display-only hint — publishing it is harmless
+  # even when nothing renders it yet.
+  #
+  # TWO fail-closed prerequisites, in this order, before a logo actually
+  # shows:
+  #   1. DMARC MUST be at enforcement (p=quarantine or p=reject, and not
+  #      sp=none). The `dmarc` record above is still `p=none`, so NO
+  #      mailbox provider will honour this BIMI record yet — tightening
+  #      DMARC (see the p=none note above) is the gating step, and carries
+  #      its own deliverability risk (raise it only after alignment has
+  #      been passing).
+  #   2. Gmail (and other VMC-requiring inboxes) additionally need a paid
+  #      Verified Mark Certificate. Leave `a=` UNSET until the VMC PEM is
+  #      purchased and hosted — then append it to the record value:
+  #        "v=BIMI1; l=https://threkir.com/bimi-logo.svg; a=https://threkir.com/bimi-vmc.pem;"
+  #      With `a=` unset the logo still shows in clients that don't demand
+  #      a VMC; Gmail lights up only once `a=` is filled (fail-closed).
+  bimi = { name = "default._bimi", type = "TXT", records = ["v=BIMI1; l=https://threkir.com/bimi-logo.svg;"] }
+
   # ── Migadu: inbound + @threkir.com mailboxes (apex) ──
   # SPF + ownership-verify share one apex TXT record set (Route 53 keys a
   # record set by name+type, so both TXT strings live under one entry).
