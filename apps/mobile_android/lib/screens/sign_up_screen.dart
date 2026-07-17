@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:api_client/api_client.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -32,6 +33,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _passwordFocus = FocusNode();
+  final _confirmPasswordFocus = FocusNode();
   bool _loading = false;
   String? _error;
   String? _emailError;
@@ -83,6 +86,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _passwordFocus.dispose();
+    _confirmPasswordFocus.dispose();
     _termsTap.dispose();
     _privacyTap.dispose();
     super.dispose();
@@ -145,6 +150,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ageConfirmedAt: stamp,
         termsAcceptedAt: stamp,
       );
+      // Commits the autofill session so the platform password manager
+      // offers to save the just-created credentials — including on the
+      // confirmation-pending path, where the account already exists.
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       if (result.needsEmailConfirmation) {
         // No session — email confirmation pending (or the address is
@@ -371,28 +380,49 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: l10n.authEmailLabel,
-                  border: const OutlineInputBorder(),
-                  errorText: _emailError,
+              AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                      decoration: InputDecoration(
+                        labelText: l10n.authEmailLabel,
+                        border: const OutlineInputBorder(),
+                        errorText: _emailError,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    PasswordField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      labelText: l10n.authPasswordLabel,
+                      border: const OutlineInputBorder(),
+                      errorText: _passwordError,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) =>
+                          _confirmPasswordFocus.requestFocus(),
+                    ),
+                    const SizedBox(height: 12),
+                    PasswordField(
+                      controller: _confirmPasswordController,
+                      focusNode: _confirmPasswordFocus,
+                      labelText: l10n.signUpConfirmPasswordLabel,
+                      border: const OutlineInputBorder(),
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) {
+                        if (!_loading) _signUp();
+                      },
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              PasswordField(
-                controller: _passwordController,
-                labelText: l10n.authPasswordLabel,
-                border: const OutlineInputBorder(),
-                errorText: _passwordError,
-              ),
-              const SizedBox(height: 12),
-              PasswordField(
-                controller: _confirmPasswordController,
-                labelText: l10n.signUpConfirmPasswordLabel,
-                border: const OutlineInputBorder(),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
