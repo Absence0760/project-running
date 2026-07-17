@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/people_screen.dart';
 import '../lib/widgets/error_state.dart';
+import '../lib/widgets/sign_in_required_state.dart';
 
 bool _supabaseReady = false;
 Future<void> _ensureSupabase() async {
@@ -46,25 +47,41 @@ class _FakeApi extends ApiClient {
     this.results = const [],
     this.followShouldThrow = false,
     this.searchShouldThrow = false,
+    this.searchError,
+    this.suggestionsError,
+    this.signedIn = true,
   });
   List<PeopleSuggestion> suggestions;
   List<PeopleSuggestion> results;
   bool followShouldThrow;
   bool searchShouldThrow;
+  Object? searchError;
+  Object? suggestionsError;
+  bool signedIn;
   int followCalls = 0;
   int unfollowCalls = 0;
   int searchCalls = 0;
+  int suggestionCalls = 0;
   String? lastSearchTerm;
 
   @override
-  Future<List<PeopleSuggestion>> fetchSuggestedPeople({int limit = 12}) async =>
-      suggestions;
+  String? get userId => signedIn ? 'me' : null;
+
+  @override
+  Future<List<PeopleSuggestion>> fetchSuggestedPeople({int limit = 12}) async {
+    suggestionCalls++;
+    final err = suggestionsError;
+    if (err != null) throw err;
+    return suggestions;
+  }
 
   @override
   Future<List<PeopleSuggestion>> searchPeople(String query,
       {int limit = 20}) async {
     searchCalls++;
     lastSearchTerm = query.trim();
+    final err = searchError;
+    if (err != null) throw err;
     if (searchShouldThrow) throw Exception('search down');
     return results;
   }
@@ -276,6 +293,100 @@ void main() {
       expect(find.text('Follow'), findsOneWidget);
       expect(api.followCalls, 1);
       await tester.pump(const Duration(seconds: 4)); // drain banner timer
+    });
+  });
+
+  group('PeopleScreen — signed-out state (issue #224)', () {
+    setUpAll(_ensureSupabase);
+
+    testWidgets(
+        'signed out (embedded) renders the sign-in state, not the search UI',
+        (tester) async {
+      final api = _FakeApi(signedIn: false);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.byType(SignInRequiredState), findsOneWidget);
+      expect(
+        find.text('Sign in to search for and follow other runners.'),
+        findsOneWidget,
+      );
+      expect(find.text('Sign in'), findsOneWidget);
+      // No search field that can only fail, and no fetch was attempted.
+      expect(find.byType(TextField), findsNothing);
+      expect(api.suggestionCalls, 0);
+    });
+
+    testWidgets(
+        'signed out (standalone) shows a plain titled AppBar over the '
+        'sign-in state', (tester) async {
+      final api = _FakeApi(signedIn: false);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api)));
+      await _settle(tester);
+
+      expect(find.byType(SignInRequiredState), findsOneWidget);
+      expect(find.text('People'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+    });
+
+    testWidgets(
+        'an auth rejection mid-search routes to the sign-in state, not the '
+        'retry error state', (tester) async {
+      final api = _FakeApi(
+        searchError: const PostgrestException(
+          message: 'permission denied for function search_user_profiles',
+          code: '42501',
+        ),
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      await tester.enterText(find.byType(TextField), 'sam');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      // Retrying an anon-revoked RPC can never succeed — no ErrorState.
+      expect(find.byType(SignInRequiredState), findsOneWidget);
+      expect(find.byType(ErrorState), findsNothing);
+    });
+
+    testWidgets(
+        'a transient suggestions failure shows a retry error state, then '
+        'retry succeeds', (tester) async {
+      final api = _FakeApi(
+        suggestions: [_person(name: 'Recovered Rae')],
+        suggestionsError: Exception('suggestions down'),
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      // A transient failure is NOT the misleading "no suggestions yet"
+      // empty state, and NOT the sign-in state.
+      expect(find.byType(ErrorState), findsOneWidget);
+      expect(find.byIcon(Icons.groups_outlined), findsNothing);
+      expect(find.byType(SignInRequiredState), findsNothing);
+
+      api.suggestionsError = null;
+      await tester.tap(find.text('Retry'));
+      await _settle(tester);
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.text('Recovered Rae'), findsOneWidget);
+    });
+
+    testWidgets(
+        'an auth-rejected suggestions load routes to the sign-in state',
+        (tester) async {
+      final api = _FakeApi(
+        suggestionsError: const PostgrestException(
+          message: 'permission denied',
+          code: '42501',
+        ),
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.byType(SignInRequiredState), findsOneWidget);
+      expect(find.byType(ErrorState), findsNothing);
     });
   });
 }

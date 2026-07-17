@@ -362,6 +362,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get peopleFollowButton => 'フォロー';
 
   @override
+  String get peopleSignedOutMessage => '他のランナーを検索してフォローするにはサインインしてください';
+
+  @override
+  String get peopleSuggestionsLoadFailed => 'おすすめを読み込めませんでした。';
+
+  @override
   String get readinessCardHeader => 'レディネス';
 
   @override

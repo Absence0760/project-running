@@ -4,8 +4,10 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/error_state.dart';
+import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import 'profile_screen.dart';
 
@@ -35,6 +37,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
   bool _loadingSuggestions = true;
   bool _searching = false;
   bool _searchError = false;
+  bool _suggestionsError = false;
+  bool _signedOut = false;
   List<PeopleSuggestion> _suggestions = const [];
   List<PeopleSuggestion> _results = const [];
   String _query = '';
@@ -44,7 +48,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSuggestions();
+    if (widget.api.userId != null) _loadSuggestions();
   }
 
   @override
@@ -61,11 +65,27 @@ class _PeopleScreenState extends State<PeopleScreen> {
       setState(() {
         _suggestions = s;
         _loadingSuggestions = false;
+        _suggestionsError = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _loadingSuggestions = false);
+      setState(() {
+        if (isSignedOutError(e)) {
+          _signedOut = true;
+        } else {
+          _suggestionsError = true;
+        }
+        _loadingSuggestions = false;
+      });
     }
+  }
+
+  void _retrySuggestions() {
+    setState(() {
+      _loadingSuggestions = true;
+      _suggestionsError = false;
+    });
+    _loadSuggestions();
   }
 
   void _onSearchChanged(String value) {
@@ -101,14 +121,21 @@ class _PeopleScreenState extends State<PeopleScreen> {
         _results = next;
         _searching = false;
       });
-    } catch (_) {
+    } catch (e) {
       // Surface the failure with a retry affordance instead of silently
       // falling through to the "no matches" empty state — a failed search
       // is not the same as an empty result. Mirrors the sibling Discover
-      // tab's ErrorState pattern (and web's search-failed toast).
+      // tab's ErrorState pattern (and web's search-failed toast). An auth
+      // rejection is different again: search_user_profiles is revoked from
+      // anon by design, so a retry can never succeed — route it into the
+      // sign-in state instead (issue #224).
       if (!mounted || gen != _searchGen) return;
       setState(() {
-        _searchError = true;
+        if (isSignedOutError(e)) {
+          _signedOut = true;
+        } else {
+          _searchError = true;
+        }
         _searching = false;
       });
     }
@@ -134,9 +161,15 @@ class _PeopleScreenState extends State<PeopleScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _flipFollow(target.id, wasFollowing));
-      showTopBanner(
-        context, AppLocalizations.of(context).peopleFollowFailedBanner(e));
+      final signedOut = isSignedOutError(e);
+      setState(() {
+        _flipFollow(target.id, wasFollowing);
+        if (signedOut) _signedOut = true;
+      });
+      if (!signedOut) {
+        showTopBanner(
+          context, AppLocalizations.of(context).peopleFollowFailedBanner(e));
+      }
     } finally {
       if (mounted) setState(() => _rowBusy.remove(target.id));
     }
@@ -161,10 +194,38 @@ class _PeopleScreenState extends State<PeopleScreen> {
         viewerFollows: follows,
       );
 
+  void _handleSignedIn() {
+    if (!mounted) return;
+    setState(() {
+      _signedOut = false;
+      _loadingSuggestions = true;
+      _suggestionsError = false;
+      _searchError = false;
+    });
+    _loadSuggestions();
+    if (_query.isNotEmpty) _runSearch();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    // search_user_profiles is granted to authenticated only (privacy
+    // opt-out lives in owner-only user_settings), so a signed-out search
+    // can only fail — render the sign-in state instead of a search field
+    // whose every query dead-ends in a retry loop (issue #224).
+    if (widget.api.userId == null || _signedOut) {
+      final signedOutBody = SignInRequiredState(
+        api: widget.api,
+        message: l10n.peopleSignedOutMessage,
+        onSignedIn: _handleSignedIn,
+      );
+      if (widget.embedded) return signedOutBody;
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.socialTabPeople)),
+        body: signedOutBody,
+      );
+    }
     final hasQuery = _query.isNotEmpty;
     final visible = hasQuery ? _results : _suggestions;
     final searchField = Semantics(
@@ -253,6 +314,16 @@ class _PeopleScreenState extends State<PeopleScreen> {
                 padding: EdgeInsets.all(24),
                 child: Center(
                   child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (!hasQuery && _suggestionsError)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: ErrorState(
+                  message: l10n.peopleSuggestionsLoadFailed,
+                  onRetry: _retrySuggestions,
                 ),
               ),
             )

@@ -370,6 +370,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get peopleFollowButton => 'Seguir';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Faça login para pesquisar e seguir outros corredores.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'Não foi possível carregar as sugestões.';
+
+  @override
   String get readinessCardHeader => 'PRONTIDÃO';
 
   @override
@@ -11658,6 +11666,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get peopleFollowButton => 'Seguir';
+
+  @override
+  String get peopleSignedOutMessage =>
+      'Faça login para pesquisar e seguir outros corredores.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'Não foi possível carregar as sugestões.';
 
   @override
   String get readinessCardHeader => 'PRONTIDÃO';

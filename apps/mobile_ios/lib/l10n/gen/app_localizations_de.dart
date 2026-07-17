@@ -371,6 +371,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get peopleFollowButton => 'Folgen';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Melde dich an, um andere Läufer zu suchen und ihnen zu folgen.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'Vorschläge konnten nicht geladen werden.';
+
+  @override
   String get readinessCardHeader => 'BEREITSCHAFT';
 
   @override

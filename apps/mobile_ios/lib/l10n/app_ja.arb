@@ -92,6 +92,8 @@
   "peopleFallbackDisplayName": "ランナー",
   "peopleFollowingButton": "フォロー中",
   "peopleFollowButton": "フォロー",
+  "peopleSignedOutMessage": "他のランナーを検索してフォローするにはサインインしてください",
+  "peopleSuggestionsLoadFailed": "おすすめを読み込めませんでした。",
   "readinessCardHeader": "レディネス",
   "readinessBandHigh": "高い",
   "readinessBandModerate": "普通",

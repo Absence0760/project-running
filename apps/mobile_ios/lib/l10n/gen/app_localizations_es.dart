@@ -371,6 +371,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get peopleFollowButton => 'Seguir';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Inicia sesión para buscar y seguir a otros corredores.';
+
+  @override
+  String get peopleSuggestionsLoadFailed =>
+      'No se pudieron cargar las sugerencias.';
+
+  @override
   String get readinessCardHeader => 'PREPARACIÓN';
 
   @override

@@ -659,6 +659,18 @@ abstract class AppLocalizations {
   /// **'Follow'**
   String get peopleFollowButton;
 
+  /// Body of the signed-out state on the People screen; people search is auth-gated so a signed-out search can only fail
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to search for and follow other runners.'**
+  String get peopleSignedOutMessage;
+
+  /// Error-state message when the suggested-people list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load suggestions.'**
+  String get peopleSuggestionsLoadFailed;
+
   /// Header label on the dashboard readiness-to-run card
   ///
   /// In en, this message translates to:

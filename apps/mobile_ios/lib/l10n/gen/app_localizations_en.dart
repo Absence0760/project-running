@@ -369,6 +369,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get peopleFollowButton => 'Follow';
 
   @override
+  String get peopleSignedOutMessage =>
+      'Sign in to search for and follow other runners.';
+
+  @override
+  String get peopleSuggestionsLoadFailed => 'Could not load suggestions.';
+
+  @override
   String get readinessCardHeader => 'READINESS';
 
   @override

@@ -92,6 +92,8 @@
   "peopleFallbackDisplayName": "Corredor",
   "peopleFollowingButton": "Seguindo",
   "peopleFollowButton": "Seguir",
+  "peopleSignedOutMessage": "Faça login para pesquisar e seguir outros corredores.",
+  "peopleSuggestionsLoadFailed": "Não foi possível carregar as sugestões.",
   "readinessCardHeader": "PRONTIDÃO",
   "readinessBandHigh": "alta",
   "readinessBandModerate": "moderada",
