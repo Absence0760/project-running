@@ -518,7 +518,7 @@ test.describe('/settings/preferences', () => {
 
 		// Changing gender must NOT fire the auto-save cue (demographics are
 		// explicit-save only).
-		await gender.selectOption('nonbinary');
+		await gender.selectOption('female');
 		await expect(page.getByTestId('save-status')).not.toContainText('Saved');
 
 		// Leave consent unticked + unsaved so nothing persists for USER_A.

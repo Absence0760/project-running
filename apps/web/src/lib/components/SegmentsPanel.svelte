@@ -273,7 +273,6 @@
 										<option value={null}>{t('segments.all')}</option>
 										<option value="male">{t('segments.men')}</option>
 										<option value="female">{t('segments.women')}</option>
-										<option value="nonbinary">{t('segments.nonbinary')}</option>
 									</select>
 								</label>
 								<label>

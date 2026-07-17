@@ -45,7 +45,7 @@
 		// 20260707_001).
 		const { data } = await supabase.rpc('get_my_profile');
 		const g = (data as { gender?: string | null } | null)?.gender;
-		if (g === 'male' || g === 'female' || g === 'nonbinary') viewerGender = g;
+		if (g === 'male' || g === 'female' || g === 'prefer_not_to_say') viewerGender = g;
 		const dob = (data as { date_of_birth?: string | null } | null)?.date_of_birth;
 		if (dob) {
 			const born = new Date(dob);

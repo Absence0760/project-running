@@ -509,7 +509,7 @@
 			const { data: prof } = await supabase.rpc('get_my_profile');
 			const p = prof as { date_of_birth?: string | null; gender?: string | null } | null;
 			if (typeof p?.date_of_birth === 'string') viewerDobIso = p.date_of_birth;
-			if (p?.gender === 'male' || p?.gender === 'female' || p?.gender === 'nonbinary') {
+			if (p?.gender === 'male' || p?.gender === 'female' || p?.gender === 'prefer_not_to_say') {
 				viewerGender = p.gender;
 			}
 		} catch (_) {

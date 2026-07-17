@@ -227,7 +227,7 @@
 	// special-category data under GDPR Art 9 (health-adjacent) —
 	// `healthDataConsent` captures the explicit Art 9(2)(a) consent
 	// timestamp. Withdrawing consent nulls both fields atomically.
-	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
+	let gender = $state<'male' | 'female' | ''>('');
 	let dateOfBirth = $state('');
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
@@ -348,7 +348,7 @@
 			const { data: prof, error: profErr } = await supabase.rpc('get_my_profile');
 			if (profErr) throw profErr;
 			if (prof) {
-				gender = (prof.gender as typeof gender) ?? '';
+				gender = prof.gender === 'male' || prof.gender === 'female' ? prof.gender : '';
 				dateOfBirth = prof.date_of_birth ?? '';
 				heightCm = prof.height_cm ?? null;
 				healthDataConsentAt = (prof.health_data_consent_at as string | null) ?? null;
@@ -816,7 +816,6 @@
 						<option value="">{m('prefs.genderPreferNotToSay')}</option>
 						<option value="male">{m('prefs.genderMale')}</option>
 						<option value="female">{m('prefs.genderFemale')}</option>
-						<option value="nonbinary">{m('prefs.genderNonbinary')}</option>
 					</select>
 				</label>
 				<label>

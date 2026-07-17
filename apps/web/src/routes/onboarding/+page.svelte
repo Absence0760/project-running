@@ -51,7 +51,7 @@
 	// from consenting to use DOB for HR/leaderboards), so a declined
 	// consent must not leave a NULL DOB that keeps the account
 	// discoverable. Weight isn't Art 9, so it persists regardless.
-	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
+	let gender = $state<'male' | 'female' | ''>('');
 	let dateOfBirth = $state('');
 	// Body weight is entered in the unit implied by the distance choice in
 	// step 2: a runner who picked miles (US/GB/LR/MM) thinks of their weight
@@ -407,7 +407,6 @@
 						<option value="">{m('onboarding.genderPreferNot')}</option>
 						<option value="female">{m('onboarding.genderFemale')}</option>
 						<option value="male">{m('onboarding.genderMale')}</option>
-						<option value="nonbinary">{m('onboarding.genderNonbinary')}</option>
 					</select>
 				</label>
 				<label class="field">
