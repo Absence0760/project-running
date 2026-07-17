@@ -2668,7 +2668,7 @@ void main() {
       // strip it without a build warning). The app's own manifest
       // declares the service with tools:node="merge" so the type is
       // visible in OUR file AND the plugin's other attributes
-      // (exported, stopWithTask) survive merge. /audit/app-store-
+      // (enabled, exported) survive merge. /audit/app-store-
       // privacy May 2026 High closeout.
       final file = File('android/app/src/main/AndroidManifest.xml');
       if (!file.existsSync()) return;
@@ -2696,6 +2696,30 @@ void main() {
             'future plugin bump that drops the attribute from the '
             'merged manifest silently breaks Android 14 + the Play '
             'reviewer\'s Data Safety cross-check.',
+      );
+    });
+
+    test('geolocator service pins stopWithTask=false so recording survives a Recents swipe', () {
+      // Reason: geolocator's GeolocatorLocationService declares neither
+      // android:stopWithTask nor an onTaskRemoved() override, so nothing
+      // keeps the foreground GPS service alive when the user swipes the
+      // app card off Recents mid-run — the service (and its hosting
+      // process) is torn down and recording dies silently (issue #250).
+      // Our <service> override pins stopWithTask="false" so the run
+      // survives. A regression that drops the attribute re-opens the bug.
+      final file = File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        RegExp(
+          r'GeolocatorLocationService"[\s\S]{0,200}stopWithTask="false"',
+        ).hasMatch(body),
+        isTrue,
+        reason: 'The explicit <service> block for '
+            'GeolocatorLocationService must carry '
+            'android:stopWithTask="false" so swiping the app off Recents '
+            'mid-run does not silently tear down the recording foreground '
+            'service (issue #250).',
       );
     });
 
