@@ -26,6 +26,7 @@ const PLAN_PHASE_KEY: Record<PlanPhase, MessageKey> = {
 	peak: 'planPhase.peak',
 	taper: 'planPhase.taper',
 	race: 'planPhase.race',
+	graduation: 'planPhase.graduation',
 };
 
 export function workoutKindLabel(kind: string): string {

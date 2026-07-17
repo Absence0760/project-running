@@ -2357,6 +2357,7 @@
   "planPhasePeak": "ピーク",
   "planPhaseTaper": "テーパリング",
   "planPhaseRace": "レース週",
+  "planPhaseGraduation": "修了週",
   "runBackgroundLocationNudgeTitle": "位置情報を常に許可",
   "runBackgroundLocationNudgeBody": "Android はアプリが開いている間だけ位置情報を許可しました。画面がオフのときも距離を正確に記録するには、設定で位置情報のアクセスを「常に許可」にしてください。このまま開始することもできます。アプリが画面に表示されている間は記録が機能します。",
   "runBatteryOptHintTitle": "バックグラウンドでも記録を継続",

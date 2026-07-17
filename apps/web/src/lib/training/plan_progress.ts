@@ -8,7 +8,7 @@
 /// Canonical phase ordering. Plans don't always use every phase, and the
 /// rows aren't guaranteed to be stored in order, so the marker derives
 /// its sequence from this rather than from row order.
-export const PLAN_PHASE_ORDER = ['base', 'build', 'peak', 'taper', 'race'] as const;
+export const PLAN_PHASE_ORDER = ['base', 'build', 'peak', 'taper', 'race', 'graduation'] as const;
 export type PlanPhaseName = (typeof PLAN_PHASE_ORDER)[number];
 
 /// The distinct phases the plan moves through, de-duplicated and sorted

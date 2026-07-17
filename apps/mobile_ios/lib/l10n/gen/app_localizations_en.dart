@@ -8535,6 +8535,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planPhaseRace => 'Race week';
 
   @override
+  String get planPhaseGraduation => 'Graduation week';
+
+  @override
   String get runBackgroundLocationNudgeTitle => 'Allow location all the time';
 
   @override

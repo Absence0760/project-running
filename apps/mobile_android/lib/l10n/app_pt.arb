@@ -2357,6 +2357,7 @@
   "planPhasePeak": "Pico",
   "planPhaseTaper": "Polimento",
   "planPhaseRace": "Semana de prova",
+  "planPhaseGraduation": "Semana de conclusão",
   "runBackgroundLocationNudgeTitle": "Permitir localização o tempo todo",
   "runBackgroundLocationNudgeBody": "O Android só concedeu a localização enquanto o app está aberto. Para uma distância precisa com a tela desligada, defina o acesso à localização como \"Permitir o tempo todo\" nas Configurações. Você pode começar mesmo assim — a gravação continua funcionando enquanto o app estiver na tela.",
   "runBatteryOptHintTitle": "Manter a gravação ativa em segundo plano",

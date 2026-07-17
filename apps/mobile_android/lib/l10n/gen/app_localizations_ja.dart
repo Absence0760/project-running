@@ -8180,6 +8180,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planPhaseRace => 'レース週';
 
   @override
+  String get planPhaseGraduation => '修了週';
+
+  @override
   String get runBackgroundLocationNudgeTitle => '位置情報を常に許可';
 
   @override

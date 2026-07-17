@@ -3308,6 +3308,7 @@ export const messages = {
 	"planPhase.peak": "Pico",
 	"planPhase.taper": "Polimento",
 	"planPhase.race": "Semana de prova",
+	"planPhase.graduation": "Semana de conclusão",
 	"authCallback.failed": "Falha na autenticação: {error}",
 	"authCallback.backToLogin": "Voltar ao login",
 	"authCallback.signingIn": "Entrando...",

@@ -17,6 +17,7 @@ void main() {
     expect(workoutKindLabel(en, WorkoutKind.marathonPace), 'Marathon pace');
     expect(planPhaseLabel(en, PlanPhase.base), 'Base');
     expect(planPhaseLabel(en, PlanPhase.race), 'Race week');
+    expect(planPhaseLabel(en, PlanPhase.graduation), 'Graduation week');
   });
 
   test('labels follow the active locale (de)', () async {

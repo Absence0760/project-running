@@ -8651,6 +8651,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get planPhaseRace => 'Semaine de course';
 
   @override
+  String get planPhaseGraduation => 'Semaine de fin de programme';
+
+  @override
   String get runBackgroundLocationNudgeTitle =>
       'Autoriser la localisation en permanence';
 

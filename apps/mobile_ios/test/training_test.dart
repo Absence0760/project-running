@@ -121,6 +121,10 @@ void main() {
           .firstWhere((w) => w.kind == WorkoutKind.walkRun);
       expect(wk9.structure!.repeats!['count'], 1);
       expect(wk9.structure!.repeats!.containsKey('recovery_duration_s'), isFalse);
+      // #273: the final week is a graduation, not a race — a beginner walk-run
+      // plan has no goal race, so labelling it 'race' ("Race week") misleads.
+      expect(plan.weeks[8].phase, PlanPhase.graduation);
+      expect(plan.weeks[0].phase, PlanPhase.build);
     });
   });
 

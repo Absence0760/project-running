@@ -3321,6 +3321,7 @@ export const en = {
 	"planPhase.peak": "Peak",
 	"planPhase.taper": "Taper",
 	"planPhase.race": "Race week",
+	"planPhase.graduation": "Graduation week",
 	"authCallback.failed": "Authentication failed: {error}",
 	"authCallback.backToLogin": "Back to login",
 	"authCallback.signingIn": "Signing you in...",

@@ -24,7 +24,7 @@ enum WorkoutKind {
   rest,
 }
 
-enum PlanPhase { base, build, peak, taper, race }
+enum PlanPhase { base, build, peak, taper, race, graduation }
 
 const Map<GoalEvent, double> kGoalDistancesM = {
   GoalEvent.distance5k: 5000,
@@ -107,6 +107,7 @@ PlanPhase planPhaseFromDb(String s) => switch (s) {
       'peak' => PlanPhase.peak,
       'taper' => PlanPhase.taper,
       'race' => PlanPhase.race,
+      'graduation' => PlanPhase.graduation,
       _ => PlanPhase.base,
     };
 
@@ -116,6 +117,7 @@ String planPhaseDbValue(PlanPhase p) => switch (p) {
       PlanPhase.peak => 'peak',
       PlanPhase.taper => 'taper',
       PlanPhase.race => 'race',
+      PlanPhase.graduation => 'graduation',
     };
 
 // ─────────────────────── VDOT ───────────────────────
@@ -640,7 +642,7 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
     }
     weeks.add(GeneratedWeek(
       weekIndex: i,
-      phase: i == totalWeeks - 1 ? PlanPhase.race : PlanPhase.build,
+      phase: i == totalWeeks - 1 ? PlanPhase.graduation : PlanPhase.build,
       targetVolumeM:
           workouts.fold(0.0, (s, w) => s + (w.targetDistanceM ?? 0)),
       notes: i == totalWeeks - 1
