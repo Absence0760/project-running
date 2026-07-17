@@ -1240,6 +1240,8 @@ class _RunScreenState extends State<RunScreen> {
 
       final should = shouldNudgeSoloSafety(SoloSafetyNudgeInput(
         nowLocalMinutes: now.hour * 60 + now.minute,
+        latitude: _currentPosition?.lat,
+        dayOfYear: now.difference(DateTime(now.year)).inDays + 1,
         autoLiveShareOn: _autoLiveShareEnabled,
         isBroadcast: _liveBroadcaster?.isActive ?? false,
         nudgeDismissed: nudgeThrottled(dismissedAtMs, nowMs),
