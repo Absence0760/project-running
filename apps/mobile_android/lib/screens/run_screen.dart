@@ -3666,7 +3666,6 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Widget _buildFinished(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final track = _finishedRun?.track ?? <cm.Waypoint>[];
     // Derived metric: "moving time" — elapsed with stops excluded, computed
@@ -3681,74 +3680,127 @@ class _RunScreenState extends State<RunScreen> {
         ),
         Expanded(
           flex: 4,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(l10n.runComplete, style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: StatColumn(
-                            label: l10n.runStatDistance,
-                            value: _formattedDistance),
-                      ),
-                      Expanded(
-                        child: StatColumn(
-                            label: l10n.runStatTime, value: _formattedTime),
-                      ),
-                      Expanded(
-                        child: StatColumn(
-                          label: l10n.runStatMoving,
-                          value: _formatDuration(movingTime),
-                        ),
-                      ),
-                      Expanded(
-                        child: StatColumn(
-                          label: _activityType.usesSpeed
-                              ? l10n.runStatAvgSpeed
-                              : l10n.runStatPace,
-                          value: _activityType.usesSpeed
-                              ? _formattedAvgSpeedValue
-                              : _formattedAvgPaceValueFromMoving(movingTime),
-                          unit: _activityType.usesSpeed
-                              ? UnitFormat.speedLabel(_unit)
-                              : UnitFormat.paceLabel(_unit),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  if (_synced) ...[
-                    const Icon(Icons.cloud_done, color: Colors.green, size: 36),
-                    const SizedBox(height: 4),
-                    Text(l10n.runSynced),
-                  ] else if (_syncError != null) ...[
-                    const Icon(Icons.cloud_off, size: 36, color: Colors.orange),
-                    const SizedBox(height: 4),
-                    Text(_syncError!,
-                        style: const TextStyle(color: Colors.orange, fontSize: 13)),
-                  ] else ...[
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(l10n.runSyncing),
-                  ],
-                  const SizedBox(height: 16),
-                  FilledButton(onPressed: _discard, child: Text(l10n.runDone)),
-                ],
-              ),
-            ),
+          child: FinishedSummary(
+            distanceValue: _formattedDistance,
+            timeValue: _formattedTime,
+            movingValue: _formatDuration(movingTime),
+            primaryLabel: _activityType.usesSpeed
+                ? l10n.runStatAvgSpeed
+                : l10n.runStatPace,
+            primaryValue: _activityType.usesSpeed
+                ? _formattedAvgSpeedValue
+                : _formattedAvgPaceValueFromMoving(movingTime),
+            primaryUnit: _activityType.usesSpeed
+                ? UnitFormat.speedLabel(_unit)
+                : UnitFormat.paceLabel(_unit),
+            synced: _synced,
+            syncError: _syncError,
+            onDone: _discard,
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The stats pane of the finished-run summary — everything below the map.
+/// A fixed-height centered Column clipped the sync status + Done button at
+/// large OS text scaling (~2x on a compact-height phone), so the pane uses
+/// the same scroll fallback as `_buildIdle`: content that fits stays
+/// vertically centered, content that doesn't scrolls.
+class FinishedSummary extends StatelessWidget {
+  const FinishedSummary({
+    super.key,
+    required this.distanceValue,
+    required this.timeValue,
+    required this.movingValue,
+    required this.primaryLabel,
+    required this.primaryValue,
+    required this.primaryUnit,
+    required this.synced,
+    required this.syncError,
+    required this.onDone,
+  });
+
+  final String distanceValue;
+  final String timeValue;
+  final String movingValue;
+  final String primaryLabel;
+  final String primaryValue;
+  final String primaryUnit;
+  final bool synced;
+  final String? syncError;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      top: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: clampDouble(
+                  constraints.maxHeight - 48, 0, double.maxFinite),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(l10n.runComplete, style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatColumn(
+                          label: l10n.runStatDistance, value: distanceValue),
+                    ),
+                    Expanded(
+                      child: StatColumn(
+                          label: l10n.runStatTime, value: timeValue),
+                    ),
+                    Expanded(
+                      child: StatColumn(
+                          label: l10n.runStatMoving, value: movingValue),
+                    ),
+                    Expanded(
+                      child: StatColumn(
+                        label: primaryLabel,
+                        value: primaryValue,
+                        unit: primaryUnit,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (synced) ...[
+                  const Icon(Icons.cloud_done, color: Colors.green, size: 36),
+                  const SizedBox(height: 4),
+                  Text(l10n.runSynced),
+                ] else if (syncError != null) ...[
+                  const Icon(Icons.cloud_off, size: 36, color: Colors.orange),
+                  const SizedBox(height: 4),
+                  Text(syncError!,
+                      style: const TextStyle(
+                          color: Colors.orange, fontSize: 13)),
+                ] else ...[
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(l10n.runSyncing),
+                ],
+                const SizedBox(height: 16),
+                FilledButton(onPressed: onDone, child: Text(l10n.runDone)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
