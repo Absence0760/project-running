@@ -36,6 +36,14 @@
 	} from '$lib/training/cycle_plan';
 
 	let displayName = $state(auth.user?.display_name ?? '');
+	// Public @handle (issue #465). Claimed / edited through the set_my_handle
+	// RPC (the only owner write path) so uniqueness + format errors surface.
+	let handle = $state('');
+	let handleInitial = $state('');
+	let handleSaving = $state(false);
+	let handleSaved = $state(false);
+	let handleError = $state<string | null>(null);
+	let handleChanged = $derived(handle.trim().toLowerCase() !== handleInitial);
 	let avatarUrl = $state<string | null>(auth.user?.avatar_url ?? null);
 	let avatarBusy = $state(false);
 	let avatarFileInput: HTMLInputElement;
@@ -213,6 +221,8 @@
 		// Sync the avatar from the freshly-read profile — the $state was seeded
 		// from auth.user at component init, which may not have hydrated yet.
 		avatarUrl = (prof?.avatar_url as string | null) ?? null;
+		handleInitial = (prof?.handle as string | null) ?? '';
+		handle = handleInitial;
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
 		coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
 		// Pre-tick the box if consent is already on record so a user can
@@ -326,6 +336,32 @@
 		} finally {
 			avatarBusy = false;
 		}
+	}
+
+	async function saveHandle() {
+		if (!auth.user || handleSaving) return;
+		handleSaving = true;
+		handleSaved = false;
+		handleError = null;
+		const next = handle.trim().toLowerCase();
+		const { data, error } = await supabase.rpc('set_my_handle', { p_handle: next });
+		if (error) {
+			// The RPC raises a distinct message per failure so the copy is
+			// specific; anything else falls back to a generic error.
+			if (error.message.includes('handle_taken')) {
+				handleError = m('settingsAccount.handleErrorTaken');
+			} else if (error.message.includes('handle_invalid')) {
+				handleError = m('settingsAccount.handleErrorInvalid');
+			} else {
+				handleError = m('settingsAccount.handleErrorGeneric', { error: error.message });
+			}
+			handleSaving = false;
+			return;
+		}
+		handleInitial = (data as string | null) ?? '';
+		handle = handleInitial;
+		handleSaved = true;
+		handleSaving = false;
 	}
 
 	async function handleSave() {
@@ -817,6 +853,42 @@
 			<label>
 				<span class="label-text">{m('settingsAccount.displayName')}</span>
 				<input type="text" bind:value={displayName} />
+			</label>
+			<label>
+				<span class="label-text">{m('settingsAccount.handleLabel')}</span>
+				<div class="handle-row">
+					<span class="handle-at" aria-hidden="true">@</span>
+					<input
+						type="text"
+						class="handle-input"
+						bind:value={handle}
+						placeholder={m('settingsAccount.handlePlaceholder')}
+						autocomplete="off"
+						autocapitalize="none"
+						spellcheck="false"
+						maxlength="30"
+						data-testid="handle-input"
+						oninput={() => {
+							handleSaved = false;
+							handleError = null;
+						}}
+					/>
+					<button
+						type="button"
+						class="btn btn-outline btn-sm handle-save-btn"
+						onclick={saveHandle}
+						disabled={handleSaving || !handleChanged}
+						data-testid="handle-save"
+					>
+						{handleSaving
+							? m('settingsAccount.handleSaving')
+							: handleSaved
+								? m('settingsAccount.handleSaved')
+								: m('settingsAccount.handleSave')}
+					</button>
+				</div>
+				<span class="handle-help">{m('settingsAccount.handleHelp')}</span>
+				{#if handleError}<p class="error-text" role="alert" data-testid="handle-error">{handleError}</p>{/if}
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.email')}</span>
@@ -1323,6 +1395,11 @@
 	.email-change-btn { margin-top: var(--space-xs); align-self: flex-start; }
 	.email-change-actions { margin-top: var(--space-xs); }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+	.handle-row { display: flex; align-items: center; gap: var(--space-xs); }
+	.handle-at { color: var(--color-text-tertiary); font-weight: 600; }
+	.handle-input { flex: 1; min-width: 0; }
+	.handle-save-btn { flex-shrink: 0; }
+	.handle-help { display: block; font-size: 0.78rem; color: var(--color-text-tertiary); margin-top: var(--space-xs); }
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.danger-heading { color: var(--color-danger); }

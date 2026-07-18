@@ -4827,6 +4827,8 @@ export interface PeopleSuggestion extends PublicProfile {
 	public_runs_count: number;
 	shared_clubs: number;
 	viewer_follows: boolean;
+	// Public @handle (issue #465). Null until the runner claims one.
+	handle: string | null;
 }
 
 /// Free-text people search for /social People tab. Used to do a
@@ -4852,6 +4854,20 @@ export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggest
 	if (term.length < 1) return [];
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id ?? null;
+
+	// Direct-id / profile-URL lookup: a pasted uuid (or `/u/<uuid>` link)
+	// resolves that exact runner. Safe — it needs the full uuid, so there's
+	// no enumeration surface, and it deliberately bypasses the
+	// discoverable_in_search opt-out the same way the public /u/[id] page
+	// already does. shadow_hidden + block filters still apply because the
+	// resolve goes through the same hydrate path (issue #465).
+	const { extractProfileId } = await import('../social/profile_query');
+	const directId = extractProfileId(term);
+	if (directId) {
+		if (directId === viewerId) return [];
+		return hydratePeopleSuggestions([directId], viewerId);
+	}
+
 	const candidateLimit = Math.min(limit * 3, 120);
 	const { data: profiles, error } = await supabase.rpc('search_user_profiles', {
 		p_query: term,
@@ -4869,7 +4885,17 @@ export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggest
 	// exact name may not have posted any runs yet), they just rank
 	// last within the result set.
 	const { comparePeopleRank } = await import('../social/search_ranking');
-	return hydrated.sort(comparePeopleRank).slice(0, limit);
+	const ranked = hydrated.sort(comparePeopleRank);
+	// A searched-for exact @handle floats above the reputation sort, so
+	// `@janedoe` surfaces janedoe first even if a busier account also
+	// prefix-matches the handle (mirrors the RPC's exact-handle-first order,
+	// which the reputation re-sort would otherwise mask).
+	const handleTerm = term.replace(/^@/, '').toLowerCase();
+	if (!handleTerm) return ranked.slice(0, limit);
+	const exact = ranked.filter((p) => p.handle?.toLowerCase() === handleTerm);
+	if (exact.length === 0) return ranked.slice(0, limit);
+	const rest = ranked.filter((p) => p.handle?.toLowerCase() !== handleTerm);
+	return [...exact, ...rest].slice(0, limit);
 }
 
 /// Suggested people for the Social People tab: members of the viewer's
@@ -4965,7 +4991,7 @@ async function hydratePeopleSuggestions(
 	const [profilesRes, countsRes, followsRes] = await Promise.all([
 		supabase
 			.from('user_profiles')
-			.select('id, display_name, avatar_url')
+			.select('id, display_name, avatar_url, handle')
 			.in('id', visibleIds),
 		// Public-run counts via a SECURITY DEFINER GROUP BY RPC — one small row
 		// per candidate, not one row per public run (which also can't be read
@@ -4995,6 +5021,7 @@ async function hydratePeopleSuggestions(
 		id: p.id as string,
 		display_name: (p.display_name as string) ?? null,
 		avatar_url: (p.avatar_url as string) ?? null,
+		handle: ((p as { handle?: string | null }).handle as string) ?? null,
 		public_runs_count: counts.get(p.id as string) ?? 0,
 		shared_clubs: 0,
 		viewer_follows: follows.has(p.id as string),

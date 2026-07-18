@@ -183,6 +183,9 @@
 					/>
 					<div class="person-body">
 						<span class="person-name">{person.display_name ?? m('socialPeople.runnerFallback')}</span>
+						{#if person.handle}
+							<span class="person-handle">@{person.handle}</span>
+						{/if}
 						<span class="person-meta">
 							{m(person.public_runs_count === 1 ? 'socialPeople.publicRunsOne' : 'socialPeople.publicRunsMany', { n: person.public_runs_count })}
 							{#if person.shared_clubs > 0}
@@ -323,6 +326,13 @@
 	.person-name {
 		font-weight: 600;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.person-handle {
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
