@@ -510,10 +510,16 @@ class LocalRunStore extends ChangeNotifier {
     if (!file.existsSync()) return;
 
     final stamped = _withLastModified(updated, DateTime.now());
-    final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    data[kLocalStoreVersionKey] = kLocalStoreSchemaVersion;
-    data['run'] = stamped.toJson();
-    data['synced'] = false;
+    // Build the envelope fresh rather than decoding the existing file: every
+    // field below is overwritten, so nothing from the old map survives. Reading
+    // it back added no data and made a malformed on-disk file (partial write,
+    // tampering, restore-from-backup) throw an uncaught decode error — unlike
+    // every sibling read path here, which recovers. Mirrors save()/saveFromRemote.
+    final data = {
+      kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+      'run': stamped.toJson(),
+      'synced': false,
+    };
     await writeJsonAtomic(file, data);
 
     final idx = _runs.indexWhere((r) => r.id == stamped.id);

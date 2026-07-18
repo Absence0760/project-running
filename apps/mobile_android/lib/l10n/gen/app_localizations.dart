@@ -3449,6 +3449,12 @@ abstract class AppLocalizations {
   /// **'Enter a valid distance and duration'**
   String get runDetailEditInvalid;
 
+  /// Banner shown when saving the run edit to local storage fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your changes. Please try again.'**
+  String get runDetailEditFailed;
+
   /// Save action in run-detail dialogs
   ///
   /// In en, this message translates to:

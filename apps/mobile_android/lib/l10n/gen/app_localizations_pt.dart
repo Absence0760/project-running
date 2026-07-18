@@ -2008,6 +2008,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailEditInvalid => 'Insira uma distância e duração válidas';
 
   @override
+  String get runDetailEditFailed =>
+      'Não foi possível salvar suas alterações. Tente novamente.';
+
+  @override
   String get runDetailSave => 'Salvar';
 
   @override
@@ -13357,6 +13361,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailEditInvalid => 'Insira uma distância e duração válidas';
+
+  @override
+  String get runDetailEditFailed =>
+      'Não foi possível salvar suas alterações. Tente novamente.';
 
   @override
   String get runDetailSave => 'Salvar';

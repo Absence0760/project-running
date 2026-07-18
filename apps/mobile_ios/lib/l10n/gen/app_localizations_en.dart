@@ -1993,6 +1993,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailEditInvalid => 'Enter a valid distance and duration';
 
   @override
+  String get runDetailEditFailed =>
+      'Couldn\'t save your changes. Please try again.';
+
+  @override
   String get runDetailSave => 'Save';
 
   @override

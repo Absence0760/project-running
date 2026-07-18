@@ -2018,6 +2018,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez une distance et une durée valides';
 
   @override
+  String get runDetailEditFailed =>
+      'Impossible d\'enregistrer vos modifications. Veuillez réessayer.';
+
+  @override
   String get runDetailSave => 'Enregistrer';
 
   @override

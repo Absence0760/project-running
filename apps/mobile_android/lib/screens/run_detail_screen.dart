@@ -672,7 +672,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       metadata: metadata,
       createdAt: run.createdAt,
     );
-    await widget.runStore.update(updated);
+    // Fail-closed: if the local write fails, surface it and do NOT push to the
+    // server — a phantom server update while the local copy stays stale would
+    // leave mobile and server disagreeing.
+    try {
+      await widget.runStore.update(updated);
+    } catch (e) {
+      debugPrint('run update failed for ${run.id}: $e');
+      if (!mounted) return;
+      showTopBanner(context, l10n.runDetailEditFailed);
+      return;
+    }
     if (!mounted) return;
     setState(() => run = updated);
 
