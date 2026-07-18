@@ -324,7 +324,7 @@ pub fn build_roadbook<'a>(
         });
 
         let cutoff = if stop.is_cutoff {
-            cutoff_limit_s(stop, opts.start_clock_min).map(|limit| {
+            cutoff_limit_s(stop, opts.start_clock_min, elapsed).map(|limit| {
                 let margin = limit as f64 - elapsed;
                 RoadbookCutoff {
                     limit_elapsed_s: limit,
@@ -371,20 +371,25 @@ pub fn build_roadbook<'a>(
 }
 
 /// Resolve a cutoff to a limit in elapsed seconds from the start. Prefers the
-/// elapsed field; otherwise derives from the clock minus the start clock,
-/// wrapping a clock at or before the start to the next day (a 24h+ race
-/// expressing its overall limit as the start wall-clock one day on).
-fn cutoff_limit_s(stop: &Stop, start_clock_min: Option<f64>) -> Option<u32> {
+/// elapsed field; otherwise derives from the clock minus the start clock.
+///
+/// A clock field carries no day, so a bare cutoff clock is ambiguous once a
+/// race runs longer than 24h ('14:00' on an 08:00 start could be hour 6 or hour
+/// 30). Snap to the whole day nearest the leg's projected arrival, so a 30h
+/// checkpoint resolves to 30h, not the same-day 6h. Never before the start
+/// (k >= 0), so an at-or-before-start clock still wraps to >= 24h.
+fn cutoff_limit_s(stop: &Stop, start_clock_min: Option<f64>, projected_elapsed_s: f64) -> Option<u32> {
     let parts = crate::route_markers::parse_cutoff(stop.cutoff_clock, stop.cutoff_elapsed_s)?;
     if let Some(e) = parts.elapsed_s {
         return Some(e);
     }
     if let (Some(clock), Some(start)) = (parts.clock, start_clock_min) {
-        let mut cutoff_min = clock_minutes(clock) as f64;
-        if cutoff_min <= start {
-            cutoff_min += MINUTES_PER_DAY;
+        let mut base_min = clock_minutes(clock) as f64 - start;
+        if base_min <= 0.0 {
+            base_min += MINUTES_PER_DAY;
         }
-        return Some(libm::round((cutoff_min - start) * 60.0) as u32);
+        let k = libm::round((projected_elapsed_s / 60.0 - base_min) / MINUTES_PER_DAY).max(0.0);
+        return Some(libm::round((base_min + k * MINUTES_PER_DAY) * 60.0) as u32);
     }
     None
 }
@@ -646,6 +651,34 @@ mod tests {
         let cutoff = rb.legs[1].cutoff.expect("cutoff present");
         assert_eq!(cutoff.limit_elapsed_s, 86_400);
         assert_eq!(cutoff.status, CutoffStatus::Safe);
+    }
+
+    #[test]
+    fn cutoff_clock_past_24h_snaps_to_the_day_nearest_the_projection() {
+        let wp = course();
+        let total = total_of(&wp);
+        // 40h goal, cutoff at 75% distance -> projected arrival ~30h. Start
+        // 08:00, cutoff clock 14:00: raw same-day offset is only +6h, but the
+        // runner is expected there at hour 30. Must resolve to 30h, not 6h.
+        let markers = [RoadbookMarker {
+            position_m: Some(total * 0.75),
+            kind: "cutoff",
+            label: "Gate",
+            services: &[],
+            cutoff_clock: Some("14:00"),
+            cutoff_elapsed_s: None,
+        }];
+        let rb = build_roadbook(
+            &wp,
+            &markers,
+            RoadbookOptions {
+                goal_seconds: 40.0 * 3600.0,
+                start_clock_min: Some(480.0),
+                model: PacingModel::Even,
+            },
+        );
+        let cutoff = rb.legs[1].cutoff.expect("cutoff present");
+        assert_eq!(cutoff.limit_elapsed_s, 108_000); // 30h, not 21600 (6h)
     }
 
     #[test]
