@@ -182,7 +182,7 @@ Byte-identical across `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` (+ t
 - **pgtap (`apps/backend/supabase/tests/`):**
   - `race_listings_rls_test.sql` — anon reads listings; a user can submit (forced `is_verified=false`); cannot edit a verified listing; cannot forge `is_verified`.
   - `race_listing_link_test.sql` — `runs.race_listing_id` FK + the `public_runs` projection still strips the owner-only race metadata.
-- **Deno (next to the EF):** `race-results-import/lib.test.ts` — RunSignUp JSON mapping, field caps, `external_id` shape, fail-closed on missing key (the EF returns 503).
+- **Deno (next to the EF):** `race-results-import/lib.test.ts` — RunSignUp JSON mapping, field caps, `external_id` shape, fail-closed on missing key (the EF returns 503), and the issue #360 athlete-scoping gates (`runSignUpScopeGate` rejects an unscoped request `400 runsignup_athlete_id_required`; `matchResultGate` rejects an ambiguous enrich `400 ambiguous_match`; `filterResultsByBib` narrows a field to one bib).
 - **node:test (web pure):** `apps/web/src/lib/integrations/race_match.test.ts` (≥14).
 - **Flutter (`apps/mobile_android/test/` + iOS twin):** `race_match_test.dart` (parity-matched ≥14); `races_screen_test.dart` widget test (search renders, near-me gated); a `run_detail_screen_test.dart` assertion for the auto-match prompt + matched-result render. **Bake in the mobile-test gotchas**: store I/O needs `tester.runAsync`, avoid `pumpAndSettle` on map/cursor animations.
 
