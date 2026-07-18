@@ -9,15 +9,19 @@ import {
   extractChronoTrackResults,
   extractRunSignUpResults,
   extractUltraSignUpResults,
+  filterResultsByBib,
   mapChronoTrackResult,
   mapRunSignUpResult,
   mapUltraSignUpResult,
+  type MappedRaceRun,
+  matchResultGate,
   MAX_FIELD_LEN,
   MAX_RESULTS_ROWS,
   parseClockToSeconds,
   parseRaceResultRow,
   raceExternalId,
   runSignUpResultsUrl,
+  runSignUpScopeGate,
   ultraSignUpResultsUrl,
 } from './lib.ts';
 import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
@@ -399,4 +403,76 @@ Deno.test('started_at known limit at UTC+14 (Samoa DST)', () => {
   // actual behaviour so a future "improve this" attempt has a baseline.
   const run = mapRunSignUpResult({ bib_num: '1', chip_time: '1:00:00' }, OPTS);
   assertEquals(localDateAt(run!.started_at, 14), '2025-09-22');
+});
+
+// ── Athlete-scoping guard (issue #360) ───────────────────────────────────────
+
+Deno.test('runSignUpScopeGate rejects an unscoped request 400 runsignup_athlete_id_required', () => {
+  // No user id and no bib — the fetch would return the whole finisher field.
+  assertEquals(runSignUpScopeGate({}), {
+    ok: false,
+    status: 400,
+    error: 'runsignup_athlete_id_required',
+  });
+  // Blank / whitespace-only values are not a scope.
+  assertEquals(runSignUpScopeGate({ runSignUpUserId: '', bib: '  ' }).ok, false);
+});
+
+Deno.test('runSignUpScopeGate accepts a request scoped by user id or bib', () => {
+  assertEquals(runSignUpScopeGate({ runSignUpUserId: 'rs-42' }).ok, true);
+  assertEquals(runSignUpScopeGate({ bib: '1234' }).ok, true);
+  assertEquals(runSignUpScopeGate({ runSignUpUserId: 'rs-42', bib: '1234' }).ok, true);
+});
+
+Deno.test('matchResultGate rejects an ambiguous enrich 400 ambiguous_match', () => {
+  // 0 or >1 mapped results can't be merged onto the caller's one run.
+  assertEquals(matchResultGate(0), { ok: false, status: 400, error: 'ambiguous_match' });
+  assertEquals(matchResultGate(2), { ok: false, status: 400, error: 'ambiguous_match' });
+  assertEquals(matchResultGate(150), { ok: false, status: 400, error: 'ambiguous_match' });
+});
+
+Deno.test('matchResultGate accepts exactly one mapped result', () => {
+  assertEquals(matchResultGate(1), { ok: true });
+});
+
+Deno.test('filterResultsByBib narrows a mapped field to the requested bib', () => {
+  const field: MappedRaceRun[] = [
+    mapRunSignUpResult({ bib_num: '1', chip_time: '20:00' }, OPTS)!,
+    mapRunSignUpResult({ bib_num: '1234', chip_time: '1:47:23' }, OPTS)!,
+    mapRunSignUpResult({ bib_num: '9', chip_time: '25:00' }, OPTS)!,
+  ];
+  const one = filterResultsByBib(field, '1234');
+  assertEquals(one.length, 1);
+  assertEquals(one[0].metadata.bib, '1234');
+  // A trimmed bib still matches the capField-normalised stored value.
+  assertEquals(filterResultsByBib(field, ' 1234 ').length, 1);
+  // No match → empty (the standalone insert then imports nothing, the match
+  // path then rejects ambiguous_match on length 0).
+  assertEquals(filterResultsByBib(field, 'nope').length, 0);
+  // A blank bib is a no-op (user-id narrowing already applied upstream).
+  assertEquals(filterResultsByBib(field, '').length, 3);
+});
+
+// End-to-end shape the EF enforces for the RunSignUp leg (issue #360): a
+// full field of finishers, unscoped, is rejected before any insert; scoped to a
+// bib it narrows to exactly one; that one result clears the enrich gate.
+Deno.test('EF gate flow: unscoped rejected, bib-scoped enriches exactly one', () => {
+  const field: MappedRaceRun[] = [
+    mapRunSignUpResult({ bib_num: '1', chip_time: '18:00' }, OPTS)!, // the winner
+    mapRunSignUpResult({ bib_num: '77', chip_time: '55:10' }, OPTS)!, // the caller
+    mapRunSignUpResult({ bib_num: '9', chip_time: '25:00' }, OPTS)!,
+  ];
+  // 1. Standalone import with no scope → rejected, nothing mapped/inserted.
+  assertEquals(runSignUpScopeGate({}).error, 'runsignup_athlete_id_required');
+  // 2. Match import with no scope → same pre-fetch rejection.
+  assertEquals(runSignUpScopeGate({ bib: '' }).ok, false);
+  // 3. Scoped by the caller's bib → mapped narrows to one, enrich gate passes.
+  assertEquals(runSignUpScopeGate({ bib: '77' }).ok, true);
+  const narrowed = filterResultsByBib(field, '77');
+  assertEquals(narrowed.length, 1);
+  assertEquals(narrowed[0].metadata.bib, '77');
+  assertEquals(matchResultGate(narrowed.length).ok, true);
+  // 4. Scoped, but the whole field slips through unfiltered → enrich rejected
+  //    rather than stamping mapped[0] (the winner) onto the caller's run.
+  assertEquals(matchResultGate(field.length).error, 'ambiguous_match');
 });
