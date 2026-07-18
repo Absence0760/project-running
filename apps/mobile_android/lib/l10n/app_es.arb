@@ -3084,6 +3084,7 @@
   "racesAgeGroupPlace": "Puesto por categoría",
   "racesAgeGroup": "Categoría de edad",
   "racesBib": "Dorsal",
+  "racesRunSignUpBibHint": "Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.",
   "racesPasteResultHint": "Introduce los datos de tu llegada desde la página de resultados de la carrera.",
   "racesSave": "Guardar",
   "racesCancel": "Cancelar",

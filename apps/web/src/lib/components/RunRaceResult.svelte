@@ -26,6 +26,11 @@
 	let candidate = $state<RaceListingResult | null>(null);
 	let loading = $state(true);
 
+	// RunSignUp requires a bib to scope the pull to this runner's own result
+	// (issue #360 — an unscoped fetch would enrich the run with a stranger's
+	// time from the finisher field).
+	let matchBib = $state('');
+
 	// Manual paste fallback (a candidate with no provider auto-pull).
 	let pasting = $state(false);
 	let pasteBib = $state('');
@@ -100,6 +105,7 @@
 				provider,
 				listingId: candidate.id,
 				matchRunId: runId,
+				bib: provider === 'runsignup' ? matchBib.trim() || undefined : undefined,
 				result:
 					provider === 'paste'
 						? {
@@ -113,6 +119,7 @@
 			showToast(m('races.imported'), 'success');
 			candidate = null;
 			pasting = false;
+			matchBib = '';
 			await load();
 		} catch (e) {
 			if ((e as Error).message === 'RUNSIGNUP_UNAVAILABLE') {
@@ -129,7 +136,10 @@
 	function dismiss() {
 		candidate = null;
 		pasting = false;
+		matchBib = '';
 	}
+
+	const isRunSignUpCandidate = $derived(candidate?.provider === 'runsignup');
 
 	onMount(load);
 </script>
@@ -212,6 +222,13 @@
 					</div>
 				</form>
 			{:else}
+				{#if isRunSignUpCandidate}
+					<label class="match-bib">
+						<span>{m('races.bib')}</span>
+						<input type="text" bind:value={matchBib} data-testid="match-runsignup-bib" />
+					</label>
+					<p class="match-hint">{m('races.runSignUpBibHint')}</p>
+				{/if}
 				<div class="match-actions">
 					<button type="button" class="btn btn-outline btn-sm" onclick={dismiss} data-testid="match-dismiss">
 						{m('races.matchDismiss')}
@@ -219,8 +236,8 @@
 					<button
 						type="button"
 						class="btn btn-primary btn-sm"
-						disabled={busy}
-						onclick={() => confirmMatch(candidate?.provider === 'runsignup' ? 'runsignup' : 'paste')}
+						disabled={busy || (isRunSignUpCandidate && !matchBib.trim())}
+						onclick={() => confirmMatch(isRunSignUpCandidate ? 'runsignup' : 'paste')}
 						data-testid="match-confirm"
 					>
 						{m('races.matchConfirm')}
@@ -252,6 +269,31 @@
 	}
 	.match-text {
 		margin: 0 0 var(--space-sm);
+	}
+	.match-bib {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		margin: 0 0 var(--space-sm);
+	}
+	.match-bib span {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-tertiary);
+	}
+	.match-bib input {
+		padding: 0.5rem 0.7rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+	.match-hint {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.85rem;
+		color: var(--color-text-muted, #666);
 	}
 	.match-actions {
 		display: flex;
