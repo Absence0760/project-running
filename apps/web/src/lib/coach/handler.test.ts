@@ -23,6 +23,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { handleCoach, supabaseErrorFields } from './handler';
 import type { CoachConfig } from './types';
 
@@ -256,6 +258,113 @@ test('returns 400 when body.messages is invalid (missing, wrong shape)', async (
 		assert.equal(status, 400, `expected 400 for ${JSON.stringify(bad)}`);
 		assert.equal(body.error, 'invalid messages');
 	}
+});
+
+// ─────────── regenerate/edit anchor-miss (fail-closed 409) ───────────
+
+/// A chainable Supabase-query-builder stub. Every filter/modifier method
+/// returns the builder; the builder is thenable (so a bare `await` on the
+/// chain resolves) and `.maybeSingle()` / `.single()` resolve too. Insert /
+/// delete calls are recorded on `calls` so a test can assert nothing was
+/// written. `coach_messages.maybeSingle()` returns `{ data: null }` — the
+/// anchor-miss the fail-closed path must catch.
+function makeSupabaseStub(calls: { inserts: string[]; deletes: string[] }) {
+	function builder(table: string): Record<string, unknown> {
+		const result = { data: null as unknown, error: null };
+		const b: Record<string, unknown> = {
+			select: () => b,
+			eq: () => b,
+			is: () => b,
+			gte: () => b,
+			lte: () => b,
+			in: () => b,
+			order: () => b,
+			limit: () => b,
+			insert: () => {
+				calls.inserts.push(table);
+				return b;
+			},
+			delete: () => {
+				calls.deletes.push(table);
+				return b;
+			},
+			maybeSingle: async () => result,
+			single: async () => ({ data: { id: 'new-row-id' }, error: null }),
+			then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+				Promise.resolve(result).then(resolve, reject),
+		};
+		return b;
+	}
+	return {
+		auth: {
+			getUser: async () => ({ data: { user: { id: 'user-1' } }, error: null }),
+		},
+		rpc: (name: string) => {
+			if (name === 'get_my_profile') {
+				return {
+					maybeSingle: async () => ({
+						data: {
+							coach_consent_at: '2026-01-01T00:00:00Z',
+							display_name: 'Test Runner',
+							preferred_unit: 'km',
+							health_data_consent_at: null,
+						},
+						error: null,
+					}),
+				};
+			}
+			return Promise.resolve({ data: null, error: null });
+		},
+		from: (table: string) => builder(table),
+	} as unknown as SupabaseClient;
+}
+
+test('regenerate with a missing anchor fails closed with 409 and inserts nothing', async () => {
+	// Reason: issue #406. When the regenerate/edit anchor lookup returns no
+	// row (stale id from a race with another tab, or the row is gone), the
+	// old code silently skipped the truncate and still inserted a new user
+	// message + streamed a reply — leaving the un-truncated originals beside
+	// the new turn (a duplicated history, no error surfaced). The handler now
+	// fails closed: a missing anchor returns a 409 BEFORE any insert or
+	// stream, and logs `regenerate_anchor_miss` so the miss is operationally
+	// visible.
+	const calls = { inserts: [] as string[], deletes: [] as string[] };
+	const lines = await captureConsoleError(async () => {
+		const result = await handleCoach(
+			'Bearer fake-token',
+			{
+				messages: [{ role: 'user', content: 'try again' }],
+				mode: 'regenerate',
+				anchor_message_id: 'stale-anchor-id',
+			},
+			{
+				...baseConfig(),
+				// Bypass the paywall so the is_pro / increment_coach_usage RPCs
+				// are skipped — the stub only needs to satisfy auth + consent +
+				// buildContext + the anchor lookup.
+				bypassPaywallEnabled: true,
+				createClient: () => makeSupabaseStub(calls),
+			},
+		);
+		// (a) Fail-closed error, no stream started.
+		assert.equal(result.kind, 'json', 'must NOT start an SSE stream on an anchor miss');
+		const { status, body } = parseJsonResult(result);
+		assert.equal(status, 409, 'stale anchor must fail closed with 409 Conflict');
+		assert.match(String(body.error ?? ''), /out of date|reload/i);
+	});
+
+	// (b) NO new user message was inserted (no partial write).
+	assert.deepEqual(
+		calls.inserts,
+		[],
+		`no coach_messages insert must fire on an anchor miss, got: ${JSON.stringify(calls.inserts)}`,
+	);
+
+	// (c) The miss is logged for operational visibility.
+	assert.ok(
+		lines.some((l) => l.includes('regenerate_anchor_miss')),
+		`expected a "regenerate_anchor_miss" log line, got: ${JSON.stringify(lines)}`,
+	);
 });
 
 test('returns 400 with the canonical jsonError shape (kind + content-type)', async () => {

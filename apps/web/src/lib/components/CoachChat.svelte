@@ -516,6 +516,12 @@
 						: t('coachChat.errorSessionExpired');
 				} else if (res.status === 404) {
 					error = t('coachChat.errorServerEndpoint');
+				} else if (res.status === 409) {
+					// The server refused a regenerate/edit it couldn't
+					// truncate because our view of the thread is stale
+					// (handler.ts fail-closed anchor-miss, issue #406).
+					// Reload so the conversation re-syncs before retrying.
+					error = t('coachChat.errorStaleThread');
 				} else if (res.status === 429) {
 					usedToday = j.used ?? dailyLimit;
 					if (typeof j.tier === 'string') tier = j.tier;

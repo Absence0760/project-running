@@ -97,7 +97,8 @@ export async function handleCoach(
 		return jsonError(400, runsLimitCheck.reason);
 	}
 
-	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
+	const makeClient = config.createClient ?? createClient;
+	const supabase = makeClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
 		global: { headers: { Authorization: `Bearer ${accessToken}` } },
 	});
 
@@ -239,23 +240,36 @@ export async function handleCoach(
 	// this user × plan). RLS scopes the delete to the caller.
 	const mode: CoachMode = body.mode ?? 'send';
 	if ((mode === 'regenerate' || mode === 'edit') && body.anchor_message_id) {
-		const { data: anchor } = await supabase
+		const { data: anchor, error: anchorErr } = await supabase
 			.from('coach_messages')
 			.select('created_at')
 			.eq('id', body.anchor_message_id)
 			.maybeSingle();
-		if (anchor?.created_at) {
-			const delQuery = supabase
-				.from('coach_messages')
-				.delete()
-				.eq('user_id', authUser.id)
-				.is('archived_at', null)
-				.gte('created_at', anchor.created_at);
-			const { error: delErr } = body.plan_id
-				? await delQuery.eq('plan_id', body.plan_id)
-				: await delQuery.is('plan_id', null);
-			if (delErr) console.error('[coach] truncate failed', supabaseErrorFields(delErr));
+		// Fail closed: without the anchor row we can't truncate the thread,
+		// so inserting a new turn + streaming would leave the un-truncated
+		// original messages sitting beside the new ones — a silently
+		// duplicated history (issue #406). A missing anchor means the
+		// client's view is stale (another tab already truncated this thread,
+		// or the row is gone); refuse with a 409 and tell the client to
+		// reload rather than corrupt the thread. This runs BEFORE any user-
+		// message insert or stream, so there is no partial write.
+		if (!anchor?.created_at) {
+			console.error('[coach] regenerate_anchor_miss', {
+				mode,
+				...supabaseErrorFields(anchorErr),
+			});
+			return jsonError(409, 'coach thread is out of date; reload and retry');
 		}
+		const delQuery = supabase
+			.from('coach_messages')
+			.delete()
+			.eq('user_id', authUser.id)
+			.is('archived_at', null)
+			.gte('created_at', anchor.created_at);
+		const { error: delErr } = body.plan_id
+			? await delQuery.eq('plan_id', body.plan_id)
+			: await delQuery.is('plan_id', null);
+		if (delErr) console.error('[coach] truncate failed', supabaseErrorFields(delErr));
 	}
 
 	// Insert the new user message (send + edit modes). Regenerate keeps
@@ -422,7 +436,7 @@ export async function handleCoach(
 				// enforces (coach_messages_content_len_chk) so a long reply
 				// can't be rejected at insert time and lost.
 				const content = accumulated.slice(0, MAX_COACH_ASSISTANT_CONTENT_BYTES);
-				const supabaseService = createClient(
+				const supabaseService = makeClient(
 					config.publicSupabaseUrl,
 					config.supabaseServiceRoleKey,
 					{ auth: { persistSession: false, autoRefreshToken: false } },

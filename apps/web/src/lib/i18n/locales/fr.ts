@@ -128,6 +128,7 @@ export const messages = {
 	"coachChat.errorSignInFirst": "Connecte-toi d'abord.",
 	"coachChat.errorSessionExpired": "Ta session a expiré. Reconnecte-toi.",
 	"coachChat.errorServerEndpoint": "Coach fonctionne comme un point de terminaison serveur. Ce déploiement utilise l'adaptateur statique — passe à un déploiement serveur (Vercel/Node) et définis ANTHROPIC_API_KEY pour activer le chat.",
+	"coachChat.errorStaleThread": "Cette conversation n'est plus à jour. Recharge la page et réessaie.",
 	"coachChat.errorDailyLimit": "Limite quotidienne atteinte ({count, plural, one {# message} other {# messages}}). Reviens demain !",
 	"coachChat.errorGeneric": "Erreur du Coach ({status})",
 	"coachChat.errorTransport": "Impossible de joindre le Coach. Vérifie ta connexion et réessaie.",
