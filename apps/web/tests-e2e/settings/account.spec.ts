@@ -145,10 +145,14 @@ test.describe('/settings/account', () => {
 	// updateUser is called, which is exactly why they're safe to run
 	// against the shared fixture user.
 	test.describe('change password — validation', () => {
+		// The verification-code field is filled so the Save button is
+		// enabled, but both cases still return on the pair check BEFORE any
+		// updateUser — safe against the shared fixture user.
 		test('mismatched entries are rejected', async ({ page }) => {
 			await page.goto('/settings/account');
 			await page.getByLabel('New Password').fill('longenough1');
 			await page.getByLabel('Confirm Password').fill('longenough2');
+			await page.getByLabel('Email verification code').fill('123456');
 			await page.getByRole('button', { name: 'Save Password' }).click();
 
 			await expect(page.getByText('Passwords do not match.')).toBeVisible();
@@ -161,12 +165,81 @@ test.describe('/settings/account', () => {
 			// the wrong thing. Pins the precedence through the UI.
 			await page.getByLabel('New Password').fill('abc');
 			await page.getByLabel('Confirm Password').fill('xyz');
+			await page.getByLabel('Email verification code').fill('123456');
 			await page.getByRole('button', { name: 'Save Password' }).click();
 
 			await expect(
 				page.getByText('Password must be at least 8 characters.')
 			).toBeVisible();
 			await expect(page.getByText('Passwords do not match.')).toHaveCount(0);
+		});
+	});
+
+	// The reauthentication step-up (issue #381): a password change must NOT
+	// proceed off the ambient session — it needs a verification code e-mailed
+	// to the account. Both the reauthenticate GET and the updateUser PUT are
+	// STUBBED so the positive case verifies the request seam without rotating
+	// USER_A's real password out from under every other spec.
+	test.describe('change password — reauthentication step-up', () => {
+		test('FAIL-CLOSED: Save is disabled until a verification code is entered', async ({
+			page
+		}) => {
+			let sawUpdate = false;
+			await page.route('**/auth/v1/user', async (route) => {
+				if (route.request().method() === 'PUT') sawUpdate = true;
+				await route.continue();
+			});
+
+			await page.goto('/settings/account');
+			await page.getByLabel('New Password').fill('longenough1');
+			await page.getByLabel('Confirm Password').fill('longenough1');
+
+			// A valid pair alone is not enough — no code, no change.
+			const save = page.getByRole('button', { name: 'Save Password' });
+			await expect(save).toBeDisabled();
+
+			await page.getByLabel('Email verification code').fill('123456');
+			await expect(save).toBeEnabled();
+			expect(sawUpdate).toBe(false);
+		});
+
+		test('a valid change sends updateUser WITH the emailed nonce', async ({ page }) => {
+			await page.route('**/auth/v1/reauthenticate', async (route) => {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({})
+				});
+			});
+
+			let updateBody: Record<string, unknown> | null = null;
+			await page.route('**/auth/v1/user', async (route) => {
+				if (route.request().method() !== 'PUT') {
+					await route.continue();
+					return;
+				}
+				updateBody = route.request().postDataJSON();
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ id: '00000000-0000-0000-0000-000000000000' })
+				});
+			});
+
+			await page.goto('/settings/account');
+			await page.getByRole('button', { name: 'Email me a code' }).click();
+			await page.getByLabel('New Password').fill('longenough1');
+			await page.getByLabel('Confirm Password').fill('longenough1');
+			await page.getByLabel('Email verification code').fill('654321');
+			await page.getByRole('button', { name: 'Save Password' }).click();
+
+			await expect(
+				page.getByText('Password saved. You can now sign in with your email on any device.')
+			).toBeVisible();
+			// The update carried the reauthentication nonce, not a bare password.
+			expect(updateBody).not.toBeNull();
+			expect(updateBody!.nonce).toBe('654321');
+			expect(updateBody!.password).toBe('longenough1');
 		});
 	});
 

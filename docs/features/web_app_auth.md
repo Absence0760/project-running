@@ -145,6 +145,23 @@ Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the len
 
 On mobile the contract is pinned in `test/auth_gates_test.dart` (17 mirror cases, one per web case) and the wiring in `test/sign_up_screen_test.dart`. Mobile has no e2e tier by design (`docs/testing/testing.md § What's not covered`), so the widget test is the wiring pin.
 
+## Change password — reauthentication step-up (issue #381)
+
+Changing the sign-in password on `/settings/account` is gated on a **reauthentication step-up**, not just the ambient session. Before GoTrue accepts the update, the user must enter a **verification code e-mailed to the account's verified address**:
+
+1. **Email me a code** → `supabase.auth.reauthenticate()` — GoTrue mails a one-time nonce (rendered by the `auth-email` Edge Function's `reauthentication` catalogue key, already wired in all six locales).
+2. The user types the code + new password + confirm → `supabase.auth.updateUser({ password, nonce })`.
+
+The orchestration lives in `lib/core/password_change.ts` (`changePasswordWithReauth` + `requestReauthNonce`), extracted from the `.svelte` page so it is unit-testable. It is **fail-closed**: with no nonce the update is never attempted (`reason: 'nonce_required'`, `updateUser` uncalled), and GoTrue is the authority on nonce validity. The nonce path (rather than a current-password re-verify) is deliberate — it also lets an **OAuth-only account** that has no password set one, and the check can't be skipped by calling the API directly.
+
+**Why this exists.** The handler used to call `updateUser({ password })` straight off the session with no current-password field and no step-up. Any path that obtains a live access token — a copied `localStorage` session from an unlocked device, an XSS-exfiltrated token, a leaked debug token — could permanently seize the account with **zero knowledge of the current password** (OWASP ASVS V2.1.14 / CWE-620). The `password_changed_notification` email is detection-after-the-fact, not prevention.
+
+**Server gate (defence-in-depth).** `apps/backend/supabase/config.toml` sets `[auth.email] secure_password_change = true`, so GoTrue itself rejects a password update without a valid nonce — closing the direct-API-call bypass, not just the UI. **Caveat:** GoTrue exempts sessions created in the **last 24 hours** from the nonce requirement, which is exactly why the web client **always** demands the code regardless of session age. Like `minimum_password_length`, `config.toml` does not reach prod — **set "Secure password change" in the hosted Dashboard → Auth → Providers → Email as a deploy-time step.** This is a **security control**: it warrants Security / CISO review before merge and the dashboard toggle is a pre-deploy checklist item.
+
+`/auth/reset` is correctly exempt — that flow is already gated by the emailed recovery token.
+
+Contract pinned in `lib/core/password_change.test.ts` (fail-closed: no/whitespace nonce → `updateUser` uncalled; a nonce → `updateUser({ password, nonce })`; GoTrue error surfaces).
+
 ## Change email
 
 A signed-in user can migrate their account to a new address from `/settings/account` (issue #245) — the escape hatch for someone who has lost access to their sign-up mailbox and would otherwise have to delete + re-register, losing all history. The email field stays read-only; a **Change email** affordance reveals a new-address input that calls `supabase.auth.updateUser({ email }, { emailRedirectTo: ${origin}/auth/callback })`. This starts GoTrue's **secure email change**: a confirmation link goes to **both** the current and the new address, and `auth.user.email` does not flip until both are followed. Because the SDK writes its returned user back into the session store, the "old address" shown in the pending note is **snapshotted at request time** (`pendingOldEmail`), not read back off the store. The UI validates the new address client-side first (loose `<input type="email">`-shape check, must differ from the current one — the server stays the authority) and, on a successful request, collapses the editor and shows a persistent **confirmation-pending** banner naming both inboxes.
