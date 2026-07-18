@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/local_run_store.dart';
+import '../lib/social_service.dart';
 import '../lib/sync_service.dart';
 
 class _FakeApiClient extends ApiClient {
@@ -54,6 +55,16 @@ class _FakeApiClient extends ApiClient {
       throw Exception('rls denied $runId');
     }
     deletedIds.add(runId);
+  }
+}
+
+class _FakeSocialService extends SocialService {
+  final List<List<DateTime>> recomputeCalls = [];
+
+  @override
+  Future<void> recomputeChallengesForRuns(
+      Iterable<DateTime> runStartedAts) async {
+    recomputeCalls.add(runStartedAts.toList());
   }
 }
 
@@ -145,6 +156,37 @@ void main() {
       expect(api.saveBatchCallCount, 1);
       expect(api.savedBatchIds.first.toSet(), {'r-1', 'r-2'});
       expect(store.unsyncedCount, 0);
+    });
+
+    test(
+        'fires the opportunistic challenge recompute for the just-synced runs',
+        () async {
+      await store.save(makeRun('r-1'));
+      await store.save(makeRun('r-2'));
+      final api = _FakeApiClient();
+      final social = _FakeSocialService();
+      final svc = SyncService(
+          apiClient: api, runStore: store, socialService: social);
+
+      await svc.debugTrySync('test');
+
+      expect(social.recomputeCalls.length, 1);
+      expect(social.recomputeCalls.first, [
+        DateTime(2026, 4, 10, 8),
+        DateTime(2026, 4, 10, 8),
+      ]);
+    });
+
+    test('does not fire the challenge recompute when the push fails', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final social = _FakeSocialService();
+      final svc = SyncService(
+          apiClient: api, runStore: store, socialService: social);
+
+      await svc.debugTrySync('test');
+
+      expect(social.recomputeCalls, isEmpty);
     });
 
     test('saveRunsBatch failure leaves runs unsynced (failure swallowed)',

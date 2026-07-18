@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'challenge_progress.dart';
 import 'event_category.dart';
 import 'event_gym_template.dart';
 import 'geocoding.dart';
@@ -1891,6 +1892,42 @@ class SocialService extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('recomputeChallengeCompletion failed: $e');
+    }
+  }
+
+  /// Opportunistic completion recompute after a batch of runs syncs to the
+  /// server: fan out [recomputeChallengeCompletion] over the runner's joined
+  /// challenges whose window covers any of the just-synced runs' `started_at`.
+  /// Mirrors web's `recomputeChallengesForRun`. Without it the daily cron sweep
+  /// is the ONLY path that awards a challenge badge / stamps completed_at /
+  /// sends the notification, so completion lags up to ~24h and a goal crossed
+  /// by a late import past the sweep's tail is never awarded. Best-effort +
+  /// swallow-to-debug; the RPC is idempotent (the challenge_badges unique
+  /// constraint), so a redundant call from client + cron is safe.
+  Future<void> recomputeChallengesForRuns(
+      Iterable<DateTime> runStartedAts) async {
+    if (_uid == null) return;
+    try {
+      final active = await myActiveChallenges();
+      final candidates = active
+          .map((c) => RecomputeCandidate(
+                id: c.id,
+                goalValue: c.goalValue,
+                startMs: c.startsAt.millisecondsSinceEpoch,
+                endMs: c.endsAt.millisecondsSinceEpoch,
+                completed: c.completedAt != null,
+              ))
+          .toList();
+      final ids = <String>{};
+      for (final startedAt in runStartedAts) {
+        ids.addAll(challengesToRecomputeForRun(
+            candidates, startedAt.millisecondsSinceEpoch));
+      }
+      for (final id in ids) {
+        await recomputeChallengeCompletion(id);
+      }
+    } catch (e) {
+      debugPrint('recomputeChallengesForRuns failed: $e');
     }
   }
 }

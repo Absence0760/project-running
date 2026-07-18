@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 
 import 'local_route_store.dart';
 import 'local_run_store.dart';
+import 'social_service.dart';
 
 /// Pushes unsynced runs to the backend whenever:
 ///
@@ -32,6 +33,11 @@ class SyncService with WidgetsBindingObserver {
   /// builder). When null, route drain is a no-op so older callers
   /// that don't wire a route store don't blow up.
   final LocalRouteStore? routeStore;
+  /// Optional — when provided, a successful run push fires an opportunistic
+  /// challenge-completion recompute for the just-synced runs (the offline-first
+  /// mobile analogue of web's on-save fan-out). When null, the daily cron sweep
+  /// remains the only completion path.
+  final SocialService? socialService;
 
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _syncing = false;
@@ -59,6 +65,7 @@ class SyncService with WidgetsBindingObserver {
     required this.apiClient,
     required this.runStore,
     this.routeStore,
+    this.socialService,
   });
 
   void start() {
@@ -205,15 +212,18 @@ class SyncService with WidgetsBindingObserver {
           // corrupted run no longer blocks the rest of the queue.
           // (The full batch-throw path stays for catastrophic
           // failures like an auth error — we land in the catch below.)
-          final succeededIds = unsynced
-              .where((r) => !failed.contains(r.id))
-              .map((r) => r.id);
-          await runStore.markManySynced(succeededIds);
+          final succeeded =
+              unsynced.where((r) => !failed.contains(r.id)).toList();
+          await runStore.markManySynced(succeeded.map((r) => r.id));
           debugPrint(
             'SyncService: pushed ${unsynced.length - failed.length} '
             '(skipped ${failed.length} on track-upload failure)',
           );
           if (failed.isNotEmpty) anyFailure = true;
+          if (succeeded.isNotEmpty) {
+            await socialService
+                ?.recomputeChallengesForRuns(succeeded.map((r) => r.startedAt));
+          }
         } catch (e) {
           debugPrint('SyncService: batch push failed ($reason): $e');
           anyFailure = true;
