@@ -4480,6 +4480,7 @@ export const en = {
 	"badges.share": "Share badge",
 	"badges.shareLinkCopied": "Badge link copied to clipboard",
 	"badges.toggleError": "Couldn't change visibility. Try again.",
+	"badges.loadFailed": "Couldn't load achievements.",
 	"badges.feedEarned": "{name} earned the {badge} badge",
 	"badges.aRunner": "A runner",
 	"badges.notif": "You earned a new badge: {badge}",

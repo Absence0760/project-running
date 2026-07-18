@@ -4456,6 +4456,7 @@ export const messages = {
 	"badges.share": "バッジを共有",
 	"badges.shareLinkCopied": "バッジのリンクをクリップボードにコピーしました",
 	"badges.toggleError": "公開設定を変更できませんでした。もう一度お試しください。",
+	"badges.loadFailed": "実績を読み込めませんでした。",
 	"badges.feedEarned": "{name} さんが {badge} バッジを獲得しました",
 	"badges.aRunner": "ランナー",
 	"badges.notif": "新しいバッジを獲得しました：{badge}",
