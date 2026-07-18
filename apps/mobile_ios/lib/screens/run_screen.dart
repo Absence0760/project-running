@@ -80,6 +80,16 @@ bool shouldDimRecordingMap({
 }) =>
     !isCountdown && keepScreenOn && dimWhileRecording;
 
+/// Broadcasts whether a run is actively recording so the nav shell
+/// (`home_screen.dart`) can lock the bottom-nav swipe gesture mid-run — an
+/// accidental swipe off the recording surface is disorienting and risky
+/// (issue #490). Deliberate bottom-nav taps still navigate (they drive the
+/// page controller directly, which a locked swipe physics doesn't block);
+/// only the drag gesture is suppressed. Defaults to false and is reset to
+/// false on tear-down, so a missed update leaves the nav swipeable
+/// (fail-open — the lock is a safety nicety, never a core guarantee).
+final ValueNotifier<bool> runRecordingActive = ValueNotifier<bool>(false);
+
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
 /// auto-pause, countdown, and optional route following.
 class RunScreen extends StatefulWidget {
@@ -144,6 +154,16 @@ enum _ResumeChoice { resume, finish, discard }
 
 class _RunScreenState extends State<RunScreen> {
   _ScreenState _state = _ScreenState.idle;
+
+  /// Single write path for [_state] so the cross-widget [runRecordingActive]
+  /// signal can't drift from the screen's real state. A manual mid-session
+  /// pause keeps [_state] at `recording` (it's tracked via `_manualPaused`),
+  /// so the swipe lock stays on through a pause — the run isn't finished.
+  void _setScreenState(_ScreenState next) {
+    _state = next;
+    runRecordingActive.value = next == _ScreenState.recording;
+  }
+
   RunRecorder? _recorder;
   StreamSubscription<RunSnapshot>? _snapshotSub;
 
@@ -985,7 +1005,7 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
     setState(() {
-      _state = _ScreenState.countdown;
+      _setScreenState(_ScreenState.countdown);
       _countdownValue = 3;
     });
 
@@ -1371,7 +1391,7 @@ class _RunScreenState extends State<RunScreen> {
       _ttsCue('announceStart', () => widget.audioCues.announceStart());
     }
 
-    setState(() => _state = _ScreenState.recording);
+    setState(() => _setScreenState(_ScreenState.recording));
     _announceA11yState(_l10n.runA11yStarted);
   }
 
@@ -1697,7 +1717,7 @@ class _RunScreenState extends State<RunScreen> {
 
     _attachRecordingSideEffects();
 
-    setState(() => _state = _ScreenState.recording);
+    setState(() => _setScreenState(_ScreenState.recording));
     _announceA11yState(_l10n.runA11yStarted);
     _showTopBanner(_l10n.runResumedBanner,
         duration: const Duration(seconds: 3));
@@ -2560,7 +2580,7 @@ class _RunScreenState extends State<RunScreen> {
     if (!mounted) return;
     setState(() {
       _finishedRun = run;
-      _state = _ScreenState.finished;
+      _setScreenState(_ScreenState.finished);
       if (!localSaved) {
         _syncError = _l10n.runSaveFailedRelaunch;
       }
@@ -2712,7 +2732,7 @@ class _RunScreenState extends State<RunScreen> {
     _lastNotificationAt = null;
     WakelockPlus.disable();
     setState(() {
-      _state = _ScreenState.idle;
+      _setScreenState(_ScreenState.idle);
       _elapsed = Duration.zero;
       _distanceMetres = 0;
       _pace = null;
@@ -2739,6 +2759,10 @@ class _RunScreenState extends State<RunScreen> {
 
   @override
   void dispose() {
+    // A disposed recording surface is no longer recording, so release the
+    // nav-shell swipe lock (issue #490) — leaving it latched would trap the
+    // shell in non-swipeable state.
+    runRecordingActive.value = false;
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
