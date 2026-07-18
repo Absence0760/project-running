@@ -42,6 +42,7 @@ export const GRANDFATHER_CUTOFF = '20270422';
 export const GUARDED_TABLES = new Set([
   'runs',
   'notifications',
+  'jobs',
   'live_run_pings',
   'race_pings',
   'segment_efforts',
