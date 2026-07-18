@@ -2539,10 +2539,20 @@ export async function leaveClub(clubId: string): Promise<void> {
 	if (error) throw error;
 }
 
-export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
+/// One page of a club roster / event attendee list. A club with hundreds
+/// of members must be reachable via load-more rather than fetched whole on
+/// every view — see `fetchFollowers` / `FOLLOW_PAGE_SIZE` for the same shape.
+export const ROSTER_PAGE_SIZE = 50;
+
+export async function fetchClubMembers(
+	clubId: string,
+	opts?: { limit?: number; offset?: number }
+): Promise<(ClubMember & {
 	display_name: string | null;
 	avatar_url: string | null;
 })[]> {
+	const limit = opts?.limit ?? ROSTER_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: members } = await supabase
 		.from(TABLES.club_members)
 		// Enumerate columns rather than `*`: on a public club anyone can
@@ -2551,7 +2561,12 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 		// public roster data.
 		.select('club_id, user_id, role, status, joined_at')
 		.eq('club_id', clubId)
-		.order('joined_at', { ascending: true });
+		.order('joined_at', { ascending: true })
+		// Secondary key so offset pages are stable when two members share a
+		// joined_at timestamp — without it a row on a page boundary can be
+		// duplicated or skipped on load-more.
+		.order('user_id', { ascending: true })
+		.range(offset, offset + limit - 1);
 	if (!members) return [];
 	const userIds = (members as ClubMember[]).map((m) => m.user_id);
 	const byId = await fetchProfilesByIds(userIds);
@@ -3126,17 +3141,24 @@ export async function markAttendance(
 
 export async function fetchEventAttendees(
 	eventId: string,
-	instanceStart: string
+	instanceStart: string,
+	opts?: { limit?: number; offset?: number }
 ): Promise<(EventAttendee & {
 	display_name: string | null;
 	avatar_url: string | null;
 })[]> {
+	const limit = opts?.limit ?? ROSTER_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: attendees } = await supabase
 		.from(TABLES.event_attendees)
 		.select('*')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
-		.order('joined_at', { ascending: true });
+		.order('joined_at', { ascending: true })
+		// Secondary key so offset pages are stable when two RSVPs share a
+		// joined_at timestamp (see fetchClubMembers).
+		.order('user_id', { ascending: true })
+		.range(offset, offset + limit - 1);
 	if (!attendees) return [];
 	const userIds = (attendees as EventAttendee[]).map((a) => a.user_id);
 	const byId = await fetchProfilesByIds(userIds);
@@ -3145,6 +3167,48 @@ export async function fetchEventAttendees(
 		display_name: byId.get(a.user_id)?.display_name ?? null,
 		avatar_url: byId.get(a.user_id)?.avatar_url ?? null
 	}));
+}
+
+/// Exact per-status RSVP tallies + the viewer's own status for an event
+/// instance, independent of the paginated `fetchEventAttendees` roster.
+/// The going / maybe / declined / waitlisted counts drive the capacity +
+/// waitlist math and the RSVP pills, which must stay exact even when the
+/// displayed roster is only its first page — so this reads the status
+/// column alone (no profile join) rather than the full member records.
+export interface EventRsvpSummary {
+	going: number;
+	maybe: number;
+	declined: number;
+	waitlisted: number;
+	viewerStatus: RsvpStatus | null;
+}
+
+export async function fetchEventRsvpSummary(
+	eventId: string,
+	instanceStart: string
+): Promise<EventRsvpSummary> {
+	const viewerId = auth.user?.id ?? null;
+	const { data } = await supabase
+		.from(TABLES.event_attendees)
+		.select('user_id, status')
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart);
+	const summary: EventRsvpSummary = {
+		going: 0,
+		maybe: 0,
+		declined: 0,
+		waitlisted: 0,
+		viewerStatus: null
+	};
+	for (const row of data ?? []) {
+		const status = row.status as RsvpStatus;
+		if (status === 'going') summary.going += 1;
+		else if (status === 'maybe') summary.maybe += 1;
+		else if (status === 'declined') summary.declined += 1;
+		else if (status === 'waitlisted') summary.waitlisted += 1;
+		if (viewerId && row.user_id === viewerId) summary.viewerStatus = status;
+	}
+	return summary;
 }
 
 // --- Event results (leaderboard) ---
