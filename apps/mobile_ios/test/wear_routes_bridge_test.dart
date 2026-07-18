@@ -1112,30 +1112,42 @@ void main() {
               'waiting for the debounce window');
     });
 
-    test('5 rapid notifications within 50ms coalesce into ONE push', () async {
-      // Real-time wait approach: short window (60ms) so the
-      // tests run fast (~250ms total) and reliable — FakeAsync
-      // doesn't pump platform-channel mocks.
+    test('5 rapid notifications within the window coalesce into ONE push',
+        () async {
+      // The burst must be SYNCHRONOUS by construction (see the sibling
+      // test below): a real `await store.save(...)` between the "rapid"
+      // saves puts a disk write inside the burst, and a runner stall
+      // can cross the window and fire a push mid-burst (CI run
+      // 29628162205). Seed the routes on disk FIRST, then drive the
+      // bridge with back-to-back synchronous notifications that involve
+      // no I/O at all, so nothing can cross the window mid-burst.
       WearRoutesBridge.kPushDebounceWindow =
-          const Duration(milliseconds: 60);
+          const Duration(milliseconds: 250);
+      // 4 of the 5 routes exist before attach — the burst must change
+      // the payload exactly once, or the bridge's diff cache would
+      // (correctly) suppress a push identical to the attach push.
+      for (var i = 0; i < 4; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
       channel.pushCalls.clear();
 
-      // Fire 5 saves spaced 5ms apart. Total span: ~25ms, well
-      // under the 60ms window. Each save restarts the timer.
-      for (var i = 0; i < 5; i++) {
-        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+      // The one disk write opens the burst; the other four
+      // notifications are synchronous re-notifies — no I/O, no spacing.
+      await store.save(_makeRoute(id: 'r-4', isStarred: true));
+      for (var i = 0; i < 4; i++) {
+        // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+        store.notifyListeners();
       }
-      // The bursts kept the timer reset; no push has fired yet.
+      // The burst kept the timer resetting; no push has fired yet.
       expect(channel.pushCalls, isEmpty,
           reason: 'saves within the window must NOT have fired '
               'a push yet — timer keeps resetting');
 
       // Wait past the window.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       expect(channel.pushCalls, hasLength(1),
           reason: 'after the window expires with no new '
               'notifications, exactly ONE coalesced push fires');
