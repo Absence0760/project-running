@@ -1197,8 +1197,13 @@ create table jobs (
   constraint jobs_max_attempts_pos check (max_attempts > 0)
 );
 
-create index jobs_queued
-  on jobs (scheduled_at, kind)
+-- Matches claim_next_job's `order by scheduled_at, id`: the `id`
+-- tie-break resolves same-scheduled_at bursts from the index with no
+-- in-memory sort. (Was `(scheduled_at, kind)`; `kind` bought nothing —
+-- the worker always claims with an empty kind_filter. Migration
+-- 20270423_001.)
+create index jobs_queued_v2
+  on jobs (scheduled_at, id)
   where status = 'queued';
 
 create index jobs_running
@@ -1215,7 +1220,7 @@ create unique index jobs_dedupe_map_match
 - **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
 - **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. PUBLIC EXECUTE is revoked; only `service_role` is granted. See [§ Database functions](#database-functions-rpcs).
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
-- **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
+- **Partial indexes**: the `jobs_queued_v2` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
 #### `live_run_pings`
 
