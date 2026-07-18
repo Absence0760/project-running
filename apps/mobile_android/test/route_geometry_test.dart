@@ -370,5 +370,22 @@ void main() {
       expect(d, greaterThanOrEqualTo(0));
       expect(d, lessThanOrEqualTo(total + 1e-6));
     });
+
+    test('null on a non-finite point (not 0)', () {
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      final finite = distWp(100);
+      expect(
+        distanceAlongRoute((lat: finite.lat, lng: finite.lng), wps),
+        isNotNull,
+      );
+      expect(
+        distanceAlongRoute((lat: double.nan, lng: 0.0), wps),
+        isNull,
+      );
+      expect(
+        distanceAlongRoute((lat: 0.0, lng: double.infinity), wps),
+        isNull,
+      );
+    });
   });
 }

@@ -74,6 +74,7 @@ export function distanceAlongRoute(
 	waypoints: RouteWaypoint[],
 ): number | null {
 	if (waypoints.length < 2) return null;
+	if (!Number.isFinite(point.lng) || !Number.isFinite(point.lat)) return null;
 	const deg = Math.PI / 180;
 	const rPerDeg = 6_371_000 * deg;
 	let seen = 0;
