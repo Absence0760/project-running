@@ -116,7 +116,7 @@ Granted to `anon` + `authenticated`. Every public-runs reader (`fetchPublicRun`,
 
 **Views grant SELECT only — never rely on the default privileges.** Supabase's default privileges hand anon/authenticated FULL table privileges on every object created in the `public` schema. For tables RLS gates the rows; for VIEWS it silently made every simple (auto-updatable) redacted view a **write path that bypasses RLS** — a write through a view is authorised as the view owner (`postgres`), so an anon `POST /rest/v1/public_race_listings` inserted a base-table row despite the table's authenticated-only INSERT policy. `20270324_001` reset every public-schema view to exactly its documented read audience, and `view_write_privileges_test.sql` pins the invariant with an information_schema catch-all so a future view created without the `revoke all … then grant select` reset fails CI. When you add a view: `revoke all on <view> from public, anon, authenticated;` then `grant select` to the intended audience.
 
-**Base-table grants are now version-controlled too — don't rely on the default privileges for them either.** The flip side of the view lesson bit prod on 2026-07-13: onboarding failed with `42501 permission denied for table user_profiles` / `user_settings` because the `authenticated` role had lost its base `insert/update/delete` (and some table `SELECT`) grants — grants that had **only ever existed via Supabase's implicit default privileges**, never a migration, so nothing restored them once prod drifted. `20270408_001` makes the whole intended matrix explicit + idempotent: one `grant` per (table, grantee) for `select/insert/update/delete` across every public base table, plus the column carve-outs, with `app_quota` + `deletion_audit_log` left service_role-only. It's additive (never tightens, never grants table-SELECT on a column-locked table) so it's a no-op on a healthy DB and safe to replay. When you add a base table, add its grants to a migration — don't assume the default privileges will carry them to every environment. Rationale in [decisions.md §232](../architecture/decisions.md).
+**Base-table grants are now version-controlled too — don't rely on the default privileges for them either.** The flip side of the view lesson bit prod on 2026-07-13: onboarding failed with `42501 permission denied for table user_profiles` / `user_settings` because the `authenticated` role had lost its base `insert/update/delete` (and some table `SELECT`) grants — grants that had **only ever existed via Supabase's implicit default privileges**, never a migration, so nothing restored them once prod drifted. `20270408_001` makes the whole intended matrix explicit + idempotent: one `grant` per (table, grantee) for `select/insert/update/delete` across every public base table, plus the column carve-outs, with `app_quota` + `deletion_audit_log` left service_role-only. It's additive (never tightens, never grants table-SELECT on a column-locked table) so it's a no-op on a healthy DB and safe to replay. When you add a base table, add its grants to a migration — don't assume the default privileges will carry them to every environment. Rationale in [decisions.md §232](../architecture/decisions.md). This broad DML surface is inert only because every granted table's RLS policies are `(select auth.uid())`-scoped; `rls_grant_without_policy_test.sql` is the defence-in-depth backstop that fails CI the moment a permissive policy with a trivially-true (literal `true`) `USING` / `WITH CHECK` lands on a DML-granted table — the future `create policy … to anon using (true)` that would turn the standing grant live and make the table anon-writable.
 
 ---
 
@@ -153,6 +153,10 @@ create index routes_public_featured_sort on routes (featured_at desc nulls last,
   where is_public = true and shadow_hidden = false;
 create index routes_public_newest_sort on routes (created_at desc nulls last)
   where is_public = true and shadow_hidden = false;
+-- 20270423_001 dropped the superseded routes_featured index
+-- (featured_at desc nulls last where is_featured and is_public): the featured
+-- branch above orders ALL public rows and is served by routes_public_featured_sort,
+-- so the old is_featured=true-only partial index served nothing (issue #407).
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
@@ -1197,8 +1201,13 @@ create table jobs (
   constraint jobs_max_attempts_pos check (max_attempts > 0)
 );
 
-create index jobs_queued
-  on jobs (scheduled_at, kind)
+-- Matches claim_next_job's `order by scheduled_at, id`: the `id`
+-- tie-break resolves same-scheduled_at bursts from the index with no
+-- in-memory sort. (Was `(scheduled_at, kind)`; `kind` bought nothing —
+-- the worker always claims with an empty kind_filter. Migration
+-- 20270423_001.)
+create index jobs_queued_v2
+  on jobs (scheduled_at, id)
   where status = 'queued';
 
 create index jobs_running
@@ -1215,7 +1224,7 @@ create unique index jobs_dedupe_map_match
 - **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
 - **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. PUBLIC EXECUTE is revoked; only `service_role` is granted. See [§ Database functions](#database-functions-rpcs).
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
-- **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
+- **Partial indexes**: the `jobs_queued_v2` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
 #### `live_run_pings`
 

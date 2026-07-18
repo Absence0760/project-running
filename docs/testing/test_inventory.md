@@ -27,7 +27,7 @@ Pure-function tests for two helpers in `lib/run_stats.dart`:
 - Slow → fast → slow run → picks the fast middle 5 km
 - Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
-### `packages/run_recorder/test/run_recorder_test.dart` — 40 tests
+### `packages/run_recorder/test/run_recorder_test.dart` — 49 tests
 
 The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hooks (see below) to bypass the real geolocator stream and inject synthetic `Position` objects directly into `_onPosition`.
 
@@ -44,7 +44,8 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 - Movement threshold (default 3 m) rejects sub-jitter deltas
 - Real movement above threshold accumulates distance correctly
 - Speed clamp drops implausible-speed fixes (≥ `maxSpeedMps`)
-- Single-hop jump > 100 m rejected even when speed is plausible
+- Single-hop jump > 100 m rejected when it arrives within the 10 s gap window (a corrupt teleport)
+- **Time-based gap re-anchor (#330)** — a > 100 m hop after a ≥ 10 s gap rebases the anchor and resumes tracking without crediting the un-sampled gap; consecutive post-gap fixes don't stay stuck on the stale anchor; a short-dt (< 10 s) or zero-dt > 100 m hop still fails closed
 
 **Pause / resume (3 tests):**
 - Pause drops incoming positions entirely (track doesn't grow, distance doesn't accumulate)
