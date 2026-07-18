@@ -3084,6 +3084,7 @@
   "racesAgeGroupPlace": "Classificação por escalão",
   "racesAgeGroup": "Escalão etário",
   "racesBib": "Dorsal",
+  "racesRunSignUpBibHint": "Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.",
   "racesPasteResultHint": "Introduz os detalhes da tua chegada a partir da página de resultados da corrida.",
   "racesSave": "Guardar",
   "racesCancel": "Cancelar",
