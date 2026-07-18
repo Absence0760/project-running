@@ -50,7 +50,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   late TabController _tabs;
 
   bool _loading = true;
+  // `_loadError` gates the WHOLE page — only a failure fetching `_summary`
+  // sets it, since the header + AppBar title depend on it and nothing
+  // meaningful can render without it. Every other section below fetches
+  // independently and tracks its own error, so one flaky call (e.g.
+  // badges) can't blank tabs that loaded fine (layered resilience,
+  // docs/architecture/conventions.md).
   Object? _loadError;
+  Object? _runsError;
+  Object? _followersError;
+  Object? _followingError;
+  Object? _badgesError;
+  Object? _notifError;
   ProfileSummary? _summary;
   List<RunRow> _runs = const [];
   List<UserProfileRow> _followers = const [];
@@ -91,58 +102,83 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
+  /// Runs [fetch], routing a failure into [onError] instead of letting it
+  /// reject the surrounding `Future.wait` — see the `_loadError` doc above.
+  Future<T?> _guarded<T>(
+    Future<T> Function() fetch, {
+    required void Function(Object error) onError,
+  }) async {
+    try {
+      return await fetch();
+    } catch (e) {
+      onError(e);
+      return null;
+    }
+  }
+
   Future<void> _load() async {
     if (!mounted) return;
     setState(() {
       _loading = true;
       _loadError = null;
+      _runsError = null;
+      _followersError = null;
+      _followingError = null;
+      _badgesError = null;
+      _notifError = null;
     });
     try {
-      final summaryF = widget.api.fetchProfileSummary(widget.userId);
-      final runsF = widget.api.fetchPublicRunsByUser(widget.userId, limit: 30);
-      // First page only; older follows / followers come in via
-      // Load-more on the respective tab.
-      final followersF =
-          widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
-      final followingF =
-          widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
-      final badgesF = widget.api.fetchUserBadges(widget.userId);
-      final notifF = _isSelf
-          ? widget.api.fetchNotificationViews(limit: 100)
-          : Future.value(const <NotificationView>[]);
-      final blockedF = _isSelf
-          ? Future.value(false)
-          : widget.api.isBlockedByViewer(widget.userId);
-
-      final results = await Future.wait([
-        summaryF,
-        runsF,
-        followersF,
-        followingF,
-        badgesF,
-        notifF,
-        blockedF,
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _summary = results[0] as ProfileSummary?;
-        _runs = results[1] as List<RunRow>;
-        _followers = results[2] as List<UserProfileRow>;
-        _following = results[3] as List<UserProfileRow>;
-        _badges = results[4] as List<AchievementRow>;
-        _notifications = results[5] as List<NotificationView>;
-        _blocked = results[6] as bool;
-        _followersHasMore = _followers.length == _kFollowsPageSize;
-        _followingHasMore = _following.length == _kFollowsPageSize;
-        _loading = false;
-      });
+      _summary = await widget.api.fetchProfileSummary(widget.userId);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loadError = e;
         _loading = false;
       });
+      return;
     }
+
+    // First page only; older follows / followers come in via Load-more
+    // on the respective tab. Each fetch is independently guarded so a
+    // single failing call only blanks its own tab.
+    final results = await Future.wait([
+      _guarded(() => widget.api.fetchPublicRunsByUser(widget.userId, limit: 30),
+          onError: (e) => _runsError = e),
+      _guarded(
+          () =>
+              widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize),
+          onError: (e) => _followersError = e),
+      _guarded(
+          () =>
+              widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize),
+          onError: (e) => _followingError = e),
+      _guarded(() => widget.api.fetchUserBadges(widget.userId),
+          onError: (e) => _badgesError = e),
+      _guarded(
+          () => _isSelf
+              ? widget.api.fetchNotificationViews(limit: 100)
+              : Future.value(const <NotificationView>[]),
+          onError: (e) => _notifError = e),
+      _guarded(
+          () => _isSelf
+              ? Future.value(false)
+              : widget.api.isBlockedByViewer(widget.userId),
+          // Best-effort — the block icon just falls back to "not blocked"
+          // rather than surfacing a whole tab's worth of error UI.
+          onError: (_) {}),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _runs = (results[0] as List<RunRow>?) ?? _runs;
+      _followers = (results[1] as List<UserProfileRow>?) ?? _followers;
+      _following = (results[2] as List<UserProfileRow>?) ?? _following;
+      _badges = (results[3] as List<AchievementRow>?) ?? _badges;
+      _notifications = (results[4] as List<NotificationView>?) ?? _notifications;
+      _blocked = (results[5] as bool?) ?? false;
+      _followersHasMore = _followers.length == _kFollowsPageSize;
+      _followingHasMore = _following.length == _kFollowsPageSize;
+      _loading = false;
+    });
   }
 
   Future<void> _loadMoreFollowers() async {
@@ -466,10 +502,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                             controller: _tabs,
                             children: [
                               _buildRunsTab(theme),
-                              BadgeGrid(badges: _badges, isOwner: _isSelf),
+                              _badgesError != null
+                                  ? ErrorState(
+                                      message: l10n.profileLoadError,
+                                      onRetry: _load,
+                                    )
+                                  : BadgeGrid(
+                                      badges: _badges, isOwner: _isSelf),
                               _buildPeopleTab(
                                 _followers,
                                 l10n.profileFollowersEmpty,
+                                error: _followersError,
                                 hasMore: _followersHasMore,
                                 loadingMore: _loadingMoreFollowers,
                                 onLoadMore: _loadMoreFollowers,
@@ -477,6 +520,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                               _buildPeopleTab(
                                 _following,
                                 l10n.profileFollowingEmpty,
+                                error: _followingError,
                                 hasMore: _followingHasMore,
                                 loadingMore: _loadingMoreFollowing,
                                 onLoadMore: _loadMoreFollowing,
@@ -530,6 +574,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildRunsTab(ThemeData theme) {
+    if (_runsError != null) {
+      return ErrorState(
+        message: AppLocalizations.of(context).profileLoadError,
+        onRetry: _load,
+      );
+    }
     if (_runs.isEmpty) {
       return Center(
         child: Padding(
@@ -607,10 +657,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildPeopleTab(
     List<UserProfileRow> people,
     String emptyMessage, {
+    Object? error,
     required bool hasMore,
     required bool loadingMore,
     required Future<void> Function() onLoadMore,
   }) {
+    if (error != null) {
+      return ErrorState(
+        message: AppLocalizations.of(context).profileLoadError,
+        onRetry: _load,
+      );
+    }
     if (people.isEmpty) {
       return Center(
         child: Padding(
@@ -673,6 +730,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildNotificationsTab(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
+    if (_notifError != null) {
+      return ErrorState(message: l10n.profileLoadError, onRetry: _load);
+    }
     final visible = (_notifFilter == 'unread'
             ? _notifications.where((n) => n.row.readAt == null)
             : _notifications)

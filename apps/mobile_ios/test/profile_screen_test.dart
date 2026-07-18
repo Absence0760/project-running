@@ -64,6 +64,83 @@ void main() {
     });
   });
 
+  group('per-tab error isolation — layered resilience', () {
+    // Regression for "Followers, Following, Notifications, Achievements
+    // and Runs all display Could not load profile": _load() used to
+    // await one Future.wait over all six section fetches inside a
+    // single try/catch, so any one throwing (e.g. fetchUserBadges)
+    // blanked every tab, including ones whose own fetch succeeded.
+    // Source-level pin (mirrors the _verbFor group above) that each
+    // section keeps its own error field and _load() guards each fetch
+    // independently, so a future edit can't silently re-merge them
+    // back into one shared catch.
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+
+    test('tracks a separate error field per non-critical section', () {
+      for (final field in [
+        '_runsError',
+        '_followersError',
+        '_followingError',
+        '_badgesError',
+        '_notifError',
+      ]) {
+        expect(source.contains('Object? $field;'), isTrue,
+            reason: '$field must exist so its tab can fail independently '
+                'of the others.');
+      }
+    });
+
+    test('_load() wraps every non-critical fetch in _guarded', () {
+      for (final call in [
+        'widget.api.fetchPublicRunsByUser',
+        'widget.api.fetchFollowers',
+        'widget.api.fetchFollowing',
+        'widget.api.fetchUserBadges',
+        'widget.api.fetchNotificationViews',
+      ]) {
+        expect(source.contains(call), isTrue,
+            reason: '$call must still be wired into _load().');
+      }
+      // Every one of those calls must sit behind `_guarded(` rather than
+      // a bare Future.wait entry — a plain `await` here would reject
+      // the whole batch again on the first failure.
+      final guardedCount = '_guarded('.allMatches(source).length;
+      expect(guardedCount, greaterThanOrEqualTo(5),
+          reason: 'Expected at least 5 _guarded(...) call sites (runs, '
+              'followers, following, badges, notifications) — found '
+              '$guardedCount. A section fetched outside _guarded can '
+              'blank every other tab again.');
+    });
+
+    test('only the summary fetch can set the page-level _loadError', () {
+      // The critical/non-critical split lives in _load(): _loadError is
+      // set from the summary try/catch, then the function returns
+      // before touching the six-way Future.wait. If a later edit moves
+      // `_loadError = e` inside that Future.wait's error handling again,
+      // this fails.
+      final loadBody = source.substring(
+        source.indexOf('Future<void> _load() async {'),
+        source.indexOf('Future<void> _loadMoreFollowers()'),
+      );
+      expect('_loadError = e;'.allMatches(loadBody).length, 1,
+          reason: '_loadError should be assigned exactly once in _load() '
+              '— from the summary fetch\'s catch block only.');
+    });
+
+    test('each tab builder checks its own error field before rendering',
+        () {
+      expect(source.contains('if (_runsError != null) {'), isTrue);
+      expect(source.contains('if (error != null) {'), isTrue,
+          reason: '_buildPeopleTab must check its injected error param '
+              '(shared by the Followers/Following tabs).');
+      expect(source.contains('if (_notifError != null) {'), isTrue);
+      expect(source.contains('_badgesError != null'), isTrue,
+          reason: 'The Achievements tab must gate on _badgesError before '
+              'rendering BadgeGrid.');
+    });
+  });
+
   group('_verbFor — event_rsvp wiring', () {
     // Source-level grep for the verb strings the web NotificationsList
     // emits. Profile_screen owns the equivalent Dart switch; if the
