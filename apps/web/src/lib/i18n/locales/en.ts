@@ -3790,6 +3790,7 @@ export const en = {
 	"nutrition.deleteEntryTitle": "Delete this entry?",
 	"nutrition.deleteEntryMessage": "{item} will be removed from today's log.",
 	"nutrition.deleteFailed": "Delete failed: {error}",
+	"nutrition.addFailed": "Couldn't log that: {error}",
 	"nutrition.weeklyTrend": "Last 7 days",
 	"nutrition.weekUnderGoal": "{n} under goal/day",
 	"nutrition.weekOverGoal": "{n} over goal/day",

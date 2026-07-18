@@ -3778,6 +3778,7 @@ export const messages = {
 	"nutrition.deleteEntryTitle": "¿Eliminar esta entrada?",
 	"nutrition.deleteEntryMessage": "{item} se eliminará del registro de hoy.",
 	"nutrition.deleteFailed": "Error al eliminar: {error}",
+	"nutrition.addFailed": "No se pudo registrar: {error}",
 	"nutrition.weeklyTrend": "Últimos 7 días",
 	"nutrition.weekUnderGoal": "{n} bajo el objetivo/día",
 	"nutrition.weekOverGoal": "{n} sobre el objetivo/día",
