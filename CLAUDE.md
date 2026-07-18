@@ -26,6 +26,7 @@ Start with whichever row below is closest to the task you've been given:
 | Touching a jsonb metadata key | [docs/backend/metadata.md](docs/backend/metadata.md) — the registry of known keys |
 | Touching a user setting / preference | [docs/backend/settings.md](docs/backend/settings.md) — universal + per-device prefs registry |
 | Touching a trigger-maintained cache (PRs, route run_count, gym totals, coach usage) | [docs/backend/derived_state.md](docs/backend/derived_state.md) — the cache=authoritative-query contract per derived cache + retention |
+| Writing a migration that adds a constraint or backfills a big table | [docs/backend/migration_locks.md](docs/backend/migration_locks.md) — the online-DDL playbook (`NOT VALID` + `VALIDATE`, batched backfills, lock reference, pre-merge checklist); keeps a `db push` off the populated prod tables from taking blocking locks |
 | Touching the recording pipeline | [docs/features/run_recording.md](docs/features/run_recording.md) — state machine, filters, auto-pause |
 | Touching the web auth flow | [docs/features/web_app_auth.md](docs/features/web_app_auth.md) |
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
