@@ -1215,13 +1215,19 @@ class SocialService extends ChangeNotifier {
     final attendees = (rows as List).cast<Map<String, dynamic>>();
     if (attendees.isEmpty) return const [];
     final ids = attendees.map((r) => r['user_id'] as String).toList();
-    final profiles = await _c
-        .from('user_profiles')
-        .select('id, display_name')
-        .inFilter('id', ids);
+    // Chunk the profile-join: PostgREST serialises `.inFilter('id', ids)` into
+    // the request URL, so an event with more than ~100 attendees overflows the
+    // gateway's request-line limit and the leg silently returns empty — every
+    // display name degrades to null. Query each chunk and merge into one map.
+    final profilePages = await Future.wait([
+      for (final c in chunkList(ids))
+        _c.from('user_profiles').select('id, display_name').inFilter('id', c),
+    ]);
     final byId = <String, String?>{};
-    for (final p in profiles as List) {
-      byId[(p as Map)['id'] as String] = p['display_name'] as String?;
+    for (final profiles in profilePages) {
+      for (final p in profiles as List) {
+        byId[(p as Map)['id'] as String] = p['display_name'] as String?;
+      }
     }
     return [
       for (final a in attendees)

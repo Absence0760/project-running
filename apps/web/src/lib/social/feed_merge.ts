@@ -21,15 +21,16 @@ export function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /**
- * Merge per-chunk feed pages into the global page. Each chunk query already
- * applied the same cursor + ordering + limit, so the global top-`limit` rows
- * (ordered by started_at desc, then id desc) are guaranteed to be a subset of
- * the union of the per-chunk results. Dedupe by id (a row can only come from
- * one chunk, but guard anyway), sort, and trim to `limit`.
+ * Merge per-chunk pages ordered by a recency timestamp into the global page.
+ * Each chunk query already applied the same cursor + ordering + limit, so the
+ * global top-`limit` rows (ordered by `tsOf` desc, then id desc) are guaranteed
+ * to be a subset of the union of the per-chunk results. Dedupe by id (a row can
+ * only come from one chunk, but guard anyway), sort, and trim to `limit`.
  */
-export function mergeFeedPages<T extends { id: string; started_at: string }>(
+export function mergeRecencyPages<T extends { id: string }>(
 	pages: (T[] | null | undefined)[],
-	limit: number
+	limit: number,
+	tsOf: (row: T) => string
 ): T[] {
 	const byId = new Map<string, T>();
 	for (const page of pages) {
@@ -37,8 +38,36 @@ export function mergeFeedPages<T extends { id: string; started_at: string }>(
 	}
 	const merged = Array.from(byId.values());
 	merged.sort((a, b) => {
-		if (a.started_at !== b.started_at) return a.started_at < b.started_at ? 1 : -1;
+		const ta = tsOf(a);
+		const tb = tsOf(b);
+		if (ta !== tb) return ta < tb ? 1 : -1;
 		return a.id < b.id ? 1 : -1;
 	});
 	return merged.slice(0, Math.max(0, limit));
+}
+
+/** The run / lift feed ordered by `started_at` — see `mergeRecencyPages`. */
+export function mergeFeedPages<T extends { id: string; started_at: string }>(
+	pages: (T[] | null | undefined)[],
+	limit: number
+): T[] {
+	return mergeRecencyPages(pages, limit, (r) => r.started_at);
+}
+
+/**
+ * Merge chunked `user_profiles` reads into one id→row map. The profile-join
+ * leg (`.in('id', ids)`) is chunked for the same request-URL reason as the
+ * feed: a club / event with more than ~100 members overflows the gateway's
+ * request-line limit and the leg silently returns null, degrading every
+ * name / avatar to a placeholder. A row can only come from one chunk (ids are
+ * deduped upstream); later chunks win on a collision.
+ */
+export function mergeProfilePages<T extends { id: string }>(
+	pages: (T[] | null | undefined)[]
+): Map<string, T> {
+	const byId = new Map<string, T>();
+	for (const page of pages) {
+		for (const row of page ?? []) byId.set(row.id, row);
+	}
+	return byId;
 }

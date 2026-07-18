@@ -174,7 +174,15 @@ test('challengePace upcoming has no projection or verdict yet', () => {
 	assert.equal(p.elapsedFraction, 0);
 	assert.equal(p.projectedValue, null);
 	assert.equal(p.verdict, null);
-	assert.equal(p.daysRemaining, 12);
+	assert.equal(p.daysRemaining, 10);
+	assert.equal(p.requiredPerDay, 10);
+});
+
+test('challengePace upcoming daysRemaining counts only the open window', () => {
+	const p = challengePace(0, 70, 2 * DAY, 12 * DAY, 0);
+	assert.equal(p.status, 'upcoming');
+	assert.equal(p.daysRemaining, 10);
+	assert.equal(p.requiredPerDay, 7);
 });
 
 test('challengePace ended freezes projection to the final value', () => {

@@ -238,7 +238,9 @@ export function challengePace(
 		elapsedFraction = (nowMs - startMs) / (endMs - startMs);
 	}
 
-	const daysRemaining = Math.max(0, Math.ceil((endMs - nowMs) / DAY_MS));
+	// Divisor is the days the challenge is OPEN — clamp the window start to now
+	// so an upcoming challenge doesn't count pre-start days into the daily rate.
+	const daysRemaining = Math.max(0, Math.ceil((endMs - Math.max(nowMs, startMs)) / DAY_MS));
 	const expectedValue = hasGoal ? goal! * elapsedFraction : null;
 	const remainingValue = hasGoal ? Math.max(0, goal! - value) : null;
 

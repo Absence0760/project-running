@@ -155,7 +155,15 @@ void main() {
     expect(p.elapsedFraction, 0);
     expect(p.projectedValue, null);
     expect(p.verdict, null);
-    expect(p.daysRemaining, 12);
+    expect(p.daysRemaining, 10);
+    expect(p.requiredPerDay, 10);
+  });
+
+  test('challengePace upcoming daysRemaining counts only the open window', () {
+    final p = challengePace(0, 70, 2 * _day, 12 * _day, 0);
+    expect(p.status, ChallengePaceStatus.upcoming);
+    expect(p.daysRemaining, 10);
+    expect(p.requiredPerDay, 7);
   });
 
   test('challengePace ended freezes projection to the final value', () {
