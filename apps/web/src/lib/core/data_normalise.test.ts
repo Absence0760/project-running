@@ -5,6 +5,9 @@ import {
 	normaliseRunMetadataFields,
 	applyRunMetadataPatch,
 	normalisePlanWorkoutNotes,
+	readGlobalSegmentsScoredCount,
+	shouldRescoreGlobalSegments,
+	stampGlobalSegmentsScored,
 } from './data_normalise.js';
 
 // ---------------------------------------------------------------------------
@@ -166,4 +169,66 @@ test('normalisePlanWorkoutNotes: whitespace-only → null', () => {
 
 test('normalisePlanWorkoutNotes: content is trimmed but preserved', () => {
 	assert.equal(normalisePlanWorkoutNotes('  Reps  '), 'Reps');
+});
+
+// ---------------------------------------------------------------------------
+// global-segments-scored stamp — the issue #333 idempotency guard that stops
+// the run-detail catalogue backfill re-fetching 500 polylines + re-matching
+// on every owner view.
+// ---------------------------------------------------------------------------
+
+test('readGlobalSegmentsScoredCount: absent key → null', () => {
+	assert.equal(readGlobalSegmentsScoredCount(null), null);
+	assert.equal(readGlobalSegmentsScoredCount(undefined), null);
+	assert.equal(readGlobalSegmentsScoredCount({}), null);
+	assert.equal(readGlobalSegmentsScoredCount({ title: 'x' }), null);
+});
+
+test('readGlobalSegmentsScoredCount: malformed value → null (fails open)', () => {
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 'nope' }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: -1 }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: Number.NaN }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: null }), null);
+});
+
+test('readGlobalSegmentsScoredCount: well-formed value parses (0 is valid)', () => {
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 12 }), 12);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 0 }), 0);
+});
+
+test('shouldRescoreGlobalSegments: never-scored run → true', () => {
+	assert.equal(shouldRescoreGlobalSegments(null, 12), true);
+	assert.equal(shouldRescoreGlobalSegments({}, 12), true);
+});
+
+test('shouldRescoreGlobalSegments: SKIPS the expensive path when the run was '
+	+ 'already scored against a catalogue at least this large', () => {
+	// This is the regression guard: a scored run whose catalogue has not
+	// grown must NOT re-fetch + re-match. Before the fix the function had
+	// no stamp to read, so this was unconditionally re-scored every view.
+	const meta = { global_segments_scored_count: 12 };
+	assert.equal(shouldRescoreGlobalSegments(meta, 12), false);
+	assert.equal(shouldRescoreGlobalSegments(meta, 5), false); // catalogue shrank
+});
+
+test('shouldRescoreGlobalSegments: re-scores when the catalogue grew', () => {
+	assert.equal(shouldRescoreGlobalSegments({ global_segments_scored_count: 12 }, 13), true);
+});
+
+test('shouldRescoreGlobalSegments: unknown active count fails open to true', () => {
+	const meta = { global_segments_scored_count: 12 };
+	assert.equal(shouldRescoreGlobalSegments(meta, null), true);
+	assert.equal(shouldRescoreGlobalSegments(meta, undefined), true);
+});
+
+test('stampGlobalSegmentsScored: writes the stamp without clobbering the bag', () => {
+	const next = stampGlobalSegmentsScored({ title: 'Morning run', notes: 'felt great' }, 12);
+	assert.equal(next.title, 'Morning run');
+	assert.equal(next.notes, 'felt great');
+	assert.equal(next.global_segments_scored_count, 12);
+});
+
+test('stampGlobalSegmentsScored: round-trips through the reader as not-needing-rescore', () => {
+	const next = stampGlobalSegmentsScored(null, 8);
+	assert.equal(shouldRescoreGlobalSegments(next, 8), false);
 });

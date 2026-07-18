@@ -99,7 +99,12 @@ import {
 } from '../social/event_gym_template';
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
-import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import {
+	applyRunMetadataPatch,
+	normalisePlanWorkoutNotes,
+	shouldRescoreGlobalSegments,
+	stampGlobalSegmentsScored,
+} from './data_normalise';
 import { bucketWeeklyMileage } from './weekly_mileage';
 import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from '../social/feed_merge';
 import {
@@ -7294,6 +7299,13 @@ export async function fetchGlobalSegmentLeaderboard(
 /// every active catalogue geometry via the pure `computeGlobalSegmentEffort`
 /// (end-to-end match, curated v1) and batch-upserts matches. Idempotent via
 /// unique(global_segment_id, run_id) + ignoreDuplicates. Returns new count.
+///
+/// The write-side upsert is idempotent, but the FETCH + client-side haversine
+/// match are not — without a short-circuit they'd re-run on every owner view
+/// forever (issue #333). A `runs.metadata.global_segments_scored_count` stamp
+/// records the catalogue size a run was last scored against; a cheap `count`
+/// query gates the expensive 500-row polyline fetch so a scored run only
+/// recomputes when the (deliberately growing) catalogue gains segments.
 export async function computeGlobalSegmentEffortsForRun(input: {
 	run_id: string;
 	user_id: string;
@@ -7302,6 +7314,16 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	if (!input.track || input.track.length < 2) return 0;
 	const userId = auth.user?.id;
 	if (!userId || userId !== input.user_id) return 0;
+
+	const [{ data: runRow }, { count: activeCount }] = await Promise.all([
+		supabase.from(TABLES.runs).select('metadata').eq('id', input.run_id).maybeSingle(),
+		supabase
+			.from(TABLES.global_segments)
+			.select('id', { count: 'exact', head: true })
+			.eq('is_active', true),
+	]);
+	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
+	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
 
 	const { segments } = await fetchGlobalSegmentsWithError(500);
 	if (segments.length === 0) return 0;
@@ -7329,16 +7351,30 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 			started_at: eff.started_at,
 		});
 	}
-	if (rows.length === 0) return 0;
-	const { data: inserted, error } = await supabase
-		.from(TABLES.global_segment_efforts)
-		.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
-		.select('id');
-	if (error) {
-		console.warn('global segment effort batch upsert failed', input.run_id, error);
-		return 0;
+	let newCount = 0;
+	if (rows.length > 0) {
+		const { data: inserted, error } = await supabase
+			.from(TABLES.global_segment_efforts)
+			.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
+			.select('id');
+		if (error) {
+			// Don't stamp on a failed write — the run stays un-scored so
+			// the next view retries rather than dropping real matches.
+			console.warn('global segment effort batch upsert failed', input.run_id, error);
+			return 0;
+		}
+		newCount = inserted?.length ?? 0;
 	}
-	return inserted?.length ?? 0;
+
+	// Stamp even when nothing matched (rows.length === 0): a no-match run
+	// must not re-fetch + re-match the whole catalogue every view either.
+	const next = stampGlobalSegmentsScored(runMetadata, segments.length);
+	const { error: stampErr } = await supabase
+		.from(TABLES.runs)
+		.update({ metadata: next })
+		.eq('id', input.run_id);
+	if (stampErr) console.warn('global segment scored stamp failed', input.run_id, stampErr);
+	return newCount;
 }
 
 /// Catalogue-segment efforts a run earned, joined to the segment + ranked
