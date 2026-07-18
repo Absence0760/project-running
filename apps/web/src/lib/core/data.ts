@@ -100,6 +100,7 @@ import {
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import { dashboardRunsWindowStart } from './dashboard_runs';
 import { bucketWeeklyMileage } from './weekly_mileage';
 import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from '../social/feed_merge';
 import {
@@ -201,6 +202,73 @@ export async function fetchRunsWithError(
 	} catch (e) {
 		return { runs: [], error: (e as Error)?.message ?? 'Failed to load runs' };
 	}
+}
+
+/// Column-narrowed, date-windowed run fetch for the dashboard. Mirrors
+/// `fetchWeeklyMileage`'s windowing pattern (window contract +
+/// rationale in `./dashboard_runs`); the select carries exactly the
+/// columns the dashboard's consumers read (streaks, training-load,
+/// race-predictor, consistency, intensity, trend, goals, snapshot,
+/// this-week, recent list) — `metadata` stays because those consumers
+/// read `avg_bpm` / `elevation_m` / `indoor` from it. `track` is nulled
+/// like `fetchRuns` (it is a lazy Storage download, never a column).
+/// The `started_at desc` order means the PostgREST 1000-row cap, if a
+/// very high-volume runner ever hits it inside the window, drops only
+/// the oldest rows in the window — never the recent ones any consumer
+/// reads. Lifetime headline numbers come from `fetchRunAllTimeStats`.
+export async function fetchRunsForDashboard(): Promise<Run[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const windowStart = dashboardRunsWindowStart(new Date());
+	const { data, error } = await supabase
+		.from(TABLES.runs)
+		.select(
+			'id, user_id, started_at, distance_m, duration_s, source, activity_type, is_dnf, elevation_gain_m, metadata',
+		)
+		.eq('user_id', userId)
+		.gte('started_at', windowStart.toISOString())
+		.order('started_at', { ascending: false });
+	if (error || !data) return [];
+	return data.map((r: any) => ({
+		...r,
+		source: parseRunSource(r.source),
+		track: null,
+	})) as Run[];
+}
+
+/// Cheap all-time aggregates for the dashboard's two lifetime stat cards
+/// (Total runs / Longest run — labelled "all sources" / "all time").
+/// `fetchRunsForDashboard` windows to ~2 years for the recency cards,
+/// which would silently truncate these lifetime numbers for a deep-history
+/// runner — the exact Strava-migrant case the old unbounded scan protected.
+/// A count-only HEAD read plus a single-row max keep them exact without
+/// shipping any run payload. Scoped to the signed-in user (RLS + explicit
+/// filter, matching every other personal-data read here).
+export async function fetchRunAllTimeStats(): Promise<{
+	totalRuns: number;
+	longestRunM: number;
+}> {
+	const userId = auth.user?.id;
+	if (!userId) return { totalRuns: 0, longestRunM: 0 };
+	const [countRes, longestRes] = await Promise.all([
+		supabase
+			.from(TABLES.runs)
+			.select('id', { count: 'exact', head: true })
+			.eq('user_id', userId),
+		supabase
+			.from(TABLES.runs)
+			.select('distance_m')
+			.eq('user_id', userId)
+			.order('distance_m', { ascending: false })
+			.limit(1),
+	]);
+	return {
+		totalRuns: countRes.error ? 0 : countRes.count ?? 0,
+		longestRunM:
+			longestRes.error || !longestRes.data?.[0]
+				? 0
+				: longestRes.data[0].distance_m ?? 0,
+	};
 }
 
 /// Supplementary counts for the Year-in-Running recap that can't be
