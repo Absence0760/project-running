@@ -33,7 +33,13 @@ What the Pro tier changes:
   the pure `resolveUsageCount(data, error)` helper in `coach/limits.ts`,
   which denies (handler returns a transient 503) on an RPC error or a
   non-finite/negative count rather than defaulting the count to 0 — so an
-  unenforceable cap never streams an unmetered provider call.
+  unenforceable cap never streams an unmetered provider call. On a
+  provider failure the slot is **refunded** (`decrement_coach_usage`) only
+  when the stream yielded **zero** tokens; a partial answer keeps the slot
+  AND is persisted to `coach_messages` (via the same service-role writer
+  the happy path uses) so what the user paid for survives a reload —
+  content-persisted ⟺ slot-consumed, never a charged slot with a lost
+  reply (decisions §258, issue #391).
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per
