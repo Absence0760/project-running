@@ -88,5 +88,42 @@ void main() {
           {'HIGH', 'MODERATE', 'LOW'}.contains((w.data ?? '').toUpperCase()));
       expect(chips, findsWidgets);
     });
+
+    testWidgets(
+        'CONFIDENCE header and chip labels stay on one line at a narrow '
+        'phone width', (tester) async {
+      // Regression: an even 4-way column split wrapped "CONFIDENCE" (and
+      // "MODERATE" etc.) onto a second line at typical phone widths.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(
+          distance: 5000,
+          durationS: 1300,
+          startedAt: now.subtract(const Duration(days: 5)),
+        ),
+      ];
+      await _pump(tester, runs: runs, now: now);
+      await tester.pumpAndSettle();
+
+      final header = tester.widget<Text>(find.text('CONFIDENCE'));
+      expect(header.maxLines, 1,
+          reason: 'The Confidence header must be capped to one line.');
+
+      final chipTexts = tester
+          .widgetList<Text>(find.byWidgetPredicate((w) =>
+              w is Text &&
+              {'HIGH', 'MODERATE', 'LOW'}.contains((w.data ?? '').toUpperCase())))
+          .toList();
+      expect(chipTexts, isNotEmpty);
+      for (final t in chipTexts) {
+        expect(t.maxLines, 1,
+            reason: 'Confidence chip labels must be capped to one line.');
+      }
+    });
   });
 }

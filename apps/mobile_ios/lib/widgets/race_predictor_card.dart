@@ -61,16 +61,21 @@ class RacePredictorCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    // CONFIDENCE is by far the longest header word
+                    // (uppercase + letter-spacing besides), so it needs
+                    // a bigger share of the row than an even 4-way
+                    // split gives it — that's what was wrapping onto a
+                    // second line.
                     Expanded(
-                      flex: 3,
+                      flex: 2,
                       child: _HeadCell(l10n.racePredictorColDistance),
                     ),
                     Expanded(
-                      flex: 3,
+                      flex: 2,
                       child: _HeadCell(l10n.racePredictorColTime),
                     ),
                     Expanded(
-                      flex: 3,
+                      flex: 2,
                       child: _HeadCell(l10n.racePredictorColPace),
                     ),
                     Expanded(
@@ -119,6 +124,8 @@ class _HeadCell extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       label.toUpperCase(),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: theme.textTheme.labelSmall?.copyWith(
         color: theme.colorScheme.outline,
         fontWeight: FontWeight.w700,
@@ -141,8 +148,10 @@ class _LadderRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Flex ratios (2:2:2:3) must match the header Row above so the
+          // columns stay aligned.
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               formatDistanceForPref(rung.distanceM),
               style: theme.textTheme.bodyMedium
@@ -150,7 +159,7 @@ class _LadderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               _clock(rung.predictedSec),
               style: theme.textTheme.bodyMedium
@@ -158,7 +167,7 @@ class _LadderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               formatPaceForPref(rung.paceSecPerKm),
               style: theme.textTheme.bodyMedium,
@@ -217,6 +226,8 @@ class _ConfidenceChip extends StatelessWidget {
         ),
         child: Text(
           label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelSmall?.copyWith(
             color: fg,
             fontWeight: FontWeight.w700,
