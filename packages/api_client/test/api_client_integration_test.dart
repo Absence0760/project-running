@@ -392,5 +392,36 @@ void main() {
       expect(summary!.id, userId);
       expect(summary.displayName, isNotEmpty);
     });
+
+    test(
+        'fetchFollowing stays within the user_profiles column grant '
+        '(no 42501)', () async {
+      // Regression for "Could not load feed." / "Could not load
+      // profile.": unlike every other cross-user user_profiles reader
+      // in this file (which already enumerates the safe column list —
+      // see fetchPublicProfile above), fetchFollowing used a bare
+      // `.select()` (all columns), which 42501s the instant it's asked
+      // to project a revoked column (subscription_tier, date_of_birth,
+      // height_cm, …). feed_screen._loadInitial calls this directly,
+      // and profile_screen's Following tab depends on it — a throw
+      // here took down both surfaces. seed.sql follows runner -> alex,
+      // charlie, so this exercises the real user_profiles join.
+      final following = await api.fetchFollowing(userId!);
+      expect(following, isNotEmpty,
+          reason: 'seed.sql follows runner -> alex, charlie; a 42501 '
+              'here would throw before returning, not return empty.');
+    });
+
+    test(
+        'fetchFollowers stays within the user_profiles column grant '
+        '(no 42501)', () async {
+      // Same regression as fetchFollowing above, other direction.
+      // seed.sql follows alex -> runner, so runner has exactly one
+      // follower.
+      final followers = await api.fetchFollowers(userId!);
+      expect(followers, isNotEmpty,
+          reason: 'seed.sql follows alex -> runner; a 42501 here would '
+              'throw before returning, not return empty.');
+    });
   });
 }

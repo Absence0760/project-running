@@ -1869,9 +1869,15 @@ class ApiClient {
         .map<String>((e) => e[UserFollowRow.colFollowerId] as String)
         .toList();
     if (ids.isEmpty) return const [];
+    // Cross-user `user_profiles` reads are column-locked to
+    // `id, display_name, avatar_url, created_at` (migrations
+    // 20260707_001 / 20260810_001) — `select('*')` 42501s for any
+    // row that isn't the caller's own, since most columns
+    // (subscription_tier, date_of_birth, height_cm, …) have no
+    // cross-user SELECT grant.
     final profiles = await _client
         .from(UserProfileRow.table)
-        .select()
+        .select('id, display_name, avatar_url, created_at')
         .inFilter(UserProfileRow.colId, ids);
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
@@ -1894,9 +1900,12 @@ class ApiClient {
         .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
         .toList();
     if (ids.isEmpty) return const [];
+    // See the matching comment in fetchFollowers — cross-user
+    // `user_profiles` reads must stay within the column-locked
+    // `id, display_name, avatar_url, created_at` grant.
     final profiles = await _client
         .from(UserProfileRow.table)
-        .select()
+        .select('id, display_name, avatar_url, created_at')
         .inFilter(UserProfileRow.colId, ids);
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
