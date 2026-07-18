@@ -621,7 +621,7 @@ function generateWalkRunPlan(
 	};
 }
 
-function peakVolumeKm(
+export function peakVolumeKm(
 	goalDistanceM: number,
 	daysPerWeek: number,
 	hasAnchor: boolean = true
@@ -647,7 +647,7 @@ function isStepBackWeek(i: number, masters: boolean): boolean {
 	return masters ? i % 3 === 2 : i % 4 === 3;
 }
 
-function mileageFraction(
+export function mileageFraction(
 	i: number,
 	total: number,
 	phase: PlanPhase,
@@ -681,6 +681,11 @@ interface WeekGenInput {
 	masters?: boolean;
 }
 
+// The shortest distance an easy/recovery run is ever prescribed at. Below this
+// there is no point emitting a run, so the race-week shakeout budget is
+// measured in whole floor-length days.
+const EASY_RUN_FLOOR_KM = 3;
+
 function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 	const workouts: GeneratedWorkout[] = [];
 	// Fixed rest day: Monday. Long run: Sunday.
@@ -697,28 +702,47 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 	const longRun = 0; // Sun (weekday 0)
 	const qualityA = w.masters ? 3 : 2; // Wed for masters, else Tue
 	const qualityB = w.masters ? 5 : 4; // Fri for masters, else Thu
+	const longRunKm = longRunDistance(w);
+	const qualityDistribution = allocateQualityKm(w);
 	const daysUsed = new Set<number>(rest >= 0 ? [longRun, rest] : [longRun]);
 	// Persona-hunt Intermediate #4: a 3-day plan used to be all
 	// long-run + easy with zero quality work across every phase — i.e.
 	// not a training plan, just a mileage log. A 3-day intermediate
 	// runner training for a half should still get one tempo/interval
 	// per week (the phase decides which); 4-day plans get qualityA;
-	// 5-day plans add qualityB. Race + recovery weeks still produce
-	// a null `qualityDistribution.a` and fall through to easy below.
-	if (w.daysPerWeek >= 3) daysUsed.add(qualityA);
-	if (w.daysPerWeek >= 5) daysUsed.add(qualityB);
+	// 5-day plans add qualityB. Reserve a quality slot only when the phase
+	// actually fills it — `allocateQualityKm` returns null for the race phase
+	// and never populates b for base/taper. Reserving an empty slot
+	// understated the easy-day count, so the slot fell through to an extra
+	// easy run and the week overshot its volume target (#326).
+	if (qualityDistribution.a) daysUsed.add(qualityA);
+	if (qualityDistribution.b) daysUsed.add(qualityB);
 
-	const longRunKm = longRunDistance(w);
-	const qualityDistribution = allocateQualityKm(w);
+	// In a race week the Sunday slot emits the race itself (goalDistanceM),
+	// standing in for the long run, and typically dwarfs the light race-week
+	// budget on its own — so the anchor subtracted from the weekly budget must
+	// be the race distance, not the (much smaller) nominal long run (#326).
+	const isRaceWeek = w.phase === 'race';
+	const anchorKm = isRaceWeek ? w.goalDistanceM / 1000 : longRunKm;
 	const remainingKm = Math.max(
 		0,
-		w.weeklyKm - longRunKm - qualityDistribution.totalKm
+		w.weeklyKm - anchorKm - qualityDistribution.totalKm
 	);
-	const easyDayCount = w.daysPerWeek - [...daysUsed].filter(
+	const easySlots = w.daysPerWeek - [...daysUsed].filter(
 		(d) => d !== rest
 	).length;
+	// Race week: only add the shakeout easy days the light remaining budget
+	// supports at the 3 km floor, so a race that dwarfs the budget isn't padded
+	// back up toward peak volume. Every other phase honours the requested day
+	// count even when a low-volume week's fixed tempo/long run nudges it
+	// slightly over its nominal target (persona #23 — daysPerWeek is a promise
+	// the training-load phases keep).
+	const easyDayCount = isRaceWeek
+		? Math.min(easySlots, Math.floor(remainingKm / EASY_RUN_FLOOR_KM))
+		: easySlots;
 	const easyKm = easyDayCount > 0 ? remainingKm / easyDayCount : 0;
 
+	let easyEmitted = 0;
 	for (let dow = 0; dow < 7; dow++) {
 		const date = formatISO(addDays(w.weekStart, dow));
 		if (dow === rest) {
@@ -757,7 +781,12 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 			workouts.push({ ...qualityDistribution.b, scheduled_date: date });
 			continue;
 		}
-		workouts.push(easyWorkout(date, easyKm, w.paces));
+		if (easyEmitted < easyDayCount) {
+			workouts.push(easyWorkout(date, easyKm, w.paces));
+			easyEmitted++;
+		} else {
+			workouts.push(emptyWorkout(date, 'rest'));
+		}
 	}
 
 	// Trim to the requested days — remove 'rest' + empty easy days if the
@@ -817,7 +846,7 @@ function easyWorkout(
 	return {
 		scheduled_date: date,
 		kind: km < 4 ? 'recovery' : 'easy',
-		target_distance_m: Math.max(3, Math.round(km)) * 1000,
+		target_distance_m: Math.max(EASY_RUN_FLOOR_KM, Math.round(km)) * 1000,
 		target_duration_seconds: null,
 		target_pace_sec_per_km: paces.easy,
 		target_pace_tolerance_sec: 30,
