@@ -140,6 +140,8 @@ export const en = {
 	"coachChat.errorGeneric": "Coach error ({status})",
 	"coachChat.errorTransport": "Could not reach the Coach. Check your connection and try again.",
 	"coachChat.errorStreamFailed": "stream failed",
+	"coachChat.errorLoadArchive": "Couldn't open that saved conversation. Try again.",
+	"coachChat.errorLoad": "Couldn't load your conversation. Try again.",
 	"coachChat.newChat": "New chat",
 	"coachChat.newChatTitle": "Archive the current conversation and start a fresh one",
 	"coachChat.conversations": "Conversations",

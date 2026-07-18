@@ -131,6 +131,8 @@ export const messages = {
 	"coachChat.errorGeneric": "Erro do Coach ({status})",
 	"coachChat.errorTransport": "Não foi possível contatar o Coach. Verifique sua conexão e tente novamente.",
 	"coachChat.errorStreamFailed": "falha no fluxo",
+	"coachChat.errorLoadArchive": "Não foi possível abrir essa conversa salva. Tente novamente.",
+	"coachChat.errorLoad": "Não foi possível carregar sua conversa. Tente novamente.",
 	"coachChat.newChat": "Novo chat",
 	"coachChat.newChatTitle": "Arquivar a conversa atual e iniciar uma nova",
 	"coachChat.conversations": "Conversas",
