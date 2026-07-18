@@ -371,6 +371,8 @@ Two paths today, both unblocked:
 
 RunSignUp powers a large portion of US road races and has an official REST API. The shipped importer calls the results endpoint server-side from `race-results-import/index.ts` (key from the Edge-only `RUNSIGNUP_API_KEY`/`_SECRET` env), maps each finisher through `lib.ts` (`mapRunSignUpResult` → a `source='race'` run with `external_id=race:{name}:{date}:{bib}` + the owner-only race metadata), and upserts with per-user `external_id` dedup. Until the key is provisioned the leg is inert (503).
 
+**Athlete-scoping is required (issue #360).** `get-results` returns the entire finisher field when unfiltered, so the leg is fail-closed: a request that names neither the runner's RunSignUp user id (`runSignUpUserId`, narrows the upstream fetch) nor a bib (`bib`, narrows the mapped field client-side via `filterResultsByBib`) is rejected `400 runsignup_athlete_id_required` before any fetch. In the `matchRunId` enrich path the leg additionally rejects `400 ambiguous_match` unless exactly one result maps — never silently merging `mapped[0]` (usually the winner) onto the caller's run. The web `/races` import modal + run-detail match banner and the mobile import sheet collect the bib; the gates are the pure `runSignUpScopeGate` / `matchResultGate` in `lib.ts`.
+
 ```
 GET https://runsignup.com/Rest/race/{race_id}/results/get-results
   ?format=json

@@ -3112,6 +3112,7 @@ export const messages = {
 	"races.ageGroupPlace": "Classificação por faixa etária",
 	"races.ageGroup": "Faixa etária",
 	"races.bib": "Número de peito",
+	"races.runSignUpBibHint": "Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.",
 	"races.pasteResultTitle": "Colar seu resultado",
 	"races.pasteResultHint": "Insira seus dados de chegada da página de resultados da corrida.",
 	"races.save": "Salvar",

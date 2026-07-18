@@ -10,8 +10,25 @@ import '../lib/screens/races_screen.dart';
 class _FakeRaceService extends RaceService {
   final List<RaceListingView> results;
   final bool runSignUpAvailable;
+  bool importCalled = false;
+  String? lastImportProvider;
+  String? lastImportBib;
 
   _FakeRaceService({this.results = const [], this.runSignUpAvailable = false});
+
+  @override
+  Future<ImportRaceResultOutcome> importRaceResult({
+    required String provider,
+    required String listingId,
+    String? bib,
+    String? matchRunId,
+    PastedRaceResult? result,
+  }) async {
+    importCalled = true;
+    lastImportProvider = provider;
+    lastImportBib = bib;
+    return const ImportRaceResultOutcome(imported: 1, skipped: 0, enriched: 0);
+  }
 
   @override
   Future<List<RaceListingView>> searchRaceListings({
@@ -108,6 +125,44 @@ void main() {
       find.textContaining("RunSignUp import isn't available yet"),
       findsNothing,
     );
+  });
+
+  testWidgets(
+      'the RunSignUp import is gated on a bib and passes it through (issue #360)',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [_listing('r3b', 'RSU Race', provider: 'runsignup')],
+      runSignUpAvailable: true,
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    final importButton = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import my result'),
+    );
+    // Disabled until a bib is entered — an unscoped pull is refused client-side.
+    expect(tester.widget<FilledButton>(importButton).onPressed, isNull);
+
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)).first,
+      '1234',
+    );
+    await tester.pump();
+
+    expect(tester.widget<FilledButton>(importButton).onPressed, isNotNull);
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+
+    expect(service.importCalled, isTrue);
+    expect(service.lastImportProvider, 'runsignup');
+    expect(service.lastImportBib, '1234');
+
+    // Drain the success top-banner's pending timer (mobile-test gotcha).
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets(

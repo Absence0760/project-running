@@ -3113,6 +3113,7 @@ export const messages = {
 	"races.ageGroupPlace": "Classement par catégorie d'âge",
 	"races.ageGroup": "Catégorie d'âge",
 	"races.bib": "Dossard",
+	"races.runSignUpBibHint": "Saisissez votre dossard pour n'importer que votre résultat, pas tout le classement.",
 	"races.pasteResultTitle": "Coller votre résultat",
 	"races.pasteResultHint": "Saisissez vos données d'arrivée depuis la page de résultats de la course.",
 	"races.save": "Enregistrer",

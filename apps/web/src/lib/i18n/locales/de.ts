@@ -3113,6 +3113,7 @@ export const messages = {
 	"races.ageGroupPlace": "Platzierung Altersklasse",
 	"races.ageGroup": "Altersklasse",
 	"races.bib": "Startnummer",
+	"races.runSignUpBibHint": "Gib deine Startnummer ein, damit wir nur dein Ergebnis importieren, nicht das ganze Feld.",
 	"races.pasteResultTitle": "Ergebnis einfügen",
 	"races.pasteResultHint": "Gib deine Zielzeit von der Ergebnisseite des Rennens ein.",
 	"races.save": "Speichern",
