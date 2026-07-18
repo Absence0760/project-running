@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../food_search.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_food_store.dart';
 import '../nutrition_totals.dart';
 import 'full_screen_form.dart';
@@ -122,6 +123,7 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         q,
         fetcher: widget.fetcher,
         usdaApiKey: widget.usdaApiKey ?? _usdaKeyFromEnv(),
+        lang: activeLocaleTag,
       );
       if (!mounted) return;
       setState(() {
@@ -160,7 +162,8 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         setState(() => _scanning = false);
         return;
       }
-      final result = await lookupBarcode(raw, fetcher: widget.fetcher);
+      final result =
+          await lookupBarcode(raw, fetcher: widget.fetcher, lang: activeLocaleTag);
       if (!mounted) return;
       setState(() => _scanning = false);
       if (result == null) {
