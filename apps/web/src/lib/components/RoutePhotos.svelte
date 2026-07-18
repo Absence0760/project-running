@@ -155,6 +155,7 @@
 				<input
 					type="text"
 					placeholder={m('routePhotos.captionPlaceholder')}
+					aria-label={m('routePhotos.captionAriaLabel')}
 					maxlength="280"
 					bind:value={pendingCaption}
 					disabled={uploading}
@@ -204,6 +205,7 @@
 								bind:value={editingCaption}
 								maxlength="280"
 								placeholder={m('routePhotos.captionEditPlaceholder')}
+								aria-label={m('routePhotos.captionEditAriaLabel')}
 							/>
 							<button class="btn btn-primary btn-sm" type="submit">{m('routePhotos.save')}</button>
 							<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editingId = null)}>

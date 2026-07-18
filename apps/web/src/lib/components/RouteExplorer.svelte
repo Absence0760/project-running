@@ -232,6 +232,7 @@
 		<input
 			type="text"
 			placeholder={t('routeExplorer.searchPlaceholder')}
+			aria-label={t('routeExplorer.searchAriaLabel')}
 			bind:value={query}
 			onkeydown={handleKeydown}
 		/>

@@ -1153,6 +1153,7 @@
 											<input
 												type="text"
 												placeholder={tr('clubHome.replyPlaceholder')}
+												aria-label={tr('clubHome.replyAriaLabel')}
 												bind:value={replyDrafts[post.id]}
 											/>
 											<button
