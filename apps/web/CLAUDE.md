@@ -178,11 +178,16 @@ lambda/
                     # server-side loop generator (graph-cycle first, GraphHopper
                     # round_trip fallback). Wraps $lib/routes/generate/handler; the
                     # SvelteKit /api/routes/generate/+server.ts owns the path in dev.
-                    # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Decisions §137/§204.
+                    # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Enforces a
+                    # DB-backed per-user throttle (check_rate_limit, bucket
+                    # 'generate-route', 60/h, fail-closed) on top of the per-IP WAF —
+                    # issue #339, $lib/routes/rate_limit.ts. Decisions §137/§204/§260.
   osrm-proxy/       # GET-only JSON Lambda for /api/routes/osrm/* — the server hop for
                     # the route builder's OSRM waypoint snapping/routing (issue #198,
                     # decisions §243). Wraps $lib/routes/osrm_proxy/handler (validates +
-                    # rebuilds every upstream URL, requires a signed-in user); the
+                    # rebuilds every upstream URL, requires a signed-in user + a
+                    # DB-backed per-user throttle: check_rate_limit, bucket 'osrm-proxy',
+                    # 1200/h, fail-closed — issue #339/§260); the
                     # SvelteKit /api/routes/osrm/[...path]/+server.ts owns the path in
                     # dev (with a dev-only demo fallback). OSRM_URL is server-only.
 ```
