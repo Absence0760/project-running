@@ -445,3 +445,61 @@ test('fetchFollowingBadgeAwards chunks the followee `.in()` (no silently-empty b
 		'It must not query the whole followee set in one unchunked `.in()` (issue #325).',
 	);
 });
+
+test('updateEvent scopes the write to a single event row and throws on error', () => {
+	// Reason: updateEvent is the edit-event write path (issue #335). It must
+	// target the `events` table, apply the patch, and filter to the one id —
+	// an unfiltered `.update()` would rewrite every event row. RLS
+	// `is_event_organiser` is the authoritative gate, but the id filter is the
+	// client-side contract the editor depends on. It must also surface DB
+	// errors (fail-closed) rather than swallowing them.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function updateEvent');
+	assert.ok(start >= 0, 'Could not locate updateEvent — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/\.from\('events'\)\s*\.update\(/,
+		'updateEvent must update the events table with the patch.',
+	);
+	assert.match(
+		body,
+		/\.eq\('id', id\)/,
+		'updateEvent must scope the update to the single event id — never an unfiltered write.',
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'updateEvent must throw on a DB error, not swallow it.',
+	);
+});
+
+test('eventHasAthleticData is fail-safe: an unknown / errored read returns true (warn when unsure)', () => {
+	// Reason: the editor uses this to decide whether to warn before switching
+	// an athletic event to a non-athletic category (which orphans its
+	// leaderboard + race rows, issue #335). The guard must fail SAFE — if the
+	// results/sessions count can't be read (RLS, network, throw), it must
+	// return true so the warning still fires, never false (which would let the
+	// destructive switch through silently).
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function eventHasAthleticData');
+	assert.ok(start >= 0, 'Could not locate eventHasAthleticData — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/if \(resultsRes\.error \|\| sessionsRes\.error\) return true;/,
+		'eventHasAthleticData must return true when either count read errors.',
+	);
+	assert.match(
+		body,
+		/catch \{\s*return true;\s*\}/,
+		'eventHasAthleticData must return true on a thrown read (fail-safe warn).',
+	);
+	assert.match(
+		body,
+		/event_results[\s\S]*race_sessions/,
+		'eventHasAthleticData must check both event_results and race_sessions.',
+	);
+});

@@ -59,6 +59,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import EventEditor from '$lib/components/EventEditor.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import CheckpointManager from '$lib/components/CheckpointManager.svelte';
 	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
@@ -153,6 +154,7 @@
 	let autoApproveOnArm = $state(true);
 	let showEndRaceConfirm = $state<'finished' | 'cancelled' | null>(null);
 	let showDeleteEventConfirm = $state(false);
+	let showEditEvent = $state(false);
 	let showRemoveResultConfirm = $state(false);
 	let exceptions = $state<EventException[]>([]);
 	let showCancelInstance = $state(false);
@@ -1663,6 +1665,19 @@
 						{m('clubEvent.addToCalendar')}
 					</button>
 				{/if}
+				{#if isEventOrganiser}
+					<div class="admin-actions">
+						<button
+							type="button"
+							class="btn-ghost"
+							onclick={() => (showEditEvent = true)}
+							data-testid="edit-event"
+						>
+							<span class="material-symbols" aria-hidden="true">edit</span>
+							{m('clubEvent.editEvent')}
+						</button>
+					</div>
+				{/if}
 				{#if isEventOrganiser && event.recurrence_freq && activeInstance && !activeException}
 					<div class="admin-actions">
 						<button
@@ -2235,6 +2250,28 @@
 	danger
 	data-testid="cancel-registration-dialog"
 />
+
+<Modal
+	open={showEditEvent && event != null && club != null}
+	title={m('clubEvent.editEventTitle')}
+	wide
+	onclose={() => (showEditEvent = false)}
+>
+	{#if event && club}
+		<EventEditor
+			clubId={club.id}
+			clubName={club.name}
+			clubIsPublic={club.is_public}
+			existing={event}
+			onsaved={async () => {
+				showEditEvent = false;
+				await load();
+				showToast(m('clubEvent.eventUpdated'), 'success');
+			}}
+			oncancel={() => (showEditEvent = false)}
+		/>
+	{/if}
+</Modal>
 
 <ConfirmDialog
 	open={showDeleteEventConfirm}
