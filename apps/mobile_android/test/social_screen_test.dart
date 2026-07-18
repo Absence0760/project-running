@@ -100,6 +100,13 @@ void main() {
     // Routes relocated to Fitness → Runs; it must not reappear here.
     expect(find.descendant(of: find.byType(TabBar), matching: find.text('Routes')),
         findsNothing);
+    // Regression: 5 icon+label tabs squeezed into an equal fixed-width
+    // split clipped the longer labels ("Challenges", "Discover"). Must
+    // be scrollable so each tab sizes to its own content.
+    expect(tabBar.isScrollable, isTrue,
+        reason: 'A non-scrollable TabBar splits width evenly across all '
+            '5 tabs, which is too narrow for "Challenges"/"Discover" at '
+            'typical phone widths.');
   });
 
   testWidgets('initialTab=3 selects the Discover tab on first frame',

@@ -100,6 +100,11 @@ class _SocialScreenState extends State<SocialScreen>
         toolbarHeight: 0,
         bottom: TabBar(
           controller: _controller,
+          // Five icon+label tabs (Feed/People/Clubs/Discover/Challenges)
+          // don't fit an even fixed-width split without clipping the
+          // longer labels ("Challenges", "Discover") — scrollable sizes
+          // each tab to its own content instead.
+          isScrollable: true,
           tabs: [
             Tab(text: l10n.socialTabFeed, icon: const Icon(Icons.dynamic_feed)),
             Tab(
