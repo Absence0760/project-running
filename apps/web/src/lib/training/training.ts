@@ -787,8 +787,8 @@ function limitToDays(ws: GeneratedWorkout[], days: number): GeneratedWorkout[] {
 	});
 }
 
-function longRunDistance(w: WeekGenInput): number {
-	// Long run scales with the weekly volume, capped at ~35% of the week.
+export function longRunDistance(w: WeekGenInput): number {
+	// Long run is a flat 33% of the week's volume.
 	return Math.round(w.weeklyKm * 0.33);
 }
 

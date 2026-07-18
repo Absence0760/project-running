@@ -35,6 +35,7 @@ import {
 	fmtHms,
 	isWorkoutCompleted,
 	isWorkoutSkipped,
+	longRunDistance,
 	type WorkoutStructure
 } from './training';
 
@@ -840,4 +841,12 @@ test('generatePlan: a zero anchor is treated as no anchor (no Infinity vdot)', (
 		p.weeks[i].workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0);
 	// A zero anchor scales volume identically to no anchor (0.6× peak).
 	assert.equal(weekVol(zero, 0), weekVol(noAnchor, 0));
+});
+
+test('longRunDistance: flat 33% of weekly volume (rounded), 0 → 0', () => {
+	const wk = (weeklyKm: number) =>
+		({ weeklyKm }) as unknown as Parameters<typeof longRunDistance>[0];
+	assert.equal(longRunDistance(wk(60)), 20); // round(19.8)
+	assert.equal(longRunDistance(wk(50)), 17); // round(16.5)
+	assert.equal(longRunDistance(wk(0)), 0);
 });
