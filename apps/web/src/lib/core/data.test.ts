@@ -295,3 +295,77 @@ test('setRunPublic is a real toggle: writes the caller boolean and surfaces erro
 		'The one-way makeRunPublic must stay deleted — visibility flips go through the bidirectional setRunPublic.',
 	);
 });
+
+test('the profile-join fetchers chunk `.in()` so >~100 members do not silently empty', () => {
+	// Reason: PostgREST serialises `.in('id', ids)` into the request URL.
+	// A club / event with more than ~100 members overflows the gateway's
+	// request-line limit and the profile-join leg silently returns null —
+	// every display_name/avatar_url degrades to a placeholder with no error
+	// (issue #325). The fix routes every such leg through fetchProfilesByIds,
+	// which chunks the id set. This guard pins that (a) the helper chunks and
+	// (b) no fetcher rebuilds the inline unchunked profile-join it replaced.
+	const source = read('src/lib/core/data.ts');
+	const helper = source.match(/async function fetchProfilesByIds[\s\S]*?\n}/);
+	assert.ok(helper, 'Could not locate fetchProfilesByIds — rename?');
+	assert.match(
+		helper![0],
+		/chunk\(userIds, FEED_FOLLOWEE_CHUNK\)/,
+		'fetchProfilesByIds must chunk the id set through chunk(..., FEED_FOLLOWEE_CHUNK).',
+	);
+	assert.match(
+		helper![0],
+		/mergeProfilePages\(/,
+		'fetchProfilesByIds must merge the per-chunk pages via mergeProfilePages.',
+	);
+	// The three named member/attendee fetchers must resolve profiles through
+	// the chunked helper, not an inline `.in('id', userIds)` read. Slice each
+	// body to the next top-level `export` — the multi-line return-type object
+	// makes a `\n}`-anchored match stop early.
+	for (const fn of ['fetchPendingRequests', 'fetchClubMembers', 'fetchEventAttendees']) {
+		const start = source.indexOf(`export async function ${fn}`);
+		assert.ok(start >= 0, `Could not locate ${fn} — rename?`);
+		const nextExport = source.indexOf('\nexport ', start + 1);
+		const body = source.slice(start, nextExport === -1 ? undefined : nextExport);
+		assert.match(
+			body,
+			/await fetchProfilesByIds\(userIds\)/,
+			`${fn} must resolve member profiles through the chunked fetchProfilesByIds.`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\.in\('id', userIds\)/,
+			`${fn} must not rebuild the unchunked inline profile-join (issue #325).`,
+		);
+	}
+});
+
+test('fetchFollowingBadgeAwards chunks the followee `.in()` (no silently-empty badge feed)', () => {
+	// Reason: a viewer following >~100 people overflowed the gateway on the
+	// primary `.in('user_id', authors)` query, silently returning null — an
+	// empty badge feed with no error (issue #325). The fix chunks the followee
+	// set, queries each chunk with the same cursor + ordering + limit, and
+	// merges by earned_at via mergeRecencyPages.
+	const source = read('src/lib/core/data.ts');
+	// Anchor past the multi-line params object so the non-greedy `\n}` lands on
+	// the function's real closing brace, not the opts type's brace.
+	const fnMatch = source.match(
+		/const authors = await resolveFollowedAuthorIds\(null\);[\s\S]*?\n}/,
+	);
+	assert.ok(fnMatch, 'Could not locate fetchFollowingBadgeAwards — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/chunk\(authors, FEED_FOLLOWEE_CHUNK\)/,
+		'fetchFollowingBadgeAwards must chunk the followee set.',
+	);
+	assert.match(
+		body,
+		/mergeRecencyPages\(pages, limit, \(r\) => r\.earned_at\)/,
+		'It must merge the per-chunk pages by earned_at.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.in\('user_id', authors\)/,
+		'It must not query the whole followee set in one unchunked `.in()` (issue #325).',
+	);
+});
