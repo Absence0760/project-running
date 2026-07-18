@@ -4,6 +4,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 
 	let error = $state('');
 
@@ -37,7 +38,12 @@
 			const stampedAge = sessionStorage.getItem('age_confirmed_at');
 			const stampedTerms = sessionStorage.getItem('terms_accepted_at');
 			if (stampedAge && stampedTerms) {
-				await supabase.rpc('confirm_age_and_terms');
+				// Seed the region unit default from the browser locale on the
+				// brand-new-row insert; a returning OAuth user's existing
+				// choice is preserved by the RPC's insert-only apply (#488).
+				await supabase.rpc('confirm_age_and_terms', {
+					p_preferred_unit: defaultUnitForLocale(navigator.language),
+				});
 				sessionStorage.removeItem('age_confirmed_at');
 				sessionStorage.removeItem('terms_accepted_at');
 			}

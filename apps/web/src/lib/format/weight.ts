@@ -16,6 +16,16 @@ export function parseWeightUnit(raw: string | null | undefined): WeightUnit {
 	return raw === 'lbs' ? 'lbs' : 'kg';
 }
 
+/// The weight unit implied by the distance unit when the user has NOT
+/// explicitly set `weight_unit`: an imperial (mi) region thinks in
+/// pounds, metric (km) in kilograms. Mirrors the onboarding wizard's own
+/// `weightUnit = preferredUnit === 'mi' ? 'lbs' : 'kg'` derivation so a
+/// US visitor who never opened the weight toggle still gets lbs across
+/// the app, not a hard-coded kg (issue #488).
+export function defaultWeightUnitForDistanceUnit(distanceUnit: 'km' | 'mi'): WeightUnit {
+	return distanceUnit === 'mi' ? 'lbs' : 'kg';
+}
+
 /// Canonical kg -> the user's chosen display unit. Pure number, no label.
 export function kgToDisplay(kg: number, unit: WeightUnit): number {
 	return unit === 'lbs' ? kg * LBS_PER_KG : kg;
