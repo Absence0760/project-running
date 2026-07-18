@@ -81,19 +81,49 @@ export async function buildContext(
 		let weeks: unknown[] = [];
 		let workouts: unknown[] = [];
 		if (plan && typeof plan === 'object' && 'id' in plan) {
+			const planRow = plan as { id: string; start_date?: string | null };
+			// Bound the plan window like recent_runs / recent_lifts so a long
+			// plan (ultra base block, multi-year, or a REST-inserted row with
+			// no row-count CHECK) can't re-serialise its entire week/workout
+			// history into the prompt on every call. Bias to the weeks around
+			// "now" — a short look-back plus the cap of upcoming weeks — so the
+			// coach keeps the current + upcoming weeks it reasons about, not a
+			// long plan's stale opening block.
+			const startMs = planRow.start_date
+				? new Date(planRow.start_date).getTime()
+				: NaN;
+			const currentWeek = Number.isFinite(startMs)
+				? Math.max(0, Math.floor((Date.now() - startMs) / (7 * 86_400_000)))
+				: 0;
+			const fromWeek = Math.max(0, currentWeek - COACH_PLAN_WEEKS_LOOKBACK);
 			const weekRes = await supabase
 				.from('plan_weeks')
 				.select('*')
-				.eq('plan_id', (plan as { id: string }).id)
-				.order('week_index', { ascending: true });
+				.eq('plan_id', planRow.id)
+				.gte('week_index', fromWeek)
+				.order('week_index', { ascending: true })
+				.limit(COACH_PLAN_WEEKS_CAP);
 			weeks = weekRes.data ?? [];
+			if (weeks.length === 0) {
+				// A fully-elapsed plan viewed explicitly (its last week is before
+				// `fromWeek`): fall back to its final cap of weeks so the coach
+				// still sees the taper/race, never an empty plan.
+				const tailRes = await supabase
+					.from('plan_weeks')
+					.select('*')
+					.eq('plan_id', planRow.id)
+					.order('week_index', { ascending: false })
+					.limit(COACH_PLAN_WEEKS_CAP);
+				weeks = (tailRes.data ?? []).slice().reverse();
+			}
 			if (weeks.length > 0) {
 				const ids = (weeks as { id: string }[]).map((w) => w.id);
 				const wkRes = await supabase
 					.from('plan_workouts')
 					.select('*')
 					.in('week_id', ids)
-					.order('scheduled_date', { ascending: true });
+					.order('scheduled_date', { ascending: true })
+					.limit(COACH_PLAN_WORKOUTS_CAP);
 				workouts = wkRes.data ?? [];
 			}
 		}
@@ -225,6 +255,16 @@ export async function buildContext(
 /// size + per-call cost stay roughly flat as gym history grows — the
 /// coach reasons about recent training, not a lifetime log.
 export const COACH_LIFTS_CAP = 8;
+
+/// Fixed caps on the plan window sent to the coach. Bounded — like
+/// recent_runs / recent_lifts — so a long or REST-inserted plan can't
+/// grow the prompt without limit. `WEEKS_CAP` covers a full marathon
+/// block; `WORKOUTS_CAP` is WEEKS_CAP × the 7-day max. `WEEKS_LOOKBACK`
+/// keeps a couple of recently-completed weeks for adherence context
+/// while the cap fills with the current + upcoming weeks.
+export const COACH_PLAN_WEEKS_CAP = 20;
+export const COACH_PLAN_WORKOUTS_CAP = 140;
+export const COACH_PLAN_WEEKS_LOOKBACK = 2;
 
 interface LiftWorkoutRow {
 	id: string;
