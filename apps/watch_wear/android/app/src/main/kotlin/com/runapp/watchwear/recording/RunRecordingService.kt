@@ -632,7 +632,10 @@ class RunRecordingService : Service() {
                             if (paused) getString(R.string.ongoing_template_paused)
                             else getString(R.string.ongoing_template_running)
                         )
-                        .addPart("time", Status.StopwatchPart(startedAtMs - pausedAccumulatedMs))
+                        .addPart(
+                            "time",
+                            Status.StopwatchPart(ongoingActivityBaseMs(startedAtMs, pausedAccumulatedMs)),
+                        )
                         .addPart(
                             "distance",
                             Status.TextPart(
