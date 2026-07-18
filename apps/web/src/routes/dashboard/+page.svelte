@@ -2550,7 +2550,7 @@
 		gap: var(--space-xs);
 		padding: var(--space-xs) var(--space-md);
 		background: color-mix(in srgb, var(--color-secondary) 14%, transparent);
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 		border-radius: 9999px;
 		font-weight: 600;
 		font-size: 0.85rem;
@@ -2595,7 +2595,7 @@
 	}
 	.readiness-card.readiness-moderate .readiness-band {
 		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	.readiness-card.readiness-low .readiness-band {
 		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
@@ -2753,7 +2753,7 @@
 		height: 2.75rem;
 		border-radius: 50%;
 		background: color-mix(in srgb, var(--color-secondary) 16%, transparent);
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 		font-size: 1.5rem;
 		flex-shrink: 0;
 	}
@@ -2981,7 +2981,7 @@
 		color: var(--color-text-tertiary);
 		margin-inline-start: var(--space-2xs);
 	}
-	.streak-active .stat-value { color: var(--color-warning); }
+	.streak-active .stat-value { color: var(--color-warning-text); }
 	.stat-sub {
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
@@ -3052,8 +3052,8 @@
 	.zone-row-3 .zone-bar { background: var(--color-warning); }
 	.zone-row-4 .zone-bar { background: var(--color-accent-orange); }
 	.zone-row-5 .zone-bar { background: var(--color-danger); }
-	.zone-row-1 .zone-name { color: var(--color-accent-cyan); }
-	.zone-row-3 .zone-name { color: var(--color-warning); }
+	.zone-row-1 .zone-name { color: var(--color-accent-cyan-text); }
+	.zone-row-3 .zone-name { color: var(--color-warning-text); }
 	.zone-row-4 .zone-name { color: var(--color-accent-orange); }
 	.zone-row-5 .zone-name { color: var(--color-danger); }
 	.zone-duration {
