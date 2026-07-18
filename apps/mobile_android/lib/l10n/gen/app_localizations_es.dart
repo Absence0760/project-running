@@ -3732,8 +3732,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get socialTabDiscover => 'Descubrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Busca yoga, pilates, HIIT, clubes de running…';
+  String get discoverSearchPlaceholder => 'Busca clases, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas las actividades';

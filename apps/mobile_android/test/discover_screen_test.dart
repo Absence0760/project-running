@@ -192,10 +192,22 @@ void main() {
     ));
     await _settle(tester);
     expect(
-      find.bySemanticsLabel(RegExp('Search yoga, pilates, HIIT, run clubs')),
+      find.bySemanticsLabel(RegExp('Search classes, clubs')),
       findsAtLeastNWidgets(1),
     );
     handle.dispose();
+  });
+
+  testWidgets('search hint fits on a single line at a narrow field width',
+      (tester) async {
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: _FakeApi(const []), social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    final hint = tester.widget<Text>(find.text('Search classes, clubs…'));
+    expect(hint.maxLines, 1);
+    expect(hint.overflow, TextOverflow.ellipsis);
   });
 
   testWidgets('empty results render the empty state', (tester) async {

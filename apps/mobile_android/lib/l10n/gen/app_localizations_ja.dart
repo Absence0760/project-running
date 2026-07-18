@@ -3516,7 +3516,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get socialTabDiscover => '見つける';
 
   @override
-  String get discoverSearchPlaceholder => 'ヨガ、ピラティス、HIIT、ランクラブを検索…';
+  String get discoverSearchPlaceholder => 'クラス、クラブを検索…';
 
   @override
   String get discoverActivityAll => 'すべてのアクティビティ';
