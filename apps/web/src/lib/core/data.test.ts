@@ -205,6 +205,62 @@ test('plans/new loads club templates with one batched query, not one per club', 
 	);
 });
 
+test('deleteNotifications batches into one .in() delete, guards empty, surfaces errors', () => {
+	// Reason: bulk-dismissing a collapsed notification group used to await
+	// deleteNotification(id) in a for-loop — one DELETE round-trip per
+	// member, so dismissing a 20-member group fired 20 sequential requests
+	// (issue #350). The batched path must delete all ids in ONE query via
+	// .in('id', ids), short-circuit an empty list (an empty .in() would
+	// match nothing but still round-trips), and throw the supabase error
+	// (supabase-js resolves {error}, never throws — dropping the check
+	// silently swallows a failed bulk-dismiss while the row vanishes).
+	const source = read('src/lib/core/data.ts');
+	const fnMatch = source.match(/export async function deleteNotifications[\s\S]*?\n}/);
+	assert.ok(fnMatch, 'Could not locate deleteNotifications — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/\.in\('id', ids\)/,
+		'deleteNotifications must delete every id in ONE query via .in(\'id\', ids) — a per-id loop is the N+1 issue #350 fixed.',
+	);
+	assert.match(
+		body,
+		/if \(ids\.length === 0\) return;/,
+		'deleteNotifications must short-circuit an empty id list.',
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB.',
+	);
+});
+
+test('NotificationsList.removeGroup fires one batched delete, not one per member', () => {
+	// Reason: removeGroup awaited remove(row.id) for every member of a
+	// collapsed group — N sequential DELETEs (issue #350). It must collect
+	// the ids and call the batched deleteNotifications ONCE, keeping the
+	// optimistic local removal + per-unread-row unread-count decrement.
+	const source = read('src/lib/components/NotificationsList.svelte');
+	const fnMatch = source.match(/async function removeGroup[\s\S]*?\n\t}/);
+	assert.ok(fnMatch, 'Could not locate removeGroup — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/deleteNotifications\(ids\)/,
+		'removeGroup must dismiss the whole group with one deleteNotifications(ids) call.',
+	);
+	assert.doesNotMatch(
+		body,
+		/remove\(row\.id/,
+		'removeGroup must not loop the single-delete remove(row.id) per member — that is the N+1 issue #350 fixed.',
+	);
+	assert.match(
+		body,
+		/notificationStore\.decrement\(\)/,
+		'removeGroup must keep decrementing the unread badge per removed unread row.',
+	);
+});
+
 test('setRunPublic is a real toggle: writes the caller boolean and surfaces errors', () => {
 	// Reason: the one-way makeRunPublic it replaces hardcoded
 	// `is_public: true`, so a live-shared run could never be made

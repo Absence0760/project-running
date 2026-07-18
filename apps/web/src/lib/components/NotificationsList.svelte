@@ -8,6 +8,7 @@
 		markNotificationRead,
 		markAllNotificationsRead,
 		deleteNotification,
+		deleteNotifications,
 		type NotificationView,
 	} from '$lib/core/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
@@ -91,8 +92,17 @@
 
 	async function removeGroup(group: NotificationGroup, event: Event) {
 		event.stopPropagation();
-		for (const row of [group.lead, ...group.others]) {
-			await remove(row.id, event);
+		const rows = [group.lead, ...group.others];
+		const ids = rows.map((r) => r.id);
+		const idSet = new Set(ids);
+		const unread = items.filter((x) => idSet.has(x.row.id) && x.row.read_at == null).length;
+		items = items.filter((x) => !idSet.has(x.row.id));
+		for (let i = 0; i < unread; i++) notificationStore.decrement();
+		try {
+			await deleteNotifications(ids);
+		} catch (e) {
+			showToast(m('notificationsList.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+			await load();
 		}
 	}
 
