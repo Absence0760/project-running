@@ -153,6 +153,10 @@ create index routes_public_featured_sort on routes (featured_at desc nulls last,
   where is_public = true and shadow_hidden = false;
 create index routes_public_newest_sort on routes (created_at desc nulls last)
   where is_public = true and shadow_hidden = false;
+-- 20270423_001 dropped the superseded routes_featured index
+-- (featured_at desc nulls last where is_featured and is_public): the featured
+-- branch above orders ALL public rows and is served by routes_public_featured_sort,
+-- so the old is_featured=true-only partial index served nothing (issue #407).
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
