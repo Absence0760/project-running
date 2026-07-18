@@ -130,6 +130,41 @@ void main() {
     });
   });
 
+  group('signUpErrorRevealsAccountExistence', () {
+    test('an existing-email error would reveal account existence (issue #454)',
+        () {
+      // With GoTrue enable_confirmations=false a duplicate sign-up throws
+      // user_already_exists; the sign-up surface must collapse that to the
+      // SAME neutral check-your-email outcome a fresh sign-up shows, never a
+      // distinct "that email already has an account" message. Mirror of web
+      // auth_errors.test.ts (#399/#448).
+      final dup = classifyAuthError(const _FakeAuthException(
+          'User already registered',
+          code: 'user_already_exists',
+          statusCode: '422'));
+      expect(dup, AuthErrorKind.emailExists);
+      expect(signUpErrorRevealsAccountExistence(dup), isTrue);
+    });
+
+    test('non-enumerating auth errors are not neutralised', () {
+      final kinds = <Object>[
+        const SocketException('x'),
+        const _FakeAuthException('Invalid login credentials',
+            code: 'invalid_credentials', statusCode: '400'),
+        const _FakeAuthException('Too many requests', statusCode: '429'),
+        const _FakeAuthException('Password should be at least 8 characters',
+            code: 'weak_password', statusCode: '422'),
+        const _FakeAuthException('Email not confirmed',
+            code: 'email_not_confirmed', statusCode: '400'),
+        Exception('boom'),
+      ];
+      for (final err in kinds) {
+        expect(signUpErrorRevealsAccountExistence(classifyAuthError(err)),
+            isFalse);
+      }
+    });
+  });
+
   testWidgets('friendlyAuthError returns the localized message per kind',
       (tester) async {
     late AppLocalizations l10n;
