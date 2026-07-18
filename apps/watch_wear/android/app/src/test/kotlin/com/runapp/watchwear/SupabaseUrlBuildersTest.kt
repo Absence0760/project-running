@@ -1,5 +1,7 @@
 package com.runapp.watchwear
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -149,5 +151,44 @@ class SupabaseUrlBuildersTest {
         val weekSec = 7L * 24 * 3600
         val out = computeRefreshExpiryMs(nowMs, expiresInSec = weekSec)
         assertEquals(nowMs + weekSec * 1000L, out)
+    }
+
+    // ───────────── uploadTrack idempotency (issue #455) ─────────────
+
+    @Test fun `uploadTrack request carries x-upsert true so a retry overwrites instead of 409`() {
+        // The track object is keyed deterministically at
+        // {uid}/{runId}.json.gz. If saveRun's row POST fails after
+        // the track uploaded, drainQueue re-runs uploadTrack against
+        // an object that already exists. Without `x-upsert: true`
+        // Storage returns 409 Duplicate, execute() throws, and the
+        // run wedges the queue forever. The header is the fix.
+        val body = "gz".toByteArray().toRequestBody("application/json".toMediaType())
+        val req = buildUploadTrackRequest(
+            baseUrl = "https://x.supabase.co",
+            path = "user-1/run-1.json.gz",
+            anonKey = "anon",
+            token = "tok",
+            body = body,
+        )
+        assertEquals("true", req.header("x-upsert"))
+    }
+
+    @Test fun `uploadTrack request targets the runs bucket via POST with auth`() {
+        val body = "gz".toByteArray().toRequestBody("application/json".toMediaType())
+        val req = buildUploadTrackRequest(
+            baseUrl = "https://x.supabase.co",
+            path = "user-1/run-1.json.gz",
+            anonKey = "anon",
+            token = "tok",
+            body = body,
+        )
+        assertEquals("POST", req.method)
+        assertEquals(
+            "https://x.supabase.co/storage/v1/object/runs/user-1/run-1.json.gz",
+            req.url.toString(),
+        )
+        assertEquals("anon", req.header("apikey"))
+        assertEquals("Bearer tok", req.header("Authorization"))
+        assertEquals("gzip", req.header("Content-Encoding"))
     }
 }
