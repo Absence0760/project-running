@@ -3777,6 +3777,7 @@ export const messages = {
 	"nutrition.deleteEntryTitle": "Excluir este item?",
 	"nutrition.deleteEntryMessage": "{item} será removido do registro de hoje.",
 	"nutrition.deleteFailed": "Falha ao excluir: {error}",
+	"nutrition.addFailed": "Não foi possível registrar: {error}",
 	"nutrition.weeklyTrend": "Últimos 7 dias",
 	"nutrition.weekUnderGoal": "{n} abaixo da meta/dia",
 	"nutrition.weekOverGoal": "{n} acima da meta/dia",

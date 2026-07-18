@@ -3773,6 +3773,7 @@ export const messages = {
 	"nutrition.deleteEntryTitle": "この項目を削除しますか？",
 	"nutrition.deleteEntryMessage": "{item} を今日の記録から削除します。",
 	"nutrition.deleteFailed": "削除に失敗しました: {error}",
+	"nutrition.addFailed": "記録できませんでした: {error}",
 	"nutrition.weeklyTrend": "直近7日間",
 	"nutrition.weekUnderGoal": "目標より1日 {n} 少ない",
 	"nutrition.weekOverGoal": "目標より1日 {n} 多い",
