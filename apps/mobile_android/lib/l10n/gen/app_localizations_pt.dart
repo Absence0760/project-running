@@ -1256,6 +1256,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
 
   @override
+  String get runHoldToStopHint => 'Segure para parar';
+
+  @override
   String get runResumeA11yLabel => 'Retomar corrida';
 
   @override
@@ -12610,6 +12613,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
+
+  @override
+  String get runHoldToStopHint => 'Segure para parar';
 
   @override
   String get runResumeA11yLabel => 'Retomar corrida';

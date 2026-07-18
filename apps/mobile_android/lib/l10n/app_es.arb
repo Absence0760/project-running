@@ -358,6 +358,7 @@
   "runDiscardA11yHint": "Descarta la grabación actual sin guardarla",
   "runStopA11yLabel": "Detener y guardar la carrera",
   "runStopA11yHint": "Finaliza la grabación y guarda la carrera",
+  "runHoldToStopHint": "Mantén para detener",
   "runResumeA11yLabel": "Reanudar carrera",
   "runPauseA11yLabel": "Pausar carrera",
   "runResumeA11yHint": "Reanuda la grabación en pausa",
