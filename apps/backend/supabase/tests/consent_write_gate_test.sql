@@ -13,7 +13,7 @@
 --      importers/webhooks have no interactive consent context).
 
 begin;
-select plan(9);
+select plan(11);
 
 -- ─── structure ─────────────────────────────────────────────────────
 select has_function(
@@ -35,6 +35,10 @@ select has_trigger(
 select has_trigger(
   'public', 'body_metrics', 'body_metrics_require_consent',
   'body_metrics must carry the consent BEFORE INSERT trigger'
+);
+select has_trigger(
+  'public', 'routes', 'routes_require_consent',
+  'routes must carry the consent BEFORE INSERT trigger'
 );
 
 -- ─── behaviour ─────────────────────────────────────────────────────
@@ -79,6 +83,21 @@ begin
   insert into public.runs (user_id, started_at, duration_s, distance_m, source)
     values (v_consented, now(), 600, 1000, 'app');
 
+  -- routes is gated too: unconsented rejected, consented allowed.
+  perform set_config('request.jwt.claim.sub', v_unconsented::text, true);
+  begin
+    insert into public.routes (user_id, name, waypoints, distance_m)
+      values (v_unconsented, 'gate test',
+              '[{"lat":0,"lng":0},{"lat":0.01,"lng":0.01}]'::jsonb, 1500);
+    raise exception 'unconsented route insert must have been rejected';
+  exception when insufficient_privilege then
+    null; -- expected: 42501 from the consent guard
+  end;
+  perform set_config('request.jwt.claim.sub', v_consented::text, true);
+  insert into public.routes (user_id, name, waypoints, distance_m)
+    values (v_consented, 'gate test',
+            '[{"lat":0,"lng":0},{"lat":0.01,"lng":0.01}]'::jsonb, 1500);
+
   -- (5) service_role / null auth.uid() passes through even for the
   -- unconsented user — the async-importer carve-out.
   perform set_config('request.jwt.claim.role', 'service_role', true);
@@ -89,6 +108,7 @@ end $$;
 
 select pass('unconsented authenticated caller is rejected inserting a run');
 select pass('consented authenticated caller is allowed to insert a run');
+select pass('routes gate: unconsented rejected, consented allowed');
 select pass('service_role / null-uid write passes through the gate');
 
 -- (4) The consent-stamping path is not locked out: a fresh unstamped

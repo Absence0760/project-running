@@ -67,10 +67,10 @@ revoke execute on function private.enforce_consent() from public;
 
 comment on function private.enforce_consent() is
   'Fail-closed GDPR Art 8 consent guard (issue #382). BEFORE INSERT '
-  'trigger on the core personal-data tables — rejects an authenticated '
-  'caller whose user_profiles.age_confirmed_at is NULL. Null auth.uid() '
-  '(service_role / backend jobs) passes through. Stamp via '
-  'confirm_age_and_terms().';
+  'trigger on the core personal-data tables (runs, gym_workouts, food_log, '
+  'body_metrics, routes) — rejects an authenticated caller whose '
+  'user_profiles.age_confirmed_at is NULL. Null auth.uid() (service_role / '
+  'backend jobs) passes through. Stamp via confirm_age_and_terms().';
 
 create trigger runs_require_consent
   before insert on runs
@@ -86,4 +86,14 @@ create trigger food_log_require_consent
 
 create trigger body_metrics_require_consent
   before insert on body_metrics
+  for each row execute function private.enforce_consent();
+
+-- routes carries user-generated GPS/location data (Art 9-adjacent personal
+-- data), same class of "functional use of the app" the gate blocks. Both
+-- routes INSERT policies ("users own their routes", "club admins insert club
+-- routes") force new.user_id = auth.uid(), so the caller-keyed guard is
+-- correct here too. Training plans / social interactions stay ungated — a
+-- deliberate boundary for CISO to weigh, not an oversight.
+create trigger routes_require_consent
+  before insert on routes
   for each row execute function private.enforce_consent();
