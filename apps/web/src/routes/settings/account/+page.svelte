@@ -7,8 +7,8 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import { checkPasswordPair } from '$lib/core/auth_gates';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
+	import { changePasswordWithReauth, requestReauthNonce } from '$lib/core/password_change';
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
@@ -80,6 +80,8 @@
 
 	let newPassword = $state('');
 	let confirmPassword = $state('');
+	let reauthCode = $state('');
+	let reauthSending = $state(false);
 	let passwordSaving = $state(false);
 	let passwordStatus = $state<string | null>(null);
 	let passwordError = $state<string | null>(null);
@@ -455,23 +457,40 @@
 		setTimeout(() => (saved = false), 2000);
 	}
 
-	async function handleSavePassword() {
-		const pair = checkPasswordPair(newPassword, confirmPassword);
-		if (!pair.ok) {
-			passwordError = pair.reason === 'too_short'
-				? m('settingsAccount.passwordTooShort', { min: PASSWORD_MIN_LENGTH })
-				: m('settingsAccount.passwordsMismatch');
+	async function handleSendReauthCode() {
+		reauthSending = true; passwordError = null; passwordStatus = null;
+		const res = await requestReauthNonce(supabase.auth);
+		reauthSending = false;
+		if (!res.ok) {
+			passwordError = m('settingsAccount.reauthSendFailed', { error: res.message });
 			return;
 		}
+		passwordStatus = m('settingsAccount.reauthCodeSent');
+	}
+
+	async function handleSavePassword() {
 		passwordSaving = true; passwordError = null; passwordStatus = null;
-		const { error } = await supabase.auth.updateUser({ password: newPassword });
+		const res = await changePasswordWithReauth(supabase.auth, {
+			newPassword,
+			confirmPassword,
+			nonce: reauthCode,
+		});
 		passwordSaving = false;
-		if (error) { passwordError = error.message; }
-		else {
-			passwordStatus = m('settingsAccount.passwordSaved');
-			newPassword = ''; confirmPassword = '';
-			setTimeout(() => (passwordStatus = null), 5000);
+		if (!res.ok) {
+			if (res.reason === 'pair') {
+				passwordError = res.pairReason === 'too_short'
+					? m('settingsAccount.passwordTooShort', { min: PASSWORD_MIN_LENGTH })
+					: m('settingsAccount.passwordsMismatch');
+			} else if (res.reason === 'nonce_required') {
+				passwordError = m('settingsAccount.reauthRequired');
+			} else {
+				passwordError = res.message;
+			}
+			return;
 		}
+		passwordStatus = m('settingsAccount.passwordSaved');
+		newPassword = ''; confirmPassword = ''; reauthCode = '';
+		setTimeout(() => (passwordStatus = null), 5000);
 	}
 
 	async function handleExportCsv() {
@@ -1038,10 +1057,19 @@
 				<span class="label-text">{m('settingsAccount.confirmPassword')}</span>
 				<input type="password" autocomplete="new-password" bind:value={confirmPassword} />
 			</label>
+			<label>
+				<span class="label-text">{m('settingsAccount.reauthCodeLabel')}</span>
+				<div class="reauth-row">
+					<input type="text" inputmode="numeric" autocomplete="one-time-code" bind:value={reauthCode} placeholder={m('settingsAccount.reauthCodePlaceholder')} />
+					<button type="button" class="btn btn-secondary" onclick={handleSendReauthCode} disabled={reauthSending}>
+						{reauthSending ? m('settingsAccount.reauthSending') : m('settingsAccount.sendReauthCode')}
+					</button>
+				</div>
+			</label>
 		</div>
 		{#if passwordError}<p class="error-text" role="alert">{passwordError}</p>{/if}
 		{#if passwordStatus}<p class="ok-text">{passwordStatus}</p>{/if}
-		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
+		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword || !reauthCode}>
 			{passwordSaving ? m('settingsAccount.saving') : m('settingsAccount.savePassword')}
 		</button>
 	</section>
@@ -1276,6 +1304,9 @@
 	.consent-recorded { font-size: 0.8rem; }
 	.btn-save { width: auto; }
 	.email-change-btn { margin-top: var(--space-xs); align-self: flex-start; }
+	.reauth-row { display: flex; gap: var(--space-sm); align-items: stretch; }
+	.reauth-row input { flex: 1; }
+	.reauth-row .btn { width: auto; white-space: nowrap; }
 	.email-change-actions { margin-top: var(--space-xs); }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
