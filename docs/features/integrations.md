@@ -161,6 +161,12 @@ Operational pre-requisites:
 - Falls back to the web browser hand-off on builds where the client ID is unconfigured (matches the existing `url_launcher` path used before native OAuth shipped).
 - `lib/strava.dart` mirrors `apps/web/src/lib/integrations/strava.ts` and is unit-tested (16 tests in `test/strava_test.dart` on URL building + callback parsing + configured-state checks).
 
+### Bulk export (ZIP) import
+
+Independent of OAuth, both clients import Strava's "Request your archive" download — a ZIP with a root-level `activities.csv` index plus an `activities/` folder of per-run GPX / TCX / FIT files (modern exports gzip the inner files: `.gpx.gz`, `.tcx.gz`, `.fit.gz`). Web: `apps/web/src/lib/integrations/strava-zip.ts` (+ the pure header map `strava-zip-header.ts`). Mobile: `apps/mobile_android/lib/strava_importer.dart`. The CSV supplies scalar metadata (id, date, name, type, distance, moving time, avg HR) and the per-activity file supplies the GPS track; the two are combined so metadata survives even when a file is missing. Dedup tags each run with `metadata.strava_id` + `external_id = strava:{id}`.
+
+**Unit quirk (issue #380).** `activities.csv` carries **two** numeric blocks. The first ("summary") block's `Distance` follows the athlete's **display unit at export time** — km for a metric athlete, **miles for an imperial one** — a documented Strava behaviour with no format option. The second ("raw") block repeats `Distance` (~col 18) always in **SI metres**. The importers therefore prefer the raw-block metric column (`stravaDistanceMetres` in `strava-zip-header.ts` ↔ `stravaCsvDistanceMetres` in `strava_importer.dart` — matching logic, both unit-tested), falling back to the display column only when a single `Distance` exists (honouring an explicit `Distance in Miles` / `Distance in Kilometers` header, else assuming km — on mobile the parsed track's distance overrides this fallback anyway). Before the fix both clients treated the display `Distance` as km unconditionally, so every imperial-athlete import came in ~1.609× short, silently corrupting mileage / pace / PRs / VDOT. `Elevation Gain` appears only in the raw SI block, so it is always metres and needs no unit branch.
+
 ### Webhook (real-time sync)
 
 Register once per app (not per user). Strava pushes a notification within seconds of a user creating, updating, or deleting an activity.
