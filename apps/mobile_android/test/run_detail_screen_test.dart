@@ -765,7 +765,8 @@ void main() {
       return runStore;
     }
 
-    Future<void> deleteViaMenu(WidgetTester tester) async {
+    Future<void> deleteViaMenu(WidgetTester tester,
+        {String? expectBanner}) async {
       // The whole interaction runs inside runAsync so the store file
       // I/O awaited by the delete flow (sidecar persist / run-file
       // delete) completes in the tap's zone — the same pattern as the
@@ -782,6 +783,16 @@ void main() {
         await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
         await tester.pump();
         await Future<void>.delayed(const Duration(milliseconds: 100));
+        // Because the delete flow runs in runAsync, showTopBanner's
+        // auto-dismiss is a REAL wall-clock timer (3 s). Assert the
+        // transient banner here, one pump after the store I/O + banner
+        // fire, so the check isn't separated from the banner by the
+        // trailing pumps + expects below — that window let the 3 s
+        // dismissal win on a loaded CI runner (found 0 widgets).
+        if (expectBanner != null) {
+          await tester.pump();
+          expect(find.textContaining(expectBanner), findsOneWidget);
+        }
       });
       await tester.pump();
       // Two 300 ms pumps: the first finishes the dialog dismissal, the
@@ -797,7 +808,10 @@ void main() {
       final api = _DeleteFailApi();
       final runStore = await pumpForDelete(tester, run, apiClient: api);
 
-      await deleteViaMenu(tester);
+      // Failure banner is asserted inside deleteViaMenu's runAsync window
+      // (its auto-dismiss is a real timer here — see the helper).
+      await deleteViaMenu(tester,
+          expectBanner: "Couldn't delete from the cloud");
 
       expect(api.calls, 1);
       // Run NOT removed locally — the cloud row still exists, so a local
@@ -806,9 +820,7 @@ void main() {
       // Tombstoned for the SyncService retry, stamped with the owner.
       expect(runStore.pendingRemoteDeleteIds, contains(run.id));
       expect(runStore.debugPendingRemoteDeleteOwner(run.id), 'user-1');
-      // Failure surfaced, screen not popped.
-      expect(find.textContaining("Couldn't delete from the cloud"),
-          findsOneWidget);
+      // Screen not popped.
       expect(find.byType(RunDetailScreen), findsOneWidget);
 
       // A resync that pulls the still-live server row must not clear the
