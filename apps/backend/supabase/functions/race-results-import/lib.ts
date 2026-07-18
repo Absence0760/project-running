@@ -11,6 +11,8 @@
 // caps, and the external_id shape are unit-testable without live credentials
 // (the EF itself returns 503 when a provider's creds are unset — see index.ts).
 
+import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
+
 export const MAX_FIELD_LEN = 200;
 export const MAX_RESULTS_ROWS = 2000;
 
@@ -98,7 +100,11 @@ export function mapRunSignUpResult(
   }
 
   const bib = capField(r.bib_num);
-  const startedAt = `${opts.raceDate}T10:00:00Z`;
+  // The RunSignUp / ChronoTrack / UltraSignup feeds carry a race date with no
+  // start clock, so synthesise a UTC time-of-day. The 10:00 UTC choice + its
+  // worldwide-timezone rationale live in the shared constant so this path and
+  // parkrun-import's parseParkrunDate can't silently diverge.
+  const startedAt = `${opts.raceDate}${SYNTHETIC_START_TIME_UTC}`;
 
   const metadata: Record<string, unknown> = {
     race_name: capField(opts.raceName),

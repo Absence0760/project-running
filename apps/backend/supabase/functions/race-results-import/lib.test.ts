@@ -20,6 +20,7 @@ import {
   runSignUpResultsUrl,
   ultraSignUpResultsUrl,
 } from './lib.ts';
+import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
 
 const OPTS = {
   userId: 'u-1',
@@ -354,4 +355,48 @@ Deno.test('extractChronoTrackResults reads event_results + tolerates results + c
     event_results: Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ results_bib: 'x' })),
   };
   assertEquals(extractChronoTrackResults(big).length, MAX_RESULTS_ROWS);
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Synthetic started_at — a race feed carries a date with no start
+// clock, so the mapper appends the shared 10:00 UTC time-of-day. Same
+// choice + rationale as parkrun-import's parseParkrunDate (persona-hunt
+// finding Pro #5), extracted into `SYNTHETIC_START_TIME_UTC` so the two
+// importers can't silently diverge. Mirrors parkrun-import/lib.test.ts.
+
+function localDateAt(stampIso: string, offsetHours: number): string {
+  const stampMs = Date.parse(stampIso);
+  const localMs = stampMs + offsetHours * 3_600_000;
+  const d = new Date(localMs);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+Deno.test('started_at synthesises the shared 10:00 UTC time on a date with no clock', () => {
+  assertEquals(SYNTHETIC_START_TIME_UTC, 'T10:00:00Z');
+  const run = mapRunSignUpResult({ bib_num: '1234', chip_time: '1:47:23' }, OPTS);
+  assert(run !== null);
+  assertEquals(run!.started_at, '2025-09-21T10:00:00Z');
+});
+
+Deno.test('started_at local calendar date is preserved at UTC-10 (Hawaii, the bug case)', () => {
+  // Pre-fix at T08:00:00Z, Hawaii's UTC-10 offset wrapped a Saturday
+  // race back to Friday. T10:00:00Z keeps it on Saturday. Pinned so a
+  // future "back to T08" refactor breaks this test.
+  const run = mapRunSignUpResult({ bib_num: '1', chip_time: '1:00:00' }, OPTS);
+  assertEquals(localDateAt(run!.started_at, -10), '2025-09-21');
+});
+
+Deno.test('started_at local calendar date is preserved at UTC+13 (NZ NZDT)', () => {
+  const run = mapRunSignUpResult({ bib_num: '1', chip_time: '1:00:00' }, OPTS);
+  assertEquals(localDateAt(run!.started_at, 13), '2025-09-21');
+});
+
+Deno.test('started_at known limit at UTC+14 (Samoa DST)', () => {
+  // No single UTC hour can satisfy every offset in the 26-hour
+  // worldwide range. Samoa during DST (UTC+14) is the documented known
+  // exception — same acceptable trade as parkrun-import. Pinning the
+  // actual behaviour so a future "improve this" attempt has a baseline.
+  const run = mapRunSignUpResult({ bib_num: '1', chip_time: '1:00:00' }, OPTS);
+  assertEquals(localDateAt(run!.started_at, 14), '2025-09-22');
 });
