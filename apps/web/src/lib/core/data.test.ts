@@ -16,6 +16,82 @@ function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
 }
 
+test('fetchRunsForDashboard is bounded + column-narrowed, not the unbounded select(*) scan', () => {
+	// Reason: /dashboard's onMount used to call the unbounded fetchRuns()
+	// (`select('*')`, paging the ENTIRE history 1000 rows at a time incl.
+	// the metadata jsonb bag) on every paint of the highest-traffic page
+	// (issue #332). It must instead window by date via dashboardRunsWindowStart
+	// and narrow the select — never regress to `select('*')` or drop the
+	// `.gte('started_at', …)` window (that resurrects the full-history scan).
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchRunsForDashboard');
+	assert.ok(start >= 0, 'Could not locate fetchRunsForDashboard — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/dashboardRunsWindowStart\(/,
+		'fetchRunsForDashboard must window via dashboardRunsWindowStart — an unwindowed fetch is the bug.',
+	);
+	assert.match(
+		body,
+		/\.gte\('started_at',\s*windowStart\.toISOString\(\)\)/,
+		'fetchRunsForDashboard must filter started_at against the window cutoff.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.select\('\*'\)/,
+		'fetchRunsForDashboard must column-narrow — select(*) ships the metadata jsonb bag per row.',
+	);
+	assert.match(
+		body,
+		/\.select\(\s*['"`][^'"`]*started_at[^'"`]*distance_m/,
+		'fetchRunsForDashboard must select the explicit consumer columns (started_at, distance_m, …).',
+	);
+	// The dashboard page must call the bounded reader, not the unbounded one.
+	const page = read('src/routes/dashboard/+page.svelte');
+	assert.match(
+		page,
+		/fetchRunsForDashboard\(\)/,
+		'/dashboard must load runs via the bounded fetchRunsForDashboard.',
+	);
+	assert.doesNotMatch(
+		page,
+		/\bfetchRuns\(\)/,
+		'/dashboard must not call the unbounded fetchRuns() — that is the #332 regression.',
+	);
+	// Lifetime headline stats must come from the cheap aggregate, not the
+	// windowed set (which would truncate a deep-history runner's totals).
+	assert.match(
+		page,
+		/fetchRunAllTimeStats\(\)/,
+		'/dashboard must source lifetime totals from fetchRunAllTimeStats, not the ~2-year window.',
+	);
+});
+
+test('fetchRunAllTimeStats uses a HEAD count + single-row max, ships no run payload', () => {
+	// Reason: the Total-runs / Longest-run cards are labelled "all sources" /
+	// "all time"; windowing the dashboard fetch to ~2 years would silently
+	// truncate them for a deep-history (Strava-migrant) runner — the exact
+	// case the old unbounded scan protected. The aggregate must stay a
+	// count-only HEAD read + a one-row max, never a full-history read.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchRunAllTimeStats');
+	assert.ok(start >= 0, 'Could not locate fetchRunAllTimeStats — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/count:\s*'exact',\s*head:\s*true/,
+		'total runs must be a HEAD count query — it must not ship rows.',
+	);
+	assert.match(
+		body,
+		/\.order\('distance_m',\s*\{\s*ascending:\s*false\s*\}\)\s*[\s\S]*?\.limit\(1\)/,
+		'longest run must be a single-row max (order desc + limit 1), not a client-side scan.',
+	);
+});
+
 test('fetchRouteById clips waypoints for non-owner club members (RLS is not the boundary)', () => {
 	// Reason: RLS lets an active club member SELECT the base `routes`
 	// row, which carries the unclipped polyline + geom + start_point. The
