@@ -255,45 +255,57 @@ unprotected. This closes that gap with a **one-time, throttled, dismissible
 contextual nudge** at run start — no start-flow friction, no new blocking
 step.
 
-- **Trigger (pure, twinned).** `shouldNudgeSoloSafety` in
+- **Trigger (pure, twinned).** `shouldSurfaceSoloSafetyNudge` in
   `apps/web/src/lib/safety/safety_nudge.ts` ↔ `apps/mobile_android/lib/safety_nudge.dart`
-  (TS↔Dart parity pair, 24 mirror tests each) returns true only when the
-  run is genuinely unprotected AND after dark AND not throttled:
+  (TS↔Dart parity pair, 30 mirror tests each) returns true only when the
+  run is genuinely unprotected AND after dark AND not throttled. It folds
+  the throttle composition over `shouldNudgeSoloSafety`'s guards:
   `autoLiveShareOn` off, `isBroadcast` false (no manual share before GO),
-  `nudgeDismissed` false, and `isDarkOutside(nowLocalMinutes, latitude, dayOfYear)`
-  true. "Dark" is the **fixed 20:00–06:00 local window** (`isNightWindow`,
-  the deterministic floor) **OR** a **seasonal sunrise/sunset test**
-  (`isSunDown`) when the runner's latitude + day-of-year are known — the
-  latter catches genuinely-dark pre-dawn winter runs at higher latitudes
-  (e.g. a 06:30 December run at 60°N, sunrise ~09:00), which the old
-  fixed-only window silently missed (issue #265). `isSunDown` derives
-  sunrise/sunset from the solar declination + latitude, assuming solar noon
-  at local 12:00; it deliberately ignores longitude-within-timezone /
-  equation-of-time / DST (~1 h of clock error) because it only ever ADDS
-  darkness on top of the fixed floor, so the window widens, never narrows,
-  and no run that nudged before stops nudging. Polar day → never dark, polar
-  night → always dark. A null `latitude`/`dayOfYear` (no GPS fix yet)
-  degrades to exactly the fixed window. Still no astronomy dependency (a few
-  lines of trig), and erring toward nudging slightly early is harmless where
-  silently missing a dark run is not. Every guard is fail-closed (any
-  suppressor wins), so a covered runner is never prompted.
-- **Throttle.** `nudgeThrottled(dismissedAtMs, nowMs)` suppresses the nudge
-  for `safetyNudgeThrottleMs` (30 days) after it's surfaced. The device
-  pref `safety_nudge_dismissed_at` (D scope, ISO-8601, [settings.md](../backend/settings.md))
-  is stamped the moment the banner shows — the banner is transient and
-  dismissible, so "surfaced once" is the throttle anchor. A failed
+  `nudgeThrottled(lastActedAtMs, nowMs)` false, and
+  `isDarkOutside(nowLocalMinutes, latitude, dayOfYear)` true. The
+  consolidated helper takes an explicit `lastActedAtMs` so a caller can't
+  re-introduce the "throttle from shown, not from acted-on" bug by feeding
+  a shown-at timestamp (issue #264). "Dark" is the **fixed 20:00–06:00
+  local window** (`isNightWindow`, the deterministic floor) **OR** a
+  **seasonal sunrise/sunset test** (`isSunDown`) when the runner's latitude
+  + day-of-year are known — the latter catches genuinely-dark pre-dawn
+  winter runs at higher latitudes (e.g. a 06:30 December run at 60°N,
+  sunrise ~09:00), which the old fixed-only window silently missed (issue
+  #265). `isSunDown` derives sunrise/sunset from the solar declination +
+  latitude, assuming solar noon at local 12:00; it deliberately ignores
+  longitude-within-timezone / equation-of-time / DST (~1 h of clock error)
+  because it only ever ADDS darkness on top of the fixed floor, so the
+  window widens, never narrows, and no run that nudged before stops
+  nudging. Polar day → never dark, polar night → always dark. A null
+  `latitude`/`dayOfYear` (no GPS fix yet) degrades to exactly the fixed
+  window. Still no astronomy dependency (a few lines of trig), and erring
+  toward nudging slightly early is harmless where silently missing a dark
+  run is not. Every guard is fail-closed (any suppressor wins), so a
+  covered runner is never prompted.
+- **Throttle.** `nudgeThrottled(actedAtMs, nowMs)` suppresses the nudge
+  for `safetyNudgeThrottleMs` (30 days) after the runner **acts on** it.
+  The device pref `safety_nudge_dismissed_at` (D scope, ISO-8601,
+  [settings.md](../backend/settings.md)) is stamped only when the runner
+  shares or dismisses — **not** when the banner merely shows. A nudge a
+  runner never engaged with (issue #264: a 6-second banner they missed) is
+  therefore never suppressed; it resurfaces next dark solo run. A failed
   stamp-write just risks re-surfacing next run (the safe direction).
 - **Surface (mobile-only, L4).** `run_screen._maybeShowSafetyNudge()` runs
   inside `_attachRecordingSideEffects` right after the auto-live-share
-  block — the complement of that path. It gathers the inputs, and on a
-  positive decision shows a top banner ("Running solo after dark? Share a
-  live link so someone can follow along.") whose action shares the current
-  run's live link (`_shareLiveLink`, one-off — it does NOT flip the
-  public-by-default `auto_live_share` pref). The whole method is wrapped in
-  its own try/catch + `debugPrint`: a failure computing daylight or reading
-  prefs must never touch the recording (L0–L1). Recording is mobile-only,
-  so there is no web surface — the decision helper is the twinned canonical
-  logic (decisions §24), the banner is the platform-additive surface.
+  block — the complement of that path. On a positive decision it flips a
+  screen-held flag that renders a **persistent, dismissible**
+  `SafetyNudgeBanner` (`widgets/safety_nudge_banner.dart`) in the recording
+  chrome, a sibling of the off-route / GPS banners — replacing the earlier
+  6-second auto-dismissing top banner that was easy to miss (issue #264).
+  The banner stays until the runner acts: **Share** shares the current
+  run's live link (`_onSafetyNudgeShare` → `_shareLiveLink`, one-off — it
+  does NOT flip the public-by-default `auto_live_share` pref); **Not now**
+  (`_dismissSafetyNudge`) dismisses it. Both stamp the throttle. The whole
+  gather-and-flip method is wrapped in its own try/catch + `debugPrint`: a
+  failure computing daylight or reading prefs must never touch the
+  recording (L0–L1). Recording is mobile-only, so there is no web
+  surface — the decision helper is the twinned canonical logic
+  (decisions §24), the banner is the platform-additive surface.
 - **Sign-in.** Gated on a settings service being available (so the throttle
   can persist) — without one the nudge would nag every run, which is the
   friction the persona explicitly doesn't want. Fail-closed: no service →

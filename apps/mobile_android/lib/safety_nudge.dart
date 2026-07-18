@@ -36,10 +36,13 @@ const int safetyNudgeDawnMinutes = 6 * 60;
 /// nudging (start at sunset), never toward missing a dark run.
 const double sunDownAltitudeDeg = -0.833;
 
-/// How long surfacing the nudge suppresses it before it can resurface.
-/// Long enough that a runner who has seen (and understood) the prompt is
-/// not nagged every night, short enough that a lapsed habit gets an
-/// occasional reminder. The nudge is otherwise dismissible on sight.
+/// How long ACTING on the nudge (sharing a link or explicitly dismissing
+/// it) suppresses it before it can resurface. Long enough that a runner who
+/// has engaged with the prompt is not nagged every night, short enough that
+/// a lapsed habit gets an occasional reminder. Deliberately anchored on the
+/// runner's *action*, not on merely surfacing the banner — a nudge a runner
+/// never engaged with (a transient banner they missed) must NOT be
+/// suppressed for a month.
 const int safetyNudgeThrottleMs = 30 * 24 * 60 * 60 * 1000;
 
 /// True when [nowLocalMinutes] falls in the fixed dusk→dawn window. Wraps
@@ -96,13 +99,14 @@ bool isDarkOutside(int nowLocalMinutes, double? latitude, int? dayOfYear) {
   return isSunDown(nowLocalMinutes, latitude, dayOfYear);
 }
 
-/// True when the nudge was last surfaced recently enough that it should
-/// stay suppressed. [dismissedAtMs] null (never surfaced) is never
+/// True when the nudge was last ACTED on (shared or dismissed) recently
+/// enough that it should stay suppressed. [actedAtMs] null (never acted on,
+/// including a nudge that was merely shown and then missed) is never
 /// throttled; a future-dated stamp (clock skew) reads as recent and
 /// throttles rather than spamming.
-bool nudgeThrottled(int? dismissedAtMs, int nowMs) {
-  if (dismissedAtMs == null) return false;
-  return nowMs - dismissedAtMs < safetyNudgeThrottleMs;
+bool nudgeThrottled(int? actedAtMs, int nowMs) {
+  if (actedAtMs == null) return false;
+  return nowMs - actedAtMs < safetyNudgeThrottleMs;
 }
 
 class SoloSafetyNudgeInput {
@@ -125,7 +129,7 @@ class SoloSafetyNudgeInput {
   /// runner shared a link manually before pressing GO).
   final bool isBroadcast;
 
-  /// Whether the nudge is currently throttled (surfaced within the
+  /// Whether the nudge is currently throttled (acted on within the
   /// window). Compute with [nudgeThrottled].
   final bool nudgeDismissed;
 
@@ -147,4 +151,61 @@ bool shouldNudgeSoloSafety(SoloSafetyNudgeInput input) {
   if (input.isBroadcast) return false;
   if (input.nudgeDismissed) return false;
   return isDarkOutside(input.nowLocalMinutes, input.latitude, input.dayOfYear);
+}
+
+class SoloSafetyNudgeSurfaceInput {
+  /// Local time of day the run started, in minutes since midnight.
+  final int nowLocalMinutes;
+
+  /// The runner's latitude in degrees, or null when there is no GPS fix
+  /// yet — null degrades the darkness test to the fixed window.
+  final double? latitude;
+
+  /// 1-based day of the local year (1–366), paired with [latitude]; null
+  /// when unknown.
+  final int? dayOfYear;
+
+  /// The `auto_live_share` device pref — when on, every run already
+  /// broadcasts, so there is nothing to nudge.
+  final bool autoLiveShareOn;
+
+  /// Whether a live broadcast is already active for this run.
+  final bool isBroadcast;
+
+  /// When the runner last ACTED on the nudge (shared or dismissed it),
+  /// epoch ms, or null if they never have. This is deliberately NOT the
+  /// time the nudge was last *shown* — a persistent banner a runner never
+  /// engaged with must resurface, not stay suppressed for the full
+  /// throttle window.
+  final int? lastActedAtMs;
+
+  /// Current wall-clock, epoch ms — the throttle reference.
+  final int nowMs;
+
+  const SoloSafetyNudgeSurfaceInput({
+    required this.nowLocalMinutes,
+    required this.latitude,
+    required this.dayOfYear,
+    required this.autoLiveShareOn,
+    required this.isBroadcast,
+    required this.lastActedAtMs,
+    required this.nowMs,
+  });
+}
+
+/// Whether to surface the persistent solo-safety banner right now. Folds
+/// the throttle composition ([nudgeThrottled] on the acted-on stamp) into
+/// the [shouldNudgeSoloSafety] guards so the caller can't re-introduce the
+/// "throttle from shown, not from acted-on" bug by feeding a shown-at
+/// timestamp — the parameter is named [SoloSafetyNudgeSurfaceInput.lastActedAtMs]
+/// to make the contract explicit at the call site.
+bool shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput input) {
+  return shouldNudgeSoloSafety(SoloSafetyNudgeInput(
+    nowLocalMinutes: input.nowLocalMinutes,
+    latitude: input.latitude,
+    dayOfYear: input.dayOfYear,
+    autoLiveShareOn: input.autoLiveShareOn,
+    isBroadcast: input.isBroadcast,
+    nudgeDismissed: nudgeThrottled(input.lastActedAtMs, input.nowMs),
+  ));
 }

@@ -83,12 +83,60 @@ void main() {
     expect(nudgeAt(22 * 60, isBroadcast: true), false);
   });
 
-  test('a throttled (recently surfaced) nudge stays suppressed', () {
+  test('a throttled (recently acted-on) nudge stays suppressed', () {
     expect(nudgeAt(22 * 60, nudgeDismissed: true), false);
   });
 
   test('every suppressor is independent — daylight alone suppresses', () {
     expect(nudgeAt(9 * 60, autoLiveShareOn: false, isBroadcast: false), false);
+  });
+
+  bool surfaceAt(
+    int minutes, {
+    double? latitude,
+    int? dayOfYear,
+    bool autoLiveShareOn = false,
+    bool isBroadcast = false,
+    int? lastActedAtMs,
+  }) {
+    return shouldSurfaceSoloSafetyNudge(SoloSafetyNudgeSurfaceInput(
+      nowLocalMinutes: minutes,
+      latitude: latitude,
+      dayOfYear: dayOfYear,
+      autoLiveShareOn: autoLiveShareOn,
+      isBroadcast: isBroadcast,
+      lastActedAtMs: lastActedAtMs,
+      nowMs: now,
+    ));
+  }
+
+  test('surfaces a solo after-dark run never acted on', () {
+    expect(surfaceAt(22 * 60), true);
+  });
+
+  test('a nudge acted on within the window stays suppressed', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now - (safetyNudgeThrottleMs - 1)),
+        false);
+  });
+
+  test('a nudge acted on longer ago than the window resurfaces', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now - safetyNudgeThrottleMs), true);
+  });
+
+  test('a future-dated acted-on stamp (clock skew) stays suppressed', () {
+    expect(surfaceAt(22 * 60, lastActedAtMs: now + 5000), false);
+  });
+
+  test('daylight / broadcast / auto-share each suppress the surface decision',
+      () {
+    expect(surfaceAt(12 * 60), false);
+    expect(surfaceAt(22 * 60, isBroadcast: true), false);
+    expect(surfaceAt(22 * 60, autoLiveShareOn: true), false);
+  });
+
+  test('the surface decision inherits the seasonal darkness', () {
+    expect(surfaceAt(7 * 60, latitude: 60, dayOfYear: dec21), true);
+    expect(surfaceAt(6 * 60 + 30, latitude: 60, dayOfYear: jun21), false);
   });
 
   test('winter pre-dawn at high latitude is dark (sun still down)', () {
