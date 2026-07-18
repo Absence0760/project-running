@@ -4095,6 +4095,7 @@ export type Database = {
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          handle: string | null
           health_data_consent_at: string | null
           height_cm: number | null
           id: string
@@ -4116,6 +4117,7 @@ export type Database = {
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          handle?: string | null
           health_data_consent_at?: string | null
           height_cm?: number | null
           id: string
@@ -4137,6 +4139,7 @@ export type Database = {
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          handle?: string | null
           health_data_consent_at?: string | null
           height_cm?: number | null
           id?: string
@@ -4153,16 +4156,22 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          discoverable_area: unknown
+          discoverable_area_label: string | null
           prefs: Json
           updated_at: string
           user_id: string
         }
         Insert: {
+          discoverable_area?: unknown
+          discoverable_area_label?: string | null
           prefs?: Json
           updated_at?: string
           user_id: string
         }
         Update: {
+          discoverable_area?: unknown
+          discoverable_area_label?: string | null
           prefs?: Json
           updated_at?: string
           user_id?: string
@@ -4865,6 +4874,7 @@ export type Database = {
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       cleanup_stale_user_coach_usage: { Args: never; Returns: number }
       clear_device_token: { Args: { p_token: string }; Returns: undefined }
+      clear_discoverable_area: { Args: never; Returns: undefined }
       clear_push_subscription: {
         Args: { p_device_id: string; p_user_id: string }
         Returns: undefined
@@ -4985,6 +4995,15 @@ export type Database = {
           run_count: number
           slug: string
           surface: string
+        }[]
+      }
+      discoverable_runners_near: {
+        Args: { p_limit?: number; p_radius_m?: number }
+        Returns: {
+          avatar_url: string
+          bucket: number
+          display_name: string
+          id: string
         }[]
       }
       dm_threads: {
@@ -5156,6 +5175,7 @@ export type Database = {
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          handle: string | null
           health_data_consent_at: string | null
           height_cm: number | null
           id: string
@@ -5358,6 +5378,7 @@ export type Database = {
           title: string
         }[]
       }
+      my_discoverable_area: { Args: never; Returns: string }
       my_pending_safety_requests: {
         Args: never
         Returns: {
@@ -5756,6 +5777,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      set_discoverable_area: {
+        Args: { p_label?: string; p_lat: number; p_lng: number }
+        Returns: string
+      }
       set_gym_routine_public: {
         Args: { p_public: boolean; p_routine_id: string }
         Returns: undefined
@@ -5781,6 +5806,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_my_handle: { Args: { p_handle: string }; Returns: string }
       set_push_subscription: {
         Args: {
           p_device_id: string
