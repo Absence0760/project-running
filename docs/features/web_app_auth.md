@@ -59,7 +59,8 @@ The shape is hydrated from `user_profiles` on every sign-in. If the row doesn't 
 | `auth.signInWithGoogle()` | Kicks off Google OAuth via Supabase; redirects to the provider |
 | `auth.signInWithApple()` | Defined in the store but **not invoked from the UI yet** — the login page's Apple button surfaces a "coming soon" toast. Will be wired once Apple Services-ID setup is complete. |
 | `auth.refreshSession()` | Re-reads the Supabase session (useful after OAuth return) |
-| `auth.logout()` | `supabase.auth.signOut()` + clears local state |
+| `auth.logout()` | `supabase.auth.signOut({ scope: 'local' })` + clears local state — the sidebar's Sign out. Only invalidates this browser context; swallows the provider error. |
+| `auth.logoutEverywhere()` | `supabase.auth.signOut({ scope: 'global' })` + clears local state — the `/settings/account` "Sign out everywhere" affordance. Revokes every refresh token (mobile + watch + other browsers), so a suspected-stolen token stops working. **Fails closed**: throws on a revocation error before the local teardown, so a failed global sign-out never masquerades as success. Both methods route through the `signOutWithScope` seam in `stores/sign_out.ts`. |
 
 Email/password sign-in is wired directly in `/login/+page.svelte` via `supabase.auth.signInWithPassword(...)` and `supabase.auth.signUp(...)` — it doesn't go through the store.
 
