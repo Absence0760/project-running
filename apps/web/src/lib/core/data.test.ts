@@ -61,6 +61,60 @@ test('fetchRouteById clips waypoints for non-owner club members (RLS is not the 
 	);
 });
 
+test('fetchRoutesWithError selects a narrowed column set, never geom, for the routes list', () => {
+	// Reason: `routes.geom` is a geography(LineString) duplicating `waypoints`
+	// purely for server-side spatial queries; no client reads it. `select('*')`
+	// on the owned-routes query + both saved-route lookups shipped the full geom
+	// binary over the wire alongside waypoints, ~doubling the geometry payload of
+	// the busiest routes page for zero rendering benefit (issue #344). The queries
+	// must enumerate ROUTE_LIST_COLS (base table) / PUBLIC_ROUTE_LIST_COLS (view)
+	// — omitting geom + start_point but covering every column the "My routes" list
+	// AND the route pickers (RunEditor / EventEditor / club transfer) read.
+	const source = read('src/lib/core/data.ts');
+
+	const listCols = source.match(/const ROUTE_LIST_COLS\s*=\s*\n?\s*'([^']*)'/);
+	assert.ok(listCols, 'Could not locate the ROUTE_LIST_COLS constant — rename?');
+	const cols = listCols![1].split(',').map((c) => c.trim());
+	assert.ok(!cols.includes('geom'), 'ROUTE_LIST_COLS must not select geom — server-spatial-only, doubles the wire payload.');
+	assert.ok(!cols.includes('start_point'), 'ROUTE_LIST_COLS must not select start_point — no client reader.');
+	// Every column a consumer of fetchRoutes / fetchRoutesWithError reads:
+	// the /routes list, plus the RunEditor / EventEditor / club-transfer pickers.
+	for (const needed of [
+		'id',
+		'user_id',
+		'club_id',
+		'name',
+		'distance_m',
+		'elevation_m',
+		'surface',
+		'waypoints',
+		'is_starred',
+		'run_count',
+		'created_at',
+	]) {
+		assert.ok(cols.includes(needed), `ROUTE_LIST_COLS must include ${needed} — a routes-list/picker consumer reads it.`);
+	}
+
+	const fnMatch = source.match(/export async function fetchRoutesWithError[\s\S]*?\n}/);
+	assert.ok(fnMatch, 'Could not locate fetchRoutesWithError — rename?');
+	const body = fnMatch![0];
+	assert.doesNotMatch(
+		body,
+		/\.select\('\*'\)/,
+		'fetchRoutesWithError must not select(\'*\') — the owned + saved lookups ship geom for nothing.',
+	);
+	assert.match(
+		body,
+		/\.from\('routes'\)\s*\.select\(ROUTE_LIST_COLS\)/,
+		'The owned + saved base-table reads must select ROUTE_LIST_COLS.',
+	);
+	assert.match(
+		body,
+		/\.from\('public_routes'\)\s*\.select\(PUBLIC_ROUTE_LIST_COLS\)/,
+		'The saved public_routes lookup must select the view-scoped PUBLIC_ROUTE_LIST_COLS.',
+	);
+});
+
 // ── Mobile twin cross-checks (packages/api_client is shared, no iOS twin) ──
 
 test('api_client.dart fetchRouteById clips for non-owner club members', () => {
