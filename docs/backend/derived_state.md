@@ -25,14 +25,20 @@ retention cron referenced in a comment that was never created.
 
 - **What it caches:** per-user best efforts (fastest time per distance bracket,
   embedded best efforts within longer runs), de-duplicated against DNF runs.
+- **Eligible sources:** `app`, `watch`, `strava`, `garmin`, `healthkit`,
+  `healthconnect`, `parkrun`, `race` — every valid `runs.source` value. `parkrun`
+  (weekly certified 5K) and `race` (chip-timed official results) were added by
+  `20270423_001` (#378); before that both were silently excluded, so a fastest 5K
+  run at parkrun never earned a PR. `award_achievements_for_user` uses the
+  identical source list so distance badges and PRs agree on what counts.
 - **Authoritative recompute:** the body of `refresh_personal_records_for_user(p_user_id)`
   — the cumulative result of the widened brackets (`20260528000002`),
   embedded-best efforts (`20260529000002`; read from the promoted
   `runs.fastest_*_s` columns since `20270325_001`), DNF exclusion
-  (`20260530000001`), mile bracket (`20261021_001`), and the auth guard
-  (`20260904_001`), consolidated by `20261009_001`. The live body is the
-  **latest** migration that touches the function — read it, don't reconstruct
-  from the originals.
+  (`20260530000001`), mile bracket (`20261021_001`), the auth guard
+  (`20260904_001`), consolidated by `20261009_001`, and the parkrun/race source
+  widening (`20270423_001`). The live body is the **latest** migration that
+  touches the function — read it, don't reconstruct from the originals.
 - **Maintained by:** statement-level AFTER INSERT/UPDATE/DELETE triggers on
   `runs` (`20270315_001`; per-row until then) calling the refresher once per
   statement per affected `user_id` from the transition tables — a bulk import
