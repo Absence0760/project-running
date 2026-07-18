@@ -378,7 +378,11 @@ pub fn build_roadbook<'a>(
 /// 30). Snap to the whole day nearest the leg's projected arrival, so a 30h
 /// checkpoint resolves to 30h, not the same-day 6h. Never before the start
 /// (k >= 0), so an at-or-before-start clock still wraps to >= 24h.
-fn cutoff_limit_s(stop: &Stop, start_clock_min: Option<f64>, projected_elapsed_s: f64) -> Option<u32> {
+fn cutoff_limit_s(
+    stop: &Stop,
+    start_clock_min: Option<f64>,
+    projected_elapsed_s: f64,
+) -> Option<u32> {
     let parts = crate::route_markers::parse_cutoff(stop.cutoff_clock, stop.cutoff_elapsed_s)?;
     if let Some(e) = parts.elapsed_s {
         return Some(e);
