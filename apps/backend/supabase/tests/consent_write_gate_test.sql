@@ -1,4 +1,4 @@
--- Pins migration 20270425_001 — server-side GDPR Art 8 consent write gate.
+-- Pins migration 20270425_002 — server-side GDPR Art 8 consent write gate.
 --
 -- Behaviour pinned:
 --   1. private.enforce_consent() exists + a BEFORE INSERT trigger is
