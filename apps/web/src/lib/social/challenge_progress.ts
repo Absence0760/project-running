@@ -137,6 +137,44 @@ function compareEntries(a: RankableEntry, b: RankableEntry): number {
 	return ak < bk ? -1 : ak > bk ? 1 : 0;
 }
 
+/** A joined challenge, reduced to the fields that decide whether a just-saved
+ * run could complete it. `startMs`/`endMs` are the challenge window in epoch ms
+ * (the caller parses the ISO `starts_at`/`ends_at`). */
+export interface RecomputeCandidate {
+	id: string;
+	goalValue: number | null;
+	startMs: number;
+	endMs: number;
+	completed: boolean;
+}
+
+/** Which of the runner's joined challenges a run at `runStartedAtMs` could push
+ * over its goal, so the client can fire an opportunistic completion recompute
+ * on save instead of waiting up to a day for the cron sweep. A candidate
+ * qualifies when it has a goal, isn't already completed by this participant,
+ * and the run's start falls inside its `[startMs, endMs)` window — the SAME
+ * half-open window the SQL aggregate sums over (`started_at >= starts_at and
+ * started_at < ends_at`), so a run outside every window is filtered out here
+ * rather than triggering a recompute that can't change any board. Ids keep
+ * input order. The recompute RPC is idempotent (the `challenge_badges` unique
+ * constraint), so a redundant call from client + cron is safe. */
+export function challengesToRecomputeForRun(
+	candidates: RecomputeCandidate[],
+	runStartedAtMs: number,
+): string[] {
+	if (!Number.isFinite(runStartedAtMs)) return [];
+	return candidates
+		.filter(
+			(c) =>
+				c.goalValue !== null &&
+				c.goalValue > 0 &&
+				!c.completed &&
+				runStartedAtMs >= c.startMs &&
+				runStartedAtMs < c.endMs,
+		)
+		.map((c) => c.id);
+}
+
 const DAY_MS = 86_400_000;
 
 /** Tolerance band around the even-pace line inside which a runner counts as

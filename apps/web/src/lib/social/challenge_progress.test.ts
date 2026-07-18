@@ -7,9 +7,20 @@ import {
 	metricFromActivity,
 	rankParticipants,
 	challengePace,
+	challengesToRecomputeForRun,
+	type RecomputeCandidate,
 } from './challenge_progress';
 
 const DAY = 86_400_000;
+
+const candidate = (over: Partial<RecomputeCandidate> = {}): RecomputeCandidate => ({
+	id: 'c1',
+	goalValue: 100,
+	startMs: 0,
+	endMs: 10 * DAY,
+	completed: false,
+	...over,
+});
 
 test('progressFraction clamps to 0..1', () => {
 	assert.equal(progressFraction(50, 100), 0.5);
@@ -188,4 +199,39 @@ test('challengePace daysRemaining ceils a partial day', () => {
 	const p = challengePace(40, 100, 0, 10 * DAY, 5.5 * DAY);
 	assert.equal(p.daysRemaining, 5);
 	assert.equal(p.requiredPerDay, 12);
+});
+
+test('challengesToRecomputeForRun includes a goal challenge whose window covers the run', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate()], 5 * DAY), ['c1']);
+});
+
+test('challengesToRecomputeForRun excludes a goal-less (pure-ranking) board', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate({ goalValue: null })], 5 * DAY), []);
+});
+
+test('challengesToRecomputeForRun excludes an already-completed challenge', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate({ completed: true })], 5 * DAY), []);
+});
+
+test('challengesToRecomputeForRun excludes a run before the window opens', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate({ startMs: 2 * DAY })], DAY), []);
+});
+
+test('challengesToRecomputeForRun excludes a run at/after ends_at (half-open window)', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate()], 10 * DAY), []);
+	assert.deepEqual(challengesToRecomputeForRun([candidate()], 0), ['c1']);
+});
+
+test('challengesToRecomputeForRun returns only the qualifying ids in input order', () => {
+	const cs = [
+		candidate({ id: 'a' }),
+		candidate({ id: 'b', completed: true }),
+		candidate({ id: 'c', goalValue: null }),
+		candidate({ id: 'd', endMs: 3 * DAY }),
+	];
+	assert.deepEqual(challengesToRecomputeForRun(cs, 5 * DAY), ['a']);
+});
+
+test('challengesToRecomputeForRun returns [] for a non-finite run time', () => {
+	assert.deepEqual(challengesToRecomputeForRun([candidate()], Number.NaN), []);
 });
