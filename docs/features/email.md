@@ -135,7 +135,7 @@ Shared pieces:
 | **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §166 |
-| **Lifecycle drip** (onboarding / first-week / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_first_week`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions`; RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
+| **Lifecycle drip** (onboarding / first-week / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_first_week`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions`; RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). Enqueue dedupe excludes `done` for onboarding + first-week + re-engagement (`20270423_001`, issue #376) so the daily cron can't re-send a completed nudge; streak stays daily-repeating by design. **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit
@@ -268,11 +268,18 @@ Dashboard → Auth → Hooks in prod):
   `enqueue_lifecycle_drip()` pg_cron (09:00 UTC) does ALL the cohort selection in
   SQL — onboarding = opted-in account 2–6 days old with no run yet;
   first-week = 1–2 runs total with the latest 2–5 days ago (the habit-formation
-  lapse window between onboarding and re-engagement; one-shot per user — its
-  enqueue dedupe includes `done`, migration `20270331_001`);
-  re-engagement = had a run >30 d ago but no cross-modal `activities` row in 30 d;
-  streak = ran the last two calendar days but not yet today — writing the chosen
-  template into the payload, dedupe-safe per `(user_id, template)`. The worker
+  lapse window between onboarding and re-engagement); re-engagement = had a run
+  >30 d ago but no cross-modal `activities` row in 30 d; streak = ran the last
+  two calendar days but not yet today — writing the chosen template into the
+  payload, dedupe-safe per `(user_id, template)`. **Dedupe includes `done` for
+  onboarding + first-week + re-engagement** (migration `20270331_001` for
+  first-week, `20270423_001` back-porting it to onboarding + re-engagement, issue
+  #376) so the daily cron cannot re-send a completed nudge: onboarding is strictly
+  one-shot (jobs retention 30 d ≫ its 4-day window), re-engagement re-fires only
+  after its `done` row is pruned (~monthly win-back, not the old daily-forever
+  loop). Streak deliberately keeps the `('queued','running')`-only dedupe — a
+  streak is at risk every day, so its nudge is meant to re-fire daily while the
+  streak lives. The worker
   handler (`handler_lifecycle_drip.go`) gates on a **separate** opt-IN
   `email_lifecycle_drip` pref (default off — NEVER folded into the digest opt-in;
   opting into one engagement stream is not consent to the other) + the shared
