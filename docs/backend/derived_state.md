@@ -154,6 +154,41 @@ retention cron referenced in a comment that was never created.
 
 ---
 
+## `clubs.member_count`
+
+- **What it caches:** how many *active* members a club has (rows in
+  `club_members` for that club with `status = 'active'`). Lets `search_clubs`
+  rank by size and lets the web `enrichClubs` helper render the count off the
+  club row instead of re-counting the roster on every `/social` clubs render
+  (`20260906_001`).
+- **Authoritative recompute:** `count(*) from club_members where club_id =
+  <club> and status = 'active'`.
+- **Consumers (read the cache, do NOT recompute):** `search_clubs` (sort key)
+  and every `enrichClubs` caller in `apps/web/src/lib/core/data.ts`
+  (`browseClubs`, `searchClubs` ILIKE fallback, `fetchMyClubs`,
+  `fetchClubBySlug`) — `CLUB_SELECT_COLS` selects `member_count` and
+  `enrichClubs` reads `c.member_count` (issue #331; the old post-query aggregate
+  is gone).
+- **Maintained by:** `clubs_member_count_trigger()` (AFTER INSERT/UPDATE OF
+  status, club_id/DELETE on `club_members`), SECURITY DEFINER since
+  `20270205_001` — the ON DELETE CASCADE from an owner's account deletion runs
+  as `supabase_auth_admin`, which lacks UPDATE on `clubs`, so the count UPDATE
+  must run as the function owner (a club owner was otherwise undeletable). The
+  owner is auto-enrolled active by `enroll_club_owner_trigger`, so a fresh club
+  is `member_count = 1`.
+- **Known drift risk (accepted):** the trigger increments/decrements per row
+  rather than recomputing from `count(*)`, so a bare-body rewrite that drops a
+  branch (e.g. the status-flip UPDATE) would let the cache drift silently.
+  `clubs_member_count_test.sql` guards every branch against the authoritative
+  query.
+- **Manual rebuild:** `update clubs c set member_count = (select count(*) from
+  club_members m where m.club_id = c.id and m.status = 'active');`
+- **Pinned by:** `clubs_member_count_test.sql` (mutate `club_members` through
+  insert-active / insert-pending / approve / leave / demote and assert the cache
+  equals the authoritative active-count each time).
+
+---
+
 ## Adding a new derived cache
 
 When you add a trigger-maintained denormalised column or a derived table:
