@@ -638,7 +638,10 @@ class _RunsScreenState extends State<RunsScreen> {
       // - Delta sync (since != null): pull every row modified since
       //   the last successful fetch. The cap is generous (200) because
       //   this catches up from a multi-device edit burst, not a cold
-      //   library load — and the cap is one trip, not per-paint.
+      //   library load — and the cap is one trip, not per-paint. This
+      //   path never touches `_remoteHasMore` on its own — it isn't a
+      //   paginated fetch, so a delta page filling or not says nothing
+      //   about whether older history remains unfetched.
       final since = widget.preferences.runsLastFetchedAt;
       final fetchStartedAt = DateTime.now().toUtc();
       final remote = since == null
@@ -646,8 +649,25 @@ class _RunsScreenState extends State<RunsScreen> {
           : await api.getRuns(limit: 200, updatedSince: since);
       await widget.runStore.saveManyFromRemote(remote);
       await widget.preferences.setRunsLastFetchedAt(fetchStartedAt);
-      if (since == null && mounted) {
-        setState(() => _remoteHasMore = remote.length == _kRunsPageSize);
+      if (mounted) {
+        setState(() {
+          if (since == null) {
+            _remoteHasMore = remote.length == _kRunsPageSize;
+          }
+          // Returning-user regression fix: `_remoteHasMore` resets to
+          // its conservative `true` default on every fresh mount (app
+          // restart, tab remount, …), but a returning user almost
+          // always takes the delta-sync branch above, which never
+          // corrects it — so the Load-more button stayed stuck on
+          // forever for anyone with under one page of runs. The local
+          // store's full history is authoritative here regardless of
+          // which branch ran (saveManyFromRemote just folded in
+          // anything new from any device): fewer than a page total
+          // means there is provably no next page to fetch.
+          if (widget.runStore.summaries.length < _kRunsPageSize) {
+            _remoteHasMore = false;
+          }
+        });
       }
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');

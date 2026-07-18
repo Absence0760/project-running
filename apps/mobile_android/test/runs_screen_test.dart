@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,29 @@ import '../lib/preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/runs_screen.dart';
 import '../lib/screens/add_run_screen.dart';
+
+/// A signed-in fake whose `getRuns` always returns an empty delta page —
+/// the realistic "nothing changed since last visit" shape a returning
+/// user's session takes. Used to drive `_fetchRemote()`'s delta-sync
+/// branch (`runsLastFetchedAt` already set) without a real network call.
+class _FakeSignedInApi extends ApiClient {
+  int getRunsCalls = 0;
+  DateTime? lastUpdatedSince;
+
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<List<Run>> getRuns({
+    int limit = 50,
+    DateTime? before,
+    DateTime? updatedSince,
+  }) async {
+    getRunsCalls++;
+    lastUpdatedSince = updatedSince;
+    return const [];
+  }
+}
 
 // Initialised by every test that calls _makeStores; pure unit tests in
 // the pagination group don't touch the filesystem so the directory may
@@ -484,6 +508,63 @@ void main() {
 
       // 5 runs fit on the first page; no api → no cloud-more guess.
       expect(find.text('Load 20 more'), findsNothing);
+    });
+
+    testWidgets(
+        'Load more button hidden for a returning user (delta-sync branch) '
+        'with fewer rows than page size', (tester) async {
+      // Regression: _remoteHasMore defaults to true on every fresh
+      // mount, and only the very-first-ever fetch (runsLastFetchedAt ==
+      // null) corrected it — a returning user (runsLastFetchedAt
+      // already set from a prior session) takes the delta-sync branch
+      // instead, which never touched it, so the button stayed stuck on
+      // forever for anyone with under one page of runs.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      // Simulate "already synced before" — this is what routes
+      // _fetchRemote() into the delta-sync branch instead of the
+      // first-page fetch.
+      await prefs.setRunsLastFetchedAt(
+          DateTime.now().toUtc().subtract(const Duration(hours: 1)));
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      // ignore: invalid_use_of_visible_for_testing_member
+      final runStore = LocalRunStore()..debugSeed(_makeRuns(5), dir: _runsDir);
+      final routeStore = LocalRouteStore();
+      final api = _FakeSignedInApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunsScreen(
+            apiClient: api,
+            runStore: runStore,
+            routeStore: routeStore,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      // Let the delta-sync _fetchRemote() (a real async call on the
+      // fake) resolve and its setState land.
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.getRunsCalls, 1);
+      expect(api.lastUpdatedSince, isNotNull,
+          reason: 'runsLastFetchedAt was pre-set, so this must be the '
+              'delta-sync branch, not the first-page fetch.');
+      // The footer row can sit just below the fold even with only 5
+      // rows (header + tiles eat the viewport) — scroll to the bottom
+      // before asserting absence, or a false _remoteHasMore=true could
+      // hide undetected off-screen instead of failing this test.
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+      await tester.pump();
+      expect(find.text('Load 20 more'), findsNothing,
+          reason: '5 local runs (under the 20-row page size) means '
+              'there is provably no next page, regardless of which '
+              'fetch branch ran.');
     });
 
     testWidgets('tapping Load more reveals the next local page',
