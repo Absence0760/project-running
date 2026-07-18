@@ -2055,6 +2055,20 @@ class ApiClient {
     final term = query.trim();
     if (term.isEmpty) return const [];
     final viewerId = _client.auth.currentUser?.id;
+
+    // Direct-id / profile-URL lookup: a pasted uuid (or `/u/<uuid>` link)
+    // resolves that exact runner. Safe — it needs the full uuid, so there's
+    // no enumeration surface, and it deliberately bypasses the
+    // discoverable_in_search opt-out the way the public /u/[id] page does.
+    // shadow_hidden + block filters still apply via the hydrate path
+    // (issue #465). Mirrors web `searchPeople`.
+    final directId = extractProfileId(term);
+    if (directId != null) {
+      if (directId == viewerId) return const [];
+      return _hydratePeopleSuggestions([directId], viewerId,
+          sharedCounts: const {});
+    }
+
     final candidateLimit = limit * 3 > 120 ? 120 : limit * 3;
     final profiles = await _client.rpc('search_user_profiles', params: {
       'p_query': term,
@@ -2068,6 +2082,23 @@ class ApiClient {
     final hydrated =
         await _hydratePeopleSuggestions(ids, viewerId, sharedCounts: const {});
     hydrated.sort(comparePeopleRank);
+    // A searched-for exact @handle floats above the reputation sort, so
+    // `@janedoe` surfaces janedoe first even if a busier account also
+    // prefix-matches (mirrors the RPC's exact-handle-first order, which the
+    // reputation re-sort would otherwise mask).
+    final handleTerm =
+        (term.startsWith('@') ? term.substring(1) : term).toLowerCase();
+    if (handleTerm.isNotEmpty) {
+      final exact = hydrated
+          .where((p) => p.handle?.toLowerCase() == handleTerm)
+          .toList();
+      if (exact.isNotEmpty) {
+        final rest = hydrated
+            .where((p) => p.handle?.toLowerCase() != handleTerm)
+            .toList();
+        return [...exact, ...rest].take(limit).toList();
+      }
+    }
     return hydrated.take(limit).toList();
   }
 
@@ -2155,7 +2186,7 @@ class ApiClient {
     if (ids.isEmpty) return const [];
     final profilesF = _client
         .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
+        .select('id, display_name, avatar_url, handle')
         .inFilter(UserProfileRow.colId, ids);
     final runsF = _client
         .from(RunRow.table)
@@ -2192,6 +2223,7 @@ class ApiClient {
         id: id,
         displayName: row['display_name'] as String?,
         avatarUrl: row['avatar_url'] as String?,
+        handle: row['handle'] as String?,
         publicRunsCount: counts[id] ?? 0,
         sharedClubs: sharedCounts[id] ?? 0,
         viewerFollows: follows.contains(id),
