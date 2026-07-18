@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
+
+import 'imported_run_id.dart';
 
 /// One-shot bulk-import path for CSV exports. Accepts both shapes the
 /// app produces today:
@@ -28,8 +29,6 @@ import 'package:uuid/uuid.dart';
 /// the Full backup ZIP path (`BackupService`). See
 /// [decisions.md § 65](../../docs/architecture/decisions.md#65-csv-import-is-a-summary-path-not-a-replacement-for-the-backup-zip).
 class CsvRunImporter {
-  static const _uuid = Uuid();
-
   static CsvImportResult parse(String content) {
     final lines = const LineSplitter().convert(content);
     if (lines.isEmpty) {
@@ -161,13 +160,16 @@ class CsvRunImporter {
         }
 
         // Stable id from the 17-column form is welcome (round-trip
-        // preserves run-detail links); 5-column gets a fresh uuid.
+        // preserves run-detail links); otherwise derive a deterministic id
+        // from the stable external_id so a re-import maps to the same local
+        // run and the server upsert never rewrites the primary key (#361).
         String runId;
-        if (idIdx != null && idIdx < cells.length) {
-          final raw = cells[idIdx].trim();
-          runId = raw.isNotEmpty ? raw : _uuid.v4();
+        if (idIdx != null &&
+            idIdx < cells.length &&
+            cells[idIdx].trim().isNotEmpty) {
+          runId = cells[idIdx].trim();
         } else {
-          runId = _uuid.v4();
+          runId = stableRunIdFromExternalId(externalId);
         }
 
         String? routeId;

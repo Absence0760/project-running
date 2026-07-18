@@ -10,6 +10,7 @@ import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
 import 'embedded_bests.dart';
+import 'imported_run_id.dart';
 
 /// Parse a Strava-formatted activity date string into a [DateTime].
 ///
@@ -262,14 +263,18 @@ class StravaImporter {
       },
     );
 
+    final externalId = 'strava:$stravaId';
     return Run(
-      id: _uuid.v4(),
+      // Stable id derived from external_id so a re-import of the same ZIP maps
+      // to the same local run (no duplicate) and the server upsert never
+      // rewrites the primary key — see imported_run_id.dart (#361).
+      id: stableRunIdFromExternalId(externalId),
       startedAt: startedAt,
       duration: duration,
       distanceMetres: distance,
       track: track,
       source: RunSource.strava,
-      externalId: 'strava:$stravaId',
+      externalId: externalId,
       metadata: metadata,
     );
   }
