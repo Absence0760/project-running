@@ -9,7 +9,7 @@
  *
  * Dart twin: `apps/mobile_android/lib/nearby.dart` — keep the boundaries,
  * bucket count, and label keys in lockstep. The SQL CASE in migration
- * `20270423_001_discoverable_runners_nearby.sql` MUST match `nearbyDistanceBucket`.
+ * `20270426_001_discoverable_runners_nearby.sql` MUST match `nearbyDistanceBucket`.
  */
 
 /** Upper bounds (metres) for buckets 0..3; bucket 4 is everything beyond. */
