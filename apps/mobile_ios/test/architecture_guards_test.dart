@@ -1660,6 +1660,51 @@ void main() {
         );
       }
     });
+
+    test('lock-screen action buttons broadcast, never launch an activity (#270)',
+        () {
+      // Reason: a getActivity PendingIntent on the Pause/Stop buttons
+      // launches MainActivity, which trips the keyguard unlock prompt on
+      // a locked phone — the user must unlock before the action fires.
+      // A true lock-screen control must work locked, so the buttons must
+      // route through a BroadcastReceiver (getBroadcast → RunActionReceiver
+      // → dispatchAction). Reverting actionIntent to getActivity /
+      // MainActivity re-introduces the bug. Shared host files — skip on the
+      // iOS twin.
+      final bridge = File(
+        'android/app/src/main/kotlin/com/threkir/app/RunNotificationBridge.kt',
+      );
+      if (!bridge.existsSync()) return;
+      final bridgeSrc = bridge.readAsStringSync();
+
+      final actionIntent =
+          bridgeSrc.substring(bridgeSrc.indexOf('fun actionIntent'));
+      final actionIntentBody =
+          actionIntent.substring(0, actionIntent.indexOf('\n    }'));
+      expect(actionIntentBody, contains('PendingIntent.getBroadcast'),
+          reason: 'the action buttons must fire a broadcast so they work '
+              'on a locked phone without a keyguard unlock (#270)');
+      expect(actionIntentBody, contains('RunActionReceiver::class.java'),
+          reason: 'the action broadcast must target RunActionReceiver');
+      expect(actionIntentBody, isNot(contains('getActivity')),
+          reason: 'an action button that launches an activity trips the '
+              'keyguard unlock prompt — the bug this guards against');
+
+      final receiver = File(
+        'android/app/src/main/kotlin/com/threkir/app/RunActionReceiver.kt',
+      );
+      expect(receiver.existsSync(), isTrue,
+          reason: 'RunActionReceiver must exist to receive the broadcast');
+      expect(receiver.readAsStringSync(),
+          contains('RunNotificationBridge.instance?.dispatchAction'),
+          reason: 'the receiver must forward the action into the bridge');
+
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      expect(manifest, contains('android:name=".RunActionReceiver"'),
+          reason: 'the receiver must be declared in the manifest or the '
+              'broadcast is dropped');
+    });
   });
 
   group('thumbnail privacy-zone clipping', () {

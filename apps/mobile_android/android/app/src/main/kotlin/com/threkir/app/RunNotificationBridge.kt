@@ -41,8 +41,8 @@ class RunNotificationBridge(
     private val methodChannel = MethodChannel(messenger, CHANNEL)
 
     // #14: set true once the Dart side announces its method-call handler is
-    // live (`ready`). A notification action that arrives before then (cold
-    // start — the process was relaunched by tapping a button) is stashed
+    // live (`ready`). A notification action that arrives before then (the
+    // bridge is constructed before Dart registers its handler) is stashed
     // and flushed on `ready` so it isn't dropped.
     private var dartReady = false
     private var pendingAction: String? = null
@@ -130,9 +130,9 @@ class RunNotificationBridge(
     }
 
     /// Forward a lock-screen action ("pause" / "resume" / "stop") to Dart.
-    /// Called by MainActivity when a notification-action PendingIntent
-    /// relaunches the activity. If Dart hasn't registered its handler yet
-    /// (cold start), stash and flush on `ready`.
+    /// Called by `RunActionReceiver` when a notification-action broadcast
+    /// fires. If Dart hasn't registered its handler yet, stash and flush on
+    /// `ready`.
     fun dispatchAction(action: String) {
         if (dartReady) {
             methodChannel.invokeMethod("action", action)
@@ -175,16 +175,20 @@ class RunNotificationBridge(
         nm.createNotificationChannel(channel)
     }
 
-    /// PendingIntent that relaunches MainActivity carrying a `run_action`
-    /// extra. Distinct request codes keep the three actions' PendingIntents
-    /// from collapsing into one another under FLAG_UPDATE_CURRENT.
+    /// PendingIntent that broadcasts a `run_action` to `RunActionReceiver`,
+    /// which forwards it to Dart via `dispatchAction`. It is a broadcast, not
+    /// an activity launch, so the button fires on a locked phone WITHOUT the
+    /// keyguard unlock prompt a `getActivity` intent triggers — the whole
+    /// point of a lock-screen control (issue #270). The recording foreground
+    /// service keeps the process alive, so `instance` is live when it fires.
+    /// Distinct request codes keep the three actions' PendingIntents from
+    /// collapsing into one another under FLAG_UPDATE_CURRENT.
     private fun actionIntent(action: String, requestCode: Int): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
+        val intent = Intent(context, RunActionReceiver::class.java).apply {
             this.action = "com.threkir.app.RUN_ACTION_$action"
             putExtra(EXTRA_RUN_ACTION, action)
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        return PendingIntent.getActivity(
+        return PendingIntent.getBroadcast(
             context,
             requestCode,
             intent,
@@ -300,8 +304,8 @@ class RunNotificationBridge(
         private const val SPLIT_NOTIFICATION_ID = 75416
         private const val SPLIT_TIMEOUT_MS = 20_000L
 
-        // #14: notification-action plumbing. MainActivity reads
-        // EXTRA_RUN_ACTION off a relaunch intent and forwards it here.
+        // #14: notification-action plumbing. RunActionReceiver reads
+        // EXTRA_RUN_ACTION off the broadcast intent and forwards it here.
         const val EXTRA_RUN_ACTION = "run_action"
         private const val ACTION_PAUSE = "pause"
         private const val ACTION_RESUME = "resume"
