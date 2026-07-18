@@ -4462,6 +4462,7 @@ export const messages = {
 	"badges.share": "Compartir insignia",
 	"badges.shareLinkCopied": "Enlace de la insignia copiado al portapapeles",
 	"badges.toggleError": "No se pudo cambiar la visibilidad. Inténtalo de nuevo.",
+	"badges.loadFailed": "No se pudieron cargar los logros.",
 	"badges.feedEarned": "{name} consiguió la insignia {badge}",
 	"badges.aRunner": "Un corredor",
 	"badges.notif": "Conseguiste una nueva insignia: {badge}",

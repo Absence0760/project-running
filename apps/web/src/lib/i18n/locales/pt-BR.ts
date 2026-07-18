@@ -4461,6 +4461,7 @@ export const messages = {
 	"badges.share": "Compartilhar medalha",
 	"badges.shareLinkCopied": "Link da medalha copiado para a área de transferência",
 	"badges.toggleError": "Não foi possível alterar a visibilidade. Tente novamente.",
+	"badges.loadFailed": "Não foi possível carregar as conquistas.",
 	"badges.feedEarned": "{name} conquistou a medalha {badge}",
 	"badges.aRunner": "Um corredor",
 	"badges.notif": "Você conquistou uma nova medalha: {badge}",

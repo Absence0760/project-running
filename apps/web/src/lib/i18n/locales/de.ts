@@ -4462,6 +4462,7 @@ export const messages = {
 	"badges.share": "Abzeichen teilen",
 	"badges.shareLinkCopied": "Abzeichen-Link in die Zwischenablage kopiert",
 	"badges.toggleError": "Sichtbarkeit konnte nicht geändert werden. Versuche es erneut.",
+	"badges.loadFailed": "Erfolge konnten nicht geladen werden.",
 	"badges.feedEarned": "{name} hat das Abzeichen {badge} erhalten",
 	"badges.aRunner": "Eine läuferin / ein läufer",
 	"badges.notif": "Du hast ein neues Abzeichen erhalten: {badge}",

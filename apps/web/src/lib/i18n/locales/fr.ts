@@ -4462,6 +4462,7 @@ export const messages = {
 	"badges.share": "Partager le badge",
 	"badges.shareLinkCopied": "Lien du badge copié dans le presse-papiers",
 	"badges.toggleError": "Impossible de modifier la visibilité. Réessayez.",
+	"badges.loadFailed": "Impossible de charger les accomplissements.",
 	"badges.feedEarned": "{name} a obtenu le badge {badge}",
 	"badges.aRunner": "Un coureur",
 	"badges.notif": "Vous avez obtenu un nouveau badge : {badge}",
