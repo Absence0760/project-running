@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
@@ -450,6 +451,283 @@ void main() {
       expect(summary, isNotNull);
       expect(summary!.id, userId);
       expect(summary.displayName, isNotEmpty);
+    });
+  });
+
+  // Offline-create idempotency (issue #365). Every `create*` method backing an
+  // OfflineSyncStore pushCreate is replayed verbatim by the drain loop when a
+  // first attempt committed server-side but its HTTP response was lost — the
+  // store still sees the row as pendingCreate. Before the fix these used
+  // `.insert()`, so the replay unique-violated on the client-minted PK, the
+  // catch left the row pendingCreate forever, and (for gym workouts) a workout
+  // whose ack was lost before its sets landed stuck with zero sets. These
+  // tests replay each create and assert the second call no-ops rather than
+  // duplicating the parent or its children.
+  group('offline-create idempotency — a lost-ack retry no-ops (issue #365)',
+      () {
+    late SupabaseClient client;
+    late ApiClient api;
+    String? userId;
+    final cleanup = <Future<void> Function()>[];
+
+    setUp(() async {
+      client = SupabaseClient(url, anonKey);
+      api = ApiClient.withClient(client);
+      userId = await api.signIn(email: 'runner@test.com', password: 'testtest');
+    });
+
+    tearDown(() async {
+      for (final del in cleanup.reversed) {
+        try {
+          await del();
+        } catch (_) {}
+      }
+      cleanup.clear();
+      try {
+        await api.signOut();
+      } catch (_) {}
+      client.dispose();
+    });
+
+    final rand = Random();
+    String hex(int n) => List.generate(
+        n, (_) => rand.nextInt(16).toRadixString(16)).join();
+    String uuid() => '${hex(8)}-${hex(4)}-4${hex(3)}-'
+        '${(8 + rand.nextInt(4)).toRadixString(16)}${hex(3)}-${hex(12)}';
+
+    Future<int> countIn(String table, String col, String value) async {
+      final rows = await client.from(table).select('id').eq(col, value);
+      return (rows as List).length;
+    }
+
+    test('createGear replays idempotently', () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteGear(id));
+      await api.createGear(id: id, kind: 'shoe', name: 'Idem trainers');
+      await api.createGear(id: id, kind: 'shoe', name: 'Idem trainers');
+      expect(await countIn('gear', 'id', id), 1,
+          reason: 'the lost-ack replay must not create a second gear row');
+    });
+
+    test('logFood replays idempotently', () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteFoodLog(id));
+      final at = DateTime.now().toUtc();
+      await api.logFood(id: id, startedAt: at, itemName: 'Idem oats');
+      await api.logFood(id: id, startedAt: at, itemName: 'Idem oats');
+      expect(await countIn('food_log', 'id', id), 1,
+          reason: 'the lost-ack replay must not create a second food row');
+    });
+
+    test('createGymWorkout replays idempotently and keeps its sets', () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteGymWorkout(id));
+      final at = DateTime.now().toUtc();
+      final sets = <GymSetInput>[
+        (
+          exerciseName: 'Squat',
+          reps: 5,
+          weightKg: 100,
+          rpe: null,
+          setType: null,
+          durationS: null,
+          exerciseId: null,
+        ),
+        (
+          exerciseName: 'Squat',
+          reps: 5,
+          weightKg: 105,
+          rpe: null,
+          setType: null,
+          durationS: null,
+          exerciseId: null,
+        ),
+      ];
+      await api.createGymWorkout(id: id, startedAt: at, sets: sets);
+      await api.createGymWorkout(id: id, startedAt: at, sets: sets);
+      expect(await countIn('gym_workouts', 'id', id), 1,
+          reason: 'the replay must not create a second workout');
+      expect(await countIn('gym_sets', 'workout_id', id), 2,
+          reason: 'the replay must not duplicate the sets');
+    });
+
+    test(
+        'createGymWorkout populates sets on a retry when the first ack was '
+        'lost before the sets landed (zero-set recovery)', () async {
+      // Simulate the worst case the issue calls out: the workout INSERT
+      // committed but the connection dropped before `_replaceGymSets`, so
+      // the server holds a set-less workout. The drain replays the create.
+      final id = uuid();
+      cleanup.add(() => api.deleteGymWorkout(id));
+      final at = DateTime.now().toUtc();
+      await client.from('gym_workouts').insert({
+        'id': id,
+        'user_id': userId,
+        'started_at': at.toIso8601String(),
+      });
+      expect(await countIn('gym_sets', 'workout_id', id), 0,
+          reason: 'precondition: the partially-committed workout has no sets');
+      await api.createGymWorkout(id: id, startedAt: at, sets: <GymSetInput>[
+        (
+          exerciseName: 'Bench',
+          reps: 8,
+          weightKg: 60,
+          rpe: null,
+          setType: null,
+          durationS: null,
+          exerciseId: null,
+        ),
+      ]);
+      expect(await countIn('gym_workouts', 'id', id), 1);
+      expect(await countIn('gym_sets', 'workout_id', id), 1,
+          reason: 'the retry must reach the sets step, not leave it zero-set');
+    });
+
+    test('createGymRoutine replays idempotently (no duplicate exercises/sets)',
+        () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteGymRoutine(id));
+      final exercises = <GymRoutineExerciseInput>[
+        (
+          exerciseName: 'Deadlift',
+          exerciseKey: 'deadlift',
+          supersetGroup: null,
+          supersetOrder: null,
+          modality: null,
+          progression: null,
+          progressionParams: null,
+          sets: <GymRoutineSetInput>[
+            (
+              setType: null,
+              targetRepsMin: 5,
+              targetRepsMax: null,
+              targetWeightKg: 140,
+              targetRpe: null,
+              restS: null,
+              targetDurationS: null,
+              targetDistanceM: null,
+            ),
+            (
+              setType: null,
+              targetRepsMin: 5,
+              targetRepsMax: null,
+              targetWeightKg: 140,
+              targetRpe: null,
+              restS: null,
+              targetDurationS: null,
+              targetDistanceM: null,
+            ),
+          ],
+        ),
+      ];
+      await api.createGymRoutine(id: id, title: 'Idem routine', exercises: exercises);
+      await api.createGymRoutine(id: id, title: 'Idem routine', exercises: exercises);
+      expect(await countIn('gym_routines', 'id', id), 1);
+      final exRows = await client
+          .from('gym_routine_exercises')
+          .select('id')
+          .eq('routine_id', id);
+      expect((exRows as List), hasLength(1),
+          reason: 'the replay must not duplicate the routine exercises');
+      final exId = (exRows.first as Map)['id'] as String;
+      expect(await countIn('gym_routine_sets', 'routine_exercise_id', exId), 2,
+          reason: 'the replay must not duplicate the routine sets');
+    });
+
+    test('createMealTemplate replays idempotently (no duplicate items)',
+        () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteMealTemplate(id));
+      final items = <MealTemplateItemInput>[
+        (
+          itemName: 'Eggs',
+          mealSlot: null,
+          calories: 150,
+          proteinG: 12,
+          carbsG: 1,
+          fatG: 10,
+          externalId: null,
+        ),
+        (
+          itemName: 'Toast',
+          mealSlot: null,
+          calories: 90,
+          proteinG: 3,
+          carbsG: 18,
+          fatG: 1,
+          externalId: null,
+        ),
+      ];
+      await api.createMealTemplate(id: id, name: 'Idem breakfast', items: items);
+      await api.createMealTemplate(id: id, name: 'Idem breakfast', items: items);
+      expect(await countIn('meal_templates', 'id', id), 1);
+      expect(await countIn('meal_template_items', 'template_id', id), 2,
+          reason: 'the replay must not duplicate the template items');
+    });
+
+    test('createRecipe replays idempotently (no duplicate ingredients)',
+        () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteRecipe(id));
+      final ingredients = <RecipeIngredientInput>[
+        (
+          itemName: 'Rice',
+          quantity: 1,
+          calories: 200,
+          proteinG: 4,
+          carbsG: 44,
+          fatG: 1,
+          externalId: null,
+        ),
+        (
+          itemName: 'Chicken',
+          quantity: 1,
+          calories: 165,
+          proteinG: 31,
+          carbsG: 0,
+          fatG: 4,
+          externalId: null,
+        ),
+      ];
+      await api.createRecipe(id: id, name: 'Idem bowl', ingredients: ingredients);
+      await api.createRecipe(id: id, name: 'Idem bowl', ingredients: ingredients);
+      expect(await countIn('recipes', 'id', id), 1);
+      expect(await countIn('recipe_ingredients', 'recipe_id', id), 2,
+          reason: 'the replay must not duplicate the recipe ingredients');
+    });
+
+    test('createSessionPlan replays idempotently (no duplicate blocks/items)',
+        () async {
+      final id = uuid();
+      cleanup.add(() => api.deleteSessionPlan(id));
+      final blockId = uuid();
+      final itemId = uuid();
+      final blocks = <SessionPlanBlockInput>[
+        (id: blockId, position: 0, name: 'Warm-up'),
+      ];
+      final items = <SessionPlanItemInput>[
+        (
+          id: itemId,
+          blockId: blockId,
+          position: 0,
+          movementName: 'Cat-cow',
+          kind: 'reps',
+          durationS: null,
+          reps: 10,
+          perSide: false,
+          tempo: null,
+          cue: null,
+        ),
+      ];
+      await api.createSessionPlan(
+          id: id, title: 'Idem flow', blocks: blocks, items: items);
+      await api.createSessionPlan(
+          id: id, title: 'Idem flow', blocks: blocks, items: items);
+      expect(await countIn('session_plans', 'id', id), 1);
+      expect(await countIn('session_plan_blocks', 'plan_id', id), 1,
+          reason: 'the replay must not duplicate the plan blocks');
+      expect(await countIn('session_plan_items', 'plan_id', id), 1,
+          reason: 'the replay must not duplicate the plan items');
     });
   });
 }
