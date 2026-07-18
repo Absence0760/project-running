@@ -3098,6 +3098,7 @@ export const messages = {
 	"races.ageGroupPlace": "年代別順位",
 	"races.ageGroup": "年代別",
 	"races.bib": "ゼッケン",
+	"races.runSignUpBibHint": "全体ではなくあなたの結果だけをインポートするため、ゼッケン番号を入力してください。",
 	"races.pasteResultTitle": "記録を貼り付け",
 	"races.pasteResultHint": "レースの結果ページから完走情報を入力してください。",
 	"races.save": "保存",

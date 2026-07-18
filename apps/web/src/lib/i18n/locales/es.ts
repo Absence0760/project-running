@@ -3103,6 +3103,7 @@ export const messages = {
 	"races.ageGroupPlace": "Puesto por categoría",
 	"races.ageGroup": "Categoría de edad",
 	"races.bib": "Dorsal",
+	"races.runSignUpBibHint": "Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.",
 	"races.pasteResultTitle": "Pegar tu resultado",
 	"races.pasteResultHint": "Introduce tus datos de meta desde la página de resultados de la carrera.",
 	"races.save": "Guardar",

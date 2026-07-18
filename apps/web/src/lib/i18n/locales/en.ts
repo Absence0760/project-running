@@ -3111,6 +3111,7 @@ export const en = {
 	"races.ageGroupPlace": "Age-group place",
 	"races.ageGroup": "Age group",
 	"races.bib": "Bib",
+	"races.runSignUpBibHint": "Enter your bib number so we import only your result, not the whole field.",
 	"races.pasteResultTitle": "Paste your result",
 	"races.pasteResultHint": "Enter your finishing details from the race's results page.",
 	"races.save": "Save",
