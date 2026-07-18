@@ -21,6 +21,18 @@ minimum_password_length = 8
 [auth.email]
 enable_confirmations = false
 
+# Require a reauthentication nonce (e-mailed to the account's verified
+# address via reauthenticate()) before GoTrue will accept a password
+# update. Defence-in-depth against account takeover from a stolen access
+# token: a copied localStorage session / XSS-exfiltrated token can call
+# updateUser({ password }) directly, and only this server gate stops it
+# (GoTrue exempts sessions created in the last 24 h, so the web client
+# ALSO always demands the code — see apps/web/src/lib/core/password_change.ts).
+# Like minimum_password_length, config.toml does not reach prod: set this
+# in the hosted Dashboard → Auth → Providers → Email (Secure password
+# change) as a deploy step. See issue #381 + docs/features/web_app_auth.md.
+secure_password_change = true
+
 # Every GoTrue auth email (signup confirmation, recovery, magic link,
 # email change, reauthentication) is rendered + sent by the auth-email
 # Edge Function — localized six-locale catalogue, same SMTP transport
