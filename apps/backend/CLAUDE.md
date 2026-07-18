@@ -121,6 +121,25 @@ supabase db reset    # replays everything from scratch, including the new one
 - **Test data / fixtures**: in `seed.sql`, not a migration. `supabase db reset` runs `seed.sql` after migrations.
 - **Functions / views**: in a migration (`create or replace function ...`). See `20260406_001_database_functions.sql` for `weekly_mileage` and `personal_records`.
 
+### Online-safety: NOT VALID on high-volume tables
+
+Migrations run on an empty local/CI DB where every lock is instant, and on the
+**populated prod** DB via `db push` where a table-scanning statement is
+downtime. A single-step `ADD CONSTRAINT … CHECK/FK` on a big table (`runs`,
+`notifications`, …) scans every row under a blocking lock; a `SET NOT NULL`, a
+volatile-default `ADD COLUMN`, an `ALTER COLUMN … TYPE`, or an unbatched
+whole-table `UPDATE` do the same. The online forms — `ADD … NOT VALID` then a
+separate `VALIDATE CONSTRAINT`, per-table FK splits, batched backfills — plus a
+lock reference, the #409/#410/#411 worked examples, and a pre-merge checklist
+live in **[../../docs/backend/migration_locks.md](../../docs/backend/migration_locks.md)**.
+Read it before writing a migration that adds a constraint or touches many rows.
+`scripts/check_migration_online_safety.mjs` (in the `parity-types` CI job,
+alongside the version-keys guard) fails a NEW migration that adds a CHECK/FK to
+a guarded table without `NOT VALID`; run it locally with `node
+apps/backend/scripts/check_migration_online_safety.mjs`. The read-only
+`/audit/migration-locks` command classifies the *existing* migrations by lock
+impact.
+
 ### Migrations that reference postgis / pg_trgm objects must set search_path themselves
 
 Hosted `supabase db push` sessions do not reliably have `extensions` on the
