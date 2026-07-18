@@ -1049,9 +1049,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get setupGenderMale => 'Hombre';
 
   @override
-  String get setupGenderNonbinary => 'No binario';
-
-  @override
   String get setupDobLabel => 'Fecha de nacimiento';
 
   @override
@@ -7628,9 +7625,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get segmentsPanelGenderWomen => 'Mujeres';
-
-  @override
-  String get segmentsPanelGenderNonbinary => 'No binario';
 
   @override
   String get segmentsPanelAllAges => 'Todas las edades';

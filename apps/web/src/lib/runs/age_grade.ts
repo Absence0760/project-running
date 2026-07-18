@@ -119,8 +119,8 @@ export function computeAgeGrade(opts: {
 
 /**
  * Convenience over `computeAgeGrade` that derives age from the runner's DOB and
- * the run's start date. `sex` is null for unset / non-binary, which yields null
- * (age grading has no standard without a binary sex reference).
+ * the run's start date. `sex` is null for unset / withheld gender, which yields
+ * null (age grading has no standard without a binary sex reference).
  */
 export function ageGradeForRun(opts: {
 	distanceM: number;

@@ -96,11 +96,11 @@ void main() {
           reason: 'female / male ratio out of expected band: $ratio');
     });
 
-    test('nonbinary falls back to the unmodified curve', () {
+    test('prefer_not_to_say falls back to the unmodified curve', () {
       final male = estimateRunCalories(distanceM: 5000, weightKg: 70);
-      final nb = estimateRunCalories(
-          distanceM: 5000, weightKg: 70, gender: 'nonbinary');
-      expect(nb, male);
+      final pnts = estimateRunCalories(
+          distanceM: 5000, weightKg: 70, gender: 'prefer_not_to_say');
+      expect(pnts, male);
     });
   });
 

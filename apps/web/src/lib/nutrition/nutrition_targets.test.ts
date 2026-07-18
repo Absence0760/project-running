@@ -29,9 +29,8 @@ test('mifflinStJeorBmr — female offset is -161', () => {
 	assert.equal(mifflinStJeorBmr(70, 178, 35, 'female'), 1642.5 - 5 - 161);
 });
 
-test('mifflinStJeorBmr — neutral offset (-78) for nonbinary / withheld / unknown', () => {
+test('mifflinStJeorBmr — neutral offset (-78) for withheld / unknown', () => {
 	const neutral = 10 * 70 + 6.25 * 178 - 5 * 35 - 78;
-	assert.equal(mifflinStJeorBmr(70, 178, 35, 'nonbinary'), neutral);
 	assert.equal(mifflinStJeorBmr(70, 178, 35, 'prefer_not_to_say'), neutral);
 	assert.equal(mifflinStJeorBmr(70, 178, 35, null), neutral);
 });

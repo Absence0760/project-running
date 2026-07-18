@@ -66,7 +66,6 @@ String crownLabel(String? genderFilter, String? ageFilter) {
     null => null,
     'male' => 'man',
     'female' => 'woman',
-    'nonbinary' => 'nonbinary runner',
     _ => null,
   };
   if (subject == null && ageFilter == null) return 'Fastest overall';

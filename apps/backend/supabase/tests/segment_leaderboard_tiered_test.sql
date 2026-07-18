@@ -47,7 +47,7 @@ values
   ('00000000-0000-0000-0000-000000cc0003', 'authenticated', 'authenticated',
    'female-50@tiered.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000cc0004', 'authenticated', 'authenticated',
-   'nonbinary-80@tiered.local', '', now(), now()),
+   'pnts-80@tiered.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000cc0005', 'authenticated', 'authenticated',
    'no-demographics@tiered.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000cc0099', 'authenticated', 'authenticated',
@@ -62,7 +62,7 @@ values
   ('00000000-0000-0000-0000-000000cc0001', 'Route Owner', 'male', '1985-01-01'),
   ('00000000-0000-0000-0000-000000cc0002', 'Male 35yo', 'male', (now() - interval '36 years')::date),
   ('00000000-0000-0000-0000-000000cc0003', 'Female 50yo', 'female', (now() - interval '51 years')::date),
-  ('00000000-0000-0000-0000-000000cc0004', 'NB 80yo', 'nonbinary', (now() - interval '80 years')::date),
+  ('00000000-0000-0000-0000-000000cc0004', 'PNTS 80yo', 'prefer_not_to_say', (now() - interval '80 years')::date),
   ('00000000-0000-0000-0000-000000cc0005', 'No Demographics', null, null);
 
 -- Route owner (cc0001) creates a public route + a private route.
@@ -158,7 +158,7 @@ select is(
 -- 2. Order is time_seconds asc then started_at asc. The earlier-started
 --    of the two 200s efforts (male-35, started -4h) comes before
 --    female-50 (started -3h); the no-demographics 250s is third;
---    NB-80 at 300s is fourth.
+--    the prefer-not-to-say 80yo at 300s is fourth.
 select results_eq(
   $$ select user_id::text from segment_leaderboard_tiered(
        '77777777-7777-7777-7777-777777770001'::uuid, null, null, 50) $$,
@@ -180,7 +180,7 @@ select results_eq(
 );
 
 -- 4. Age-band filter narrows by current age. 35-39 should match the
---    male-35yo only — the female-50yo and the NB-80yo fall outside.
+--    male-35yo only — the female-50yo and the 80yo fall outside.
 select results_eq(
   $$ select user_id::text from segment_leaderboard_tiered(
        '77777777-7777-7777-7777-777777770001'::uuid, null, '35-39', 50) $$,
@@ -188,7 +188,7 @@ select results_eq(
   'age_band=35-39 returns only the 35-39yo runner'
 );
 
--- 5. '75+' is inclusive — the 80yo NB should appear.
+-- 5. '75+' is inclusive — the 80yo runner should appear.
 select results_eq(
   $$ select user_id::text from segment_leaderboard_tiered(
        '77777777-7777-7777-7777-777777770001'::uuid, null, '75+', 50) $$,

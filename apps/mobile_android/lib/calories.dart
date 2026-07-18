@@ -6,7 +6,7 @@
 ///
 /// Pure functions, no Flutter / Supabase deps.
 
-typedef CalorieGender = String?; // 'male' | 'female' | 'nonbinary' | null
+typedef CalorieGender = String?; // 'male' | 'female' | 'prefer_not_to_say' | null
 
 const double kDefaultBodyWeightKg = 70;
 

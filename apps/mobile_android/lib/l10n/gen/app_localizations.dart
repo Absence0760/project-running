@@ -1877,12 +1877,6 @@ abstract class AppLocalizations {
   /// **'Male'**
   String get setupGenderMale;
 
-  /// Setup wizard non-binary gender option
-  ///
-  /// In en, this message translates to:
-  /// **'Non-binary'**
-  String get setupGenderNonbinary;
-
   /// Setup wizard date-of-birth field label
   ///
   /// In en, this message translates to:
@@ -12593,12 +12587,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Women'**
   String get segmentsPanelGenderWomen;
-
-  /// Leaderboard gender filter: nonbinary
-  ///
-  /// In en, this message translates to:
-  /// **'Nonbinary'**
-  String get segmentsPanelGenderNonbinary;
 
   /// Leaderboard filter: all age bands
   ///

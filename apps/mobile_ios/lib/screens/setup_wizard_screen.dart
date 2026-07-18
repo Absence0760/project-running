@@ -405,8 +405,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
                   value: 'female', child: Text(l10n.setupGenderFemale)),
               DropdownMenuItem(
                   value: 'male', child: Text(l10n.setupGenderMale)),
-              DropdownMenuItem(
-                  value: 'nonbinary', child: Text(l10n.setupGenderNonbinary)),
             ],
             onChanged: (v) => setState(() => _gender = v ?? ''),
           ),

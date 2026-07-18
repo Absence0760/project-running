@@ -42,7 +42,8 @@ world-record-grade efforts exceed it.
   5 mile are 0.6 % apart and disambiguated this way). A non-standard distance →
   no age grade.
 - **Sex** must be `male` or `female`. Age grading has no standard for an unset or
-  non-binary sex, so those return null (tile hidden) rather than a guess.
+  withheld (`prefer_not_to_say`) gender, so those return null (tile hidden) rather
+  than a guess.
 - **Age** must fall in the table's 5..99 range.
 
 Standard distances covered (22, ascending): 1 mile, 5 km, 6 km, 4 mile, 8 km,

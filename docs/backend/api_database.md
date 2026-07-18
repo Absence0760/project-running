@@ -817,7 +817,7 @@ create table user_profiles (
   preferred_unit           text default 'km',                   -- 'km' | 'mi'
   subscription_tier        text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
   subscription_at          timestamptz,
-  gender                   text,                                -- 'male' | 'female' | 'nonbinary' | null
+  gender                   text,                                -- 'male' | 'female' | 'prefer_not_to_say' | null (CHECK, 20270422_001)
   date_of_birth            date,
   height_cm                numeric(5,1),                        -- nutrition BMR (20261216_001); owner-only, off the public-safe grant
   coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach

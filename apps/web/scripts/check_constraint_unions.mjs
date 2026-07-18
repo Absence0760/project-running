@@ -34,6 +34,7 @@ const PAIRS = [
 	{ tableColumn: 'route_conditions.condition', tsUnion: 'RouteConditionKind' },
 	{ tableColumn: 'route_conditions.severity', tsUnion: 'RouteConditionSeverity' },
 	{ tableColumn: 'integrations.provider', tsUnion: 'IntegrationProvider' },
+	{ tableColumn: 'user_profiles.gender', tsUnion: 'Gender' },
 	{ tableColumn: 'user_profiles.preferred_unit', tsUnion: 'PreferredUnit' },
 	{ tableColumn: 'user_profiles.subscription_tier', tsUnion: 'SubscriptionTier' },
 	{ tableColumn: 'club_members.role', tsUnion: 'ClubRole' },
@@ -64,7 +65,8 @@ const PAIRS = [
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or
 // `alter table <t>`, and emit `(table, column, values)` for every
-// `check (<col> in (...))` clause encountered. Returns the LAST occurrence
+// `check (<col> in (...))` clause encountered — including the nullable form
+// `check (<col> is null or <col> in (...))`. Returns the LAST occurrence
 // per `<table>.<column>` (later migrations win).
 function parseChecks(sql) {
 	const out = new Map();
@@ -74,7 +76,8 @@ function parseChecks(sql) {
 		.replace(/\/\*[\s\S]*?\*\//g, '');
 
 	const tableRe = /\b(?:create\s+table|alter\s+table)\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/gi;
-	const checkRe = /check\s*\(\s*([a-z_][a-z0-9_]*)\s+in\s*\(([^)]*)\)\s*\)/gi;
+	const checkRe =
+		/check\s*\(\s*(?:[a-z_][a-z0-9_]*\s+is\s+null\s+or\s+)?([a-z_][a-z0-9_]*)\s+in\s*\(([^)]*)\)\s*\)/gi;
 
 	const hits = [];
 	let m;

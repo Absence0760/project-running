@@ -142,7 +142,6 @@
 						<option value={null}>{m('segments.all')}</option>
 						<option value="male">{m('segments.men')}</option>
 						<option value="female">{m('segments.women')}</option>
-						<option value="nonbinary">{m('segments.nonbinary')}</option>
 					</select>
 				</label>
 				<label>

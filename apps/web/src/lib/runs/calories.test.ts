@@ -116,17 +116,17 @@ test('estimateRunCalories: female calibration is ~5% lower than the male curve',
 	);
 });
 
-test('estimateRunCalories: nonbinary falls back to the unmodified curve', () => {
+test('estimateRunCalories: prefer_not_to_say falls back to the unmodified curve', () => {
 	// Same reasoning as the training pace calibration ADR §76 —
-	// no validated calibration for non-binary athletes; better to
+	// no validated calibration without a stated sex; better to
 	// under-prescribe than mis-prescribe.
 	const male = estimateRunCalories({ distanceM: 5_000, weightKg: 70 });
-	const nb = estimateRunCalories({
+	const pnts = estimateRunCalories({
 		distanceM: 5_000,
 		weightKg: 70,
-		gender: 'nonbinary',
+		gender: 'prefer_not_to_say',
 	});
-	assert.equal(nb, male);
+	assert.equal(pnts, male);
 });
 
 // ── Edge cases ────────────────────────────────────────────────

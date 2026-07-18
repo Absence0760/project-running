@@ -228,7 +228,7 @@ class TrainingPaces {
 /// Optional gender hint for pace derivation. Matches the `gender`
 /// column on `user_profiles`. Mirrored from web
 /// `training.ts#TrainingGender`. Persona-hunt Round 3 finding Woman #3.
-typedef TrainingGender = String?; // 'male' | 'female' | 'nonbinary' | null
+typedef TrainingGender = String?; // 'male' | 'female' | 'prefer_not_to_say' | null
 
 // Female-specific calibration constant. See web training.ts for the
 // full rationale comment; keep both helpers in lockstep.

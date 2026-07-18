@@ -235,7 +235,7 @@
 				// 20260707_001). uid is the viewer's own id here.
 				const { data: prof } = await supabase.rpc('get_my_profile');
 				const g = (prof as { gender?: string | null } | null)?.gender;
-				if (g === 'male' || g === 'female' || g === 'nonbinary') {
+				if (g === 'male' || g === 'female' || g === 'prefer_not_to_say') {
 					viewerGender = g;
 				}
 			} catch (_) {
