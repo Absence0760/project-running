@@ -72,15 +72,39 @@ function num(v: unknown): number | null {
 	return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+/// Normalise a BCP-47 locale/tag to an Open Food Facts language code (`lc`) —
+/// the primary subtag, lowercased (`pt-BR` → `pt`, `en` → `en`). Blank/unknown
+/// falls back to English. Kept in lockstep with the Dart twin's `offLang`.
+export function offLang(locale?: string | null): string {
+	if (!locale) return 'en';
+	const base = locale.split('-')[0].trim().toLowerCase();
+	return base || 'en';
+}
+
+/// The best display name for an Open Food Facts product in language `lc`.
+/// Open Food Facts is a global, community-contributed database: `product_name`
+/// holds whatever language the contributor typed (Nordic contributors are very
+/// active, so unfiltered it skews non-English), while `product_name_<lc>` holds
+/// the per-language name where one exists. Prefer the localized field, fall
+/// back to the generic name. Kept in lockstep with the Dart twin.
+function offProductName(prod: Record<string, unknown>, lc: string): string {
+	const localizedRaw = prod[`product_name_${lc}`];
+	const localized = typeof localizedRaw === 'string' ? localizedRaw.trim() : '';
+	if (localized) return localized;
+	return typeof prod.product_name === 'string' ? prod.product_name.trim() : '';
+}
+
 /// Map a raw Open Food Facts search response into our result shape. Pure.
 /// Drops products with no name or no calorie figure (unloggable noise).
-export function parseOffSearch(json: unknown): FoodSearchResult[] {
+/// `lang` picks which `product_name_<lc>` to prefer (see `offProductName`).
+export function parseOffSearch(json: unknown, lang = 'en'): FoodSearchResult[] {
 	const products = (json as { products?: unknown[] } | null)?.products;
 	if (!Array.isArray(products)) return [];
+	const lc = offLang(lang);
 	const out: FoodSearchResult[] = [];
 	for (const p of products) {
 		const prod = p as Record<string, unknown>;
-		const name = typeof prod.product_name === 'string' ? prod.product_name.trim() : '';
+		const name = offProductName(prod, lc);
 		const code = typeof prod.code === 'string' ? prod.code : '';
 		const n = (prod.nutriments ?? {}) as Record<string, unknown>;
 		const calories = num(n['energy-kcal_100g']);
@@ -108,12 +132,12 @@ export function parseOffSearch(json: unknown): FoodSearchResult[] {
 /// endpoint returns), so it can't reuse `parseOffSearch`. Returns null when
 /// the product is missing (`status != 1`) or unloggable (no name / no calorie
 /// figure) — the caller treats null as "no match, fall back to search".
-export function parseOffProduct(json: unknown): FoodSearchResult | null {
+export function parseOffProduct(json: unknown, lang = 'en'): FoodSearchResult | null {
 	const map = json as { status?: unknown; product?: unknown } | null;
 	if (!map || map.status !== 1) return null;
 	const p = map.product as Record<string, unknown> | undefined;
 	if (!p || typeof p !== 'object') return null;
-	const name = typeof p.product_name === 'string' ? p.product_name.trim() : '';
+	const name = offProductName(p, offLang(lang));
 	const code = typeof p.code === 'string' ? p.code : '';
 	const n = (p.nutriments ?? {}) as Record<string, unknown>;
 	const calories = num(n['energy-kcal_100g']);
@@ -152,20 +176,23 @@ export async function searchFoods(
 	query: string,
 	fetcher: Fetcher = (u) => fetch(u),
 	limit = 20,
+	lang = 'en',
 ): Promise<FoodSearchResult[]> {
 	const q = query.trim();
 	if (!q) return [];
+	const lc = offLang(lang);
 	const params = new URLSearchParams({
 		search_terms: q,
 		search_simple: '1',
 		action: 'process',
 		json: '1',
+		lc,
 		page_size: String(limit),
-		fields: 'code,product_name,brands,nutriments',
+		fields: `code,product_name,product_name_${lc},brands,nutriments`,
 	});
 	const res = await fetcher(`${SEARCH_URL}?${params.toString()}`);
 	if (!res.ok) throw new Error(`Open Food Facts search failed: ${res.status}`);
-	return parseOffSearch(await res.json());
+	return parseOffSearch(await res.json(), lc);
 }
 
 /// Look up a single product by scanned EAN/UPC barcode (the v1.1 camera
@@ -177,13 +204,18 @@ export async function searchFoods(
 export async function lookupBarcode(
 	barcode: string,
 	fetcher: Fetcher = (u) => fetch(u),
+	lang = 'en',
 ): Promise<FoodSearchResult | null> {
 	const code = normaliseBarcode(barcode);
 	if (code == null) return null;
-	const params = new URLSearchParams({ fields: 'code,product_name,brands,nutriments' });
+	const lc = offLang(lang);
+	const params = new URLSearchParams({
+		lc,
+		fields: `code,product_name,product_name_${lc},brands,nutriments`,
+	});
 	const res = await fetcher(`${PRODUCT_URL}/${code}.json?${params.toString()}`);
 	if (!res.ok) throw new Error(`Open Food Facts product lookup failed: ${res.status}`);
-	return parseOffProduct(await res.json());
+	return parseOffProduct(await res.json(), lc);
 }
 
 /// USDA FDC nutrient numbers (`nutrientNumber`, the stable identifier) for the
@@ -286,15 +318,16 @@ export async function searchUsda(
 /// looser USDA generic of the same name.
 export async function searchFoodSources(
 	query: string,
-	opts: { fetcher?: Fetcher; usdaApiKey?: string; limit?: number } = {},
+	opts: { fetcher?: Fetcher; usdaApiKey?: string; limit?: number; lang?: string } = {},
 ): Promise<FoodSearchResult[]> {
 	const q = query.trim();
 	if (!q) return [];
 	const fetcher = opts.fetcher ?? ((u) => fetch(u));
 	const limit = opts.limit ?? 20;
 	const usdaKey = (opts.usdaApiKey ?? '').trim();
+	const lang = opts.lang ?? 'en';
 
-	const sources: Promise<FoodSearchResult[]>[] = [searchFoods(q, fetcher, limit)];
+	const sources: Promise<FoodSearchResult[]>[] = [searchFoods(q, fetcher, limit, lang)];
 	if (usdaKey) sources.push(searchUsda(q, usdaKey, fetcher, limit));
 
 	const settled = await Promise.allSettled(sources);

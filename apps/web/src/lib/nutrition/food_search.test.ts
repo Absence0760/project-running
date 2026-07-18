@@ -5,6 +5,7 @@ import {
 	dedupeFoods,
 	lookupBarcode,
 	normaliseBarcode,
+	offLang,
 	parseOffProduct,
 	parseOffSearch,
 	parseUsdaSearch,
@@ -120,6 +121,87 @@ test('searchFoods parses a successful response via the injected fetcher', async 
 	const out = await searchFoods('oats', fetcher);
 	assert.equal(out.length, 1);
 	assert.equal(out[0].name, 'Rolled Oats');
+});
+
+test('offLang normalises a BCP-47 tag to an Open Food Facts language code', () => {
+	assert.equal(offLang('en'), 'en');
+	assert.equal(offLang('pt-BR'), 'pt');
+	assert.equal(offLang('FR'), 'fr');
+	assert.equal(offLang(''), 'en');
+	assert.equal(offLang(null), 'en');
+	assert.equal(offLang(undefined), 'en');
+});
+
+test('parseOffSearch prefers the locale-specific product_name_<lc>, falling back to the generic name', () => {
+	const json = {
+		products: [
+			{
+				code: '1',
+				product_name: 'Melk', // contributor's Norwegian name
+				product_name_en: 'Whole Milk',
+				nutriments: { 'energy-kcal_100g': 60 },
+			},
+			{
+				code: '2',
+				product_name: 'Havregryn', // no English localization → falls back
+				nutriments: { 'energy-kcal_100g': 370 },
+			},
+		],
+	};
+	const en = parseOffSearch(json, 'en');
+	assert.equal(en[0].name, 'Whole Milk');
+	assert.equal(en[1].name, 'Havregryn');
+	// A different locale ignores product_name_en and falls back to the generic name.
+	const de = parseOffSearch(json, 'de');
+	assert.equal(de[0].name, 'Melk');
+});
+
+test('searchFoods sends lc + product_name_<lc> for the requested language', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=en'), 'defaults to English');
+		assert.ok(url.includes('product_name_en'), 'requests the English localized name field');
+		return new Response(JSON.stringify(sample), { status: 200 });
+	};
+	await searchFoods('oats', fetcher);
+
+	const frFetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=fr'), 'pt-BR-style tag reduced to the primary subtag');
+		assert.ok(url.includes('product_name_fr'));
+		return new Response(JSON.stringify(sample), { status: 200 });
+	};
+	await searchFoods('oats', frFetcher, 20, 'fr');
+});
+
+test('searchFoodSources threads the caller locale into the OFF query', async () => {
+	let offUrl = '';
+	const fetcher: Fetcher = async (url) => {
+		offUrl = url;
+		return new Response(JSON.stringify(sample), { status: 200 });
+	};
+	await searchFoodSources('oats', { fetcher, lang: 'pt-BR' });
+	assert.ok(offUrl.includes('lc=pt'));
+	assert.ok(offUrl.includes('product_name_pt'));
+});
+
+test('lookupBarcode sends lc + product_name_<lc> and prefers the localized name', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=fr'));
+		assert.ok(url.includes('product_name_fr'));
+		return new Response(
+			JSON.stringify({
+				status: 1,
+				product: {
+					code: '737628064502',
+					product_name: 'Melk',
+					product_name_fr: 'Lait',
+					nutriments: { 'energy-kcal_100g': 60 },
+				},
+			}),
+			{ status: 200 },
+		);
+	};
+	const r = await lookupBarcode('737628064502', fetcher, 'fr');
+	assert.equal(r?.name, 'Lait');
 });
 
 test('searchFoods throws on a non-OK response (so the caller can show retry, not empty)', async () => {

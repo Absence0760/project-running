@@ -2,7 +2,7 @@
 	import { searchFoodSources, scalePortion, type FoodSearchResult } from '$lib/nutrition/food_search';
 	import { createFoodEntry } from '$lib/core/data';
 	import { MEAL_SLOTS, type MealSlot } from '$lib/nutrition/nutrition_totals';
-	import { m } from '$lib/i18n/store.svelte';
+	import { m, currentLocale } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { env } from '$env/dynamic/public';
 
@@ -57,7 +57,7 @@
 		searching = true;
 		searchFailed = false;
 		try {
-			results = await searchFoodSources(q, { usdaApiKey });
+			results = await searchFoodSources(q, { usdaApiKey, lang: currentLocale() });
 		} catch {
 			// Distinguish a failed search from a genuinely empty one so the
 			// user sees a retry affordance, not a misleading "no matches".
