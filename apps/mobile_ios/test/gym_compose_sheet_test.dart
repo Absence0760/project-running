@@ -74,6 +74,39 @@ void main() {
     }
   });
 
+  testWidgets(
+      'remove-set (x) button is hidden on the first set, shown from the '
+      'second set onward', (tester) async {
+    // The first set can never be removed (the composer always keeps at
+    // least one), so its row must not offer the x button — only the
+    // second row and beyond should.
+    final f = await _store('remove_set_gate_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+
+      expect(find.byTooltip('Remove set'), findsNothing,
+          reason: 'A single set is always present and can\'t be removed.');
+
+      await tester.tap(find.text('Add set'));
+      await tester.pump();
+
+      // Now two sets exist: the first still has no remove button, the
+      // second does.
+      expect(find.byTooltip('Remove set'), findsOneWidget);
+
+      await tester.tap(find.text('Add set'));
+      await tester.pump();
+      expect(find.byTooltip('Remove set'), findsNWidgets(2));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('entering an exercise + saving creates a workout in the store',
       (tester) async {
     final f = await _store('create_');
