@@ -1,4 +1,4 @@
--- Pins migration 20270424_001 — the public @handle (issue #465):
+-- Pins migration 20270425_001 — the public @handle (issue #465):
 --   * set_my_handle claims / clears / rejects (format + case-insensitive
 --     uniqueness), and only authenticated may execute it;
 --   * search_user_profiles matches a handle prefix, ranks an EXACT handle
