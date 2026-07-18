@@ -18,10 +18,14 @@ class GuidedRunsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final library = guidedRunLibrary(l10n);
+    // Bottom padding clears the system gesture-nav bar plus a little
+    // breathing room — a flat `vertical: 8` left the last card crowded
+    // right against the edge of the screen.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsAccountGuidedRuns)),
       body: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.fromLTRB(0, 8, 0, 24 + bottomInset),
         itemCount: library.length,
         itemBuilder: (context, i) {
           return _GuidedRunCard(run: library[i]);
