@@ -205,6 +205,13 @@ class RunRecorder {
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
   double _accuracyGateMetres = 20;
+  // A hop that fails the <100 m one-hop cap but spans at least this many
+  // seconds is treated as a real GPS gap (fixes dropped under cover / in a
+  // tunnel / while backgrounded, or a batch), not a corrupt teleport: the
+  // anchor is rebased to the new fix without crediting the un-sampled gap
+  // distance. ~10 s matches the "GPS lost" mental model and is long enough
+  // that a 1 Hz corrupt outlier (dt≈1 s) still fails closed. See #330.
+  static const double _gpsReanchorAfterSeconds = 10;
   // Rate-limits the "fix dropped for accuracy" log. An always-bad stream
   // would otherwise spam at ~1 Hz for the entire run.
   DateTime? _lastAccuracyDropLogAt;
@@ -967,6 +974,18 @@ class RunRecorder {
         // hop), and anything faster than the activity's max plausible speed.
         if (delta > _trackThresholdMetres && delta < 100 && !implausible) {
           _distanceMetres += delta;
+          _lastTrackedPosition = pos;
+          _lastTrackedPositionAt = pos.timestamp;
+          _track.add(_currentWaypoint!);
+        } else if (dtSec >= _gpsReanchorAfterSeconds) {
+          // Real GPS gap: the hop failed the < 100 m cap (the runner genuinely
+          // moved away while fixes were dropped) but a genuine interval has
+          // elapsed. Rebase the anchor to this fresh fix WITHOUT crediting the
+          // un-sampled gap distance — exactly how resume() nulls the anchor so
+          // the first post-resume fix re-anchors. Without this the anchor stays
+          // stale, every later delta only grows past 100 m, and distance is
+          // frozen for the rest of the run (#330). The dtSec gate (GPS time,
+          // not wall clock) keeps a zero/near-zero-dt duplicate failing closed.
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);

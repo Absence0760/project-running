@@ -10819,6 +10819,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get racesBib => 'Dossard';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Saisissez votre dossard pour n\'importer que votre résultat, pas tout le classement.';
+
+  @override
   String get racesPasteResultHint =>
       'Saisissez les détails de votre arrivée depuis la page de résultats de la course.';
 
