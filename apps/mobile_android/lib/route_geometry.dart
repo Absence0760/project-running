@@ -12,7 +12,9 @@ import 'run_stats.dart' show haversineMetres;
 
 /// Interpolate the position along [waypoints] at the given
 /// normalized [fraction] (0.0 = start, 1.0 = end). Returns null when
-/// the polyline is too short to interpolate (`< 2` waypoints).
+/// the polyline is too short to interpolate (`< 2` waypoints) or
+/// [fraction] is not finite (NaN / ±Infinity) — clamping a non-finite
+/// fraction would propagate NaN into the returned lat/lng.
 ///
 /// Used by the route-detail screen's scrubber slider: the slider
 /// emits a 0..1 value as the user drags from start to finish, this
@@ -28,6 +30,7 @@ Waypoint? interpolateAlongRoute(
   double fraction,
 ) {
   if (waypoints.length < 2) return null;
+  if (!fraction.isFinite) return null;
   final f = fraction.clamp(0.0, 1.0);
   // Compute cumulative distance + segment lengths in one pass so
   // we can locate the target distance with a linear scan. The
