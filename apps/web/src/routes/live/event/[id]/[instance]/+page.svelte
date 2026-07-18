@@ -25,6 +25,7 @@
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
 	import { freshnessFor, type Freshness } from '$lib/runs/live_freshness';
+	import { CoalescingRefetcher } from '$lib/runs/live_refetch';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let eventId = $derived($page.params.id as string);
@@ -41,6 +42,19 @@
 	let loadError = $state<string | null>(null);
 
 	let channel: RealtimeChannel | null = null;
+
+	// Coalesces the per-ping leaderboard refetch. The INSERT subscription
+	// below fires once per ping from EVERY runner (~N/5s for an N-runner
+	// field), so a raw handler ran the recent-pings query + leaderboard RPC +
+	// full GeoJSON rebuild once per ping — O(N) per ping, O(N^2) as the field
+	// grows. The refetcher collapses a burst to one fetch, never stacks a
+	// concurrent one, and discards any stale out-of-order resolution so the
+	// board can't flicker backward. Built in subscribe(), disposed on destroy.
+	let pingRefetcher: CoalescingRefetcher<{
+		recent: RacePingRow[];
+		leaders: RacePingRow[];
+		profiles: Map<string, { display_name: string | null }>;
+	}> | null = null;
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -207,6 +221,28 @@
 	}
 
 	function subscribe() {
+		pingRefetcher = new CoalescingRefetcher({
+			fetch: async () => {
+				const [ps, lp] = await Promise.all([
+					fetchRecentRacePings(eventId, instance),
+					fetchLatestRacePings(eventId, instance)
+				]);
+				return { recent: ps, leaders: lp, profiles: await buildProfiles(lp, results) };
+			},
+			apply: (v) => {
+				recentPings = v.recent;
+				leaderPings = v.leaders;
+				profiles = v.profiles;
+			},
+			onError: (err) => {
+				// Layered resilience: a failed background refetch must not blank
+				// the leaderboard or tear down the map. Keep the last good
+				// snapshot and log; the next ping (or the freshness tick)
+				// recovers. Mirrors the /live/[id] next-cut-off card's guard.
+				console.warn('live/event: ping refetch failed', err);
+			}
+		});
+
 		// Privacy-zone trust contract: pings are rendered verbatim. The
 		// broadcaster's privacy zones are NOT fetched here. The single
 		// line of defence is the `race_pings_drop_in_zone` BEFORE-INSERT
@@ -224,15 +260,7 @@
 					table: 'race_pings',
 					filter: `event_id=eq.${eventId}&instance_start=eq.${instance}`
 				},
-				async () => {
-					const [ps, lp] = await Promise.all([
-						fetchRecentRacePings(eventId, instance),
-						fetchLatestRacePings(eventId, instance)
-					]);
-					recentPings = ps;
-					leaderPings = lp;
-					profiles = await buildProfiles(lp, results);
-				}
+				() => pingRefetcher?.trigger()
 			)
 			.on(
 				'postgres_changes',
@@ -278,6 +306,7 @@
 
 	onDestroy(() => {
 		if (channel) supabase.removeChannel(channel);
+		pingRefetcher?.dispose();
 		stopResizeWatch?.();
 		map?.remove();
 	});
