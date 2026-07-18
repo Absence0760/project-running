@@ -162,6 +162,13 @@ export async function searchFoods(
 		json: '1',
 		page_size: String(limit),
 		fields: 'code,product_name,brands,nutriments',
+		// Open Food Facts is a global, community-contributed database —
+		// without a language hint it returns whichever language each
+		// product's name happens to be entered in (Nordic contributors
+		// are unusually active, hence the reported Norwegian results).
+		// `lc` asks it to prefer the English name, falling back to the
+		// product's default name when no English one exists.
+		lc: 'en'
 	});
 	const res = await fetcher(`${SEARCH_URL}?${params.toString()}`);
 	if (!res.ok) throw new Error(`Open Food Facts search failed: ${res.status}`);
@@ -180,7 +187,10 @@ export async function lookupBarcode(
 ): Promise<FoodSearchResult | null> {
 	const code = normaliseBarcode(barcode);
 	if (code == null) return null;
-	const params = new URLSearchParams({ fields: 'code,product_name,brands,nutriments' });
+	const params = new URLSearchParams({
+		fields: 'code,product_name,brands,nutriments',
+		lc: 'en'
+	});
 	const res = await fetcher(`${PRODUCT_URL}/${code}.json?${params.toString()}`);
 	if (!res.ok) throw new Error(`Open Food Facts product lookup failed: ${res.status}`);
 	return parseOffProduct(await res.json());
