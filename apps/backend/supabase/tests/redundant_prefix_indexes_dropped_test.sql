@@ -1,4 +1,4 @@
--- Pins the redundant-prefix-index cleanup (migration 20270423_001).
+-- Pins the redundant-prefix-index cleanup (migration 20270424_001).
 --
 -- Each of the six redundant indexes was an exact left-prefix of a UNIQUE / PK
 -- index on the same table, so dropping it loses no query capability. This test
