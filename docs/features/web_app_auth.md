@@ -131,6 +131,16 @@ OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` an
 
 ---
 
+## Auth error surfacing
+
+Supabase's raw `err.message` ("AuthApiException…", "Failed to fetch") is unlocalized developer jargon. Every rendered `error =` on `/login` routes through `classifyAuthError` + `authErrorMessageKey` in `lib/core/auth_errors.ts`, which maps the failure to one of `offline` / `invalidCredentials` / `rateLimited` / `emailExists` / `emailNotConfirmed` / `weakPassword` / `generic` and resolves the matching `login.error*` i18n key (all six locales). Classification is **structural** — it reads the error's `code` + `status` first (supabase-js `AuthApiError` carries both) and falls back to matching the message, so a plain `TypeError: Failed to fetch` classifies too. Mobile mirrors the branches in `apps/mobile_android/lib/auth_error.dart` (`classifyAuthError` / `friendlyAuthError`) — **keep the two in sync**.
+
+**Unconfirmed email (issue #486).** A user who signs up but never clicks the confirmation link can't sign in. GoTrue signals this two ways: the dedicated `email_not_confirmed` code, **or** the OAuth-style `invalid_grant` error carrying the descriptive message `"Email not confirmed"`. The classifier checks the specific email-not-confirmed condition (code **or** message) **before** the generic `invalid_credentials`/`invalid_grant` branch — the ordering matters, because that branch also matches `invalid_grant`, so a message-only signal would otherwise fall through to a misleading "wrong password" banner. On this classification `/login` sets `resendFor` to the attempted email, which renders a **Resend confirmation email** button inside the error banner; clicking it calls `supabase.auth.resend({ type: 'signup', … })` and shows the privacy-preserving `login.confirmationResent` copy ("If that email is registered, we've sent a new confirmation link.") — deliberately non-committal so it isn't a user-enumeration oracle (matches the reset-request posture; see issue #454 on enumeration). Note local Supabase runs with `enable_confirmations = false`, so this path only fires against the hosted project — see "Email confirmation redirect" below.
+
+Mapping pinned in `lib/core/auth_errors.test.ts` (incl. the `invalid_grant` + "Email not confirmed" ordering case); surfacing pinned in `tests-e2e/auth/email-not-confirmed.spec.ts` (intercepts the token endpoint, asserts the specific banner + resend button).
+
+---
+
 ## Password confirmation
 
 All three surfaces that **mint** a password — sign-up (`/login?signup=1`), reset (`/auth/reset`), and change-password (`/settings/account`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none. **If you add a fourth, route it through the same helper.**
