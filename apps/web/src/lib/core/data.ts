@@ -7556,6 +7556,12 @@ export async function deleteNotification(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+export async function deleteNotifications(ids: string[]): Promise<void> {
+	if (ids.length === 0) return;
+	const { error } = await supabase.from(TABLES.notifications).delete().in('id', ids);
+	if (error) throw error;
+}
+
 // ─────────────────────── User reports ───────────────────────
 //
 // Submit a report against a user / club / route. The server-side
