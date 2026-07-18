@@ -61,6 +61,8 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/safety/off_route_alert.ts` (`OffRouteAlertDetector`, `OFF_ROUTE_ALERT_DISTANCE_M`, `OFF_ROUTE_ALERT_SUSTAIN_MS`, `offRouteEscalationEnabled`) | `apps/mobile_android/lib/off_route_alert.dart` | `safety/off_route_alert.test.ts` ↔ `test/off_route_alert_test.dart` |
 | `apps/web/src/lib/core/auth_gates.ts` (`checkPasswordPair`, `MIN_PASSWORD_LENGTH`; the `checkSignUpGates` consent half is web-only — mobile's sign-up screen is separate from sign-in, so those gates live inline in `sign_up_screen.dart`'s `_checkGates`) | `apps/mobile_android/lib/auth_gates.dart` (`checkPasswordPair`, `minPasswordLength`; web's `{ok} \| {ok, reason}` union is a nullable reason in Dart) | `core/auth_gates.test.ts` ↔ `test/auth_gates_test.dart` |
 
+| `apps/web/src/lib/social/nearby.ts` (`NEARBY_BUCKET_BOUNDS_M`, `NEARBY_BUCKET_COUNT`, `nearbyDistanceBucket`, `nearbyBucketUpperBoundM`; the coarse distance-bucket contract for opt-in "runners nearby" — boundaries MUST match the SQL CASE in migration `20270423_001` + the `discoverable_runners_near` RPC) | `apps/mobile_android/lib/nearby.dart` (same, `kNearbyBucketBoundsM` / `kNearbyBucketCount`) | `social/nearby.test.ts` ↔ `test/nearby_test.dart` |
+
 > The embedded factor tables `apps/web/src/lib/runs/age_grade_tables.ts` ↔ `apps/mobile_android/lib/age_grade_tables.dart` are part of the `age_grade` pair but are **generated** from `scripts/age_grade/` and stay identical by construction — never hand-edit them.
 
 The mobile_android side is the byte-identical twin source — `apps/mobile_ios/` mirrors it automatically (handled by `mobile-twin-mirror`), so you only compare web ↔ android.
