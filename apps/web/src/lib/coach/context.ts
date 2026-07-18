@@ -208,7 +208,6 @@ export async function buildContext(
 
 	return {
 		data: {
-			now_iso: new Date().toISOString(),
 			profile: profile ?? null,
 			runner_context: runnerContext,
 			plan: plan ?? null,
@@ -217,6 +216,12 @@ export async function buildContext(
 			recent_runs: recentRuns ?? [],
 			recent_lifts: recentLifts,
 			nutrition_7d: nutrition7d,
+			// LAST, not first: this is the only ever-changing field, and the
+			// serialized context is sent as an Anthropic ephemeral-cache block
+			// (providers.ts) that only hits on a byte-identical prefix. Leading
+			// with the timestamp busts the cache on every message; trailing it
+			// keeps the whole prefix stable across a conversation. Issue #390.
+			now_iso: new Date().toISOString(),
 		},
 	};
 }
