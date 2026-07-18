@@ -127,6 +127,8 @@ export const messages = {
 	"coachChat.errorGeneric": "Coach エラー（{status}）",
 	"coachChat.errorTransport": "Coach に接続できませんでした。接続を確認してもう一度お試しください。",
 	"coachChat.errorStreamFailed": "ストリームに失敗しました",
+	"coachChat.errorLoadArchive": "保存された会話を開けませんでした。もう一度お試しください。",
+	"coachChat.errorLoad": "会話を読み込めませんでした。もう一度お試しください。",
 	"coachChat.newChat": "新しいチャット",
 	"coachChat.newChatTitle": "現在の会話をアーカイブして新しい会話を始める",
 	"coachChat.conversations": "会話",
