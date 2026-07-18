@@ -2227,6 +2227,7 @@ export const messages = {
 	"messages.send": "Enviar",
 	"messages.sendFailed": "Falha ao enviar",
 	"messages.threadsLoadFailed": "Não foi possível carregar suas conversas.",
+	"messages.threadLoadFailed": "Não foi possível carregar esta conversa.",
 	"messages.retry": "Tentar novamente",
 	"periodSummary.previous": "Anterior",
 	"periodSummary.next": "Próximo",

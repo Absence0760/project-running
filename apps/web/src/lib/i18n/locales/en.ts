@@ -2236,6 +2236,7 @@ export const en = {
 	"messages.send": "Send",
 	"messages.sendFailed": "Send failed",
 	"messages.threadsLoadFailed": "Couldn’t load your conversations.",
+	"messages.threadLoadFailed": "Couldn’t load this conversation.",
 	"messages.retry": "Retry",
 	"periodSummary.previous": "Previous",
 	"periodSummary.next": "Next",
