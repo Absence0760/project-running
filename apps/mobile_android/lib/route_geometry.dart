@@ -80,6 +80,7 @@ double? distanceAlongRoute(
   List<Waypoint> waypoints,
 ) {
   if (waypoints.length < 2) return null;
+  if (!point.lat.isFinite || !point.lng.isFinite) return null;
   const deg = pi / 180;
   const rPerDeg = 6371000.0 * deg;
   var seen = 0.0;

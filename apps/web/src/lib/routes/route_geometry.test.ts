@@ -259,6 +259,12 @@ test('distanceAlongRoute — picks the nearest of two close segments', () => {
 	assert.ok(Math.abs(d! - 50) < 2, `got ${d}`);
 });
 
+test('distanceAlongRoute — non-finite point returns null (no false 0-at-start)', () => {
+	const wps = [distWp(0), distWp(100), distWp(200)];
+	assert.equal(distanceAlongRoute({ lat: NaN, lng: 0 }, wps), null);
+	assert.equal(distanceAlongRoute({ lat: 0, lng: Infinity }, wps), null);
+});
+
 test('distanceAlongRoute — clamps to [0, totalLength]', () => {
 	const wps = [distWp(0), distWp(100), distWp(200)];
 	const total = polylineLengthMetres(wps);

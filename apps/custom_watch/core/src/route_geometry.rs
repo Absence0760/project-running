@@ -91,6 +91,9 @@ pub fn distance_along_route(
     if waypoints.len() < 2 {
         return None;
     }
+    if !point_lat.is_finite() || !point_lng.is_finite() {
+        return None;
+    }
     let deg = core::f64::consts::PI / 180.0;
     let r_per_deg = R_M * deg;
     let mut seen = 0.0;
@@ -386,6 +389,13 @@ mod tests {
         let d = distance_along_route(-2.0 / M_PER_DEG_LNG, 50.0 / M_PER_DEG_LNG, &wps).unwrap();
         assert!(d < 100.0, "expected on the first leg, got {}", d);
         assert!((d - 50.0).abs() < 2.0, "got {}", d);
+    }
+
+    #[test]
+    fn distance_non_finite_point_returns_none() {
+        let wps = [dist_wp(0.0), dist_wp(100.0), dist_wp(200.0)];
+        assert_eq!(distance_along_route(f64::NAN, 0.0, &wps), None);
+        assert_eq!(distance_along_route(0.0, f64::INFINITY, &wps), None);
     }
 
     #[test]

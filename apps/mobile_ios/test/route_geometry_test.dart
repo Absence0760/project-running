@@ -368,6 +368,13 @@ void main() {
       expect(d, closeTo(50, 2));
     });
 
+    test('non-finite point returns null (no false 0-at-start)', () {
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      expect(distanceAlongRoute((lat: double.nan, lng: 0), wps), isNull);
+      expect(
+          distanceAlongRoute((lat: 0, lng: double.infinity), wps), isNull);
+    });
+
     test('clamps to [0, totalLength]', () {
       final wps = [distWp(0), distWp(100), distWp(200)];
       final total = polylineLengthMetres(wps);
