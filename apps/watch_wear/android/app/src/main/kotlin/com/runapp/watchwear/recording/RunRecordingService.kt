@@ -521,11 +521,13 @@ class RunRecordingService : Service() {
     private suspend fun writeCheckpoint() {
         val file = trackWriter ?: return
         if (file.pointCount == 0 && bpmCount == 0L) return
+        val savedAtMs = System.currentTimeMillis()
+        val currentPauseMs = if (pausedSinceMs > 0) savedAtMs - pausedSinceMs else 0
         checkpoints.save(
             Checkpoint(
                 runId = runId,
                 startedAtMs = startedAtMs,
-                savedAtMs = System.currentTimeMillis(),
+                savedAtMs = savedAtMs,
                 distanceM = RecordingRepository.metrics.value.distanceM,
                 trackFilePath = file.path,
                 trackPointCount = file.pointCount,
@@ -533,6 +535,7 @@ class RunRecordingService : Service() {
                 bpmCount = bpmCount,
                 activityType = activityType,
                 laps = laps.map { CheckpointLap(it.number, it.atMs, it.distanceM) },
+                pausedAccumulatedMs = pausedAccumulatedMs + currentPauseMs,
             )
         )
     }

@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
+import com.runapp.watchwear.recording.checkpointActiveDurationS
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RunRecordingService
 import com.runapp.watchwear.system.BatteryOptimization
@@ -599,7 +600,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         viewModelScope.launch {
-            val durationS = ((cp.savedAtMs - cp.startedAtMs) / 1000).toInt()
+            val durationS = checkpointActiveDurationS(cp)
             val avgBpm = if (cp.bpmCount == 0L) null
                 else cp.bpmSum.toDouble() / cp.bpmCount
             val sealed = sealTrackFile(cp.trackFilePath)
