@@ -136,9 +136,14 @@ Read it before writing a migration that adds a constraint or touches many rows.
 `scripts/check_migration_online_safety.mjs` (in the `parity-types` CI job,
 alongside the version-keys guard) fails a NEW migration that adds a CHECK/FK to
 a guarded table without `NOT VALID`; run it locally with `node
-apps/backend/scripts/check_migration_online_safety.mjs`. The read-only
-`/audit/migration-locks` command classifies the *existing* migrations by lock
-impact.
+apps/backend/scripts/check_migration_online_safety.mjs`. **`jobs` is in the
+guarded set** (#394 follow-up): a bare `DROP CONSTRAINT jobs_kind_chk` +
+`ADD CONSTRAINT … CHECK (…)` widening now fails CI just like the
+`notifications` case, because the Go `job_worker` polls `jobs` continuously and
+a blocking validation scan stalls job processing — so a new `kind` allow-list
+entry must use `ADD … NOT VALID` + a separate `VALIDATE CONSTRAINT`. The
+read-only `/audit/migration-locks` command classifies the *existing* migrations
+by lock impact.
 
 ### Migrations that reference postgis / pg_trgm objects must set search_path themselves
 
