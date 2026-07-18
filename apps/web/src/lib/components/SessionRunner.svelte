@@ -25,6 +25,9 @@
 	let paused = $state(false);
 	let confirmAbandon = $state(false);
 
+	let runnerEl = $state<HTMLDivElement | null>(null);
+	let prevFocus: HTMLElement | null = null;
+
 	// The countdown is driven off the cumulative axis: each timed step's
 	// deadline is its `cumulativeS` boundary measured from a monotonic start
 	// epoch, so per-step rounding can't accumulate drift over a long session.
@@ -138,9 +141,72 @@
 	});
 
 	onDestroy(clearTicker);
+
+	// The runner is a full-screen role="dialog" aria-modal overlay, but the host
+	// page's controls stay mounted behind it, so manage focus like Modal.svelte:
+	// save/restore focus, lock body scroll, trap Tab, and route Escape to the
+	// abandon-confirm (never a silent exit of a live workout).
+	$effect(() => {
+		prevFocus = document.activeElement as HTMLElement | null;
+		const prevOverflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+
+		const onKey = (e: KeyboardEvent) => {
+			// While the abandon-confirm is open its own Modal owns focus + Escape;
+			// stand down so the two traps don't fight over the active element.
+			if (confirmAbandon) return;
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				confirmAbandon = true;
+				return;
+			}
+			if (e.key !== 'Tab' || !runnerEl) return;
+			const focusable = [
+				...runnerEl.querySelectorAll<HTMLElement>(
+					'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+						'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+				)
+			].filter((el) => el.getClientRects().length > 0);
+			if (focusable.length === 0) {
+				e.preventDefault();
+				runnerEl.focus();
+				return;
+			}
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			const inside = active != null && runnerEl.contains(active);
+			if (e.shiftKey) {
+				if (!inside || active === first || active === runnerEl) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else if (!inside || active === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+		window.addEventListener('keydown', onKey);
+
+		queueMicrotask(() => runnerEl?.focus());
+
+		return () => {
+			window.removeEventListener('keydown', onKey);
+			document.body.style.overflow = prevOverflow;
+			if (prevFocus && document.body.contains(prevFocus)) prevFocus.focus();
+		};
+	});
 </script>
 
-<div class="runner-overlay" data-testid="session-runner" role="dialog" aria-modal="true" aria-label={m('session.run.title')}>
+<div
+	class="runner-overlay"
+	data-testid="session-runner"
+	role="dialog"
+	aria-modal="true"
+	aria-label={m('session.run.title')}
+	bind:this={runnerEl}
+	tabindex="-1"
+>
 	<div class="runner-body">
 		{#if current}
 			<SessionExecutionBand

@@ -36,6 +36,9 @@
 
 	// Import flow modal state.
 	let importing = $state<RaceListingResult | null>(null);
+	// RunSignUp requires a bib to scope the import to the runner's own result
+	// (issue #360 — an unscoped fetch imports the whole finisher field).
+	let runSignUpBib = $state('');
 	let pasteBib = $state('');
 	let pasteChip = $state('');
 	let pasteGun = $state('');
@@ -141,6 +144,7 @@
 
 	function openImport(race: RaceListingResult) {
 		importing = race;
+		runSignUpBib = '';
 		pasteBib = '';
 		pasteChip = '';
 		pasteGun = '';
@@ -151,7 +155,11 @@
 		if (!importing) return;
 		importBusy = true;
 		try {
-			await importRaceResult({ provider: 'runsignup', listingId: importing.id });
+			await importRaceResult({
+				provider: 'runsignup',
+				listingId: importing.id,
+				bib: runSignUpBib.trim() || undefined
+			});
 			showToast(m('races.imported'), 'success');
 			importing = null;
 		} catch (e) {
@@ -308,10 +316,15 @@
 	{#if importing}
 		<div class="import-body">
 			{#if importing.provider === 'runsignup' && runSignUpAvailable}
+				<label>
+					<span>{m('races.bib')}</span>
+					<input type="text" bind:value={runSignUpBib} data-testid="runsignup-bib" />
+				</label>
+				<p class="paste-hint">{m('races.runSignUpBibHint')}</p>
 				<button
 					type="button"
 					class="btn btn-primary"
-					disabled={importBusy}
+					disabled={importBusy || !runSignUpBib.trim()}
 					onclick={doRunSignUpImport}
 					data-testid="race-import-runsignup"
 				>
