@@ -4257,6 +4257,9 @@ export const messages = {
 	"gym.session.restSkip": "Pular descanso",
 	"gym.session.target": "Meta",
 	"gym.session.noTarget": "Sem meta",
+	"gym.session.holdSeconds": "Sustentado (s)",
+	"gym.session.startHold": "Iniciar sustentação",
+	"gym.session.stopHold": "Parar sustentação",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Planejado vs realizado",

@@ -4253,6 +4253,9 @@ export const messages = {
 	"gym.session.restSkip": "休憩をスキップ",
 	"gym.session.target": "目標",
 	"gym.session.noTarget": "目標なし",
+	"gym.session.holdSeconds": "実績（秒）",
+	"gym.session.startHold": "計測開始",
+	"gym.session.stopHold": "計測停止",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "計画と実績",
