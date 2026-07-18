@@ -188,6 +188,21 @@ When the client sends no redirect, GoTrue falls back to the hosted project's **S
 
 ---
 
+## Consent is enforced server-side, not just by the client redirect (issue #382)
+
+The Art 8 age/terms gate above (`confirm_age_and_terms` + the `/auth/confirm-age` redirect) is a **client-side UX layer**. On its own it was bypassable: a direct `curl` to GoTrue `/auth/v1/signup`, or closing the tab before `/auth/callback` replays the stamp, yields an `authenticated` account whose `user_profiles.age_confirmed_at IS NULL` — and until now every RPC/RLS was silent on the column, so that account had full functional use of the app. Art 8 consent is invalid when the controller can't show the affirmative act happened, and the downstream Art 9 processing (location traces, workouts, food, body metrics) is then unlawful ab initio.
+
+The enforcement beneath the redirect is a **fail-closed `BEFORE INSERT` trigger** (`private.enforce_consent()`, migration `20270425_001_consent_write_gate.sql`) on the core personal-data content tables — `runs`, `gym_workouts`, `food_log`, `body_metrics`. An `authenticated` caller (a user JWT) cannot insert their first row of activity/health data until `confirm_age_and_terms()` has stamped `age_confirmed_at`; the guard raises `42501`. The reusable helper is keyed on `auth.uid()` (the RLS insert check already forces `new.user_id = auth.uid()`), so the caller's stamp is the row's stamp.
+
+Two carve-outs keep legitimate flows working:
+
+- **The consent-stamping path is never gated.** `user_profiles` carries no trigger, so `confirm_age_and_terms()` (which creates/updates the profile row) always succeeds — a brand-new user stamps, then writes.
+- **A null `auth.uid()` (service_role / backend jobs) passes through.** Async importers/webhooks (the Strava webhook runs as service_role) have no interactive consent context; gating them would break ingestion. The bypass this closes is an `authenticated` account with no stamp, which always has a non-null `auth.uid()`. The parkrun importer runs under the *user's* JWT, so it is gated too — and passes for the consented users who reach it.
+
+**Prod deploy is gated on CISO / legal sign-off** (privacy-boundary change) per the compliance-sign-off rule — the code lands now, fail-closed, behind that deploy gate. Pinned by `apps/backend/supabase/tests/consent_write_gate_test.sql`.
+
+---
+
 ## Sign-up must not be an account-existence oracle (issue #399)
 
 A sign-up form that tells you "that email already has an account" is a **user-enumeration oracle** — anyone can probe whether an address is registered. GoTrue only hides this when **email confirmations are ON**: a duplicate `signUp()` then returns a session-less success that is byte-for-byte identical to a fresh sign-up needing confirmation. With `enable_confirmations = false` a duplicate instead throws `422 user_already_exists`, which classifies as `emailExists` and would otherwise render the distinct "that email already has an account" message.
