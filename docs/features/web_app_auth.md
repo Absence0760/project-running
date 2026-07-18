@@ -187,6 +187,19 @@ When the client sends no redirect, GoTrue falls back to the hosted project's **S
 
 ---
 
+## Sign-up must not be an account-existence oracle (issue #399)
+
+A sign-up form that tells you "that email already has an account" is a **user-enumeration oracle** — anyone can probe whether an address is registered. GoTrue only hides this when **email confirmations are ON**: a duplicate `signUp()` then returns a session-less success that is byte-for-byte identical to a fresh sign-up needing confirmation. With `enable_confirmations = false` a duplicate instead throws `422 user_already_exists`, which classifies as `emailExists` and would otherwise render the distinct "that email already has an account" message.
+
+Whether prod has confirmations on is **dashboard-managed and invisible from the repo**, so the security property must not depend on it. Two independent layers hold it closed:
+
+1. **Code (defence-in-depth, shipped).** The sign-up call site neutralises the reveal in `login/+page.svelte`: on an `emailExists` outcome it shows the **same neutral `login.checkEmail` info banner** a fresh sign-up shows, instead of the distinct error. The decision is the pure `signUpErrorRevealsAccountExistence(kind)` predicate in `core/auth_errors.ts` (unit-tested in `auth_errors.test.ts`; the wiring is pinned by `tests-e2e/auth/login.spec.ts`). **Login is deliberately untouched** — an existing email on the sign-in form classifies as `invalidCredentials`, which is the standard, non-enumerable response. The `emailExists` kind + `login.errorEmailExists` copy still exist for any non-sign-up surface; only the sign-up context is neutralised.
+2. **Deploy gate (the real fix — pre-deploy security checklist item).** **Production GoTrue MUST run with `enable_confirmations = true`.** With it off, a confirmed-immediately sign-up also leaks existence through timing/side-channels the neutral banner can't fully mask, and the whole confirmation-redirect + Art 8 consent-gate path above assumes confirmations are on. This is a **pre-deploy gate, verified in the Supabase dashboard**, not a code toggle — see Production setup below.
+
+**Local config stays `enable_confirmations = false` on purpose.** Flipping it locally would break the e2e sign-up flow (`tests-e2e/auth/login.spec.ts` signs a fresh user up through the UI and expects an immediate session → `/onboarding`; that only works when sign-up returns a session with no email-click step) and add a Mailpit round-trip to every local ad-hoc sign-up. The code defence-in-depth makes the enumeration property hold regardless of the toggle, so local dev keeps the frictionless path and prod carries the gate.
+
+---
+
 ## Session persistence
 
 Sessions are managed by `@supabase/supabase-js` itself:
@@ -239,6 +252,7 @@ Supabase Auth dashboard:
 - Enable Google and Apple providers under **Authentication → Providers**
 - Enable **Allow manual linking** under **Authentication → Settings** so `linkIdentity()` works
 - Mirror the same redirect URI in each external provider's app config
+- **Pre-deploy security gate:** confirm **Authentication → Providers → Email → Confirm email** is **ON** (`enable_confirmations = true`). This closes the sign-up user-enumeration oracle (issue #399, see "Sign-up must not be an account-existence oracle" above). The code neutralises the distinct account-exists message regardless, but the durable fix is confirmations enabled in prod — verify it as part of the release checklist, not just at first setup.
 
 Email confirmations and rate limits are configured in the same dashboard. For the auth-email localization hook + custom SMTP (the sender address), see [email.md § Production ops](email.md).
 
