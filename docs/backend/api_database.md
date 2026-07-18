@@ -815,7 +815,7 @@ Supplementary user data not stored in `auth.users`. As of `20260521_001_user_fol
 ```sql
 create table user_profiles (
   id                       uuid primary key references auth.users,
-  display_name             text,
+  display_name             text,                                -- rejects control chars (CHECK user_profiles_display_name_no_control_chars, 20270423_001)
   avatar_url               text,
   parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
   preferred_unit           text default 'km',                   -- 'km' | 'mi'
@@ -832,6 +832,15 @@ create table user_profiles (
 -- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
 -- 'premium' values to 'pro'. Keep this list in lockstep with the
 -- SubscriptionTier TS union in apps/web/src/lib/types.ts.
+--
+-- `user_profiles_display_name_no_control_chars` (20270423_001) rejects any
+-- control character (CR/LF/other C0/DEL) in display_name. display_name is
+-- interpolated into the Subject of safety-contact emails the app relays to
+-- third parties; a raw CR/LF is an SMTP/MIME header injection (issue #375).
+-- The Go mailer (job_worker) also strips control chars from every header by
+-- construction; this CHECK is the defence-in-depth write boundary. NULL stays
+-- allowed. Added NOT VALID + VALIDATE (existing rows scrubbed first) so the
+-- DDL doesn't take a long blocking lock on the populated table.
 --
 -- `coach_consent_at` and `health_data_consent_at` were added in
 -- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
