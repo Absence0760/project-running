@@ -3035,7 +3035,7 @@ export const messages = {
 	"socialHub.tabPeople": "ユーザー",
 	"socialHub.tabClubs": "クラブ",
 	"socialHub.tabDiscover": "見つける",
-	"discover.searchPlaceholder": "ヨガ、ピラティス、HIIT、ランクラブを検索…",
+	"discover.searchPlaceholder": "クラス・クラブを検索…",
 	"discover.activityAll": "すべてのアクティビティ",
 	"discover.cadenceLabel": "頻度",
 	"discover.cadenceAny": "頻度を指定しない",

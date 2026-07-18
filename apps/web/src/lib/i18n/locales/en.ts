@@ -3048,7 +3048,7 @@ export const en = {
 	"socialHub.tabPeople": "People",
 	"socialHub.tabClubs": "Clubs",
 	"socialHub.tabDiscover": "Discover",
-	"discover.searchPlaceholder": "Search yoga, pilates, HIIT, run clubs…",
+	"discover.searchPlaceholder": "Search classes, clubs…",
 	"discover.activityAll": "All activities",
 	"discover.cadenceLabel": "Cadence",
 	"discover.cadenceAny": "Any cadence",

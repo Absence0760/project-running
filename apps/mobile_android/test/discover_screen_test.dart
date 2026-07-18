@@ -192,7 +192,7 @@ void main() {
     ));
     await _settle(tester);
     expect(
-      find.bySemanticsLabel(RegExp('Search yoga, pilates, HIIT, run clubs')),
+      find.bySemanticsLabel(RegExp('Search classes, clubs')),
       findsAtLeastNWidgets(1),
     );
     handle.dispose();
