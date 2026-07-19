@@ -46,6 +46,17 @@ AuthErrorKind classifyAuthError(Object error) {
     return AuthErrorKind.rateLimited;
   }
 
+  // Checked BEFORE invalidCredentials: GoTrue's token endpoint can
+  // report an unconfirmed-email sign-in as the OAuth-style invalid_grant
+  // error carrying the descriptive message "Email not confirmed", not
+  // only via the dedicated email_not_confirmed code. The
+  // invalidCredentials branch below also matches invalid_grant, so this
+  // specific-message check has to win first — otherwise the user gets a
+  // wrong-password message for an unconfirmed account (issue #486).
+  if (code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
+    return AuthErrorKind.emailNotConfirmed;
+  }
+
   if (code == 'invalid_credentials' ||
       code == 'invalid_grant' ||
       msg.contains('invalid login credentials') ||
@@ -57,10 +68,6 @@ AuthErrorKind classifyAuthError(Object error) {
       code == 'email_exists' ||
       msg.contains('already registered')) {
     return AuthErrorKind.emailExists;
-  }
-
-  if (code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
-    return AuthErrorKind.emailNotConfirmed;
   }
 
   if (code == 'weak_password' ||
@@ -101,6 +108,25 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
       return l10n.authErrorGeneric;
   }
 }
+
+/// Whether surfacing this error kind at the SIGN-UP surface would
+/// disclose that an email is already registered. GoTrue only
+/// obfuscates a duplicate sign-up (returning a session-less success
+/// identical to a fresh one) when email confirmations are ON — a
+/// dashboard-managed setting invisible from this repo. With
+/// confirmations OFF a duplicate address throws `user_already_exists`
+/// (→ [AuthErrorKind.emailExists]), which would otherwise render a
+/// distinct "that email already has an account" message and turn
+/// sign-up into an account-existence oracle. Defence in depth: the
+/// sign-up screen collapses this to the same neutral check-your-email
+/// state a fresh sign-up shows, regardless of the server toggle. The
+/// full fix is prod GoTrue running `enable_confirmations = true` — see
+/// docs/features/web_app_auth.md. Sign-IN is unaffected: an existing
+/// email there classifies as [AuthErrorKind.invalidCredentials], which
+/// is standard. Mirrors web's `signUpErrorRevealsAccountExistence` in
+/// `apps/web/src/lib/core/auth_errors.ts` — keep the two in sync.
+bool signUpErrorRevealsAccountExistence(AuthErrorKind kind) =>
+    kind == AuthErrorKind.emailExists;
 
 /// Map an arbitrary exception on a non-auth form screen (club, coach, plan,
 /// invite) to a localized, user-facing message. Reuses [classifyAuthError]'s

@@ -387,12 +387,13 @@ export const authEmailCatalogue: Record<
 > = {
   en: {
     signup: {
-      subject: 'Confirm your signup',
-      preheader: 'Confirm your email address to finish creating your Threkir account.',
-      heading: 'Confirm your signup',
+      subject: 'Confirm your email address',
+      preheader: 'Confirm your email to finish creating your Threkir account.',
+      heading: 'Confirm your email address',
       cta: 'Confirm your email',
       body: [
-        'Follow the link below to confirm your email address and finish creating your Threkir account.',
+        'Welcome to Threkir! Confirm your email address using the button below to finish creating your account.',
+        'Once confirmed, you can record your first run, build routes, and follow friends.',
         "If you didn't create this account, you can safely ignore this email.",
       ],
     },
@@ -477,12 +478,13 @@ export const authEmailCatalogue: Record<
   },
   de: {
     signup: {
-      subject: 'Bestätige deine Registrierung',
+      subject: 'Bestätige deine E-Mail-Adresse',
       preheader: 'Bestätige deine E-Mail-Adresse, um dein Threkir-Konto fertig einzurichten.',
-      heading: 'Bestätige deine Registrierung',
+      heading: 'Bestätige deine E-Mail-Adresse',
       cta: 'E-Mail bestätigen',
       body: [
-        'Folge dem Link unten, um deine E-Mail-Adresse zu bestätigen und dein Threkir-Konto fertig einzurichten.',
+        'Willkommen bei Threkir! Bestätige deine E-Mail-Adresse über den Button unten, um dein Konto fertig einzurichten.',
+        'Sobald sie bestätigt ist, kannst du deinen ersten Lauf aufzeichnen, Routen erstellen und Freunden folgen.',
         'Wenn du dieses Konto nicht erstellt hast, kannst du diese E-Mail einfach ignorieren.',
       ],
     },
@@ -567,12 +569,13 @@ export const authEmailCatalogue: Record<
   },
   fr: {
     signup: {
-      subject: 'Confirmez votre inscription',
+      subject: 'Confirmez votre adresse e-mail',
       preheader: 'Confirmez votre adresse e-mail pour finaliser la création de votre compte Threkir.',
-      heading: 'Confirmez votre inscription',
+      heading: 'Confirmez votre adresse e-mail',
       cta: 'Confirmer mon e-mail',
       body: [
-        'Suivez le lien ci-dessous pour confirmer votre adresse e-mail et finaliser la création de votre compte Threkir.',
+        'Bienvenue sur Threkir ! Confirmez votre adresse e-mail à l\'aide du bouton ci-dessous pour finaliser la création de votre compte.',
+        'Une fois confirmée, vous pourrez enregistrer votre première course, créer des itinéraires et suivre des amis.',
         "Si vous n'avez pas créé ce compte, vous pouvez ignorer cet e-mail.",
       ],
     },
@@ -657,12 +660,13 @@ export const authEmailCatalogue: Record<
   },
   es: {
     signup: {
-      subject: 'Confirma tu registro',
+      subject: 'Confirma tu dirección de correo',
       preheader: 'Confirma tu dirección de correo para terminar de crear tu cuenta de Threkir.',
-      heading: 'Confirma tu registro',
+      heading: 'Confirma tu dirección de correo',
       cta: 'Confirmar mi correo',
       body: [
-        'Sigue el enlace de abajo para confirmar tu dirección de correo y terminar de crear tu cuenta de Threkir.',
+        'Te damos la bienvenida a Threkir. Confirma tu dirección de correo con el botón de abajo para terminar de crear tu cuenta.',
+        'Una vez confirmada, podrás registrar tu primera carrera, crear rutas y seguir a amigos.',
         'Si no creaste esta cuenta, puedes ignorar este correo.',
       ],
     },
@@ -747,12 +751,13 @@ export const authEmailCatalogue: Record<
   },
   ja: {
     signup: {
-      subject: '登録を確認してください',
+      subject: 'メールアドレスを確認してください',
       preheader: 'メールアドレスを確認して、Threkirアカウントの作成を完了してください。',
-      heading: '登録の確認',
+      heading: 'メールアドレスの確認',
       cta: 'メールアドレスを確認',
       body: [
-        '下のリンクからメールアドレスを確認し、Threkirアカウントの作成を完了してください。',
+        'Threkir へようこそ。下のボタンからメールアドレスを確認し、アカウントの作成を完了してください。',
+        '確認が完了すると、最初のランの記録、ルート作成、友達のフォローを始められます。',
         'このアカウントに心当たりがない場合は、このメールを無視してください。',
       ],
     },
@@ -837,12 +842,13 @@ export const authEmailCatalogue: Record<
   },
   'pt-BR': {
     signup: {
-      subject: 'Confirme seu cadastro',
+      subject: 'Confirme seu endereço de e-mail',
       preheader: 'Confirme seu endereço de e-mail para concluir a criação da sua conta Threkir.',
-      heading: 'Confirme seu cadastro',
+      heading: 'Confirme seu endereço de e-mail',
       cta: 'Confirmar meu e-mail',
       body: [
-        'Siga o link abaixo para confirmar seu endereço de e-mail e concluir a criação da sua conta Threkir.',
+        'Bem-vindo ao Threkir! Confirme seu endereço de e-mail no botão abaixo para concluir a criação da sua conta.',
+        'Depois de confirmar, você poderá registrar sua primeira corrida, criar rotas e seguir amigos.',
         'Se você não criou esta conta, pode ignorar este e-mail.',
       ],
     },

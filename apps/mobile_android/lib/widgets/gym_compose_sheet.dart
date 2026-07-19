@@ -548,12 +548,21 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                         const TextInputType.numberWithOptions(decimal: false),
                       ),
                     ),
-                    IconButton(
-                      tooltip: l10n.gymEditorRemoveSet,
-                      icon: const Icon(Icons.close, size: 18),
-                      color: theme.colorScheme.outline,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _removeSet(ex, si),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 32,
+                      child: si == 0
+                          ? null
+                          : IconButton(
+                              tooltip: l10n.gymEditorRemoveSet,
+                              icon: const Icon(Icons.close, size: 18),
+                              color: theme.colorScheme.outline,
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                  minWidth: 32, minHeight: 32),
+                              onPressed: () => _removeSet(ex, si),
+                            ),
                     ),
                   ],
                 ),

@@ -75,6 +75,37 @@ test.describe('/messages — direct messages', () => {
 		await expect(errorNote).toHaveCount(0, { timeout: 10_000 });
 	});
 
+	test('a failed thread load surfaces a retry instead of a stale/empty pane', async ({ page }) => {
+		// Pin the openThread unswallowed-failure contract: a transient
+		// direct_messages select failure must render the error + Retry
+		// state, NOT leave the user on the previous conversation (or the
+		// "no messages yet" copy) with no sign anything broke. First call
+		// 500s, the retry goes through.
+		let failedOnce = false;
+		await page.route('**/rest/v1/direct_messages*', async (route) => {
+			if (route.request().method() === 'GET' && !failedOnce) {
+				failedOnce = true;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated transient failure' })
+				});
+			} else {
+				await route.continue();
+			}
+		});
+
+		await page.goto(`/messages/${USER_B.id}`);
+		const errorNote = page.locator('.messages [role="alert"]');
+		await expect(errorNote).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText('No messages yet', { exact: false })).toHaveCount(0);
+
+		await errorNote.getByRole('button', { name: 'Retry' }).click();
+		// The retry hits the real endpoint: either messages render or the
+		// honest empty state does — the error note is gone either way.
+		await expect(errorNote).toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('anon is prompted to sign in', async ({ page, context }) => {
 		await context.clearCookies();
 		await page.context().addInitScript(() => {
