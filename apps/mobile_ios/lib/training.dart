@@ -504,12 +504,12 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   final masters = isMastersAge(input.age);
   for (var i = 0; i < totalWeeks; i++) {
     final phase = phaseFor(i, totalWeeks);
-    final peakKm = _peakVolumeKm(
+    final peakKm = peakVolumeKm(
         goalDistance,
         input.daysPerWeek,
         (input.goalTimeSec != null && input.goalTimeSec! > 0) ||
             (input.recent5kSec != null && input.recent5kSec! > 0));
-    final frac = _mileageFraction(i, totalWeeks, phase, masters);
+    final frac = mileageFraction(i, totalWeeks, phase, masters);
     final weeklyKm = (peakKm * frac).round();
     final weekStart = _addDays(input.startDate, i * 7);
     final workouts = _generateWeek(
@@ -661,7 +661,7 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
   );
 }
 
-double _peakVolumeKm(double goalDistanceM, int daysPerWeek,
+double peakVolumeKm(double goalDistanceM, int daysPerWeek,
     [bool hasAnchor = true]) {
   final baseMul = goalDistanceM <= 10000
       ? 5.0
@@ -683,7 +683,7 @@ bool _isStepBackWeek(int i, bool masters) {
   return masters ? i % 3 == 2 : i % 4 == 3;
 }
 
-double _mileageFraction(int i, int total, PlanPhase phase,
+double mileageFraction(int i, int total, PlanPhase phase,
     [bool masters = false]) {
   if (phase == PlanPhase.race) return 0.35;
   if (phase == PlanPhase.taper) return 0.55;
@@ -734,18 +734,38 @@ List<GeneratedWorkout> _generateWeek({
   );
   final qualityKm = (quality.a?.targetDistanceM ?? 0) / 1000 +
       (quality.b?.targetDistanceM ?? 0) / 1000;
-  final remaining = max(0.0, weeklyKm - longKm - qualityKm);
   final daysUsed = restDow >= 0 ? <int>{longDow, restDow} : <int>{longDow};
   // Persona-hunt Intermediate #4: a 3-day plan used to be all
-  // long-run + easy with zero quality across every phase. Drop the
-  // gate from >=4 to >=3 so 3-day plans get one tempo/interval per
-  // week (the phase picks which). Race + recovery phases still
-  // produce a null quality.a and fall through to easy below.
-  if (daysPerWeek >= 3) daysUsed.add(qaDow);
-  if (daysPerWeek >= 5) daysUsed.add(qbDow);
-  final easyDays = daysPerWeek - daysUsed.where((d) => d != restDow).length;
+  // long-run + easy with zero quality across every phase. 3-day plans
+  // get one tempo/interval per week (the phase picks which). Reserve a
+  // quality slot only when the phase actually fills it — _allocateQuality
+  // returns null for the race phase and never populates b for base/taper.
+  // Reserving an empty slot understated the easy-day count, so the slot
+  // fell through to an extra easy run and the week overshot its volume
+  // target (#326).
+  if (quality.a != null) daysUsed.add(qaDow);
+  if (quality.b != null) daysUsed.add(qbDow);
+
+  // In a race week the Sunday slot emits the race itself (goalDistanceM),
+  // standing in for the long run, and typically dwarfs the light race-week
+  // budget on its own — so the anchor subtracted from the weekly budget must
+  // be the race distance, not the (much smaller) nominal long run (#326).
+  final isRaceWeek = phase == PlanPhase.race;
+  final anchorKm = isRaceWeek ? goalDistanceM / 1000 : longKm.toDouble();
+  final remaining = max(0.0, weeklyKm - anchorKm - qualityKm);
+  final easySlots = daysPerWeek - daysUsed.where((d) => d != restDow).length;
+  // Race week: only add the shakeout easy days the light remaining budget
+  // supports at the 3 km floor, so a race that dwarfs the budget isn't padded
+  // back up toward peak volume. Every other phase honours the requested day
+  // count even when a low-volume week's fixed tempo/long run nudges it
+  // slightly over its nominal target (persona #23 — daysPerWeek is a promise
+  // the training-load phases keep).
+  final easyDays = isRaceWeek
+      ? min(easySlots, (remaining / _kEasyRunFloorKm).floor())
+      : easySlots;
   final easyKm = easyDays > 0 ? remaining / easyDays : 0.0;
 
+  var easyEmitted = 0;
   for (var dow = 0; dow < 7; dow++) {
     final date = _addDays(weekStart, dow);
     if (dow == restDow) {
@@ -778,7 +798,15 @@ List<GeneratedWorkout> _generateWeek({
       workouts.add(quality.b!._withDate(date));
       continue;
     }
-    workouts.add(_easy(date, easyKm, paces));
+    if (easyEmitted < easyDays) {
+      workouts.add(_easy(date, easyKm, paces));
+      easyEmitted++;
+    } else {
+      workouts.add(GeneratedWorkout(
+        scheduledDate: date,
+        kind: WorkoutKind.rest,
+      ));
+    }
   }
 
   return _limitToDays(workouts, daysPerWeek);
@@ -820,10 +848,15 @@ GeneratedWorkout _longRun(DateTime date, int km, TrainingPaces p) => GeneratedWo
       targetPaceToleranceSec: 20,
     );
 
+// The shortest distance an easy/recovery run is ever prescribed at. Below this
+// there is no point emitting a run, so the race-week shakeout budget is
+// measured in whole floor-length days.
+const int _kEasyRunFloorKm = 3;
+
 GeneratedWorkout _easy(DateTime date, double km, TrainingPaces p) => GeneratedWorkout(
       scheduledDate: date,
       kind: km < 4 ? WorkoutKind.recovery : WorkoutKind.easy,
-      targetDistanceM: max(3, km.round()) * 1000.0,
+      targetDistanceM: max(_kEasyRunFloorKm, km.round()) * 1000.0,
       targetPaceSecPerKm: p.easy,
       targetPaceToleranceSec: 30,
     );

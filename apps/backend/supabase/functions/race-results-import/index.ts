@@ -8,11 +8,14 @@ import {
   extractChronoTrackResults,
   extractRunSignUpResults,
   extractUltraSignUpResults,
+  filterResultsByBib,
   mapChronoTrackResult,
   mapRunSignUpResult,
   mapUltraSignUpResult,
+  matchResultGate,
   parseRaceResultRow,
   runSignUpResultsUrl,
+  runSignUpScopeGate,
   ultraSignUpResultsUrl,
   type MappedRaceRun,
 } from './lib.ts';
@@ -115,13 +118,17 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     if (!raceId) {
       return Response.json({ error: 'listing has no RunSignUp race id' }, { status: 400 });
     }
-    const url = runSignUpResultsUrl({
-      raceId,
-      apiKey,
-      apiSecret,
-      runSignUpUserId:
-        typeof body.runSignUpUserId === 'string' ? body.runSignUpUserId : undefined,
-    });
+    // Fail closed: an unscoped fetch returns the entire finisher field, which
+    // would be imported as the caller's own runs (issue #360). Require the
+    // runner's RunSignUp user id or a bib before hitting the upstream.
+    const runSignUpUserId =
+      typeof body.runSignUpUserId === 'string' ? body.runSignUpUserId : undefined;
+    const runSignUpBib = typeof body.bib === 'string' ? body.bib : undefined;
+    const scope = runSignUpScopeGate({ runSignUpUserId, bib: runSignUpBib });
+    if (!scope.ok) {
+      return Response.json({ error: scope.error }, { status: scope.status });
+    }
+    const url = runSignUpResultsUrl({ raceId, apiKey, apiSecret, runSignUpUserId });
     const upstream = await fetch(url, {
       headers: { 'User-Agent': Deno.env.get('RACE_IMPORT_USER_AGENT') || 'RunApp/1.0' },
     });
@@ -138,6 +145,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     mapped = extractRunSignUpResults(payload)
       .map((r) => mapRunSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
+    // A bib-scoped request narrows here: the API filters only by user id, so
+    // without this a bib-only request would still map the whole field.
+    if (runSignUpBib) mapped = filterResultsByBib(mapped, runSignUpBib);
   } else if (provider === 'ultrasignup') {
     // Fail closed when the provider key is unconfigured — the UltraSignup leg
     // mirrors RunSignUp's missing-credential gate (integrations.md + the race
@@ -233,6 +243,13 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   // result is expected in this mode.
   const matchRunId = typeof body.matchRunId === 'string' ? body.matchRunId : '';
   if (matchRunId) {
+    // Enrich merges ONE result onto the caller's own run. More than one mapped
+    // result is ambiguous — reject rather than stamp a stranger's mapped[0]
+    // onto the run (issue #360).
+    const gate = matchResultGate(mapped.length);
+    if (!gate.ok) {
+      return Response.json({ error: gate.error }, { status: gate.status });
+    }
     const result = mapped[0];
     const { data: existing } = await supabase
       .from('runs')

@@ -10685,6 +10685,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get racesBib => 'Bib';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Enter your bib number so we import only your result, not the whole field.';
+
+  @override
   String get racesPasteResultHint =>
       'Enter your finishing details from the race\'s results page.';
 
