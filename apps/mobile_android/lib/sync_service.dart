@@ -230,11 +230,12 @@ class SyncService with WidgetsBindingObserver {
         }
       }
       if (hasPendingDeletes) {
-        final ok = await _drainPendingDeletes(reason);
+        final ok = await drainPendingDeletes(api, runStore, reason: reason);
         if (!ok) anyFailure = true;
       }
-      if (unsyncedRoutes.isNotEmpty) {
-        final ok = await _drainUnsyncedRoutes(unsyncedRoutes, reason);
+      final store = routeStore;
+      if (store != null && unsyncedRoutes.isNotEmpty) {
+        final ok = await drainUnsyncedRoutes(api, store, reason: reason);
         if (!ok) anyFailure = true;
       }
     } finally {
@@ -247,97 +248,102 @@ class SyncService with WidgetsBindingObserver {
     }
   }
 
-  /// Retry remote-side deletes that failed on first attempt (e.g. the
-  /// user batch-deleted runs while offline). Each id is attempted
-  /// independently so one persistent failure (e.g. an RLS rejection
-  /// on a malformed id) doesn't poison the rest of the queue. On
-  /// success the local copy is also removed — runs_screen kept it
-  /// around precisely so the local list stayed consistent with the
-  /// cloud, and now that the cloud row is gone the local row should
-  /// follow.
-  ///
-  /// Only deletes owned by the currently-signed-in user are attempted
-  /// — entries owned by a different user stay in the queue for their
-  /// rightful owner to drain on their next sync (the parallel of the
-  /// run owner-tag guard above). Untagged entries (legacy / queued-
-  /// while-signed-out) adopt to the current user.
-  ///
-  /// Returns `true` iff every pending id was drained without error.
-  Future<bool> _drainPendingDeletes(String reason) async {
-    final api = apiClient;
-    if (api == null) return true;
-    final ids = runStore.pendingRemoteDeletesForUser(api.userId).toList();
-    if (ids.isEmpty) return true;
-    debugPrint(
-      'SyncService: retrying ${ids.length} pending remote deletes ($reason)',
-    );
-    var ok = 0;
-    var failed = 0;
-    for (final id in ids) {
-      try {
-        await api.deleteRunById(id);
-        await runStore.delete(id);
-        await runStore.clearPendingRemoteDelete(id);
-        ok++;
-      } catch (e) {
-        debugPrint('SyncService: retry delete failed for $id: $e');
-        failed++;
-      }
-    }
-    debugPrint('SyncService: drained $ok / ${ids.length} pending deletes');
-    return failed == 0;
-  }
+}
 
-  /// Push routes the user created offline (signed-out, network down,
-  /// Supabase init failed at app launch) to the cloud. Each route is
-  /// attempted independently so one bad row (e.g. RLS rejection on a
-  /// stale club_id) doesn't poison the rest of the queue. Successful
-  /// pushes are marked synced; failures stay unsynced for the next
-  /// cycle.
-  ///
-  /// Returns `true` iff every route was drained without error.
-  Future<bool> _drainUnsyncedRoutes(
-    List<Object> unsyncedRoutes,
-    String reason,
-  ) async {
-    final api = apiClient;
-    final store = routeStore;
-    if (api == null || store == null) return true;
-    if (unsyncedRoutes.isEmpty) return true;
-    debugPrint(
-      'SyncService: pushing ${unsyncedRoutes.length} unsynced routes ($reason)',
-    );
-    var ok = 0;
-    var failed = 0;
-    final succeededIds = <String>[];
-    for (final route in unsyncedRoutes) {
-      // Type-erased through Object to keep the import surface narrow;
-      // every caller hands us core_models Route objects.
-      final r = route as dynamic;
-      try {
-        await api.saveRoute(r);
-        succeededIds.add(r.id as String);
-        ok++;
-      } catch (e) {
-        debugPrint('SyncService: route push failed for ${r.id}: $e');
-        failed++;
-      }
+/// Retry remote-side deletes that failed on first attempt (e.g. the
+/// user batch-deleted runs while offline). Each id is attempted
+/// independently so one persistent failure (e.g. an RLS rejection
+/// on a malformed id) doesn't poison the rest of the queue. On
+/// success the local copy is also removed — runs_screen kept it
+/// around precisely so the local list stayed consistent with the
+/// cloud, and now that the cloud row is gone the local row should
+/// follow.
+///
+/// Only deletes owned by the currently-signed-in user are attempted
+/// — entries owned by a different user stay in the queue for their
+/// rightful owner to drain on their next sync (the parallel of the
+/// run owner-tag guard). Untagged entries (legacy / queued-while-
+/// signed-out) adopt to the current user.
+///
+/// Returns `true` iff every pending id was drained without error.
+///
+/// Shared free function so the foreground [SyncService] and the
+/// WorkManager `background_sync.dart#runBackgroundSyncCycle` drain
+/// the same queue the same way and can't drift.
+Future<bool> drainPendingDeletes(
+  ApiClient api,
+  LocalRunStore runStore, {
+  String reason = 'background',
+}) async {
+  final ids = runStore.pendingRemoteDeletesForUser(api.userId).toList();
+  if (ids.isEmpty) return true;
+  debugPrint('Sync: retrying ${ids.length} pending remote deletes ($reason)');
+  var ok = 0;
+  var failed = 0;
+  for (final id in ids) {
+    try {
+      await api.deleteRunById(id);
+      await runStore.delete(id);
+      await runStore.clearPendingRemoteDelete(id);
+      ok++;
+    } catch (e) {
+      debugPrint('Sync: retry delete failed for $id: $e');
+      failed++;
     }
-    if (succeededIds.isNotEmpty) {
-      await store.markManyRoutesSynced(succeededIds);
-      // Adoption stamp (§67 semantics, issue #229): an untagged
-      // (signed-out-built) route that just landed in this account now
-      // belongs to it — tag it so it stops rendering for other accounts.
-      final uid = api.userId;
-      if (uid != null && uid.isNotEmpty) {
-        await store.tagRoutesOwner(succeededIds, uid);
-      }
-    }
-    debugPrint(
-      'SyncService: drained $ok / ${unsyncedRoutes.length} unsynced routes',
-    );
-    return failed == 0;
   }
+  debugPrint('Sync: drained $ok / ${ids.length} pending deletes');
+  return failed == 0;
+}
+
+/// Push routes the user created offline (signed-out, network down,
+/// Supabase init failed at app launch) to the cloud. Each route is
+/// attempted independently so one bad row (e.g. RLS rejection on a
+/// stale club_id) doesn't poison the rest of the queue. Successful
+/// pushes are marked synced (and owner-tagged, §67); failures stay
+/// unsynced for the next cycle.
+///
+/// Returns `true` iff every route was drained without error.
+///
+/// Shared free function so the foreground [SyncService] and the
+/// WorkManager `background_sync.dart#runBackgroundSyncCycle` drain
+/// the same queue the same way and can't drift.
+Future<bool> drainUnsyncedRoutes(
+  ApiClient api,
+  LocalRouteStore routeStore, {
+  String reason = 'background',
+}) async {
+  final unsyncedRoutes = routeStore.unsyncedRoutes;
+  if (unsyncedRoutes.isEmpty) return true;
+  debugPrint(
+    'Sync: pushing ${unsyncedRoutes.length} unsynced routes ($reason)',
+  );
+  var ok = 0;
+  var failed = 0;
+  final succeededIds = <String>[];
+  for (final route in unsyncedRoutes) {
+    try {
+      await api.saveRoute(route);
+      succeededIds.add(route.id);
+      ok++;
+    } catch (e) {
+      debugPrint('Sync: route push failed for ${route.id}: $e');
+      failed++;
+    }
+  }
+  if (succeededIds.isNotEmpty) {
+    await routeStore.markManyRoutesSynced(succeededIds);
+    // Adoption stamp (§67 semantics, issue #229): an untagged
+    // (signed-out-built) route that just landed in this account now
+    // belongs to it — tag it so it stops rendering for other accounts.
+    final uid = api.userId;
+    if (uid != null && uid.isNotEmpty) {
+      await routeStore.tagRoutesOwner(succeededIds, uid);
+    }
+  }
+  debugPrint(
+    'Sync: drained $ok / ${unsyncedRoutes.length} unsynced routes',
+  );
+  return failed == 0;
 }
 
 /// Filter [runs] to those the currently-signed-in [userId] can push.

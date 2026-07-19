@@ -58,7 +58,16 @@ To verify pairing: in the watch simulator, you should see the watch face. If it 
 1. Start a workout on the watch
 2. The watch uses its own GPS (simulated in the simulator)
 3. Tap Stop to end the workout
-4. The run data transfers to the iPhone app via WatchConnectivity
+4. Tap **Sync Run** — the run data transfers to the iPhone app via WatchConnectivity
+
+### Sync fails safely when the phone isn't reachable (issue #372)
+
+`transferRun` only queues a run once `WCSession` is `.activated`; if it isn't, the run must **not** be marked synced.
+
+1. Boot the watch simulator **without** its paired iPhone simulator (or before the companion app has activated its session), or reproduce the cold-launch window (short run immediately after launch).
+2. Finish a run and tap **Sync Run**.
+3. Expect the error `Phone unavailable — tap Sync Run to retry` (localised) and the **Sync Run** / **Discard** buttons to stay — **not** the "Sent to phone" / "Queued" success state with only "Start next run".
+4. Bring the phone up, tap **Sync Run** again — it now queues and shows the queued/sent status. The finished run was preserved the whole time.
 
 ### Route navigation
 
