@@ -183,6 +183,13 @@ void main() {
       );
       expect(out!.elevationMetres, isNull);
     });
+
+    test('non-finite fraction returns null (no NaN lat/lng)', () {
+      final line = [wp(0, 0), wp(0, 0.010)];
+      expect(interpolateAlongRoute(line, double.nan), isNull);
+      expect(interpolateAlongRoute(line, double.infinity), isNull);
+      expect(interpolateAlongRoute(line, double.negativeInfinity), isNull);
+    });
   });
 
   group('polylineLengthMetres', () {

@@ -363,7 +363,7 @@ void main() {
       // _trySync is fire-and-forget from the observer; let microtasks drain.
       await Future<void>.delayed(Duration.zero);
       // The sync future itself is async; let one more macrotask round trip.
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 1);
     });
@@ -377,7 +377,7 @@ void main() {
       svc.didChangeAppLifecycleState(AppLifecycleState.paused);
       svc.didChangeAppLifecycleState(AppLifecycleState.inactive);
       svc.didChangeAppLifecycleState(AppLifecycleState.detached);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 0);
     });
@@ -390,7 +390,7 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.debugOnConnectivity([ConnectivityResult.wifi]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 1);
     });
@@ -402,13 +402,13 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.debugOnConnectivity([ConnectivityResult.mobile]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
       // The first sync drained both runs in one batch; mark them so a
       // second connectivity event has fresh work to do.
       await store.save(makeRun('r-after-mobile'));
 
       svc.debugOnConnectivity([ConnectivityResult.ethernet]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       // Two distinct sync cycles → two batch pushes.
       expect(api.saveBatchCallCount, 2);
@@ -420,7 +420,7 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.debugOnConnectivity([ConnectivityResult.none]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 0);
     });
@@ -435,7 +435,7 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.debugOnConnectivity([ConnectivityResult.bluetooth, ConnectivityResult.wifi]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 1);
     });
@@ -448,7 +448,7 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.debugOnConnectivity([ConnectivityResult.bluetooth]);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 0);
     });
@@ -463,7 +463,7 @@ void main() {
 
       svc.start();
       // Wait for the startup _trySync future.
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 1, reason: 'startup _trySync should fire');
 
@@ -471,7 +471,7 @@ void main() {
       // observer. Save a fresh run, simulate a resume.
       await store.save(makeRun('r-2'));
       svc.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
       expect(api.saveBatchCallCount, 2);
 
       svc.stop();
@@ -484,7 +484,7 @@ void main() {
       svc.start();
       // Allow startup _trySync to settle (no runs to push, so it's a
       // no-op anyway).
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
       svc.stop();
 
       // After stop, lifecycle events on the binding don't route to us
@@ -497,7 +497,7 @@ void main() {
       // observers, but svc isn't one anymore.
       WidgetsBinding.instance
           .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await pumpEventQueue();
 
       expect(api.saveBatchCallCount, 0,
           reason: 'svc unregistered itself in stop()');

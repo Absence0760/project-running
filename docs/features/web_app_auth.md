@@ -59,7 +59,8 @@ The shape is hydrated from `user_profiles` on every sign-in. If the row doesn't 
 | `auth.signInWithGoogle()` | Kicks off Google OAuth via Supabase; redirects to the provider |
 | `auth.signInWithApple()` | Defined in the store but **not invoked from the UI yet** — the login page's Apple button surfaces a "coming soon" toast. Will be wired once Apple Services-ID setup is complete. |
 | `auth.refreshSession()` | Re-reads the Supabase session (useful after OAuth return) |
-| `auth.logout()` | `supabase.auth.signOut()` + clears local state |
+| `auth.logout()` | `supabase.auth.signOut({ scope: 'local' })` + clears local state — the sidebar's Sign out. Only invalidates this browser context; swallows the provider error. |
+| `auth.logoutEverywhere()` | `supabase.auth.signOut({ scope: 'global' })` + clears local state — the `/settings/account` "Sign out everywhere" affordance. Revokes every refresh token (mobile + watch + other browsers), so a suspected-stolen token stops working. **Fails closed**: throws on a revocation error before the local teardown, so a failed global sign-out never masquerades as success. Both methods route through the `signOutWithScope` seam in `stores/sign_out.ts`. |
 
 Email/password sign-in is wired directly in `/login/+page.svelte` via `supabase.auth.signInWithPassword(...)` and `supabase.auth.signUp(...)` — it doesn't go through the store.
 
@@ -131,6 +132,16 @@ OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` an
 
 ---
 
+## Auth error surfacing
+
+Supabase's raw `err.message` ("AuthApiException…", "Failed to fetch") is unlocalized developer jargon. Every rendered `error =` on `/login` routes through `classifyAuthError` + `authErrorMessageKey` in `lib/core/auth_errors.ts`, which maps the failure to one of `offline` / `invalidCredentials` / `rateLimited` / `emailExists` / `emailNotConfirmed` / `weakPassword` / `generic` and resolves the matching `login.error*` i18n key (all six locales). Classification is **structural** — it reads the error's `code` + `status` first (supabase-js `AuthApiError` carries both) and falls back to matching the message, so a plain `TypeError: Failed to fetch` classifies too. Mobile mirrors the branches in `apps/mobile_android/lib/auth_error.dart` (`classifyAuthError` / `friendlyAuthError`) — **keep the two in sync**.
+
+**Unconfirmed email (issue #486).** A user who signs up but never clicks the confirmation link can't sign in. GoTrue signals this two ways: the dedicated `email_not_confirmed` code, **or** the OAuth-style `invalid_grant` error carrying the descriptive message `"Email not confirmed"`. The classifier checks the specific email-not-confirmed condition (code **or** message) **before** the generic `invalid_credentials`/`invalid_grant` branch — the ordering matters, because that branch also matches `invalid_grant`, so a message-only signal would otherwise fall through to a misleading "wrong password" banner. On this classification `/login` sets `resendFor` to the attempted email, which renders a **Resend confirmation email** button inside the error banner; clicking it calls `supabase.auth.resend({ type: 'signup', … })` and shows the privacy-preserving `login.confirmationResent` copy ("If that email is registered, we've sent a new confirmation link.") — deliberately non-committal so it isn't a user-enumeration oracle (matches the reset-request posture; see issue #454 on enumeration). Note local Supabase runs with `enable_confirmations = false`, so this path only fires against the hosted project — see "Email confirmation redirect" below.
+
+Mapping pinned in `lib/core/auth_errors.test.ts` (incl. the `invalid_grant` + "Email not confirmed" ordering case); surfacing pinned in `tests-e2e/auth/email-not-confirmed.spec.ts` (intercepts the token endpoint, asserts the specific banner + resend button).
+
+---
+
 ## Password confirmation
 
 All three surfaces that **mint** a password — sign-up (`/login?signup=1`), reset (`/auth/reset`), and change-password (`/settings/account`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none. **If you add a fourth, route it through the same helper.**
@@ -187,6 +198,19 @@ When the client sends no redirect, GoTrue falls back to the hosted project's **S
 
 ---
 
+## Sign-up must not be an account-existence oracle (issue #399)
+
+A sign-up form that tells you "that email already has an account" is a **user-enumeration oracle** — anyone can probe whether an address is registered. GoTrue only hides this when **email confirmations are ON**: a duplicate `signUp()` then returns a session-less success that is byte-for-byte identical to a fresh sign-up needing confirmation. With `enable_confirmations = false` a duplicate instead throws `422 user_already_exists`, which classifies as `emailExists` and would otherwise render the distinct "that email already has an account" message.
+
+Whether prod has confirmations on is **dashboard-managed and invisible from the repo**, so the security property must not depend on it. Two independent layers hold it closed:
+
+1. **Code (defence-in-depth, shipped).** The sign-up call site neutralises the reveal in `login/+page.svelte`: on an `emailExists` outcome it shows the **same neutral `login.checkEmail` info banner** a fresh sign-up shows, instead of the distinct error. The decision is the pure `signUpErrorRevealsAccountExistence(kind)` predicate in `core/auth_errors.ts` (unit-tested in `auth_errors.test.ts`; the wiring is pinned by `tests-e2e/auth/login.spec.ts`). **Login is deliberately untouched** — an existing email on the sign-in form classifies as `invalidCredentials`, which is the standard, non-enumerable response. The `emailExists` kind + `login.errorEmailExists` copy still exist for any non-sign-up surface; only the sign-up context is neutralised. **Mobile carries the same defence** (issue #454): `sign_up_screen.dart`'s catch block folds an `emailExists` outcome into the same neutral check-your-email state a fresh confirmation-pending sign-up shows, via the twinned `signUpErrorRevealsAccountExistence(kind)` predicate in `auth_error.dart` (unit-tested in `auth_error_test.dart`, wiring pinned by `sign_up_screen_test.dart`); the iOS twin is byte-identical.
+2. **Deploy gate (the real fix — pre-deploy security checklist item).** **Production GoTrue MUST run with `enable_confirmations = true`.** With it off, a confirmed-immediately sign-up also leaks existence through timing/side-channels the neutral banner can't fully mask, and the whole confirmation-redirect + Art 8 consent-gate path above assumes confirmations are on. This is a **pre-deploy gate, verified in the Supabase dashboard**, not a code toggle — see Production setup below.
+
+**Local config stays `enable_confirmations = false` on purpose.** Flipping it locally would break the e2e sign-up flow (`tests-e2e/auth/login.spec.ts` signs a fresh user up through the UI and expects an immediate session → `/onboarding`; that only works when sign-up returns a session with no email-click step) and add a Mailpit round-trip to every local ad-hoc sign-up. The code defence-in-depth makes the enumeration property hold regardless of the toggle, so local dev keeps the frictionless path and prod carries the gate.
+
+---
+
 ## Session persistence
 
 Sessions are managed by `@supabase/supabase-js` itself:
@@ -239,6 +263,7 @@ Supabase Auth dashboard:
 - Enable Google and Apple providers under **Authentication → Providers**
 - Enable **Allow manual linking** under **Authentication → Settings** so `linkIdentity()` works
 - Mirror the same redirect URI in each external provider's app config
+- **Pre-deploy security gate:** confirm **Authentication → Providers → Email → Confirm email** is **ON** (`enable_confirmations = true`). This closes the sign-up user-enumeration oracle (issue #399, see "Sign-up must not be an account-existence oracle" above). The code neutralises the distinct account-exists message regardless, but the durable fix is confirmations enabled in prod — verify it as part of the release checklist, not just at first setup.
 
 Email confirmations and rate limits are configured in the same dashboard. For the auth-email localization hook + custom SMTP (the sender address), see [email.md § Production ops](email.md).
 

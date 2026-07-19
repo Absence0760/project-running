@@ -14,7 +14,9 @@ export interface RouteWaypoint {
 /**
  * Interpolate the position along `waypoints` at the given normalized
  * `fraction` (0.0 = start, 1.0 = end). Returns null when the polyline
- * is too short to interpolate (`< 2` waypoints).
+ * is too short to interpolate (`< 2` waypoints) or `fraction` is not
+ * finite (NaN / ±Infinity) — clamping a non-finite fraction would
+ * propagate NaN into the returned lat/lng.
  *
  * Distance-weighted — a long segment between two waypoints takes
  * proportionally more of the scrubber's range than a short segment,
@@ -30,6 +32,7 @@ export function interpolateAlongRoute(
 	fraction: number,
 ): RouteWaypoint | null {
 	if (waypoints.length < 2) return null;
+	if (!Number.isFinite(fraction)) return null;
 	const f = Math.min(1, Math.max(0, fraction));
 	const totalLen = cumulativeLengthM(waypoints);
 	if (totalLen <= 0) {

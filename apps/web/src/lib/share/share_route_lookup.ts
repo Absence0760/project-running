@@ -10,14 +10,15 @@
 /// missing-vs-present route case stays explicit at the call site
 /// without forcing a try/catch on every consumer.
 ///
-/// The track is fetched through the `clip_track_for_user` SECURITY
-/// DEFINER RPC (the same path fetchPublicRoute uses for non-owner
-/// viewers) so privacy zones are applied server-side — a runner's
-/// home / work coordinate never leaks into a public unfurl image.
+/// The track is fetched through the `clip_route_for_viewer` SECURITY
+/// DEFINER RPC (the same path fetchClippedRouteForViewer uses for
+/// non-owner viewers) so privacy zones are applied server-side — a
+/// runner's home / work coordinate never leaks into a public unfurl
+/// image.
 /// `withTrack: false` skips that RPC for the HTML path, which only
 /// needs the route's name + distance for the <head> meta.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import type { TrackPoint } from '../types';
 
@@ -56,15 +57,15 @@ export async function lookupSharedRoute(
 	id: string,
 	config: SharedRouteLookupConfig | null,
 	options: SharedRouteLookupOptions = {},
+	makeClient: (url: string, key: string) => SupabaseClient = (url, key) =>
+		createClient(url, key, { auth: { persistSession: false } }),
 ): Promise<SharedRouteLookup> {
 	if (!config?.supabaseUrl || !config?.supabaseAnonKey) {
 		return { route: null, track: [] };
 	}
 	const withTrack = options.withTrack ?? true;
 	try {
-		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-			auth: { persistSession: false },
-		});
+		const supabase = makeClient(config.supabaseUrl, config.supabaseAnonKey);
 		const { data: route, error } = await supabase
 			.from('public_routes')
 			.select('id, name, distance_m, surface, elevation_m')
@@ -84,7 +85,7 @@ export async function lookupSharedRoute(
 			try {
 				// The route may not be loadable for anon (private + clip
 				// RPC denies). The PNG card still renders title-only.
-				const { data: clipped } = await supabase.rpc('clip_track_for_user', {
+				const { data: clipped } = await supabase.rpc('clip_route_for_viewer', {
 					p_route_id: id,
 				});
 				if (Array.isArray(clipped)) {

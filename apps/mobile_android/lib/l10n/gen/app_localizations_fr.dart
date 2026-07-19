@@ -3528,6 +3528,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileLoadError => 'Impossible de charger le profil.';
 
   @override
+  String get profileSectionError => 'Impossible de charger cette section.';
+
+  @override
   String get profileNotFound => 'Profil introuvable.';
 
   @override
@@ -10817,6 +10820,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get racesBib => 'Dossard';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Saisissez votre dossard pour n\'importer que votre résultat, pas tout le classement.';
 
   @override
   String get racesPasteResultHint =>

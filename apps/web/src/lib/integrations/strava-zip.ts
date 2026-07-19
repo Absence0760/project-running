@@ -22,7 +22,7 @@ import { collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedup
 import { gunzipBlob } from '../util/gunzip';
 import { classifyStravaMember } from './strava-zip-classify';
 import { classifyStravaRow } from './strava-zip-disposition';
-import { indexHeader, type HeaderIndex } from './strava-zip-header';
+import { indexHeader, stravaDistanceMetres, type HeaderIndex } from './strava-zip-header';
 import { parseStravaCsvDateToIso } from './strava-zip-date';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
@@ -165,7 +165,7 @@ async function importOne(
 	filename: string,
 ): Promise<{ droppedPhotos: number }> {
 	const startedAt = row[idx.date];
-	const distanceM = parseCsvNumber(row[idx.distance]) * 1000; // CSV is km
+	const distanceM = stravaDistanceMetres(row, idx);
 	const durationS = parseCsvNumber(row[idx.movingTime]);
 	const elevationM = idx.elevation >= 0 ? parseCsvNumber(row[idx.elevation]) : 0;
 	const avgBpm = idx.avgHr >= 0 ? parseCsvNumber(row[idx.avgHr]) : 0;
