@@ -11,13 +11,14 @@
 //!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap /
 //!          zones / pacer / nav / back-to-start) while a run is under way;
 //!          cycle the GNSS recording mode (Performance / Balanced /
-//!          Expedition) on the idle face
+//!          Expedition) on the idle face; long-press = page back in a run,
+//!          manual QNH re-zero on the idle face
 //!   BTN4 — manual lap (the Fenix layout's lower-right Lap, decisions §81)
 //! The buttons are active-LOW (idle high, press pulls low), so a press is a
 //! falling edge and a held press reads `is_low()`. BTN3 carries no recording
-//! command — which of its two cycles a press lands on is the host-tested
-//! `watch_core::button::btn3_action` (idle = mode, any run view = pages, so a
-//! run's mode is frozen for its duration).
+//! command — what a press does is the host-tested
+//! `watch_core::button::btn3_action` (idle = mode / re-zero, any run view =
+//! pages, so a run's mode and altitude reference are frozen for its duration).
 
 use defmt::*;
 #[cfg(not(feature = "sim-buttons"))]
@@ -46,8 +47,9 @@ const DEBOUNCE: Duration = Duration::from_millis(20);
 /// How long BTN3 must be held to count as a long-press. A short BTN3 press
 /// still cycles forward (page next / GNSS mode); a long-press cycles the run
 /// pages *backward*, so a late page in the 31-page cycle is one press away
-/// instead of ~30. A deliberate hold, not a chord — inside decisions §81's
-/// five-button, no-chord budget.
+/// instead of ~30, and on the idle face requests the manual QNH re-zero. A
+/// deliberate hold, not a chord — inside decisions §81's five-button,
+/// no-chord budget.
 const BTN3_LONG_PRESS: Duration = Duration::from_millis(500);
 
 #[cfg(not(feature = "sim-buttons"))]
@@ -89,9 +91,8 @@ pub async fn run(
                 Timer::after(DEBOUNCE).await;
                 if btn3.is_low() {
                     // Time the hold: a long-press cycles pages backward so a
-                    // late page is one press away, not ~30. The idle GNSS-mode
-                    // selector ignores the distinction (only three modes, no
-                    // reverse), keeping the idle/run split intact.
+                    // late page is one press away, not ~30; on the idle face it
+                    // requests the manual QNH re-zero instead.
                     let long = matches!(
                         select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge()).await,
                         Either::First(()),
@@ -101,8 +102,8 @@ pub async fn run(
                         .try_get()
                         .map(|snap| snap.state)
                         .unwrap_or(RecordState::Idle);
-                    match btn3_action(state) {
-                        Btn3Action::CyclePage => {
+                    match btn3_action(state, long) {
+                        Btn3Action::PageNext | Btn3Action::PagePrev => {
                             page = if long { page.prev() } else { page.next() };
                             info!("button: BTN3 -> page {}", page);
                             page_tx.send(page);
@@ -120,6 +121,12 @@ pub async fn run(
                             // Best-effort / L4: a flash error only warns; the
                             // mode switch is never blocked on flash.
                             store.lock().await.persist_gnss_mode(mode).await;
+                        }
+                        Btn3Action::QnhRezero => {
+                            info!("button: BTN3 long -> qnh re-zero requested");
+                            // try_send: a request already pending covers this
+                            // press too.
+                            let _ = state::QNH_REZERO_REQ.try_send(());
                         }
                     }
                 }
@@ -261,8 +268,8 @@ pub async fn run(
                     .try_get()
                     .map(|snap| snap.state)
                     .unwrap_or(RecordState::Idle);
-                match btn3_action(state) {
-                    Btn3Action::CyclePage => {
+                match btn3_action(state, long) {
+                    Btn3Action::PageNext | Btn3Action::PagePrev => {
                         page = if long { page.prev() } else { page.next() };
                         info!("button: BTN3 -> page {}", page);
                         page_tx.send(page);
@@ -279,6 +286,10 @@ pub async fn run(
                         // Persist so the choice survives reboot / brown-out
                         // (no-ops under the sim, which has no NVMC).
                         store.lock().await.persist_gnss_mode(mode).await;
+                    }
+                    Btn3Action::QnhRezero => {
+                        info!("button: BTN3 long -> qnh re-zero requested");
+                        let _ = state::QNH_REZERO_REQ.try_send(());
                     }
                 }
                 continue;
