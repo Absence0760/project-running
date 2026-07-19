@@ -10280,6 +10280,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get racesBib => 'ゼッケン';
 
   @override
+  String get racesRunSignUpBibHint =>
+      '全体ではなくあなたの結果だけをインポートするため、ゼッケン番号を入力してください。';
+
+  @override
   String get racesPasteResultHint => 'レースの結果ページから完走の詳細を入力してください。';
 
   @override

@@ -7,6 +7,7 @@
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
 	import type { PrefillExercise } from '$lib/gym/gym_routine';
 	import { assignSupersetGroups } from '$lib/gym/routine_editor_build';
+	import { floatOrNull, intOrNull } from '$lib/gym/numeric_input';
 	import type { GymExerciseModality, GymProgressionScheme, GymSetType } from '$lib/types';
 
 	interface Props {
@@ -29,23 +30,26 @@
 		oncancel,
 	}: Props = $props();
 
+	// The numeric fields bind to `<input type="number">`, whose bind:value coerces
+	// to a number at runtime even though we seed them with '' (see apps/web/CLAUDE.md);
+	// typing them `string | number` keeps the boundary honest.
 	type EditSet = {
 		setType: GymSetType;
-		reps: string;
-		repsMax: string;
-		weight: string;
-		rest: string;
-		duration: string;
-		distance: string;
+		reps: string | number;
+		repsMax: string | number;
+		weight: string | number;
+		rest: string | number;
+		duration: string | number;
+		distance: string | number;
 	};
 	type EditExercise = {
 		name: string;
 		modality: GymExerciseModality;
 		progression: GymProgressionScheme;
-		incrementKg: string;
-		percent: string;
-		oneRm: string;
-		targetRpe: string;
+		incrementKg: string | number;
+		percent: string | number;
+		oneRm: string | number;
+		targetRpe: string | number;
 		/// Brackets this exercise into a superset with the one below it; a run of
 		/// flagged exercises forms one group at build time.
 		supersetWithNext: boolean;
@@ -123,22 +127,6 @@
 	function removeSet(ei: number, si: number) {
 		exercises[ei].sets = exercises[ei].sets.filter((_, idx) => idx !== si);
 		if (exercises[ei].sets.length === 0) exercises[ei].sets = [emptySet()];
-	}
-
-	function intOrNull(s: string | number): number | null {
-		// A `<input type="number" bind:value>` binds a NUMBER even when the
-		// field is declared string (Svelte coercion — see apps/web/CLAUDE.md),
-		// so coerce at the boundary rather than rejecting every numeric input
-		// as "not a string" (which silently dropped target reps/duration/etc).
-		if (typeof s === 'number') return Number.isFinite(s) ? Math.trunc(s) : null;
-		if (typeof s !== 'string' || s.trim() === '') return null;
-		const n = parseInt(s, 10);
-		return Number.isFinite(n) ? n : null;
-	}
-	function floatOrNull(s: string): number | null {
-		if (typeof s !== 'string' || s.trim() === '') return null;
-		const n = parseFloat(s);
-		return Number.isFinite(n) ? n : null;
 	}
 
 	function setTypeLabel(s: GymSetType): string {

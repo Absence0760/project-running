@@ -3084,6 +3084,7 @@
   "racesAgeGroupPlace": "Classement par catégorie",
   "racesAgeGroup": "Catégorie d'âge",
   "racesBib": "Dossard",
+  "racesRunSignUpBibHint": "Saisissez votre dossard pour n'importer que votre résultat, pas tout le classement.",
   "racesPasteResultHint": "Saisissez les détails de votre arrivée depuis la page de résultats de la course.",
   "racesSave": "Enregistrer",
   "racesCancel": "Annuler",
