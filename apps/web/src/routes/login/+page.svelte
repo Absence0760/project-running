@@ -11,7 +11,11 @@
 		type PasswordPairReason,
 		type SignUpGateReason,
 	} from '$lib/core/auth_gates';
-	import { classifyAuthError, authErrorMessageKey } from '$lib/core/auth_errors';
+	import {
+		classifyAuthError,
+		authErrorMessageKey,
+		signUpErrorRevealsAccountExistence,
+	} from '$lib/core/auth_errors';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
 	import { googleAuthEnabled } from '$lib/core/google_auth_flag';
@@ -218,6 +222,16 @@
 			// supabase err.message is unlocalized and over-general. Same
 			// mapping as mobile's friendlyAuthError (auth_error.dart).
 			const kind = classifyAuthError(err);
+			// Sign-up must never disclose that an email is already
+			// registered: collapse an emailExists outcome to the same
+			// neutral check-your-email state a fresh sign-up shows, so
+			// sign-up can't be an account-existence oracle even when prod
+			// GoTrue has email confirmations off. Login is untouched (an
+			// existing email there classifies as invalidCredentials).
+			if (isSignUp && !isReset && signUpErrorRevealsAccountExistence(kind)) {
+				info = m('login.checkEmail', { email });
+				return;
+			}
 			error = m(authErrorMessageKey(kind), { min: PASSWORD_MIN_LENGTH });
 			if (kind === 'emailNotConfirmed' && email) resendFor = email;
 		} finally {

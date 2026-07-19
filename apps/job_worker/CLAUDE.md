@@ -184,7 +184,7 @@ apps/job_worker/
 │   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
 │   ├── handler_account_deletion_receipt_test.go # 9 tests on inline-address send / hash send-once / no-address / send-error / nil-sender / locale / no-prefs-link
 │   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
-│   ├── mailer_test.go       # 6 tests on emailMode / shouldEmail / render / MIME
+│   ├── mailer_test.go       # tests on emailMode / shouldEmail / render / MIME + header-injection sanitizer (buildMIME + safety-email owner name, issue #375)
 │   ├── handler_safety_email.go # kind='safety_email' confirm + finish alerts (decisions §131)
 │   ├── handler_web_push.go  # kind='web_push' — send-or-skip over the notifications rows; prune dead subs
 │   ├── handler_web_push_test.go # 14 tests on gating / opt-out / no-sub / prune / transient / idempotency
