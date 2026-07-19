@@ -327,8 +327,9 @@ impl SlotDir {
     /// exceed the current (post-reboot) uptime and date the run in the FUTURE.
     /// Clamping `start_uptime_s <= watch_uptime_s` makes the offset non-negative,
     /// so a recovered run reads as "around this power-on" (under-aged) rather than
-    /// in the future. Precise wall-clock dating of a prior-boot run needs the
-    /// phone to fall back to the footer's elapsed time — a phone-side follow-up.
+    /// in the future. The phone detects the clamp (offset shorter than the blob
+    /// footer's elapsed time) and falls back to dating the run as ending now-ish
+    /// via that elapsed time (`sim_watch_sync.dart`'s `payloadFromBlob`).
     pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
         let mut out = Vec::new();
         for s in self.slots.iter().flatten() {
