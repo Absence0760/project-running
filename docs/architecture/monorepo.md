@@ -488,6 +488,19 @@ the App Store requires). The web header + PWA use `apps/web/static/logo-mark.svg
 and `wordmark.svg`, which are separate hand-authored vector lockups derived from
 the same mark — edit those directly.
 
+The Android status-bar notification small icon is a third hand-authored
+derivative: `apps/mobile_android/android/app/src/main/res/drawable/ic_stat_threkir.xml`,
+a white-on-transparent monochrome glyph (Android masks a small icon to its alpha
+silhouette, so the full-colour launcher mipmap renders as a solid square — that
+was the #483 bug). Its accent colour comes from `res/values/colors.xml`
+(`brand_ember = #FFFE5932`, the master's ember gradient stop). If you change the
+mark's glyph or the ember colour, update this drawable/colour to match.
+`apps/web/src/lib/brand_icon_color_guard.test.ts` pins the canonical
+`#FE5932 → #A01E77` pair across every machine-readable brand surface (master SVG,
+manifest, `app.html` theme-color, the web SVG lockups, the Android colour + the
+notification drawable) so a single-platform edit can't silently drift the icon
+colour again.
+
 ### Deploy Edge Functions
 
 ```bash

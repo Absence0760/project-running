@@ -157,7 +157,7 @@ RunnerProjection projectRunner(
     final actual = byId[c.id];
     final reached = actual != null;
     double? projected;
-    if (!reached && paceSPerM != null && c.positionM > coveredM) {
+    if (!reached && paceSPerM != null && c.positionM >= coveredM) {
       projected = paceSPerM * c.positionM;
     }
 

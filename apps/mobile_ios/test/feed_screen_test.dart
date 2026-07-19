@@ -159,6 +159,27 @@ class _ThrowingApi extends _FakeApi {
       throw Exception('feed down');
 }
 
+/// Fake whose author-dropdown fetch (fetchFollowing) throws — the feed
+/// entries must still render (issue #506: a dropdown failure can't blank
+/// the whole feed).
+class _FollowingFailApi extends _FakeApi {
+  _FollowingFailApi({super.entries, super.engagement});
+  @override
+  Future<List<UserProfileRow>> fetchFollowing(String userId,
+          {int limit = 100, int offset = 0}) async =>
+      throw Exception('followees down');
+}
+
+/// Fake whose engagement fetch throws — the feed entries must still
+/// render, just without kudos/comment counts (issue #506).
+class _EngagementFailApi extends _FakeApi {
+  _EngagementFailApi({super.entries, super.followees});
+  @override
+  Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
+      fetchEngagementSummaries(List<String> runIds) async =>
+          throw Exception('engagement down');
+}
+
 /// Fake whose kudos write throws the ApiClient signed-out guard, to drive
 /// the optimistic-rollback banner + the friendly-error classification.
 class _KudosFailApi extends _FakeApi {
@@ -309,6 +330,41 @@ void main() {
       await _settle(tester);
       expect(find.byType(ErrorState), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testWidgets('a failed author-dropdown fetch still renders the feed',
+        (tester) async {
+      await _pump(
+        tester,
+        _FollowingFailApi(
+          entries: [_runEntry(distanceM: 5000)],
+          engagement: {
+            'run-1': (kudosCount: 2, viewerHasKudos: false, commentCount: 1),
+          },
+        ),
+      );
+      await _settle(tester);
+      // No ErrorState — the feed entry renders despite the dropdown failure.
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.textContaining('5.00'), findsOneWidget);
+      // Engagement still loaded, so the counts show.
+      expect(find.text('2'), findsOneWidget);
+    });
+
+    testWidgets('a failed engagement fetch still renders the feed',
+        (tester) async {
+      await _pump(
+        tester,
+        _EngagementFailApi(
+          entries: [_runEntry(distanceM: 5000)],
+          followees: [_profileRow('u-1', 'Alex Runner')],
+        ),
+      );
+      await _settle(tester);
+      // No ErrorState — the entry renders; the footer just shows zero counts.
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.textContaining('5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Give kudos'), findsOneWidget);
     });
   });
 

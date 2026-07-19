@@ -115,6 +115,14 @@ class RunRecordingService : Service() {
     /// the active-run tile renders in the runner's chosen unit.
     private var preferredUnit: DistanceUnit = DistanceUnit.KM
 
+    /// Runner's universal `privacy_default` ("public" / "followers" /
+    /// "private"), passed once from the ACTION_START intent and written
+    /// into every checkpoint so a crash-recovered run honours the same
+    /// visibility the normal stop path (`RunViewModel.snapshotIsPublic`)
+    /// would apply. Null when the prefs bag hadn't loaded at run start —
+    /// recovery then falls back to the fail-closed DB default (non-public).
+    private var privacyDefault: String? = null
+
     // Rolling HR aggregation instead of a list of every sample.
     // `bpmSum` / `bpmCount` let us compute avg in O(1) regardless of
     // how many samples have arrived.
@@ -153,6 +161,7 @@ class RunRecordingService : Service() {
                 unit = runCatching {
                     DistanceUnit.valueOf(intent.getStringExtra(EXTRA_PREFERRED_UNIT) ?: "KM")
                 }.getOrDefault(DistanceUnit.KM),
+                privacyDefault = intent.getStringExtra(EXTRA_PRIVACY_DEFAULT),
             )
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
@@ -181,6 +190,7 @@ class RunRecordingService : Service() {
         routeWaypointsJson: String?,
         targetPaceSecPerKm: Int?,
         unit: DistanceUnit,
+        privacyDefault: String?,
     ) {
         if (RecordingRepository.metrics.value.isActive) return
 
@@ -188,6 +198,7 @@ class RunRecordingService : Service() {
         this.activityType = activity
         this.targetPaceSecPerKm = targetPaceSecPerKm
         this.preferredUnit = unit
+        this.privacyDefault = privacyDefault
         startedAtMs = System.currentTimeMillis()
         pausedAccumulatedMs = 0
         pausedSinceMs = 0
@@ -534,6 +545,8 @@ class RunRecordingService : Service() {
                 bpmCount = bpmCount,
                 activityType = activityType,
                 laps = laps.map { CheckpointLap(it.number, it.atMs, it.distanceM) },
+                steps = RecordingRepository.metrics.value.steps,
+                privacyDefault = privacyDefault,
                 pausedAccumulatedMs = pausedAccumulatedMs + currentPauseMs,
             )
         )
@@ -634,7 +647,10 @@ class RunRecordingService : Service() {
                             if (paused) getString(R.string.ongoing_template_paused)
                             else getString(R.string.ongoing_template_running)
                         )
-                        .addPart("time", Status.StopwatchPart(startedAtMs - pausedAccumulatedMs))
+                        .addPart(
+                            "time",
+                            Status.StopwatchPart(ongoingActivityBaseMs(startedAtMs, pausedAccumulatedMs)),
+                        )
                         .addPart(
                             "distance",
                             Status.TextPart(
@@ -707,6 +723,11 @@ class RunRecordingService : Service() {
         /// `DistanceUnit` name (`"KM"` / `"MI"`) for the runner's distance
         /// preference. Absent / unrecognised → kilometres.
         const val EXTRA_PREFERRED_UNIT = "preferred_unit"
+        /// Runner's universal `privacy_default` ("public" / "followers" /
+        /// "private"). Snapshotted into each checkpoint so a crash-recovered
+        /// run honours the same visibility as a normal stop. Absent when the
+        /// prefs bag hadn't loaded at run start.
+        const val EXTRA_PRIVACY_DEFAULT = "privacy_default"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "run_recording"
@@ -733,12 +754,16 @@ class RunRecordingService : Service() {
             routeWaypointsJson: String? = null,
             targetPaceSecPerKm: Int? = null,
             preferredUnit: DistanceUnit = DistanceUnit.KM,
+            privacyDefault: String? = null,
         ) {
             val intent = Intent(context, RunRecordingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_RUN_ID, runId)
                 putExtra(EXTRA_ACTIVITY_TYPE, activityType)
                 putExtra(EXTRA_PREFERRED_UNIT, preferredUnit.name)
+                if (!privacyDefault.isNullOrEmpty()) {
+                    putExtra(EXTRA_PRIVACY_DEFAULT, privacyDefault)
+                }
                 if (!routeWaypointsJson.isNullOrEmpty()) {
                     putExtra(EXTRA_ROUTE_WAYPOINTS_JSON, routeWaypointsJson)
                 }

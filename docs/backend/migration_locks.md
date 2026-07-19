@@ -28,8 +28,16 @@ The blast radius of a blocking statement is proportional to the row count of the
 table it locks. These are the tables that are big now or grow unboundedly, and
 where an online-unsafe statement is real downtime:
 
-`runs`, `notifications`, `live_run_pings`, `race_pings`, `segment_efforts`,
-`run_kudos`, `run_comments`, `run_photos`, `webhook_events`, `rate_limits`.
+`runs`, `notifications`, `jobs`, `live_run_pings`, `race_pings`,
+`segment_efforts`, `run_kudos`, `run_comments`, `run_photos`, `webhook_events`,
+`rate_limits`.
+
+`jobs` earns its place for a different reason than sheer row count: the Go
+`job_worker` polls it continuously, so a blocking validation scan on the
+`jobs_kind_chk` allow-list (the common `DROP CONSTRAINT … , ADD CONSTRAINT …
+CHECK (…)` widening when a new job kind lands) stalls job processing until the
+scan finishes. Widen it with `ADD … NOT VALID` + `VALIDATE`, same as
+`notifications` (#394 follow-up — the guard now enforces this on `jobs`).
 
 `runs` is the highest-volume table and the one to be most careful with. A
 constraint or backfill on a small, bounded config table (`event_pricing`,

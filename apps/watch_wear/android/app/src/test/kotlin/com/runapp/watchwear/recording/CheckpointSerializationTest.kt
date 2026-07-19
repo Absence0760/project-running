@@ -1,5 +1,6 @@
 package com.runapp.watchwear.recording
 
+import com.runapp.watchwear.isPublicFromPrivacyDefault
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,6 +47,8 @@ class CheckpointSerializationTest {
             CheckpointLap(number = 1, atMs = 300_000, distanceM = 1_000.0),
             CheckpointLap(number = 2, atMs = 600_000, distanceM = 1_000.0),
         ),
+        steps = 6_400,
+        privacyDefault = "public",
         pausedAccumulatedMs = 120_000,
     )
 
@@ -207,6 +210,8 @@ class CheckpointSerializationTest {
         assertEquals(0L, decoded.bpmCount)
         assertEquals("run", decoded.activityType)
         assertTrue(decoded.laps.isEmpty())
+        assertNull(decoded.steps)
+        assertNull(decoded.privacyDefault)
         assertEquals(0L, decoded.pausedAccumulatedMs)
     }
 
@@ -311,5 +316,82 @@ class CheckpointSerializationTest {
             result.isFailure ||
                 result.getOrNull()?.runId?.isEmpty() == true,
         )
+    }
+
+    @Test
+    fun `decode populates steps + privacyDefault = null when absent (pre-#389 payload)`() {
+        // Before #389, Checkpoint carried neither field. A payload
+        // written by such a build must decode cleanly with both null so
+        // a mid-upgrade recovery isn't dropped — null steps omits
+        // metadata.steps, null privacyDefault falls back to the DB
+        // default (non-public), the fail-closed choice.
+        val preFix = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200,
+            "bpmSum": 87000,
+            "bpmCount": 600,
+            "activityType": "run",
+            "laps": []
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), preFix)
+        assertNull(decoded.steps)
+        assertNull(decoded.privacyDefault)
+    }
+
+    @Test
+    fun `steps + privacyDefault round-trip through JSON`() {
+        val cp = sample.copy(steps = 9_001, privacyDefault = "followers")
+        val decoded = json.decodeFromString(
+            Checkpoint.serializer(),
+            json.encodeToString(Checkpoint.serializer(), cp),
+        )
+        assertEquals(9_001, decoded.steps)
+        assertEquals("followers", decoded.privacyDefault)
+    }
+
+    @Test
+    fun `recovered run's steps + isPublic match a normal stop given the same live metrics`() {
+        // The root of #389: the crash-recovery path (recoverCheckpoint)
+        // must build a QueuedRun with the SAME steps + isPublic a normal
+        // stop (handleFinishedRun) would, given identical live metrics.
+        // Before the fix, Checkpoint carried neither, so a recovered run
+        // dropped step count (null) and always uploaded non-public
+        // regardless of the runner's privacy_default. A checkpoint now
+        // snapshots both; recovery maps privacyDefault through the SAME
+        // isPublicFromPrivacyDefault the normal stop's snapshotIsPublic
+        // uses, so the two paths can't drift.
+        val liveSteps = 8_432
+        val livePrivacy = "public"
+
+        val cp = sample.copy(steps = liveSteps, privacyDefault = livePrivacy)
+        val recovered = json.decodeFromString(
+            Checkpoint.serializer(),
+            json.encodeToString(Checkpoint.serializer(), cp),
+        )
+
+        // Normal stop: QueuedRun.steps = m.steps (the live pedometer
+        // count), isPublic = snapshotIsPublic() = isPublicFromPrivacyDefault(pref).
+        assertEquals(liveSteps, recovered.steps)
+        assertEquals(
+            isPublicFromPrivacyDefault(livePrivacy),
+            isPublicFromPrivacyDefault(recovered.privacyDefault),
+        )
+        assertEquals(true, isPublicFromPrivacyDefault(recovered.privacyDefault))
+    }
+
+    @Test
+    fun `recovered non-public default stays fail-closed (followers - private - null)`() {
+        // The visibility mapping the wrist can express is a boolean, so
+        // followers / private / an unloaded pref all resolve to
+        // non-public — identical on the recovery and normal-stop paths.
+        assertEquals(false, isPublicFromPrivacyDefault("followers"))
+        assertEquals(false, isPublicFromPrivacyDefault("private"))
+        assertNull(isPublicFromPrivacyDefault(null))
     }
 }
