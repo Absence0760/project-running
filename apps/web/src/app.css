@@ -39,6 +39,19 @@
 	--color-danger-strong: #B0392C;
 	--color-warning-strong: #9A5B0A;
 
+	/* Theme-aware FOREGROUND tokens for status / accent TEXT + ICONS. The base
+	   --color-warning / -secondary / -accent-cyan tokens are tuned for tints,
+	   borders and dark-mode use and FAIL WCAG 1.4.3 as text on a light surface
+	   (2.05 / 3.06 / 2.30:1). These darken to >=4.5:1 in light mode and revert
+	   to the (already-passing) base hue in dark. Distinct from the -strong
+	   tokens, which are solid status BACKGROUNDS for white text — a blind swap
+	   of foreground text to -strong fails in dark (warning-strong is 2.98:1 on
+	   the dark surface). Light text contrast: warning 5.42, secondary 5.91,
+	   cyan 5.29 on white; >=4.68:1 on the matching same-hue chip. */
+	--color-warning-text: var(--color-warning-strong);
+	--color-secondary-text: #A24A2C;
+	--color-accent-cyan-text: #3A7385;
+
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
@@ -147,6 +160,12 @@
 		--color-accent-pink: #B9A7E8;
 		--color-accent-cyan: #8FB8C7;
 
+		/* Dark surfaces: the base accent hues already pass as text (>=7.5:1),
+		   so the -text tokens revert to them. */
+		--color-warning-text: var(--color-warning);
+		--color-secondary-text: var(--color-secondary);
+		--color-accent-cyan-text: var(--color-accent-cyan);
+
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
 		--color-bg-tertiary: #241B3D;
@@ -195,6 +214,11 @@
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #B9A7E8;
 	--color-accent-cyan: #8FB8C7;
+
+	/* Dark surfaces: the base accent hues already pass as text; -text reverts. */
+	--color-warning-text: var(--color-warning);
+	--color-secondary-text: var(--color-secondary);
+	--color-accent-cyan-text: var(--color-accent-cyan);
 
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;
