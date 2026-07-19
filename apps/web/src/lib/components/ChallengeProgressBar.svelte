@@ -152,7 +152,7 @@
 		color: var(--color-success);
 	}
 	.pace.behind .verdict {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	.pace .need {
 		font-variant-numeric: tabular-nums;
