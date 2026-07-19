@@ -1,0 +1,38 @@
+-- Drop the dead `routes_featured` partial index (db-performance, issue #407).
+--
+-- Origin: 20260426_001_route_discovery created
+--   routes_featured on routes (featured_at desc nulls last)
+--     where featured = true and is_public = true
+-- to back the "featured" branch of search_public_routes. The 20261217_001 F17
+-- rename (`featured` -> `is_featured`) carried the predicate to
+--   where is_featured = true and is_public = true
+-- (a column rename rewrites the index predicate in place).
+--
+-- 20270326_001_search_public_routes_sort_branches superseded it: that migration
+-- rewrote search_public_routes' featured branch to order the FULL public
+-- candidate set (public_routes: is_public = true AND shadow_hidden = false) by
+-- `featured_at desc nulls last, created_at desc`, with non-featured rows
+-- trailing — NOT the is_featured=true-only subset. routes_featured therefore
+-- cannot serve that branch on two counts: it only indexes is_featured=true rows
+-- (the branch needs every public row), and it lacks both the shadow_hidden
+-- partial predicate and the created_at tie-break. The replacement
+-- routes_public_featured_sort (same migration:
+--   (featured_at desc nulls last, created_at desc)
+--     where is_public = true and shadow_hidden = false)
+-- is the exact-match index for that branch and strictly dominates.
+--
+-- No other query can use routes_featured: the only other is_featured filters
+-- (discoverable_routes in 20270128_001, the heatmap pin RPCs) sort
+-- `is_featured desc, run_count desc, created_at desc` over an OR predicate
+-- (is_featured OR run_count > 0), which a featured_at-ordered partial index
+-- cannot serve. Client/mobile code only reads the is_featured column off
+-- already-returned RPC rows; none issue a base-table featured query. The index
+-- is thus maintained on every routes write while serving nothing.
+--
+-- Lock note: DROP INDEX takes a brief ACCESS EXCLUSIVE lock on routes. DROP
+-- INDEX CONCURRENTLY is not used — it cannot run inside the Supabase CLI's
+-- migration transaction (SQLSTATE 25001), the same constraint 20270326_001
+-- documented for the CREATE side. The lock for dropping a single partial index
+-- is momentary; a plain drop is appropriate here.
+
+drop index if exists routes_featured;
