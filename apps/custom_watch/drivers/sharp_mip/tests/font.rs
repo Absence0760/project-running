@@ -122,21 +122,24 @@ fn horizontal_bar_glyphs_keep_their_shape() {
     underscore[14] = BAR;
     assert_eq!(glyph(b'_'), &underscore, "'_' moved");
 
-    // '-' is the odd one out and deliberately pinned so the difference is
-    // visible rather than accidental: the repair pass re-rasterises *both*
-    // members of a colliding pair, so fixing '+' also thickened '-' from the
-    // 1x single 0x7E bar to a two-row wedge. It reads fine, but it now carries
-    // more weight than '=' and '_' do. Repairing only the degenerate member of
-    // a pair would leave '-' at 1x and shrink the table diff to one glyph.
-    let dash = glyph(b'-');
+    // '-' is the one that has to be watched. It is the innocent half of the
+    // '+'/'-' collision: nothing is wrong with its 1x form, it was only ever
+    // guilty by association. An earlier repair re-rasterised both members of
+    // the pair and thickened it to a two-row wedge, leaving the hyphen heavier
+    // than the '=' and '_' bars above — a user-visible weight mismatch from a
+    // fix for a different glyph. It must stay the single 1x bar.
+    let mut dash = [0u8; font::GLYPH_HEIGHT];
+    dash[8] = BAR;
     assert_eq!(
-        inked_rows(dash),
-        2,
-        "'-' is no longer the repaired two-row bar"
+        glyph(b'-'),
+        &dash,
+        "'-' moved — the repair pass should only touch the degenerate member \
+         of a colliding pair, never the glyph that rasterised correctly"
     );
-    assert!(
-        longest_vertical_run(dash) < longest_vertical_run(glyph(b'+')) / 2,
-        "'-' has grown a stem — it is no longer clearly distinct from '+'"
+    assert_eq!(
+        inked_rows(glyph(b'-')),
+        1,
+        "'-' is heavier than the '=' and '_' bars it should match"
     );
 }
 

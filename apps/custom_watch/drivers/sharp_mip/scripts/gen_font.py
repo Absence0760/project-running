@@ -110,24 +110,19 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     ahead/behind sign) rendered as a minus. Supersampling gives the stem whole
     pixels to land in.
 
-    Only colliding glyphs are touched, so the rest of the table stays
-    bit-identical to the plain 1x rasterisation. Returns the repaired labels.
+    Only the glyphs that were actually broken are touched — see
+    [`_repair_group`] — so the rest of the table stays bit-identical to the
+    plain 1x rasterisation. Returns the repaired labels.
     """
     # Space participates so that a glyph the rasteriser blanked out entirely
     # collides with it and gets repaired — that is how '|' shipped invisible,
     # byte-identical to a space. Space itself is legitimately all-zero, so it
     # is never the glyph that gets re-rasterised.
-    seen: dict[tuple[int, ...], int] = {}
-    colliding: set[int] = set()
+    groups: dict[tuple[int, ...], list[int]] = {}
     for index, rows in enumerate(glyphs):
-        key = tuple(rows)
-        if key in seen:
-            colliding.update(
-                i for i in (seen[key], index) if GLYPHS[i] != " "
-            )
-        else:
-            seen[key] = index
-    if not colliding:
+        groups.setdefault(tuple(rows), []).append(index)
+    collided = [members for members in groups.values() if len(members) > 1]
+    if not collided:
         return []
 
     scale = REPAIR_SCALE
@@ -137,8 +132,7 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
         raise SystemExit(f"{scale}x strip is {width}px wide, expected >= {ink_width}")
     y_off = baseline_window(bits, width, height, ink_width, CELL_H * scale)
 
-    repaired = []
-    for index in sorted(colliding):
+    def resample(index: int) -> list[int]:
         rows = []
         for cy in range(CELL_H):
             row = 0
@@ -156,7 +150,49 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
                 if lit * 2 >= scale * scale:
                     row |= 1 << cx
             rows.append(row)
-        glyphs[index] = rows
+        return rows
+
+    repaired = []
+    for members in collided:
+        repaired += _repair_group(glyphs, members, resample)
+    return repaired
+
+
+def _repair_group(
+    glyphs: list[list[int]],
+    members: list[int],
+    resample,
+) -> list[str]:
+    """Repair the fewest glyphs in one colliding group that makes its members
+    distinguishable again, worst-damaged first.
+
+    A collision has exactly one guilty party: the glyph whose strokes the 1x
+    rasteriser dropped. Re-rasterising the *innocent* member as well is
+    gratuitous churn — it changes a glyph nobody reported as wrong, and at this
+    cell size the 2x pass renders a hairline as two rows, so the innocent glyph
+    comes back visibly heavier than its unaffected siblings. `-` is the worked
+    example: repairing it alongside `+` thickened the hyphen to a two-row wedge
+    while `=` and `_`, which never collided, stayed single-row bars — a
+    user-visible weight mismatch introduced by a fix for a different glyph.
+
+    So: rank candidates by how much detail the 1x pass cost them (the pixel
+    distance between their 1x and supersampled forms — the glyph that lost a
+    whole stem outranks one that merely thinned), repair them in that order,
+    and stop the moment the group is pairwise distinct. Space is never a
+    candidate: it is legitimately blank.
+    """
+    candidates = [i for i in members if GLYPHS[i] != " "]
+    candidates.sort(
+        key=lambda i: (
+            -sum(bin(a ^ b).count("1") for a, b in zip(glyphs[i], resample(i))),
+            i,
+        )
+    )
+    repaired = []
+    for index in candidates:
+        if len({tuple(glyphs[i]) for i in members}) == len(members):
+            break  # already distinguishable — leave the rest at 1x
+        glyphs[index] = resample(index)
         repaired.append(GLYPHS[index])
     return repaired
 
