@@ -55,7 +55,9 @@ export async function buildContext(
 	// two-gate design and audit/coach May 2026 High #1. Derived from the
 	// passed-in profile row, so it's known before any query — the nutrition
 	// lane below can join the parallel fan-out instead of waiting on a
-	// profile fetch.
+	// profile fetch. This is the CALLER's consent; because every lane is now
+	// scoped to `userId` (the caller), the data being gated is the caller's
+	// own — the consent tenant and data tenant match by construction.
 	const healthConsentGranted = profileRowTyped?.health_data_consent_at != null;
 
 	// These five reads are mutually independent: the active plan (+ its
@@ -71,11 +73,25 @@ export async function buildContext(
 		weeks: unknown[];
 		workouts: unknown[];
 	}> => {
+		// Scope every data lane to the caller explicitly — do NOT lean on RLS
+		// alone. Migrations 20261103_001 + 20261116_001 additively granted an
+		// active coach read on their athletes' runs/plans, so an RLS-only read
+		// from a coach's own /coach chat would UNION the athlete's rows into the
+		// coach's context (and the no-plan_id branch could return the athlete's
+		// active plan). The `.eq('user_id', userId)` keeps this the caller's own
+		// data; plan_weeks/plan_workouts inherit the scope transitively through
+		// the plan (they carry no user_id column).
 		const { data: plan } = planId
-			? await supabase.from('training_plans').select('*').eq('id', planId).maybeSingle()
+			? await supabase
+					.from('training_plans')
+					.select('*')
+					.eq('id', planId)
+					.eq('user_id', userId)
+					.maybeSingle()
 			: await supabase
 					.from('training_plans')
 					.select('*')
+					.eq('user_id', userId)
 					.eq('status', 'active')
 					.maybeSingle();
 		let weeks: unknown[] = [];
@@ -118,6 +134,7 @@ export async function buildContext(
 		const { data: rawRecentRuns } = await supabase
 			.from(TABLES.runs)
 			.select('id, started_at, distance_m, duration_s, metadata, route_id')
+			.eq('user_id', userId)
 			.order('started_at', { ascending: false })
 			.limit(runsLimit);
 		return (rawRecentRuns ?? []).map((r) => ({
@@ -139,13 +156,17 @@ export async function buildContext(
 	// neither, both self-hide (empty array / null) and the JSON stays
 	// the same size as today's running-only payload.
 	//
-	// RLS scopes both queries to the caller (gym_workouts / gym_sets /
-	// food_log are owner-only), so no user_id filter is needed — the
-	// forwarded JWT does the scoping, same as recent_runs above.
+	// gym_workouts / food_log are owner-only today, but scope them to the
+	// caller explicitly anyway — the same not-rely-on-RLS-alone defence the
+	// plan/runs lanes now apply, so a future additive coach-visibility grant
+	// (as already happened to runs/plans) can't quietly leak an athlete's
+	// lifts/nutrition into a coach's own context. gym_sets inherits the scope
+	// transitively through the workout ids (no user_id column).
 	const liftsLane = (async (): Promise<LiftSummary[]> => {
 		const { data: liftWorkouts } = await supabase
 			.from(TABLES.gym_workouts)
 			.select('id, title, started_at')
+			.eq('user_id', userId)
 			.order('started_at', { ascending: false })
 			.limit(COACH_LIFTS_CAP);
 		if (!liftWorkouts || liftWorkouts.length === 0) return [];
@@ -181,6 +202,7 @@ export async function buildContext(
 			const { data: foodRows } = await supabase
 				.from(TABLES.food_log)
 				.select('started_at, calories, protein_g, carbs_g, fat_g')
+				.eq('user_id', userId)
 				.gte('started_at', sevenDaysAgo)
 				.order('started_at', { ascending: false })
 				.limit(200);
