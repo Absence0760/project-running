@@ -10,6 +10,7 @@ PlannedSetRef planned(
   num? targetDurationS,
   num? targetRepsMax,
   String setType = 'working',
+  num? targetDistanceM,
 ]) => PlannedSetRef(
   exerciseKey: exerciseKey,
   setIndex: setIndex,
@@ -18,6 +19,7 @@ PlannedSetRef planned(
   targetRepsMax: targetRepsMax,
   targetWeightKg: targetWeightKg,
   targetDurationS: targetDurationS,
+  targetDistanceM: targetDistanceM,
 );
 
 ActualSetRef actual(
@@ -26,12 +28,14 @@ ActualSetRef actual(
   num? reps,
   num? weightKg,
   num? durationS,
+  num? distanceM,
 ]) => ActualSetRef(
   exerciseKey: exerciseKey,
   setIndex: setIndex,
   reps: reps,
   weightKg: weightKg,
   durationS: durationS,
+  distanceM: distanceM,
 );
 
 void main() {
@@ -226,6 +230,66 @@ void main() {
       expect(r.completedCount, 0);
     },
   );
+
+  test('distance-set met -> hit', () {
+    final r = computeRoutineAdherence(
+      [planned('row', 0, null, null, null, null, 'working', 500)],
+      [actual('row', 0, null, null, null, 500)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    expect(r.completedCount, 1);
+    expect(r.verdict, RoutineVerdict.completed);
+  });
+
+  test('distance-set cut short is partial, not an unconditional hit (issue #328)', () {
+    // The regression: before the distance axis existed, ANY distance-modality set
+    // with a matching actual fell through to the final else and graded 'hit'. A
+    // runner who covered 200 m of a 500 m target must be 'partial', never 'hit'.
+    final r = computeRoutineAdherence(
+      [planned('row', 0, null, null, null, null, 'working', 500)],
+      [actual('row', 0, null, null, null, 200)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.partial);
+    expect(r.completedCount, 0);
+    expect(r.verdict, RoutineVerdict.abandoned);
+  });
+
+  test('distance-set at exactly 80% is hit (boundary inclusive)', () {
+    final r = computeRoutineAdherence(
+      [planned('row', 0, null, null, null, null, 'working', 500)],
+      [actual('row', 0, null, null, null, 400)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+  });
+
+  test('distance-set with no logged distance is partial', () {
+    final r = computeRoutineAdherence(
+      [planned('row', 0, null, null, null, null, 'working', 500)],
+      [actual('row', 0, null, null, null, null)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.partial);
+    expect(r.completedCount, 0);
+  });
+
+  test(
+    'weighted-distance set: distance met, weight unlogged -> hit (distance is primary when weight is not recorded)',
+    () {
+      final r = computeRoutineAdherence(
+        [planned('sled', 0, null, 100, null, null, 'working', 500)],
+        [actual('sled', 0, null, null, null, 500)],
+      );
+      expect(r.sets[0].status, SetAdherenceStatus.hit);
+      expect(r.completedCount, 1);
+    },
+  );
+
+  test('amrap distance set: any distance logged -> hit', () {
+    final r = computeRoutineAdherence(
+      [planned('row', 0, null, null, null, null, 'amrap', 500)],
+      [actual('row', 0, null, null, null, 120)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+  });
 
   test('deltas signed correctly', () {
     final r = computeRoutineAdherence(

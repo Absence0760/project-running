@@ -85,7 +85,7 @@
 			pendingCaption = '';
 			if (fileInput) fileInput.value = '';
 		} catch (e: any) {
-			showToast(e?.message ?? m('clubPhotos.uploadFailed'), 'error');
+			showToast(m('clubPhotos.uploadFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			uploading = false;
 		}
@@ -106,7 +106,7 @@
 			photos = photos.filter((p) => p.id !== target.id);
 			if (lightbox?.id === target.id) lightbox = null;
 		} catch (e: any) {
-			showToast(e?.message ?? m('clubPhotos.deleteFailed'), 'error');
+			showToast(m('clubPhotos.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -124,7 +124,7 @@
 			await updateClubPhotoCaption(id, next);
 			photos = photos.map((p) => (p.id === id ? { ...p, caption: next } : p));
 		} catch (e: any) {
-			showToast(e?.message ?? m('clubPhotos.captionUpdateFailed'), 'error');
+			showToast(m('clubPhotos.captionUpdateFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 </script>

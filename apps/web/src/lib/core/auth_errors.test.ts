@@ -65,6 +65,18 @@ test('email_not_confirmed code → emailNotConfirmed', () => {
 	);
 });
 
+test('invalid_grant + "Email not confirmed" message → emailNotConfirmed (not invalidCredentials)', () => {
+	// GoTrue's token endpoint can report an unconfirmed-email sign-in via
+	// the OAuth-style `invalid_grant` error with the descriptive message
+	// "Email not confirmed", not the dedicated code. The specific message
+	// must win over the generic invalid_grant → invalidCredentials branch
+	// so the user gets the resend affordance, not a wrong-password banner.
+	assert.equal(
+		classifyAuthError(authError('Email not confirmed', { code: 'invalid_grant', status: 400 })),
+		'emailNotConfirmed'
+	);
+});
+
 test('weak_password code → weakPassword', () => {
 	assert.equal(
 		classifyAuthError(

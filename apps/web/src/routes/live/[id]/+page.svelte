@@ -257,13 +257,21 @@
 			const snap = await fetchLiveSnapshot(data.id, sess?.access_token ?? null);
 			return snap != null;
 		}
+		// Bounded, newest-first — mirrors `fetchRecentRacePings` and the
+		// Go-hub's ring replay. A long broadcast (48h retention @ ~5s cadence
+		// ≈ 34.5k rows) must not download every row on an anon share-link
+		// load, and an ascending fetch would surface the OLDEST 1000 under a
+		// PostgREST row cap, freezing the spectator near the run start.
+		// Fetch descending + capped, then replay reversed so the newest ping
+		// is the last one pushed and wins the trace/pan.
 		const { data: rows, error } = await supabase
 			.from('live_run_pings')
 			.select('lat, lng, distance_m, elapsed_s, at, coarse')
 			.eq('run_id', data.id)
-			.order('at', { ascending: true });
+			.order('at', { ascending: false })
+			.limit(1000);
 		if (error || !rows || rows.length === 0) return false;
-		for (const row of rows) pushPing(row);
+		for (let i = rows.length - 1; i >= 0; i--) pushPing(rows[i]);
 		return true;
 	}
 
@@ -990,7 +998,7 @@
 	.live-badge.demo,
 	.live-badge.stale {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 
@@ -1219,7 +1227,7 @@
 		border-inline-start-color: var(--color-warning);
 	}
 	.cutoff-card.stale .cutoff-waiting {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		font-style: normal;
 		font-weight: 600;
 	}
@@ -1283,7 +1291,7 @@
 	}
 	.cutoff-card.tight .cutoff-chip {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 	.cutoff-card.behind .cutoff-chip {
@@ -1433,7 +1441,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 	.approx-badge .material-symbols {

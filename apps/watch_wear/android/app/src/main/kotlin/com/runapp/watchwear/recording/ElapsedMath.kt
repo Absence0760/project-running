@@ -23,3 +23,15 @@ fun activeElapsedMs(
     val active = total - pausedAccumulatedMs - currentPauseMs
     return if (active < 0) 0 else active
 }
+
+/// Base instant for the OS-rendered Ongoing Activity stopwatch, which the
+/// platform ticks up as `now - base`. Derived so that while not paused
+/// `now - ongoingActivityBaseMs(startedAtMs, pausedAccumulatedMs)` equals
+/// `activeElapsedMs(now, startedAtMs, pausedAccumulatedMs, 0)` — i.e. the OS
+/// stopwatch shows exactly the active time the rest of the app shows. The
+/// accumulated pause is ADDED, pushing the base forward so the counted-up
+/// interval shrinks by the paused time (subtracting would run it ahead).
+fun ongoingActivityBaseMs(
+    startedAtMs: Long,
+    pausedAccumulatedMs: Long,
+): Long = startedAtMs + pausedAccumulatedMs

@@ -122,7 +122,7 @@ watch talks to Supabase directly — no paired-phone handoff, no Wearable
 Data Layer proxy. `SupabaseClient` is a thin OkHttp wrapper:
 
 1. `signIn(email, password)` → POST `/auth/v1/token?grant_type=password`, stashes access token + user id in memory.
-2. `saveRun(...)` → gzips the track JSON, POSTs to `/storage/v1/object/runs/{user_id}/{run_id}.json.gz`, then POSTs the row to `/rest/v1/runs` with `Prefer: return=minimal`. Matches the Dart `ApiClient.saveRun` contract byte-for-byte so the web/Android apps read Wear-produced runs without special cases.
+2. `saveRun(...)` → gzips the track JSON, uploads to `/storage/v1/object/runs/{user_id}/{run_id}.json.gz` with `x-upsert: true` (idempotent overwrite — the track object is keyed deterministically, so a retry after a partial-success save must overwrite it, not `409 Duplicate`; mirrors mobile's `upsert: true` and `buildUploadTrackRequest` pins the header), then POSTs the row to `/rest/v1/runs` with `Prefer: resolution=merge-duplicates,return=minimal`. Both halves are now idempotent, so a run whose row POST failed drains cleanly on the next attempt instead of wedging the queue. Matches the Dart `ApiClient.saveRun` contract byte-for-byte so the web/Android apps read Wear-produced runs without special cases.
 
 **Primary path — phone handoff.** Auth comes from the paired Android phone
 over the Wearable Data Layer. `mobile_android` pushes `{access_token,
@@ -500,7 +500,12 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   per-run baseline subtraction so the flow yields cumulative steps
   since recording started. `RunRecordingService` collects into
   `RecordingRepository.Metrics.steps`; `QueuedRun.steps` persists the
-  final count; `pushRun` writes `run.metadata.steps` when non-zero.
+  final count; `pushRun` writes `run.metadata.steps` when non-zero. The
+  15 s recovery `Checkpoint` snapshots `steps` (and the runner's
+  `privacy_default`) alongside the rolling HR pair, so a
+  crash-recovered run stamps the same `steps` + `isPublic` a normal
+  stop would (#389) — `recoverCheckpoint` maps `Checkpoint.privacyDefault`
+  through the shared `isPublicFromPrivacyDefault` helper.
   Requires `ACTIVITY_RECOGNITION` at runtime — requested alongside
   `ACCESS_FINE_LOCATION` + `BODY_SENSORS` by `permissionLauncher`.
   `RunningScreen` surfaces the live count as a `"N steps"` caption

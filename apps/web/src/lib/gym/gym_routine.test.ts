@@ -380,6 +380,43 @@ test('expandRoutineSteps: a duration-based set is preserved (targetDurationS set
 	assert.equal(out.steps[0].targetRepsMin, null);
 });
 
+test('expandRoutineSteps: a distance-based set carries targetDistanceM through to the step', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'Row erg',
+				position: 0,
+				sets: [
+					{
+						setIndex: 0,
+						targetRepsMin: null,
+						targetRepsMax: null,
+						targetWeightKg: null,
+						targetRpe: null,
+						targetDistanceM: 500,
+						setType: 'working',
+					},
+				],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.equal(out.steps[0].targetDistanceM, 500);
+	assert.equal(out.steps[0].targetDurationS, null);
+	assert.equal(out.steps[0].targetWeightKg, null);
+	assert.equal(out.steps[0].targetRepsMin, null);
+});
+
+test('expandRoutineSteps: a set with no distance target defaults targetDistanceM to null', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [{ exerciseName: 'Bench', position: 0, sets: [pset(0, 5, 80)] }],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.equal(out.steps[0].targetDistanceM, null);
+});
+
 test('expandRoutineSteps: an empty routine yields no steps', () => {
 	const out = expandRoutineSteps({ title: 'P', exercises: [] });
 	assert.deepEqual(out, { steps: [], totalSets: 0, supersetGroups: 0 });
