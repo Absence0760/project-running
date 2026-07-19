@@ -176,7 +176,8 @@ async fn checkpoint_run(store: &'static SharedStore, open: &OpenRun, snap: &Snap
     store
         .lock()
         .await
-        .checkpoint(open.run_seq, open.start_uptime_s, &blob);
+        .checkpoint(open.run_seq, open.start_uptime_s, &blob)
+        .await;
 }
 
 /// Finalise the staged blob with the snapshot totals and commit it to flash.
@@ -202,7 +203,8 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
     store
         .lock()
         .await
-        .commit(open.run_seq, open.start_uptime_s, &blob);
+        .commit(open.run_seq, open.start_uptime_s, &blob)
+        .await;
 }
 
 /// Altitude in metres → wire-format decimetres, dropping values outside the

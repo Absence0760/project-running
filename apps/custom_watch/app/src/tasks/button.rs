@@ -119,7 +119,7 @@ pub async fn run(
                             // Persist so the choice survives reboot / brown-out.
                             // Best-effort / L4: a flash error only warns; the
                             // mode switch is never blocked on flash.
-                            store.lock().await.persist_gnss_mode(mode);
+                            store.lock().await.persist_gnss_mode(mode).await;
                         }
                     }
                 }
@@ -278,7 +278,7 @@ pub async fn run(
                         mode_tx.send(mode);
                         // Persist so the choice survives reboot / brown-out
                         // (no-ops under the sim, which has no NVMC).
-                        store.lock().await.persist_gnss_mode(mode);
+                        store.lock().await.persist_gnss_mode(mode).await;
                     }
                 }
                 continue;
