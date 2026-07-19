@@ -167,8 +167,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } catch (e) {
       debugPrint('SignUpScreen._signUp failed: $e');
       if (mounted) {
-        setState(() => _error =
-            friendlyAuthError(AppLocalizations.of(context), e));
+        // Sign-up must never disclose that an email is already
+        // registered: collapse an emailExists outcome to the same
+        // neutral check-your-email state a fresh sign-up shows, so
+        // sign-up can't be an account-existence oracle even when prod
+        // GoTrue has email confirmations off (issue #454, web twin
+        // #399/#448). Sign-in is untouched (an existing email there
+        // classifies as invalidCredentials).
+        if (signUpErrorRevealsAccountExistence(classifyAuthError(e))) {
+          setState(() => _confirmationSentTo = email);
+        } else {
+          setState(() => _error =
+              friendlyAuthError(AppLocalizations.of(context), e));
+        }
       }
     } finally {
       if (mounted) setState(() => _loading = false);

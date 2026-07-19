@@ -289,6 +289,7 @@ class _SettingsIntegrationsScreenState
         ],
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (athleteNumber == null || athleteNumber.isEmpty) return;
     if (!mounted) return;
 

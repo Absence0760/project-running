@@ -219,6 +219,169 @@ test('buildContext keeps per-run avg_bpm when health consent is granted', async 
 	assert.deepEqual(runs[0].metadata, { activity_type: 'run', avg_bpm: 152 });
 });
 
+// --- cross-tenant scoping (issue #373) --------------------------------
+
+// Filter-aware Supabase stub: honours .eq / .in / .gte so a query that
+// forgets .eq('user_id', caller) sees EVERY seeded row (the pre-fix leak),
+// while the scoped query sees only the caller's. Terminal .limit resolves to
+// the matched array, .maybeSingle to its first row (or null).
+function filteringSupabase(tableData: Record<string, unknown[]>) {
+	return {
+		from(table: string) {
+			const rows: unknown[] = Array.isArray(tableData[table]) ? tableData[table] : [];
+			const eqs: Array<[string, unknown]> = [];
+			const ins: Array<[string, unknown[]]> = [];
+			let gte: [string, string] | null = null;
+			const matched = () =>
+				rows.filter((r) => {
+					const row = r as Record<string, unknown>;
+					if (!eqs.every(([c, v]) => row[c] === v)) return false;
+					if (!ins.every(([c, vs]) => vs.includes(row[c]))) return false;
+					if (gte && !(String(row[gte[0]]) >= gte[1])) return false;
+					return true;
+				});
+			const q: Record<string, unknown> = {};
+			q.select = () => q;
+			q.order = () => q;
+			q.eq = (c: string, v: unknown) => {
+				eqs.push([c, v]);
+				return q;
+			};
+			q.in = (c: string, vs: unknown[]) => {
+				ins.push([c, vs]);
+				return q;
+			};
+			q.gte = (c: string, v: string) => {
+				gte = [c, v];
+				return q;
+			};
+			q.limit = () => Promise.resolve({ data: matched(), error: null });
+			q.maybeSingle = () => Promise.resolve({ data: matched()[0] ?? null, error: null });
+			// Awaiting a query that terminates in .eq/.in/.order (plan_weeks,
+			// plan_workouts, gym_sets have no .limit) resolves to the array.
+			q.then = (
+				onFulfilled: (v: unknown) => unknown,
+				onRejected?: (e: unknown) => unknown,
+			) => Promise.resolve({ data: matched(), error: null }).then(onFulfilled, onRejected);
+			return q;
+		},
+	};
+}
+
+const ATHLETE = 'athlete-a';
+const COACH = 'coach-b';
+
+function coachTenantFixture() {
+	// Athlete rows are listed FIRST in every array so a pre-fix, RLS-only
+	// read (which the filtering stub models by returning all rows the query
+	// didn't filter) would surface the ATHLETE's row — .maybeSingle() would
+	// pick the athlete's active plan, .limit() would include the athlete's
+	// runs/lifts/food. The fix scopes each lane to the caller (COACH).
+	const soon = new Date(Date.now() - 86_400_000).toISOString();
+	return {
+		runs: [
+			{ id: 'run-a', user_id: ATHLETE, started_at: soon, distance_m: 21000, duration_s: 7200, metadata: { activity_type: 'run', avg_bpm: 160 }, route_id: null },
+			{ id: 'run-b', user_id: COACH, started_at: soon, distance_m: 5000, duration_s: 1500, metadata: { activity_type: 'run' }, route_id: null },
+		],
+		training_plans: [
+			{ id: 'plan-a', user_id: ATHLETE, status: 'active', is_template: false },
+			{ id: 'plan-b', user_id: COACH, status: 'active', is_template: false },
+		],
+		plan_weeks: [
+			{ id: 'week-a', plan_id: 'plan-a', week_index: 0 },
+			{ id: 'week-b', plan_id: 'plan-b', week_index: 0 },
+		],
+		plan_workouts: [
+			{ id: 'wk-a', week_id: 'week-a', scheduled_date: '2026-06-01' },
+			{ id: 'wk-b', week_id: 'week-b', scheduled_date: '2026-06-01' },
+		],
+		gym_workouts: [
+			{ id: 'gym-a', user_id: ATHLETE, title: 'A push', started_at: soon },
+			{ id: 'gym-b', user_id: COACH, title: 'B pull', started_at: soon },
+		],
+		gym_sets: [
+			{ workout_id: 'gym-a', exercise_name: 'Bench', reps: 5, weight_kg: 80 },
+			{ workout_id: 'gym-b', exercise_name: 'Row', reps: 5, weight_kg: 60 },
+		],
+		food_log: [
+			{ user_id: ATHLETE, started_at: soon, calories: 900, protein_g: 40, carbs_g: 100, fat_g: 20 },
+			{ user_id: COACH, started_at: soon, calories: 500, protein_g: 30, carbs_g: 50, fat_g: 10 },
+		],
+	};
+}
+
+const COACH_PROFILE: CoachProfileRow = {
+	display_name: 'Coach',
+	preferred_unit: 'km',
+	health_data_consent_at: '2026-06-01T00:00:00.000Z',
+};
+
+test('buildContext no-plan_id branch returns the CALLER active plan, not an athlete plan', async () => {
+	const ctx = await buildContext(
+		filteringSupabase(coachTenantFixture()) as never,
+		COACH,
+		null,
+		10,
+		COACH_PROFILE,
+	);
+	const data = ctx.data as {
+		plan: { id: string; user_id: string } | null;
+		plan_weeks: { id: string }[];
+		plan_workouts: { id: string }[];
+	};
+	assert.equal(data.plan?.id, 'plan-b', 'must resolve the coach own active plan');
+	assert.equal(data.plan?.user_id, COACH);
+	assert.deepEqual(data.plan_weeks.map((w) => w.id), ['week-b']);
+	assert.deepEqual(data.plan_workouts.map((w) => w.id), ['wk-b']);
+});
+
+test('buildContext leaks none of an athlete recent runs into a coach context', async () => {
+	const ctx = await buildContext(
+		filteringSupabase(coachTenantFixture()) as never,
+		COACH,
+		null,
+		10,
+		COACH_PROFILE,
+	);
+	const runs = (ctx.data as { recent_runs: { id: string; metadata: unknown }[] }).recent_runs;
+	assert.deepEqual(runs.map((r) => r.id), ['run-b'], 'only the coach own run');
+});
+
+test('buildContext scopes lifts + nutrition to the caller', async () => {
+	const ctx = await buildContext(
+		filteringSupabase(coachTenantFixture()) as never,
+		COACH,
+		null,
+		10,
+		COACH_PROFILE,
+	);
+	const data = ctx.data as {
+		recent_lifts: { title: string | null; volume_kg: number }[];
+		nutrition_7d: { avg_calories: number | null } | null;
+	};
+	assert.equal(data.recent_lifts.length, 1);
+	assert.equal(data.recent_lifts[0].title, 'B pull');
+	assert.equal(data.recent_lifts[0].volume_kg, 5 * 60, 'only the coach own sets');
+	// Coach food only: 500 kcal on the one logged day (the athlete 900 excluded).
+	assert.equal(data.nutrition_7d?.avg_calories, 500);
+});
+
+test('buildContext with an athlete planId still returns nothing cross-tenant', async () => {
+	// A coach passing an athlete plan id (RLS would allow the read) must not
+	// resolve it — the plan lane scopes on user_id, so a foreign id yields null.
+	const ctx = await buildContext(
+		filteringSupabase(coachTenantFixture()) as never,
+		COACH,
+		'plan-a',
+		10,
+		COACH_PROFILE,
+	);
+	const data = ctx.data as { plan: unknown; plan_weeks: unknown[]; plan_workouts: unknown[] };
+	assert.equal(data.plan, null, 'a foreign plan id must not resolve');
+	assert.deepEqual(data.plan_weeks, []);
+	assert.deepEqual(data.plan_workouts, []);
+});
+
 // --- summarizeRecentLifts ---------------------------------------------
 
 test('summarizeRecentLifts rolls sets into per-session summaries', () => {
