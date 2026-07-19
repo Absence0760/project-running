@@ -111,6 +111,7 @@ class PlannedSet {
   final String? setType;
   final num? restS;
   final num? targetDurationS;
+  final num? targetDistanceM;
   const PlannedSet({
     required this.setIndex,
     this.targetRepsMin,
@@ -120,6 +121,7 @@ class PlannedSet {
     this.setType,
     this.restS,
     this.targetDurationS,
+    this.targetDistanceM,
   });
 }
 
@@ -140,6 +142,7 @@ class RoutineStep {
   final num? targetRpe;
   final num? restS;
   final num? targetDurationS;
+  final num? targetDistanceM;
   const RoutineStep({
     required this.exerciseName,
     required this.exerciseKey,
@@ -154,6 +157,7 @@ class RoutineStep {
     required this.targetRpe,
     required this.restS,
     required this.targetDurationS,
+    required this.targetDistanceM,
   });
 }
 
@@ -319,6 +323,7 @@ RoutineStep _stepFor(PlannedExercise ex, PlannedSet s) {
     targetRpe: s.targetRpe,
     restS: s.restS,
     targetDurationS: s.targetDurationS,
+    targetDistanceM: s.targetDistanceM,
   );
 }
 

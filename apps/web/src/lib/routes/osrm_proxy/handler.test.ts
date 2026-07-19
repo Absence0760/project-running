@@ -179,6 +179,22 @@ test('handleOsrmProxy requires a signed-in caller', async () => {
 	assert.equal(errored.status, 500);
 });
 
+test('handleOsrmProxy → 429 when the per-user throttle is tripped, upstream never contacted', async () => {
+	// A signed-in caller over their per-user ceiling (issue #339) must be
+	// denied before the engine relay is touched.
+	let upstreamCalled = false;
+	const fetcher: Fetcher = async () => {
+		upstreamCalled = true;
+		return osrmOk({ code: 'Ok' });
+	};
+	const res = await handleOsrmProxy(AUTH, '/nearest/v1/foot/1,1', {}, CONFIG, {
+		fetcher,
+		authChecker: async () => 'limited' as const,
+	});
+	assert.equal(res.status, 429);
+	assert.equal(upstreamCalled, false, 'a throttled caller must not reach the engine');
+});
+
 test('handleOsrmProxy answers 501 when OSRM_URL is unset and the demo fallback is off', async () => {
 	const result = await handleOsrmProxy(
 		AUTH,
