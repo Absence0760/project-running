@@ -29,13 +29,18 @@
 --      columns even though the returned gender/age are masked, so the
 --      cohort filter remains correct.
 --  15. Calling with auth.uid() = null (no JWT claim) raises 42501.
+--  16. One row PER ATHLETE, not per effort (issue #393). A runner with
+--      three efforts (60/65/70s) plus a second runner at 62s yields
+--      exactly two rows [A:60 rank1, B:62 rank2] — the athlete's best
+--      effort only, so repeat runners can't hold multiple ranks or fill
+--      the board past its distinct-athlete limit.
 --
 -- Reads as authenticated callers via `set local "request.jwt.claims"`.
 -- No service-role bypass.
 
 begin;
 
-select plan(16);
+select plan(18);
 
 -- ── Fixture: three runners with distinct demographics ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -50,6 +55,10 @@ values
    'pnts-80@tiered.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000cc0005', 'authenticated', 'authenticated',
    'no-demographics@tiered.local', '', now(), now()),
+  ('00000000-0000-0000-0000-000000cc0006', 'authenticated', 'authenticated',
+   'repeat-runner@tiered.local', '', now(), now()),
+  ('00000000-0000-0000-0000-000000cc0007', 'authenticated', 'authenticated',
+   'single-effort@tiered.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000cc0099', 'authenticated', 'authenticated',
    'stranger@tiered.local', '', now(), now());
 
@@ -63,7 +72,9 @@ values
   ('00000000-0000-0000-0000-000000cc0002', 'Male 35yo', 'male', (now() - interval '36 years')::date),
   ('00000000-0000-0000-0000-000000cc0003', 'Female 50yo', 'female', (now() - interval '51 years')::date),
   ('00000000-0000-0000-0000-000000cc0004', 'PNTS 80yo', 'prefer_not_to_say', (now() - interval '80 years')::date),
-  ('00000000-0000-0000-0000-000000cc0005', 'No Demographics', null, null);
+  ('00000000-0000-0000-0000-000000cc0005', 'No Demographics', null, null),
+  ('00000000-0000-0000-0000-000000cc0006', 'Repeat Runner', 'male', (now() - interval '30 years')::date),
+  ('00000000-0000-0000-0000-000000cc0007', 'Single Effort', 'male', (now() - interval '30 years')::date);
 
 -- Route owner (cc0001) creates a public route + a private route.
 set local role authenticated;
@@ -92,6 +103,11 @@ values
    '66666666-6666-6666-6666-666666660002',
    'Private Sprint',
    500, 1500,
+   '00000000-0000-0000-0000-000000cc0001'),
+  ('77777777-7777-7777-7777-777777770003',
+   '66666666-6666-6666-6666-666666660001',
+   'Per-Athlete Sprint',
+   2000, 3000,
    '00000000-0000-0000-0000-000000cc0001');
 
 -- Each runner records a run on the public route + plants one effort.
@@ -143,6 +159,37 @@ insert into segment_efforts (segment_id, run_id, user_id, time_seconds, started_
 values ('77777777-7777-7777-7777-777777770001',
    '88888888-8888-8888-8888-888888880004',
    '00000000-0000-0000-0000-000000cc0005', 250, now() - interval '1 hour');
+
+-- ── Per-athlete dedup fixture (issue #393) on segment 770003 ──
+-- Repeat Runner (cc0006) records three runs, one effort each on 770003
+-- at 60/65/70s. Single Effort (cc0007) records one run at 62s. The
+-- `unique (segment_id, run_id)` on segment_efforts means each effort
+-- needs its own run.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000cc0006"}';
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata, is_public)
+values
+  ('88888888-8888-8888-8888-888888880006',
+   '00000000-0000-0000-0000-000000cc0006', now(), 10000, 1800, 'app', '{"activity_type":"run"}'::jsonb, true),
+  ('88888888-8888-8888-8888-888888880016',
+   '00000000-0000-0000-0000-000000cc0006', now(), 10000, 1810, 'app', '{"activity_type":"run"}'::jsonb, true),
+  ('88888888-8888-8888-8888-888888880026',
+   '00000000-0000-0000-0000-000000cc0006', now(), 10000, 1820, 'app', '{"activity_type":"run"}'::jsonb, true);
+insert into segment_efforts (segment_id, run_id, user_id, time_seconds, started_at)
+values
+  ('77777777-7777-7777-7777-777777770003', '88888888-8888-8888-8888-888888880006',
+   '00000000-0000-0000-0000-000000cc0006', 60, now() - interval '3 hours'),
+  ('77777777-7777-7777-7777-777777770003', '88888888-8888-8888-8888-888888880016',
+   '00000000-0000-0000-0000-000000cc0006', 65, now() - interval '2 hours'),
+  ('77777777-7777-7777-7777-777777770003', '88888888-8888-8888-8888-888888880026',
+   '00000000-0000-0000-0000-000000cc0006', 70, now() - interval '1 hour');
+
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000cc0007"}';
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata, is_public)
+values ('88888888-8888-8888-8888-888888880007',
+   '00000000-0000-0000-0000-000000cc0007', now(), 10000, 1800, 'app', '{"activity_type":"run"}'::jsonb, true);
+insert into segment_efforts (segment_id, run_id, user_id, time_seconds, started_at)
+values ('77777777-7777-7777-7777-777777770003', '88888888-8888-8888-8888-888888880007',
+   '00000000-0000-0000-0000-000000cc0007', 62, now() - interval '3 hours');
 
 -- ── Tests run as the male-35yo viewer unless overridden. ──
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000cc0002"}';
@@ -307,6 +354,29 @@ select throws_ok(
   '42501',
   null,
   'caller with null auth.uid() is rejected with 42501'
+);
+
+-- 16. Per-athlete reduction (issue #393). Segment 770003 has four
+--     efforts across two athletes (cc0006: 60/65/70, cc0007: 62). The
+--     board must return exactly two rows — each athlete's best effort —
+--     ordered [cc0006:60, cc0007:62], NOT one row per effort. A
+--     regression that dropped the distinct-on would return four rows
+--     with cc0006 holding ranks 1 and 3.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000cc0006"}';
+select is(
+  (select count(*)::int from segment_leaderboard_tiered(
+     '77777777-7777-7777-7777-777777770003'::uuid, null, null, 50)),
+  2,
+  'leaderboard returns one row per athlete, not per effort'
+);
+select results_eq(
+  $$ select user_id::text, time_seconds from segment_leaderboard_tiered(
+       '77777777-7777-7777-7777-777777770003'::uuid, null, null, 50) $$,
+  $$ values
+       ('00000000-0000-0000-0000-000000cc0006', 60),
+       ('00000000-0000-0000-0000-000000cc0007', 62)
+  $$,
+  'each athlete surfaces only their best effort, ordered by time'
 );
 
 select * from finish();
