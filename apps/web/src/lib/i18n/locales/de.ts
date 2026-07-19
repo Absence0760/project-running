@@ -2238,6 +2238,7 @@ export const messages = {
 	"messages.send": "Senden",
 	"messages.sendFailed": "Senden fehlgeschlagen",
 	"messages.threadsLoadFailed": "Deine Unterhaltungen konnten nicht geladen werden.",
+	"messages.threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
 	"messages.retry": "Erneut versuchen",
 	"periodSummary.previous": "Zurück",
 	"periodSummary.next": "Weiter",

@@ -2233,6 +2233,7 @@ export const messages = {
 	"messages.send": "送信",
 	"messages.sendFailed": "送信に失敗しました",
 	"messages.threadsLoadFailed": "会話を読み込めませんでした。",
+	"messages.threadLoadFailed": "この会話を読み込めませんでした。",
 	"messages.retry": "再試行",
 	"periodSummary.previous": "前へ",
 	"periodSummary.next": "次へ",
