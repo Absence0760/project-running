@@ -13,6 +13,25 @@ path add $ORIGIN
 mach create "watch"
 machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
 
+# RTC1 with a working OVRFLW event + all four compare channels. The stock
+# platform breaks the firmware's 64-bit monotonic clock two ways: rtc1 is
+# declared with numberOfEvents: 3 (the real RTC1 has 4 — embassy-nrf's time
+# driver parks its half-period tick on CC[3], which a 3-channel model silently
+# drops) and the model's OVRFLW event is an unimplemented tag. Either alone
+# stalls the period counter, so Instant::now() wrapped to zero every 512 s
+# (2^24 ticks @ 32768 Hz) and froze every uptime-anchored path (fix
+# acceptance, moving time, alerts) 8.5 min into a run. The replacement model
+# (sim/NRF52840_RTC_Overflow.cs) is the upstream v1.16.1 source plus a real
+# OVRFLW; re-registering with numberOfEvents: 4 restores CC[3].
+include @NRF52840_RTC_Overflow.cs
+machine UnregisterFromParent sysbus.rtc1
+machine LoadPlatformDescriptionFromString
+"""
+rtc1: Timers.NRF52840_RTC_Overflow @ sysbus 0x40011000
+    numberOfEvents: 4
+    -> nvic@17
+"""
+
 # Board LEDs. We declare these inline instead of loading
 # platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
 # four user buttons as Miscellaneous.Button peripherals that drive their pins
