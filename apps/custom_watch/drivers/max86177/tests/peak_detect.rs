@@ -551,6 +551,108 @@ fn clean_signal_not_regressed_by_ambient_path() {
 }
 
 #[test]
+fn pinned_adc_stays_saturated_despite_in_band_correction() {
+    // The subtraction's hard limit: ambient so bright the raw LED-on sample
+    // pins at the 19-bit full scale. The corrected difference (clip − ambient)
+    // lands back inside the worn DC band, but it is arithmetic over a flat
+    // rail — the ADC clipped the pulse away before subtraction could run.
+    // Contact must stay Saturated (the honest reason: no conversion headroom),
+    // never Worn, and no BPM may be fabricated.
+    let rate = 100;
+    const FULL_SCALE: i32 = 0x7_FFFF;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = AmbientSynth::new(rate);
+    synth.ambient_dc = 510_000.0;
+    synth.led_dc = 40_000.0; // scene DC ~550k — beyond the ADC's reach
+    let mut last = Reading {
+        bpm: 0,
+        valid: false,
+    };
+    for _ in 0..rate * 20 {
+        let ppg = synth.ppg(72.0).min(FULL_SCALE);
+        let ambient = synth.ambient().min(FULL_SCALE);
+        last = det.push_ambient(ppg, ambient);
+    }
+    assert_eq!(
+        det.contact(),
+        Contact::Saturated,
+        "a pinned raw ADC must read Saturated even with an in-band correction"
+    );
+    assert!(
+        !last.valid,
+        "a clipped channel must never report a heart rate"
+    );
+    assert_eq!(last.bpm, 0);
+}
+
+#[test]
+fn subtraction_saturates_at_integer_extremes() {
+    // The corrected difference is computed with saturating arithmetic: no
+    // argument pair may overflow (a plain `-` would abort a debug build on
+    // i32::MAX − i32::MIN). Behaviour, not just absence of a panic: extremes
+    // must still never yield a valid reading.
+    let mut det = PeakDetector::new(100);
+    let a = det.push_ambient(i32::MAX, i32::MIN);
+    let b = det.push_ambient(i32::MIN, i32::MAX);
+    assert!(!a.valid && !b.valid);
+    assert_eq!((a.bpm, b.bpm), (0, 0));
+}
+
+#[test]
+fn ambient_exceeding_ppg_clamps_to_the_dark_floor() {
+    // A miscalibrated / noisy ambient channel reading brighter than the LED-on
+    // channel: the difference is floored at zero (the LED can only add light),
+    // so the corrected stream is a dark floor — OffWrist, invalid, never a
+    // negative-count artifact pulse.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut noise = Noise::new(0xD00D);
+    for _ in 0..rate * 20 {
+        let ppg = 1_000 + noise.sample(6);
+        let ambient = 50_000 + noise.sample(6);
+        let r = det.push_ambient(ppg, ambient);
+        assert!(
+            !r.valid,
+            "an over-subtracted stream must not report a heart rate"
+        );
+    }
+    assert_eq!(det.contact(), Contact::OffWrist);
+}
+
+#[test]
+fn saturated_recovers_to_worn_once_ambient_data_arrives() {
+    // The deployed startup sequence: the hr task feeds `ambient == 0` until the
+    // first MEAS2 word arrives, so a bright-sun boot starts railed/Saturated on
+    // the uncorrected stream. Once real ambient samples flow, the same detector
+    // must re-converge to Worn with a correct BPM — Saturated is a live state,
+    // not a latch.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = AmbientSynth::new(rate);
+    for _ in 0..rate * 10 {
+        let ppg = synth.ppg(72.0);
+        det.push_ambient(ppg, 0);
+    }
+    assert_eq!(
+        det.contact(),
+        Contact::Saturated,
+        "no ambient data yet: the bright scene rails the corrected stream"
+    );
+    let r = synth.run_subtracted(&mut det, 72.0, 25);
+    assert_eq!(
+        det.contact(),
+        Contact::Worn,
+        "live ambient samples must un-rail the same detector"
+    );
+    assert!(r.valid, "the recovered pulse must read valid");
+    assert!(
+        r.bpm.abs_diff(72) <= 3,
+        "recovered rate should be correct, got {}",
+        r.bpm
+    );
+}
+
+#[test]
 fn sustained_weaker_signal_is_not_suppressed() {
     let rate = 100;
     let mut det = PeakDetector::new(rate);
