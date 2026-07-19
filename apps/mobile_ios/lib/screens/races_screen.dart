@@ -509,6 +509,7 @@ class _RaceImportFormState extends State<_RaceImportForm> {
       await widget.service.importRaceResult(
         provider: 'runsignup',
         listingId: widget.race.id,
+        bib: _blank(_bib.text),
         matchRunId: widget.matchRunId,
       );
       if (mounted) Navigator.of(context).pop(true);
@@ -562,12 +563,13 @@ class _RaceImportFormState extends State<_RaceImportForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.race.provider == 'runsignup' && widget.runSignUpAvailable)
+            if (widget.race.provider == 'runsignup' && widget.runSignUpAvailable) ...[
+              Text(l.racesRunSignUpBibHint, style: Theme.of(context).textTheme.bodySmall),
               FilledButton(
-                onPressed: _busy ? null : _runSignUpImport,
+                onPressed: (_busy || _bib.text.trim().isEmpty) ? null : _runSignUpImport,
                 child: Text(l.racesImportResult),
-              )
-            else if (widget.race.provider == 'runsignup' && !widget.runSignUpAvailable)
+              ),
+            ] else if (widget.race.provider == 'runsignup' && !widget.runSignUpAvailable)
               Text(
                 l.integrationsRunsignupUnavailable,
                 style: Theme.of(context).textTheme.bodySmall,
@@ -577,6 +579,7 @@ class _RaceImportFormState extends State<_RaceImportForm> {
             TextField(
               controller: _bib,
               decoration: InputDecoration(labelText: l.racesBib),
+              onChanged: (_) => setState(() {}),
             ),
             TextField(
               controller: _chip,

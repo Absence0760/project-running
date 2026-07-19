@@ -38,14 +38,28 @@ export type StravaActivity = {
 	has_heartrate?: boolean;
 };
 
-/// Refresh a Strava access token. Used both ad-hoc (from `sync`) and
-/// proactively by the cron-driven `refresh-tokens` EF. Returns the new
-/// access token on success, null on failure (caller decides whether
-/// that's fatal — for `sync` it isn't, the stale token may still work).
+/// Reason a Strava refresh permanently failed. `invalid_grant` — the
+/// refresh token was revoked or expired (Strava 400 invalid_grant);
+/// `unauthorized` — any other 4xx. Both mean the grant is dead and the
+/// integration should stop being swept. Mirrors the Go worker's
+/// handler_token_refresh.go classification.
+export type StravaRefreshFailureReason = 'invalid_grant' | 'unauthorized';
+
+/// Refresh a Strava access token. Used ad-hoc (from `sync`), by the
+/// `strava-webhook` handler, and proactively by the cron-driven
+/// `refresh-tokens` EF. Returns the new access token on success, null on
+/// failure (caller decides whether that's fatal — for `sync` it isn't,
+/// the stale token may still work).
+///
+/// `onPermanentFailure` is invoked on a 4xx from Strava (dead grant) so a
+/// caller can wire a side effect — the cron sweep stamps `disconnected_at`
+/// so the row isn't retried forever. A 5xx is transient: no callback, the
+/// caller retries next tick.
 export async function refreshStravaToken(
 	supabase: ReturnType<typeof createClient>,
 	userId: string,
 	refreshToken: string,
+	onPermanentFailure?: (reason: StravaRefreshFailureReason) => Promise<void>,
 ): Promise<string | null> {
 	const resp = await fetch('https://www.strava.com/oauth/token', {
 		method: 'POST',
@@ -57,7 +71,26 @@ export async function refreshStravaToken(
 			grant_type: 'refresh_token',
 		}),
 	});
-	if (!resp.ok) return null;
+	if (!resp.ok) {
+		if (resp.status >= 400 && resp.status < 500 && onPermanentFailure) {
+			let reason: StravaRefreshFailureReason = 'unauthorized';
+			if (resp.status === 400) {
+				try {
+					const errBody = await resp.json();
+					if (
+						typeof errBody?.error === 'string' &&
+						(errBody.error.includes('invalid_grant') || errBody.error.includes('expired'))
+					) {
+						reason = 'invalid_grant';
+					}
+				} catch (_) {
+					/* keep default reason */
+				}
+			}
+			await onPermanentFailure(reason);
+		}
+		return null;
+	}
 	const tokens = (await resp.json()) as StravaTokens;
 	// audit/strava May 2026 High #3 — CAS write so a concurrent
 	// refresh (cron + on-demand + webhook race) doesn't overwrite

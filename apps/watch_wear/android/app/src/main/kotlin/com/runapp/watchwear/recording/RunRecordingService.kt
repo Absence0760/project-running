@@ -370,7 +370,6 @@ class RunRecordingService : Service() {
                 distanceM = finalDistance,
                 avgBpm = avgBpm,
                 trackFilePath = file?.absolutePath,
-                trackPointCount = it.trackPointCount,
                 laps = laps.toList(),
                 activityType = activityType,
             )
