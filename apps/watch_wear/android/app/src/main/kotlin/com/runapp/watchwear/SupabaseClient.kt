@@ -543,14 +543,13 @@ class SupabaseClient(
     }
 
     private suspend fun uploadTrack(path: String, gzFile: File, token: String) {
-        val req = Request.Builder()
-            .url("$baseUrl/storage/v1/object/runs/$path")
-            .header("apikey", anonKey)
-            .header("Authorization", "Bearer $token")
-            .header("Content-Type", "application/json")
-            .header("Content-Encoding", "gzip")
-            .post(gzFile.asRequestBody("application/json".toMediaType()))
-            .build()
+        val req = buildUploadTrackRequest(
+            baseUrl = baseUrl,
+            path = path,
+            anonKey = anonKey,
+            token = token,
+            body = gzFile.asRequestBody("application/json".toMediaType()),
+        )
         execute(req)
     }
 

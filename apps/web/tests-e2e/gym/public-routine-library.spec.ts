@@ -96,6 +96,11 @@ test.describe('/gym/routines/library — publish, browse, preview, adopt', () =>
 			await expect(page.getByTestId('gym-library-adopt')).toBeVisible({ timeout: 10_000 });
 			await expect(page.locator('.exercise-name', { hasText: exercise })).toBeVisible();
 
+			// The set-preview table exposes column headers for screen readers (WCAG 1.3.1).
+			const setTable = page.locator('.set-table').first();
+			await expect(setTable.getByRole('columnheader', { name: 'Set type' })).toBeVisible();
+			await expect(setTable.getByRole('columnheader', { name: 'Target reps' })).toBeVisible();
+
 			// Adopt → lands on the new personal routine detail.
 			await page.getByTestId('gym-library-adopt').click();
 			await expect(page).toHaveURL(/\/gym\/routines\/[0-9a-f-]+$/, { timeout: 10_000 });

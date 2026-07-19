@@ -66,4 +66,26 @@ class ElapsedMathTest {
         val now = start + 30_000
         assertEquals(0, activeElapsedMs(now, start, 0, start))
     }
+
+    @Test
+    fun `ongoing-activity base after a completed pause matches active elapsed`() {
+        val start = 1_000_000L
+        val now = start + 200_000
+        val pauses = 30_000L
+        // Not currently paused: the OS stopwatch (now - base) must equal the
+        // active time the rest of the app shows. Before the fix the base
+        // subtracted the pause and ran 2x the paused time ahead.
+        val base = ongoingActivityBaseMs(start, pauses)
+        assertEquals(activeElapsedMs(now, start, pauses, 0), now - base)
+        assertEquals(170_000, now - base)
+    }
+
+    @Test
+    fun `ongoing-activity base with no pauses matches active elapsed`() {
+        val start = 1_000_000L
+        val now = start + 45_000
+        val base = ongoingActivityBaseMs(start, 0)
+        assertEquals(activeElapsedMs(now, start, 0, 0), now - base)
+        assertEquals(45_000, now - base)
+    }
 }
