@@ -3527,6 +3527,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileLoadError => 'Profil konnte nicht geladen werden.';
 
   @override
+  String get profileSectionError =>
+      'Dieser Abschnitt konnte nicht geladen werden.';
+
+  @override
   String get profileNotFound => 'Profil nicht gefunden.';
 
   @override
@@ -10804,6 +10808,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get racesBib => 'Startnummer';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Gib deine Startnummer ein, damit wir nur dein Ergebnis importieren, nicht das ganze Feld.';
 
   @override
   String get racesPasteResultHint =>

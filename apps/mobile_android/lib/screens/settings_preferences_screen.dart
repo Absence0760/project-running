@@ -169,6 +169,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ],
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (result != null) await prefs.setTargetPaceSecPerKm(result);
   }
 
@@ -364,12 +365,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     int minValue = 0,
     int maxValue = 1 << 30,
     bool allowClear = true,
-  }) {
+  }) async {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(
       text: current == null ? '' : '$current',
     );
-    return showDialog<int?>(
+    final result = await showDialog<int?>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
@@ -406,6 +407,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ],
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
+    return result;
   }
 
   Future<double?> _pickDouble({
@@ -415,12 +418,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     double minValue = 0,
     double maxValue = double.infinity,
     bool allowClear = true,
-  }) {
+  }) async {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(
       text: current == null ? '' : '$current',
     );
-    return showDialog<double?>(
+    final result = await showDialog<double?>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
@@ -457,6 +460,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ],
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
+    return result;
   }
 
   Future<void> _editDefaultActivityType() async {
@@ -892,6 +897,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ],
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (result == null) return;
     await _putUniversal(
       SettingsKeys.hrZones,

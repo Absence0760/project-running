@@ -316,6 +316,81 @@ func TestBuildMIME_MultipartWhenHTMLPresent(t *testing.T) {
 	}
 }
 
+// headerLines returns the header block (everything before the first blank
+// CRLF line) split into individual header lines. A header value that carried a
+// smuggled CRLF would show up here as an extra line.
+func headerLines(raw string) []string {
+	headers := strings.SplitN(raw, "\r\n\r\n", 2)[0]
+	return strings.Split(headers, "\r\n")
+}
+
+func countHeaderLines(raw, prefix string) int {
+	n := 0
+	for _, line := range headerLines(raw) {
+		if strings.HasPrefix(line, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestBuildMIME_SanitizesHeaderInjection(t *testing.T) {
+	// Every interpolated header carries a CRLF-injection payload. The
+	// sanitizer must collapse each onto its single header line — no forged
+	// Bcc:/Subject: line may appear in the header block.
+	raw := buildMIME(
+		"Threkir <noreply@threkir.com>\r\nBcc: sneaky@from.com",
+		"contact@example.com\r\nBcc: sneaky@to.com",
+		Email{
+			Subject:         "Ada\r\nBcc: evil@example.com\r\nSubject: forged",
+			Body:            "body",
+			ListUnsubscribe: "https://threkir.test/u\r\nBcc: sneaky@unsub.com",
+		})
+
+	for _, prefix := range []string{"From:", "To:", "Subject:", "List-Unsubscribe:"} {
+		if n := countHeaderLines(raw, prefix); n != 1 {
+			t.Errorf("want exactly one %q header line, got %d in:\n%s", prefix, n, raw)
+		}
+	}
+	for _, line := range headerLines(raw) {
+		if strings.HasPrefix(line, "Bcc:") {
+			t.Errorf("injected Bcc reached the header block:\n%s", raw)
+		}
+	}
+	// The literal payload text survives (control chars removed) folded onto
+	// the single Subject line — proof it was stripped, not truncated.
+	if !strings.Contains(raw, "Subject: AdaBcc: evil@example.comSubject: forged\r\n") {
+		t.Errorf("subject not sanitized as expected:\n%s", raw)
+	}
+}
+
+func TestRenderSafetyEmail_OwnerNameHeaderInjection(t *testing.T) {
+	// The runner's own display_name flows into the Subject of every
+	// safety-contact email. A CR/LF in that name must never split the header.
+	p := SafetyEmailPayload{
+		Template:     "confirm",
+		OwnerName:    "Ada\r\nBcc: evil@example.com",
+		ConfirmToken: "tok-123",
+	}
+	msg, ok := renderSafetyEmail(p, "https://threkir.test", "en")
+	if !ok {
+		t.Fatal("confirm template should render")
+	}
+	if strings.ContainsAny(msg.Subject, "\r\n") {
+		t.Errorf("owner name left a raw CR/LF in the Subject: %q", msg.Subject)
+	}
+
+	raw := buildMIME("Threkir <noreply@threkir.com>", "contact@example.com", msg)
+	if n := countHeaderLines(raw, "Subject:"); n != 1 {
+		t.Errorf("want exactly one Subject header line, got %d in:\n%s", n, raw)
+	}
+	for _, line := range headerLines(raw) {
+		if strings.HasPrefix(line, "Bcc:") {
+			t.Errorf("owner-name injection produced a Bcc header line:\n%s", raw)
+		}
+	}
+}
+
 func TestExtractAddr(t *testing.T) {
 	cases := map[string]string{
 		"Threkir <noreply@threkir.com>": "noreply@threkir.com",

@@ -39,7 +39,7 @@ gym_routines  +  gym_routine_exercises  +  gym_routine_sets   (relational plan)
     ▼
 List<GymStep>                         ← computed once at session start
     │
-    │  nextPrescription(history, lastActuals, config)   — pure, suggests next targets
+    │  nextPrescription(input)   — pure, suggests next targets from the last session's sets
     ▼
 Prefilled editable session draft (StoredGymWorkout, pendingCreate)
     │
@@ -190,10 +190,11 @@ create index gym_routine_sets_exercise_idx
 
 > One coherent rule across the engine, review panel, and progression input — **per-axis, never volume-product.** For each **non-warmup** planned set, it is a **hit** when `actual_reps >= 0.8 * target_reps_min` **AND** (when load is prescribed) `actual_weight_kg >= 0.8 * target_weight_kg`. Load is skipped for bodyweight / time / distance modalities.
 
+- A **time** set (`target_duration_s`) with no rep target is graded on its own axis: `hit` when `actual_duration_s >= 0.8 * target_duration_s`, else `partial`. A **distance** set (`target_distance_m`) mirrors it: `hit` when `actual_distance_m >= 0.8 * target_distance_m`, else `partial` (a distance/duration target left unlogged is `partial`, not `hit`). When a set carries a weight target *and* a duration/distance target, the duration/distance is the primary axis while the weight is unrecorded (an unlogged weight is graded on that axis, not auto-missed); a weight that IS logged and falls short still misses. This closed issue #328 — a distance-modality set used to fall through to `else` and grade `hit` unconditionally, and its target never reached `GymExecutionBand`.
 - Any **skipped** step OR any step under the per-axis cutoff → `partial`.
 - Abandon flag → `abandoned`.
 - Otherwise → `completed`.
-- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps were logged**.
+- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps, duration, or distance were logged**.
 
 Per-axis (not the reps×weight product) is the chosen resolution: it matches how lifters think (you got the reps or you didn't) and the run precedent's per-step semantics, and it is the load-bearing `evaluateHit` input the progression engine consumes — so the same rule governs the review pill and the next-target computation.
 
@@ -259,7 +260,7 @@ alter table public.gym_workouts
 
 ## Progression engine
 
-The "intelligence" — **pure math over history + config, no side effects.** It does not read the DB, does not write a routine, does not auto-mutate anything. The (impure) instantiation layer calls it, gets a `PrescribedSession`, and prefills an editable draft the user can still change before logging. This keeps the engine a Tier-1 "inform" computation; the Tier-2 "command" (writing a routine row) is a deliberate user-confirmed step elsewhere.
+The "intelligence" — **pure math over the last session's sets + config, no side effects.** It does not read the DB, does not write a routine, does not auto-mutate anything. The (impure) instantiation layer calls it, gets a `ProgressionSuggestion`, and prefills an editable draft the user can still change before logging. This keeps the engine a Tier-1 "inform" computation; the Tier-2 "command" (writing a routine row) is a deliberate user-confirmed step elsewhere.
 
 ### Module decomposition — three small parity pairs
 
@@ -273,101 +274,94 @@ The engine is **three** pure TS↔Dart parity pairs, not one monolith (the clean
 
 Mobile lives flat under `apps/mobile_android/lib/` (where the existing gym helpers `gym_prs.dart` / `exercise_history.dart` / `lift_load.dart` already sit — there is no `lib/gym/` subdir on mobile today; web nests under `gym/`, mobile is flat) and is mirrored **byte-identical** into `apps/mobile_ios/`. Each pair has identical algorithm, edge cases, outputs, and **test count** on both sides. They reuse `estimatedOneRepMax` + `normaliseExerciseName` (from `gym_prs`) and consume the `ExerciseSession[]` series from `exercise_history.ts` (`previousExerciseSession`) — so the prescriber and the "vs last time" hint can never drift. (The mobile `exercise_history.dart` mirror has already landed and is a tracked parity pair, so "next target" can reuse `previousExerciseSession` without new mirror work.)
 
-### Core types (`gym_progression`)
+### Core types (`gym_progression`) — API of record
+
+The shipped signature is a **single flat input → single suggestion**. `nextPrescription` looks only at the *last session's* logged sets (`lastSets`), the exercise's target rep range, and a loose `params` bag; it does not take a chronological `history` array or a rich config object. This is what the tests pin and what both the web runner and the mobile P4 prefill call.
 
 ```ts
 export type ProgressionScheme =
   'none' | 'linear' | 'double_progression' | 'five_by_five' | 'percent_cycle' | 'rpe_autoreg';
 
-export interface LoadingConfig {
-  unit: WeightUnit;             // 'kg' | 'lbs' — from format/weight.ts
-  incrementDisplay: number;     // smallest progression step in display unit (2.5 kg / 5 lb)
-  smallestPlateDisplay: number; // smallest plate pair available for rounding (default = increment)
+export interface ProgressionSetLike {
+  reps: number | null;
+  weight_kg: number | null;
+  rpe: number | null;
 }
 
-export interface ProgressionConfig {
+export interface ProgressionInput {
   scheme: ProgressionScheme;
-  loading: LoadingConfig;
-  targetSets: number;
-  targetReps: number;           // linear / 5x5: fixed rep target. double: top of range.
-  repRangeMin?: number;         // double progression only (bottom of the climb)
-  incrementKg?: number;         // overrides loading-derived increment (canonical kg)
-  deloadAfterMisses?: number;   // N consecutive failed sessions → deload (default 3)
-  deloadFactor?: number;        // multiply working weight on deload (default 0.9)
-  // percent_cycle (5/3/1):
-  trainingMaxKg?: number;       // explicit TM; else 0.9 × best e1RM
-  weekIndex?: number;           // 0-based wave position
-  percentWave?: number[][];     // per-week [pct-of-TM …]; default Wendler table
-  tmIncrementKg?: number;       // TM bump after a completed wave (+2.5 upper / +5 lower, caller-set)
-  // rpe_autoreg:
-  targetRpe?: number;           // e.g. 8
-  rpeRepTarget?: number;        // reps the prescribed sets are written for
+  lastSets: ProgressionSetLike[];        // the most-recent logged session's working sets
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  params: Record<string, unknown> | null; // scheme-specific knobs, all optional (see below)
 }
 
-export interface PrescribedSet {
-  reps: number;
-  weightKg: number;             // canonical kg, plate-rounded (0 ⇒ bodyweight)
-  isAmrap?: boolean;            // 5/3/1 top set
-  targetRpe?: number;
+export type ProgressionReason =
+  | 'increase_weight'
+  | 'increase_reps'
+  | 'hold'
+  | 'establish_baseline'
+  | 'deload'
+  | 'none';
+
+export interface ProgressionSuggestion {
+  suggestedWeightKg: number | null;      // null ⇒ bodyweight / no load to add
+  suggestedRepsMin: number | null;
+  suggestedRepsMax: number | null;
+  reason: ProgressionReason;
 }
 
-export interface PrescribedSession {
-  exerciseName: string;
-  scheme: ProgressionScheme;
-  sets: PrescribedSet[];
-  rationale: ProgressionRationale;   // drives a one-line chip; never a silent change
-  trainingMaxKg: number | null;      // TM used (percent_cycle), echoed for the caller to persist
-}
-
-export type ProgressionRationale =
-  | { kind: 'first_session' }
-  | { kind: 'progress'; addedKg: number }
-  | { kind: 'hold'; reason: 'partial' }
-  | { kind: 'rep_climb'; fromReps: number; toReps: number }
-  | { kind: 'deload'; factor: number; afterMisses: number }
-  | { kind: 'wave_step'; weekIndex: number }
-  | { kind: 'rpe_adjust'; deltaKg: number };
-
-export function nextPrescription(
-  history: ExerciseSession[],              // from exercise_history.ts (chronological, oldest-first)
-  lastActuals: LastSessionActuals | null,  // null ⇒ first-ever session
-  config: ProgressionConfig,
-): PrescribedSession;
+export function nextPrescription(input: ProgressionInput): ProgressionSuggestion;
 ```
 
-### Shared primitives
+`estimatedOneRepMax` + `normaliseExerciseName` are re-exported from `gym_prs` for callers, but `nextPrescription` itself takes no `ExerciseSession[]` — the caller reduces history to `lastSets` before calling (mobile does this via the `progression_prefill` pair's `lastSessionSets`).
 
-- **`evaluateHit(actuals, prescribedReps, prescribedSets) → 'hit' | 'partial'`** — applies the per-axis 80% cutoff (above) per working set on reps; a set under 80% of prescribed reps is a miss.
-- **`consecutiveMisses(history, …) → int`** — count of most-recent-contiguous missed sessions of *this* exercise (matched by `normaliseExerciseName`); drives deload.
-- **`roundToPlate(weightKg, loading) → number`** — the single load-quantiser every scheme funnels through, so a 5/3/1 percentage and a linear +2.5 land on the same plate grid. Rounds in the *display* unit then converts back to canonical kg via `format/weight.ts`. `roundToPlate(0) === 0` (bodyweight stays bodyweight). A computed load that rounds below the smallest increment clamps to the increment **in a barbell context** — for micro-load accessories (`smallestPlateDisplay` small) the clamp is skipped so a 1 kg dumbbell exercise isn't pushed to 2.5 kg.
+### `params` knobs (all optional, read per scheme)
 
-### Schemes
+| key | default | used by |
+|---|---|---|
+| `incrementKg` | `2.5` | linear / double_progression / five_by_five / rpe_autoreg load bump |
+| `targetSets` | `5` | five_by_five success threshold |
+| `targetReps` | `5` | five_by_five (fallback when no rep range) |
+| `maxConsecutiveMisses` | `3` | five_by_five deload trigger |
+| `consecutiveMisses` | `0` | five_by_five — caller supplies the running miss count |
+| `deloadFactor` | `0.9` | five_by_five deload multiplier |
+| `percent` | — | percent_cycle (fraction of 1RM, e.g. `0.85`) |
+| `oneRmKg` | — | percent_cycle (training max / 1RM in kg) |
+| `targetRpe` | — | rpe_autoreg |
+
+A weight bump is guarded by `safeAdd` (never drives the load ≤ 0) and every load is `round1`-ed to 0.1 kg. There is no plate-rounding, no display-unit round-trip, and no `trainingMaxKg`/`weekIndex`/`percentWave` wave table — those belong to the deferred design below.
+
+### Schemes (as shipped)
 
 | Scheme | Rule (one line) | Worked example |
 |---|---|---|
-| **linear** | Hit → +increment; partial → hold; `deloadAfterMisses` consecutive misses → `×deloadFactor`, round, reset counter. Tracks the bar, not e1RM. | Squat 3×5: hit @100 → 102.5; last set short → hold 102.5; 3rd consecutive miss → 102.5×0.9=92.25 → **92.5 kg**. |
-| **double_progression** | Range `repRangeMin..targetReps` at fixed load: below top → +1 rep same load; at top, all sets → +increment, reps reset to min. Partial holds. | DB press 8–12: 3×8@20 hit → **3×9@20**; …3×12@20 hit → **3×8@22.5**. |
-| **five_by_five** | A `linear` specialisation: 5 sets × 5 reps, defaults (+2.5 upper / +5 lower), `deloadAfterMisses=3`, `−10%`. One code path; the tag only changes defaults + rationale label. | Bench 5×5@60 hit → 62.5; stall 3× → 62.5×0.9=56.25 → **57.5 kg**, then resume. |
-| **percent_cycle** (5/3/1) | % of training max (TM = explicit, else 0.9×best e1RM from history). `weekIndex` selects the wave row; top set `isAmrap`. After a full wave, caller bumps TM by `tmIncrementKg` and persists; engine echoes the TM used. | DL best e1RM 200 → TM 180; week 0 (65/75/85%) → **117.5 / 135 / 152.5**, top AMRAP. |
-| **rpe_autoreg** | Load = `currentE1rm × pct(targetRpe, rpeRepTarget)` (RPE×reps coefficient table), plate-rounded. If last avg RPE was ≥1 off target, nudge ±1 increment (bounded to ±1/session). | RPE8@5, e1RM 100, coeff 0.81 → 81 → **80 kg**; last @RPE9.5 → −2.5 → **77.5 kg**. |
-
-Default Wendler wave for `percent_cycle`:
-
-| week | set 1 | set 2 | set 3 (AMRAP) |
-|---|---|---|---|
-| 0 | 65% | 75% | 85% |
-| 1 | 70% | 80% | 90% |
-| 2 | 75% | 85% | 95% |
-| 3 (deload) | 40% | 50% | 60% |
+| **none** | Suggests nothing — all fields null, `reason: 'none'`. | any input → `{null, null, null, 'none'}`. |
+| **linear** | All completed sets ≥ the top rep target → `increase_weight` (+`incrementKg`); any short set (or no completed set / no rep target) → `hold` at the top weight. Bodyweight (no top weight) success raises the rep target instead → `increase_reps`. | Squat 3×5@100 all hit → **102.5, increase_weight**; one set @4 → **hold 100**. |
+| **double_progression** | Below `targetRepsMax` → `increase_reps` at the same weight; all sets at `targetRepsMax` → `increase_weight` (+`incrementKg`) and reps reset to `targetRepsMin`. Bodyweight at the top raises the ceiling (`targetRepsMax + 1`) instead of dropping load. | DB press 8–12: 3×8@60 → **increase_reps, 60, max 12**; 3×12@60 → **62.5, min=max=8**. |
+| **five_by_five** | Success = `≥ targetSets` completed sets all ≥ `targetReps` → `increase_weight`. `consecutiveMisses ≥ maxConsecutiveMisses` → `deload` (`× deloadFactor`). Otherwise `hold`. Bodyweight success bumps the rep target. | 5×5@80 hit → **82.5**; 4 hit + 1 short → **hold 80**; 3rd miss → **80×0.9 = 72, deload**. |
+| **percent_cycle** | Prescribes `round1(percent × oneRmKg)`. No prior top weight (first / bodyweight session) → `establish_baseline`; prescribed > last top weight → `increase_weight`; else `hold`. Missing/invalid `percent`/`oneRmKg` → `hold` at the last weight. | 0.85 × 150 = **127.5**; over a prior 120 → `increase_weight`; from a bodyweight log → `establish_baseline`. |
+| **rpe_autoreg** | Compares the max achieved `rpe` across completed sets to `params.targetRpe`. Below target → `increase_weight` (+`incrementKg`), or a rep-target bump for bodyweight; at/above target (or missing RPE data) → `hold`. | RPE 7/7.5 vs target 8 @100 → **102.5, increase_weight**; RPE 9/9.5 → **hold 100**. |
 
 ### Edge cases (identical both sides)
 
-- **First-ever session** (`history` empty AND `lastActuals == null`): `rationale: first_session`. Seed from config starting weight; `percent_cycle`/`rpe_autoreg` need a TM/e1RM, else fall back to config weight; if none, prescribe reps-only at weight 0 and let the user fill the bar. Never throw.
-- **Partial:** never advances load → `hold`.
-- **Deload trigger:** `consecutiveMisses >= deloadAfterMisses`, counted only for this exercise (name-normalised), most-recent-contiguous; resets implicitly once the deloaded load is hit.
-- **Bodyweight (weight 0):** `roundToPlate(0) === 0`; linear/double "progress" advances **reps**; `percent_cycle`/`rpe_autoreg` of a 0-e1RM exercise → reps-only. No NaN, no negative load.
-- **Non-finite / negative inputs:** `numericOrNull`-guarded (same shape as `gym_prs` / `exercise_history`); a null/NaN actual is treated as a missed set, never propagated.
-- **Determinism:** ordering follows `exercise_history.ts` (oldest-first, workout-id tiebreak). No `Date.now()`, no RNG — output is a pure function of inputs, so TS and Dart produce byte-identical numbers (asserted by a shared fixture).
+- **`none` scheme:** always the all-null `none` suggestion, regardless of `lastSets`.
+- **Empty `lastSets` (or no completed reps):** every scheme except `none` returns `hold` (there is nothing to progress from); `percent_cycle` still prescribes if `percent`/`oneRmKg` are present.
+- **Bodyweight (no positive `weight_kg` in any set):** the suggestion never invents a load — `suggestedWeightKg` stays null and progress is expressed as a **higher rep target** (`increase_reps`), never a re-prescription of the same count and never a reduction below a maxed range.
+- **Negative / zero `incrementKg`:** `safeAdd` clamps so the suggested weight is never ≤ 0.
+- **Non-finite / string inputs:** `numericOrNull` coerces (accepts numeric strings, rejects everything else); a null/NaN rep is simply not counted as completed.
+- **Determinism:** no `Date.now()`, no RNG — a pure function of `input`, so the TS and Dart twins produce identical numbers.
+
+### Deferred / future design — richer table-driven engine (NOT shipped)
+
+An earlier spec envisioned a more elaborate engine and is preserved here so the intent isn't lost. **None of the following is implemented** — do not treat it as the current contract; growing `nextPrescription` toward it is a separate future feature (the P4 progression-engine validation gate below). The deferred shape:
+
+- A three-argument signature `nextPrescription(history, lastActuals, config)` taking the full chronological `ExerciseSession[]` (not just `lastSets`) plus a `LastSessionActuals | null` and a structured `ProgressionConfig`.
+- A rich `ProgressionConfig` with a `LoadingConfig` (`unit`, `incrementDisplay`, `smallestPlateDisplay`), explicit `targetSets`/`targetReps`/`repRangeMin`, `deloadAfterMisses`/`deloadFactor`, and — for a true 5/3/1 `percent_cycle` — `trainingMaxKg` (explicit TM, else 0.9 × best e1RM), `weekIndex`, a `percentWave` table (default Wendler 65/75/85 → 70/80/90 → 75/85/95 → 40/50/60 deload), and `tmIncrementKg`; plus `targetRpe`/`rpeRepTarget` for RPE autoregulation.
+- A structured `PrescribedSession` output (`sets: PrescribedSet[]` with per-set `isAmrap`/`targetRpe`, echoed `trainingMaxKg`) and a 7-variant `ProgressionRationale` union — `first_session`, `progress`, `hold`, `rep_climb`, `deload`, plus the two the shipped `ProgressionReason` has no equivalent for: **`wave_step`** (5/3/1 wave advance) and **`rpe_adjust`** (RPE-driven ±increment nudge).
+- Shared primitives `evaluateHit`, `consecutiveMisses`, and a display-unit `roundToPlate` plate-quantiser (so a 5/3/1 percentage and a linear +2.5 land on the same plate grid, with a barbell-context clamp skipped for micro-load accessories).
+
+The shipped engine collapses this to the flat single-session shape above: a 6-variant `ProgressionReason` (no `wave_step`/`rpe_adjust`), `round1`-to-0.1-kg instead of plate rounding, a caller-supplied `consecutiveMisses` count instead of history reduction, and a plain `percent × oneRmKg` prescription instead of a TM wave table.
 
 ## Execution: planned-vs-actual + adherence
 

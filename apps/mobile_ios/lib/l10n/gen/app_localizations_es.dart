@@ -3514,6 +3514,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileLoadError => 'No se pudo cargar el perfil.';
 
   @override
+  String get profileSectionError => 'No se pudo cargar esta sección.';
+
+  @override
   String get profileNotFound => 'Perfil no encontrado.';
 
   @override
@@ -10794,6 +10797,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get racesBib => 'Dorsal';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.';
 
   @override
   String get racesPasteResultHint =>

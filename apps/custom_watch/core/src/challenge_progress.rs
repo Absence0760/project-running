@@ -275,7 +275,10 @@ pub fn challenge_pace(
         )
     };
 
-    let days_remaining = libm::ceil((end_ms - now_ms) / DAY_MS).max(0.0);
+    // Divisor is the days the challenge is OPEN — clamp the window start to now
+    // so an upcoming challenge doesn't count pre-start days into the daily rate.
+    let window_start = now_ms.max(start_ms);
+    let days_remaining = libm::ceil((end_ms - window_start) / DAY_MS).max(0.0);
     let expected_value = goal_value.map(|g| g * elapsed_fraction);
     let remaining_value = goal_value.map(|g| (g - value).max(0.0));
 
@@ -588,7 +591,16 @@ mod tests {
         assert_eq!(p.elapsed_fraction, 0.0);
         assert_eq!(p.projected_value, None);
         assert_eq!(p.verdict, None);
-        assert_eq!(p.days_remaining, 12.0);
+        assert_eq!(p.days_remaining, 10.0);
+        assert_eq!(p.required_per_day, Some(10.0));
+    }
+
+    #[test]
+    fn challenge_pace_upcoming_days_remaining_counts_only_the_open_window() {
+        let p = challenge_pace(0.0, Some(70.0), 2.0 * DAY, 12.0 * DAY, 0.0);
+        assert_eq!(p.status, ChallengePaceStatus::Upcoming);
+        assert_eq!(p.days_remaining, 10.0);
+        assert_eq!(p.required_per_day, Some(7.0));
     }
 
     #[test]

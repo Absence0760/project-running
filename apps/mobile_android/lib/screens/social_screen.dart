@@ -100,6 +100,7 @@ class _SocialScreenState extends State<SocialScreen>
         toolbarHeight: 0,
         bottom: TabBar(
           controller: _controller,
+          isScrollable: true,
           tabs: [
             Tab(text: l10n.socialTabFeed, icon: const Icon(Icons.dynamic_feed)),
             Tab(
