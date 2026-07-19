@@ -126,6 +126,89 @@ for (const { label, marker } of THEMES) {
 	});
 }
 
+// Resolve a token to a #hex within a theme, following `var(--x)` references
+// (the -text tokens are defined as `var(--color-warning-strong)` in light and
+// `var(--color-warning)` in dark). A token missing from a dark block falls back
+// to its :root value, exactly as the cascade resolves it.
+function resolveToken(marker: string, name: string): string {
+	const rootBlock = block(':root {');
+	const themeBlock = marker === ':root {' ? rootBlock : block(marker);
+	for (let hop = 0, cur = name; hop < 6; hop++) {
+		const src = themeBlock.match(new RegExp(`--${cur}:\\s*([^;]+);`))?.[1]?.trim()
+			?? rootBlock.match(new RegExp(`--${cur}:\\s*([^;]+);`))?.[1]?.trim();
+		assert.ok(src, `app.css is missing --${cur} (resolving --${name} in ${marker})`);
+		const hex = src!.match(/^#[0-9A-Fa-f]{6}$/)?.[0];
+		if (hex) return hex;
+		const ref = src!.match(/var\(\s*--([\w-]+)\s*\)/)?.[1];
+		assert.ok(ref, `--${cur} is neither a #hex nor a var() reference: ${src}`);
+		cur = ref!;
+	}
+	throw new assert.AssertionError({ message: `--${name} var() chain too deep in ${marker}` });
+}
+
+function mixOverHex(fg: string, pct: number, bg: string): string {
+	const f = parseInt(fg.slice(1), 16), b = parseInt(bg.slice(1), 16);
+	const a = pct / 100;
+	const ch = (sh: number) =>
+		Math.round((((f >> sh) & 0xff) * a + ((b >> sh) & 0xff) * (1 - a)));
+	return '#' + [16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, '0')).join('');
+}
+
+// Theme-aware FOREGROUND tokens for status / accent TEXT + ICONS. Unlike the
+// -strong tokens (theme-independent white-on-fill backgrounds), these MUST flip
+// per theme: dark on a light surface, light on a dark surface. The base
+// --color-warning / -secondary / -accent-cyan they replace failed WCAG 1.4.3 as
+// text (2.05 / 3.06 / 2.30:1 on white; issue #368). Each -text token is checked
+// as text both on the plain surface AND on its own same-hue chip tint (the
+// tightest case — a raw base token at the tint % used on the chip), in EVERY
+// theme, so a fix to one theme but not the others fails here.
+const ACCENT_TEXT: Array<{ text: string; base: string; chipPct: number }> = [
+	{ text: 'color-warning-text', base: 'color-warning', chipPct: 22 },
+	{ text: 'color-secondary-text', base: 'color-secondary', chipPct: 16 },
+	{ text: 'color-accent-cyan-text', base: 'color-accent-cyan', chipPct: 16 },
+];
+for (const { label, marker } of THEMES) {
+	test(`accent/status -text tokens meet WCAG AA as text — ${label}`, () => {
+		const surface = resolveToken(marker, 'color-surface');
+		const bg = resolveToken(marker, 'color-bg');
+		for (const { text, base, chipPct } of ACCENT_TEXT) {
+			const fg = resolveToken(marker, text);
+			for (const [ctxName, ctx] of [
+				['color-surface', surface],
+				['color-bg', bg],
+				[`${base}@${chipPct}% chip on surface`, mixOverHex(resolveToken(marker, base), chipPct, surface)],
+			] as const) {
+				const ratio = contrastRatio(fg, ctx);
+				assert.ok(
+					ratio >= AA_NORMAL,
+					`--${text} (${fg}) on ${ctxName} (${ctx}) is ${ratio.toFixed(2)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+				);
+			}
+		}
+	});
+}
+
+// The base --color-warning / -secondary / -accent-cyan tokens are tuned for
+// tints, borders and dark-mode use; as a bare `color:` (text/icon) on a light
+// surface they fail WCAG 1.4.3 (issue #368). The theme-aware -text variants
+// exist for foreground use — this scan stops the bare tokens creeping back as
+// text. Quoted JS props (`color: 'var(--color-accent-cyan)'`, the macro-ring
+// stroke colours) are not text and don't match (the `'` breaks `color:\s*var`).
+test('no source file uses a bare accent/status token as a text colour', () => {
+	// `color:` (rejecting `background-color:`/`border-color:` via the leading
+	// boundary) set to a base accent token, NOT its -text / -strong / -hover
+	// variant (the trailing `(?!-)` guards those).
+	const offender = /(?<![a-z-])color:\s*var\(\s*--color-(?:warning|secondary|accent-cyan)\)(?!-)/;
+	const hits = scanSource((line) => offender.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`A base accent token (--color-warning / -secondary / -accent-cyan) is used as a text ` +
+			`colour; it fails WCAG AA on light surfaces (2.05-3.06:1). Use the theme-aware ` +
+			`--color-<token>-text variant instead:\n${hits.join('\n')}`,
+	);
+});
+
 // Walk src/ and return `path:line  text` for every line the predicate flags.
 function scanSource(flag: (line: string) => boolean): string[] {
 	const srcRoot = resolve(__dirname, '..');

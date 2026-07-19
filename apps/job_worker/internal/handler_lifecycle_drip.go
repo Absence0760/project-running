@@ -92,7 +92,17 @@ func (w *Worker) handleLifecycleDrip(ctx context.Context, job *Job) error {
 		return nil
 	}
 
+	// Gate 3: a working opt-out is mandatory. engagementUnsubURL returns "" when
+	// WEEKLY_DIGEST_UNSUB_SECRET is unset (a misconfigured deploy: SMTP set,
+	// unsub secret not yet provisioned). Sending bulk mail with no
+	// List-Unsubscribe header and no footer opt-out violates CAN-SPAM /
+	// GDPR-ePrivacy, so fail closed (log + skip) rather than send an
+	// un-unsubscribable message.
 	unsubURL := w.engagementUnsubURL(digesttoken.StreamLifecycleDrip, "/unsubscribe/lifecycle-drip", p.UserID)
+	if unsubURL == "" {
+		w.Log.Error("lifecycle_drip: unsubscribe secret unset; refusing to send mail with no opt-out", "user_id", p.UserID)
+		return nil
+	}
 	msg, ok := renderLifecycleDrip(p.Template, w.AppBaseURL, localeFromPrefs(prefs), unsubURL)
 	if !ok {
 		w.Log.Warn("lifecycle_drip: template did not render; skipping", "template", p.Template)
