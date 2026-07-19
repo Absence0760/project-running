@@ -94,7 +94,7 @@
 			showToast(m('nutrition.added'), 'success');
 			oncreated();
 		} catch (e) {
-			showToast(`${(e as Error).message}`, 'error');
+			showToast(m('nutrition.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 			saving = false;
 		}
 	}
@@ -115,7 +115,7 @@
 			showToast(m('nutrition.added'), 'success');
 			oncreated();
 		} catch (e) {
-			showToast(`${(e as Error).message}`, 'error');
+			showToast(m('nutrition.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 			saving = false;
 		}
 	}
