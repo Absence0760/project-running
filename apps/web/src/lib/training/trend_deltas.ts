@@ -93,8 +93,6 @@ function startOfWeek(now: Date, weekStart: WeekStartDay): Date {
 	return ws;
 }
 
-const WEEK_MS = 7 * 86_400_000;
-
 export function computeTrendDeltas(
 	runs: RunLike[],
 	weekStart: WeekStartDay = 'monday',
@@ -102,10 +100,16 @@ export function computeTrendDeltas(
 ): TrendDeltas {
 	const nowMs = now.getTime();
 
-	// Week-to-date vs the same slice of last week.
-	const weekStartMs = startOfWeek(now, weekStart).getTime();
+	// Week-to-date vs the same slice of last week. The prior-week boundary is
+	// derived with calendar-day arithmetic (setDate), not a fixed 7*86.4M-ms
+	// subtraction: across a DST transition a fixed-ms step lands an hour off
+	// local midnight and mis-buckets a run near the prior-week boundary.
+	const thisWeekStart = startOfWeek(now, weekStart);
+	const weekStartMs = thisWeekStart.getTime();
 	const weekElapsed = nowMs - weekStartMs;
-	const priorWeekStartMs = weekStartMs - WEEK_MS;
+	const priorWeekStart = new Date(thisWeekStart);
+	priorWeekStart.setDate(thisWeekStart.getDate() - 7);
+	const priorWeekStartMs = priorWeekStart.getTime();
 	const priorWeekEndMs = priorWeekStartMs + weekElapsed;
 	const week = trendFor(
 		summarise(runs, weekStartMs, nowMs),

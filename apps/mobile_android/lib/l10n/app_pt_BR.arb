@@ -3084,6 +3084,7 @@
   "racesAgeGroupPlace": "Classificação por categoria",
   "racesAgeGroup": "Categoria de idade",
   "racesBib": "Número de peito",
+  "racesRunSignUpBibHint": "Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.",
   "racesPasteResultHint": "Insira os detalhes da sua chegada a partir da página de resultados da corrida.",
   "racesSave": "Salvar",
   "racesCancel": "Cancelar",
