@@ -138,7 +138,7 @@
 		gap: var(--space-sm);
 	}
 	.head-icon {
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 		font-size: 1.3rem;
 	}
 	h2 {

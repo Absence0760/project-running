@@ -35,6 +35,7 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: parchment,
       useMaterial3: true,
+      splashFactory: InkRipple.splashFactory,
       appBarTheme: const AppBarTheme(
         backgroundColor: parchment,
         foregroundColor: ink,
@@ -110,6 +111,7 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: midnight,
       useMaterial3: true,
+      splashFactory: InkRipple.splashFactory,
       appBarTheme: const AppBarTheme(
         backgroundColor: midnight,
         foregroundColor: parchment,

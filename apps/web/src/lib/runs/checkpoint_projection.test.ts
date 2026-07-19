@@ -97,3 +97,20 @@ test('a reached checkpoint has no projection, only an actual', () => {
 	assert.equal(a.actualElapsedS, 3_600);
 	assert.equal(a.projectedElapsedS, null);
 });
+
+test('a cutoff co-located with the last-reached checkpoint is graded on the exact arrival', () => {
+	// An aid station and a cutoff gate share the same distance (separate rows).
+	// The runner crosses the aid station at 7000s; the co-located cutoff is not
+	// individually logged, but arrival there is known exactly (== the crossing).
+	const coLocated: ProjectionCheckpoint[] = [
+		{ id: 'aid', positionM: 20_000, cutoffElapsedS: null },
+		{ id: 'gate', positionM: 20_000, cutoffElapsedS: 7_200 }
+	];
+	const p = projectRunner(coLocated, [{ checkpointId: 'aid', elapsedS: 7_000 }]);
+	const gate = p.legs.find((l) => l.checkpointId === 'gate')!;
+	assert.equal(gate.reached, false);
+	assert.equal(gate.projectedElapsedS, 7_000); // paceSPerM * coveredM === lastElapsedS
+	assert.notEqual(gate.cutoff, null);
+	assert.equal(gate.cutoff!.marginS, 200);
+	assert.equal(gate.cutoff!.status, 'tight');
+});

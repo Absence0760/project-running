@@ -32,6 +32,7 @@
 		B2C3D4E5F6A70001000B0007 /* WorkoutManagerTrackJSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */; };
 		B2C3D4E5F6A70001000B0008 /* WorkoutManagerRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */; };
 		B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */; };
+		B2C3D4E5F6A70001000B0010 /* WorkoutManagerDistanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +64,7 @@
 		B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerTrackJSONTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerRecoveryTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferStateTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerDistanceTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WatchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -109,6 +111,7 @@
 				B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */,
 				B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */,
 				B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */,
+				B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */,
 			);
 			path = WatchAppTests;
 			sourceTree = "<group>";
@@ -305,6 +308,7 @@
 				B2C3D4E5F6A70001000B0007 /* WorkoutManagerTrackJSONTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0008 /* WorkoutManagerRecoveryTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0010 /* WorkoutManagerDistanceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
