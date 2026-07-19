@@ -83,6 +83,7 @@ export interface PlannedSet {
 	setType?: GymSetType | null;
 	restS?: number | null;
 	targetDurationS?: number | null;
+	targetDistanceM?: number | null;
 }
 
 /// One flattened per-set step of an expanded routine (gym_programming.md P2).
@@ -102,6 +103,7 @@ export interface RoutineStep {
 	targetRpe: number | null;
 	restS: number | null;
 	targetDurationS: number | null;
+	targetDistanceM: number | null;
 }
 
 export interface ExpandedRoutine {
@@ -229,6 +231,7 @@ function stepFor(ex: PlannedExercise, s: PlannedSet): RoutineStep {
 		targetRpe: s.targetRpe,
 		restS: s.restS ?? null,
 		targetDurationS: s.targetDurationS ?? null,
+		targetDistanceM: s.targetDistanceM ?? null,
 	};
 }
 

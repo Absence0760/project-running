@@ -963,6 +963,7 @@
   "profileUnblock": "このプロフィールのブロックを解除",
   "profileBlock": "このプロフィールをブロック",
   "profileLoadError": "プロフィールを読み込めませんでした。",
+  "profileSectionError": "このセクションを読み込めませんでした。",
   "profileNotFound": "プロフィールが見つかりません。",
   "profileFollowStats": "フォロワー {followers} · フォロー中 {following}",
   "profileFollowing": "フォロー中",

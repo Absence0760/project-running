@@ -132,7 +132,7 @@
 			composerOpen = false;
 			showToast(m('routeConditions.reported'), 'success');
 		} catch (e: any) {
-			showToast(e?.message ?? m('routeConditions.reportFailed'), 'error');
+			showToast(m('routeConditions.reportFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			submitting = false;
 		}
@@ -143,7 +143,7 @@
 			await deleteRouteCondition(c.id);
 			conditions = conditions.filter((x) => x.id !== c.id);
 		} catch (e: any) {
-			showToast(e?.message ?? m('routeConditions.deleteFailed'), 'error');
+			showToast(m('routeConditions.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			confirmDelete = null;
 		}

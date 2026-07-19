@@ -492,11 +492,21 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         BillingIssueBanner(apiClient: widget.apiClient),
         Expanded(
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: _onPageChanged,
-            physics: const PageScrollPhysics(),
-            children: _pages,
+          // Lock the horizontal swipe while a run is actively recording so a
+          // stray swipe can't fling the user off the recording surface
+          // mid-run (issue #490). Deliberate bottom-nav taps still navigate —
+          // `_goToPage` drives the controller directly, which non-scrollable
+          // physics doesn't block. Fail-open: the notifier defaults to false.
+          child: ValueListenableBuilder<bool>(
+            valueListenable: runRecordingActive,
+            builder: (context, recording, _) => PageView(
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              physics: recording
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
+              children: _pages,
+            ),
           ),
         ),
       ],

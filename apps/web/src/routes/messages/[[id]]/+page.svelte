@@ -23,6 +23,7 @@
 	let loadingThread = $state(false);
 	let sendError = $state<string | null>(null);
 	let threadsError = $state(false);
+	let threadError = $state(false);
 
 	let activeId = $derived($page.params.id ?? null);
 	let me = $derived(auth.user?.id ?? null);
@@ -58,6 +59,7 @@
 		const id = activeId;
 		if (!id || !auth.user) {
 			messages = [];
+			threadError = false;
 			return;
 		}
 		void openThread(id);
@@ -65,13 +67,23 @@
 
 	async function openThread(id: string) {
 		loadingThread = true;
+		threadError = false;
 		try {
 			messages = await fetchDmThread(id);
+		} catch {
+			messages = [];
+			threadError = true;
+			return;
+		} finally {
+			loadingThread = false;
+		}
+		try {
 			await markDmThreadRead(id);
 			// Zero the unread badge locally without a full refetch.
 			threads = threads.map((t) => (t.partnerId === id ? { ...t, unread: 0 } : t));
-		} finally {
-			loadingThread = false;
+		} catch {
+			// Marking-read is a non-critical side effect; its failure must not
+			// blank the conversation the fetch already loaded.
 		}
 	}
 
@@ -174,6 +186,17 @@
 					<div class="messages">
 						{#if loadingThread}
 							<p class="muted center">{tr('shell.loading')}</p>
+						{:else if threadError}
+							<p class="muted center" role="alert">
+								{tr('messages.threadLoadFailed')}
+								<button
+									type="button"
+									class="btn btn-secondary btn-sm"
+									onclick={() => activeId && void openThread(activeId)}
+								>
+									{tr('messages.retry')}
+								</button>
+							</p>
 						{:else if messages.length === 0}
 							<p class="muted center">{tr('messages.emptyConversation')}</p>
 						{:else}

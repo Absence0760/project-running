@@ -107,7 +107,7 @@
 			if (error) throw new Error(error.message);
 			coachConsentAt = (data as string | null) ?? new Date().toISOString();
 		} catch (e) {
-			coachConsentError = (e as Error).message ?? m('coachPage.consentRecordError');
+			coachConsentError = m('coachPage.consentRecordError', { error: e instanceof Error ? e.message : String(e) });
 		} finally {
 			coachConsentSaving = false;
 		}
