@@ -76,7 +76,9 @@ async fn main(spawner: Spawner) {
         Irqs,
         gps_config,
     );
-    let (_gps_tx, gps_rx) = gps_uart.split();
+    // TX carries the UBX-RXM-PMREQ power-down frames + the 0xFF wake byte the
+    // gps task sends to duty-cycle the receiver in throttled recording modes.
+    let (gps_tx, gps_rx) = gps_uart.split();
 
     // Sharp MIP wants LSB-first (datasheet bit M0 leads) and mode 0; the
     // panel tops out at 2 MHz.
@@ -199,7 +201,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(unwrap!(tasks::button::run(
         btn1, btn2, btn3, btn4, boot_mode, store
     )));
-    spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
+    spawner.spawn(unwrap!(tasks::gps::run(gps_tx, gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
