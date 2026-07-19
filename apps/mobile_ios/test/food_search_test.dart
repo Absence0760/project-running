@@ -282,6 +282,24 @@ void main() {
     );
   });
 
+  test('parseOffProduct maps the extended nutrients too', () {
+    final r = parseOffProduct({
+      'status': 1,
+      'product': {
+        'code': 'x',
+        'product_name': 'Barcoded',
+        'nutriments': {
+          'energy-kcal_100g': 100,
+          'sodium_100g': 1,
+          'fiber_100g': 5,
+        },
+      },
+    });
+    expect(r?.sodiumMg100g, 1000);
+    expect(r?.fiber100g, 5);
+    expect(r?.sugar100g, isNull);
+  });
+
   test(
       'lookupBarcode returns null for a blank/non-numeric code without calling the fetcher',
       () async {
