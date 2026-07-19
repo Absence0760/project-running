@@ -468,6 +468,15 @@ The app has **two** card flavours, and the distinction is load-bearing — don't
 
 When you need an elevated panel: `class="card-elevated"` (+ a layout modifier). When you need a flat panel: keep the existing page-scoped `.card`. Never give the global an unqualified `.card` rule.
 
+## Web status / accent colour tokens — pick the variant for the JOB
+
+The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--color-success` / `--color-danger`) base tokens in `apps/web/src/app.css` are tuned for **tints, borders and dark mode** — they are *light* accents and FAIL WCAG 1.4.3 as foreground text on a light surface (warning 2.05:1, cyan 2.30:1, secondary 3.06:1 on white; issue #368). Each status/accent has purpose-built variants — use the one matching the job, never the base token, for these two jobs:
+
+- **Solid status BACKGROUND with white text** (toasts, offline banner): use the theme-independent `--color-<status>-strong` (dark in both themes, AA with `#fff`). Never as a `color:` — dark-on-dark in dark mode.
+- **Foreground TEXT / ICON** (a stat value, a chip label, an inline warning): use the **theme-aware `--color-<token>-text`** variant (dark on light surfaces, reverts to the base hue on dark surfaces; ≥4.5:1 both themes, incl. on the same-hue chip tint). A blind swap to `-strong` here fails dark mode (2.98:1). For a status word tinted toward the body text on a same-status chip, `color: color-mix(<status> N%, var(--color-text))` is also valid within the mix caps below.
+
+`contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
+
 ## Web forms — `.editor-form` is the shared field layer
 
 Every create / edit editor (`ClubEditor`, `EventEditor`, `RunEditor`, `GymEditor`, `PlanMetaEditor`, `RoutineEditor`, `SessionPlanEditor`, `WorkoutEditor`) shares one field-styling layer in `apps/web/src/app.css`, opted into with `class="editor-form"` on the form / container root. It used to be duplicated per-editor and had drifted into three input backgrounds, two label cases, and two markup conventions; the 2026-06-12 consolidation collapsed ~440 lines of copy into one ~180-line layer.

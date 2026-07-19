@@ -990,7 +990,7 @@
 	.live-badge.demo,
 	.live-badge.stale {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 
@@ -1219,7 +1219,7 @@
 		border-inline-start-color: var(--color-warning);
 	}
 	.cutoff-card.stale .cutoff-waiting {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		font-style: normal;
 		font-weight: 600;
 	}
@@ -1283,7 +1283,7 @@
 	}
 	.cutoff-card.tight .cutoff-chip {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 	.cutoff-card.behind .cutoff-chip {
@@ -1433,7 +1433,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 	.approx-badge .material-symbols {
