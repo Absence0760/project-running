@@ -13,7 +13,9 @@ import {
 
 test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // The cutoff itself and everything before it is grandfathered.
-  assert.equal(isAfterCutoff('20270422'), false);
+  assert.equal(isAfterCutoff('20270424'), false);
+  assert.equal(isAfterCutoff('20270423'), false);
+  assert.equal(isAfterCutoff('20270423000003'), false); // renamed collision trio
   assert.equal(isAfterCutoff('20261210'), false); // #411
   assert.equal(isAfterCutoff('20260728'), false); // #410
   assert.equal(isAfterCutoff('20261207'), false); // #409
@@ -21,8 +23,8 @@ test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // a naive numeric one that would rank 2026…000002 above the 2027 cutoff).
   assert.equal(isAfterCutoff('20260528000002'), false);
   // A genuinely newer migration is guarded.
-  assert.equal(isAfterCutoff('20270423'), true);
-  assert.equal(isAfterCutoff('20270422000001'), true); // same-day, added later
+  assert.equal(isAfterCutoff('20270425'), true);
+  assert.equal(isAfterCutoff('20270424000001'), true); // same-day, added later
   assert.equal(isAfterCutoff('20280101'), true);
 });
 
@@ -43,6 +45,45 @@ test('findUnsafeConstraintAdds flags a NOT-VALID-less FK drop+recreate (the #410
   const findings = findUnsafeConstraintAdds(sql);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].table, 'runs');
+});
+
+test('findUnsafeConstraintAdds flags a NOT-VALID-less jobs_kind_chk widening', () => {
+  // The #394 shape: a `jobs` kind CHECK widened via bare DROP + ADD CONSTRAINT,
+  // which blocks the continuously-polled job queue while every row validates.
+  const sql = `alter table public.jobs drop constraint jobs_kind_chk;
+    alter table public.jobs
+      add constraint jobs_kind_chk
+      check (kind in ('map_match', 'new_kind'));`;
+  const findings = findUnsafeConstraintAdds(sql);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].table, 'jobs');
+});
+
+test('findUnsafeConstraintAdds passes a NOT VALID jobs_kind_chk widening', () => {
+  const sql = `alter table public.jobs drop constraint jobs_kind_chk;
+    alter table public.jobs
+      add constraint jobs_kind_chk
+      check (kind in ('map_match', 'new_kind')) not valid;
+    alter table public.jobs validate constraint jobs_kind_chk;`;
+  assert.deepEqual(findUnsafeConstraintAdds(sql), []);
+});
+
+test('scanMigrations catches a bare jobs ADD CONSTRAINT after the cutoff', () => {
+  const unsafe = `alter table public.jobs drop constraint jobs_kind_chk;
+    alter table public.jobs
+      add constraint jobs_kind_chk check (kind in ('map_match', 'new_kind'));`;
+  // Grandfathered before the cutoff (the shipped #394 widening at 20270410).
+  assert.deepEqual(
+    scanMigrations([{ filename: '20270410_001_safety_sms.sql', sql: unsafe }]),
+    [],
+  );
+  // Flagged for a NEW widening after the cutoff.
+  const caught = scanMigrations([
+    { filename: '20270501_001_jobs_new_kind.sql', sql: unsafe },
+  ]);
+  assert.equal(caught.length, 1);
+  assert.equal(caught[0].filename, '20270501_001_jobs_new_kind.sql');
+  assert.equal(caught[0].table, 'jobs');
 });
 
 test('findUnsafeConstraintAdds passes the NOT VALID two-step', () => {

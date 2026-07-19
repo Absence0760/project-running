@@ -308,6 +308,22 @@ test('handleGenerate → 500 fail-closed when the tier check errors (never grant
 	assert.equal(engineCalled, false, 'an unanswerable tier check must deny, not grant');
 });
 
+test('handleGenerate → 429 when the per-user throttle is tripped, engines never contacted', async () => {
+	// A Pro caller over their per-user ceiling (issue #339) must be denied
+	// BEFORE the 32-way billed round_trip fan-out runs.
+	let engineCalled = false;
+	const fetcher: Fetcher = async () => {
+		engineCalled = true;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, {
+		fetcher,
+		proChecker: async () => 'limited' as const,
+	});
+	assert.equal(res.status, 429);
+	assert.equal(engineCalled, false, 'a throttled caller must not consume engine capacity');
+});
+
 test('handleGenerate skips the tier check under the dev bypass but still requires auth', async () => {
 	const fetcher: Fetcher = async () => ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	const cfg = { ...OK_CFG, bypassPaywallEnabled: true };

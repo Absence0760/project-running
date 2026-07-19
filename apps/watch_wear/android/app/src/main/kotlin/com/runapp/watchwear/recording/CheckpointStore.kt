@@ -32,6 +32,16 @@ data class Checkpoint(
     val bpmCount: Long = 0L,
     val activityType: String = "run",
     val laps: List<CheckpointLap> = emptyList(),
+    // Cumulative pedometer steps for the in-flight run, and the runner's
+    // universal `privacy_default` ("public" / "followers" / "private")
+    // snapshotted at write time. Both are what the NORMAL stop path
+    // (`RunViewModel.handleFinishedRun`) stamps onto `QueuedRun`; a
+    // crash-recovered run must carry them too or it silently uploads with
+    // no step count and always non-public. Null `steps` ⇒ omit
+    // `metadata.steps`; null `privacyDefault` ⇒ DB default (`false`,
+    // non-public) — the fail-closed choice when the pref never loaded.
+    val steps: Int? = null,
+    val privacyDefault: String? = null,
 )
 
 @Serializable

@@ -129,7 +129,7 @@ Deno.test('handler — valid signup sends one localized mail with the verify lin
   assertEquals(sent.length, 1);
   assertEquals(sent[0].to, 'runner@test.com');
   // user_settings locale (de) beats the metadata locale (fr).
-  assertStringIncludes(sent[0].mime, btoa(new TextEncoder().encode('Bestätige deine Registrierung').reduce((s, b) => s + String.fromCharCode(b), '')));
+  assertStringIncludes(sent[0].mime, btoa(new TextEncoder().encode('Bestätige deine E-Mail-Adresse').reduce((s, b) => s + String.fromCharCode(b), '')));
   assertStringIncludes(
     sent[0].mime,
     'http://127.0.0.1:54321/auth/v1/verify?token=pkce_hash&type=signup&redirect_to=http://localhost:7777/auth/callback',
@@ -163,7 +163,7 @@ Deno.test('handler — settings lookup failure falls back to metadata locale', a
   const res = await makeAuthEmailHandler(deps)(await signedRequest(SIGNUP_PAYLOAD));
   assertEquals(res.status, 200);
   assertEquals(sent.length, 1);
-  assertStringIncludes(sent[0].mime, 'Confirmez votre inscription');
+  assertStringIncludes(sent[0].mime, 'Confirmez votre adresse e-mail');
 });
 
 Deno.test('handler — secure email change sends two mails', async () => {
