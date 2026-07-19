@@ -63,8 +63,7 @@ void, `gps_dropout.log`).
   `NO GPS FIX` banner variants** — the vert accumulator lives in the baro
   task and Renode has no BMP581 model; the sim's honest state is `NO BARO`
   and a `--` VERT row (both observed). Bench-gated.
-- **HR paths** (zones with live BPM, duty-cycling, off-wrist, ambient) — no
-  MAX86177 model; the Zones page's honest no-HR state is what the sim shows.
+- ~~**HR paths**~~ — **now verified**, see the MAX86177 section below.
 - **BLE / SoftDevice** (GATT link, run sync, settings/course push) — the
   SoftDevice cannot run under Renode; compile-only as before.
 - Power draw, GNSS receiver power-down, real-analog GPS/HR behaviour.
@@ -78,4 +77,150 @@ bin/watch-sim.sh --fixture gps_dropout --no-autostart   # idle face first
 bin/watch-monitor.sh                          # then: runMacro $btn1..$btn4
 # long-press BTN3:  python "click(24, 1.5)"
 # panel capture:    sysbus.spi3.display DumpFrame @/tmp/frame.ppm
+```
+
+---
+
+# MAX86177 optical-HR model — HR path sim-verified
+
+Second pass, same day. The sim gained a **MAX86177 model** (`sim/Max86177.cs`)
+behind a new **nRF52840 TWIM master model** (`sim/NRF52840_TWIM.cs`), so the
+optical-HR path above stops being bench-gated. Evidence:
+[`max86177_hr.log`](max86177_hr.log) (decoded defmt + the model's own register
+traffic) and [`max86177_panels.txt`](max86177_panels.txt) (panel captures
+transcribed back through the `sharp_mip` font table).
+
+## Why two models
+
+Renode's stock platform declares `twi0` as `I2C.NRF52840_I2C`, which models
+only the **legacy TWI** register interface. embassy-nrf's `Twim` driver
+programs **TWIM**: `ENABLE=6`, EasyDMA `TXD/RXD PTR+MAXCNT+AMOUNT`, the
+`LASTTX/LASTRX` SHORTS chain, completion via `EVENTS_STOPPED`. None of that
+exists on the stock model, so every I2C transaction went nowhere and the hr
+task's presence probe timed out — the sim genuinely had no I2C at all, not
+just no sensor. `NRF52840_TWIM.cs` is a generic master (it dispatches to
+whatever `II2CPeripheral` is registered at the addressed slave); an address
+with nothing behind it raises ANACK, so an unpopulated bus still fails fast.
+
+## Synthetic waveform + monitor knobs
+
+Deterministic, derived from the sample index off a 100 Hz virtual-clock timer
+— no wall-clock, no randomness:
+
+```
+MEAS1 = clamp19(DcBaseline*pa/64 + tri(n)*PulseAmplitude*pa/64 + AmbientLevel)
+MEAS2 = clamp19(AmbientLevel)
+```
+
+`pa` is the live `LEDA_CURRENT` code, so the LED drive really moves the signal
+and the firmware's AGC loop closes end to end. Ambient is **common-mode across
+both slots**, which is what makes ambient subtraction exercisable, and
+`clamp19` pins at the 19-bit full scale so pushing ambient at the rail clips
+MEAS1 the way a real converter does. Knobs, settable live from the monitor:
+
+```
+sysbus.twi0.max86177 AmbientLevel 300000      # ambient bleed, both slots
+sysbus.twi0.max86177 PulseAmplitude 0         # 0 = no pulse (off-wrist)
+sysbus.twi0.max86177 DcBaseline 200           # reflected DC at drive 0x40
+sysbus.twi0.max86177 PulsePeriodSamples 83    # BPM = 6000 / period
+```
+
+Defaults are a nominal worn wrist at ~72 BPM with the DC deliberately **below**
+the AGC's target band, so the auto-gain visibly walks up and settles.
+
+## Verified
+
+| Claim | Evidence |
+|---|---|
+| HR reaches the face with a plausible BPM | `hr: bpm 70 → 71 → 72` by 16.7 s against the 72.3 BPM synthetic rate; dashboard HR row `72 BPM Z1` |
+| Zone banking accrues during a recording | Zones page `Z1 0:18` banked (72 bpm is Z1 under the default 190 max-HR ladder), Z2–Z5 `0:00` |
+| Duty-cycling really shuts the part down | `hr: window closed; sensor shut down until 60s` ↔ model-side `shut down — sampling stopped, FIFO frozen, registers retained` |
+| …on the 15 s / 60 s Balanced cadence | window opens at exactly 60/120/180/240/300/360 s, closes at 75/135/195/255/315/375 s — six clean cycles |
+| FIFO flush on wake | `FIFO flushed (0 word(s) dropped)` on every wake — 0 because shutdown genuinely stopped filling it, which is the point |
+| Register retention across shutdown | after wake the part streams correctly-tagged MEAS1/MEAS2 again with **no re-init and no AGC re-walk** (drive stays at the settled `0x60`) |
+| Detector resets per window, honest while re-converging | each wake logs `contact OffWrist` → `Worn` → `bpm 72` within ~3 s; nothing is published as valid before it re-converges |
+| Staleness bounded and honest between windows | at uptime ~100 s the sensor is demonstrably shut down (closed at 75 s, reopens at 120 s) and the face still reads `72 BPM Z1` — the held value, age ~32 s inside the 60 s budget — then `75 BPM` once the window reopens |
+| Ambient subtraction recovers a real BPM | ambient 0 → 300 000 (raw ≈ 435 k, sub-rail): brief drop-out then **`bpm 72` again at 75.6 s with the ambient still applied**; panel `72 BPM Z1` |
+| Honest `Saturated` at the ADC rail | ambient → 520 000 pins raw at the 19-bit full scale: `hr: contact Saturated` + `no trusted pulse`, panel HR row `--`. **No fabricated reading** |
+| AGC steps toward target and holds | `LED drive 0x40 → 0x48 → 0x50 → 0x58 → 0x60` then holds for the next 90 s (settled DC 135 k, inside the 130 k–300 k band) |
+| AGC sheds drive as ambient approaches the raw ceiling | under the rail the drive walks `0x60 → 0x08` one step per second and **holds at `min_pa`** — the documented honest floor |
+| …and recovers when ambient clears | ambient → 0 walks `0x08 → 0x60` back and `bpm 72` returns at 164 s |
+| Off-wrist blanks honestly | pulse → 0 with DC out of band: `no trusted pulse` then `contact OffWrist`, panel HR row `--` |
+
+## Firmware bug found and fixed
+
+**The HR task republished an unchanged reading at 50 Hz, waking the whole UI.**
+With a sensor actually present, the drain loop ran every 20 ms and
+unconditionally `send`-ed an `HrSample` to `state::HR`. The screen task waits
+on `HR.changed()`, so it woke and re-rendered 50 times a second forever,
+whatever the pulse was doing — precisely the free-running waker README § Power
+discipline rules out ("no gratuitous wakers"; "the screen task is event-driven
+… the CPU sleeps seconds apart"). It was invisible until now because the sim
+had no MAX86177 and the task parked.
+
+Fixed at the source: publish only what carries new information
+(`watch_core::hr_duty::should_publish`). `HrSample::at_s` is in whole seconds,
+so a steady pulse still publishes once per second — `shown_bpm`'s hold budget
+ages exactly as before — while a changed BPM (or losing the pulse) differs
+immediately and is never delayed. Four host regression tests pin it, including
+that suppressing a byte-identical resend provably cannot move `shown_bpm` for
+any mode or observation time.
+
+Measured effect in-sim: before the fix the emulated CPU was saturated by the
+redundant wakes and the sim ran ~9× slower than real time (20 s of firmware
+time in 170 s of host time); after it the same workload runs at ~1:1.
+
+## Found, NOT fixed — needs an owner
+
+**The generated font renders `+` identically to `-`.** Transcribing panel
+captures against `drivers/sharp_mip/src/font.rs` shows `'+'` and `'-'` are
+byte-identical (both a single `0x7E` row at y=8) — the `+` glyph lost its
+vertical stroke in rasterisation. `'='` and `'_'` are fine, so it is one bad
+glyph, not a systemic threshold problem. User-visible consequence: the
+**Pacer** page's whole purpose is a *signed* delta (`+0:42` ahead vs `-1:05`
+behind) and the two now render the same, and the idle face's
+`VERT +gain -loss` row loses its sign too.
+
+Not fixed here: it is outside this task's scope (optical HR) and the font
+table is a **generated** shared asset (`scripts/gen_font.py`, "do not
+hand-edit") that two concurrent sessions were editing around. Durable fix:
+correct the `+` glyph in `gen_font.py`'s rasterisation, regenerate, eyeball at
+1x/2x/3x, and add a driver host test asserting `FONT[b'+'] != FONT[b'-']` so
+it cannot silently return. Trigger: next change that touches the font
+generator, or sooner if anyone relies on the Pacer sign.
+
+## Model limitations (bench-verify targets)
+
+- **Register semantics are pinned to the driver, not to the datasheet.** The
+  driver's register map is itself hand-rolled and flagged as a bench-verify
+  target; the model matches the pinned init sequence host test. So this pass
+  proves the firmware is **self-consistent** end to end — it cannot prove the
+  addresses/encodings match real silicon.
+- **Register retention across shutdown is honoured deliberately.** The
+  firmware assumes SHDN keeps the register file (its duty-cycle wake never
+  re-inits the MEAS2 block). The model implements that assumption, so the
+  duty-cycle result above is conditional on it holding on real silicon —
+  still a bench-verify item, now at least explicit and exercised.
+- **No bus timing.** Transfers complete in zero virtual time inside the task
+  register write; there is no per-byte I2C clocking, no FIFO almost-full
+  interrupt (the firmware polls the counter), and no ADC conversion latency.
+- **The waveform is a clean triangle, not a PPG.** No dicrotic notch, no
+  motion artifact, no skin-tone/perfusion variation, no LED thermal drift. It
+  exercises the *pipeline*, not the detector's real-world robustness.
+- **Contact/AGC constants are unvalidated.** `CONTACT_DC_MIN/MAX`,
+  `RAW_RAIL_DC` and the `AgcConfig` band are bench-verify values in the
+  driver; the model's default DC/pulse levels were chosen to sit inside them,
+  so the two are consistent by construction rather than by measurement.
+- Still not sim-verifiable: real optical/analog behaviour, LED power draw, and
+  anything needing the SoftDevice.
+
+## Reproduce
+
+```
+bin/watch-sim.sh --phone-port 7796                     # HR streams immediately
+bin/watch-sim.sh --no-autostart --phone-port 7796      # then BTN3 = Balanced, BTN1 = start
+# in the monitor (bin/watch-monitor.sh):
+sysbus.twi0.max86177 AmbientLevel 300000    # ambient subtraction still yields a BPM
+sysbus.twi0.max86177 AmbientLevel 520000    # raw at the rail -> honest Saturated
+sysbus.twi0.max86177 PulseAmplitude 0       # off-wrist -> honest blank
 ```

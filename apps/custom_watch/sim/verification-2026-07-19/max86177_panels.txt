@@ -1,0 +1,113 @@
+Panel captures from the MAX86177 sim pass (sysbus.spi3.display DumpFrame),
+transcribed back through the sharp_mip 8x16 font table. PPMs are not
+committed. '<N ink px - icon/widget>' rows are the gutter icons and
+widget cells the face draws outside the text grid.
+
+===== baseline_dash — run dashboard, Performance, t+170s — HR row live
+y=  0 x2 | ~:00:15  ~
+y= 16    | <260 ink px — icon/widget>
+y= 32 x1 | ~~   0.10 KM
+y= 48 x1 | PACE 1:41 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   72 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== baseline_zones — Zones page, same run — in-zone time banked
+y=  0 x2 | 7~       ~
+y= 16    | <60 ink px — icon/widget>
+y= 32 x1 | HR  BPM       ZONE 1
+y= 48 x1 | Z1 0:18    ~~~~~~~~~~
+y= 64 x1 | Z2 0:00
+y= 80 x1 | Z3 0:00
+y= 96 x1 | Z4 0:00
+y=112 x1 | Z5 0:00
+y=128 x1 | GPS  8 SATS PERF
+[168x144]
+
+===== amb_0_baseline — ambient 0 — nominal worn wrist
+y=  0 x2 | ~:00:40 ~~
+y= 16 x1 | ~~~~~~~~~~~~~~  DRINK
+y= 32 x1 | ~~   0.06 KM
+y= 48 x1 | PACE 10:50 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   72 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== amb_1_raised — ambient 300k (sub-rail) — corrected signal survives
+y=  0 x2 | ~:01:25  ~
+y= 16 x1 | ~~~~~~~~~~~~~~    D-E
+y= 32 x1 | ~~   0.13 KM
+y= 48 x1 | PACE 10:37 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   72 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== amb_2_railed — ambient 520k (raw pinned at 19-bit full scale) — honest blank
+y=  0 x2 | ~:02:16  ~
+y= 16 x1 | ~~~~~~~~~~~~~~    D-E
+y= 32 x1 | ~~   0.21 KM
+y= 48 x1 | PACE 10:35 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   --
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== amb_3_recovered — ambient back to 0 — BPM returns
+y=  0 x2 | ~ DRINK  ~
+y= 16 x1 | ~~  ~~~~~~~~~~    D-E
+y= 32 x1 | ~~   0.30 KM
+y= 48 x1 | PACE 10:28 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   72 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== amb_4_offwrist — pulse 0 + DC out of band — honest blank
+y=  0 x2 | ~:04:05  ~
+y= 16 x1 | ~~~~~~~~~~~~~~    D-E
+y= 32 x1 | ~~   0.38 KM
+y= 48 x1 | PACE 10:33 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   --
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS PERF
+[168x144]
+
+===== hold_offwindow — Balanced, uptime ~100s — sensor SHUT DOWN, reading held
+y=  0 x2 | ~:01:14  ~
+y= 16    | <256 ink px — icon/widget>
+y= 32 x1 | ~~   0.11 KM
+y= 48 x1 | PACE 8:59 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   72 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS BAL
+[168x144]
+
+===== hold_window_open — Balanced, uptime ~125s — window reopened, fresh reading
+y=  0 x2 | ~:01:39  ~
+y= 16    | <264 ink px — icon/widget>
+y= 32 x1 | ~~   0.14 KM
+y= 48 x1 | PACE 9:02 /KM
+y= 64 x1 | NOW  5:33 /KM
+y= 80 x1 | ~~   75 BPM Z1
+y= 96 x1 | ~~   1624 M
+y=112 x1 | ~~   --
+y=128 x1 | ~~   8 SATS BAL
+[168x144]
+
