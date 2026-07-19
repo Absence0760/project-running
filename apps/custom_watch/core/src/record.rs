@@ -52,6 +52,17 @@ pub const MAX_JUMP_M: f64 = 100.0;
 /// `run_recorder`.
 pub const MAX_SPEED_MPS: f64 = 10.0;
 
+/// A rejected hop that spans at least this many seconds is a real GPS gap
+/// (canyon, tunnel, dense cover — fixes stopped while the runner kept
+/// moving), not a corrupt teleport: the anchor is rebased to the fresh fix
+/// WITHOUT crediting the un-sampled gap distance. Without this the anchor
+/// stays stale after any 1 Hz dropout that displaced the runner past
+/// [`MAX_JUMP_M`], every later delta only grows, and distance is frozen for
+/// the rest of the run. `_gpsReanchorAfterSeconds` in `run_recorder`
+/// (its #330); long enough that a 1 Hz corrupt outlier (dt ≈ 1 s) still
+/// fails closed.
+pub const GPS_REANCHOR_AFTER_S: u32 = 10;
+
 /// A segment slower than this counts its distance but not its time toward
 /// moving time — the `minSpeedMps` of `run_stats.movingTimeOf`, which replaced
 /// the removed live auto-pause as the way moving time is derived.
@@ -560,7 +571,8 @@ pub struct Recorder {
     /// from. Cleared on start / resume so a pause gap is never one huge hop.
     last: Option<Fix>,
     /// Whether the most recent [`on_fix`](Recorder::on_fix) call adopted the
-    /// fix as a new anchor (the run's first fix or an accepted move). Read-only
+    /// fix as a new anchor (the run's first fix, an accepted move, or a
+    /// post-gap re-anchor — see [`GPS_REANCHOR_AFTER_S`]). Read-only
     /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
     last_fix_stored: bool,
     /// Count of anchor-adopting fixes this run — the points the app's flash
@@ -722,7 +734,10 @@ impl Recorder {
     /// scaled by the actual time between fixes rather than an assumed 1 s.
     /// Deliberately keyed off the configured interval, not off `dt` alone, so
     /// the full-rate filter is never silently loosened: at 1 Hz a 150 m hop
-    /// after a 30 s signal gap is still rejected as corrupt, exactly as today.
+    /// after a 30 s signal gap still credits no distance. (The hop does
+    /// rebase the anchor when the gap is [`GPS_REANCHOR_AFTER_S`] or longer —
+    /// `run_recorder`'s #330 — so recording resumes from the reacquire point
+    /// instead of freezing against a stale anchor.)
     pub fn set_fix_interval_s(&mut self, interval_s: u32) {
         self.fix_interval_s = interval_s.max(1);
     }
@@ -1074,6 +1089,28 @@ impl Recorder {
             MAX_JUMP_M
         };
         if dt == 0 || delta >= max_jump_m || delta / dt as f64 > MAX_SPEED_MPS {
+            // Real GPS gap, not a teleport: the hop failed the one-hop cap but
+            // a genuine interval elapsed (`run_recorder`'s #330 re-anchor,
+            // `_gpsReanchorAfterSeconds`). Rebase the anchor to the fresh fix
+            // WITHOUT crediting the un-sampled gap distance or its time —
+            // exactly how the first fix of a run anchors. The rebased point is
+            // stored so the flash track carries the reacquire position, and
+            // the gap banks no moving time. Without this, a 1 Hz dropout that
+            // displaced the runner past MAX_JUMP_M froze distance for the rest
+            // of the run: the fixed cap never scales, so the stale anchor only
+            // ever receded. 1 Hz only, mirroring the Dart recorder it ports —
+            // a throttled mode needs no re-anchor because its `MAX_SPEED_MPS *
+            // dt` ceiling grows faster than any real displacement, so a held
+            // anchor self-heals on a later fix. A dt == 0 duplicate can never
+            // reach here (dt >= the gate), so timestamp dupes stay
+            // failed-closed.
+            if self.fix_interval_s <= 1 && dt >= GPS_REANCHOR_AFTER_S {
+                self.current_speed_mps = fix.speed_mps.max(0.0);
+                self.last = Some(*fix);
+                self.last_fix_stored = true;
+                self.stored_points = self.stored_points.saturating_add(1);
+                self.feed_gap(fix);
+            }
             return;
         }
         self.current_speed_mps = fix.speed_mps.max(0.0);
@@ -1747,6 +1784,64 @@ mod tests {
         assert_eq!(s.state, RecordState::Recording);
         assert!(s.moving_s > 3);
         assert!(s.distance_m > dist_before);
+    }
+
+    #[test]
+    fn dropout_reacquire_rebases_anchor_without_crediting_gap() {
+        // run_recorder's #330: a hop that fails the one-hop cap after a real
+        // signal gap re-anchors instead of freezing distance forever.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 0));
+        r.on_fix(&fix(40.00005, -105.0, 3.0, 1));
+        let dist_before = r.snapshot().distance_m;
+        assert!(dist_before > 5.0, "sanity: pre-gap segment accrued");
+        assert_eq!(r.snapshot().moving_s, 1);
+
+        // 41 s dropout during which the runner moved ~150 m: past MAX_JUMP_M,
+        // so the hop credits nothing — but the anchor rebases (and the point
+        // is stored so the flash track carries the reacquire position).
+        r.on_fix(&fix(40.00140, -105.0, 3.0, 42));
+        let s = r.snapshot();
+        assert_eq!(s.distance_m, dist_before, "gap distance never credited");
+        assert_eq!(s.moving_s, 1, "gap banks no moving time");
+        assert!(r.last_fix_stored(), "reacquire point stored to the track");
+
+        // The very next fix measures from the reacquire point — ~5.6 m, not
+        // ~155 m from the pre-gap anchor. Before the re-anchor this fix (and
+        // every one after it) was rejected and distance stayed frozen.
+        r.on_fix(&fix(40.00145, -105.0, 3.0, 43));
+        let s = r.snapshot();
+        let resumed = s.distance_m - dist_before;
+        assert!(
+            (5.0..7.0).contains(&resumed),
+            "recording resumed from the reacquire point (got {resumed} m)"
+        );
+        assert_eq!(s.state, RecordState::Recording);
+    }
+
+    #[test]
+    fn short_gap_teleport_still_rejected_and_keeps_anchor() {
+        // Under GPS_REANCHOR_AFTER_S the one-hop cap keeps its old semantics:
+        // reject AND hold the anchor, so a corrupt teleport can't re-base.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 0));
+
+        // 150 m in 9 s (16.7 m/s): both implausible and past the cap, and
+        // too soon to be a trusted gap — dropped, anchor untouched.
+        r.on_fix(&fix(40.00135, -105.0, 3.0, 9));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        assert!(!r.last_fix_stored(), "teleport not stored");
+
+        // A fix near the ORIGINAL anchor is accepted and measures from it —
+        // proof the teleport did not move the anchor.
+        r.on_fix(&fix(40.00004, -105.0, 3.0, 10));
+        let d = r.snapshot().distance_m;
+        assert!(
+            (3.0..6.0).contains(&d),
+            "next fix measured from the held anchor (got {d} m)"
+        );
     }
 
     #[test]
