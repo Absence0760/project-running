@@ -781,7 +781,11 @@ void main() {
         // item's identical label can't match).
         await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
         await tester.pump();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        // Drain the delete flow's real async (api call + tombstone /
+        // run-file store I/O) to completion instead of guessing a
+        // wall-clock delay — a fixed delay flaked under CI load when the
+        // failure banner hadn't been posted yet by the time it elapsed.
+        await pumpEventQueue();
       });
       await tester.pump();
       // Two 300 ms pumps: the first finishes the dialog dismissal, the
