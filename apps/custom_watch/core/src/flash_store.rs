@@ -895,7 +895,7 @@ mod tests {
         // NVMC writes a 4-byte word; the record must be a whole number of them,
         // and it must fit inside the one reserved erase page.
         assert_eq!(CONFIG_RECORD_LEN % 4, 0);
-        assert!(CONFIG_RECORD_LEN <= CONFIG_LEN);
+        const { assert!(CONFIG_RECORD_LEN <= CONFIG_LEN) }
         assert_eq!(CONFIG_LEN, SLOT_LEN, "config page is one erase page");
     }
 
