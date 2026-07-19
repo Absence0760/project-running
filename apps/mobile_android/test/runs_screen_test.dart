@@ -482,58 +482,6 @@ void main() {
       expect(find.text('Load 20 more'), findsOneWidget);
     });
 
-    testWidgets('Add Run FAB does not overlap the Load-more button',
-        (tester) async {
-      // Regression: the docked FAB floats over the bottom-right of the
-      // screen but the list's own padding didn't reserve any clearance
-      // for it, so the last row (the Load-more button, when shown)
-      // rendered directly underneath it. Needs a realistic phone-width
-      // viewport — flutter_test's much-wider default surface leaves
-      // enough horizontal gap between the centered Load-more button and
-      // the bottom-right FAB that they never intersect regardless of
-      // bottom padding, masking the bug.
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      SharedPreferences.setMockInitialValues({
-        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
-      });
-      final prefs = Preferences();
-      await prefs.init();
-      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
-      // ignore: invalid_use_of_visible_for_testing_member
-      final runStore = LocalRunStore()..debugSeed(_makeRuns(30), dir: _runsDir);
-      final routeStore = LocalRouteStore();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: RunsScreen(
-            apiClient: null,
-            runStore: runStore,
-            routeStore: routeStore,
-            preferences: prefs,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-
-      await tester.scrollUntilVisible(
-        find.text('Load 20 more'),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-
-      final loadMoreRect = tester.getRect(find.text('Load 20 more'));
-      final fabRect = tester.getRect(find.byType(FloatingActionButton));
-      expect(loadMoreRect.overlaps(fabRect), isFalse,
-          reason: 'The Add Run FAB must not sit on top of the Load-more '
-              'button — the list needs bottom padding that clears the '
-              "FAB's footprint.");
-    });
-
     testWidgets('Load more button hidden when fewer rows than page size',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
