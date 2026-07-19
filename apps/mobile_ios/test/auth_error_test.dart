@@ -101,6 +101,18 @@ void main() {
       );
     });
 
+    test('invalid_grant + "Email not confirmed" → emailNotConfirmed', () {
+      // GoTrue's token endpoint can report an unconfirmed-email sign-in
+      // via the OAuth-style invalid_grant error with the descriptive
+      // message, not the dedicated code. The specific message must win
+      // over the generic invalid_grant → invalidCredentials branch.
+      expect(
+        classifyAuthError(const _FakeAuthException('Email not confirmed',
+            code: 'invalid_grant', statusCode: '400')),
+        AuthErrorKind.emailNotConfirmed,
+      );
+    });
+
     test('weak_password code → weakPassword', () {
       expect(
         classifyAuthError(const _FakeAuthException(

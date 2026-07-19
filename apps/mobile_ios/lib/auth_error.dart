@@ -46,6 +46,17 @@ AuthErrorKind classifyAuthError(Object error) {
     return AuthErrorKind.rateLimited;
   }
 
+  // Checked BEFORE invalidCredentials: GoTrue's token endpoint can
+  // report an unconfirmed-email sign-in as the OAuth-style invalid_grant
+  // error carrying the descriptive message "Email not confirmed", not
+  // only via the dedicated email_not_confirmed code. The
+  // invalidCredentials branch below also matches invalid_grant, so this
+  // specific-message check has to win first — otherwise the user gets a
+  // wrong-password message for an unconfirmed account (issue #486).
+  if (code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
+    return AuthErrorKind.emailNotConfirmed;
+  }
+
   if (code == 'invalid_credentials' ||
       code == 'invalid_grant' ||
       msg.contains('invalid login credentials') ||
@@ -57,10 +68,6 @@ AuthErrorKind classifyAuthError(Object error) {
       code == 'email_exists' ||
       msg.contains('already registered')) {
     return AuthErrorKind.emailExists;
-  }
-
-  if (code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
-    return AuthErrorKind.emailNotConfirmed;
   }
 
   if (code == 'weak_password' ||
