@@ -73,6 +73,7 @@ fn base_snapshot() -> Snapshot {
         run_stats: None,
         pr_recency: None,
         plan_replan: None,
+        plan_adaptive: None,
         readiness: None,
         goals: None,
         turn_cue: None,

@@ -46,8 +46,8 @@ const DEBOUNCE: Duration = Duration::from_millis(20);
 
 /// How long BTN3 must be held to count as a long-press. A short BTN3 press
 /// still cycles forward (page next / GNSS mode); a long-press cycles the run
-/// pages *backward*, so a late page in the 31-page cycle is one press away
-/// instead of ~30, and on the idle face requests the manual QNH re-zero. A
+/// pages *backward*, so a late page in the 32-page cycle is one press away
+/// instead of ~31, and on the idle face requests the manual QNH re-zero. A
 /// deliberate hold, not a chord — inside decisions §81's five-button,
 /// no-chord budget.
 const BTN3_LONG_PRESS: Duration = Duration::from_millis(500);

@@ -268,6 +268,21 @@ pub struct PlanReplanView {
     pub ease_offs: u8,
 }
 
+/// The adaptive re-plan trend summary ([`crate::plan_adaptive_replan`]): the
+/// multi-week adherence trend verdict (`trend` 0 on-track / 1 under — do more /
+/// 2 over — ease off), its confidence (0 low / 1 medium / 2 high), the flagged
+/// weeks over the trailing window, the proposed future-change count, and
+/// whether a do-more suggestion was withheld for a fatigued runner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanAdaptiveView {
+    pub trend: u8,
+    pub confidence: u8,
+    pub flagged_weeks: u8,
+    pub window_weeks: u8,
+    pub changes: u8,
+    pub fitness_gated: bool,
+}
+
 /// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
 /// `band` is 0 low / 1 moderate / 2 high.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -441,6 +456,8 @@ pub struct Snapshot {
     pub pr_recency: Option<PrRecencyView>,
     /// The synced re-plan proposal counts, or `None` until pushed.
     pub plan_replan: Option<PlanReplanView>,
+    /// The synced adaptive re-plan trend summary, or `None` until pushed.
+    pub plan_adaptive: Option<PlanAdaptiveView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -628,6 +645,7 @@ pub struct Recorder {
     run_stats: Option<RunStatsView>,
     pr_recency: Option<PrRecencyView>,
     plan_replan: Option<PlanReplanView>,
+    plan_adaptive: Option<PlanAdaptiveView>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -683,6 +701,7 @@ impl Recorder {
             run_stats: None,
             pr_recency: None,
             plan_replan: None,
+            plan_adaptive: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -846,6 +865,25 @@ impl Recorder {
 
     pub fn set_plan_replan(&mut self, view: Option<PlanReplanView>) {
         self.plan_replan = view;
+    }
+
+    /// The trend + confidence are clamped to their 0..=2 code spaces and the
+    /// week counts to the trend window, so a corrupt push can't render an
+    /// unknown verdict or an impossible "9/3 weeks".
+    pub fn set_plan_adaptive(&mut self, view: Option<PlanAdaptiveView>) {
+        self.plan_adaptive = view.map(|v| {
+            let window = v
+                .window_weeks
+                .min(crate::plan_adaptive_replan::ADAPTIVE_TREND_WINDOW as u8);
+            PlanAdaptiveView {
+                trend: v.trend.min(2),
+                confidence: v.confidence.min(2),
+                flagged_weeks: v.flagged_weeks.min(window),
+                window_weeks: window,
+                changes: v.changes,
+                fitness_gated: v.fitness_gated,
+            }
+        });
     }
 
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
@@ -1190,6 +1228,7 @@ impl Recorder {
             run_stats: self.run_stats,
             pr_recency: self.pr_recency,
             plan_replan: self.plan_replan,
+            plan_adaptive: self.plan_adaptive,
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
@@ -2510,6 +2549,7 @@ mod tests {
         // Unset by default — every synced page reads its honest empty state.
         let s = r.snapshot();
         assert!(s.recap.is_none() && s.readiness.is_none() && s.race_day.is_none());
+        assert!(s.plan_adaptive.is_none());
 
         r.set_recap(Some(RecapView {
             runs: 120,
@@ -2546,6 +2586,31 @@ mod tests {
             feasible: 9,
         }));
         assert_eq!(r.snapshot().race_day.unwrap().feasible, 2);
+
+        r.set_plan_adaptive(Some(PlanAdaptiveView {
+            trend: 9,
+            confidence: 9,
+            flagged_weeks: 9,
+            window_weeks: 9,
+            changes: 4,
+            fitness_gated: true,
+        }));
+        let pa = r.snapshot().plan_adaptive.unwrap();
+        assert_eq!((pa.trend, pa.confidence), (2, 2));
+        assert_eq!((pa.flagged_weeks, pa.window_weeks), (3, 3));
+        assert_eq!(pa.changes, 4);
+        assert!(pa.fitness_gated);
+
+        r.set_plan_adaptive(Some(PlanAdaptiveView {
+            trend: 1,
+            confidence: 1,
+            flagged_weeks: 2,
+            window_weeks: 3,
+            changes: 1,
+            fitness_gated: false,
+        }));
+        let pa = r.snapshot().plan_adaptive.unwrap();
+        assert_eq!((pa.flagged_weeks, pa.window_weeks), (2, 3));
 
         // Clearing works.
         r.set_recap(None);
