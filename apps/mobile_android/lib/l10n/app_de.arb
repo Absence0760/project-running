@@ -3084,6 +3084,7 @@
   "racesAgeGroupPlace": "Platzierung Altersklasse",
   "racesAgeGroup": "Altersklasse",
   "racesBib": "Startnummer",
+  "racesRunSignUpBibHint": "Gib deine Startnummer ein, damit wir nur dein Ergebnis importieren, nicht das ganze Feld.",
   "racesPasteResultHint": "Gib deine Zielergebnisse von der Ergebnisseite des Rennens ein.",
   "racesSave": "Speichern",
   "racesCancel": "Abbrechen",
