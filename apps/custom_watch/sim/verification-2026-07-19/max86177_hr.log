@@ -1,0 +1,190 @@
+=== baseline (Performance, bench_jog, autostart) — defmt, DEFMT_LOG=info ===
+0.000701 INFO  hr: MAX86177 streaming
+0.020721 INFO  hr: contact Worn
+0.020721 INFO  hr: no trusted pulse
+12.515075 INFO  hr: bpm 70
+13.350189 INFO  hr: bpm 71
+16.655792 INFO  hr: bpm 72
+
+--- renode.log: LED auto-gain walks into the target band and holds ---
+17:38:21.9632 [INFO] twi0.max86177: soft reset
+17:38:21.9638 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:38:21.9643 [INFO] twi0.max86177: LED drive 0x00 -> 0x40
+17:38:26.5256 [INFO] twi0.max86177: LED drive 0x40 -> 0x48
+17:38:28.1159 [INFO] twi0.max86177: LED drive 0x48 -> 0x50
+17:38:29.6667 [INFO] twi0.max86177: LED drive 0x50 -> 0x58
+17:38:31.2244 [INFO] twi0.max86177: LED drive 0x58 -> 0x60
+
+=== ambient staging (Performance) — defmt ===
+t+50s AmbientLevel 0 -> 300000 | t+95s -> 520000 | t+145s -> 0
+t+200s PulseAmplitude -> 0, DcBaseline -> 200 (off-wrist)
+0.000701 INFO  hr: MAX86177 streaming
+0.020721 INFO  hr: contact Worn
+0.020721 INFO  hr: no trusted pulse
+12.513580 INFO  hr: bpm 70
+13.337799 INFO  hr: bpm 71
+16.664764 INFO  hr: bpm 72
+51.862091 INFO  hr: no trusted pulse
+75.593200 INFO  hr: bpm 72
+95.386199 INFO  hr: bpm 75
+96.810638 INFO  hr: contact Saturated
+96.810638 INFO  hr: no trusted pulse
+145.380889 INFO  hr: contact Worn
+161.905975 INFO  hr: bpm 73
+164.392730 INFO  hr: bpm 72
+202.094909 INFO  hr: no trusted pulse
+203.817474 INFO  hr: contact OffWrist
+
+--- renode.log: AGC sheds drive to min_pa under the rail, then recovers ---
+18:05:41.9847 [INFO] twi0.max86177: LED drive 0x00 -> 0x40
+18:05:43.7475 [INFO] twi0.max86177: LED drive 0x40 -> 0x48
+18:05:44.2832 [INFO] twi0.max86177: LED drive 0x48 -> 0x50
+18:05:44.8855 [INFO] twi0.max86177: LED drive 0x50 -> 0x58
+18:05:45.8859 [INFO] twi0.max86177: LED drive 0x58 -> 0x60
+18:07:18.2886 [INFO] twi0.max86177: LED drive 0x60 -> 0x58
+18:07:19.2930 [INFO] twi0.max86177: LED drive 0x58 -> 0x50
+18:07:20.2936 [INFO] twi0.max86177: LED drive 0x50 -> 0x48
+18:07:21.3001 [INFO] twi0.max86177: LED drive 0x48 -> 0x40
+18:07:22.3566 [INFO] twi0.max86177: LED drive 0x40 -> 0x38
+18:07:23.3027 [INFO] twi0.max86177: LED drive 0x38 -> 0x30
+18:07:24.3073 [INFO] twi0.max86177: LED drive 0x30 -> 0x28
+18:07:25.3706 [INFO] twi0.max86177: LED drive 0x28 -> 0x20
+18:07:26.3035 [INFO] twi0.max86177: LED drive 0x20 -> 0x18
+18:07:27.3945 [INFO] twi0.max86177: LED drive 0x18 -> 0x10
+18:07:28.3174 [INFO] twi0.max86177: LED drive 0x10 -> 0x08
+18:08:07.4651 [INFO] twi0.max86177: LED drive 0x08 -> 0x10
+18:08:08.4634 [INFO] twi0.max86177: LED drive 0x10 -> 0x18
+18:08:09.6431 [INFO] twi0.max86177: LED drive 0x18 -> 0x20
+18:08:10.8242 [INFO] twi0.max86177: LED drive 0x20 -> 0x28
+18:08:11.6209 [INFO] twi0.max86177: LED drive 0x28 -> 0x30
+18:08:12.7624 [INFO] twi0.max86177: LED drive 0x30 -> 0x38
+18:08:13.6102 [INFO] twi0.max86177: LED drive 0x38 -> 0x40
+18:08:14.4799 [INFO] twi0.max86177: LED drive 0x40 -> 0x48
+18:08:15.5421 [INFO] twi0.max86177: LED drive 0x48 -> 0x50
+18:08:16.7874 [INFO] twi0.max86177: LED drive 0x50 -> 0x58
+18:08:17.6200 [INFO] twi0.max86177: LED drive 0x58 -> 0x60
+18:09:03.7560 [INFO] twi0.max86177: LED drive 0x60 -> 0x68
+18:09:04.7570 [INFO] twi0.max86177: LED drive 0x68 -> 0x70
+18:09:05.7823 [INFO] twi0.max86177: LED drive 0x70 -> 0x78
+18:09:06.7699 [INFO] twi0.max86177: LED drive 0x78 -> 0x80
+18:09:07.9738 [INFO] twi0.max86177: LED drive 0x80 -> 0x88
+18:09:08.9091 [INFO] twi0.max86177: LED drive 0x88 -> 0x90
+18:09:10.0568 [INFO] twi0.max86177: LED drive 0x90 -> 0x98
+18:09:10.7760 [INFO] twi0.max86177: LED drive 0x98 -> 0xA0
+18:09:11.9800 [INFO] twi0.max86177: LED drive 0xA0 -> 0xA8
+18:09:12.9158 [INFO] twi0.max86177: LED drive 0xA8 -> 0xB0
+18:09:14.0689 [INFO] twi0.max86177: LED drive 0xB0 -> 0xB8
+18:09:14.9090 [INFO] twi0.max86177: LED drive 0xB8 -> 0xC0
+
+=== duty-cycling (Balanced: 15 s on / 60 s period) — defmt ===
+0.000671 INFO  hr: MAX86177 streaming
+0.020690 INFO  hr: contact Worn
+0.020690 INFO  hr: no trusted pulse
+12.503784 INFO  hr: bpm 70
+13.344635 INFO  hr: bpm 71
+16.667877 INFO  hr: bpm 72
+25.839782 INFO  hr: window closed; sensor shut down until 60s
+60.839782 INFO  hr: window open; sensor sampling
+60.859802 INFO  hr: contact OffWrist
+60.859802 INFO  hr: no trusted pulse
+61.601806 INFO  hr: contact Worn
+63.283477 INFO  hr: bpm 75
+64.104309 INFO  hr: bpm 74
+64.945129 INFO  hr: bpm 73
+68.268371 INFO  hr: bpm 72
+75.002136 INFO  hr: window closed; sensor shut down until 120s
+120.002136 INFO  hr: window open; sensor sampling
+120.022155 INFO  hr: contact OffWrist
+120.022155 INFO  hr: no trusted pulse
+120.702850 INFO  hr: contact Worn
+122.384521 INFO  hr: bpm 79
+123.225341 INFO  hr: bpm 77
+124.046142 INFO  hr: bpm 76
+124.886962 INFO  hr: bpm 75
+125.707794 INFO  hr: bpm 74
+127.369415 INFO  hr: bpm 73
+130.692657 INFO  hr: bpm 72
+135.005065 INFO  hr: window closed; sensor shut down until 180s
+180.005065 INFO  hr: window open; sensor sampling
+180.025085 INFO  hr: contact OffWrist
+180.025085 INFO  hr: no trusted pulse
+180.645690 INFO  hr: contact Worn
+183.988952 INFO  hr: bpm 72
+195.011810 INFO  hr: window closed; sensor shut down until 240s
+240.011810 INFO  hr: window open; sensor sampling
+240.031829 INFO  hr: contact OffWrist
+240.031829 INFO  hr: no trusted pulse
+240.572357 INFO  hr: contact Worn
+243.923156 INFO  hr: bpm 72
+255.002136 INFO  hr: window closed; sensor shut down until 300s
+300.002136 INFO  hr: window open; sensor sampling
+300.022155 INFO  hr: contact OffWrist
+300.022155 INFO  hr: no trusted pulse
+300.522674 INFO  hr: contact Worn
+303.865966 INFO  hr: bpm 72
+315.005065 INFO  hr: window closed; sensor shut down until 360s
+360.005065 INFO  hr: window open; sensor sampling
+360.025085 INFO  hr: contact OffWrist
+360.025085 INFO  hr: no trusted pulse
+360.465515 INFO  hr: contact Worn
+363.803161 INFO  hr: bpm 72
+375.002136 INFO  hr: window closed; sensor shut down until 420s
+
+--- renode.log: the part really stops filling the FIFO between windows ---
+17:46:10.2045 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:46:35.9595 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:47:10.9041 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:47:10.9041 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:47:25.0666 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:48:10.0664 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:48:10.0664 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:48:25.0695 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:49:10.0693 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:49:10.0694 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:49:25.0763 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:50:10.0761 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:50:10.0762 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:50:25.0668 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:51:10.0664 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:51:10.0665 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:51:25.0696 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+17:52:10.0694 [INFO] twi0.max86177: woken — sampling resumes from retained config
+17:52:10.0694 [INFO] twi0.max86177: FIFO flushed (0 word(s) dropped)
+17:52:25.0665 [INFO] twi0.max86177: shut down — sampling stopped, FIFO frozen, registers retained
+
+=== held reading across an off-window (Balanced) — defmt ===
+0.000671 INFO  hr: MAX86177 streaming
+0.020690 INFO  hr: contact Worn
+0.020690 INFO  hr: no trusted pulse
+12.516235 INFO  hr: bpm 70
+13.337036 INFO  hr: bpm 71
+16.660278 INFO  hr: bpm 72
+20.941558 INFO  button: BTN3 -> gnss mode Balanced (fix interval 15s, ~180h)
+20.944458 INFO  hr: window closed; sensor shut down until 60s
+25.638092 INFO  button: Primary -> Start
+60.944458 INFO  hr: window open; sensor sampling
+60.964477 INFO  hr: contact OffWrist
+60.964477 INFO  hr: no trusted pulse
+61.605102 INFO  hr: contact Worn
+64.129547 INFO  hr: bpm 70
+64.970367 INFO  hr: bpm 71
+68.273590 INFO  hr: bpm 72
+75.011352 INFO  hr: window closed; sensor shut down until 120s
+120.011352 INFO  hr: window open; sensor sampling
+120.031372 INFO  hr: contact OffWrist
+120.031372 INFO  hr: no trusted pulse
+120.732055 INFO  hr: contact Worn
+122.413696 INFO  hr: bpm 78
+123.234497 INFO  hr: bpm 77
+124.075317 INFO  hr: bpm 76
+124.896118 INFO  hr: bpm 75
+125.736938 INFO  hr: bpm 74
+127.398559 INFO  hr: bpm 73
+129.872344 INFO  hr: bpm 72
+135.017364 INFO  hr: window closed; sensor shut down until 180s
+180.017364 INFO  hr: window open; sensor sampling
+180.037384 INFO  hr: contact OffWrist
+180.037384 INFO  hr: no trusted pulse
+180.657989 INFO  hr: contact Worn
+184.009399 INFO  hr: bpm 72
+195.018066 INFO  hr: window closed; sensor shut down until 240s

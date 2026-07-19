@@ -32,6 +32,32 @@ rtc1: Timers.NRF52840_RTC_Overflow @ sysbus 0x40011000
     -> nvic@17
 """
 
+# MAX86177 optical-HR AFE on the TWISPI0 I2C bus (0x40003000, address 0x62 —
+# the bus + address boards/nrf52840_dk's HrPort assigns and the hr task
+# probes). Two models: the stock platform's twi0 is the legacy-TWI-only
+# NRF52840_I2C, which implements none of the TWIM EasyDMA registers
+# embassy-nrf's Twim driver programs (ENABLE=6, TXD/RXD PTR+MAXCNT, the
+# LASTTX/LASTRX shorts, EVENTS_STOPPED) — the hr task's presence probe timed
+# out against it and the whole optical-HR path was bench-gated.
+# NRF52840_TWIM.cs is the TWIM (EasyDMA) master; Max86177.cs synthesizes a
+# deterministic tagged MEAS1(PPG)/MEAS2(ambient) sample stream at 100 Hz off
+# the virtual clock (~72 BPM by default). Scenario knobs, settable live from
+# the monitor (documented in Max86177.cs):
+#   sysbus.twi0.max86177 AmbientLevel 200000    # common-mode ambient bleed
+#   sysbus.twi0.max86177 PulseAmplitude 0       # 0 = no pulse (off-wrist)
+#   sysbus.twi0.max86177 DcBaseline 500         # reflected DC at drive 0x40
+#   sysbus.twi0.max86177 PulsePeriodSamples 83  # BPM = 6000 / period
+include @NRF52840_TWIM.cs
+include @Max86177.cs
+machine UnregisterFromParent sysbus.twi0
+machine LoadPlatformDescriptionFromString
+"""
+twi0: I2C.NRF52840_TWIM @ sysbus 0x40003000
+    -> nvic@3
+
+max86177: Sensors.MAX86177 @ twi0 0x62
+"""
+
 # Board LEDs. We declare these inline instead of loading
 # platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
 # four user buttons as Miscellaneous.Button peripherals that drive their pins

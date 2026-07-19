@@ -119,6 +119,31 @@ pub const fn hold_budget_s(mode: GnssMode) -> u32 {
     }
 }
 
+/// Whether a freshly produced [`HrSample`] is worth publishing on the `HR`
+/// watch, given the last one published.
+///
+/// The sensor streams at 100 Hz and the hr task drains it every 20 ms, so a
+/// naive "publish every drain" wakes **every** consumer of the watch 50 times a
+/// second — and the screen task is one of them (it waits on `HR.changed()`).
+/// That is a gratuitous free-running waker of exactly the kind the README's
+/// power discipline rules out: with a sensor present the CPU could never sleep
+/// longer than 20 ms, and the panel re-rendered 50 times a second, whatever the
+/// pulse was doing.
+///
+/// Deduplicating by value fixes it without loosening the staleness contract,
+/// because [`HrSample::at_s`] is in **whole seconds**: two readings inside the
+/// same second carrying the same BPM are byte-identical and genuinely carry no
+/// new information, while the first reading of each new second differs in
+/// `at_s` and publishes — so [`shown_bpm`]'s hold budget still sees a
+/// once-per-second heartbeat and ages exactly as before. A real BPM change (or
+/// a drop to `None`) differs immediately and is never delayed.
+///
+/// Net effect: steady-state wakes fall from ~50/s to ≤1/s, and every value
+/// change still propagates on the sample that produced it.
+pub fn should_publish(last: Option<HrSample>, next: HrSample) -> bool {
+    last != Some(next)
+}
+
 /// The BPM a consumer may honestly act on right now: the sample's valid BPM
 /// while it is within the mode's hold budget, else `None`. Every reader of
 /// the HR watch — the face's HR rows, the recorder's zone banking, the
@@ -225,6 +250,78 @@ mod tests {
         assert_eq!(shown_bpm(s, 60, mode), Some(150));
         assert_eq!(shown_bpm(s, 14 + BALANCED_PERIOD_S, mode), Some(150));
         assert_eq!(shown_bpm(s, 14 + BALANCED_PERIOD_S + 1, mode), None);
+    }
+
+    #[test]
+    fn identical_same_second_readings_are_not_republished() {
+        // The 50 Hz drain produces the same (bpm, at_s) many times inside one
+        // second. Publishing each one wakes every consumer of the HR watch —
+        // including the screen task — 50 times a second for no new information.
+        let s = HrSample {
+            bpm: Some(150),
+            at_s: 42,
+        };
+        assert!(should_publish(None, s), "the first reading must publish");
+        assert!(!should_publish(Some(s), s), "a repeat carries nothing new");
+    }
+
+    #[test]
+    fn a_new_second_republishes_so_the_hold_budget_still_ages() {
+        // The dedup must not starve `shown_bpm`'s staleness clock: `at_s` is in
+        // whole seconds, so the first reading of each new second differs and
+        // publishes, giving consumers a once-per-second freshness heartbeat.
+        let prev = HrSample {
+            bpm: Some(150),
+            at_s: 42,
+        };
+        let next = HrSample {
+            bpm: Some(150),
+            at_s: 43,
+        };
+        assert!(should_publish(Some(prev), next));
+    }
+
+    #[test]
+    fn a_changed_reading_publishes_immediately() {
+        // A real change — a new BPM, or losing the pulse — must never be
+        // delayed by the dedup, even within the same second.
+        let prev = HrSample {
+            bpm: Some(150),
+            at_s: 42,
+        };
+        for next in [
+            HrSample {
+                bpm: Some(151),
+                at_s: 42,
+            },
+            HrSample {
+                bpm: None,
+                at_s: 42,
+            },
+        ] {
+            assert!(should_publish(Some(prev), next), "{next:?} must publish");
+        }
+    }
+
+    #[test]
+    fn dedup_never_changes_what_a_consumer_would_show() {
+        // The safety property: suppressing a byte-identical resend cannot move
+        // `shown_bpm`, because the suppressed sample and the one the consumer
+        // still holds are the same value.
+        let held = HrSample {
+            bpm: Some(150),
+            at_s: 100,
+        };
+        let repeat = held;
+        assert!(!should_publish(Some(held), repeat));
+        for mode in MODES {
+            for now in [100, 105, 160, 260] {
+                assert_eq!(
+                    shown_bpm(Some(held), now, mode),
+                    shown_bpm(Some(repeat), now, mode)
+                );
+            }
+        }
     }
 
     #[test]

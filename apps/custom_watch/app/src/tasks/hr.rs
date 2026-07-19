@@ -38,7 +38,7 @@ use defmt::*;
 use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Instant, Timer};
 use embedded_hal::i2c::Operation;
-use max86177::peak_detect::{PeakDetector, Reading};
+use max86177::peak_detect::{Contact, PeakDetector, Reading};
 use max86177::{
     agc_next_pa_ambient, AgcConfig, FifoWord, Max86177, I2C_ADDR, LED_PA_DEFAULT, MEAS1_TAG,
     MEAS2_TAG,
@@ -112,6 +112,15 @@ pub async fn run(mut twim: Twim<'static>) {
     let mut led_pa: u8 = LED_PA_DEFAULT;
     let mut agc_samples: u32 = 0;
     let mut warned_unknown_tag = false;
+    // Change-only observability: one line when the published estimate flips
+    // (valid BPM appears / moves / blanks) and one when the contact
+    // classification changes (Worn / OffWrist / Saturated), so a defmt stream
+    // — sim or bench — shows the HR story without a 50 Hz log flood.
+    let mut logged_bpm: Option<Option<u16>> = None;
+    let mut logged_contact: Option<Contact> = None;
+    // Last sample actually put on the HR watch, so a byte-identical resend can
+    // be suppressed (`hr_duty::should_publish`).
+    let mut last_published: Option<HrSample> = None;
     loop {
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -225,10 +234,34 @@ pub async fn run(mut twim: Twim<'static>) {
             }
         }
         if let Some(reading) = latest {
-            sender.send(HrSample {
-                bpm: reading.valid.then_some(reading.bpm),
+            let contact = detector.contact();
+            if logged_contact != Some(contact) {
+                info!("hr: contact {:?}", contact);
+                logged_contact = Some(contact);
+            }
+            let bpm = reading.valid.then_some(reading.bpm);
+            if logged_bpm != Some(bpm) {
+                match bpm {
+                    Some(b) => info!("hr: bpm {=u16}", b),
+                    None => info!("hr: no trusted pulse"),
+                }
+                logged_bpm = Some(bpm);
+            }
+            // Publish only what carries new information. The drain runs at
+            // 50 Hz and the screen task waits on this watch, so resending a
+            // byte-identical sample would wake the whole UI 50 times a second
+            // — the free-running waker the README's power discipline rules
+            // out. `at_s` is whole seconds, so a steady pulse still publishes
+            // once per second and `shown_bpm`'s hold budget ages unchanged,
+            // while a real change propagates on the sample that produced it.
+            let sample = HrSample {
+                bpm,
                 at_s: Instant::now().as_secs() as u32,
-            });
+            };
+            if hr_duty::should_publish(last_published, sample) {
+                sender.send(sample);
+                last_published = Some(sample);
+            }
         }
     }
 }
