@@ -208,7 +208,8 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
               targetWeightKg: ex.modality == 'weight_reps'
                   ? WeightFormat.parseToKg(s.weight.text, activeWeightUnit)
                   : null,
-              targetRpe: null,
+              targetRpe:
+                  double.tryParse(s.rpe.text.trim().replaceAll(',', '.')),
               restS: int.tryParse(s.rest.text.trim()),
               targetDurationS:
                   ex.modality == 'time' ? int.tryParse(s.duration.text.trim()) : null,
@@ -513,6 +514,11 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             width: 60,
             child: _numField(s.rest, l10n.gymRoutineRestLabel, false),
           ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 56,
+            child: _numField(s.rpe, l10n.gymRpe, true),
+          ),
           IconButton(
             tooltip: l10n.gymEditorRemoveSet,
             icon: const Icon(Icons.close, size: 18),
@@ -671,6 +677,7 @@ class _EditSet {
   final TextEditingController rest;
   final TextEditingController duration;
   final TextEditingController distance;
+  final TextEditingController rpe;
   _EditSet({String reps = '', String weight = ''})
       : setType = 'working',
         reps = TextEditingController(text: reps),
@@ -678,7 +685,8 @@ class _EditSet {
         weight = TextEditingController(text: weight),
         rest = TextEditingController(),
         duration = TextEditingController(),
-        distance = TextEditingController();
+        distance = TextEditingController(),
+        rpe = TextEditingController();
   void dispose() {
     reps.dispose();
     repsMax.dispose();
@@ -686,6 +694,7 @@ class _EditSet {
     rest.dispose();
     duration.dispose();
     distance.dispose();
+    rpe.dispose();
   }
 }
 
