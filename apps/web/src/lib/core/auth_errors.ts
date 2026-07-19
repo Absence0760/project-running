@@ -41,6 +41,18 @@ export function classifyAuthError(error: unknown): AuthErrorKind {
 		return 'rateLimited';
 	}
 
+	// Checked BEFORE invalidCredentials: GoTrue's token endpoint can
+	// report an unconfirmed-email sign-in as the OAuth-style
+	// `invalid_grant` error carrying the descriptive message "Email not
+	// confirmed", not only via the dedicated `email_not_confirmed` code.
+	// The invalidCredentials branch below also matches `invalid_grant`,
+	// so this specific-message check has to win first — otherwise the
+	// user gets a "wrong password" banner and no resend affordance for
+	// what is really an unconfirmed account (issue #486).
+	if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
+		return 'emailNotConfirmed';
+	}
+
 	if (
 		code === 'invalid_credentials' ||
 		code === 'invalid_grant' ||
@@ -52,10 +64,6 @@ export function classifyAuthError(error: unknown): AuthErrorKind {
 
 	if (code === 'user_already_exists' || code === 'email_exists' || msg.includes('already registered')) {
 		return 'emailExists';
-	}
-
-	if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
-		return 'emailNotConfirmed';
 	}
 
 	if (
