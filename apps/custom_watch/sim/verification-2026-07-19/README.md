@@ -170,24 +170,27 @@ Measured effect in-sim: before the fix the emulated CPU was saturated by the
 redundant wakes and the sim ran ~9× slower than real time (20 s of firmware
 time in 170 s of host time); after it the same workload runs at ~1:1.
 
-## Found, NOT fixed — needs an owner
+## Found here, fixed since
 
 **The generated font renders `+` identically to `-`.** Transcribing panel
 captures against `drivers/sharp_mip/src/font.rs` shows `'+'` and `'-'` are
 byte-identical (both a single `0x7E` row at y=8) — the `+` glyph lost its
-vertical stroke in rasterisation. `'='` and `'_'` are fine, so it is one bad
-glyph, not a systemic threshold problem. User-visible consequence: the
-**Pacer** page's whole purpose is a *signed* delta (`+0:42` ahead vs `-1:05`
-behind) and the two now render the same, and the idle face's
-`VERT +gain -loss` row loses its sign too.
+vertical stroke in rasterisation. User-visible consequence: the **Pacer**
+page's whole purpose is a *signed* delta (`+0:42` ahead vs `-1:05` behind)
+and the two now render the same, and the idle face's `VERT +gain -loss` row
+loses its sign too.
 
-Not fixed here: it is outside this task's scope (optical HR) and the font
-table is a **generated** shared asset (`scripts/gen_font.py`, "do not
-hand-edit") that two concurrent sessions were editing around. Durable fix:
-correct the `+` glyph in `gen_font.py`'s rasterisation, regenerate, eyeball at
-1x/2x/3x, and add a driver host test asserting `FONT[b'+'] != FONT[b'-']` so
-it cannot silently return. Trigger: next change that touches the font
-generator, or sooner if anyone relies on the Pacer sign.
+Deferred out of this pass (outside its optical-HR scope, and the font table
+is a **generated** shared asset two concurrent sessions were editing around).
+**Now fixed** — see the "Font `+` glyph fix + per-session sim pointer" batch
+in [`../../README.md`](../../README.md). Two corrections to the diagnosis
+above, both from the collision audit that came with the fix:
+
+- It is not one bad glyph. `'='` and `'_'` survived only because they are
+  pure horizontal bars; every *vertical* sub-pixel stroke was at risk.
+- `'|'` was broken too, and worse: it packed **all-zero**, byte-identical to
+  a space, so it rendered as nothing at all. Nobody had noticed because the
+  first collision guard written for `'+'` excused space on both sides.
 
 ## Model limitations (bench-verify targets)
 
