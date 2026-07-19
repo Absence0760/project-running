@@ -102,6 +102,29 @@ void main() {
         findsNothing);
   });
 
+  testWidgets(
+      'the TabBar is scrollable so all 5 labels render untruncated (#498)',
+      (tester) async {
+    // Five icon+text tabs (Feed/People/Clubs/Discover/Challenges) squeezed
+    // into equal fixed-width slots ellipsized "Challenges"/"Discover" on
+    // typical phone widths. isScrollable sizes each tab to its content.
+    await tester.pumpWidget(_wrap(await _socialScreen()));
+    await tester.pump();
+
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.isScrollable, isTrue);
+
+    for (final label in ['Feed', 'People', 'Clubs', 'Discover', 'Challenges']) {
+      final text = tester.widget<Text>(
+          find.descendant(of: find.byType(TabBar), matching: find.text(label)));
+      // A fixed TabBar clips overflow; a scrollable one lets the label lay
+      // out at its natural size. No maxLines/ellipsis override means the
+      // label is never truncated.
+      expect(text.overflow, isNot(TextOverflow.ellipsis),
+          reason: '$label must not be ellipsized');
+    }
+  });
+
   testWidgets('initialTab=3 selects the Discover tab on first frame',
       (tester) async {
     await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 3)));
