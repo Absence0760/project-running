@@ -3880,6 +3880,8 @@ export const en = {
 	"gym.rpe": "RPE",
 	"gym.duration": "Time (s)",
 	"gym.durationValue": "{seconds}s",
+	"gym.distanceValue": "{metres} m",
+	"gym.distanceUnit": "Distance (m)",
 	"gym.setN": "Set {n}",
 	"gym.exercisesShort": "{count, plural, one {# exercise} other {# exercises}}",
 	"gym.volumeShort": "{volume}",

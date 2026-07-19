@@ -3868,6 +3868,8 @@ export const messages = {
 	"gym.rpe": "RPE",
 	"gym.duration": "Temps (s)",
 	"gym.durationValue": "{seconds}s",
+	"gym.distanceValue": "{metres} m",
+	"gym.distanceUnit": "Distance (m)",
 	"gym.setN": "Série {n}",
 	"gym.exercisesShort": "{count, plural, one {# exercice} other {# exercices}}",
 	"gym.volumeShort": "{volume}",
