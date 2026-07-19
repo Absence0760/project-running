@@ -57,6 +57,7 @@
 		todayISO
 	} from '$lib/training/training';
 	import { weeklyDrift, missedWorkoutAdvice } from '$lib/training/plan_adherence';
+	import { currentPlanWeekIndex } from '$lib/training/plan_week';
 	import {
 		orderedPlanPhases,
 		longestCompletedLongRunMetres,
@@ -728,12 +729,7 @@
 
 	let currentWeekIndex = $derived.by(() => {
 		if (!plan) return null;
-		const dayIndex = Math.floor(
-			(parseISO(today).getTime() - parseISO(plan.start_date).getTime()) /
-				(1000 * 60 * 60 * 24)
-		);
-		if (dayIndex < 0) return 0;
-		return Math.min(weeks.length - 1, Math.floor(dayIndex / 7));
+		return currentPlanWeekIndex(plan.start_date, today, weeks.length);
 	});
 
 	/// Race-date relation derived from start/end in the plan's local-date
