@@ -491,6 +491,38 @@ pub struct Snapshot {
     pub track_full: bool,
 }
 
+impl Snapshot {
+    /// Is the runner physically moving right now?
+    ///
+    /// The barometric vert accumulator gates on this
+    /// ([`crate::elevation::VertAccumulator::push`]'s `moving`): while stopped,
+    /// an altitude change is weather drift rather than climb, so the reference
+    /// re-bases and banks nothing.
+    ///
+    /// The answer comes from the receiver's own speed, **not** from
+    /// `state == Recording`. [`RecordState::Paused`] means one of three
+    /// different things here: a manual pause, an auto-pause (a segment under
+    /// [`MIN_MOVING_SPEED_MPS`]), or merely a fix whose displacement failed the
+    /// point-acceptance min-move filter ([`TRACK_THRESHOLD_M`]). That last one
+    /// is a *sampling artifact of the GPS filter*, not a stop: a runner
+    /// power-hiking a climb at ~1–2 m/s covers under 3 m per 1 Hz fix, so the
+    /// state legitimately alternates Recording/Paused fix by fix. Gating vert on
+    /// `Recording` re-based the deadband reference on every other sample, and a
+    /// climb slower than [`TRACK_THRESHOLD_M`] per second — i.e. every real
+    /// climb — banked exactly zero gain.
+    ///
+    /// Speed is honest across all three cases: `on_fix` stamps
+    /// `current_speed_mps` from the fix before the min-move filter can flip the
+    /// state, while [`Recorder::pause`], [`Recorder::stop`] and
+    /// [`Recorder::start`] all zero it — so a real stop (aid station, sleep,
+    /// waiting out weather on a col) still reads as not-moving and the
+    /// phantom-vert protection is unchanged.
+    pub fn is_moving(&self) -> bool {
+        !matches!(self.state, RecordState::Idle | RecordState::Finished)
+            && self.current_speed_mps as f64 >= MIN_MOVING_SPEED_MPS
+    }
+}
+
 /// Fixed-RAM decimated elevation series feeding [`ElevProfileView`]. Mirrors the
 /// trackback breadcrumb's halve-and-double-spacing decimation over one dimension
 /// (altitude against distance-along-run), so the whole run's shape survives at a
@@ -2710,5 +2742,115 @@ mod tests {
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    // --- Snapshot::is_moving — the barometric vert gate --------------------
+
+    #[test]
+    fn is_moving_true_through_the_min_move_filters_paused_state() {
+        // A runner power-hiking a climb at ~1.7 m/s covers under the 3 m
+        // min-move threshold in one 1 Hz fix, so the point-acceptance filter
+        // flips the state to Paused even though the receiver reports real
+        // speed. That is a GPS sampling artifact, not a stop — the vert gate
+        // must stay open or a whole climb banks zero gain.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 1.7, 0));
+        // ~1.7 m north: under TRACK_THRESHOLD_M, so the filter pauses.
+        r.on_fix(&fix(40.0000153, -105.0, 1.7, 1));
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused, "min-move filter paused");
+        assert!(
+            s.current_speed_mps as f64 >= MIN_MOVING_SPEED_MPS,
+            "the receiver still reports real speed"
+        );
+        assert!(s.is_moving(), "a sub-threshold hop is not a stop");
+    }
+
+    #[test]
+    fn is_moving_false_when_genuinely_stopped_or_inert() {
+        // Idle before any run.
+        let mut r = Recorder::new();
+        assert!(!r.snapshot().is_moving());
+
+        // Standing still with a good fix: the receiver reports ~0 speed, so the
+        // phantom-vert protection still closes the gate.
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        assert!(r.snapshot().is_moving());
+        r.on_fix(&fix(40.0, -105.0, 0.0, 1));
+        assert!(!r.snapshot().is_moving(), "stationary banks nothing");
+
+        // A manual pause zeroes speed even though the last fix was fast.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r.on_fix(&fix(40.0005, -105.0, 5.0, 1));
+        assert!(r.snapshot().is_moving());
+        r.pause(2);
+        assert!(!r.snapshot().is_moving(), "manual pause banks nothing");
+
+        // So does a stop.
+        r.resume(3);
+        r.on_fix(&fix(40.001, -105.0, 5.0, 4));
+        assert!(r.snapshot().is_moving());
+        r.stop(5);
+        assert!(!r.snapshot().is_moving(), "finished banks nothing");
+    }
+
+    #[test]
+    fn sustained_climb_banks_vert_through_min_move_pauses() {
+        // End-to-end regression for the bug the Renode BMP581 model surfaced:
+        // gating the vert accumulator on `state == Recording` discarded every
+        // metre of a real climb, because the min-move filter alternated the
+        // state fix by fix and each Paused sample re-based the deadband
+        // reference before the pending gain could cross it.
+        use crate::elevation::VertAccumulator;
+
+        let mut r = Recorder::new();
+        r.start(0);
+        let mut vert = VertAccumulator::new();
+        let mut alt = 1600.0f32;
+        // 120 s of climbing at ~1.7 m/s over the ground and 0.4 m/s vertical —
+        // a 24 % grade power-hike, the mountain_loop fixture's terrain.
+        for t in 0..120u32 {
+            let lat = 40.0 + f64::from(t) * 0.0000153;
+            r.on_fix(&fix(lat, -105.0, 1.7, t));
+            alt += 0.4;
+            vert.push(alt, r.snapshot().is_moving(), None);
+        }
+        assert!(
+            r.snapshot().state == RecordState::Paused
+                || r.snapshot().state == RecordState::Recording,
+            "run stayed active"
+        );
+        // ~48 m of real climb; the deadband holds back at most one 3 m step.
+        assert!(
+            vert.gain_m() > 44.0,
+            "a sustained climb banks its gain (got {})",
+            vert.gain_m()
+        );
+        assert_eq!(vert.loss_m(), 0.0, "a pure climb banks no loss");
+    }
+
+    #[test]
+    fn stationary_drift_banks_no_vert() {
+        // The phantom-vert protection the moving gate exists for: a weather
+        // front moves the barometer while the runner sits at an aid station.
+        use crate::elevation::VertAccumulator;
+
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        let mut vert = VertAccumulator::new();
+        let mut alt = 1600.0f32;
+        for t in 1..120u32 {
+            // Stationary: same position, receiver reports no speed.
+            r.on_fix(&fix(40.0, -105.0, 0.0, t));
+            alt += 0.4; // 48 m of pure barometric drift
+            vert.push(alt, r.snapshot().is_moving(), None);
+        }
+        assert_eq!(vert.gain_m(), 0.0, "drift while stopped banks nothing");
+        assert_eq!(vert.loss_m(), 0.0);
     }
 }
