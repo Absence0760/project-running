@@ -102,6 +102,25 @@ String friendlyAuthError(AppLocalizations l10n, Object error) {
   }
 }
 
+/// Whether surfacing this error kind at the SIGN-UP surface would
+/// disclose that an email is already registered. GoTrue only
+/// obfuscates a duplicate sign-up (returning a session-less success
+/// identical to a fresh one) when email confirmations are ON — a
+/// dashboard-managed setting invisible from this repo. With
+/// confirmations OFF a duplicate address throws `user_already_exists`
+/// (→ [AuthErrorKind.emailExists]), which would otherwise render a
+/// distinct "that email already has an account" message and turn
+/// sign-up into an account-existence oracle. Defence in depth: the
+/// sign-up screen collapses this to the same neutral check-your-email
+/// state a fresh sign-up shows, regardless of the server toggle. The
+/// full fix is prod GoTrue running `enable_confirmations = true` — see
+/// docs/features/web_app_auth.md. Sign-IN is unaffected: an existing
+/// email there classifies as [AuthErrorKind.invalidCredentials], which
+/// is standard. Mirrors web's `signUpErrorRevealsAccountExistence` in
+/// `apps/web/src/lib/core/auth_errors.ts` — keep the two in sync.
+bool signUpErrorRevealsAccountExistence(AuthErrorKind kind) =>
+    kind == AuthErrorKind.emailExists;
+
 /// Map an arbitrary exception on a non-auth form screen (club, coach, plan,
 /// invite) to a localized, user-facing message. Reuses [classifyAuthError]'s
 /// offline / rate-limited detection; the credential-shaped branches can't
