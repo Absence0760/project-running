@@ -3039,7 +3039,7 @@ export const messages = {
 	"socialHub.tabPeople": "Pessoas",
 	"socialHub.tabClubs": "Clubes",
 	"socialHub.tabDiscover": "Descobrir",
-	"discover.searchPlaceholder": "Buscar aulas, clubes…",
+	"discover.searchPlaceholder": "Busque ioga, pilates, HIIT, clubes de corrida…",
 	"discover.activityAll": "Todas as atividades",
 	"discover.cadenceLabel": "Frequência",
 	"discover.cadenceAny": "Qualquer frequência",

@@ -3734,7 +3734,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
+  String get discoverSearchPlaceholder =>
+      'Buscar yoga, pilates, HIIT, clubes de corrida…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';
@@ -15088,7 +15089,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
+  String get discoverSearchPlaceholder =>
+      'Buscar yoga, pilates, HIIT, clubes de corrida…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';

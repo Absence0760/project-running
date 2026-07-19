@@ -5068,7 +5068,7 @@
   "@socialTabDiscover": {
     "description": "Social hub sub-tab label — cross-club activity discovery"
   },
-  "discoverSearchPlaceholder": "Search classes, clubs…",
+  "discoverSearchPlaceholder": "Search yoga, pilates, HIIT, run clubs…",
   "@discoverSearchPlaceholder": {
     "description": "Discover tab search field placeholder"
   },
