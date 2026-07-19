@@ -27,7 +27,6 @@ use watch_core::elevation::{
     STANDARD_SEA_LEVEL_PA,
 };
 use watch_core::fix::Fix;
-use watch_core::record::{RecordState, MIN_MOVING_SPEED_MPS};
 
 use crate::state;
 
@@ -126,10 +125,13 @@ pub async fn run(mut twim: Twim<'static>) {
         // Pick up the latest recording state without blocking the sample tick;
         // vert only accumulates while a run is actively moving, so barometric
         // drift during a stop (aid station, sleep, weather on a col) banks
-        // nothing (watch_core::elevation::VertAccumulator::push).
+        // nothing (watch_core::elevation::VertAccumulator::push). The
+        // is-moving decision is the host-tested `Snapshot::is_moving` — the
+        // recorder's Paused state alone can't answer it, since the GPS
+        // point-acceptance min-move filter also parks a genuinely climbing
+        // runner there.
         if let Some(snap) = rec_rx.try_changed() {
-            moving = snap.state == RecordState::Recording
-                && snap.current_speed_mps >= MIN_MOVING_SPEED_MPS as f32;
+            moving = snap.is_moving();
         }
         // Pick up a recalibrated sea-level reference without blocking the tick.
         if let Some(pa) = sea_level_rx.try_changed() {
