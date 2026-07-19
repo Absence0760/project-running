@@ -963,6 +963,7 @@
   "profileUnblock": "Débloquer ce profil",
   "profileBlock": "Bloquer ce profil",
   "profileLoadError": "Impossible de charger le profil.",
+  "profileSectionError": "Impossible de charger cette section.",
   "profileNotFound": "Profil introuvable.",
   "profileFollowStats": "{followers, plural, one{{followers} abonné} other{{followers} abonnés}} · {following} abonnements",
   "profileFollowing": "Abonné",

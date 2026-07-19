@@ -1,4 +1,5 @@
 import XCTest
+import WatchConnectivity
 @testable import WatchApp
 
 /// `WatchConnectivityManager.TransferState` drives the post-run sync UI
@@ -38,10 +39,32 @@ final class TransferStateTests: XCTestCase {
     func testPatternMatchExtractsMessage() {
         // PostRunView relies on `if case .failed(let msg)` to surface the
         // error text — pin that the associated value is recoverable.
-        let s = State.failed("WCSession not activated")
+        let s = State.failed("Phone unavailable")
         guard case .failed(let msg) = s else {
             return XCTFail("Expected .failed")
         }
-        XCTAssertEqual(msg, "WCSession not activated")
+        XCTAssertEqual(msg, "Phone unavailable")
+    }
+
+    // `transferRun` gates on `WCSession.default.activationState == .activated`
+    // and returns a Bool the caller (`ContentView.syncRun`) uses to decide
+    // whether to mark the run synced. The activation guard is the whole point
+    // of issue #372: a `false` when the session isn't activated is what keeps a
+    // finished run from being silently dropped. Constructing the manager would
+    // activate a real `WCSession` (unavailable in the unit-test host), so the
+    // decision is pulled into the pure `canTransfer` and pinned here.
+    func testCanTransferOnlyWhenActivated() {
+        XCTAssertTrue(WatchConnectivityManager.canTransfer(activationState: .activated))
+    }
+
+    func testCanTransferFalseWhenNotActivated() {
+        // The cold-launch window: `WCSession.activate()` hasn't completed.
+        XCTAssertFalse(WatchConnectivityManager.canTransfer(activationState: .notActivated))
+    }
+
+    func testCanTransferFalseWhenInactive() {
+        // A session that went `.inactive` (e.g. phone unpaired mid-session)
+        // must also refuse the hand-off so the run is kept for retry.
+        XCTAssertFalse(WatchConnectivityManager.canTransfer(activationState: .inactive))
     }
 }

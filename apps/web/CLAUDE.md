@@ -65,6 +65,7 @@ src/
     training/plan_progress.ts   # pure orderedPlanPhases (base→build→peak→taper marker) + longestCompletedLongRunMetres + planDistanceBanked (plan-wide km banked vs planned — mileage view of the workout-count ring, skipped excluded, actual linked-run distance preferred). Mounted on the /plans/[id] header. 16 unit tests.
     training/race_predictor.ts  # pure predictRaceLadder — multi-distance race-time predictor (5K/10K/Half/Marathon ladder, recency-weighted Riegel anchor, per-rung confidence via predictionConfidence). Reuses riegelPredict + predictionConfidence from training.ts. Backs RacePredictorCard on /dashboard. TS↔Dart parity pair (race_predictor.dart). 11 unit tests. Backlog #11.
     training/plan_serialize.ts  # pure planToMarkdown/planToJson + parsePlanMarkdown/parsePlanJson round-trip. Export menu on /plans/[id]; paste-import disclosure in PlanEditor (/plans/new). 12 unit tests.
+    training/plan_week.ts       # pure currentPlanWeekIndex(startDateIso, todayIso, weekCount) — the plan's current week bucket, counted in whole UTC epoch-days (DST-immune, mirrors cycle_plan.ts's isoToEpochDay) so a start→today span crossing a DST transition can't undercount a day and report the previous week (issue #338). Backs currentWeekIndex on /plans/[id]. Web-only. 5 unit tests.
     training/plan_bulk_ops.ts   # pure shiftIsoDate + recoveryWorkoutPatch/recoveryWeekVolume. Owner bulk ops on /plans/[id] (shift plan ±N days, mark week recovery). 9 unit tests. Duplicate-week is a separate atomic re-index RPC (duplicate_plan_week, migration 20261205_001 + duplicatePlanWeek in data.ts), not a pure helper — the (plan_id, week_index) unique constraint makes a client-side multi-update unsafe.
     integrations/strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
     integrations/garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
@@ -178,11 +179,16 @@ lambda/
                     # server-side loop generator (graph-cycle first, GraphHopper
                     # round_trip fallback). Wraps $lib/routes/generate/handler; the
                     # SvelteKit /api/routes/generate/+server.ts owns the path in dev.
-                    # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Decisions §137/§204.
+                    # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Enforces a
+                    # DB-backed per-user throttle (check_rate_limit, bucket
+                    # 'generate-route', 60/h, fail-closed) on top of the per-IP WAF —
+                    # issue #339, $lib/routes/rate_limit.ts. Decisions §137/§204/§260.
   osrm-proxy/       # GET-only JSON Lambda for /api/routes/osrm/* — the server hop for
                     # the route builder's OSRM waypoint snapping/routing (issue #198,
                     # decisions §243). Wraps $lib/routes/osrm_proxy/handler (validates +
-                    # rebuilds every upstream URL, requires a signed-in user); the
+                    # rebuilds every upstream URL, requires a signed-in user + a
+                    # DB-backed per-user throttle: check_rate_limit, bucket 'osrm-proxy',
+                    # 1200/h, fail-closed — issue #339/§260); the
                     # SvelteKit /api/routes/osrm/[...path]/+server.ts owns the path in
                     # dev (with a dev-only demo fallback). OSRM_URL is server-only.
 ```

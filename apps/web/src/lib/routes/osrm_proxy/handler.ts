@@ -32,8 +32,23 @@
 import { createClient } from '@supabase/supabase-js';
 
 import { parseAuthHeader } from '../../coach/limits';
+import { checkRouteRateLimit } from '../rate_limit';
 
 export const OSRM_DEMO_URL = 'https://router.project-osrm.org';
+
+/// Per-user throttle on the OSRM waypoint proxy (issue #339). The proxy
+/// is signed-in-only by design (an anonymous relay in front of the
+/// self-hosted engine would be a free relay for anyone on the internet —
+/// see the header comment), so this is a per-user ceiling, not the
+/// anon+authenticated split clip-public-track uses. The builder fires one
+/// proxied call per waypoint segment, so the ceiling has to absorb a heavy
+/// interactive session while still bounding a single JWT the per-IP WAF
+/// (600/5min) can't stop across an IP pool. 1200/hour ≈ 20 calls/min
+/// sustained — comfortably above real builder traffic, a hard cap on a
+/// scripted relay.
+export const OSRM_RATE_BUCKET = 'osrm-proxy';
+export const OSRM_RATE_MAX = 1200;
+export const OSRM_RATE_WINDOW_S = 3600;
 
 /// Ceilings on a single proxied call. The builder routes segments pairwise
 /// and its multi-waypoint full-route call carries one coordinate per pin —
@@ -46,10 +61,12 @@ const UPSTREAM_TIMEOUT_MS = 10_000;
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
-/// Outcome of the auth gate. `'error'` covers the fail-closed branches
-/// (missing Supabase config, GoTrue unreachable) — the caller answers 500,
-/// never silently waves the request through.
-export type AuthVerdict = 'ok' | 'unauthenticated' | 'error';
+/// Outcome of the caller gate. `'error'` covers the fail-closed branches
+/// (missing Supabase config, GoTrue unreachable, rate-limit RPC failure) —
+/// the caller answers 500, never silently waves the request through.
+/// `'limited'` is a signed-in caller over their per-user throttle (issue
+/// #339) → 429.
+export type AuthVerdict = 'ok' | 'unauthenticated' | 'limited' | 'error';
 
 export interface OsrmProxyConfig {
 	/// Server-only OSRM base URL (`OSRM_URL`). Unset → 501 unless
@@ -72,7 +89,7 @@ export interface OsrmProxyDeps {
 
 export type OsrmProxyResult =
 	| { status: 200; body: unknown }
-	| { status: 400 | 401 | 500 | 501 | 502; body: { error: string } };
+	| { status: 400 | 401 | 429 | 500 | 501 | 502; body: { error: string } };
 
 interface ParsedOsrmPath {
 	service: 'nearest' | 'route';
@@ -166,6 +183,20 @@ function supabaseAuthChecker(config: OsrmProxyConfig) {
 			});
 			return 'unauthenticated';
 		}
+
+		// Signed-in — enforce the per-user throttle on the SAME JWT-bound
+		// client (one getUser, guard-satisfying user id). Fail-closed: a
+		// throttle error denies (mapped to 'error' → 500) rather than
+		// leaving the engine relay unbounded per JWT.
+		const rl = await checkRouteRateLimit(
+			supabase,
+			userRes.data.user.id,
+			OSRM_RATE_BUCKET,
+			OSRM_RATE_MAX,
+			OSRM_RATE_WINDOW_S,
+		);
+		if (rl === 'limited') return 'limited';
+		if (rl === 'error') return 'error';
 		return 'ok';
 	};
 }
@@ -191,6 +222,10 @@ export async function handleOsrmProxy(
 	if (!accessToken) return { status: 401, body: { error: 'not authenticated' } };
 	const verdict = await (deps.authChecker ?? supabaseAuthChecker(config))(accessToken);
 	if (verdict === 'unauthenticated') return { status: 401, body: { error: 'not authenticated' } };
+	// Per-user throttle tripped (issue #339): deny before proxying to the
+	// engine. The builder treats any non-200 as a failed segment (straight-
+	// line fallback), same as the 502 branch below.
+	if (verdict === 'limited') return { status: 429, body: { error: 'rate_limited' } };
 	if (verdict === 'error') return { status: 500, body: { error: 'auth check failed' } };
 
 	const coordsStr = parsed.coords.map(([lng, lat]) => `${lng},${lat}`).join(';');

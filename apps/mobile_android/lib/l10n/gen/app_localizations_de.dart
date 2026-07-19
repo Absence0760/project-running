@@ -3527,6 +3527,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileLoadError => 'Profil konnte nicht geladen werden.';
 
   @override
+  String get profileSectionError =>
+      'Dieser Abschnitt konnte nicht geladen werden.';
+
+  @override
   String get profileNotFound => 'Profil nicht gefunden.';
 
   @override

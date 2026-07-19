@@ -136,9 +136,47 @@ Read it before writing a migration that adds a constraint or touches many rows.
 `scripts/check_migration_online_safety.mjs` (in the `parity-types` CI job,
 alongside the version-keys guard) fails a NEW migration that adds a CHECK/FK to
 a guarded table without `NOT VALID`; run it locally with `node
-apps/backend/scripts/check_migration_online_safety.mjs`. The read-only
-`/audit/migration-locks` command classifies the *existing* migrations by lock
-impact.
+apps/backend/scripts/check_migration_online_safety.mjs`. **`jobs` is in the
+guarded set** (#394 follow-up): a bare `DROP CONSTRAINT jobs_kind_chk` +
+`ADD CONSTRAINT … CHECK (…)` widening now fails CI just like the
+`notifications` case, because the Go `job_worker` polls `jobs` continuously and
+a blocking validation scan stalls job processing — so a new `kind` allow-list
+entry must use `ADD … NOT VALID` + a separate `VALIDATE CONSTRAINT`. The
+read-only `/audit/migration-locks` command classifies the *existing* migrations
+by lock impact.
+
+### Widening a `kind` CHECK also needs `NOT VALID` — don't `DROP` + bare `ADD`
+
+The online-safety rule above bites hardest on a pattern that keeps recurring:
+widening an enum-style `kind` allowlist by dropping the old CHECK and re-adding
+it. `notifications_kind_check` has been rebuilt this way ~12 times (latest
+`20270218_001_auto_hide_reports.sql`) and `jobs_kind_chk` on nearly every new
+job kind (`20261211_001`, `20270410_001`, …) — always as `drop constraint …;
+alter table … add constraint … check (kind in (…))`, with **no `NOT VALID`**.
+The bare `ADD CONSTRAINT … CHECK` re-scans the whole table under a blocking
+lock — the exact downtime the two-step avoids — and these are the two worst
+tables to do it on: `notifications` is the archetypal high-write, unbounded
+table (every kudos / comment / follow / RSVP / achievement inserts a row) and
+`jobs` is polled continuously by the Go worker (a stalled `ADD CONSTRAINT`
+stalls job draining). Already-applied migrations aren't editable; this is a
+forward-guard for the **next** kind addition. Use the two-step:
+
+```sql
+alter table notifications drop constraint notifications_kind_check;
+alter table notifications
+  add constraint notifications_kind_check
+  check (kind in (…)) not valid;                        -- instant, no scan
+alter table notifications validate constraint notifications_kind_check;  -- separate; SHARE UPDATE EXCLUSIVE, writes pass
+```
+
+Model it on `20260621_001_runs_track_url_path_check.sql` and
+`20261124_001_content_length_caps.sql`, which already split the `ADD … NOT
+VALID` from a later `VALIDATE CONSTRAINT`. Re-emit the **complete** union each
+time — a CHECK rebuild replaces the whole allowlist, so the same "bare-body
+strips prior fixes" trap applies (see below). Note `check_migration_online_safety.mjs`
+catches the missing `NOT VALID` on `notifications` (a guarded table — the
+add-half trips its check), but **`jobs` is not in that guard's `GUARDED_TABLES`
+set**, so on `jobs` the two-step is on you, not CI.
 
 ### Migrations that reference postgis / pg_trgm objects must set search_path themselves
 

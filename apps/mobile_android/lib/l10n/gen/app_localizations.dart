@@ -5900,6 +5900,12 @@ abstract class AppLocalizations {
   /// **'Could not load profile.'**
   String get profileLoadError;
 
+  /// Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this section.'**
+  String get profileSectionError;
+
   /// Shown when the profile does not exist
   ///
   /// In en, this message translates to:

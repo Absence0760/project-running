@@ -3515,6 +3515,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileLoadError => 'Não foi possível carregar o perfil.';
 
   @override
+  String get profileSectionError => 'Não foi possível carregar esta secção.';
+
+  @override
   String get profileNotFound => 'Perfil não encontrado.';
 
   @override
@@ -14867,6 +14870,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get profileLoadError => 'Não foi possível carregar o perfil.';
+
+  @override
+  String get profileSectionError => 'Não foi possível carregar esta seção.';
 
   @override
   String get profileNotFound => 'Perfil não encontrado.';

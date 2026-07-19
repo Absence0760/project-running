@@ -121,7 +121,7 @@ export function projectRunner(
 		const actual = byId.get(c.id);
 		const reached = actual !== undefined;
 		let projected: number | null = null;
-		if (!reached && paceSPerM !== null && c.positionM > coveredM) {
+		if (!reached && paceSPerM !== null && c.positionM >= coveredM) {
 			projected = paceSPerM * c.positionM;
 		}
 
