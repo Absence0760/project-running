@@ -2261,6 +2261,12 @@ abstract class AppLocalizations {
   /// **'Ends the recording and saves the run'**
   String get runStopA11yHint;
 
+  /// Caption under the stop button telling the user to press and hold (not tap) to end the run
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to stop'**
+  String get runHoldToStopHint;
+
   /// Screen-reader label for the pause/resume control when paused
   ///
   /// In en, this message translates to:

@@ -1259,6 +1259,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Beendet die Aufzeichnung und speichert den Lauf';
 
   @override
+  String get runHoldToStopHint => 'Zum Stoppen halten';
+
+  @override
   String get runResumeA11yLabel => 'Lauf fortsetzen';
 
   @override

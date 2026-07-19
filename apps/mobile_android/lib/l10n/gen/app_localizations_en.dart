@@ -1248,6 +1248,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runStopA11yHint => 'Ends the recording and saves the run';
 
   @override
+  String get runHoldToStopHint => 'Hold to stop';
+
+  @override
   String get runResumeA11yLabel => 'Resume run';
 
   @override

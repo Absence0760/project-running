@@ -1208,6 +1208,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runStopA11yHint => '記録を終了してランを保存します';
 
   @override
+  String get runHoldToStopHint => '長押しで停止';
+
+  @override
   String get runResumeA11yLabel => 'ランを再開';
 
   @override
