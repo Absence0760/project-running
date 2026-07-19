@@ -996,7 +996,7 @@
 		text-overflow: ellipsis;
 	}
 	.freshness.stale {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	.stale-badge {
 		font-weight: 800;
@@ -1012,7 +1012,7 @@
 		background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-secondary));
 	}
 	.freshness.coarse {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	/* Coarse last-seen badge: an amber chip on the leaderboard row so a
 	 * spectator reads the runner's position as an approximate ~1 km cell,
@@ -1030,7 +1030,7 @@
 		letter-spacing: 0.03em;
 		vertical-align: middle;
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 	.approx-tag .material-symbols {
@@ -1055,7 +1055,7 @@
 	}
 	.pending-tag {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 		font-size: 0.7rem;
 		font-weight: 700;
 		padding: 0.15rem 0.5rem;

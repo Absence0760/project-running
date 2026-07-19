@@ -131,6 +131,22 @@ void main() {
     expect(rb.legs[1].cutoff!.status, CutoffStatus.safe);
   });
 
+  test(
+      'cutoff_clock past 24h snaps to the day nearest the projection, not same-day',
+      () {
+    final wp = course();
+    final total =
+        buildRoadbook(wp, const [], goalSeconds: 1, model: PacingModel.even)
+            .totalDistM;
+    // 40h goal, a cutoff at 75% distance -> projected arrival ~30h. Start 08:00,
+    // cutoff clock 14:00: the raw same-day offset is only +6h, but the runner is
+    // expected there at hour 30 (14:00 the next day). Must resolve to 30h.
+    final rb = buildRoadbook(
+        wp, [marker(total * 0.75, 'cutoff', 'Gate', {'cutoff_clock': '14:00'})],
+        goalSeconds: 40 * 3600, startClockMin: 480, model: PacingModel.even);
+    expect(rb.legs[1].cutoff!.limitElapsedS, 108000); // 30h, not 21600 (6h)
+  });
+
   test('projected clock advances from the start and wraps past midnight', () {
     final wp = course();
     final rb = buildRoadbook(wp, const [],
