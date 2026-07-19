@@ -1248,6 +1248,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runStopA11yHint => 'Ends the recording and saves the run';
 
   @override
+  String get runHoldToStopHint => 'Hold to stop';
+
+  @override
   String get runResumeA11yLabel => 'Resume run';
 
   @override
@@ -3486,6 +3489,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileLoadError => 'Could not load profile.';
+
+  @override
+  String get profileSectionError => 'Couldn\'t load this section.';
 
   @override
   String get profileNotFound => 'Profile not found.';

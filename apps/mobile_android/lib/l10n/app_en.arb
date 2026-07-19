@@ -1673,6 +1673,10 @@
   "@runStopA11yHint": {
     "description": "Screen-reader hint for the stop-and-save control"
   },
+  "runHoldToStopHint": "Hold to stop",
+  "@runHoldToStopHint": {
+    "description": "Caption under the stop button telling the user to press and hold (not tap) to end the run"
+  },
   "runResumeA11yLabel": "Resume run",
   "@runResumeA11yLabel": {
     "description": "Screen-reader label for the pause/resume control when paused"
@@ -4709,6 +4713,10 @@
   "profileLoadError": "Could not load profile.",
   "@profileLoadError": {
     "description": "Error state shown when the profile fails to load"
+  },
+  "profileSectionError": "Couldn't load this section.",
+  "@profileSectionError": {
+    "description": "Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab"
   },
   "profileNotFound": "Profile not found.",
   "@profileNotFound": {

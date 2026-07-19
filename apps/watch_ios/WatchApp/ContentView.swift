@@ -75,8 +75,14 @@ struct ContentView: View {
                 "last_modified_at": formatter.string(from: Date())
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
-            connectivity.transferRun(fileURL: fileURL, metadata: metadata)
-            thisRunSynced = true
+            // Only mark the run synced when WCSession actually queued it.
+            // A false means nothing was handed off (session not yet
+            // activated) — leave `thisRunSynced` false so `PostRunView`
+            // keeps the finished run, shows the failure, and offers Sync
+            // Run again rather than silently dropping the run.
+            if connectivity.transferRun(fileURL: fileURL, metadata: metadata) {
+                thisRunSynced = true
+            }
         } catch {
             syncError = error.localizedDescription
         }

@@ -91,7 +91,17 @@ func (w *Worker) handleWeeklyDigest(ctx context.Context, job *Job) error {
 		return fmt.Errorf("build digest: %w", err)
 	}
 
+	// Gate 3: a working opt-out is mandatory. digestUnsubURL returns "" when
+	// WEEKLY_DIGEST_UNSUB_SECRET is unset (a misconfigured deploy: SMTP set,
+	// unsub secret not yet provisioned). Sending bulk mail with no
+	// List-Unsubscribe header and no footer opt-out violates CAN-SPAM /
+	// GDPR-ePrivacy, so fail closed (log + skip) rather than send an
+	// un-unsubscribable message.
 	unsubURL := w.digestUnsubURL(p.UserID)
+	if unsubURL == "" {
+		w.Log.Error("weekly_digest: unsubscribe secret unset; refusing to send mail with no opt-out", "user_id", p.UserID)
+		return nil
+	}
 	msg := renderWeeklyDigest(summary, w.AppBaseURL, localeFromPrefs(prefs), unsubURL)
 	if err := w.Email.Send(ctx, email, msg); err != nil {
 		return fmt.Errorf("send: %w", err)

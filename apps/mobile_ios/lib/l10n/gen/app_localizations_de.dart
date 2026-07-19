@@ -1259,6 +1259,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Beendet die Aufzeichnung und speichert den Lauf';
 
   @override
+  String get runHoldToStopHint => 'Zum Stoppen halten';
+
+  @override
   String get runResumeA11yLabel => 'Lauf fortsetzen';
 
   @override
@@ -3525,6 +3528,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get profileLoadError => 'Profil konnte nicht geladen werden.';
+
+  @override
+  String get profileSectionError =>
+      'Dieser Abschnitt konnte nicht geladen werden.';
 
   @override
   String get profileNotFound => 'Profil nicht gefunden.';

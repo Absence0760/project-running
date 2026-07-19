@@ -403,8 +403,15 @@ void main() {
 
     // ─────────── Server-side auth errors (#242) ───────────
 
-    testWidgets('duplicate email (confirmations disabled) shows the specific message',
+    testWidgets(
+        'duplicate email (confirmations disabled) is neutralised, not an oracle (issue #454)',
         (tester) async {
+      // With GoTrue enable_confirmations=false a duplicate signUp() throws
+      // user_already_exists. The sign-up screen must NOT surface the distinct
+      // "that email already has an account" message — that is a user-
+      // enumeration oracle (mobile twin of web #399/#448). It collapses to
+      // the SAME neutral check-your-email state a fresh confirmation-pending
+      // sign-up shows, so an attacker can't tell a registered address apart.
       final client = _FakeApiClient()
         ..errorToThrow = const _FakeAuthException('User already registered',
             code: 'user_already_exists', statusCode: '422');
@@ -420,8 +427,13 @@ void main() {
       await tester.pump();
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
-      expect(find.textContaining('already has an account'), findsOneWidget);
-      expect(find.textContaining('Something went wrong'), findsNothing);
+      // Neutral check-your-email state — indistinguishable from a fresh
+      // confirmation-pending sign-up.
+      expect(find.text('Check your email'), findsOneWidget);
+      expect(find.textContaining('taken@b.com'), findsOneWidget);
+      expect(find.text('Back to sign in'), findsOneWidget);
+      // The oracle is closed: no distinct "account exists" reveal.
+      expect(find.textContaining('already has an account'), findsNothing);
     });
 
     testWidgets('weak password rejected by the server shows the specific message',

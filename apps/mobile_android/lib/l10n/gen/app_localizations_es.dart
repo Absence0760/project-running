@@ -1257,6 +1257,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runStopA11yHint => 'Finaliza la grabación y guarda la carrera';
 
   @override
+  String get runHoldToStopHint => 'Mantén para detener';
+
+  @override
   String get runResumeA11yLabel => 'Reanudar carrera';
 
   @override
@@ -3512,6 +3515,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get profileLoadError => 'No se pudo cargar el perfil.';
+
+  @override
+  String get profileSectionError => 'No se pudo cargar esta sección.';
 
   @override
   String get profileNotFound => 'Perfil no encontrado.';

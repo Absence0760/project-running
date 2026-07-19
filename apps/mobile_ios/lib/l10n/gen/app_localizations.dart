@@ -2261,6 +2261,12 @@ abstract class AppLocalizations {
   /// **'Ends the recording and saves the run'**
   String get runStopA11yHint;
 
+  /// Caption under the stop button telling the user to press and hold (not tap) to end the run
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to stop'**
+  String get runHoldToStopHint;
+
   /// Screen-reader label for the pause/resume control when paused
   ///
   /// In en, this message translates to:
@@ -5899,6 +5905,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not load profile.'**
   String get profileLoadError;
+
+  /// Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this section.'**
+  String get profileSectionError;
 
   /// Shown when the profile does not exist
   ///

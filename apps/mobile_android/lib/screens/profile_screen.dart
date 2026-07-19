@@ -55,10 +55,25 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _loading = true;
   Object? _loadError;
   ProfileSummary? _summary;
+
+  bool _runsLoading = true;
+  Object? _runsError;
   List<RunRow> _runs = const [];
+
+  bool _followersLoading = true;
+  Object? _followersError;
   List<UserProfileRow> _followers = const [];
+
+  bool _followingLoading = true;
+  Object? _followingError;
   List<UserProfileRow> _following = const [];
+
+  bool _badgesLoading = true;
+  Object? _badgesError;
   List<AchievementRow> _badges = const [];
+
+  bool _notificationsLoading = true;
+  Object? _notificationsError;
   List<NotificationView> _notifications = const [];
   bool _followBusy = false;
   bool _blocked = false;
@@ -95,49 +110,42 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
+  // Each independent fetch owns its loading / error / data so a failure
+  // in one section (a broken Achievements query, a stale followers page)
+  // scopes to that tab's ErrorState + Retry instead of blanking the whole
+  // profile. The summary drives the header, which is structurally required
+  // to render anything, so it alone gates the page.
   Future<void> _load() async {
+    await Future.wait([
+      _loadSummary(),
+      _loadRuns(),
+      _loadFollowers(),
+      _loadFollowing(),
+      _loadBadges(),
+      if (_isSelf) _loadNotifications(),
+    ]);
+  }
+
+  Future<void> _loadSummary() async {
     if (!mounted) return;
     setState(() {
       _loading = true;
       _loadError = null;
     });
     try {
-      final summaryF = widget.api.fetchProfileSummary(widget.userId);
-      final runsF = widget.api.fetchPublicRunsByUser(widget.userId, limit: 30);
-      // First page only; older follows / followers come in via
-      // Load-more on the respective tab.
-      final followersF =
-          widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
-      final followingF =
-          widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
-      final badgesF = widget.api.fetchUserBadges(widget.userId);
-      final notifF = _isSelf
-          ? widget.api.fetchNotificationViews(limit: 100)
-          : Future.value(const <NotificationView>[]);
-      final blockedF = _isSelf
-          ? Future.value(false)
-          : widget.api.isBlockedByViewer(widget.userId);
-
-      final results = await Future.wait([
-        summaryF,
-        runsF,
-        followersF,
-        followingF,
-        badgesF,
-        notifF,
-        blockedF,
-      ]);
+      final summary = await widget.api.fetchProfileSummary(widget.userId);
+      var blocked = false;
+      if (!_isSelf) {
+        try {
+          blocked = await widget.api.isBlockedByViewer(widget.userId);
+        } catch (e) {
+          debugPrint('profile blocked check failed: $e');
+        }
+      }
       if (!mounted) return;
       setState(() {
-        _summary = results[0] as ProfileSummary?;
-        _runs = results[1] as List<RunRow>;
-        _followers = results[2] as List<UserProfileRow>;
-        _following = results[3] as List<UserProfileRow>;
-        _badges = results[4] as List<AchievementRow>;
-        _notifications = results[5] as List<NotificationView>;
-        _blocked = results[6] as bool;
-        _followersHasMore = _followers.length == _kFollowsPageSize;
-        _followingHasMore = _following.length == _kFollowsPageSize;
+        _summary = summary;
+        _blocked = blocked;
         _loading = false;
       });
     } catch (e) {
@@ -145,6 +153,123 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() {
         _loadError = e;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadRuns() async {
+    if (!mounted) return;
+    setState(() {
+      _runsLoading = true;
+      _runsError = null;
+    });
+    try {
+      final runs =
+          await widget.api.fetchPublicRunsByUser(widget.userId, limit: 30);
+      if (!mounted) return;
+      setState(() {
+        _runs = runs;
+        _runsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _runsError = e;
+        _runsLoading = false;
+      });
+    }
+  }
+
+  // First page only; older follows / followers come in via Load-more on
+  // the respective tab.
+  Future<void> _loadFollowers() async {
+    if (!mounted) return;
+    setState(() {
+      _followersLoading = true;
+      _followersError = null;
+    });
+    try {
+      final followers =
+          await widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
+      if (!mounted) return;
+      setState(() {
+        _followers = followers;
+        _followersHasMore = followers.length == _kFollowsPageSize;
+        _followersLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _followersError = e;
+        _followersLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFollowing() async {
+    if (!mounted) return;
+    setState(() {
+      _followingLoading = true;
+      _followingError = null;
+    });
+    try {
+      final following =
+          await widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
+      if (!mounted) return;
+      setState(() {
+        _following = following;
+        _followingHasMore = following.length == _kFollowsPageSize;
+        _followingLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _followingError = e;
+        _followingLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadBadges() async {
+    if (!mounted) return;
+    setState(() {
+      _badgesLoading = true;
+      _badgesError = null;
+    });
+    try {
+      final badges = await widget.api.fetchUserBadges(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _badges = badges;
+        _badgesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _badgesError = e;
+        _badgesLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    if (!_isSelf || !mounted) return;
+    setState(() {
+      _notificationsLoading = true;
+      _notificationsError = null;
+    });
+    try {
+      final notifications = await widget.api.fetchNotificationViews(limit: 100);
+      if (!mounted) return;
+      setState(() {
+        _notifications = notifications;
+        _notificationsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _notificationsError = e;
+        _notificationsLoading = false;
       });
     }
   }
@@ -481,23 +606,50 @@ class _ProfileScreenState extends State<ProfileScreen>
                           child: TabBarView(
                             controller: _tabs,
                             children: [
-                              _buildRunsTab(theme),
-                              BadgeGrid(badges: _badges, isOwner: _isSelf),
-                              _buildPeopleTab(
-                                _followers,
-                                l10n.profileFollowersEmpty,
-                                hasMore: _followersHasMore,
-                                loadingMore: _loadingMoreFollowers,
-                                onLoadMore: _loadMoreFollowers,
+                              _tabScope(
+                                loading: _runsLoading,
+                                error: _runsError,
+                                onRetry: _loadRuns,
+                                child: () => _buildRunsTab(theme),
                               ),
-                              _buildPeopleTab(
-                                _following,
-                                l10n.profileFollowingEmpty,
-                                hasMore: _followingHasMore,
-                                loadingMore: _loadingMoreFollowing,
-                                onLoadMore: _loadMoreFollowing,
+                              _tabScope(
+                                loading: _badgesLoading,
+                                error: _badgesError,
+                                onRetry: _loadBadges,
+                                child: () =>
+                                    BadgeGrid(badges: _badges, isOwner: _isSelf),
                               ),
-                              if (_isSelf) _buildNotificationsTab(theme),
+                              _tabScope(
+                                loading: _followersLoading,
+                                error: _followersError,
+                                onRetry: _loadFollowers,
+                                child: () => _buildPeopleTab(
+                                  _followers,
+                                  l10n.profileFollowersEmpty,
+                                  hasMore: _followersHasMore,
+                                  loadingMore: _loadingMoreFollowers,
+                                  onLoadMore: _loadMoreFollowers,
+                                ),
+                              ),
+                              _tabScope(
+                                loading: _followingLoading,
+                                error: _followingError,
+                                onRetry: _loadFollowing,
+                                child: () => _buildPeopleTab(
+                                  _following,
+                                  l10n.profileFollowingEmpty,
+                                  hasMore: _followingHasMore,
+                                  loadingMore: _loadingMoreFollowing,
+                                  onLoadMore: _loadMoreFollowing,
+                                ),
+                              ),
+                              if (_isSelf)
+                                _tabScope(
+                                  loading: _notificationsLoading,
+                                  error: _notificationsError,
+                                  onRetry: _loadNotifications,
+                                  child: () => _buildNotificationsTab(theme),
+                                ),
                             ],
                           ),
                         ),
@@ -548,6 +700,24 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
       ),
     );
+  }
+
+  Widget _tabScope({
+    required bool loading,
+    required Object? error,
+    required Future<void> Function() onRetry,
+    required Widget Function() child,
+  }) {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error != null) {
+      return ErrorState(
+        message: AppLocalizations.of(context).profileSectionError,
+        onRetry: onRetry,
+      );
+    }
+    return child();
   }
 
   Widget _buildRunsTab(ThemeData theme) {

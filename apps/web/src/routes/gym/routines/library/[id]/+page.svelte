@@ -139,6 +139,12 @@
 					<li class="exercise-card">
 						<span class="exercise-name">{ex.exercise_name}</span>
 						<table class="set-table">
+							<thead>
+								<tr>
+									<th class="section-label">{t('gym.routine.setType')}</th>
+									<th class="section-label">{t('gym.routine.targetReps')}</th>
+								</tr>
+							</thead>
 							<tbody>
 								{#each ex.sets as s (s.set_index)}
 									<tr>
@@ -229,6 +235,10 @@
 		border-collapse: collapse;
 		width: 100%;
 		max-width: 24rem;
+	}
+	.set-table th {
+		text-align: start;
+		padding-inline-end: 1rem;
 	}
 	.set-table td {
 		padding-inline-end: 1rem;
