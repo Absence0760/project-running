@@ -150,6 +150,19 @@ void main() {
     expect(out[0].name, 'Rolled Oats');
   });
 
+  test(
+      'searchFoods requests English-localized names (regression: Norwegian results)',
+      () async {
+    // Open Food Facts is a global, community-contributed database —
+    // without a language hint it returns whichever language a
+    // product's name was entered in. Pin that the request always asks
+    // for lc=en.
+    await searchFoods('oats', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'en');
+      return jsonEncode(_sample);
+    });
+  });
+
   test('searchFoods rethrows a fetch failure (so the caller can show retry, not empty)',
       () async {
     expect(
@@ -231,6 +244,15 @@ void main() {
     });
     expect(r, isNotNull);
     expect(r!.name, 'Rolled Oats');
+  });
+
+  test(
+      'lookupBarcode requests English-localized names (regression: Norwegian results)',
+      () async {
+    await lookupBarcode('737628064502', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'en');
+      return jsonEncode(product);
+    });
   });
 
   test('lookupBarcode returns null on a genuine no-match (status 0)', () async {
