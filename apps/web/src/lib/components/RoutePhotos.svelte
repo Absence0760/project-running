@@ -77,7 +77,7 @@
 			pendingCaption = '';
 			if (fileInput) fileInput.value = '';
 		} catch (e: any) {
-			showToast(e?.message ?? m('routePhotos.uploadFailed'), 'error');
+			showToast(m('routePhotos.uploadFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			uploading = false;
 		}
@@ -98,7 +98,7 @@
 			photos = photos.filter((p) => p.id !== target.id);
 			if (lightbox?.id === target.id) lightbox = null;
 		} catch (e: any) {
-			showToast(e?.message ?? m('routePhotos.deleteFailed'), 'error');
+			showToast(m('routePhotos.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -116,7 +116,7 @@
 			await updateRoutePhotoCaption(id, next);
 			photos = photos.map((p) => (p.id === id ? { ...p, caption: next } : p));
 		} catch (e: any) {
-			showToast(e?.message ?? m('routePhotos.captionUpdateFailed'), 'error');
+			showToast(m('routePhotos.captionUpdateFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 </script>

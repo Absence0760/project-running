@@ -40,6 +40,7 @@
 						targetRpe: s.target_rpe,
 						restS: s.rest_s,
 						targetDurationS: s.target_duration_s,
+						targetDistanceM: s.target_distance_m,
 					})),
 				})),
 			};

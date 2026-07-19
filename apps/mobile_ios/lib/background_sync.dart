@@ -4,8 +4,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'local_route_store.dart';
 import 'local_run_store.dart';
-import 'sync_service.dart' show filterRunsForCurrentUser;
+import 'sync_service.dart'
+    show drainPendingDeletes, drainUnsyncedRoutes, filterRunsForCurrentUser;
 
 const backgroundSyncTaskName = 'com.threkir.backgroundSync';
 
@@ -31,7 +33,9 @@ void callbackDispatcher() {
 
       final store = LocalRunStore();
       await store.init();
-      await runBackgroundSyncCycle(api, store);
+      final routeStore = LocalRouteStore();
+      await routeStore.init();
+      await runBackgroundSyncCycle(api, store, routeStore);
     } catch (e) {
       debugPrint('Background sync error: $e');
     }
@@ -39,22 +43,29 @@ void callbackDispatcher() {
   });
 }
 
-/// Push the local unsynced queue to the cloud from the WorkManager
-/// callback. Extracted from [callbackDispatcher] so it can be unit-
-/// tested without the WorkManager + dotenv + Supabase bootstrap.
+/// Drain the local queues to the cloud from the WorkManager callback:
+/// unsynced runs, pending remote-deletes, and unsynced routes — the
+/// same three queues the foreground [SyncService] drains every cycle.
+/// Extracted from [callbackDispatcher] so it can be unit-tested without
+/// the WorkManager + dotenv + Supabase bootstrap.
 ///
-/// **Always** routes the queue through [filterRunsForCurrentUser] so
-/// the background path honours the same owner-tag guard the foreground
-/// [SyncService] does. Without this, on a shared device, User A's
-/// unsynced runs would get pushed under User B's account the next
-/// time WorkManager fires while B is signed in — every row would land
-/// under the wrong user and RLS would silently accept them (the row
-/// embeds the caller's `user_id`, not the run's tagged owner). The
-/// guard mirrors `SyncService._trySync`'s owner-tag filter so a fresh
-/// WorkManager job behaves identically to a foreground sync.
+/// The delete + route drains reuse the shared [drainPendingDeletes] /
+/// [drainUnsyncedRoutes] free functions so the background path can't
+/// drift from the foreground one. Each queue is wrapped in its own
+/// try/catch (layered resilience) so a failure draining one queue
+/// doesn't abort the others.
+///
+/// **Always** routes the run queue through [filterRunsForCurrentUser]
+/// so the background path honours the same owner-tag guard the
+/// foreground [SyncService] does. Without this, on a shared device,
+/// User A's unsynced runs would get pushed under User B's account the
+/// next time WorkManager fires while B is signed in — every row would
+/// land under the wrong user and RLS would silently accept them (the
+/// row embeds the caller's `user_id`, not the run's tagged owner).
 Future<void> runBackgroundSyncCycle(
   ApiClient api,
   LocalRunStore store,
+  LocalRouteStore routeStore,
 ) async {
   final allUnsynced = store.unsyncedRuns;
   final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
@@ -65,18 +76,29 @@ Future<void> runBackgroundSyncCycle(
       'different user (signed in as ${api.userId})',
     );
   }
-  if (unsynced.isEmpty) return;
+  if (unsynced.isNotEmpty) {
+    try {
+      final failed = await api.saveRunsBatch(unsynced);
+      await store.markManySynced(
+        unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
+      );
+      debugPrint(
+        'Background sync: pushed ${unsynced.length - failed.length} '
+        '(skipped ${failed.length} on track-upload failure)',
+      );
+    } catch (e) {
+      debugPrint('Background sync batch failed: $e');
+    }
+  }
   try {
-    final failed = await api.saveRunsBatch(unsynced);
-    await store.markManySynced(
-      unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
-    );
-    debugPrint(
-      'Background sync: pushed ${unsynced.length - failed.length} '
-      '(skipped ${failed.length} on track-upload failure)',
-    );
+    await drainPendingDeletes(api, store);
   } catch (e) {
-    debugPrint('Background sync batch failed: $e');
+    debugPrint('Background sync delete drain failed: $e');
+  }
+  try {
+    await drainUnsyncedRoutes(api, routeStore);
+  } catch (e) {
+    debugPrint('Background sync route drain failed: $e');
   }
 }
 
