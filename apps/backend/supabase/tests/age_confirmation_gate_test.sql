@@ -12,7 +12,7 @@
 --      replay the RPC on every login, and consent is a once-per-
 --      account act.
 --   4. EXECUTE grants are narrow: authenticated only.
---   5. Region unit default (migration 20270426_001, issue #488):
+--   5. Region unit default (migration 20270424000006, issue #488):
 --      `p_preferred_unit` seeds preferred_unit on the brand-new-row
 --      insert only; a returning user's existing choice is never
 --      overwritten by a later call.
