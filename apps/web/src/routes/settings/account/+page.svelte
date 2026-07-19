@@ -29,6 +29,7 @@
 	} from '$lib/util/push';
 	import { cloudExport } from '$lib/backup/cloud_export';
 	import { m } from '$lib/i18n/store.svelte';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
 	import {
 		MIN_CYCLE_LENGTH_DAYS,
@@ -1051,11 +1052,11 @@
 		<div class="form-grid">
 			<label>
 				<span class="label-text">{m('settingsAccount.newPassword')}</span>
-				<input type="password" autocomplete="new-password" bind:value={newPassword} placeholder={m('settingsAccount.newPasswordPlaceholder')} />
+				<PasswordInput autocomplete="new-password" bind:value={newPassword} placeholder={m('settingsAccount.newPasswordPlaceholder')} />
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.confirmPassword')}</span>
-				<input type="password" autocomplete="new-password" bind:value={confirmPassword} />
+				<PasswordInput autocomplete="new-password" bind:value={confirmPassword} />
 			</label>
 		</div>
 		{#if passwordError}<p class="error-text" role="alert">{passwordError}</p>{/if}
