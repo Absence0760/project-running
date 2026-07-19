@@ -108,7 +108,7 @@
 		flex: 1;
 		min-width: 0;
 	}
-	.nutrition-rings-icon { font-size: 1.15rem; color: var(--color-warning); flex-shrink: 0; }
+	.nutrition-rings-icon { font-size: 1.15rem; color: var(--color-warning-text); flex-shrink: 0; }
 	.nutrition-rings-arrow { color: var(--color-text-tertiary); flex-shrink: 0; }
 
 	.nutrition-rings {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import {
@@ -191,6 +191,50 @@
 	function downloadJson(): void {
 		const e = buildExport();
 		if (e) downloadFile(planToJson(e), `${planSlug()}.json`, 'application/json');
+	}
+
+	// Export menu keyboard support (ARIA menu pattern over a native <details>).
+	// Mirrors the history route's onLogMenuKeydown so both menus navigate
+	// identically; the <details>/<summary> disclosure (Tab, click) is untouched.
+	let exportMenu = $state<HTMLDetailsElement>();
+	function exportMenuItems(): HTMLButtonElement[] {
+		return exportMenu
+			? Array.from(exportMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+			: [];
+	}
+	function focusExportItem(i: number) {
+		const items = exportMenuItems();
+		if (items.length === 0) return;
+		items[(i + items.length) % items.length]?.focus();
+	}
+	async function onExportToggle() {
+		// Move focus into the menu on open so arrow keys + Escape work immediately.
+		if (exportMenu?.open) {
+			await tick();
+			focusExportItem(0);
+		}
+	}
+	function onExportMenuKeydown(e: KeyboardEvent) {
+		const items = exportMenuItems();
+		if (items.length === 0) return;
+		const cur = items.indexOf(document.activeElement as HTMLButtonElement);
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			focusExportItem(cur + 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			focusExportItem(cur - 1);
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			focusExportItem(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			focusExportItem(items.length - 1);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			if (exportMenu) exportMenu.open = false;
+			exportMenu?.querySelector<HTMLElement>('summary')?.focus();
+		}
 	}
 
 	// ─── Bulk editor ops (owner-only) ───
@@ -929,12 +973,12 @@
 						</button>
 					{/if}
 					{#if isOwner && workouts.length > 0}
-						<details class="export-menu">
+						<details class="export-menu" bind:this={exportMenu} ontoggle={onExportToggle}>
 							<summary class="btn btn-outline btn-sm">
 								<span class="material-symbols">ios_share</span>
 								{m('planDetail.export')}
 							</summary>
-							<div class="export-actions" role="menu">
+							<div class="export-actions" role="menu" tabindex="-1" onkeydown={onExportMenuKeydown}>
 								<button type="button" role="menuitem" onclick={copyMarkdown}>
 									{m('planDetail.exportCopyMarkdown')}
 								</button>

@@ -1076,7 +1076,7 @@
 		padding-top: var(--space-md);
 		border-top: 1px solid var(--color-border);
 	}
-	.breakdown-icon { font-size: 1.05rem; color: var(--color-warning); flex-shrink: 0; }
+	.breakdown-icon { font-size: 1.05rem; color: var(--color-warning-text); flex-shrink: 0; }
 
 	/* Water tracker — segmented pips give a glanceable fill level the bare
 	   "N × 250 ml" string never conveyed. */
@@ -1227,8 +1227,8 @@
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
-	.macro-p { color: var(--color-accent-cyan); background: color-mix(in srgb, var(--color-accent-cyan) 16%, transparent); }
-	.macro-c { color: var(--color-secondary); background: color-mix(in srgb, var(--color-secondary) 16%, transparent); }
+	.macro-p { color: var(--color-accent-cyan-text); background: color-mix(in srgb, var(--color-accent-cyan) 16%, transparent); }
+	.macro-c { color: var(--color-secondary-text); background: color-mix(in srgb, var(--color-secondary) 16%, transparent); }
 	.macro-f { color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text)); background: color-mix(in srgb, var(--color-warning) 18%, transparent); }
 	.item-kcal-wrap {
 		display: inline-flex;
