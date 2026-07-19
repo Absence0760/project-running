@@ -292,9 +292,19 @@ impl<I2C: I2c> Max86177<I2C> {
         Ok(decode_die_temp_milli_c(whole, frac))
     }
 
-    /// Put the part into shutdown, releasing the LED drive current.
+    /// Put the part into shutdown, releasing the LED drive current. Register
+    /// state survives shutdown, so [`wake`](Self::wake) resumes sampling
+    /// without a re-[`init`](Self::init).
     pub fn shutdown(&mut self) -> Result<(), Error<I2C::Error>> {
         self.write_reg(reg::SYSTEM_CONFIG_1, SHUTDOWN)
+    }
+
+    /// Wake the part from [`shutdown`](Self::shutdown) and resume sampling,
+    /// flushing the FIFO so counts buffered before the shutdown can't replay
+    /// into a freshly reset detector as if they were a live pulse.
+    pub fn wake(&mut self) -> Result<(), Error<I2C::Error>> {
+        self.write_reg(reg::SYSTEM_CONFIG_1, 0)?;
+        self.write_reg(reg::FIFO_CONFIG_2, FIFO_FLUSH | FIFO_ROLLOVER)
     }
 
     fn wait_temp(&mut self) -> Result<(), Error<I2C::Error>> {

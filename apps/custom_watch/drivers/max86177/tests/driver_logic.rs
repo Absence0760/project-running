@@ -5,9 +5,43 @@
 //! that decides a register value.
 
 use max86177::{
-    agc_next_pa, decode_die_temp_milli_c, decode_fifo_word, AgcConfig, FifoWord, LED_PA_MAX,
-    MEAS1_TAG, MEAS2_TAG,
+    agc_next_pa, decode_die_temp_milli_c, decode_fifo_word, AgcConfig, FifoWord, Max86177,
+    I2C_ADDR, LED_PA_MAX, MEAS1_TAG, MEAS2_TAG,
 };
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+/// Records every register write into a shared log so a test can pin the exact
+/// wire traffic a driver method produces (the driver owns the bus, so the log
+/// handle is what stays inspectable); reads return zeroes.
+#[derive(Clone, Default)]
+struct MockI2c {
+    writes: Rc<RefCell<Vec<Vec<u8>>>>,
+}
+
+impl embedded_hal::i2c::ErrorType for MockI2c {
+    type Error = core::convert::Infallible;
+}
+
+impl embedded_hal::i2c::I2c for MockI2c {
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [embedded_hal::i2c::Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        assert_eq!(address, I2C_ADDR);
+        for op in operations {
+            match op {
+                embedded_hal::i2c::Operation::Write(bytes) => {
+                    self.writes.borrow_mut().push(bytes.to_vec())
+                }
+                embedded_hal::i2c::Operation::Read(buf) => buf.fill(0),
+            }
+        }
+        Ok(())
+    }
+}
 
 #[test]
 fn dim_signal_steps_current_up() {
@@ -178,6 +212,47 @@ fn decode_temp_negative() {
     // Two's-complement whole part with a positive added fraction: -6 + 8/16.
     assert_eq!(decode_die_temp_milli_c(0xFA, 8), -5_500);
     assert_eq!(decode_die_temp_milli_c(0xFF, 0), -1_000);
+}
+
+#[test]
+fn shutdown_sets_only_the_shutdown_bit() {
+    // SYSTEM_CONFIG_1 (0x10) <- SHDN (bit 1), and nothing else: RESET (bit 0)
+    // alongside it would wipe the measurement config wake() relies on
+    // surviving. A stored wire format in spirit — pin it.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.shutdown().unwrap();
+    assert_eq!(*log.borrow(), vec![vec![0x10, 0x02]]);
+}
+
+#[test]
+fn wake_clears_shutdown_then_flushes_the_fifo() {
+    // SYSTEM_CONFIG_1 (0x10) <- 0 resumes sampling; FIFO_CONFIG_2 (0x0E) <-
+    // FLUSH|ROLLOVER (0x12) discards counts buffered before the shutdown so
+    // they can't replay into a freshly reset detector, keeping the rollover
+    // behaviour init configured. Order matters: flushing after the wake also
+    // drops any pre-wake residue.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.wake().unwrap();
+    assert_eq!(*log.borrow(), vec![vec![0x10, 0x00], vec![0x0E, 0x12]]);
+}
+
+#[test]
+fn wake_round_trips_a_shutdown() {
+    // The duty-cycling pattern: shutdown then wake leaves the part sampling
+    // with the same traffic a bare wake produces — no re-init in between.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.shutdown().unwrap();
+    sensor.wake().unwrap();
+    assert_eq!(
+        *log.borrow(),
+        vec![vec![0x10, 0x02], vec![0x10, 0x00], vec![0x0E, 0x12]]
+    );
 }
 
 #[test]

@@ -21,6 +21,7 @@ use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
+use watch_core::hr_duty::{self, HrSample};
 use watch_core::page::Page;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
@@ -176,7 +177,7 @@ pub async fn screen_task(
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
     let mut latest: Option<Fix> = None;
-    let mut hr_bpm: Option<u16> = None;
+    let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
@@ -211,8 +212,8 @@ pub async fn screen_task(
         if let Some(fix) = fix_rx.try_changed() {
             latest = Some(fix);
         }
-        if let Some(reading) = hr_rx.try_changed() {
-            hr_bpm = reading.valid.then_some(reading.bpm);
+        if let Some(sample) = hr_rx.try_changed() {
+            hr = Some(sample);
         }
         if let Some(snap) = rec_rx.try_changed() {
             rec = Some(snap);
@@ -253,6 +254,10 @@ pub async fn screen_task(
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
         let animate = uptime_s.saturating_sub(last_interaction_s) < ANIM_WINDOW_S;
+        // The face renders only what the duty-cycle hold budget lets it vouch
+        // for: the last valid reading holds through one off-window and then
+        // blanks to `--` — a duty-cycled HR must never look continuous.
+        let hr_bpm = hr_duty::shown_bpm(hr, uptime_s, mode);
         let mut rows = face::page_rows(
             page,
             latest.as_ref(),
@@ -444,7 +449,10 @@ pub async fn screen_task(
         let fix_fresh = latest
             .as_ref()
             .is_some_and(|f| uptime_s.saturating_sub(f.uptime_s) <= stale_after);
-        let tick = if animate || fix_fresh {
+        // A shown HR is another time-based refresh owed: its blank must land
+        // when the hold budget expires, not at the next long heartbeat — the
+        // HR analogue of the fresh→stale fix flip above.
+        let tick = if animate || fix_fresh || hr_bpm.is_some() {
             TICK_ACTIVE
         } else {
             TICK_IDLE
@@ -482,9 +490,7 @@ pub async fn screen_task(
         .await
         {
             Either3::First(Either4::First(fix)) => latest = Some(fix),
-            Either3::First(Either4::Second(reading)) => {
-                hr_bpm = reading.valid.then_some(reading.bpm)
-            }
+            Either3::First(Either4::Second(sample)) => hr = Some(sample),
             Either3::First(Either4::Third(snap)) => rec = Some(snap),
             Either3::First(Either4::Fourth(reading)) => elev = Some(reading),
             Either3::Second(Either4::First(p)) => page = p,

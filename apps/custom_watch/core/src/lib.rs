@@ -211,6 +211,7 @@ pub mod gnss_mode;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;
+pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
 pub mod link;
