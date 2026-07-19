@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from './feed_merge';
+import {
+	chunk,
+	mergeFeedPages,
+	mergeProfilePages,
+	mergeRecencyPages,
+	FEED_FOLLOWEE_CHUNK
+} from './feed_merge';
 
 test('chunk splits into the requested size with a short final chunk', () => {
 	const ids = Array.from({ length: 250 }, (_, i) => `id-${i}`);
@@ -83,4 +89,77 @@ test('mergeFeedPages returns [] when limit is 0', () => {
 		mergeFeedPages([[{ id: 'x', started_at: '2026-05-02T10:00:00Z' }]], 0),
 		[]
 	);
+});
+
+test('mergeRecencyPages orders by an arbitrary timestamp field (earned_at)', () => {
+	// The badge feed orders by `earned_at`, not `started_at` — mergeFeedPages is
+	// just this specialised to `started_at`.
+	const mk = (id: string, day: number) => ({
+		id,
+		earned_at: `2026-05-${String(day).padStart(2, '0')}T10:00:00Z`
+	});
+	const pageA = [mk('a12', 12), mk('a2', 2)];
+	const pageB = [mk('b11', 11), mk('b2', 2)]; // 'b2' vs 'a2' tie → id desc keeps 'b2'
+	const merged = mergeRecencyPages([pageA, pageB], 3, (r) => r.earned_at);
+	assert.deepEqual(
+		merged.map((r) => r.id),
+		['a12', 'b11', 'b2']
+	);
+});
+
+test('badge-feed chunk+merge surfaces every followee across >FEED_FOLLOWEE_CHUNK ids', () => {
+	// Simulate the fetchFollowingBadgeAwards path: >100 followees, each with one
+	// public award, queried per chunk. The merge must surface the global newest
+	// `limit` — proving the chunking can't drop a followee's award.
+	const limit = 20;
+	const authorCount = 250;
+	const authors = Array.from({ length: authorCount }, (_, i) => `author-${i}`);
+	// Each author earned a badge; earned_at increases with the index so the
+	// newest `limit` are the highest indices.
+	const rowFor = (i: number) => ({
+		id: `badge-${i}`,
+		user_id: `author-${i}`,
+		earned_at: `2026-01-01T00:${String(i % 60).padStart(2, '0')}:${String(i).padStart(4, '0').slice(-2)}Z`,
+		// Monotonic sort key independent of the minute rollover above.
+		sort: i
+	});
+	const chunks = chunk(authors, FEED_FOLLOWEE_CHUNK);
+	assert.equal(chunks.length, 3);
+	// Each chunk query returns its authors' rows, newest-first, capped at limit.
+	const pages = chunks.map((ids) => {
+		const idxs = ids.map((a) => Number(a.split('-')[1]));
+		return idxs
+			.map(rowFor)
+			.sort((x, y) => y.sort - x.sort)
+			.slice(0, limit);
+	});
+	const merged = mergeRecencyPages(pages, limit, (r) => String(r.sort).padStart(4, '0'));
+	assert.equal(merged.length, limit);
+	// The global newest `limit` are indices 249..230.
+	assert.deepEqual(
+		merged.map((r) => r.sort),
+		Array.from({ length: limit }, (_, i) => authorCount - 1 - i)
+	);
+});
+
+test('mergeProfilePages merges every chunk into one id→row map', () => {
+	// The profile-join leg chunks `.in('id', ids)`; the merge must not drop a
+	// single profile even when the id set spans multiple chunks.
+	const ids = Array.from({ length: 250 }, (_, i) => `u-${i}`);
+	const chunks = chunk(ids, FEED_FOLLOWEE_CHUNK);
+	assert.equal(chunks.length, 3);
+	const pages = chunks.map((c) =>
+		c.map((id) => ({ id, display_name: `name-${id}`, avatar_url: null }))
+	);
+	const byId = mergeProfilePages(pages);
+	assert.equal(byId.size, 250);
+	for (const id of ids) {
+		assert.equal(byId.get(id)?.display_name, `name-${id}`);
+	}
+});
+
+test('mergeProfilePages tolerates null/undefined pages and returns an empty map for no input', () => {
+	assert.equal(mergeProfilePages<{ id: string }>([]).size, 0);
+	const byId = mergeProfilePages([[{ id: 'a' }], null, undefined, [{ id: 'b' }]]);
+	assert.deepEqual([...byId.keys()].sort(), ['a', 'b']);
 });
