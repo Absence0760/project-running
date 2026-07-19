@@ -74,8 +74,11 @@ class RacePredictorCard extends StatelessWidget {
                       child: _HeadCell(l10n.racePredictorColPace),
                     ),
                     Expanded(
-                      flex: 3,
-                      child: _HeadCell(l10n.racePredictorColConfidence),
+                      flex: 4,
+                      child: _HeadCell(
+                        l10n.racePredictorColConfidence,
+                        upper: false,
+                      ),
                     ),
                   ],
                 ),
@@ -112,17 +115,21 @@ String _clock(double seconds) {
 
 class _HeadCell extends StatelessWidget {
   final String label;
-  const _HeadCell(this.label);
+  final bool upper;
+  const _HeadCell(this.label, {this.upper = true});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Text(
-      label.toUpperCase(),
+      upper ? label.toUpperCase() : label,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.visible,
       style: theme.textTheme.labelSmall?.copyWith(
         color: theme.colorScheme.outline,
         fontWeight: FontWeight.w700,
-        letterSpacing: 0.5,
+        letterSpacing: upper ? 0.5 : 0,
       ),
     );
   }
@@ -165,7 +172,7 @@ class _LadderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Align(
               alignment: Alignment.centerLeft,
               child: _ConfidenceChip(quality: rung.quality, l10n: l10n),
@@ -216,11 +223,13 @@ class _ConfidenceChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
-          label.toUpperCase(),
+          label,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
           style: theme.textTheme.labelSmall?.copyWith(
             color: fg,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
           ),
         ),
       ),
