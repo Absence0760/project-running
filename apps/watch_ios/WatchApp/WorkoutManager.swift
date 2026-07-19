@@ -59,6 +59,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var lastTooSlowHaptic: Date? = nil
     private var currentRunId: String?
     private var checkpointStore: CheckpointStore?
+    // Reference fix for the per-update distance delta, kept SEPARATE from the
+    // bounded `track` window. Cleared on resume() so the first fix after a
+    // pause establishes a fresh reference: without this, distance() would be
+    // measured against the pre-pause fix (minutes and any aid-station wander
+    // ago) and that stale gap misattributed as post-resume distance. Mirrors
+    // Wear OS's `lastLocation = null` on resume.
+    var lastLocationForDistance: CLLocation?
 
     struct FinishedRun {
         let id: String
@@ -121,6 +128,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         totalPausedInterval = 0
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
+        lastLocationForDistance = nil
         healthKit.reset()
 
         let store = CheckpointStore(runId: runId)
@@ -164,6 +172,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard state == .paused, let pausedAt else { return }
         totalPausedInterval += Date().timeIntervalSince(pausedAt)
         self.pausedAt = nil
+        lastLocationForDistance = nil
         locationManager.startUpdatingLocation()
         healthKit.resumeSession()
         state = .recording
@@ -226,6 +235,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         totalPausedInterval = 0
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
+        lastLocationForDistance = nil
         checkpointStore = nil
         currentRunId = nil
         state = .idle
@@ -277,17 +287,25 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
+    /// Metres to add to the running distance for one consecutive pair of fixes.
+    /// The `2..<100 m` band rejects stationary GPS jitter (<2 m) and physically
+    /// impossible jumps (>=100 m, e.g. a reacquisition teleport); anything
+    /// outside contributes zero. Pure so the pause->wander->resume behaviour
+    /// can be unit-tested without a live `CLLocationManager`.
+    static func distanceDelta(from: CLLocation, to: CLLocation) -> Double {
+        let delta = to.distance(from: from)
+        return (delta > 2 && delta < 100) ? delta : 0
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         var newPoints: [TrackPointRecord] = []
         for location in locations {
             guard location.horizontalAccuracy >= 0, location.horizontalAccuracy < 30 else { continue }
 
-            if let last = track.last {
-                let delta = location.distance(from: last)
-                if delta > 2 && delta < 100 {
-                    distanceMetres += delta
-                }
+            if let last = lastLocationForDistance {
+                distanceMetres += Self.distanceDelta(from: last, to: location)
             }
+            lastLocationForDistance = location
 
             track.append(location)
             newPoints.append(TrackPointRecord(

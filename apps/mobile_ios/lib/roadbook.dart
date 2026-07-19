@@ -238,7 +238,7 @@ Roadbook buildRoadbook(
 
     RoadbookCutoff? cutoff;
     if (stop.isCutoff) {
-      final limit = _cutoffLimitS(stop.cutoffMeta, startClockMin);
+      final limit = _cutoffLimitS(stop.cutoffMeta, startClockMin, elapsed);
       if (limit != null) {
         final margin = limit - elapsed;
         cutoff = RoadbookCutoff(
@@ -281,18 +281,23 @@ Roadbook buildRoadbook(
   );
 }
 
-int? _cutoffLimitS(dynamic meta, double? startClockMin) {
+int? _cutoffLimitS(dynamic meta, double? startClockMin, double projectedElapsedS) {
   final cutoff = parseCutoff(meta);
   if (cutoff == null) return null;
   if (cutoff.elapsedS != null) return cutoff.elapsedS;
   if (cutoff.clock != null && startClockMin != null) {
     final parts = cutoff.clock!.split(':');
-    var cutoffMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    // A cutoff clock at or before the start clock is the next day: a 24h+
-    // race expressing its overall limit as the start wall-clock one day on
-    // (e.g. start 06:00, cutoff '06:00') means 24h, never a 0-second window.
-    if (cutoffMin <= startClockMin) cutoffMin += _minutesPerDay;
-    return ((cutoffMin - startClockMin) * 60).round();
+    // A clock field carries no day, so a bare cutoff clock is ambiguous once a
+    // race runs longer than 24h ('14:00' on an 08:00 start could be hour 6 or
+    // hour 30). Snap to the whole day nearest the leg's projected arrival, so a
+    // 30h checkpoint resolves to 30h, not the same-day 6h. Never before the
+    // start (k >= 0), so an at-or-before-start clock still wraps to >= 24h.
+    var baseMin =
+        (int.parse(parts[0]) * 60 + int.parse(parts[1])) - startClockMin;
+    if (baseMin <= 0) baseMin += _minutesPerDay;
+    final k = math.max(
+        0, ((projectedElapsedS / 60 - baseMin) / _minutesPerDay).round());
+    return ((baseMin + k * _minutesPerDay) * 60).round();
   }
   return null;
 }
