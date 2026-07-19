@@ -68,7 +68,7 @@
 			showToast(m('planMeta.planUpdated'));
 			onSaved();
 		} catch (e: any) {
-			error = e?.message ?? m('planMeta.saveFailed');
+			error = m('planMeta.saveFailed', { error: e instanceof Error ? e.message : String(e) });
 		} finally {
 			saving = false;
 		}

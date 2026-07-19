@@ -445,3 +445,48 @@ test('fetchFollowingBadgeAwards chunks the followee `.in()` (no silently-empty b
 		'It must not query the whole followee set in one unchunked `.in()` (issue #325).',
 	);
 });
+
+test('/live/[id] hydrateBacklog fetches newest-first + capped, then replays reversed', () => {
+	// Reason: hydrateBacklog seeded the spectator trace with EVERY
+	// live_run_pings row for the run, ordered oldest-first and with no
+	// `.limit()` (issue #334). Over 48h retention @ ~5s cadence a long ultra
+	// broadcast accumulates ~34.5k rows, so either the anon share-link load
+	// downloads + `pushPing`s tens of thousands of rows, or a PostgREST row
+	// cap returns the OLDEST 1000 and freezes the spectator near the run
+	// start with a gap. It must mirror `fetchRecentRacePings`: order
+	// descending, `.limit(1000)`, then replay reversed so the NEWEST ping is
+	// the last one pushed and wins the trace/pan — never regress to an
+	// ascending, unlimited scan.
+	const source = read('src/routes/live/[id]/+page.svelte');
+	const start = source.indexOf('async function hydrateBacklog');
+	assert.ok(start >= 0, 'Could not locate hydrateBacklog — rename?');
+	const next = source.indexOf('\n\tfunction subscribeLive', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	// Isolate the Supabase-Realtime fallback query (the Go-hub branch above
+	// it returns early before this fetch).
+	const queryStart = body.indexOf(".from('live_run_pings')");
+	assert.ok(queryStart >= 0, 'hydrateBacklog must still read live_run_pings.');
+	const query = body.slice(queryStart);
+	assert.match(
+		query,
+		/\.order\('at',\s*\{\s*ascending:\s*false\s*\}\)/,
+		'The backlog fetch must be newest-first — an ascending fetch surfaces the OLDEST rows under a row cap (issue #334).',
+	);
+	assert.match(
+		query,
+		/\.limit\(1000\)/,
+		'The backlog fetch must cap at 1000 rows — mirror fetchRecentRacePings; an unbounded fetch ships ~34.5k rows on an anon load (issue #334).',
+	);
+	assert.doesNotMatch(
+		query,
+		/ascending:\s*true/,
+		'The backlog fetch must not order ascending (issue #334 regression).',
+	);
+	// Descending rows must be replayed in reverse so the last pushPing is the
+	// newest ping (matches the /live/event replay).
+	assert.match(
+		body,
+		/for\s*\(\s*let i = rows\.length - 1;\s*i >= 0;\s*i--\s*\)\s*pushPing\(rows\[i\]\)/,
+		'Newest-first rows must be replayed reversed so the newest ping wins the trace.',
+	);
+});
