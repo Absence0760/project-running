@@ -500,7 +500,12 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   per-run baseline subtraction so the flow yields cumulative steps
   since recording started. `RunRecordingService` collects into
   `RecordingRepository.Metrics.steps`; `QueuedRun.steps` persists the
-  final count; `pushRun` writes `run.metadata.steps` when non-zero.
+  final count; `pushRun` writes `run.metadata.steps` when non-zero. The
+  15 s recovery `Checkpoint` snapshots `steps` (and the runner's
+  `privacy_default`) alongside the rolling HR pair, so a
+  crash-recovered run stamps the same `steps` + `isPublic` a normal
+  stop would (#389) — `recoverCheckpoint` maps `Checkpoint.privacyDefault`
+  through the shared `isPublicFromPrivacyDefault` helper.
   Requires `ACTIVITY_RECOGNITION` at runtime — requested alongside
   `ACCESS_FINE_LOCATION` + `BODY_SENSORS` by `permissionLauncher`.
   `RunningScreen` surfaces the live count as a `"N steps"` caption
