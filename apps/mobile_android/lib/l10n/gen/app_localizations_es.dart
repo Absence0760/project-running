@@ -10796,6 +10796,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get racesBib => 'Dorsal';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduce los datos de tu llegada desde la página de resultados de la carrera.';
 

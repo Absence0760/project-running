@@ -131,6 +131,14 @@ jobs:
         run: |
           node apps/backend/scripts/check_migration_versions.mjs
           node --test apps/backend/scripts/check_migration_versions.test.mjs
+      # A new migration that adds a CHECK/FK to a high-volume table (runs,
+      # notifications, …) without the NOT VALID two-step scans every existing
+      # row under a blocking lock — downtime against prod. Grandfathers the
+      # shipped history; see docs/backend/migration_locks.md.
+      - name: Migration online-safety (NOT VALID on guarded tables)
+        run: |
+          node apps/backend/scripts/check_migration_online_safety.mjs
+          node --test apps/backend/scripts/check_migration_online_safety.test.mjs
       # These two checks parse source files only (no DB), so they run BEFORE
       # the Supabase stack starts. Keeping them after it meant a broken stack
       # — e.g. the run-26820381977 migration-version collision — silently

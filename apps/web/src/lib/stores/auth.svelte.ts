@@ -5,6 +5,7 @@ import { setUnit } from '$lib/format/units.svelte';
 import { showToast } from '$lib/stores/toast.svelte';
 import { m } from '$lib/i18n/store.svelte';
 import { createReadyGate, isAuthSettled } from './auth_ready';
+import { signOutWithScope } from './sign_out';
 
 /// Longest QUIET gap a `ready()` waiter tolerates before resolving
 /// anyway — the deadline re-arms on every unsettled auth lifecycle
@@ -164,16 +165,33 @@ function createAuthStore() {
 		// default ('global') would also revoke refresh tokens on the
 		// user's mobile + watch sessions, which is rarely what the
 		// user means when they click Sign out on the web — sign-out-
-		// everywhere belongs on a separate "sign out of all devices"
-		// affordance, not the default Sign out button.
+		// everywhere is the separate `logoutEverywhere()` affordance,
+		// not the default Sign out button.
 		const priorUserId = user?.id;
-		await supabase.auth.signOut({ scope: 'local' });
+		await signOutWithScope(supabase.auth, 'local');
 		user = null;
 		loggedIn = false;
 		// Drop the prior user's cached prefs so a subsequent sign-in
 		// as a different user on the same browser can't read the
 		// previous user's universal / device bags or replay their
 		// queued offline writes against the wrong account.
+		if (priorUserId) dropUserCache(priorUserId);
+	}
+
+	async function logoutEverywhere() {
+		// `scope: 'global'` revokes every refresh token for this user —
+		// this browser AND their mobile / watch / other-browser sessions.
+		// The security affordance a user reaches for when they suspect a
+		// refresh token was exfiltrated: a local sign-out only drops the
+		// local copy, so a stolen token keeps working until it expires.
+		// Fail closed — if the server revocation errors we must NOT tear
+		// down the local session and imply success; surface it and let the
+		// caller keep the user signed in so they can retry.
+		const priorUserId = user?.id;
+		const error = await signOutWithScope(supabase.auth, 'global');
+		if (error) throw new Error(error.message ?? 'sign-out-everywhere failed');
+		user = null;
+		loggedIn = false;
 		if (priorUserId) dropUserCache(priorUserId);
 	}
 
@@ -217,6 +235,7 @@ function createAuthStore() {
 		fetchUser,
 		refreshSession,
 		logout,
+		logoutEverywhere,
 	};
 }
 

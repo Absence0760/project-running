@@ -222,14 +222,16 @@ void main() {
       expect(r.debugDistanceMetres, 0);
     });
 
-    test('implausible single-hop jump (> 100m) is rejected', () {
+    test('implausible short-interval single-hop jump (> 100m) is rejected', () {
       final r = RunRecorder()
         ..debugPrepareWithoutStream(maxSpeedMps: 1000);
       r.begin();
       r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
-      // 150 m in 60 s = 2.5 m/s (within speed clamp) but > 100 m hop filter.
+      // 150 m in 5 s = 30 m/s (within the loosened speed clamp) but > 100 m
+      // hop filter, and only 5 s elapsed (< the 10 s gap re-anchor window) so
+      // this is a corrupt teleport, not a real gap: rejected, anchor unmoved.
       r.debugInjectPosition(
-        makePosition(metresEast: 150, secondsFromStart: 60),
+        makePosition(metresEast: 150, secondsFromStart: 5),
       );
       expect(r.debugTrack.length, 1);
       expect(r.debugDistanceMetres, 0);
@@ -259,6 +261,75 @@ void main() {
       r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 10));
       expect(r.debugDistanceMetres, closeTo(20, 0.5));
       expect(r.debugTrack.length, 2);
+    });
+
+    test('GPS gap > 100m re-anchors and resumes tracking (#330)', () {
+      // A real dropout — fixes rejected under cover / in a tunnel / while
+      // backgrounded — while the runner keeps moving. The first fix back is
+      // > 100 m from the stale anchor but a genuine interval has elapsed, so
+      // the anchor rebases to it WITHOUT crediting the un-sampled gap, and
+      // ordinary movement accumulates again from the new anchor.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      // 150 m gap over 60 s (> the 10 s re-anchor window): rebase, no credit.
+      r.debugInjectPosition(makePosition(metresEast: 150, secondsFromStart: 60));
+      expect(r.debugDistanceMetres, 0);
+      expect(r.debugTrack.length, 2);
+      // Normal movement from the re-anchored position now accumulates.
+      r.debugInjectPosition(makePosition(metresEast: 160, secondsFromStart: 70));
+      expect(r.debugDistanceMetres, closeTo(10, 0.5));
+      expect(r.debugTrack.length, 3);
+    });
+
+    test('consecutive post-gap fixes do not stay stuck on stale anchor (#330)',
+        () {
+      // Regression guard: before the time-based re-anchor, once the runner was
+      // > 100 m from the anchor every later fix only grew the delta, so the
+      // anchor could never re-qualify and distance was frozen for the rest of
+      // the run. Inject three fixes each further away after a gap; the first
+      // rebases and the next two accumulate the real movement between them.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      // 200 m gap over 60 s → re-anchor at 200 m, nothing credited.
+      r.debugInjectPosition(makePosition(metresEast: 200, secondsFromStart: 60));
+      r.debugInjectPosition(makePosition(metresEast: 230, secondsFromStart: 70));
+      r.debugInjectPosition(makePosition(metresEast: 260, secondsFromStart: 80));
+      // 30 m + 30 m of real movement after the re-anchor; the 200 m gap itself
+      // is never credited.
+      expect(r.debugDistanceMetres, closeTo(60, 1.0));
+      expect(r.debugTrack.length, 4);
+    });
+
+    test('> 100m hop within the gap window (short dt) still fails closed (#330)',
+        () {
+      // A > 100 m hop that arrives BEFORE the re-anchor window (dt < 10 s, but
+      // dt > 0) is a corrupt teleport, not a gap: it must keep failing closed
+      // so a single bad fix can't move the anchor onto a glitch location.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 150, secondsFromStart: 8));
+      expect(r.debugDistanceMetres, 0);
+      expect(r.debugTrack.length, 1);
+    });
+
+    test('zero-dt duplicate teleport still fails closed after re-anchor (#330)',
+        () {
+      // The re-anchor must not open a hole for the zero-dt duplicate case:
+      // two fixes sharing a timestamp give dt = 0, which is < the re-anchor
+      // window, so a 120 m hop is still rejected.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 30));
+      r.debugInjectPosition(makePosition(metresEast: 120, secondsFromStart: 30));
+      expect(r.debugDistanceMetres, 0);
+      expect(r.debugTrack.length, 1);
     });
   });
 
