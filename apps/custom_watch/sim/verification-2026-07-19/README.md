@@ -224,24 +224,27 @@ Measured effect in-sim: before the fix the emulated CPU was saturated by the
 redundant wakes and the sim ran ~9× slower than real time (20 s of firmware
 time in 170 s of host time); after it the same workload runs at ~1:1.
 
-## Found here, fixed alongside — the `+` glyph
+## Found here, fixed since
 
-**The generated font rendered `+` identically to `-`.** Transcribing panel
-captures against `drivers/sharp_mip/src/font.rs` showed `'+'` and `'-'` were
-byte-identical (both a single `0x7E` row at y=8) — the `+` glyph's vertical
-stroke fell under the rasteriser's coverage threshold at 8x16. `'='` and `'_'`
-are fine, so it was one bad glyph, not a systemic threshold problem.
-User-visible consequence: the **Pacer** page's whole purpose is a *signed*
-delta (`+0:42` ahead vs `-1:05` behind) and the two rendered the same, and the
-idle face's `VERT +gain -loss` row lost its sign too.
+**The generated font renders `+` identically to `-`.** Transcribing panel
+captures against `drivers/sharp_mip/src/font.rs` shows `'+'` and `'-'` are
+byte-identical (both a single `0x7E` row at y=8) — the `+` glyph lost its
+vertical stroke in rasterisation. User-visible consequence: the **Pacer**
+page's whole purpose is a *signed* delta (`+0:42` ahead vs `-1:05` behind)
+and the two now render the same, and the idle face's `VERT +gain -loss` row
+loses its sign too.
 
-Found independently from both directions the same day — this HR pass (panel
-transcription) and the BMP581 baro pass, whose `VERT` row read `-139 -17 M`
-for 139 m of *ascent*. Fixed on the barometer branch: `gen_font.py` now
-supersamples only the glyphs that collide with another glyph (two changed — a
-whole-font supersample would have altered 89 of 95, an owner-visible UI
-change) and the generator fails loudly if any collision survives
-regeneration.
+Deferred out of this pass (outside its optical-HR scope, and the font table
+is a **generated** shared asset two concurrent sessions were editing around).
+**Now fixed** — see the "Font `+` glyph fix + per-session sim pointer" batch
+in [`../../README.md`](../../README.md). Two corrections to the diagnosis
+above, both from the collision audit that came with the fix:
+
+- It is not one bad glyph. `'='` and `'_'` survived only because they are
+  pure horizontal bars; every *vertical* sub-pixel stroke was at risk.
+- `'|'` was broken too, and worse: it packed **all-zero**, byte-identical to
+  a space, so it rendered as nothing at all. Nobody had noticed because the
+  first collision guard written for `'+'` excused space on both sides.
 
 ## Model limitations (bench-verify targets)
 

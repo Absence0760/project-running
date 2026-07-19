@@ -85,7 +85,7 @@ ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 
 RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/watch-sim.XXXXXX")"
-LATEST_LINK="${TMPDIR:-/tmp}/watch-sim.latest"
+LATEST_LINK="$(watch_sim_latest_link)"
 DEFMT_RAW="$RUN_DIR/defmt.raw"
 GPS_PTY="$RUN_DIR/gps-pty"
 RENODE_LOG="$RUN_DIR/renode.log"
@@ -112,7 +112,11 @@ trap cleanup INT TERM EXIT
 # monitor also lets you poke the machine mid-run:
 #   ncat localhost <port>   then e.g.:  sysbus.spi3.display DumpFrame "/tmp/f.ppm"
 # bin/watch-monitor.sh attaches here without knowing the port — it follows
-# the watch-sim.latest pointer to this run dir and reads monitor.port.
+# this checkout's watch-sim.latest-* pointer to this run dir and reads
+# monitor.port. Beware: the Renode monitor treats a closed stdin as `quit`,
+# so `echo <cmd> | ncat localhost <port>` runs the command and then kills the
+# emulator. To script one command without ending the run, hold stdin open
+# (e.g. `{ echo "<cmd>"; sleep 2; } | ncat localhost <port>`).
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
 echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
