@@ -174,7 +174,7 @@ pub fn project_runner<'a>(
         let actual = earliest_crossing(crossings, c.id);
         let reached = actual.is_some();
         let projected = match (reached, pace_s_per_m) {
-            (false, Some(pace)) if c.position_m > covered_m => Some(pace * c.position_m),
+            (false, Some(pace)) if c.position_m >= covered_m => Some(pace * c.position_m),
             _ => None,
         };
 
@@ -398,6 +398,36 @@ mod tests {
         assert!(a.reached);
         assert!((a.actual_elapsed_s.unwrap() - 3_600.0).abs() < 1e-9);
         assert_eq!(a.projected_elapsed_s, None);
+    }
+
+    #[test]
+    fn a_cutoff_co_located_with_the_last_reached_checkpoint_is_graded_on_the_exact_arrival() {
+        // An aid station and a cutoff gate share the same distance (separate
+        // rows). The runner crosses the aid at 7000 s; the co-located cutoff is
+        // not individually logged, but arrival there is known exactly.
+        let cps = [
+            ProjectionCheckpoint {
+                id: "aid",
+                position_m: 20_000.0,
+                cutoff_elapsed_s: None,
+            },
+            ProjectionCheckpoint {
+                id: "gate",
+                position_m: 20_000.0,
+                cutoff_elapsed_s: Some(7_200.0),
+            },
+        ];
+        let cr = [ProjectionCrossing {
+            checkpoint_id: "aid",
+            elapsed_s: 7_000.0,
+        }];
+        let p = project_runner(&cps, &cr);
+        let gate = leg(&p, "gate");
+        assert!(!gate.reached);
+        assert!((gate.projected_elapsed_s.unwrap() - 7_000.0).abs() < 1e-9);
+        let cutoff = gate.cutoff.unwrap();
+        assert!((cutoff.margin_s - 200.0).abs() < 1e-9);
+        assert_eq!(cutoff.status, CutoffStatus::Tight);
     }
 
     #[test]

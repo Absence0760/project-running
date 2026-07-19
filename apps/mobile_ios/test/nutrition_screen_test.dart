@@ -219,6 +219,71 @@ void main() {
     }
   });
 
+  // #501: each autofocus name-entry dialog must release focus on dismissal so
+  // a later plain delete confirmation (which has no text field) can't resurface
+  // the soft keyboard. The keyboard resurface is a platform-IME behaviour the
+  // widget-test harness can't simulate (focus restoration already moves primary
+  // focus off the disposed TextField), so this source-level guard pins the fix
+  // at its root — both dialogs unfocus after their showDialog await.
+  test('#501: every autofocus name dialog unfocuses on dismissal', () {
+    final src =
+        File('lib/screens/nutrition_screen.dart').readAsStringSync();
+    final autofocusCount = 'autofocus: true'.allMatches(src).length;
+    final unfocusCount =
+        'FocusManager.instance.primaryFocus?.unfocus();'.allMatches(src).length;
+    expect(
+      unfocusCount,
+      greaterThanOrEqualTo(autofocusCount),
+      reason:
+          'each of the $autofocusCount autofocus TextField dialogs must release '
+          'focus on dismissal (found $unfocusCount unfocus calls) — see #501',
+    );
+  });
+
+  testWidgets('name dialog dismiss releases focus before the delete dialog',
+      (tester) async {
+    final f = await _store('focus_leak_');
+    final pp = Directory.systemTemp.createTempSync('nutrition_focus_pp_');
+    PathProviderPlatform.instance = _FakePathProvider(pp);
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+
+      // Open the autofocus name-entry dialog — its TextField grabs focus and
+      // raises the soft keyboard.
+      await tester.tap(find.byTooltip('Save as meal'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsWidgets);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      // Cancel it. The fix unfocuses on dismissal.
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(FocusManager.instance.primaryFocus?.context?.widget,
+          isNot(isA<EditableText>()));
+
+      // Now the plain delete confirmation must not bring the keyboard back.
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this entry?'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+    } finally {
+      f.dir.deleteSync(recursive: true);
+      pp.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('water card shows the litre readout + a remaining chip',
       (tester) async {
     final f = await _store('water_target_');
