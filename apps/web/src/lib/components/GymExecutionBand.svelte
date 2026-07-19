@@ -29,6 +29,7 @@
 	let repsStr = $state('');
 	let weightStr = $state('');
 	let rpeStr = $state('');
+	let distanceStr = $state('');
 	// The ACTUAL held time for a time-modality set, in seconds. Never prefilled
 	// from the target — an untracked hold must log null, not a fake full hit.
 	let durationStr = $state('');
@@ -51,6 +52,12 @@
 					? weightInputValue(step.targetWeightKg)
 					: '';
 		rpeStr = entered.rpe != null ? String(entered.rpe) : step.targetRpe != null ? String(step.targetRpe) : '';
+		distanceStr =
+			entered.distanceM != null
+				? String(entered.distanceM)
+				: step.targetDistanceM != null
+					? String(step.targetDistanceM)
+					: '';
 		durationStr = entered.durationS != null ? String(entered.durationS) : '';
 		stopwatch = idleStopwatch();
 	});
@@ -84,7 +91,10 @@
 	}
 
 	const hasTarget = $derived(
-		step.targetRepsMin != null || step.targetWeightKg != null || step.targetDurationS != null,
+		step.targetRepsMin != null ||
+			step.targetWeightKg != null ||
+			step.targetDurationS != null ||
+			step.targetDistanceM != null,
 	);
 
 	function targetLabel(): string {
@@ -101,11 +111,16 @@
 			parts.push(formatTargetWeight(step.targetWeightKg));
 		}
 		const repWeight = parts.join(' × ');
+		const extras: string[] = [];
 		if (step.targetDurationS != null) {
-			const dur = t('gym.durationValue', { seconds: step.targetDurationS });
-			return repWeight ? `${repWeight} · ${dur}` : dur;
+			extras.push(t('gym.durationValue', { seconds: step.targetDurationS }));
 		}
-		return repWeight;
+		if (step.targetDistanceM != null) {
+			extras.push(t('gym.distanceValue', { metres: step.targetDistanceM }));
+		}
+		const tail = extras.join(' · ');
+		if (!tail) return repWeight;
+		return repWeight ? `${repWeight} · ${tail}` : tail;
 	}
 
 	function formatTargetWeight(kg: number): string {
@@ -120,9 +135,12 @@
 		// routes through `parseWeight`, which coerces; reps + rpe must too).
 		const repsRaw = typeof repsStr === 'number' ? String(repsStr) : repsStr;
 		const rpeRaw = typeof rpeStr === 'number' ? String(rpeStr) : rpeStr;
+		const distanceRaw = typeof distanceStr === 'number' ? String(distanceStr) : distanceStr;
 		const reps = repsRaw.trim() === '' ? null : parseInt(repsRaw, 10);
 		const weightKg = parseWeight(weightStr);
 		const rpe = rpeRaw.trim() === '' ? null : parseFloat(rpeRaw);
+		const distanceM =
+			step.targetDistanceM == null || distanceRaw.trim() === '' ? null : parseFloat(distanceRaw);
 		// If the stopwatch is still running when Complete is tapped, capture the
 		// live elapsed rather than the last committed tick.
 		const durationS = isTimed
@@ -135,6 +153,7 @@
 			weightKg,
 			rpe: rpe != null && Number.isFinite(rpe) ? rpe : null,
 			durationS,
+			distanceM: distanceM != null && Number.isFinite(distanceM) ? distanceM : null,
 		};
 	}
 
@@ -146,7 +165,8 @@
 		const loggedReps = e.reps != null;
 		const loggedWeight = e.weightKg != null;
 		const loggedDuration = step.targetDurationS != null && e.durationS != null;
-		if (!loggedReps && !loggedWeight && !loggedDuration) {
+		const loggedDistance = step.targetDistanceM != null && e.distanceM != null;
+		if (!loggedReps && !loggedWeight && !loggedDuration && !loggedDistance) {
 			return { state: 'pending', icon: 'radio_button_unchecked' };
 		}
 		const repsOk = step.targetRepsMin == null || (e.reps != null && e.reps >= step.targetRepsMin);
@@ -154,7 +174,9 @@
 			step.targetWeightKg == null || (e.weightKg != null && e.weightKg >= step.targetWeightKg);
 		const durationOk =
 			step.targetDurationS == null || (e.durationS != null && e.durationS >= step.targetDurationS);
-		return repsOk && weightOk && durationOk
+		const distanceOk =
+			step.targetDistanceM == null || (e.distanceM != null && e.distanceM >= step.targetDistanceM);
+		return repsOk && weightOk && durationOk && distanceOk
 			? { state: 'hit', icon: 'check_circle' }
 			: { state: 'under', icon: 'error' };
 	});
@@ -213,7 +235,8 @@
 		</div>
 	{/if}
 
-	<div class="inputs">
+	<div class="inputs" class:has-distance={step.targetDistanceM != null}>
+
 		<label class="field">
 			<span class="field-label section-label">{t('gym.reps')}</span>
 			<input
@@ -247,6 +270,19 @@
 				data-testid="gym-set-rpe"
 			/>
 		</label>
+		{#if step.targetDistanceM != null}
+			<label class="field">
+				<span class="field-label section-label">{t('gym.distanceUnit')}</span>
+				<input
+					type="number"
+					inputmode="decimal"
+					min="0"
+					step="1"
+					bind:value={distanceStr}
+					data-testid="gym-set-distance"
+				/>
+			</label>
+		{/if}
 	</div>
 
 	<div class="actions">
@@ -361,6 +397,14 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-md);
+	}
+	.inputs.has-distance {
+		grid-template-columns: repeat(4, 1fr);
+	}
+	@media (max-width: 30rem) {
+		.inputs.has-distance {
+			grid-template-columns: repeat(2, 1fr);
+		}
 	}
 	.field {
 		display: flex;

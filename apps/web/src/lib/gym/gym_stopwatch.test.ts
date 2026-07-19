@@ -9,12 +9,12 @@ import {
 	stopStopwatch,
 	parseDurationInput,
 	type StopwatchState,
-} from './gym_stopwatch.ts';
+} from './gym_stopwatch';
 import {
 	computeRoutineAdherence,
 	type PlannedSetRef,
 	type ActualSetRef,
-} from './gym_adherence.ts';
+} from './gym_adherence';
 
 test('idle stopwatch is not running and has zero elapsed', () => {
 	const s = idleStopwatch();
@@ -83,6 +83,7 @@ test('cut-short timed hold captured via the stopwatch grades partial, not hit', 
 			targetRepsMax: null,
 			targetWeightKg: null,
 			targetDurationS: 60,
+			targetDistanceM: null,
 		},
 	];
 
@@ -93,7 +94,7 @@ test('cut-short timed hold captured via the stopwatch grades partial, not hit', 
 	assert.equal(capturedS, 20);
 
 	const actual: ActualSetRef[] = [
-		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: capturedS },
+		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: capturedS, distanceM: null },
 	];
 	const adherence = computeRoutineAdherence(planned, actual);
 	assert.equal(adherence.sets[0].status, 'partial');
@@ -102,7 +103,7 @@ test('cut-short timed hold captured via the stopwatch grades partial, not hit', 
 	// Guard against regressing to the old bug (logging the target as the actual),
 	// which adherence would score as a full hit.
 	const buggy = computeRoutineAdherence(planned, [
-		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: 60 },
+		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: 60, distanceM: null },
 	]);
 	assert.equal(buggy.sets[0].status, 'hit');
 });
@@ -117,13 +118,14 @@ test('a fully-held timed set still grades hit', () => {
 			targetRepsMax: null,
 			targetWeightKg: null,
 			targetDurationS: 60,
+			targetDistanceM: null,
 		},
 	];
 	let sw = startStopwatch(idleStopwatch(), 0);
 	sw = stopStopwatch(sw, 61_000);
 	const capturedS = parseDurationInput(String(elapsedSeconds(sw, 61_000)));
 	const actual: ActualSetRef[] = [
-		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: capturedS },
+		{ exerciseKey: 'plank', setIndex: 0, reps: null, weightKg: null, durationS: capturedS, distanceM: null },
 	];
 	assert.equal(computeRoutineAdherence(planned, actual).sets[0].status, 'hit');
 });

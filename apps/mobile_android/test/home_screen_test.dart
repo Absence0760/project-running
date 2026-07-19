@@ -20,6 +20,7 @@ import '../lib/race_controller.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
+import '../lib/screens/run_screen.dart';
 import '../lib/screens/setup_wizard_screen.dart';
 
 /// Drives auth transitions for the setup-wizard gate (#232): a fresh
@@ -145,6 +146,9 @@ class _StampApi extends ApiClient {
 
 void main() {
   tearDown(() {
+    // The swipe-lock signal is a process-global ValueNotifier; reset it so a
+    // recording-active test can't leak the lock into the next test (#490).
+    runRecordingActive.value = false;
     // Null when the test never built the stores (the pure gate-helper
     // group below has no run store on disk).
     if (_runsDir?.existsSync() ?? false) {
@@ -378,6 +382,44 @@ void main() {
       await _pump(tester, s);
       expect(find.byType(NavigationRail), findsNothing);
       expect(find.byType(BottomAppBar), findsOneWidget);
+    });
+  });
+
+  group('HomeScreen swipe lock during recording (#490)', () {
+    testWidgets('idle: the tab PageView is swipeable', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final physics = tester.widget<PageView>(find.byType(PageView)).physics;
+      expect(physics, isNot(isA<NeverScrollableScrollPhysics>()),
+          reason: 'with no run recording the tabs stay swipeable');
+    });
+
+    testWidgets('actively recording: the tab swipe gesture is locked',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      runRecordingActive.value = true;
+      await tester.pump();
+      final physics = tester.widget<PageView>(find.byType(PageView)).physics;
+      expect(physics, isA<NeverScrollableScrollPhysics>(),
+          reason: 'an active run must block the accidental swipe-away');
+    });
+
+    testWidgets('recording: a bottom-nav tap still switches pages',
+        (tester) async {
+      // The lock only kills the drag gesture — deliberate navigation via a
+      // nav tap drives the page controller directly and must still work, so a
+      // runner is never trapped on the recording surface.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      runRecordingActive.value = true;
+      await tester.pump();
+      await tester.tap(find.text('Fitness'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Runs'), findsWidgets,
+          reason: 'the Fitness hub mounted, so the tap navigated the PageView '
+              'despite the locked swipe physics');
     });
   });
 }

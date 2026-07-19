@@ -1420,12 +1420,18 @@ class _RunsScreenState extends State<RunsScreen> {
         : buildHistoryItems(_visible,
             now: DateTime.now(),
             localeTag: localeToTag(Localizations.localeOf(context)));
+    // Bottom padding = FAB clearance (80) + system nav inset, mirroring
+    // plans_screen.dart — without it the docked Add Run FAB sits right on
+    // top of the last row, which is the Load-more button when one shows.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     if (widthClassOf(context) == WidthClass.expanded) {
       return _buildRunGrid(theme, l10n, unit, items,
-          emptyAfterFilter: emptyAfterFilter, showLoadMore: showLoadMore);
+          emptyAfterFilter: emptyAfterFilter,
+          showLoadMore: showLoadMore,
+          bottomInset: bottomInset);
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 80 + bottomInset),
       itemCount:
           items.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
       itemBuilder: (context, index) {
@@ -1463,6 +1469,7 @@ class _RunsScreenState extends State<RunsScreen> {
     List<HistoryItem> items, {
     required bool emptyAfterFilter,
     required bool showLoadMore,
+    required double bottomInset,
   }) {
     final slivers = <Widget>[
       SliverToBoxAdapter(child: _filterHeader(l10n, unit)),
@@ -1504,7 +1511,7 @@ class _RunsScreenState extends State<RunsScreen> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 80 + bottomInset),
           sliver: SliverMainAxisGroup(slivers: slivers),
         ),
       ],
