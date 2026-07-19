@@ -8,7 +8,7 @@
 ///
 /// Web twin: `apps/web/src/lib/social/nearby.ts` — keep the boundaries, bucket
 /// count, and label keys in lockstep. The SQL CASE in migration
-/// `20270426_001_discoverable_runners_nearby.sql` MUST match
+/// `20270424000005_discoverable_runners_nearby.sql` MUST match
 /// `nearbyDistanceBucket`.
 library;
 

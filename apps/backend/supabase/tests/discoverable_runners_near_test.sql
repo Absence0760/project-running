@@ -1,7 +1,7 @@
 -- Opt-in coarse-location "runners nearby" discovery (issue #466).
 --
 -- Pins the privacy contract of `discoverable_runners_near` (migration
--- 20270426_001): the SECURITY DEFINER reader must surface ONLY runners who
+-- 20270424000005): the SECURITY DEFINER reader must surface ONLY runners who
 -- explicitly opted in (`discoverable_nearby` = 'true'), exclude everyone the
 -- other person-discovery filters exclude (minors, shadow_hidden,
 -- `discoverable_in_search` = 'false', blocked either-way), return a coarse
