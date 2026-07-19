@@ -8883,6 +8883,13 @@ export interface FoodEntry {
 	protein_g: number | null;
 	carbs_g: number | null;
 	fat_g: number | null;
+	// Extended nutrients (issue #492), all nullable. Grams for fibre / sugar /
+	// saturated fat; milligrams for sodium / cholesterol.
+	fiber_g: number | null;
+	sugar_g: number | null;
+	sodium_mg: number | null;
+	saturated_fat_g: number | null;
+	cholesterol_mg: number | null;
 	is_public: boolean;
 	external_id: string | null;
 	last_modified_at: string;
@@ -8896,6 +8903,11 @@ export interface FoodEntryInput {
 	protein_g?: number | null;
 	carbs_g?: number | null;
 	fat_g?: number | null;
+	fiber_g?: number | null;
+	sugar_g?: number | null;
+	sodium_mg?: number | null;
+	saturated_fat_g?: number | null;
+	cholesterol_mg?: number | null;
 	started_at?: string;
 	external_id?: string | null;
 }
@@ -8942,6 +8954,11 @@ export async function createFoodEntry(input: FoodEntryInput): Promise<FoodEntry>
 		protein_g: input.protein_g ?? null,
 		carbs_g: input.carbs_g ?? null,
 		fat_g: input.fat_g ?? null,
+		fiber_g: input.fiber_g ?? null,
+		sugar_g: input.sugar_g ?? null,
+		sodium_mg: input.sodium_mg ?? null,
+		saturated_fat_g: input.saturated_fat_g ?? null,
+		cholesterol_mg: input.cholesterol_mg ?? null,
 		started_at: input.started_at ?? now,
 		external_id: input.external_id ?? null,
 		last_modified_at: now,
