@@ -267,15 +267,45 @@
 	let popoverEl = $state<HTMLDivElement | null>(null);
 	let profileBtnEl = $state<HTMLButtonElement | null>(null);
 
+	function accountMenuItems(): HTMLElement[] {
+		return popoverEl
+			? Array.from(popoverEl.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+			: [];
+	}
+	function focusAccountItem(i: number) {
+		const items = accountMenuItems();
+		if (items.length === 0) return;
+		items[(i + items.length) % items.length]?.focus();
+	}
+	/// Roving focus among the account menu items, mirroring the /history Log
+	/// menu's onLogMenuKeydown so role="menu" delivers the arrow/Home/End
+	/// navigation it promises. Items stay tabbable (the $effect below also
+	/// wraps Tab inside the popover); Escape is handled there too.
+	function onAccountMenuKeydown(e: KeyboardEvent) {
+		const items = accountMenuItems();
+		if (items.length === 0) return;
+		const cur = items.indexOf(document.activeElement as HTMLElement);
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			focusAccountItem(cur + 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			focusAccountItem(cur - 1);
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			focusAccountItem(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			focusAccountItem(items.length - 1);
+		}
+	}
+
 	$effect(() => {
 		if (!showLogoutModal) return;
 		const trigger = profileBtnEl;
 		// Move focus to first menu item once the popover renders.
 		queueMicrotask(() => {
-			const first = popoverEl?.querySelector<HTMLElement>(
-				'a, button, [tabindex]:not([tabindex="-1"])',
-			);
-			first?.focus();
+			focusAccountItem(0);
 		});
 
 		const onKey = (e: KeyboardEvent) => {
@@ -462,12 +492,7 @@
 
 	{#if showLogoutModal}
 		<div class="popover-backdrop" onclick={() => (showLogoutModal = false)} role="presentation"></div>
-		<div
-			class="popover"
-			role="menu"
-			aria-label={m('shell.accountMenu')}
-			bind:this={popoverEl}
-		>
+		<div class="popover" bind:this={popoverEl}>
 			<div class="popover-header">
 				<div class="popover-avatar">
 					{auth.user?.display_name?.[0]?.toUpperCase() ?? '?'}
@@ -478,37 +503,48 @@
 				</div>
 			</div>
 			<div class="popover-divider"></div>
-			{#if auth.user}
-				<a
-					class="popover-item"
-					href="/u/{auth.user.id}"
-					onclick={() => (showLogoutModal = false)}
-				>
-					<span class="material-symbols">person</span>
-					{m('shell.viewProfile')}
-				</a>
-				<a
-					class="popover-item"
-					href="/coaching"
-					onclick={() => (showLogoutModal = false)}
-				>
-					<span class="material-symbols">groups</span>
-					{m('shell.coaching')}
-				</a>
-				<a
-					class="popover-item"
-					href="/settings"
-					onclick={() => (showLogoutModal = false)}
-				>
-					<span class="material-symbols">settings</span>
-					{m('shell.settings')}
-				</a>
-				<div class="popover-divider"></div>
-			{/if}
-			<button class="popover-item popover-danger" onclick={handleLogout}>
-				<span class="material-symbols">logout</span>
-				{m('shell.signOut')}
-			</button>
+			<div
+				class="popover-menu"
+				role="menu"
+				aria-label={m('shell.accountMenu')}
+				tabindex="-1"
+				onkeydown={onAccountMenuKeydown}
+			>
+				{#if auth.user}
+					<a
+						class="popover-item"
+						role="menuitem"
+						href="/u/{auth.user.id}"
+						onclick={() => (showLogoutModal = false)}
+					>
+						<span class="material-symbols" aria-hidden="true">person</span>
+						{m('shell.viewProfile')}
+					</a>
+					<a
+						class="popover-item"
+						role="menuitem"
+						href="/coaching"
+						onclick={() => (showLogoutModal = false)}
+					>
+						<span class="material-symbols" aria-hidden="true">groups</span>
+						{m('shell.coaching')}
+					</a>
+					<a
+						class="popover-item"
+						role="menuitem"
+						href="/settings"
+						onclick={() => (showLogoutModal = false)}
+					>
+						<span class="material-symbols" aria-hidden="true">settings</span>
+						{m('shell.settings')}
+					</a>
+					<div class="popover-divider" role="separator"></div>
+				{/if}
+				<button class="popover-item popover-danger" role="menuitem" onclick={handleLogout}>
+					<span class="material-symbols" aria-hidden="true">logout</span>
+					{m('shell.signOut')}
+				</button>
+			</div>
 		</div>
 	{/if}
 {/if}

@@ -420,10 +420,46 @@ Deno.test('renderAuthEmail — localizes and stamps <html lang>', () => {
     { email_action_type: 'signup', token: '1', token_hash: 'h' },
   );
   const de = renderAuthEmail('de-DE', send, { supabaseUrl: 'http://x' });
-  assertEquals(de.subject, 'Bestätige deine Registrierung');
+  assertEquals(de.subject, 'Bestätige deine E-Mail-Adresse');
   assertStringIncludes(de.html, '<html lang="de">');
   const ja = renderAuthEmail('ja', send, { supabaseUrl: 'http://x' });
-  assertEquals(ja.subject, '登録を確認してください');
+  assertEquals(ja.subject, 'メールアドレスを確認してください');
+});
+
+Deno.test('renderAuthEmail — signup: confirm link + welcome copy render in every locale', () => {
+  for (const locale of AUTH_EMAIL_LOCALES) {
+    const [send] = planSends(
+      { email: 'a@example.com' },
+      {
+        email_action_type: 'signup',
+        token: '654321',
+        token_hash: 'signhash',
+        redirect_to: 'http://localhost:7777/auth/callback',
+      },
+    );
+    const r = renderAuthEmail(locale, send, {
+      supabaseUrl: 'http://127.0.0.1:54321',
+      redirectTo: 'http://localhost:7777/auth/callback',
+    });
+    const strings = authEmailCatalogue[locale].signup;
+    // The confirm link is byte-compatible with GoTrue's own and is the
+    // FIRST URL in the HTML (the e2e mail fixture grabs the first URL).
+    const firstUrl = r.html.match(/https?:\/\/[^\s"'<>]+/)![0].replace(/&amp;/g, '&');
+    assertStringIncludes(
+      firstUrl,
+      'http://127.0.0.1:54321/auth/v1/verify?token=signhash&type=signup',
+      `signup verify link drift in ${locale}`,
+    );
+    assertStringIncludes(firstUrl, '/auth/callback');
+    assertStringIncludes(r.text, '/auth/v1/verify?token=signhash&type=signup');
+    // Localized subject / heading / CTA all render (none carry
+    // HTML-special characters, so escapeHtml is identity here).
+    assertEquals(r.subject, strings.subject, `signup subject drift in ${locale}`);
+    assertStringIncludes(r.html, strings.heading);
+    assertStringIncludes(r.html, strings.cta);
+    // The welcoming "what you unlock" line the pass added is present.
+    assertStringIncludes(r.html, strings.body[1]);
+  }
 });
 
 Deno.test('renderAuthEmail — unknown locale falls back to English', () => {

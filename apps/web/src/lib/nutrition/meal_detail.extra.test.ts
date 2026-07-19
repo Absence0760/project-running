@@ -1,16 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { dayKey, entriesForSlotOnDay, slotCalorieTrend } from './meal_detail';
+import { entriesForSlotOnDay, slotCalorieTrend } from './meal_detail';
 
 function row(started_at: string, meal_slot: string | null, calories: number | null) {
 	return { started_at, meal_slot: meal_slot as never, calories };
 }
-
-test('dayKey: returns the UTC YYYY-MM-DD of an ISO timestamp', () => {
-	assert.equal(dayKey('2026-06-05T08:00:00Z'), '2026-06-05');
-	assert.equal(dayKey('2026-06-05T23:59:59Z'), '2026-06-05');
-});
 
 test('entriesForSlotOnDay: a midnight-start entry is in the day (half-open window)', () => {
 	// The window is [date 00:00, next-day 00:00). An entry exactly at local

@@ -45,8 +45,19 @@
 	function enteredFor(i: number): EnteredSet {
 		const o = outcomes[i];
 		if (o && o.kind === 'logged') return o.entered;
-		return { reps: null, weightKg: null, rpe: null, durationS: null };
+		return { reps: null, weightKg: null, rpe: null, durationS: null, distanceM: null };
 	}
+
+	function enteredSomething(e: EnteredSet): boolean {
+		return e.reps != null || e.weightKg != null || e.durationS != null || e.distanceM != null;
+	}
+
+	// Count every set the runner actually logged a value for, including a
+	// distance-only set (which carries no gym_sets column, so buildSets — the
+	// gym_sets writer — legitimately drops it, but it is still a completed set).
+	const loggedCount = $derived(
+		outcomes.filter((o) => o?.kind === 'logged' && enteredSomething(o.entered)).length,
+	);
 
 	function advance() {
 		const step = steps[currentIndex];
@@ -93,6 +104,8 @@
 			if (!o || o.kind !== 'logged') return;
 			const e = o.entered;
 			if (e.reps == null && e.weightKg == null && e.durationS == null) return;
+			// distance has no gym_sets column — a distance-only set is graded via
+			// the metadata step-results below, not persisted as a flat set row.
 			out.push({
 				exercise_name: step.exerciseName,
 				reps: e.reps,
@@ -113,6 +126,7 @@
 			targetRepsMax: step.targetRepsMax,
 			targetWeightKg: step.targetWeightKg,
 			targetDurationS: step.targetDurationS,
+			targetDistanceM: step.targetDistanceM,
 		}));
 		const actual: ActualSetRef[] = [];
 		steps.forEach((step, i) => {
@@ -125,6 +139,7 @@
 				reps: e.reps,
 				weightKg: e.weightKg,
 				durationS: e.durationS,
+				distanceM: e.distanceM,
 			});
 		});
 		const adherence = computeRoutineAdherence(planned, actual);
@@ -144,9 +159,11 @@
 				target_reps_max: p?.targetRepsMax ?? null,
 				target_weight_kg: p?.targetWeightKg ?? null,
 				target_duration_s: p?.targetDurationS ?? null,
+				target_distance_m: p?.targetDistanceM ?? null,
 				actual_reps: a?.reps ?? null,
 				actual_weight_kg: a?.weightKg ?? null,
 				actual_duration_s: a?.durationS ?? null,
+				actual_distance_m: a?.distanceM ?? null,
 			};
 		});
 		return {
@@ -195,7 +212,7 @@
 	{:else}
 		<div class="finish" data-testid="gym-session-finish">
 			<span class="material-symbols finish-icon" aria-hidden="true">flag</span>
-			<p class="finish-text">{t('gym.session.setProgress', { done: buildSets().length, total: steps.length })}</p>
+			<p class="finish-text">{t('gym.session.setProgress', { done: loggedCount, total: steps.length })}</p>
 			{#if saveFailed}
 				<p class="save-failed" role="alert" data-testid="gym-session-save-failed">
 					{t('gym.session.saveFailed')}

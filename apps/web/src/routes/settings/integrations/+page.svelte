@@ -717,7 +717,7 @@
 	}
 	.integration-icon[data-provider="parkrun"] {
 		background: rgba(217, 122, 84, 0.14);
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 	}
 	.integration-icon[data-provider="garmin"] {
 		background: rgba(0, 119, 200, 0.12);
@@ -778,7 +778,7 @@
 	.last-sync {
 		display: block;
 		font-size: 0.75rem;
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 		margin-top: var(--space-xs);
 	}
 

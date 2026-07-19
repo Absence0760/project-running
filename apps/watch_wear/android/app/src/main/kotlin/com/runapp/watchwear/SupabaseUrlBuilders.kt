@@ -2,6 +2,8 @@ package com.runapp.watchwear
 
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Request
+import okhttp3.RequestBody
 
 /// Pure helpers that build the PostgREST / GoTrue URLs + bodies the
 /// watch's [SupabaseClient] POSTs and GETs. Lifted out of the HTTP-
@@ -69,3 +71,35 @@ internal fun computeRefreshExpiryMs(
     nowMs: Long,
     expiresInSec: Long?,
 ): Long = nowMs + (expiresInSec ?: 3600L) * 1000L
+
+// ───────────────────────── uploadTrack ─────────────────────────
+
+/// Build the Storage request that uploads a run's gzipped track to
+/// `runs/{userId}/{runId}.json.gz`. The track object is keyed
+/// deterministically, so a retry after a partial-success save (track
+/// uploaded, row POST failed) re-uploads an object that already
+/// exists. `x-upsert: true` makes Storage overwrite it instead of
+/// returning `409 Duplicate` — the same idempotent-overwrite intent
+/// the row POST expresses with `resolution=merge-duplicates` and that
+/// mobile's `ApiClient.uploadTrackBytes` expresses with `upsert: true`.
+/// Without it, a track-already-there run wedges the offline queue
+/// forever (issue #455).
+///
+/// Extracted so the header set — the load-bearing idempotency
+/// guarantee — is unit-testable without booting OkHttp's network.
+internal fun buildUploadTrackRequest(
+    baseUrl: String,
+    path: String,
+    anonKey: String,
+    token: String,
+    body: RequestBody,
+): Request =
+    Request.Builder()
+        .url("$baseUrl/storage/v1/object/runs/$path")
+        .header("apikey", anonKey)
+        .header("Authorization", "Bearer $token")
+        .header("Content-Type", "application/json")
+        .header("Content-Encoding", "gzip")
+        .header("x-upsert", "true")
+        .post(body)
+        .build()
