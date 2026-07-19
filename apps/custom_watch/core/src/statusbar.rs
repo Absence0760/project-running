@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard).total, 31);
+        assert_eq!(page_indicator(Page::Dashboard).total, 32);
     }
 
     #[test]
