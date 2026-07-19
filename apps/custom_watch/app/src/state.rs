@@ -11,7 +11,7 @@ use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::course::Course;
-use watch_core::elevation::Reading as ElevationReading;
+use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
@@ -116,3 +116,15 @@ pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = 
 /// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
 /// baro task keeps its default reference. One receiver (the `baro` task).
 pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
+
+/// Manual QNH re-zero request: the `button` task sends one on an idle-face
+/// BTN3 long-press; the `baro` task (which owns the vert accumulator the snap
+/// applies to) receives and performs it. Capacity 1 — a press while one is
+/// pending has nothing extra to ask for.
+pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::new();
+
+/// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
+/// was decided: the `baro` task publishes it (honest refusals included — no
+/// fresh GPS, no barometer); the `ui` task shows it as a transient idle-face
+/// banner. One receiver (the `ui` task).
+pub static QNH_REZERO: Watch<CriticalSectionRawMutex, (RezeroStatus, u32), 1> = Watch::new();
