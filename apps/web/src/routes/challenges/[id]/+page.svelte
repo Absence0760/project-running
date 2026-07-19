@@ -43,12 +43,24 @@
 	let notFound = $state(false);
 	let board = $state<ChallengeLeaderboardRow[]>([]);
 	let clubNames = $state<Record<string, string>>({});
+	let myClubs = $state<ClubWithMeta[]>([]);
 	let busy = $state(false);
 	let editing = $state(false);
 	let confirmLeave = $state(false);
 	let confirmDelete = $state(false);
 
 	const isCreator = $derived(!!challenge && challenge.creator_id === auth.user?.id);
+	// RLS also grants a club admin update/delete on a club-anchored challenge, so
+	// admin turnover doesn't orphan it. Mirror the club page's isAdmin derivation.
+	const isClubAdminForChallenge = $derived(
+		!!challenge?.club_id &&
+			myClubs.some(
+				(c) =>
+					c.id === challenge!.club_id &&
+					(c.viewer_role === 'owner' || c.viewer_role === 'admin')
+			)
+	);
+	const canManageChallenge = $derived(isCreator || isClubAdminForChallenge);
 
 	async function load() {
 		notFound = false;
@@ -60,9 +72,9 @@
 			}
 			challenge = c;
 			board = await fetchChallengeLeaderboard(id, c.scope === 'club_vs_club');
-			if (c.scope === 'club_vs_club') {
-				const clubs = await fetchMyClubs();
-				clubNames = Object.fromEntries(clubs.map((cl: ClubWithMeta) => [cl.id, cl.name]));
+			if (c.scope === 'club_vs_club' || c.club_id) {
+				myClubs = await fetchMyClubs();
+				clubNames = Object.fromEntries(myClubs.map((cl) => [cl.id, cl.name]));
 			}
 		} catch {
 			notFound = true;
@@ -195,7 +207,7 @@
 					{m('challenges.join')}
 				</button>
 			{/if}
-			{#if isCreator}
+			{#if canManageChallenge}
 				<button type="button" class="btn btn-secondary" onclick={() => (editing = true)}>
 					{m('challenges.edit')}
 				</button>

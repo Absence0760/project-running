@@ -190,10 +190,11 @@ create index gym_routine_sets_exercise_idx
 
 > One coherent rule across the engine, review panel, and progression input — **per-axis, never volume-product.** For each **non-warmup** planned set, it is a **hit** when `actual_reps >= 0.8 * target_reps_min` **AND** (when load is prescribed) `actual_weight_kg >= 0.8 * target_weight_kg`. Load is skipped for bodyweight / time / distance modalities.
 
+- A **time** set (`target_duration_s`) with no rep target is graded on its own axis: `hit` when `actual_duration_s >= 0.8 * target_duration_s`, else `partial`. A **distance** set (`target_distance_m`) mirrors it: `hit` when `actual_distance_m >= 0.8 * target_distance_m`, else `partial` (a distance/duration target left unlogged is `partial`, not `hit`). When a set carries a weight target *and* a duration/distance target, the duration/distance is the primary axis while the weight is unrecorded (an unlogged weight is graded on that axis, not auto-missed); a weight that IS logged and falls short still misses. This closed issue #328 — a distance-modality set used to fall through to `else` and grade `hit` unconditionally, and its target never reached `GymExecutionBand`.
 - Any **skipped** step OR any step under the per-axis cutoff → `partial`.
 - Abandon flag → `abandoned`.
 - Otherwise → `completed`.
-- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps were logged**.
+- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps, duration, or distance were logged**.
 
 Per-axis (not the reps×weight product) is the chosen resolution: it matches how lifters think (you got the reps or you didn't) and the run precedent's per-step semantics, and it is the load-bearing `evaluateHit` input the progression engine consumes — so the same rule governs the review pill and the next-target computation.
 

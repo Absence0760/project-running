@@ -30,19 +30,32 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    /// Hand a finished run off to the phone. The file is copied into
-    /// WCSession's outbox synchronously, so the caller can reset UI state
-    /// immediately — WCSession owns delivery from here on.
-    func transferRun(fileURL: URL, metadata: [String: Any]) {
-        guard WCSession.default.activationState == .activated else {
-            DispatchQueue.main.async { self.transferState = .failed("WCSession not activated") }
-            return
+    /// A run may only be handed off once WCSession has finished activating.
+    /// `WCSession.activate()` is async at launch, so a short run right after a
+    /// cold launch (or a session gone `.inactive`) can reach the sync tap
+    /// before this is true. Pure so the caller-side decision is unit-testable
+    /// without constructing the manager (its `init` activates a real session).
+    static func canTransfer(activationState: WCSessionActivationState) -> Bool {
+        activationState == .activated
+    }
+
+    /// Hand a finished run off to the phone. Returns `true` only when the file
+    /// was handed to WCSession's outbox (queued for delivery); `false` when the
+    /// session isn't activated yet and nothing was queued. A `false` MUST be
+    /// read by the caller as "not synced" — the finished run has to be kept for
+    /// a retry, never marked done, or it is silently and irrecoverably dropped.
+    func transferRun(fileURL: URL, metadata: [String: Any]) -> Bool {
+        guard Self.canTransfer(activationState: WCSession.default.activationState) else {
+            let message = String(localized: "Phone unavailable — tap Sync Run to retry")
+            DispatchQueue.main.async { self.transferState = .failed(message) }
+            return false
         }
         WCSession.default.transferFile(fileURL, metadata: metadata)
         DispatchQueue.main.async {
             self.queuedCount += 1
             self.transferState = .pending
         }
+        return true
     }
 
     // MARK: - WCSessionDelegate

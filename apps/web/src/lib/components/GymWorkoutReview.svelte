@@ -64,6 +64,7 @@
 		repsMax: number | null,
 		weightKg: number | null,
 		durationS: number | null,
+		distanceM: number | null,
 	): string {
 		const parts: string[] = [];
 		if (reps != null) {
@@ -71,11 +72,12 @@
 		}
 		if (weightKg != null) parts.push(formatWeight(weightKg));
 		const rw = parts.join(' × ');
-		if (durationS != null) {
-			const dur = t('gym.durationValue', { seconds: durationS });
-			return rw ? `${rw} · ${dur}` : dur;
-		}
-		return rw || '—';
+		const extras: string[] = [];
+		if (durationS != null) extras.push(t('gym.durationValue', { seconds: durationS }));
+		if (distanceM != null) extras.push(t('gym.distanceValue', { metres: distanceM }));
+		const tail = extras.join(' · ');
+		if (!tail) return rw || '—';
+		return rw ? `${rw} · ${tail}` : tail;
 	}
 
 	function verdictKey(v: RoutineAdherence['verdict']): string {
@@ -132,10 +134,16 @@
 						<td class="num">
 							{s.status === 'extra'
 								? '—'
-								: repWeight(s.target_reps_min, s.target_reps_max, s.target_weight_kg, s.target_duration_s)}
+								: repWeight(
+										s.target_reps_min,
+										s.target_reps_max,
+										s.target_weight_kg,
+										s.target_duration_s,
+										s.target_distance_m,
+									)}
 						</td>
 						<td class="num">
-							{repWeight(s.actual_reps, null, s.actual_weight_kg, s.actual_duration_s)}
+							{repWeight(s.actual_reps, null, s.actual_weight_kg, s.actual_duration_s, s.actual_distance_m)}
 						</td>
 					</tr>
 				{/each}

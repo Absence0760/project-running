@@ -182,20 +182,17 @@ func TestLifecycleDrip_NilSenderSkips(t *testing.T) {
 	}
 }
 
-func TestLifecycleDrip_NoSecretOmitsUnsubscribeHeaderButStillSends(t *testing.T) {
+func TestLifecycleDrip_NoSecretFailsClosed(t *testing.T) {
 	be := dripBackend()
 	sender := &fakeEmailSender{}
 	w := newEmailTestWorker(be, sender)
 	w.DigestUnsubSecret = "" // not yet provisioned
 
 	if err := w.handleLifecycleDrip(context.Background(), dripJob("u1", "drip_streak")); err != nil {
-		t.Fatalf("handler: %v", err)
+		t.Fatalf("missing unsub secret should be a skip, not a job error: %v", err)
 	}
-	if len(sender.sent) != 1 {
-		t.Fatalf("want 1 sent, got %d", len(sender.sent))
-	}
-	if sender.sent[0].msg.ListUnsubscribe != "" {
-		t.Error("without a secret the drip must omit the List-Unsubscribe header (no forgeable link)")
+	if len(sender.sent) != 0 {
+		t.Errorf("without a secret the drip has no working opt-out; must fail closed (no send); got %d", len(sender.sent))
 	}
 }
 
@@ -203,6 +200,7 @@ func TestLifecycleDrip_SendErrorPropagates(t *testing.T) {
 	be := dripBackend()
 	sender := &fakeEmailSender{err: errors.New("smtp 451 try again")}
 	w := newEmailTestWorker(be, sender)
+	w.DigestUnsubSecret = "s3cret"
 
 	if err := w.handleLifecycleDrip(context.Background(), dripJob("u1", "drip_onboarding")); err == nil {
 		t.Fatal("a send failure must return an error so the queue retries")
