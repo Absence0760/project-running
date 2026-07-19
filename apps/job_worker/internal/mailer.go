@@ -82,14 +82,21 @@ func (s *SMTPSender) Send(ctx context.Context, to string, msg Email) error {
 // isn't available deterministically for the tests).
 func buildMIME(from, to string, msg Email) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\n", from)
-	fmt.Fprintf(&b, "To: %s\r\n", to)
-	fmt.Fprintf(&b, "Subject: %s\r\n", msg.Subject)
+	// Sanitize every interpolated header value by construction. net/smtp
+	// writes the DATA bytes verbatim, so a raw CR/LF smuggled in from
+	// user-controlled copy (the runner's display_name flows into a
+	// safety-email Subject) would split the header — classic SMTP/MIME header
+	// injection (splice a Bcc:, forge List-Unsubscribe:, inject a body).
+	// Stripping control chars here defends From/To/Subject/List-Unsubscribe
+	// regardless of what any caller forgot to clean. Issue #375.
+	fmt.Fprintf(&b, "From: %s\r\n", sanitizeHeaderValue(from))
+	fmt.Fprintf(&b, "To: %s\r\n", sanitizeHeaderValue(to))
+	fmt.Fprintf(&b, "Subject: %s\r\n", sanitizeHeaderValue(msg.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z))
 	if msg.ListUnsubscribe != "" {
 		// RFC 2369. Mail clients render a one-tap "Unsubscribe" that
 		// opens the preferences page.
-		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", msg.ListUnsubscribe)
+		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", sanitizeHeaderValue(msg.ListUnsubscribe))
 		if msg.ListUnsubscribeOneClick {
 			// RFC 8058. Lets Gmail/Yahoo unsubscribe with a single
 			// background POST (List-Unsubscribe=One-Click) instead of
@@ -119,6 +126,21 @@ func buildMIME(from, to string, msg Email) string {
 }
 
 func toCRLF(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+
+// sanitizeHeaderValue strips CR, LF, and every other C0 control character
+// (plus DEL) from a value destined for an RFC 5322 header. This is the header
+// injection defence: a control char in a header value can split or forge a
+// header when the message is written to the SMTP DATA stream. Applied to every
+// interpolated header in buildMIME, and at the source of the user-controlled
+// owner name in renderSafetyEmail. Issue #375.
+func sanitizeHeaderValue(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+}
 
 // extractAddr pulls the bare address out of an RFC 5322 "Name <addr>"
 // string for the SMTP MAIL FROM. A plain address passes through unchanged.
@@ -440,7 +462,11 @@ func renderSafetyEmail(p SafetyEmailPayload, baseURL, locale string) (Email, boo
 	loc := normalizeEmailLocale(locale)
 	shared := lookupEmailShared(loc)
 
-	owner := strings.TrimSpace(p.OwnerName)
+	// Defence in depth: strip control chars from the runner's own
+	// display_name before it reaches the Subject/heading/body. buildMIME
+	// sanitizes headers by construction, but cleaning at the source keeps a
+	// stray CR/LF out of the body copy too. Issue #375.
+	owner := sanitizeHeaderValue(strings.TrimSpace(p.OwnerName))
 	if owner == "" {
 		owner = shared.safetyDefaultOwner
 	}

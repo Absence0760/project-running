@@ -1112,15 +1112,17 @@ void main() {
               'waiting for the debounce window');
     });
 
-    test('5 rapid notifications within 50ms coalesce into ONE push', () async {
+    test('5 rapid notifications within the window coalesce into ONE push',
+        () async {
       // The burst must be SYNCHRONOUS by construction. An `await
       // store.save(...)` per notification puts a disk write inside
       // the "rapid" burst, and a runner stall between two saves
       // crosses whatever window is chosen and fires the debounce
       // timer mid-burst, splitting the push (CI flakes 26523370163,
-      // 29520492396, 29629619415 — raising the window only moves it).
-      // So: seed the routes on disk FIRST, then drive the bridge with
-      // back-to-back store notifications that involve no I/O at all.
+      // 29520492396, 29628162205, 29629619415 — raising the window
+      // only moves it). So: seed the routes on disk FIRST, then drive
+      // the bridge with back-to-back store notifications that involve
+      // no I/O at all.
       WearRoutesBridge.kPushDebounceWindow =
           const Duration(milliseconds: 250);
       // 4 of the 5 routes exist before attach — the burst must change
@@ -1142,7 +1144,7 @@ void main() {
         // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
         store.notifyListeners();
       }
-      // The burst kept the timer reset; no push has fired yet.
+      // The burst kept the timer resetting; no push has fired yet.
       expect(channel.pushCalls, isEmpty,
           reason: 'saves within the window must NOT have fired '
               'a push yet — timer keeps resetting');

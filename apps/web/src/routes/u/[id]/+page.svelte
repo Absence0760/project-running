@@ -92,15 +92,20 @@
 	// lazily when the viewer first lands on the Achievements tab.
 	let badges = $state<Achievement[]>([]);
 	let badgesLoaded = $state(false);
+	// A load *failure* is kept distinct from the genuinely-no-badges state so a
+	// broken fetch surfaces an error + retry instead of rendering the same empty
+	// grid a badge-less runner sees (issue #357).
+	let badgesError = $state<string | null>(null);
 
 	async function loadBadges() {
-		if (badgesLoaded) return;
+		if (badgesLoaded && !badgesError) return;
+		badgesError = null;
 		try {
 			badges = await fetchUserBadges(userId);
-		} catch {
-			badges = [];
+			badgesLoaded = true;
+		} catch (e) {
+			badgesError = e instanceof Error ? e.message : String(e);
 		}
-		badgesLoaded = true;
 	}
 
 	async function toggleBadgeVisibility(b: Achievement) {
@@ -761,12 +766,23 @@
 				</div>
 			{/if}
 		{:else if tab === 'achievements'}
-			<BadgeGrid
-				{badges}
-				isOwner={isSelf}
-				onToggleVisibility={toggleBadgeVisibility}
-				onShare={shareBadge}
-			/>
+			{#if badgesError}
+				<div class="error-banner" role="alert">
+					<span class="material-symbols" aria-hidden="true">error</span>
+					<div>
+						<strong>{m('badges.loadFailed')}</strong>
+						<span class="error-detail">{badgesError}</span>
+					</div>
+					<button class="btn btn-outline" onclick={loadBadges}>{m('profile.retry')}</button>
+				</div>
+			{:else}
+				<BadgeGrid
+					{badges}
+					isOwner={isSelf}
+					onToggleVisibility={toggleBadgeVisibility}
+					onShare={shareBadge}
+				/>
+			{/if}
 		{:else if tab === 'followers'}
 			{#if followers.length === 0}
 				<div class="empty-card">
