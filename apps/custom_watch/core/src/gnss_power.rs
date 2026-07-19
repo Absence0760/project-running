@@ -170,7 +170,10 @@ mod tests {
             for t in [0, 31, 600] {
                 let w = sleep_window(mode, t).unwrap();
                 let backstop_at_ms = u64::from(t) * 1000 + u64::from(w.duration_ms);
-                assert_eq!(backstop_at_ms, u64::from(w.wake_at_s + BACKSTOP_SLACK_S) * 1000);
+                assert_eq!(
+                    backstop_at_ms,
+                    u64::from(w.wake_at_s + BACKSTOP_SLACK_S) * 1000
+                );
                 assert!(BACKSTOP_SLACK_S < REACQUIRE_S);
             }
         }
