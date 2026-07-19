@@ -113,6 +113,38 @@ test.describe('/login', () => {
 		}
 	});
 
+	test('sign-up with an already-registered email shows the neutral check-your-email state, not an account-exists oracle', async ({
+		page
+	}) => {
+		// Issue #399: with local GoTrue enable_confirmations=false a
+		// duplicate sign-up throws user_already_exists. The sign-up
+		// surface must collapse that to the SAME neutral
+		// "check your inbox" info banner a fresh sign-up would show —
+		// never a distinct "that email already has an account" error —
+		// so sign-up can't be used to enumerate accounts regardless of
+		// the (dashboard-managed, unobservable) confirmations toggle.
+		await page.goto('/login?signup=1');
+		await expect(
+			page.getByRole('heading', { name: 'Create an account' })
+		).toBeVisible({ timeout: 5_000 });
+
+		// USER_A.email is a seeded, already-registered account. Any
+		// password is fine — the address collision is what matters.
+		await page.getByPlaceholder('Email address').fill(USER_A.email);
+		await page.getByPlaceholder('Password', { exact: true }).fill('testtest');
+		await page.getByPlaceholder('Confirm password').fill('testtest');
+		await page.getByLabel(/I confirm I am 16 years of age or older/).check();
+		await page.getByLabel(/I have read and agree to the/).check();
+		await page.getByRole('button', { name: 'Sign Up' }).click();
+
+		// Neutral outcome: the info (status) banner appears; the error
+		// (alert) banner does NOT; and no session is minted so we stay
+		// on /login (no /onboarding or /dashboard handoff).
+		await expect(page.locator('.info[role="status"]')).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.error[role="alert"]')).toHaveCount(0);
+		await expect(page).toHaveURL(/\/login/);
+	});
+
 	test('forgot password: link → email → reset → sign in with new password', async ({
 		page,
 		context
