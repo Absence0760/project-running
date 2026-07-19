@@ -32,6 +32,28 @@ rtc1: Timers.NRF52840_RTC_Overflow @ sysbus 0x40011000
     -> nvic@17
 """
 
+# BMP581 barometer on the TWIM1 bus (the baro task probes TWISPI1 at 0x46).
+# Two pieces in one block: the stock platform's twi1 is the legacy nRF51-style
+# TWI byte-interface model, which maps none of the TWIM EasyDMA registers
+# embassy-nrf's twim driver programs (ENABLE=6, TXD/RXD.PTR+MAXCNT, the
+# LASTTX/LASTRX shortcut matrix) — every transaction hung, so the baro task's
+# timeout-probe parked it as "no BMP581". NRF52840_TWIM.cs is a TWIM master
+# model that completes transfers synchronously; BMP581.cs is the sensor behind
+# it with a deterministic, monitor-scriptable altitude source (see its header:
+# SetAltitudeMeters / StartTriangleProfile / SetSeaLevelPa via
+# `sysbus.twi1.bmp581 ...` in the monitor). IRQ 4 per the datasheet (the
+# shared SPIM1/TWIM1 slot).
+include @NRF52840_TWIM.cs
+include @BMP581.cs
+machine UnregisterFromParent sysbus.twi1
+machine LoadPlatformDescriptionFromString
+"""
+twi1: I2C.NRF52840_TWIM @ sysbus 0x40004000
+    -> nvic@4
+
+bmp581: Sensors.BMP581 @ twi1 0x46
+"""
+
 # Board LEDs. We declare these inline instead of loading
 # platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
 # four user buttons as Miscellaneous.Button peripherals that drive their pins
