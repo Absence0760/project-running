@@ -3528,6 +3528,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileLoadError => 'Impossible de charger le profil.';
 
   @override
+  String get profileSectionError => 'Impossible de charger cette section.';
+
+  @override
   String get profileNotFound => 'Profil introuvable.';
 
   @override

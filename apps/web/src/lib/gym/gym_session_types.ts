@@ -6,6 +6,7 @@ export interface EnteredSet {
 	weightKg: number | null;
 	rpe: number | null;
 	durationS: number | null;
+	distanceM: number | null;
 }
 
 // P4 "next target" hint shown on the workout review (gym_programming.md). Weights
@@ -33,7 +34,9 @@ export interface GymStepResult {
 	target_reps_max: number | null;
 	target_weight_kg: number | null;
 	target_duration_s: number | null;
+	target_distance_m: number | null;
 	actual_reps: number | null;
 	actual_weight_kg: number | null;
 	actual_duration_s: number | null;
+	actual_distance_m: number | null;
 }

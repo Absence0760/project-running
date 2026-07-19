@@ -5,26 +5,17 @@
 // can exercise them without importing the EF module (whose top-level
 // `serve(...)` binds a port at module-load time).
 
+import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
+
 /// Parkrun returns its result date as DD/MM/YYYY with no time-of-day
 /// or timezone. We need a UTC timestamp for the runs row, so we
-/// synthesise one. The choice of hour determines which timezones get
-/// the right local date when their dashboard / heatmap reads back.
-///
-/// Persona-hunt finding Pro #5: T08:00:00Z was a UK-centric default.
-/// At UTC-10 (Hawaii — parkrun has a Hawai'i event) and UTC-11
-/// (American Samoa), 08:00 UTC wraps backward to the PREVIOUS local
-/// calendar day. A Saturday parkrun would land on Friday in the
-/// runner's heatmap.
-///
-/// T10:00:00Z covers UTC-10 (Hawaii) through UTC+13 (New Zealand
-/// NZDT) — the realistic worldwide parkrun audience. The remaining
-/// edge case is Samoa (UTC+14 during DST), which crosses the
-/// dateline to land on Sunday locally. That's a known acceptable
-/// trade — no single UTC hour can satisfy every offset in the
-/// 26-hour worldwide range simultaneously. Pinned by lib.test.ts.
+/// synthesise one by appending the shared 10:00 UTC start time — its
+/// worldwide-timezone rationale (persona-hunt finding Pro #5) lives on
+/// `SYNTHETIC_START_TIME_UTC` so this path and race-results-import
+/// can't silently diverge. Pinned by lib.test.ts.
 export function parseParkrunDate(d: string): string {
 	const [dd, mm, yyyy] = d.split('/');
-	return `${yyyy}-${mm}-${dd}T10:00:00Z`;
+	return `${yyyy}-${mm}-${dd}${SYNTHETIC_START_TIME_UTC}`;
 }
 
 export function parseParkrunTime(time: string): number {

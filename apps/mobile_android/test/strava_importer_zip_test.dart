@@ -201,6 +201,77 @@ void main() {
     });
   });
 
+  // Strava's activities.csv has two "Distance" columns: a summary-block one in
+  // the athlete's display unit (km OR miles) and a raw-block one always in
+  // metres. An imperial athlete's export used to import ~1.6x short because
+  // the importer treated the display miles value as km. Single-point GPX
+  // tracks have a distanceMetres of 0, so the CSV fallback is what's used.
+  group('distance unit resolution', () {
+    // Header with both Distance columns (summary display unit + raw metres).
+    const twoBlock = [
+      'Activity ID',
+      'Activity Date',
+      'Activity Name',
+      'Activity Type',
+      'Distance', // summary block: display unit
+      'Elapsed Time',
+      'Filename',
+      'Moving Time',
+      'Distance', // raw block: always metres
+    ];
+
+    Future<double> distanceFor(List<String> header, List<String> row) async {
+      final zip = await writeZip(
+        tmpDir,
+        csvContent: csv([header, row]),
+        gpxFiles: {'activities/1.gpx': _gpxOnePoint},
+      );
+      final r = await StravaImporter.importFromZip(zip);
+      expect(r.runs, hasLength(1));
+      return r.runs.first.distanceMetres;
+    }
+
+    test('imperial export imports the raw metric distance, not the miles value',
+        () async {
+      // 5.00 mi run: summary "Distance" = 5.0 (miles), raw = 8046.72 m.
+      final d = await distanceFor(twoBlock, [
+        '1', 'Apr 9, 2026, 7:30:00 AM', 'X', 'Run', '5.0', '3600',
+        'activities/1.gpx', '3400', '8046.72',
+      ]);
+      expect(d.round(), 8047);
+    });
+
+    test('metric export is unchanged — raw column is already metres', () async {
+      // 8.05 km run: summary "Distance" = 8.05 (km), raw = 8050 m.
+      final d = await distanceFor(twoBlock, [
+        '1', 'Apr 9, 2026, 7:30:00 AM', 'X', 'Run', '8.05', '3600',
+        'activities/1.gpx', '3400', '8050',
+      ]);
+      expect(d.round(), 8050);
+    });
+
+    test('pure helper: two-column export prefers the raw metres column', () {
+      expect(
+        stravaCsvDistanceMetres(
+          ['distance', 'x', 'distance'],
+          ['5.0', 'y', '8046.72'],
+        ).round(),
+        8047,
+      );
+    });
+
+    test('pure helper: single bare Distance falls back to km', () {
+      expect(stravaCsvDistanceMetres(['distance'], ['8.5']), 8500);
+    });
+
+    test('pure helper: explicit "distance in miles" converts from miles', () {
+      expect(
+        stravaCsvDistanceMetres(['distance in miles'], ['5']).round(),
+        8047,
+      );
+    });
+  });
+
   group('multi-row imports', () {
     test('imports multiple activities in one zip', () async {
       final zip = await writeZip(

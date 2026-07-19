@@ -41,6 +41,7 @@ import {
 import { fetchGraphCycle } from './graph_cycle';
 import { pickBestLoop } from './select';
 import { isValidTargetDistance } from '../route_loop';
+import { checkRouteRateLimit } from '../rate_limit';
 
 export interface GenerateRequest {
 	start: { lat: number; lng: number };
@@ -73,11 +74,25 @@ export interface GenerateConfig {
 	bypassPaywallEnabled: boolean;
 }
 
-/// Outcome of the tier gate. `'error'` covers every fail-closed branch
-/// (missing Supabase config, is_pro RPC failure) — the caller answers 500
-/// and the client falls back to the heuristic rather than being granted
-/// the perk.
-export type ProCheckVerdict = 'pro' | 'free' | 'unauthenticated' | 'error';
+/// Outcome of the caller gate. `'error'` covers every fail-closed branch
+/// (missing Supabase config, is_pro RPC failure, rate-limit RPC failure) —
+/// the caller answers 500 and the client falls back to the heuristic
+/// rather than being granted the perk. `'limited'` is a Pro caller who is
+/// over their per-user throttle (issue #339) → 429.
+export type ProCheckVerdict = 'pro' | 'free' | 'unauthenticated' | 'limited' | 'error';
+
+/// Per-user throttle on server-side generation (issue #339). This is the
+/// heaviest paid path in the app: a single call races REQUEST_MULTIPLIERS ×
+/// up to MAX_SEEDS = 32 upstream round_trip fetches against the billed
+/// GraphHopper / self-hosted graph_cycle engines. The per-IP AWS WAF rule
+/// (100/5min) can't stop a single JWT spreading calls across a small IP
+/// pool, so we add a durable per-user ceiling. 60/hour is generous for
+/// interactive route-building (a deliberate generate every minute,
+/// sustained) while capping a scripted caller at ~60 × 32 ≈ 1920 upstream
+/// fetches/hour instead of unbounded. Pro-only path, so no free/pro split.
+export const GENERATE_RATE_BUCKET = 'generate-route';
+export const GENERATE_RATE_MAX = 60;
+export const GENERATE_RATE_WINDOW_S = 3600;
 
 export interface GenerateDeps {
 	fetcher?: Fetcher;
@@ -110,7 +125,23 @@ function supabaseProChecker(config: GenerateConfig) {
 			console.error('[generate] is_pro lookup failed', proRes.error);
 			return 'error';
 		}
-		return proRes.data === true ? 'pro' : 'free';
+		if (proRes.data !== true) return 'free';
+
+		// Pro confirmed — enforce the per-user throttle on the SAME
+		// JWT-bound client (one getUser, guard-satisfying user id). Only
+		// Pro callers reach generation, so free callers are never charged
+		// a rate-limit slot. Fail-closed: a throttle error denies the paid
+		// fan-out (mapped to 'error' → 500) rather than granting it.
+		const rl = await checkRouteRateLimit(
+			supabase,
+			userRes.data.user.id,
+			GENERATE_RATE_BUCKET,
+			GENERATE_RATE_MAX,
+			GENERATE_RATE_WINDOW_S,
+		);
+		if (rl === 'limited') return 'limited';
+		if (rl === 'error') return 'error';
+		return 'pro';
 	};
 }
 
@@ -128,7 +159,7 @@ export type GenerateResult =
 				largestLoopM?: number;
 			};
 	  }
-	| { status: 400 | 401 | 500 | 501 | 502; body: { error: string } }
+	| { status: 400 | 401 | 429 | 500 | 501 | 502; body: { error: string } }
 	| { status: 403; body: { error: 'pro_required'; upgrade: true } };
 
 /// Seeds raced at EACH request multiplier (so total round_trip calls is
@@ -251,10 +282,14 @@ export async function handleGenerate(
 	if (!config.bypassPaywallEnabled) {
 		const verdict = await (deps.proChecker ?? supabaseProChecker(config))(accessToken);
 		if (verdict === 'unauthenticated') return { status: 401, body: { error: 'not authenticated' } };
-		// Fail-closed: an unanswerable tier check denies the perk (the client
-		// falls back to the heuristic) — it never silently grants it.
+		// Fail-closed: an unanswerable tier / throttle check denies the perk
+		// (the client falls back to the heuristic) — it never silently grants it.
 		if (verdict === 'error') return { status: 500, body: { error: 'tier check failed' } };
 		if (verdict === 'free') return { status: 403, body: { error: 'pro_required', upgrade: true } };
+		// Per-user throttle tripped (issue #339): deny before racing 32
+		// billed upstream fetches. The client falls back to its in-browser
+		// heuristic on any non-200, same as the 500 branch above.
+		if (verdict === 'limited') return { status: 429, body: { error: 'rate_limited' } };
 	}
 
 	const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));
