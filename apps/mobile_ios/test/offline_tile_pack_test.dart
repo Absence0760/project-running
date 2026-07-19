@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -152,6 +153,37 @@ void main() {
     expect(hit, isNotNull);
     final miss = await store.cachedTile('r7', 18, 1, 1);
     expect(miss, isNull);
+  });
+
+  test('deletePack mid-download removes the pack and leaves no stale state',
+      () async {
+    final firstFetchStarted = Completer<void>();
+    final proceed = Completer<void>();
+    final store = OfflineTilePackStore(
+      tileUrlTemplate: 'https://t/{z}/{x}/{y}.png',
+      fetcher: (url) async {
+        if (!firstFetchStarted.isCompleted) firstFetchStarted.complete();
+        // Hold the download open until the test releases it, so deletePack
+        // runs while the loop is genuinely mid-flight.
+        await proceed.future;
+        return fakeTile();
+      },
+    );
+    await store.init(overrideDirectory: tmp);
+
+    // Start the download but don't await — it suspends on the first fetch.
+    final download = store.downloadPack('r9', bbox, minZoom: 12, maxZoom: 13);
+    await firstFetchStarted.future;
+    expect(store.progressFor('r9').status, OfflinePackStatus.downloading);
+
+    // Unpin mid-download: deletePack cancels + awaits the in-flight download,
+    // then releases so it unwinds past the cancel check.
+    final delete = store.deletePack('r9');
+    proceed.complete();
+    await Future.wait([download, delete]);
+
+    expect(Directory('${tmp.path}/r9').existsSync(), isFalse);
+    expect(store.progressFor('r9').status, OfflinePackStatus.absent);
   });
 
   test('init reconciles an already-downloaded pack to ready', () async {

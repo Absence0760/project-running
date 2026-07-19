@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'chunk.dart';
 import 'segments_rank.dart';
 
 // Column-level grant lockdowns: see migrations 20260801_001 +
@@ -6888,25 +6889,46 @@ class ApiClient {
         .toList();
     if (authors.isEmpty) return const [];
 
-    var q = _client
-        .from(AchievementRow.table)
-        .select()
-        .inFilter(AchievementRow.colUserId, authors)
-        .eq(AchievementRow.colIsPublic, true);
-    if (cursor != null) {
-      final iso = cursor.earnedAt.toIso8601String();
-      q = q.or(
-        'earned_at.lt.$iso,and(earned_at.eq.$iso,id.lt.${cursor.id})',
-      );
+    // The followee set is chunked: PostgREST serialises `.inFilter()` into the
+    // URL, so a viewer following many hundreds of people overflows the
+    // gateway's request-line limit and the query silently returns empty — a
+    // silently empty badge feed. Each chunk applies the same cursor + ordering
+    // + limit; the global top-`limit` is a subset of the union, re-sorted by
+    // earned_at desc then id desc.
+    Future<List<AchievementRow>> queryChunk(List<String> ids) async {
+      var q = _client
+          .from(AchievementRow.table)
+          .select()
+          .inFilter(AchievementRow.colUserId, ids)
+          .eq(AchievementRow.colIsPublic, true);
+      if (cursor != null) {
+        final iso = cursor.earnedAt.toIso8601String();
+        q = q.or(
+          'earned_at.lt.$iso,and(earned_at.eq.$iso,id.lt.${cursor.id})',
+        );
+      }
+      final rows = await q
+          .order(AchievementRow.colEarnedAt, ascending: false)
+          .order(AchievementRow.colId, ascending: false)
+          .limit(limit);
+      return rows.map<AchievementRow>((r) => AchievementRow.fromJson(r)).toList();
     }
-    final rows = await q
-        .order(AchievementRow.colEarnedAt, ascending: false)
-        .order(AchievementRow.colId, ascending: false)
-        .limit(limit);
-    if (rows.isEmpty) return const [];
 
-    final badges =
-        rows.map<AchievementRow>((r) => AchievementRow.fromJson(r)).toList();
+    final pages = await Future.wait(chunkList(authors).map(queryChunk));
+    final mergedById = <String, AchievementRow>{};
+    for (final page in pages) {
+      for (final b in page) {
+        mergedById[b.id] = b;
+      }
+    }
+    final badges = mergedById.values.toList()
+      ..sort((a, b) {
+        final byDate = b.earnedAt.compareTo(a.earnedAt);
+        return byDate != 0 ? byDate : b.id.compareTo(a.id);
+      });
+    if (badges.length > limit) badges.removeRange(limit, badges.length);
+    if (badges.isEmpty) return const [];
+
     final ids = badges.map((b) => b.userId).toSet().toList();
     final profiles = await _client
         .from(UserProfileRow.table)

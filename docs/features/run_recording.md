@@ -230,7 +230,8 @@ Every incoming `Position` goes through:
    - `delta < 100` — rejects implausible teleports
    - `delta / dt <= _maxSpeedMps` — rejects implausible speed. A corrupt fix implying 50 m/s on foot would otherwise inflate distance and pace.
 7. If all three gates pass: append to track, add `delta` to `_distanceMetres`, update `_lastTrackedPosition` + `_lastTrackedPositionAt`.
-8. `_emitSnapshot()` publishes the updated `RunSnapshot`.
+8. **Time-based gap re-anchor** — if the gates *don't* pass but `dt >= _gpsReanchorAfterSeconds` (10 s), the hop is treated as a real GPS gap (fixes dropped under cover / in a tunnel / while backgrounded, where the runner genuinely moved > 100 m) rather than a corrupt teleport. The anchor rebases to the new fix — append to track, update `_lastTrackedPosition` + `_lastTrackedPositionAt` — **without** crediting the un-sampled gap distance, exactly how `resume()` nulls the anchor so the first post-resume fix re-anchors. Without this the anchor stays stale, every later `delta` only grows past 100 m, and distance freezes for the rest of the run ([#330](https://github.com/Absence0760/project-running/issues/330)). The `dt` gate uses GPS-reported time (not wall clock), so a zero/near-zero-dt duplicate keeps failing closed. This also makes the weak-GPS banner honest: the first good fix after a real gap both clears `_weakGps` and re-anchors, so tracking truly resumes when the "distance paused" banner clears (row 16).
+9. `_emitSnapshot()` publishes the updated `RunSnapshot`.
 
 ### Per-activity tuning
 
