@@ -28,9 +28,24 @@ frame dumps are transcribed inline (PPMs are not committed).
 | Idle BTN3 long = QNH re-zero, honest refusal | `button: BTN3 long -> qnh re-zero requested` → 2x `NO BARO` banner (parked baro task answers) |
 | Uptime-anchored paths past 512 s / 1024 s | 44-min continuous recording, monotonic timestamps, 3 125 m — after the sim RTC1 model fix below |
 
-## Firmware bug found and fixed
+### Barometric path (added by the BMP581 model — `bmp581.log`)
 
-**1 Hz GPS-dropout reacquire froze distance for the rest of the run.**
+| Claim | Evidence |
+|---|---|
+| The baro task runs instead of parking | `baro: BMP581 streaming`; chip-id probe, soft-reset and the OSR/IIR/ODR config sequence all answered |
+| Scripted altitude round-trips through the firmware | model at 1600 m → `baro: alt=1599.9999m` (0.1 mm, same ISA constants both sides) |
+| ELEVATION published every sample | 1 Hz `baro: alt=… gain=… loss=…` throughout every run |
+| GPS-baro complementary filter / auto-QNH engages | pure baro `1599.9999` → `1624.18` on the seed sample, matching the fixture's GGA altitude 1624.0 |
+| Face ALT row prefers barometric altitude | static 2400 m set while the fixture's GPS altitude is ~1700 m → ALT row reads `2324 M` (bias-corrected baro), not the fix |
+| VERT +gain/-loss accrues on a climbing profile | mountain_loop + a 1600→1800 m triangle: `gain=133.8728m loss=20.082764m`, panel row `+133 -23 M` |
+| Elevation mini-profile sparkline is baro-driven | ElevationProfile page renders a full-width climb, context row `ELEV D+61 D-0` |
+| QNH re-zero `SET <alt>` (was bench-gated) | `baro: qnh re-zero -> Applied(1624.0)` → 2x `SET 1624M` banner **and** the ALT row snaps 1600 → 1624 M |
+| QNH re-zero `NO GPS FIX` (was bench-gated) | same press inside the gps_dropout void → `qnh re-zero -> NoGps`, 2x `NO GPS FIX` banner over `GPS STALE 10S`, ALT unchanged |
+| Phantom-vert moving gate banks nothing while stopped | idle recorder + 43 m of scripted climb → `gain=0.0m`; BTN1 starts the run and the next commit lands (`gain=3.0166016m`) |
+
+## Firmware bugs found and fixed
+
+**1. 1 Hz GPS-dropout reacquire froze distance for the rest of the run.**
 `watch_core::record` never ported `run_recorder`'s #330 re-anchor
 (`_gpsReanchorAfterSeconds = 10`): at 1 Hz the fixed 100 m one-hop cap
 rejected the post-gap reacquire fix, the anchor never rebased, and every
@@ -40,6 +55,30 @@ without crediting the un-sampled distance, 1 Hz path only — throttled modes
 self-heal via their scaled ceiling and are untouched); locked with two host
 regression tests; re-verified in-sim (freeze now lasts exactly the 40 s
 void, `gps_dropout.log`).
+
+**2. Vert banked nothing on any real climb.** The baro task gated the vert
+accumulator on `state == Recording`, but `RecordState::Paused` also covers a
+fix whose displacement merely failed the point-acceptance min-move filter
+(`TRACK_THRESHOLD_M`, 3 m) — a GPS sampling artifact, not a stop. A runner
+power-hiking at 1–2 m/s covers under 3 m per 1 Hz fix, so the state alternates
+fix by fix and every Paused sample re-based the deadband reference before the
+pending gain could cross it: a climb slower than 3 m/s *vertical* — i.e. every
+real climb — banked exactly zero. Invisible until a barometer existed in the
+sim. Fixed at the source with the host-tested `Snapshot::is_moving()`, which
+reads the receiver's own speed (stamped before the min-move filter can flip the
+state, and zeroed by start/pause/stop), so a genuine stop still banks nothing.
+Four host regression tests; the climb one fails "got 0" against the old gate.
+
+**3. Every `+` on the panel rendered as a minus.** Read straight off the
+emulated panel: the VERT row showed `-139 -17 M` for 139 m of ascent. The
+format string is `+{gain} -{loss} M` — the generated font's `+` glyph was
+byte-identical to `-`, because at the 8x16 cell size its vertical stem is under
+one device pixel wide and its coverage falls below the threshold in every
+column. Reproducible with and without antialiasing. `gen_font.py` now
+supersamples any glyph that packs identically to a different glyph (2 glyphs
+change; a whole-font supersample would have changed 89 of 95) and fails loudly
+if a collision survives; two host tests pin the invariant. This also un-breaks
+the Pacer page, where `+0:42` and `-0:42` were the same pixels.
 
 ## Sim-harness issues found and fixed
 
@@ -56,13 +95,28 @@ void, `gps_dropout.log`).
    so the honest signal meter read 0 bars even with a 3D fix and the
    "0 bars despite sats in view" claim was untestable. The fixture now
    carries GSA fix-type transitions (3 → 1 → 3) and a mid-void GSV.
+3. **The stock `twi1` is the legacy TWI byte interface** — it maps none of the
+   EasyDMA TWIM registers embassy-nrf's driver programs (ENABLE=6, TXD/RXD
+   PTR+MAXCNT, the LASTTX/LASTRX shortcuts), so every I²C transaction hung
+   with no STOPPED event and both sensor tasks' timeout-probes concluded the
+   part was absent. `sim/NRF52840_TWIM.cs` is a real TWIM master (generic — it
+   dispatches to whatever `II2CPeripheral` sits at the addressed slave);
+   `sim/BMP581.cs` is the sensor behind it.
+4. **Two monitor hazards, both of which killed a run mid-capture** — the
+   Renode monitor treats a closed stdin as `quit`, so `echo cmd | ncat <port>`
+   *ends the emulation*; and `/tmp/watch-sim.latest` is shared across
+   concurrent sims, so a second sim silently repoints it. Drive one long-lived
+   connection to your own instance's `monitor.port`.
 
 ## Not sim-verifiable (unchanged claims)
 
-- **VertAccumulator / VERT row / complementary filter / QNH `SET <alt>` +
-  `NO GPS FIX` banner variants** — the vert accumulator lives in the baro
-  task and Renode has no BMP581 model; the sim's honest state is `NO BARO`
-  and a `--` VERT row (both observed). Bench-gated.
+- **Real-analog barometer behaviour** — the BMP581 model serves a scripted
+  altitude, so sensor noise, self-heating, IIR/OSR settling and the register
+  map itself stay bench-gated. What the model proves is the *path*: driver
+  sequence, task, accumulator, filter, face and banners (see the barometric
+  table above). The one path still unverified is a `read_pressure_pa` that
+  returns `Ok(None)` for a sustained stretch — the model's 50 Hz ODR always
+  has a sample ready by the 1 Hz poll.
 - **HR paths** (zones with live BPM, duty-cycling, off-wrist, ambient) — no
   MAX86177 model; the Zones page's honest no-HR state is what the sim shows.
 - **BLE / SoftDevice** (GATT link, run sync, settings/course push) — the
@@ -79,3 +133,19 @@ bin/watch-monitor.sh                          # then: runMacro $btn1..$btn4
 # long-press BTN3:  python "click(24, 1.5)"
 # panel capture:    sysbus.spi3.display DumpFrame @/tmp/frame.ppm
 ```
+
+Barometer (all monitor commands; the sensor is `sysbus.twi1.bmp581`):
+
+```
+sysbus.twi1.bmp581 SetAltitudeMeters 1650                 # static altitude
+sysbus.twi1.bmp581 StartTriangleProfile 1600 1800 417 660 # climb/descend, mm/s
+sysbus.twi1.bmp581 StopProfile                            # freeze where it is
+sysbus.twi1.bmp581 SetSeaLevelPa 101800                   # move the QNH reference
+sysbus.twi1.bmp581 AltitudeMeters                         # inspect
+```
+
+The triangle profile is advanced by a 1 Hz timer on the machine's virtual-time
+clock — no wall-clock, no randomness, so a given firmware + fixture + profile
+replays identically. The `417/660 mm/s` rates above track `mountain_loop`'s own
+GPS altitude ramp, so the GPS-baro complementary filter is exercised rather
+than swamped by an artificial divergence.
