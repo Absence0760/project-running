@@ -967,16 +967,13 @@ fn draw_arc_degenerate_and_offscreen_clip() {
 /// pins the invariant so a regenerated table can never reintroduce it silently.
 #[test]
 fn no_two_glyphs_rasterise_identically() {
+    // Space is *not* skipped. Excusing it hides the same bug in its worst
+    // form — a glyph the rasteriser blanked out entirely, which collides with
+    // space and renders as nothing at all. That is how '|' shipped invisible.
     for (i, a) in font::FONT.iter().enumerate() {
         let ch_a = font::FIRST_CHAR + i as u8;
-        if ch_a == b' ' {
-            continue;
-        }
         for (j, b) in font::FONT.iter().enumerate().skip(i + 1) {
             let ch_b = font::FIRST_CHAR + j as u8;
-            if ch_b == b' ' {
-                continue;
-            }
             assert_ne!(
                 a, b,
                 "glyphs {:?} and {:?} rasterise identically",

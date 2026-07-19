@@ -113,17 +113,18 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     Only colliding glyphs are touched, so the rest of the table stays
     bit-identical to the plain 1x rasterisation. Returns the repaired labels.
     """
+    # Space participates so that a glyph the rasteriser blanked out entirely
+    # collides with it and gets repaired — that is how '|' shipped invisible,
+    # byte-identical to a space. Space itself is legitimately all-zero, so it
+    # is never the glyph that gets re-rasterised.
     seen: dict[tuple[int, ...], int] = {}
     colliding: set[int] = set()
     for index, rows in enumerate(glyphs):
-        if GLYPHS[index] == " ":
-            continue  # a blank space is legitimately all-zero
         key = tuple(rows)
-        if not any(rows):
-            continue  # an entirely blank glyph is caught by the guard below
         if key in seen:
-            colliding.add(seen[key])
-            colliding.add(index)
+            colliding.update(
+                i for i in (seen[key], index) if GLYPHS[i] != " "
+            )
         else:
             seen[key] = index
     if not colliding:
@@ -170,11 +171,11 @@ def main() -> None:
         print(f"note: supersampled {len(repaired)} colliding glyph(s): {' '.join(repaired)}",
               file=sys.stderr)
     # Guard the invariant the repair exists for: after it, no two distinct
-    # printable glyphs may still pack to the same pixels.
+    # printable glyphs may still pack to the same pixels. Space is included,
+    # so a glyph the rasteriser blanked out entirely trips this too rather
+    # than shipping invisible.
     seen: dict[tuple[int, ...], str] = {}
     for ch, rows in zip(GLYPHS, glyphs):
-        if ch == " ":
-            continue
         key = tuple(rows)
         if key in seen:
             raise SystemExit(
