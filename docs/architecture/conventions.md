@@ -227,6 +227,7 @@ The rule when adding any feature that touches a mature flow (recording, sync, au
 1. **Identify the layer.** What does your feature depend on? Stopwatch (L0), sensors (L1), network (L2), third-party widgets (L3), side-effects (L4). Put it at the highest layer that needs it — don't wire a new visual into the state that drives the clock.
 2. **Degrade, don't fail.** If the dependency is unavailable (GPS off, network dead, tile layer crashed), the layers below must still work. Provide a fallback (pedometer distance when GPS is absent, cached tiles when offline, typed errors that leave the recorder usable). Silent stalls and white screens are bugs.
 3. **Wrap risky subtrees.** User-facing surfaces that depend on complex third-party widgets (`flutter_map` is the prime example) need a release-mode `ErrorWidget.builder` override so a subtree crash replaces *only* that subtree, not the entire screen. Debug keeps the default red screen.
+4. **Independent fetches get independent error state.** A screen that loads several unrelated sections (a profile's Runs / Achievements / Followers / Following / Notifications tabs) must give each its own loading + error + retry, not bundle them into one `Future.wait` under a single `try`/`catch` — one failed call there blanks every section, including the ones that succeeded. Only a fetch the whole page structurally needs (the profile header's summary) may gate the page; each per-section fetch owns a scoped `ErrorState` + Retry. See `apps/mobile_android/lib/screens/profile_screen.dart` (`#508`).
 
 The canonical write-up with the L0–L4 table and failure modes is [run_recording.md § Hardening § Layering](../features/run_recording.md#layering). Read it before touching the recording stack; copy the pattern when building the next "basics must always work" surface (e.g. sync, auth, navigation).
 
@@ -467,6 +468,15 @@ The app has **two** card flavours, and the distinction is load-bearing — don't
 - **Flat** (no shadow): ~17 pages (settings, plans, coaching, recap, share, onboarding, …) deliberately use a page-scoped, shadowless local `.card`. These are intentionally *not* elevated. **Do not add a `box-shadow` to a bare global `.card` name** — it would cascade a shadow into every one of those flat pages. There is intentionally no global `.card`; the flat look stays page-scoped until someone does a full design-system pass to name it (`.card-flat`) and migrate all the copies.
 
 When you need an elevated panel: `class="card-elevated"` (+ a layout modifier). When you need a flat panel: keep the existing page-scoped `.card`. Never give the global an unqualified `.card` rule.
+
+## Web status / accent colour tokens — pick the variant for the JOB
+
+The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--color-success` / `--color-danger`) base tokens in `apps/web/src/app.css` are tuned for **tints, borders and dark mode** — they are *light* accents and FAIL WCAG 1.4.3 as foreground text on a light surface (warning 2.05:1, cyan 2.30:1, secondary 3.06:1 on white; issue #368). Each status/accent has purpose-built variants — use the one matching the job, never the base token, for these two jobs:
+
+- **Solid status BACKGROUND with white text** (toasts, offline banner): use the theme-independent `--color-<status>-strong` (dark in both themes, AA with `#fff`). Never as a `color:` — dark-on-dark in dark mode.
+- **Foreground TEXT / ICON** (a stat value, a chip label, an inline warning): use the **theme-aware `--color-<token>-text`** variant (dark on light surfaces, reverts to the base hue on dark surfaces; ≥4.5:1 both themes, incl. on the same-hue chip tint). A blind swap to `-strong` here fails dark mode (2.98:1). For a status word tinted toward the body text on a same-status chip, `color: color-mix(<status> N%, var(--color-text))` is also valid within the mix caps below.
+
+`contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
 
 ## Web forms — `.editor-form` is the shared field layer
 

@@ -217,7 +217,7 @@ export function buildRoadbook(
 		}
 
 		if (stop.isCutoff) {
-			const cutoff = cutoffLimitS(stop.cutoffMeta, opts.startClockMin ?? null);
+			const cutoff = cutoffLimitS(stop.cutoffMeta, opts.startClockMin ?? null, elapsed);
 			if (cutoff != null) {
 				const marginS = cutoff - elapsed;
 				leg.cutoff = {
@@ -247,20 +247,29 @@ export function buildRoadbook(
 /**
  * Resolve a cutoff marker's `meta` to a limit in elapsed seconds from the
  * start. Prefers `cutoff_elapsed_s`; otherwise derives from `cutoff_clock`
- * minus the start clock (wrapping past midnight). Null when neither resolves.
+ * minus the start clock. Null when neither resolves.
+ *
+ * A clock field carries no day, so a bare `cutoff_clock` is ambiguous once a
+ * race runs longer than 24h: '14:00' on a race that started at 08:00 could be
+ * hour 6 or hour 30. We snap to the whole day nearest the leg's projected
+ * arrival (`projectedElapsedS`) — so a 30h checkpoint resolves to 30h, not the
+ * same-day 6h the raw offset alone would give. Never resolves before the start
+ * (k ≥ 0), so an at-or-before-start clock still yields at least the 24h wrap.
  */
-function cutoffLimitS(meta: unknown, startClockMin: number | null): number | null {
+function cutoffLimitS(
+	meta: unknown,
+	startClockMin: number | null,
+	projectedElapsedS: number
+): number | null {
 	const cutoff = parseCutoff(meta);
 	if (!cutoff) return null;
 	if (cutoff.elapsedS !== undefined) return cutoff.elapsedS;
 	if (cutoff.clock !== undefined && startClockMin != null) {
 		const [h, m] = cutoff.clock.split(':').map(Number);
-		let cutoffMin = h * 60 + m;
-		// A cutoff clock at or before the start clock is the next day: a 24h+
-		// race expressing its overall limit as the start wall-clock one day on
-		// (e.g. start 06:00, cutoff '06:00') means 24h, never a 0-second window.
-		if (cutoffMin <= startClockMin) cutoffMin += MINUTES_PER_DAY;
-		return (cutoffMin - startClockMin) * 60;
+		let baseMin = h * 60 + m - startClockMin;
+		if (baseMin <= 0) baseMin += MINUTES_PER_DAY;
+		const k = Math.max(0, Math.round((projectedElapsedS / 60 - baseMin) / MINUTES_PER_DAY));
+		return (baseMin + k * MINUTES_PER_DAY) * 60;
 	}
 	return null;
 }

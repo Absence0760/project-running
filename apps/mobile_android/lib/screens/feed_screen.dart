@@ -104,53 +104,74 @@ class _FeedScreenState extends State<FeedScreen> {
       _loadError = null;
     });
     _loadBadgeAwards();
-    try {
-      final api = widget.api;
-      final results = await Future.wait([
-        api.fetchFollowingActivityFeed(
-          limit: 20,
-          authorId: _authorFilter == 'all' ? null : _authorFilter,
-          activityType: _activityFilter,
-        ),
-        // Following list — drives the author-filter dropdown.
-        // Capped at 200 to keep payload small (was 500 — overkill
-        // for the dropdown UI). Users following more than 200
-        // accounts can still filter via search; if a power-user
-        // case emerges we'll add a "load more authors" affordance
-        // rather than always pulling the long-tail of inactive
-        // follows.
-        api.userId == null
-            ? Future.value(const <UserProfileRow>[])
-            : api.fetchFollowing(api.userId!, limit: 200),
-      ]);
-      final entries = results[0] as List<ActivityFeedEntry>;
-      final followees = results[1] as List<UserProfileRow>;
 
-      final runIds = _runIds(entries);
-      final engagement = runIds.isEmpty
-          ? const <String, ({int kudosCount, bool viewerHasKudos, int commentCount})>{}
-          : await api.fetchEngagementSummaries(runIds);
-      if (!mounted) return;
-      setState(() {
-        _entries = entries;
-        _followees = followees;
-        _engagement = {
-          for (final id in engagement.keys)
-            id: EngagementSummary(
-              kudosCount: engagement[id]!.kudosCount,
-              viewerHasKudos: engagement[id]!.viewerHasKudos,
-              commentCount: engagement[id]!.commentCount,
-            ),
-        };
-        _exhausted = entries.length < 20;
-        _loading = false;
-      });
+    // The activity feed is the one fetch that must succeed — a failure
+    // here is a genuine can't-show-a-feed error. The author-filter
+    // dropdown (fetchFollowing) and the per-run kudos/comment footers
+    // (fetchEngagementSummaries) are adornments on the feed; isolating
+    // them means one of those failing can't blank the whole feed the way
+    // a single shared try/catch over all three did (issue #506).
+    final List<ActivityFeedEntry> entries;
+    try {
+      entries = await widget.api.fetchFollowingActivityFeed(
+        limit: 20,
+        authorId: _authorFilter == 'all' ? null : _authorFilter,
+        activityType: _activityFilter,
+      );
     } catch (e) {
+      debugPrint('feed load failed: $e');
       if (!mounted) return;
       setState(() {
         _loadError = e;
         _loading = false;
       });
+      return;
+    }
+
+    final followees = await _loadFollowees();
+    final engagement = await _loadEngagement(_runIds(entries));
+    if (!mounted) return;
+    setState(() {
+      _entries = entries;
+      _followees = followees;
+      _engagement = engagement;
+      _exhausted = entries.length < 20;
+      _loading = false;
+    });
+  }
+
+  // Following list — drives the author-filter dropdown. Capped at 200 to
+  // keep the payload small. A failure here degrades to no dropdown (the
+  // previously-loaded list is kept), never blanks the feed.
+  Future<List<UserProfileRow>> _loadFollowees() async {
+    if (widget.api.userId == null) return const [];
+    try {
+      return await widget.api.fetchFollowing(widget.api.userId!, limit: 200);
+    } catch (e) {
+      debugPrint('feed followees load failed: $e');
+      return _followees;
+    }
+  }
+
+  // Per-run kudos / comment counts. Runs only (lift cards carry no
+  // engagement footer). A failure degrades to no counts, never blanks
+  // the feed.
+  Future<Map<String, EngagementSummary>> _loadEngagement(
+      List<String> runIds) async {
+    if (runIds.isEmpty) return const {};
+    try {
+      final engagement = await widget.api.fetchEngagementSummaries(runIds);
+      return {
+        for (final id in engagement.keys)
+          id: EngagementSummary(
+            kudosCount: engagement[id]!.kudosCount,
+            viewerHasKudos: engagement[id]!.viewerHasKudos,
+            commentCount: engagement[id]!.commentCount,
+          ),
+      };
+    } catch (e) {
+      debugPrint('feed engagement load failed: $e');
+      return const {};
     }
   }
 
@@ -165,22 +186,11 @@ class _FeedScreenState extends State<FeedScreen> {
         authorId: _authorFilter == 'all' ? null : _authorFilter,
         activityType: _activityFilter,
       );
-      final moreRunIds = _runIds(more);
-      final moreEng = moreRunIds.isEmpty
-          ? const <String, ({int kudosCount, bool viewerHasKudos, int commentCount})>{}
-          : await widget.api.fetchEngagementSummaries(moreRunIds);
+      final moreEng = await _loadEngagement(_runIds(more));
       if (!mounted) return;
       setState(() {
         _entries = [..._entries, ...more];
-        _engagement = {
-          ..._engagement,
-          for (final id in moreEng.keys)
-            id: EngagementSummary(
-              kudosCount: moreEng[id]!.kudosCount,
-              viewerHasKudos: moreEng[id]!.viewerHasKudos,
-              commentCount: moreEng[id]!.commentCount,
-            ),
-        };
+        _engagement = {..._engagement, ...moreEng};
         _exhausted = more.length < 20;
         _loadingMore = false;
       });

@@ -170,6 +170,16 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila — vai tentar de novo" } }
       }
     },
+    "Phone unavailable — tap Sync Run to retry" : {
+      "comment" : "Sync failure shown when WCSession has not finished activating; the run is kept for a manual retry.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Telefon nicht verfügbar – zum Wiederholen auf „Lauf synchronisieren“ tippen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Teléfono no disponible: toca Sincronizar carrera para reintentar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Téléphone indisponible – appuyez sur Synchroniser la course pour réessayer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "スマホに接続できません。「ランを同期」をタップして再試行" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Telefone indisponível — toque em Sincronizar corrida para tentar de novo" } }
+      }
+    },
     "Queued for sync" : {
       "comment" : "Sync status shown when the run is queued to transfer to the phone.",
       "localizations" : {
