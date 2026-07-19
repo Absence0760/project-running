@@ -9300,6 +9300,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionFat => 'Fat';
 
   @override
+  String get nutritionFiber => 'Fiber';
+
+  @override
+  String get nutritionSugar => 'Sugar';
+
+  @override
+  String get nutritionSodium => 'Sodium';
+
+  @override
+  String get nutritionSaturatedFat => 'Saturated fat';
+
+  @override
+  String get nutritionCholesterol => 'Cholesterol';
+
+  @override
   String get nutritionWater => 'Water';
 
   @override

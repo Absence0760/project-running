@@ -9396,6 +9396,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionFat => 'Gorduras';
 
   @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
+
+  @override
   String get nutritionWater => 'Água';
 
   @override
@@ -20748,6 +20763,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
 
   @override
   String get nutritionWater => 'Água';

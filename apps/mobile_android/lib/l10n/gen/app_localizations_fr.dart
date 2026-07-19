@@ -9423,6 +9423,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionFat => 'Lipides';
 
   @override
+  String get nutritionFiber => 'Fibres';
+
+  @override
+  String get nutritionSugar => 'Sucre';
+
+  @override
+  String get nutritionSodium => 'Sodium';
+
+  @override
+  String get nutritionSaturatedFat => 'Graisses saturées';
+
+  @override
+  String get nutritionCholesterol => 'Cholestérol';
+
+  @override
   String get nutritionWater => 'Eau';
 
   @override
