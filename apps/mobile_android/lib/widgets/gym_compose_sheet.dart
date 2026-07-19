@@ -510,25 +510,12 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                         const TextInputType.numberWithOptions(decimal: false),
                       ),
                     ),
-                    // The first set can never be removed (the composer
-                    // always keeps at least one), so no x button on
-                    // si == 0 — but the slot still reserves the same 40px
-                    // width so the reps/weight/RPE/duration columns stay
-                    // aligned across every row instead of the first row's
-                    // fields shifting wider than the rest.
-                    SizedBox(
-                      width: 40,
-                      child: si == 0
-                          ? null
-                          : IconButton(
-                              tooltip: l10n.gymEditorRemoveSet,
-                              icon: const Icon(Icons.close, size: 18),
-                              color: theme.colorScheme.outline,
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _removeSet(ex, si),
-                            ),
+                    IconButton(
+                      tooltip: l10n.gymEditorRemoveSet,
+                      icon: const Icon(Icons.close, size: 18),
+                      color: theme.colorScheme.outline,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _removeSet(ex, si),
                     ),
                   ],
                 ),
