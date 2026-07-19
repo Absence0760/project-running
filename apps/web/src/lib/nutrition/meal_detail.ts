@@ -13,12 +13,6 @@ export interface MealDetailRow {
 	calories: number | null;
 }
 
-/// Local YYYY-MM-DD key for an ISO timestamp. A null meal_slot folds into
-/// `snack` (the same default the day view uses).
-export function dayKey(iso: string): string {
-	return new Date(iso).toISOString().slice(0, 10);
-}
-
 /// Entries from `rows` that fall on local calendar day `date` AND belong to
 /// `slot` (null slot → snack).
 export function entriesForSlotOnDay<T extends MealDetailRow>(
