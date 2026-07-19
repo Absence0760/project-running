@@ -100,8 +100,15 @@ import {
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import { dashboardRunsWindowStart } from './dashboard_runs';
 import { bucketWeeklyMileage } from './weekly_mileage';
-import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from '../social/feed_merge';
+import {
+	chunk,
+	mergeFeedPages,
+	mergeProfilePages,
+	mergeRecencyPages,
+	FEED_FOLLOWEE_CHUNK
+} from '../social/feed_merge';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -201,6 +208,73 @@ export async function fetchRunsWithError(
 	} catch (e) {
 		return { runs: [], error: (e as Error)?.message ?? 'Failed to load runs' };
 	}
+}
+
+/// Column-narrowed, date-windowed run fetch for the dashboard. Mirrors
+/// `fetchWeeklyMileage`'s windowing pattern (window contract +
+/// rationale in `./dashboard_runs`); the select carries exactly the
+/// columns the dashboard's consumers read (streaks, training-load,
+/// race-predictor, consistency, intensity, trend, goals, snapshot,
+/// this-week, recent list) — `metadata` stays because those consumers
+/// read `avg_bpm` / `elevation_m` / `indoor` from it. `track` is nulled
+/// like `fetchRuns` (it is a lazy Storage download, never a column).
+/// The `started_at desc` order means the PostgREST 1000-row cap, if a
+/// very high-volume runner ever hits it inside the window, drops only
+/// the oldest rows in the window — never the recent ones any consumer
+/// reads. Lifetime headline numbers come from `fetchRunAllTimeStats`.
+export async function fetchRunsForDashboard(): Promise<Run[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const windowStart = dashboardRunsWindowStart(new Date());
+	const { data, error } = await supabase
+		.from(TABLES.runs)
+		.select(
+			'id, user_id, started_at, distance_m, duration_s, source, activity_type, is_dnf, elevation_gain_m, metadata',
+		)
+		.eq('user_id', userId)
+		.gte('started_at', windowStart.toISOString())
+		.order('started_at', { ascending: false });
+	if (error || !data) return [];
+	return data.map((r: any) => ({
+		...r,
+		source: parseRunSource(r.source),
+		track: null,
+	})) as Run[];
+}
+
+/// Cheap all-time aggregates for the dashboard's two lifetime stat cards
+/// (Total runs / Longest run — labelled "all sources" / "all time").
+/// `fetchRunsForDashboard` windows to ~2 years for the recency cards,
+/// which would silently truncate these lifetime numbers for a deep-history
+/// runner — the exact Strava-migrant case the old unbounded scan protected.
+/// A count-only HEAD read plus a single-row max keep them exact without
+/// shipping any run payload. Scoped to the signed-in user (RLS + explicit
+/// filter, matching every other personal-data read here).
+export async function fetchRunAllTimeStats(): Promise<{
+	totalRuns: number;
+	longestRunM: number;
+}> {
+	const userId = auth.user?.id;
+	if (!userId) return { totalRuns: 0, longestRunM: 0 };
+	const [countRes, longestRes] = await Promise.all([
+		supabase
+			.from(TABLES.runs)
+			.select('id', { count: 'exact', head: true })
+			.eq('user_id', userId),
+		supabase
+			.from(TABLES.runs)
+			.select('distance_m')
+			.eq('user_id', userId)
+			.order('distance_m', { ascending: false })
+			.limit(1),
+	]);
+	return {
+		totalRuns: countRes.error ? 0 : countRes.count ?? 0,
+		longestRunM:
+			longestRes.error || !longestRes.data?.[0]
+				? 0
+				: longestRes.data[0].distance_m ?? 0,
+	};
 }
 
 /// Supplementary counts for the Year-in-Running recap that can't be
@@ -2343,6 +2417,28 @@ export async function joinClubByToken(token: string): Promise<string> {
 	return data as string;
 }
 
+/// Fetch `display_name` + `avatar_url` for a set of user ids, chunked.
+/// PostgREST serialises `.in('id', ids)` into the request URL, so a
+/// club / event with more than ~100 members overflows the gateway's
+/// request-line limit and this profile-join leg silently returns null —
+/// degrading every name + avatar to a placeholder. Chunk the id set and
+/// merge each chunk's rows into one map. See social/feed_merge.ts.
+async function fetchProfilesByIds(
+	userIds: string[]
+): Promise<Map<string, { id: string; display_name: string | null; avatar_url: string | null }>> {
+	if (userIds.length === 0) return new Map();
+	const pages = await Promise.all(
+		chunk(userIds, FEED_FOLLOWEE_CHUNK).map((ids) =>
+			supabase.from('user_profiles').select('id, display_name, avatar_url').in('id', ids)
+		)
+	);
+	return mergeProfilePages(
+		pages.map(
+			(p) => p.data as { id: string; display_name: string | null; avatar_url: string | null }[] | null
+		)
+	);
+}
+
 export async function fetchPendingRequests(clubId: string): Promise<(ClubMember & {
 	display_name: string | null;
 	avatar_url: string | null;
@@ -2355,12 +2451,7 @@ export async function fetchPendingRequests(clubId: string): Promise<(ClubMember 
 		.order('joined_at', { ascending: true });
 	if (!rows || rows.length === 0) return [];
 	const userIds = (rows as ClubMember[]).map((r) => r.user_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', userIds);
-	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	const byId = await fetchProfilesByIds(userIds);
 	return (rows as ClubMember[]).map((r) => ({
 		...r,
 		display_name: byId.get(r.user_id)?.display_name ?? null,
@@ -2453,12 +2544,7 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 		.order('joined_at', { ascending: true });
 	if (!members) return [];
 	const userIds = (members as ClubMember[]).map((m) => m.user_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', userIds);
-	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	const byId = await fetchProfilesByIds(userIds);
 	return (members as ClubMember[]).map((m) => ({
 		...m,
 		display_name: byId.get(m.user_id)?.display_name ?? null,
@@ -3043,12 +3129,7 @@ export async function fetchEventAttendees(
 		.order('joined_at', { ascending: true });
 	if (!attendees) return [];
 	const userIds = (attendees as EventAttendee[]).map((a) => a.user_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', userIds);
-	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	const byId = await fetchProfilesByIds(userIds);
 	return (attendees as EventAttendee[]).map((a) => ({
 		...a,
 		display_name: byId.get(a.user_id)?.display_name ?? null,
@@ -7546,6 +7627,12 @@ export async function deleteNotification(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+export async function deleteNotifications(ids: string[]): Promise<void> {
+	if (ids.length === 0) return;
+	const { error } = await supabase.from(TABLES.notifications).delete().in('id', ids);
+	if (error) throw error;
+}
+
 // ─────────────────────── User reports ───────────────────────
 //
 // Submit a report against a user / club / route. The server-side
@@ -7780,12 +7867,7 @@ export async function fetchMyAthletesWithError(): Promise<{
 	if (error) return { athletes: [], error: error.message };
 	if (!rows || rows.length === 0) return { athletes: [], error: null };
 	const ids = (rows as { athlete_id: string }[]).map((r) => r.athlete_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', ids);
-	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	const byId = await fetchProfilesByIds(ids);
 	return {
 		athletes: (rows as Array<Record<string, unknown>>).map((r) => ({
 			id: r.id as string,
@@ -7982,12 +8064,7 @@ export async function fetchMyCoaches(): Promise<CoachAthleteLink[]> {
 		.order('accepted_at', { ascending: false });
 	if (!rows || rows.length === 0) return [];
 	const ids = (rows as { coach_id: string }[]).map((r) => r.coach_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', ids);
-	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	const byId = await fetchProfilesByIds(ids);
 	return (rows as Array<Record<string, unknown>>).map((r) => ({
 		id: r.id as string,
 		status: r.status as CoachAthleteStatus,
@@ -10176,30 +10253,36 @@ export async function fetchFollowingBadgeAwards(opts?: {
 	const authors = await resolveFollowedAuthorIds(null);
 	if (authors.length === 0) return [];
 
-	let q = supabase
-		.from(TABLES.achievements)
-		.select('*')
-		.in('user_id', authors)
-		.eq('is_public', true)
-		.order('earned_at', { ascending: false })
-		.order('id', { ascending: false })
-		.limit(limit);
-	if (opts?.cursor) {
-		q = q.or(
-			`earned_at.lt.${opts.cursor.earned_at},and(earned_at.eq.${opts.cursor.earned_at},id.lt.${opts.cursor.id})`
-		);
-	}
-	const { data, error } = await q;
-	if (error) throw error;
-	const rows = (data ?? []) as Achievement[];
+	// The followee set is chunked: PostgREST serialises `.in()` into the
+	// URL, so a viewer following many hundreds of people overflows the
+	// gateway's request-line limit and the query silently returns null —
+	// a silently empty badge feed. Each chunk applies the same cursor +
+	// ordering + limit; the global top-`limit` is a subset of the union,
+	// which mergeRecencyPages collapses back down (earned_at desc, id desc).
+	const queryChunk = async (ids: string[]) => {
+		let q = supabase
+			.from(TABLES.achievements)
+			.select('*')
+			.in('user_id', ids)
+			.eq('is_public', true)
+			.order('earned_at', { ascending: false })
+			.order('id', { ascending: false })
+			.limit(limit);
+		if (opts?.cursor) {
+			q = q.or(
+				`earned_at.lt.${opts.cursor.earned_at},and(earned_at.eq.${opts.cursor.earned_at},id.lt.${opts.cursor.id})`
+			);
+		}
+		const { data, error } = await q;
+		if (error) throw error;
+		return (data ?? []) as Achievement[];
+	};
+
+	const pages = await Promise.all(chunk(authors, FEED_FOLLOWEE_CHUNK).map(queryChunk));
+	const rows = mergeRecencyPages(pages, limit, (r) => r.earned_at);
 	if (rows.length === 0) return [];
 
-	const ids = [...new Set(rows.map((r) => r.user_id))];
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', ids);
-	const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+	const byId = await fetchProfilesByIds([...new Set(rows.map((r) => r.user_id))]);
 	return rows.map((badge) => {
 		const p = byId.get(badge.user_id);
 		return {

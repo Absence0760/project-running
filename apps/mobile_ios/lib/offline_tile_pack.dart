@@ -64,6 +64,14 @@ class OfflineTilePackStore extends ChangeNotifier {
   Directory? _root;
   final Map<String, OfflinePackProgress> _packs = {};
 
+  // Per-route download coordination (issue #401). `_inFlight` holds the running
+  // download future for a route id; `_cancelled` names the route ids whose
+  // download has been asked to stop. deletePack sets the cancel flag then awaits
+  // the in-flight future before touching disk or _packs, so an unpin during a
+  // download can never be followed by resurrected tiles or a stale present-state.
+  final Map<String, Future<void>> _inFlight = {};
+  final Set<String> _cancelled = {};
+
   OfflinePackProgress progressFor(String routeId) =>
       _packs[routeId] ?? OfflinePackProgress.absent;
 
@@ -137,6 +145,25 @@ class OfflineTilePackStore extends ChangeNotifier {
     TileBbox bbox, {
     int minZoom = kDefaultMinZoom,
     int maxZoom = kDefaultMaxZoom,
+  }) {
+    // Register the in-flight future synchronously (before the first await) so a
+    // concurrent deletePack for the same route can find and await it.
+    final existing = _inFlight[routeId];
+    if (existing != null) return existing;
+    _cancelled.remove(routeId);
+    final future =
+        _downloadPack(routeId, bbox, minZoom: minZoom, maxZoom: maxZoom);
+    _inFlight[routeId] = future;
+    return future.whenComplete(() {
+      if (identical(_inFlight[routeId], future)) _inFlight.remove(routeId);
+    });
+  }
+
+  Future<void> _downloadPack(
+    String routeId,
+    TileBbox bbox, {
+    required int minZoom,
+    required int maxZoom,
   }) async {
     final List<TileCoord> tiles;
     try {
@@ -163,6 +190,9 @@ class OfflineTilePackStore extends ChangeNotifier {
     notifyListeners();
 
     for (final t in tiles) {
+      // Unpinned mid-download: stop writing into a pack that deletePack is about
+      // to remove. deletePack owns clearing _packs, so bail without touching it.
+      if (_cancelled.contains(routeId)) return;
       final f = tileFile(dir, t);
       if (f.existsSync()) {
         done++;
@@ -208,6 +238,20 @@ class OfflineTilePackStore extends ChangeNotifier {
 
   /// Delete a route's pack from disk (called when the offline pin is removed).
   Future<void> deletePack(String routeId) async {
+    // Cancel + await any in-flight download for this route BEFORE deleting, so
+    // no tile write (or directory re-create) can land after the delete and no
+    // download-completion can re-populate _packs behind us (issue #401).
+    final inFlight = _inFlight[routeId];
+    if (inFlight != null) {
+      _cancelled.add(routeId);
+      try {
+        await inFlight;
+      } catch (_) {
+        // A failed download still leaves a (partial) dir to remove below.
+      }
+    }
+    _cancelled.remove(routeId);
+
     final root = _root;
     _packs.remove(routeId);
     notifyListeners();

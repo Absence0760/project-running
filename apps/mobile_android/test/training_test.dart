@@ -397,7 +397,13 @@ void main() {
         recent5kSec: 22 * 60,
         weeks: 12,
       ));
+      // The race week is a deliberate exception: the race itself stands in for
+      // the long run and dwarfs the light race-week budget, so shakeout days
+      // collapse to what the remaining budget supports (#326) rather than
+      // padding with filler runs. The "no hardcoded Monday rest" guarantee
+      // still applies to every training-load week.
       for (final week in seven.weeks) {
+        if (week.phase == PlanPhase.race) continue;
         final active =
             week.workouts.where((w) => w.kind != WorkoutKind.rest).length;
         final rest =
@@ -413,6 +419,7 @@ void main() {
         weeks: 12,
       ));
       for (final week in six.weeks) {
+        if (week.phase == PlanPhase.race) continue;
         final active =
             week.workouts.where((w) => w.kind != WorkoutKind.rest).length;
         expect(active, 6, reason: '6-day week ${week.weekIndex} active=$active');
@@ -505,6 +512,63 @@ void main() {
       final raceWeek = plan.weeks.last;
       expect(raceWeek.phase, PlanPhase.race);
       expect(raceWeek.workouts.any((w) => w.kind == WorkoutKind.race), isTrue);
+    });
+
+    // #326: the race week reserved a quality slot the race phase never fills and
+    // costed the Sunday slot as a nominal long run while emitting the full race
+    // distance, so the week ballooned back toward peak volume. Mirrors
+    // training.test.ts.
+    test('race week volume stays a light shakeout above the race (#326)', () {
+      final cfgs = [
+        (goal: GoalEvent.distanceHalf, days: 5, time: 90 * 60),
+        (goal: GoalEvent.distanceFull, days: 7, time: 4 * 3600),
+      ];
+      for (final cfg in cfgs) {
+        final plan = generatePlan(GeneratePlanInput(
+          goalEvent: cfg.goal,
+          startDate: DateTime(2026, 8, 1),
+          daysPerWeek: cfg.days,
+          goalTimeSec: cfg.time,
+        ));
+        final raceWeek = plan.weeks.last;
+        expect(raceWeek.phase, PlanPhase.race);
+        expect(raceWeek.targetVolumeM <= plan.goalDistanceM * 1.15, isTrue,
+            reason:
+                'race week ${raceWeek.targetVolumeM}m must be <= goal*1.15 '
+                '(${plan.goalDistanceM * 1.15}m) for ${cfg.goal} ${cfg.days}d');
+        expect(raceWeek.targetVolumeM >= plan.goalDistanceM, isTrue,
+            reason: 'race week volume still includes the full race distance');
+      }
+    });
+
+    // #326: base/taper weeks over-reserved the empty qualityB slot, dividing the
+    // easy budget over too few days and overshooting the week's weeklyKm ramp.
+    // Mirrors training.test.ts.
+    test('base/taper 5-day weeks do not exceed their weeklyKm target (#326)', () {
+      const days = 5;
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 8, 1),
+        daysPerWeek: days,
+        goalTimeSec: 95 * 60,
+      ));
+      final total = plan.weeks.length;
+      final peakKm = peakVolumeKm(plan.goalDistanceM, days, true);
+      // Each easy day is rounded to a whole km, so the week can round up by ~0.5
+      // km per easy day — far under the 25-70% overshoot the bug produced.
+      const roundingHeadroomM = days * 500;
+      for (final week in plan.weeks) {
+        if (week.phase != PlanPhase.base && week.phase != PlanPhase.taper) {
+          continue;
+        }
+        final weeklyKm =
+            (peakKm * mileageFraction(week.weekIndex, total, week.phase))
+                .round();
+        expect(week.targetVolumeM <= weeklyKm * 1000 + roundingHeadroomM, isTrue,
+            reason:
+                '${week.phase} week ${week.weekIndex} volume '
+                '${week.targetVolumeM}m exceeds its ${weeklyKm * 1000}m budget');
+      }
     });
 
     test('build-phase intervals have a structure with repeats', () {
