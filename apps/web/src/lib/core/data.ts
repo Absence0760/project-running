@@ -7775,7 +7775,12 @@ export async function fetchDmThread(otherId: string, limit = 200): Promise<Direc
 		)
 		.order('created_at', { ascending: true })
 		.limit(limit);
-	if (error || !data) return [];
+	// Throw rather than returning [] — the caller can't tell a transient
+	// failure (network blip, RLS denial, dead session) from a genuinely
+	// empty conversation, and rendering the empty-thread copy on a blip
+	// leaves the user on the previous pane with no sign anything broke.
+	if (error) throw new Error(`fetchDmThread failed: ${error.message}`);
+	if (!data) return [];
 	return data as DirectMessage[];
 }
 

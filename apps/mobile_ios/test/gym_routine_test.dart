@@ -282,6 +282,29 @@ void main() {
     expect(out.steps[0].targetRepsMin, null);
   });
 
+  test('expandRoutineSteps: a distance-based set carries targetDistanceM through to the step',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Row erg', position: 0, sets: [
+        const PlannedSet(setIndex: 0, targetDistanceM: 500, setType: 'working'),
+      ]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps[0].targetDistanceM, 500);
+    expect(out.steps[0].targetDurationS, null);
+    expect(out.steps[0].targetWeightKg, null);
+    expect(out.steps[0].targetRepsMin, null);
+  });
+
+  test('expandRoutineSteps: a set with no distance target defaults targetDistanceM to null',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Bench', position: 0, sets: [pset(0, 5, 80)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps[0].targetDistanceM, null);
+  });
+
   test('expandRoutineSteps: an empty routine yields no steps', () {
     final out = expandRoutineSteps(const PlannedRoutine(title: 'P', exercises: []));
     expect(out.steps, isEmpty);

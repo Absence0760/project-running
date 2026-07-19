@@ -74,12 +74,14 @@ void main() {
       await _pump(tester, runs: runs, now: now);
       await tester.pumpAndSettle();
 
-      // Card title + the four ladder column headers (uppercased).
+      // Card title + the four ladder column headers. Distance / Time / Pace
+      // stay uppercased; the wider Confidence header drops the uppercase +
+      // letter-spacing so it fits on one line (issue #503).
       expect(find.text('Race-time predictor'), findsOneWidget);
       expect(find.text('DISTANCE'), findsOneWidget);
       expect(find.text('TIME'), findsOneWidget);
       expect(find.text('PACE'), findsOneWidget);
-      expect(find.text('CONFIDENCE'), findsOneWidget);
+      expect(find.text('Confidence'), findsOneWidget);
 
       // Four ladder rungs (5K / 10K / Half / Marathon) each render a
       // confidence chip — at least one HIGH/MODERATE/LOW chip is present.
@@ -87,6 +89,50 @@ void main() {
           w is Text &&
           {'HIGH', 'MODERATE', 'LOW'}.contains((w.data ?? '').toUpperCase()));
       expect(chips, findsWidgets);
+    });
+
+    testWidgets(
+        'confidence header + value stay on one line at a narrow phone width',
+        (tester) async {
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(
+          distance: 5000,
+          durationS: 1300,
+          startedAt: now.subtract(const Duration(days: 5)),
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              // A deliberately narrow phone content column.
+              child: SizedBox(
+                width: 320,
+                child: RacePredictorCard(runs: runs, now: now),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // No RenderFlex / layout overflow at this width.
+      expect(tester.takeException(), isNull);
+
+      final header = tester.widget<Text>(find.text('Confidence'));
+      expect(header.maxLines, 1);
+      expect(header.softWrap, isFalse);
+
+      final chip = tester.widget<Text>(find
+          .byWidgetPredicate((w) =>
+              w is Text &&
+              {'HIGH', 'MODERATE', 'LOW'}.contains((w.data ?? '').toUpperCase()))
+          .first);
+      expect(chip.maxLines, 1);
+      expect(chip.softWrap, isFalse);
     });
   });
 }

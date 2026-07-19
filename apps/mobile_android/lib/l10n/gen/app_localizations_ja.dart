@@ -3306,6 +3306,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get profileLoadError => 'プロフィールを読み込めませんでした。';
 
   @override
+  String get profileSectionError => 'このセクションを読み込めませんでした。';
+
+  @override
   String get profileNotFound => 'プロフィールが見つかりません。';
 
   @override

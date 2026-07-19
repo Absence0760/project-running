@@ -963,6 +963,7 @@
   "profileUnblock": "Profil entsperren",
   "profileBlock": "Profil blockieren",
   "profileLoadError": "Profil konnte nicht geladen werden.",
+  "profileSectionError": "Dieser Abschnitt konnte nicht geladen werden.",
   "profileNotFound": "Profil nicht gefunden.",
   "profileFollowStats": "{followers, plural, one{{followers} Follower} other{{followers} Follower}} · {following} abonniert",
   "profileFollowing": "Folgt",

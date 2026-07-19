@@ -9,6 +9,7 @@
 		walkRunDefaultWeeks,
 		generatePlan,
 		formatISO,
+		parseISO,
 	} from '$lib/training/training';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import type {
@@ -594,7 +595,7 @@
 									{#each w.workouts as wo, woIdx (woIdx)}
 										<div class="wo-row">
 											<div class="wo-date">
-												{new Date(wo.scheduled_date).toLocaleDateString(activeFormatLocale(), {
+												{parseISO(wo.scheduled_date).toLocaleDateString(activeFormatLocale(), {
 													weekday: 'short',
 													month: 'short',
 													day: 'numeric',

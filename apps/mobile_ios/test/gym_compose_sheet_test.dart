@@ -613,4 +613,29 @@ void main() {
       f.dir.deleteSync(recursive: true);
     }
   });
+
+  testWidgets(
+      'the first set row has no remove button; a second set row does',
+      (tester) async {
+    final f = await _store('remove_set_gate_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+
+      // One exercise block with a single set — the first set can't be removed,
+      // so no remove (x) button renders.
+      expect(find.byTooltip('Remove set'), findsNothing);
+
+      // Add a second set; only the second (si >= 1) gets a remove button.
+      await tester.tap(find.text('Add set'));
+      await tester.pump();
+      expect(find.byTooltip('Remove set'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
 }

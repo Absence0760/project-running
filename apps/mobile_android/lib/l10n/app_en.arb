@@ -4710,6 +4710,10 @@
   "@profileLoadError": {
     "description": "Error state shown when the profile fails to load"
   },
+  "profileSectionError": "Couldn't load this section.",
+  "@profileSectionError": {
+    "description": "Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab"
+  },
   "profileNotFound": "Profile not found.",
   "@profileNotFound": {
     "description": "Shown when the profile does not exist"
