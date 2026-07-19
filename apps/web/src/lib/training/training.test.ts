@@ -27,6 +27,8 @@ import {
 	resolveTrainingPacesWithMeta,
 	phaseFor,
 	generatePlan,
+	peakVolumeKm,
+	mileageFraction,
 	isMastersAge,
 	defaultPlanWeeks,
 	walkRunDefaultWeeks,
@@ -35,6 +37,7 @@ import {
 	fmtHms,
 	isWorkoutCompleted,
 	isWorkoutSkipped,
+	longRunDistance,
 	type WorkoutStructure
 } from './training';
 
@@ -404,6 +407,54 @@ test('generatePlan: taper weeks have lower volume than peak', () => {
 	);
 });
 
+// #326: the race week reserved a quality-day slot from daysPerWeek that the
+// race phase never fills, and it costed the Sunday slot as a nominal long run
+// while actually emitting the full race distance — so the week ballooned back
+// up toward peak volume (a half race week was ~98% of the peak week). The race
+// itself is the week's volume; any shakeout must stay inside a light budget.
+test('generatePlan: race week volume stays a light shakeout above the race (#326)', () => {
+	for (const cfg of [
+		{ goalEvent: 'distance_half' as const, daysPerWeek: 5, goalTimeSec: 90 * 60 },
+		{ goalEvent: 'distance_full' as const, daysPerWeek: 7, goalTimeSec: 4 * 3600 }
+	]) {
+		const plan = generatePlan({ ...cfg, startDate: '2026-08-01' });
+		const raceWeek = plan.weeks[plan.weeks.length - 1];
+		assert.equal(raceWeek.phase, 'race');
+		assert.ok(
+			raceWeek.target_volume_m <= plan.goalDistanceM * 1.15,
+			`race week ${raceWeek.target_volume_m}m must be <= goal*1.15 ` +
+				`(${plan.goalDistanceM * 1.15}m) for ${cfg.goalEvent} ${cfg.daysPerWeek}d`
+		);
+		assert.ok(
+			raceWeek.target_volume_m >= plan.goalDistanceM,
+			'race week volume still includes the full race distance'
+		);
+	}
+});
+
+// #326: base/taper weeks over-reserved the (empty) qualityB slot, dividing the
+// easy budget over too few days and overshooting the week's own weeklyKm ramp
+// target. Each training-load week's emitted volume must stay within its budget.
+test('generatePlan: base/taper 5-day weeks do not exceed their weeklyKm target (#326)', () => {
+	const cfg = { goalEvent: 'distance_half' as const, daysPerWeek: 5, goalTimeSec: 95 * 60 };
+	const plan = generatePlan({ ...cfg, startDate: '2026-08-01' });
+	const total = plan.weeks.length;
+	const peakKm = peakVolumeKm(plan.goalDistanceM, cfg.daysPerWeek, true);
+	// Each easy day's distance is rounded to a whole km, so the week can round up
+	// by at most ~0.5 km per easy day above the exact budget. Allow that headroom
+	// (well under the 25-70% overshoot the bug produced).
+	const roundingHeadroomM = cfg.daysPerWeek * 500;
+	for (const week of plan.weeks) {
+		if (week.phase !== 'base' && week.phase !== 'taper') continue;
+		const weeklyKm = Math.round(peakKm * mileageFraction(week.week_index, total, week.phase));
+		assert.ok(
+			week.target_volume_m <= weeklyKm * 1000 + roundingHeadroomM,
+			`${week.phase} week ${week.week_index} volume ${week.target_volume_m}m ` +
+				`exceeds its ${weeklyKm * 1000}m weeklyKm budget`
+		);
+	}
+});
+
 test('generatePlan: race week ends with a race-kind workout', () => {
 	const plan = generatePlan({
 		goalEvent: 'distance_5k',
@@ -499,7 +550,13 @@ test('generatePlan: a 7-day plan runs all 7 days (no hardcoded Monday rest)', ()
 		recent5kSec: 22 * 60,
 		weeks: 12
 	});
+	// The race week is a deliberate exception: the race itself stands in for the
+	// long run and dwarfs the light race-week budget, so shakeout days collapse
+	// to what the remaining budget supports (#326) rather than padding the week
+	// back up with filler runs. The "no hardcoded Monday rest" guarantee still
+	// applies to every training-load week.
 	for (const week of seven.weeks) {
+		if (week.phase === 'race') continue;
 		const active = week.workouts.filter((w) => w.kind !== 'rest').length;
 		const rest = week.workouts.filter((w) => w.kind === 'rest').length;
 		assert.equal(active, 7, `7-day week ${week.week_index} has ${active} active days`);
@@ -513,6 +570,7 @@ test('generatePlan: a 7-day plan runs all 7 days (no hardcoded Monday rest)', ()
 		weeks: 12
 	});
 	for (const week of six.weeks) {
+		if (week.phase === 'race') continue;
 		const active = week.workouts.filter((w) => w.kind !== 'rest').length;
 		assert.equal(active, 6, `6-day week ${week.week_index} has ${active} active days`);
 	}
@@ -840,4 +898,12 @@ test('generatePlan: a zero anchor is treated as no anchor (no Infinity vdot)', (
 		p.weeks[i].workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0);
 	// A zero anchor scales volume identically to no anchor (0.6× peak).
 	assert.equal(weekVol(zero, 0), weekVol(noAnchor, 0));
+});
+
+test('longRunDistance: flat 33% of weekly volume (rounded), 0 → 0', () => {
+	const wk = (weeklyKm: number) =>
+		({ weeklyKm }) as unknown as Parameters<typeof longRunDistance>[0];
+	assert.equal(longRunDistance(wk(60)), 20); // round(19.8)
+	assert.equal(longRunDistance(wk(50)), 17); // round(16.5)
+	assert.equal(longRunDistance(wk(0)), 0);
 });

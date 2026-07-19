@@ -14,11 +14,11 @@ import kotlin.math.sqrt
 /// equirectangular projection they share. Keep the two implementations
 /// in sync; any algorithm change here lands in the Dart twin, too.
 ///
-/// **Not wired yet.** This module exists so the off-route alert and the
-/// "distance remaining" badge on the Wear RunningScreen can be built
-/// without also designing route sync to the watch in the same PR. When
-/// the sync path lands, the service calls these helpers per GPS sample
-/// the same way Android does in `run_recorder.dart`.
+/// Live on the recording hot path: `RunRecordingService.onGps` calls
+/// `routeProgress` once per GPS sample (only when a route is selected),
+/// and `RunningScreen` renders the off-route banner + "X to go" badge
+/// from the resulting `offRouteDistanceM` / `remainingM`. The per-sample
+/// call mirrors how Android drives the same helpers in `run_recorder.dart`.
 ///
 /// All positions are `(latitude, longitude)` in decimal degrees.
 /// All distances are in metres. Equirectangular projection is accurate

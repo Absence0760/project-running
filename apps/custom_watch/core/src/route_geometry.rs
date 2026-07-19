@@ -1,7 +1,7 @@
 //! Pure geometry helpers for a planned route polyline — the canonical
 //! standalone port of web `routes/route_geometry.ts` (twin of
 //! `route_geometry.dart`). Keep the algorithm, edge cases, and the
-//! twenty-nine twin tests in lockstep so the route-detail scrubber and the
+//! thirty twin tests in lockstep so the route-detail scrubber and the
 //! predictive-live-tracking projection agree across every platform.
 //!
 //! Three helpers:
@@ -33,14 +33,19 @@ pub struct RouteWaypoint {
 
 /// Interpolate the position along `waypoints` at the normalised `fraction`
 /// (`0.0` = start, `1.0` = end). `None` when the polyline is too short to
-/// interpolate (`< 2` waypoints). Distance-weighted: a long segment takes
-/// proportionally more of the range than a short one. An all-coincident
-/// polyline (zero total length) snaps to the start.
+/// interpolate (`< 2` waypoints) or `fraction` is not finite (NaN / ±Infinity)
+/// — clamping a non-finite fraction would propagate NaN into the returned
+/// lat/lng. Distance-weighted: a long segment takes proportionally more of the
+/// range than a short one. An all-coincident polyline (zero total length) snaps
+/// to the start.
 pub fn interpolate_along_route(
     waypoints: &[RouteWaypoint],
     fraction: f64,
 ) -> Option<RouteWaypoint> {
     if waypoints.len() < 2 {
+        return None;
+    }
+    if !fraction.is_finite() {
         return None;
     }
     let f = fraction.clamp(0.0, 1.0);
@@ -270,6 +275,14 @@ mod tests {
     fn interpolate_returns_null_elevation_when_both_sides_null() {
         let out = interpolate_along_route(&[wp(0.0, 0.0), wp(0.0, 0.001)], 0.5).unwrap();
         assert_eq!(out.elevation_m, None);
+    }
+
+    #[test]
+    fn interpolate_non_finite_fraction_returns_none() {
+        let line = [wp(0.0, 0.0), wp(0.0, 0.010)];
+        assert_eq!(interpolate_along_route(&line, f64::NAN), None);
+        assert_eq!(interpolate_along_route(&line, f64::INFINITY), None);
+        assert_eq!(interpolate_along_route(&line, f64::NEG_INFINITY), None);
     }
 
     #[test]

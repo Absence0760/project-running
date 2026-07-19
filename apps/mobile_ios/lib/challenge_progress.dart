@@ -203,8 +203,11 @@ ChallengePace challengePace(
     elapsedFraction = (nowMs - startMs) / (endMs - startMs);
   }
 
+  // Divisor is the days the challenge is OPEN — clamp the window start to now
+  // so an upcoming challenge doesn't count pre-start days into the daily rate.
+  final windowStart = nowMs > startMs ? nowMs : startMs;
   final daysRemaining =
-      (endMs - nowMs) <= 0 ? 0 : ((endMs - nowMs) / _dayMs).ceil();
+      (endMs - windowStart) <= 0 ? 0 : ((endMs - windowStart) / _dayMs).ceil();
   final num? expectedValue = hasGoal ? goal * elapsedFraction : null;
   final num? remainingValue =
       hasGoal ? (goal - value > 0 ? goal - value : 0) : null;

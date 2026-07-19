@@ -10792,6 +10792,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get racesBib => 'Dorsal';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduz os detalhes da tua chegada a partir da página de resultados da corrida.';
 
@@ -22140,6 +22144,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get racesBib => 'Número de peito';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
   String get racesPasteResultHint =>
