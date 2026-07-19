@@ -715,6 +715,25 @@
 	let linkedProviderSet = $derived(new Set(identities.map((i) => i.provider)));
 	let unlinkedProviders = $derived(LINKABLE_PROVIDERS.filter((p) => !linkedProviderSet.has(p)));
 
+	let showSignOutEverywhere = $state(false);
+	let signingOutEverywhere = $state(false);
+
+	async function handleSignOutEverywhere() {
+		showSignOutEverywhere = false;
+		signingOutEverywhere = true;
+		try {
+			await auth.logoutEverywhere();
+			goto('/login');
+		} catch (e) {
+			// Fail closed: the local session is still live because the global
+			// revocation didn't land, so keep the user here with an error to
+			// retry rather than silently pretending they were signed out.
+			showToast(m('settingsAccount.signoutEverywhereFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			signingOutEverywhere = false;
+		}
+	}
+
 	let showDeleteAccount = $state(false);
 	let deleting = $state(false);
 
@@ -1185,6 +1204,23 @@
 		{/if}
 	</section>
 
+	<!-- Sign out everywhere -->
+	<section class="card" data-testid="signout-everywhere">
+		<h2>{m('settingsAccount.signoutEverywhereHeading')}</h2>
+		<p class="section-desc">{m('settingsAccount.signoutEverywhereDesc')}</p>
+		<button
+			class="btn btn-outline"
+			onclick={() => (showSignOutEverywhere = true)}
+			disabled={signingOutEverywhere}
+			data-testid="signout-everywhere-btn"
+		>
+			<span class="material-symbols" aria-hidden="true">logout</span>
+			{signingOutEverywhere
+				? m('settingsAccount.signingOutEverywhere')
+				: m('settingsAccount.signoutEverywhere')}
+		</button>
+	</section>
+
 	<ConfirmDialog
 		open={showRestoreConfirm}
 		title={m('settingsAccount.restoreConfirmTitle')}
@@ -1204,6 +1240,15 @@
 		</button>
 	</section>
 </div>
+
+<ConfirmDialog
+	open={showSignOutEverywhere}
+	title={m('settingsAccount.signoutEverywhereConfirmTitle')}
+	message={m('settingsAccount.signoutEverywhereConfirmMessage')}
+	confirmLabel={m('settingsAccount.signoutEverywhereConfirmLabel')}
+	onconfirm={handleSignOutEverywhere}
+	oncancel={() => (showSignOutEverywhere = false)}
+/>
 
 <ConfirmDialog
 	open={showDeleteAccount}

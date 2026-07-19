@@ -85,3 +85,21 @@ const MESSAGE_KEYS: Record<AuthErrorKind, MessageKey> = {
 export function authErrorMessageKey(kind: AuthErrorKind): MessageKey {
 	return MESSAGE_KEYS[kind];
 }
+
+/// Whether surfacing this error kind at the SIGN-UP surface would
+/// disclose that an email is already registered. GoTrue only
+/// obfuscates a duplicate sign-up (returning a session-less success
+/// identical to a fresh one) when email confirmations are ON — a
+/// dashboard-managed setting invisible from this repo. With
+/// confirmations OFF a duplicate address throws `user_already_exists`
+/// (→ `emailExists`), which would otherwise render a distinct "that
+/// email already has an account" message and turn sign-up into an
+/// account-existence oracle. Defence in depth: the sign-up call site
+/// collapses this to the same neutral check-your-email outcome a fresh
+/// sign-up shows, regardless of the server toggle. The full fix is prod
+/// GoTrue running `enable_confirmations = true` — see
+/// docs/features/web_app_auth.md. LOGIN is unaffected: an existing
+/// email there classifies as `invalidCredentials`, which is standard.
+export function signUpErrorRevealsAccountExistence(kind: AuthErrorKind): boolean {
+	return kind === 'emailExists';
+}
