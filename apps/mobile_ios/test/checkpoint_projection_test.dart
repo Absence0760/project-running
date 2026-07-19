@@ -99,4 +99,20 @@ void main() {
     expect(a.actualElapsedS, 3600);
     expect(a.projectedElapsedS, isNull);
   });
+
+  test('a cutoff co-located with the last-reached checkpoint is graded on the exact arrival',
+      () {
+    final coLocated = <ProjectionCheckpoint>[
+      const ProjectionCheckpoint(id: 'aid', positionM: 20000, cutoffElapsedS: null),
+      const ProjectionCheckpoint(id: 'gate', positionM: 20000, cutoffElapsedS: 7200),
+    ];
+    final p = projectRunner(coLocated,
+        const [ProjectionCrossing(checkpointId: 'aid', elapsedS: 7000)]);
+    final gate = legFor(p, 'gate');
+    expect(gate.reached, isFalse);
+    expect(gate.projectedElapsedS, 7000);
+    expect(gate.cutoff, isNotNull);
+    expect(gate.cutoff!.marginS, 200);
+    expect(gate.cutoff!.status, CutoffStatus.tight);
+  });
 }

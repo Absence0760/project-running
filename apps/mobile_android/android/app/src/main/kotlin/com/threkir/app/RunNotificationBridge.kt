@@ -218,7 +218,8 @@ class RunNotificationBridge(
     /// a split can't outlive its run.
     private fun postSplit(title: String, text: String) {
         val builder = NotificationCompat.Builder(context, GEOLOCATOR_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_threkir)
+            .setColor(ContextCompat.getColor(context, R.color.brand_ember))
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(false)
@@ -238,7 +239,8 @@ class RunNotificationBridge(
         val pending = openAppIntent()
 
         val builder = NotificationCompat.Builder(context, GEOLOCATOR_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_threkir)
+            .setColor(ContextCompat.getColor(context, R.color.brand_ember))
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
