@@ -10806,6 +10806,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get racesBib => 'Startnummer';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Gib deine Startnummer ein, damit wir nur dein Ergebnis importieren, nicht das ganze Feld.';
+
+  @override
   String get racesPasteResultHint =>
       'Gib deine Zielergebnisse von der Ergebnisseite des Rennens ein.';
 

@@ -16,6 +16,82 @@ function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
 }
 
+test('fetchRunsForDashboard is bounded + column-narrowed, not the unbounded select(*) scan', () => {
+	// Reason: /dashboard's onMount used to call the unbounded fetchRuns()
+	// (`select('*')`, paging the ENTIRE history 1000 rows at a time incl.
+	// the metadata jsonb bag) on every paint of the highest-traffic page
+	// (issue #332). It must instead window by date via dashboardRunsWindowStart
+	// and narrow the select — never regress to `select('*')` or drop the
+	// `.gte('started_at', …)` window (that resurrects the full-history scan).
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchRunsForDashboard');
+	assert.ok(start >= 0, 'Could not locate fetchRunsForDashboard — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/dashboardRunsWindowStart\(/,
+		'fetchRunsForDashboard must window via dashboardRunsWindowStart — an unwindowed fetch is the bug.',
+	);
+	assert.match(
+		body,
+		/\.gte\('started_at',\s*windowStart\.toISOString\(\)\)/,
+		'fetchRunsForDashboard must filter started_at against the window cutoff.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.select\('\*'\)/,
+		'fetchRunsForDashboard must column-narrow — select(*) ships the metadata jsonb bag per row.',
+	);
+	assert.match(
+		body,
+		/\.select\(\s*['"`][^'"`]*started_at[^'"`]*distance_m/,
+		'fetchRunsForDashboard must select the explicit consumer columns (started_at, distance_m, …).',
+	);
+	// The dashboard page must call the bounded reader, not the unbounded one.
+	const page = read('src/routes/dashboard/+page.svelte');
+	assert.match(
+		page,
+		/fetchRunsForDashboard\(\)/,
+		'/dashboard must load runs via the bounded fetchRunsForDashboard.',
+	);
+	assert.doesNotMatch(
+		page,
+		/\bfetchRuns\(\)/,
+		'/dashboard must not call the unbounded fetchRuns() — that is the #332 regression.',
+	);
+	// Lifetime headline stats must come from the cheap aggregate, not the
+	// windowed set (which would truncate a deep-history runner's totals).
+	assert.match(
+		page,
+		/fetchRunAllTimeStats\(\)/,
+		'/dashboard must source lifetime totals from fetchRunAllTimeStats, not the ~2-year window.',
+	);
+});
+
+test('fetchRunAllTimeStats uses a HEAD count + single-row max, ships no run payload', () => {
+	// Reason: the Total-runs / Longest-run cards are labelled "all sources" /
+	// "all time"; windowing the dashboard fetch to ~2 years would silently
+	// truncate them for a deep-history (Strava-migrant) runner — the exact
+	// case the old unbounded scan protected. The aggregate must stay a
+	// count-only HEAD read + a one-row max, never a full-history read.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchRunAllTimeStats');
+	assert.ok(start >= 0, 'Could not locate fetchRunAllTimeStats — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/count:\s*'exact',\s*head:\s*true/,
+		'total runs must be a HEAD count query — it must not ship rows.',
+	);
+	assert.match(
+		body,
+		/\.order\('distance_m',\s*\{\s*ascending:\s*false\s*\}\)\s*[\s\S]*?\.limit\(1\)/,
+		'longest run must be a single-row max (order desc + limit 1), not a client-side scan.',
+	);
+});
+
 test('fetchRouteById clips waypoints for non-owner club members (RLS is not the boundary)', () => {
 	// Reason: RLS lets an active club member SELECT the base `routes`
 	// row, which carries the unclipped polyline + geom + start_point. The
@@ -205,6 +281,62 @@ test('plans/new loads club templates with one batched query, not one per club', 
 	);
 });
 
+test('deleteNotifications batches into one .in() delete, guards empty, surfaces errors', () => {
+	// Reason: bulk-dismissing a collapsed notification group used to await
+	// deleteNotification(id) in a for-loop — one DELETE round-trip per
+	// member, so dismissing a 20-member group fired 20 sequential requests
+	// (issue #350). The batched path must delete all ids in ONE query via
+	// .in('id', ids), short-circuit an empty list (an empty .in() would
+	// match nothing but still round-trips), and throw the supabase error
+	// (supabase-js resolves {error}, never throws — dropping the check
+	// silently swallows a failed bulk-dismiss while the row vanishes).
+	const source = read('src/lib/core/data.ts');
+	const fnMatch = source.match(/export async function deleteNotifications[\s\S]*?\n}/);
+	assert.ok(fnMatch, 'Could not locate deleteNotifications — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/\.in\('id', ids\)/,
+		'deleteNotifications must delete every id in ONE query via .in(\'id\', ids) — a per-id loop is the N+1 issue #350 fixed.',
+	);
+	assert.match(
+		body,
+		/if \(ids\.length === 0\) return;/,
+		'deleteNotifications must short-circuit an empty id list.',
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB.',
+	);
+});
+
+test('NotificationsList.removeGroup fires one batched delete, not one per member', () => {
+	// Reason: removeGroup awaited remove(row.id) for every member of a
+	// collapsed group — N sequential DELETEs (issue #350). It must collect
+	// the ids and call the batched deleteNotifications ONCE, keeping the
+	// optimistic local removal + per-unread-row unread-count decrement.
+	const source = read('src/lib/components/NotificationsList.svelte');
+	const fnMatch = source.match(/async function removeGroup[\s\S]*?\n\t}/);
+	assert.ok(fnMatch, 'Could not locate removeGroup — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/deleteNotifications\(ids\)/,
+		'removeGroup must dismiss the whole group with one deleteNotifications(ids) call.',
+	);
+	assert.doesNotMatch(
+		body,
+		/remove\(row\.id/,
+		'removeGroup must not loop the single-delete remove(row.id) per member — that is the N+1 issue #350 fixed.',
+	);
+	assert.match(
+		body,
+		/notificationStore\.decrement\(\)/,
+		'removeGroup must keep decrementing the unread badge per removed unread row.',
+	);
+});
+
 test('setRunPublic is a real toggle: writes the caller boolean and surfaces errors', () => {
 	// Reason: the one-way makeRunPublic it replaces hardcoded
 	// `is_public: true`, so a live-shared run could never be made
@@ -237,5 +369,79 @@ test('setRunPublic is a real toggle: writes the caller boolean and surfaces erro
 		source,
 		/makeRunPublic\(/,
 		'The one-way makeRunPublic must stay deleted — visibility flips go through the bidirectional setRunPublic.',
+	);
+});
+
+test('the profile-join fetchers chunk `.in()` so >~100 members do not silently empty', () => {
+	// Reason: PostgREST serialises `.in('id', ids)` into the request URL.
+	// A club / event with more than ~100 members overflows the gateway's
+	// request-line limit and the profile-join leg silently returns null —
+	// every display_name/avatar_url degrades to a placeholder with no error
+	// (issue #325). The fix routes every such leg through fetchProfilesByIds,
+	// which chunks the id set. This guard pins that (a) the helper chunks and
+	// (b) no fetcher rebuilds the inline unchunked profile-join it replaced.
+	const source = read('src/lib/core/data.ts');
+	const helper = source.match(/async function fetchProfilesByIds[\s\S]*?\n}/);
+	assert.ok(helper, 'Could not locate fetchProfilesByIds — rename?');
+	assert.match(
+		helper![0],
+		/chunk\(userIds, FEED_FOLLOWEE_CHUNK\)/,
+		'fetchProfilesByIds must chunk the id set through chunk(..., FEED_FOLLOWEE_CHUNK).',
+	);
+	assert.match(
+		helper![0],
+		/mergeProfilePages\(/,
+		'fetchProfilesByIds must merge the per-chunk pages via mergeProfilePages.',
+	);
+	// The three named member/attendee fetchers must resolve profiles through
+	// the chunked helper, not an inline `.in('id', userIds)` read. Slice each
+	// body to the next top-level `export` — the multi-line return-type object
+	// makes a `\n}`-anchored match stop early.
+	for (const fn of ['fetchPendingRequests', 'fetchClubMembers', 'fetchEventAttendees']) {
+		const start = source.indexOf(`export async function ${fn}`);
+		assert.ok(start >= 0, `Could not locate ${fn} — rename?`);
+		const nextExport = source.indexOf('\nexport ', start + 1);
+		const body = source.slice(start, nextExport === -1 ? undefined : nextExport);
+		assert.match(
+			body,
+			/await fetchProfilesByIds\(userIds\)/,
+			`${fn} must resolve member profiles through the chunked fetchProfilesByIds.`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\.in\('id', userIds\)/,
+			`${fn} must not rebuild the unchunked inline profile-join (issue #325).`,
+		);
+	}
+});
+
+test('fetchFollowingBadgeAwards chunks the followee `.in()` (no silently-empty badge feed)', () => {
+	// Reason: a viewer following >~100 people overflowed the gateway on the
+	// primary `.in('user_id', authors)` query, silently returning null — an
+	// empty badge feed with no error (issue #325). The fix chunks the followee
+	// set, queries each chunk with the same cursor + ordering + limit, and
+	// merges by earned_at via mergeRecencyPages.
+	const source = read('src/lib/core/data.ts');
+	// Anchor past the multi-line params object so the non-greedy `\n}` lands on
+	// the function's real closing brace, not the opts type's brace.
+	const fnMatch = source.match(
+		/const authors = await resolveFollowedAuthorIds\(null\);[\s\S]*?\n}/,
+	);
+	assert.ok(fnMatch, 'Could not locate fetchFollowingBadgeAwards — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/chunk\(authors, FEED_FOLLOWEE_CHUNK\)/,
+		'fetchFollowingBadgeAwards must chunk the followee set.',
+	);
+	assert.match(
+		body,
+		/mergeRecencyPages\(pages, limit, \(r\) => r\.earned_at\)/,
+		'It must merge the per-chunk pages by earned_at.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.in\('user_id', authors\)/,
+		'It must not query the whole followee set in one unchunked `.in()` (issue #325).',
 	);
 });

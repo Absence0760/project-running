@@ -1,6 +1,11 @@
 // Unit tests for the week-over-week / month-over-month trend deltas. Run with:
 //   npx tsx --test src/lib/training/trend_deltas.test.ts
 
+// A DST-observing zone so the spring-forward boundary tests below are
+// deterministic (a fixed 7*86.4M-ms step lands an hour off local midnight
+// only in a zone that actually shifts). Set before any Date is constructed.
+process.env.TZ = 'America/New_York';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -129,6 +134,40 @@ test('runs outside both windows are ignored entirely', () => {
 	const t = computeTrendDeltas(runs, 'monday', NOW);
 	assert.equal(t.week.runs.current, 0);
 	assert.equal(t.month.runs.current, 0);
+});
+
+// ─────────── DST safety ───────────
+
+test('prior-week boundary lands on local midnight across a spring-forward', () => {
+	// US spring-forward is Sun 2026-03-08 (02:00 → 03:00). NOW is the following
+	// Wednesday, so the Monday-start week begins Mon 2026-03-09 (after the shift)
+	// and the prior week must begin Mon 2026-03-02 at LOCAL midnight. A fixed
+	// 7*86.4M-ms subtraction lands on Sun 2026-03-01 23:00 instead, wrongly
+	// pulling a late-Sunday run into the prior-week window.
+	const now = new Date(2026, 2, 11, 12, 0, 0); // Wed 2026-03-11, noon local.
+	const runs = [
+		run(new Date(2026, 2, 1, 23, 30), 4000, 1200), // Sun 03-01 23:30 — BEFORE the prior week.
+		run(new Date(2026, 2, 2, 0, 30), 5000, 1500), // Mon 03-02 00:30 — first run of the prior week.
+	];
+	const t = computeTrendDeltas(runs, 'monday', now);
+	// Only the Mon 03-02 run is inside the prior-week-to-date slice; the Sun
+	// 03-01 run sits in the week before and must be excluded.
+	assert.equal(t.week.runs.prior, 1);
+	assert.equal(t.week.distanceM.prior, 5000);
+});
+
+test('prior-month boundary lands on local midnight when the prior month spans a spring-forward', () => {
+	// NOW in April 2026; the prior month is March, which contains the
+	// 2026-03-08 spring-forward. The prior-month window must begin Sun
+	// 2026-03-01 at LOCAL midnight, excluding a late-Feb run.
+	const now = new Date(2026, 3, 15, 12, 0, 0); // Wed 2026-04-15, noon local.
+	const runs = [
+		run(new Date(2026, 1, 28, 23, 30), 4000, 1200), // Feb 28 23:30 — BEFORE the prior month.
+		run(new Date(2026, 2, 1, 0, 30), 5000, 1500), // Mar 01 00:30 — first run of the prior month.
+	];
+	const t = computeTrendDeltas(runs, 'monday', now);
+	assert.equal(t.month.runs.prior, 1);
+	assert.equal(t.month.distanceM.prior, 5000);
 });
 
 test('non-finite timestamps and metrics do not poison the totals', () => {
