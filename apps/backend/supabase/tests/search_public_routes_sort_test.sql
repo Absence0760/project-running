@@ -13,7 +13,7 @@
 
 begin;
 
-select plan(12);
+select plan(14);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -176,6 +176,22 @@ select ok(
      and indexdef like '%is_public = true%'
      and indexdef like '%shadow_hidden = false%'),
   'each sort index is partial on the public_routes visibility predicate');
+
+-- Issue #407: the pre-F17 routes_featured partial index
+-- (featured_at desc nulls last WHERE is_featured AND is_public) is superseded
+-- by routes_public_featured_sort above and was dropped in 20270423_001. It
+-- indexed only the is_featured=true subset without the shadow_hidden predicate
+-- or created_at tie-break, so it could not serve the branch-per-sort body.
+select ok(
+  not exists (select 1 from pg_indexes
+              where schemaname = 'public' and indexname = 'routes_featured'),
+  'the superseded routes_featured index is gone');
+
+select ok(
+  exists (select 1 from pg_indexes
+          where schemaname = 'public'
+            and indexname = 'routes_public_featured_sort'),
+  'the replacement routes_public_featured_sort index remains');
 
 select * from finish();
 

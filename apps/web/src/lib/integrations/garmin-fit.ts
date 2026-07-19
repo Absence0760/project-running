@@ -259,7 +259,8 @@ export interface ParsedFitRun {
 	avg_cadence_spm: number | null;
 	total_ascent_m: number | null;
 	/// Stable per-file identity from the FIT `file_id` message — used
-	/// for dedupe. `null` only for malformed files without a file_id.
+	/// for dedupe. `null` for malformed files whose `file_id` lacks a
+	/// `time_created` or `serial_number` (either alone is too weak to key on).
 	garmin_file_id: string | null;
 	/// Canonical per-lap deltas from the FIT `lap` messages. Empty when
 	/// the file has no real laps (single whole-activity lap).
@@ -427,10 +428,18 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 	const timeKey =
 		rawTimeCreated instanceof Date
 			? Math.floor(rawTimeCreated.getTime() / 1000)
-			: (rawTimeCreated ?? '');
-	const garminFileId = fileIdEntry
-		? `${timeKey}-${fileIdEntry.serial_number ?? ''}`
-		: null;
+			: typeof rawTimeCreated === 'number'
+				? rawTimeCreated
+				: null;
+	const rawSerial = (fileIdEntry as { serial_number?: unknown } | undefined)?.serial_number;
+	const serial = typeof rawSerial === 'number' ? rawSerial : null;
+	// A serial alone (the device id, shared by every activity that watch
+	// records) is not unique — two malformed files missing time_created would
+	// collide on `-<serial>` and the second would be dropped as a dup though
+	// it's a different activity (#397). Require BOTH the per-activity
+	// time_created AND the serial; otherwise fall through to no id so the run
+	// is imported rather than deduped away.
+	const garminFileId = timeKey !== null && serial !== null ? `${timeKey}-${serial}` : null;
 
 	return {
 		startedAt: new Date(session.start_time).toISOString(),
@@ -453,7 +462,7 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		avg_cadence_spm: avgCadenceSpm,
 		total_ascent_m:
 			typeof session.total_ascent === 'number' ? Math.round(session.total_ascent) : null,
-		garmin_file_id: garminFileId && garminFileId !== '-' ? garminFileId : null,
+		garmin_file_id: garminFileId,
 		laps: buildCanonicalLaps(data.laps as RawFitLap[] | undefined),
 		indoor,
 		sub_sport: normalizeSubSport(rawSubSport),

@@ -14,6 +14,7 @@
 	// My challenges = the ones I've joined. Browse = the ranked, server-paginated
 	// public feed of ones I haven't (popularity-ordered in browse_public_challenges).
 	let mine = $state<ChallengeWithMeta[] | null>(null);
+	let mineError = $state<string | null>(null);
 	let browse = $state<ChallengeWithMeta[] | null>(null);
 	let creating = $state(false);
 	let search = $state('');
@@ -22,11 +23,15 @@
 	let browseLoading = $state(false);
 	let activeSearch = $state('');
 
+	// A load *failure* is kept distinct from the genuinely-empty state so a
+	// broken fetch surfaces an error + retry instead of masquerading as
+	// "you're in no challenges" (issue #357).
 	async function loadMine() {
+		mineError = null;
 		try {
 			mine = await fetchChallenges({ mine: true });
-		} catch {
-			mine = [];
+		} catch (e) {
+			mineError = e instanceof Error ? e.message : String(e);
 		}
 	}
 
@@ -104,7 +109,16 @@
 
 	<section>
 		<h2>{m('challenges.myChallenges')}</h2>
-		{#if mine === null}
+		{#if mineError}
+			<div class="error-banner" role="alert">
+				<span class="material-symbols" aria-hidden="true">error</span>
+				<div>
+					<strong>{m('challenges.loadFailed')}</strong>
+					<span class="error-detail">{mineError}</span>
+				</div>
+				<button class="btn btn-outline btn-sm" onclick={loadMine}>{m('plansPage.retry')}</button>
+			</div>
+		{:else if mine === null}
 			<p class="muted">…</p>
 		{:else if mine.length === 0}
 			<div class="empty-state">
@@ -361,5 +375,29 @@
 	}
 	.empty-state p {
 		margin: 0;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>

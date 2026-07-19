@@ -295,7 +295,7 @@
 		color: var(--color-success);
 	}
 	.pip-under {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	.pip-pending {
 		color: var(--color-text-tertiary);
