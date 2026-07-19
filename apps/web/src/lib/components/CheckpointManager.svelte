@@ -11,6 +11,7 @@
 		deleteEventCheckpoint,
 		type EventCheckpoint
 	} from '$lib/core/data';
+	import { swapCheckpointOrdinals } from '$lib/runs/checkpoint_reorder';
 
 	interface Props {
 		eventId: string;
@@ -148,21 +149,15 @@
 		}
 	}
 
-	/** Swap two checkpoints' ordinals to reorder. The (event_id, ordinal)
-	 *  unique constraint forbids a transient collision, so move to a temp
-	 *  ordinal first, then settle. */
 	async function move(index: number, dir: -1 | 1) {
 		const other = index + dir;
 		if (busy || other < 0 || other >= checkpoints.length) return;
-		const a = checkpoints[index];
-		const b = checkpoints[other];
 		busy = true;
 		try {
-			const temp = Math.max(...checkpoints.map((c) => c.ordinal)) + 1000;
-			await updateEventCheckpoint(a.id, { ordinal: temp });
-			await updateEventCheckpoint(b.id, { ordinal: a.ordinal });
-			await updateEventCheckpoint(a.id, { ordinal: b.ordinal });
-			await load();
+			await swapCheckpointOrdinals(checkpoints, index, dir, {
+				update: updateEventCheckpoint,
+				reload: load
+			});
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : m('checkpoint.saveFailed'), 'error');
 		} finally {

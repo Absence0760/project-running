@@ -18006,6 +18006,12 @@ abstract class AppLocalizations {
   /// **'Bib'**
   String get racesBib;
 
+  /// Hint above the RunSignUp import action requiring a bib to scope the import
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your bib number so we import only your result, not the whole field.'**
+  String get racesRunSignUpBibHint;
+
   /// Hint above the manual result paste form
   ///
   /// In en, this message translates to:

@@ -2721,7 +2721,7 @@
 	.pace-delta-neutral { color: var(--color-text-tertiary); }
 
 	.split-elev.negative {
-		color: var(--color-secondary);
+		color: var(--color-secondary-text);
 	}
 
 	.hr-bar {

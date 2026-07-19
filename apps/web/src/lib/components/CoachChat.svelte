@@ -76,7 +76,7 @@
 		return planId ? builder.eq('plan_id', planId) : builder.is('plan_id', null);
 	}
 
-	async function loadThread(userId: string) {
+	async function loadThread(userId: string): Promise<boolean> {
 		const { data, error: err } = await planFilter(
 			supabase
 				.from('coach_messages')
@@ -88,20 +88,20 @@
 		if (err) {
 			console.error('[coach] load thread failed', err);
 			threadLoaded = true;
-			return;
+			return false;
 		}
 		const rows = (data ?? []) as Msg[];
 		if (rows.length > 0) {
 			messages = rows;
 			threadLoaded = true;
-			return;
+			return true;
 		}
 		// One-time migration from the previous localStorage build.
 		try {
 			const raw = localStorage.getItem(legacyStorageKey(userId, planId));
 			if (!raw) {
 				threadLoaded = true;
-				return;
+				return true;
 			}
 			const parsed = JSON.parse(raw) as { messages?: Msg[] };
 			// Only the user's own turns are migrated. Since migration
@@ -116,7 +116,7 @@
 			if (legacy.length === 0) {
 				localStorage.removeItem(legacyStorageKey(userId, planId));
 				threadLoaded = true;
-				return;
+				return true;
 			}
 			const { error: insertErr } = await supabase.from('coach_messages').insert(
 				legacy.map((m) => ({
@@ -127,13 +127,15 @@
 				})),
 			);
 			if (!insertErr) {
-				await loadThread(userId);
+				const ok = await loadThread(userId);
 				localStorage.removeItem(legacyStorageKey(userId, planId));
-			} else {
-				threadLoaded = true;
+				return ok;
 			}
+			threadLoaded = true;
+			return true;
 		} catch (_) {
 			threadLoaded = true;
+			return true;
 		}
 	}
 
@@ -202,6 +204,7 @@
 
 	async function viewArchive(archivedAt: string) {
 		if (!cachedUserId) return;
+		error = null;
 		const { data, error: err } = await planFilter(
 			supabase
 				.from('coach_messages')
@@ -212,6 +215,7 @@
 		);
 		if (err) {
 			console.error('[coach] view archive failed', err);
+			error = t('coachChat.errorLoadArchive');
 			return;
 		}
 		messages = (data ?? []) as Msg[];
@@ -223,7 +227,10 @@
 		viewingArchiveAt = null;
 		messages = [];
 		threadLoaded = false;
-		if (cachedUserId) await loadThread(cachedUserId);
+		error = null;
+		if (cachedUserId && !(await loadThread(cachedUserId))) {
+			error = t('coachChat.errorLoad');
+		}
 		await scrollToBottom();
 	}
 
