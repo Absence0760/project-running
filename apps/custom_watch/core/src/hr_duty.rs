@@ -294,7 +294,10 @@ mod tests {
                 bpm: Some(151),
                 at_s: 42,
             },
-            HrSample { bpm: None, at_s: 42 },
+            HrSample {
+                bpm: None,
+                at_s: 42,
+            },
         ] {
             assert!(should_publish(Some(prev), next), "{next:?} must publish");
         }
