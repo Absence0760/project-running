@@ -208,6 +208,7 @@ pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
 pub mod gnss_mode;
+pub mod gnss_power;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;
