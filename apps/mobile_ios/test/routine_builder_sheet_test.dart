@@ -140,4 +140,54 @@ void main() {
       f.dir.deleteSync(recursive: true);
     }
   });
+
+  testWidgets('per-set RPE round-trips as a non-null target; empty stays null',
+      (tester) async {
+    final f = await _store('rpe');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: RoutineBuilderSheet(
+            store: f.store,
+            seedTitle: 'Push day A',
+            seedExercises: [
+              RoutineSeedExercise(
+                name: 'Bench',
+                sets: [
+                  RoutineSeedSet(reps: '5', weightKg: 80),
+                  RoutineSeedSet(reps: '5', weightKg: 80),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // Enter an RPE into the first set's RPE field (hint == the gymRpe label,
+      // 'RPE'), leaving the second set's RPE blank.
+      final rpeFields = find.widgetWithText(TextField, 'RPE');
+      expect(rpeFields, findsNWidgets(2));
+      await tester.enterText(rpeFields.first, '8.5');
+      await tester.pump();
+
+      await tester.ensureVisible(find.text('Save routine'));
+      await tester.pump();
+      await tester.tap(find.text('Save routine'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+
+      expect(f.store.routines, hasLength(1));
+      final sets = f.store.routines.first.exercises.first.sets;
+      expect(sets, hasLength(2));
+      // First set carries the authored RPE; empty second stays null.
+      expect(sets[0].targetRpe, 8.5);
+      expect(sets[1].targetRpe, isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
 }

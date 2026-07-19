@@ -11,6 +11,8 @@
 // caps, and the external_id shape are unit-testable without live credentials
 // (the EF itself returns 503 when a provider's creds are unset — see index.ts).
 
+import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
+
 export const MAX_FIELD_LEN = 200;
 export const MAX_RESULTS_ROWS = 2000;
 
@@ -98,7 +100,11 @@ export function mapRunSignUpResult(
   }
 
   const bib = capField(r.bib_num);
-  const startedAt = `${opts.raceDate}T10:00:00Z`;
+  // The RunSignUp / ChronoTrack / UltraSignup feeds carry a race date with no
+  // start clock, so synthesise a UTC time-of-day. The 10:00 UTC choice + its
+  // worldwide-timezone rationale live in the shared constant so this path and
+  // parkrun-import's parseParkrunDate can't silently diverge.
+  const startedAt = `${opts.raceDate}${SYNTHETIC_START_TIME_UTC}`;
 
   const metadata: Record<string, unknown> = {
     race_name: capField(opts.raceName),
@@ -325,6 +331,69 @@ export function extractRunSignUpResults(payload: unknown): RunSignUpResult[] {
     }
   }
   return out;
+}
+
+// ── Athlete-scoping guard (issue #360) ───────────────────────────────────────
+//
+// RunSignUp's get-results returns EVERY finisher (up to MAX_RESULTS_ROWS) when
+// unfiltered. Without narrowing, a standalone import inserts the whole field as
+// the caller's own runs, and a matchRunId enrich stamps mapped[0] (usually the
+// winner) onto the caller's run. The gate below fails closed: a request must
+// name the runner's RunSignUp user id or a bib before any fetch, and an enrich
+// must resolve to exactly one result.
+
+export interface RaceImportGate {
+  ok: boolean;
+  status?: number;
+  error?: string;
+}
+
+const GATE_OK: RaceImportGate = { ok: true };
+
+/**
+ * Pre-fetch gate for the RunSignUp leg. A request is scoped when it carries the
+ * runner's RunSignUp user id (narrows the upstream fetch) or a bib (narrows the
+ * mapped results client-side via `filterResultsByBib`). An unscoped request is
+ * rejected 400 `runsignup_athlete_id_required` — never fetched.
+ */
+export function runSignUpScopeGate(scope: {
+  runSignUpUserId?: string;
+  bib?: string;
+}): RaceImportGate {
+  const scoped = Boolean(capField(scope.runSignUpUserId) || capField(scope.bib));
+  return scoped ? GATE_OK : {
+    ok: false,
+    status: 400,
+    error: 'runsignup_athlete_id_required',
+  };
+}
+
+/**
+ * Post-fetch gate for the matchRunId (enrich) path. Enrich merges ONE result
+ * onto the caller's own run, so it must resolve to exactly one mapped result;
+ * more than one is ambiguous (which finisher is the caller?) and is rejected
+ * 400 `ambiguous_match` rather than silently taking mapped[0].
+ */
+export function matchResultGate(mappedCount: number): RaceImportGate {
+  return mappedCount === 1 ? GATE_OK : {
+    ok: false,
+    status: 400,
+    error: 'ambiguous_match',
+  };
+}
+
+/**
+ * Keep only the mapped results whose bib matches `bib`. RunSignUp's API filters
+ * only by user id, so a request scoped by bib alone must be narrowed here — a
+ * blank bib is a no-op (the user-id narrowing already applied upstream).
+ */
+export function filterResultsByBib(
+  mapped: MappedRaceRun[],
+  bib: string,
+): MappedRaceRun[] {
+  const want = capField(bib);
+  if (!want) return mapped;
+  return mapped.filter((r) => r.metadata.bib === want);
 }
 
 // ── UltraSignup ──────────────────────────────────────────────────────────────

@@ -45,8 +45,13 @@ drive the worker:
 - **`weekly_digest`** — the opt-in weekly engagement summary
   (`{user_id}`). Enqueued by a Monday pg_cron over opted-in recipients;
   the handler gates on the opt-IN `email_weekly_digest` pref + the
-  `email_suppressions` hard-block, then sends a bounded localized summary with
-  an RFC 8058 one-click unsubscribe. `decisions.md § 174`.
+  `email_suppressions` hard-block + a **third fail-closed gate: a working
+  opt-out must exist** — if `WEEKLY_DIGEST_UNSUB_SECRET` is unset the
+  computed unsubscribe URL is `""`, and the handler logs an error and skips
+  the send rather than emit bulk mail with no `List-Unsubscribe` header and no
+  footer opt-out (CAN-SPAM / GDPR-ePrivacy). Only after all three pass does it
+  send a bounded localized summary with an RFC 8058 one-click unsubscribe.
+  `decisions.md § 174`.
 - **`lifecycle_drip`** — staged engagement nudges keyed off the user's own
   activity timeline (`{user_id, template}` — `drip_onboarding`,
   `drip_reengagement`, `drip_streak`). The third engagement stream, built on the
@@ -56,8 +61,10 @@ drive the worker:
   ran the last two days, not yet today), writing the chosen template into the
   payload. The handler gates on a **separate** opt-IN `email_lifecycle_drip`
   pref (default off, never inferred from the digest opt-in) + the same
-  `email_suppressions` hard-block, then renders the fixed per-template copy with
-  an RFC 8058 one-click unsubscribe scoped to the drip stream. `decisions.md § 177`.
+  `email_suppressions` hard-block + the same **third fail-closed gate** (unset
+  `WEEKLY_DIGEST_UNSUB_SECRET` → empty unsubscribe URL → log + skip, no send),
+  then renders the fixed per-template copy with an RFC 8058 one-click
+  unsubscribe scoped to the drip stream. `decisions.md § 177`.
 
 A **non-email** job kind reuses the same notifications rows over a
 different transport:
@@ -135,7 +142,7 @@ Shared pieces:
 | **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §166 |
-| **Lifecycle drip** (onboarding / first-week / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_first_week`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions`; RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
+| **Lifecycle drip** (onboarding / first-week / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_first_week`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions` + a working opt-out (unset `WEEKLY_DIGEST_UNSUB_SECRET` → no unsubscribe URL → log + skip); RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit
@@ -249,7 +256,7 @@ Dashboard → Auth → Hooks in prod):
   a suppression row, fail-closed on a bad/missing token; keyed by
   `WEEKLY_DIGEST_UNSUB_SECRET`). The **reverse path** — a user re-opting into a
   stream via Settings (a pref flips off→on) — calls the SECURITY DEFINER
-  `clear_my_unsubscribe_suppression()` RPC (migration `20270423_001`), which
+  `clear_my_unsubscribe_suppression()` RPC (migration `20270425_001`), which
   deletes the caller's OWN `reason='unsubscribe'` suppression only (never a
   `bounce`/`complaint`/`manual` row), scoped to the caller's own address via
   `auth.uid()`. Without it the address-keyed hard-block outlived the pref and

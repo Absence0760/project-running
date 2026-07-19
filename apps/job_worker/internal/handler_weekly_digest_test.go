@@ -175,20 +175,17 @@ func TestWeeklyDigest_QuietWeekStillSends(t *testing.T) {
 	}
 }
 
-func TestWeeklyDigest_NoSecretOmitsUnsubscribeHeaderButStillSends(t *testing.T) {
+func TestWeeklyDigest_NoSecretFailsClosed(t *testing.T) {
 	be := digestBackend()
 	sender := &fakeEmailSender{}
 	w := newEmailTestWorker(be, sender)
 	w.DigestUnsubSecret = "" // misconfigured / not yet provisioned
 
 	if err := w.handleWeeklyDigest(context.Background(), digestJob("u1")); err != nil {
-		t.Fatalf("handler: %v", err)
+		t.Fatalf("missing unsub secret should be a skip, not a job error: %v", err)
 	}
-	if len(sender.sent) != 1 {
-		t.Fatalf("want 1 sent, got %d", len(sender.sent))
-	}
-	if sender.sent[0].msg.ListUnsubscribe != "" {
-		t.Error("without a secret the digest must omit the List-Unsubscribe header (no forgeable link)")
+	if len(sender.sent) != 0 {
+		t.Errorf("without a secret the digest has no working opt-out; must fail closed (no send); got %d", len(sender.sent))
 	}
 }
 
@@ -196,6 +193,7 @@ func TestWeeklyDigest_SendErrorPropagates(t *testing.T) {
 	be := digestBackend()
 	sender := &fakeEmailSender{err: errors.New("smtp 451 try again")}
 	w := newEmailTestWorker(be, sender)
+	w.DigestUnsubSecret = "s3cret"
 
 	if err := w.handleWeeklyDigest(context.Background(), digestJob("u1")); err == nil {
 		t.Fatal("a send failure must return an error so the queue retries")
