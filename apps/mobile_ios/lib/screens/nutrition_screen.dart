@@ -322,6 +322,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ],
       ),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
     if (name == null) return;
     if (_savingMeal) return;
     setState(() => _savingMeal = true);
@@ -566,6 +567,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ],
       ),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
     if (result == null) return;
     if (_savingRecipe) return;
     setState(() => _savingRecipe = true);

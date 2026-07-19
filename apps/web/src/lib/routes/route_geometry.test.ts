@@ -126,6 +126,13 @@ test('interpolateAlongRoute — returns null elevation when both sides null', ()
 	assert.equal(out!.elevation_m, null);
 });
 
+test('interpolateAlongRoute — non-finite fraction returns null (no NaN lat/lng)', () => {
+	const line = [wp(0, 0), wp(0, 0.010)];
+	assert.equal(interpolateAlongRoute(line, NaN), null);
+	assert.equal(interpolateAlongRoute(line, Infinity), null);
+	assert.equal(interpolateAlongRoute(line, -Infinity), null);
+});
+
 test('polylineLengthMetres — empty / single → 0', () => {
 	assert.equal(polylineLengthMetres([]), 0);
 	assert.equal(polylineLengthMetres([wp(0, 0)]), 0);

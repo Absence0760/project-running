@@ -39,7 +39,7 @@ What the Pro tier changes:
   AND is persisted to `coach_messages` (via the same service-role writer
   the happy path uses) so what the user paid for survives a reload —
   content-persisted ⟺ slot-consumed, never a charged slot with a lost
-  reply (decisions §258, issue #391).
+  reply (decisions §261, issue #391).
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per
