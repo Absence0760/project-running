@@ -3519,6 +3519,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileLoadError => 'Não foi possível carregar o perfil.';
 
   @override
+  String get profileSectionError => 'Não foi possível carregar esta secção.';
+
+  @override
   String get profileNotFound => 'Perfil não encontrado.';
 
   @override
@@ -10796,6 +10799,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get racesBib => 'Dorsal';
 
   @override
+  String get racesRunSignUpBibHint =>
+      'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduz os detalhes da tua chegada a partir da página de resultados da corrida.';
 
@@ -14872,6 +14879,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get profileLoadError => 'Não foi possível carregar o perfil.';
+
+  @override
+  String get profileSectionError => 'Não foi possível carregar esta seção.';
 
   @override
   String get profileNotFound => 'Perfil não encontrado.';
@@ -22148,6 +22158,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get racesBib => 'Número de peito';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
   String get racesPasteResultHint =>

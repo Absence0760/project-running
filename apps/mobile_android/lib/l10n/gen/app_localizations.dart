@@ -5906,6 +5906,12 @@ abstract class AppLocalizations {
   /// **'Could not load profile.'**
   String get profileLoadError;
 
+  /// Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this section.'**
+  String get profileSectionError;
+
   /// Shown when the profile does not exist
   ///
   /// In en, this message translates to:
@@ -18011,6 +18017,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bib'**
   String get racesBib;
+
+  /// Hint above the RunSignUp import action requiring a bib to scope the import
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your bib number so we import only your result, not the whole field.'**
+  String get racesRunSignUpBibHint;
 
   /// Hint above the manual result paste form
   ///

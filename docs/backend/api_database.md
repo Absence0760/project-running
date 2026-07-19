@@ -116,7 +116,7 @@ Granted to `anon` + `authenticated`. Every public-runs reader (`fetchPublicRun`,
 
 **Views grant SELECT only — never rely on the default privileges.** Supabase's default privileges hand anon/authenticated FULL table privileges on every object created in the `public` schema. For tables RLS gates the rows; for VIEWS it silently made every simple (auto-updatable) redacted view a **write path that bypasses RLS** — a write through a view is authorised as the view owner (`postgres`), so an anon `POST /rest/v1/public_race_listings` inserted a base-table row despite the table's authenticated-only INSERT policy. `20270324_001` reset every public-schema view to exactly its documented read audience, and `view_write_privileges_test.sql` pins the invariant with an information_schema catch-all so a future view created without the `revoke all … then grant select` reset fails CI. When you add a view: `revoke all on <view> from public, anon, authenticated;` then `grant select` to the intended audience.
 
-**Base-table grants are now version-controlled too — don't rely on the default privileges for them either.** The flip side of the view lesson bit prod on 2026-07-13: onboarding failed with `42501 permission denied for table user_profiles` / `user_settings` because the `authenticated` role had lost its base `insert/update/delete` (and some table `SELECT`) grants — grants that had **only ever existed via Supabase's implicit default privileges**, never a migration, so nothing restored them once prod drifted. `20270408_001` makes the whole intended matrix explicit + idempotent: one `grant` per (table, grantee) for `select/insert/update/delete` across every public base table, plus the column carve-outs, with `app_quota` + `deletion_audit_log` left service_role-only. It's additive (never tightens, never grants table-SELECT on a column-locked table) so it's a no-op on a healthy DB and safe to replay. When you add a base table, add its grants to a migration — don't assume the default privileges will carry them to every environment. Rationale in [decisions.md §232](../architecture/decisions.md).
+**Base-table grants are now version-controlled too — don't rely on the default privileges for them either.** The flip side of the view lesson bit prod on 2026-07-13: onboarding failed with `42501 permission denied for table user_profiles` / `user_settings` because the `authenticated` role had lost its base `insert/update/delete` (and some table `SELECT`) grants — grants that had **only ever existed via Supabase's implicit default privileges**, never a migration, so nothing restored them once prod drifted. `20270408_001` makes the whole intended matrix explicit + idempotent: one `grant` per (table, grantee) for `select/insert/update/delete` across every public base table, plus the column carve-outs, with `app_quota` + `deletion_audit_log` left service_role-only. It's additive (never tightens, never grants table-SELECT on a column-locked table) so it's a no-op on a healthy DB and safe to replay. When you add a base table, add its grants to a migration — don't assume the default privileges will carry them to every environment. Rationale in [decisions.md §232](../architecture/decisions.md). This broad DML surface is inert only because every granted table's RLS policies are `(select auth.uid())`-scoped; `rls_grant_without_policy_test.sql` is the defence-in-depth backstop that fails CI the moment a permissive policy with a trivially-true (literal `true`) `USING` / `WITH CHECK` lands on a DML-granted table — the future `create policy … to anon using (true)` that would turn the standing grant live and make the table anon-writable.
 
 ---
 
@@ -153,6 +153,10 @@ create index routes_public_featured_sort on routes (featured_at desc nulls last,
   where is_public = true and shadow_hidden = false;
 create index routes_public_newest_sort on routes (created_at desc nulls last)
   where is_public = true and shadow_hidden = false;
+-- 20270423_001 dropped the superseded routes_featured index
+-- (featured_at desc nulls last where is_featured and is_public): the featured
+-- branch above orders ALL public rows and is served by routes_public_featured_sort,
+-- so the old is_featured=true-only partial index served nothing (issue #407).
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
@@ -508,6 +512,8 @@ create table segment_efforts (
 
 Anyone who can read the parent route can create a segment (Strava-style community contribution); `author_id` is enforced as `auth.uid()`. Effort visibility = segment AND run readability so private runs don't surface on a public segment's leaderboard. **Auto-effort generation is client-side**: there's no trigger because `pg_net` isn't wired and downloading from Postgres is gross. The browser walks the run track via `lib/segments.ts#computeEffortFromTrack` (haversine cumulative distance + timestamp interpolation) on the run-detail page, then INSERTs new efforts via the regular RLS-gated path. The unique constraint makes this idempotent.
 
+`segment_leaderboard_tiered(p_segment_id, p_gender, p_age_band, p_limit, p_club_id)` — SECURITY DEFINER, `search_path = public, private`, block-guarded, route-visibility-filtered, own-row-only demographics. Returns **one row per athlete** (each athlete's best VISIBLE effort), not one per effort: a `distinct on (se.user_id)` CTE reduces the efforts *after* every gender / age-band / club / visibility / block filter is applied, then the outer query ranks + limits the deduped set, so `p_limit` counts distinct competitors and no runner can hold multiple ranks (issue #393, migration `20270424000003`). Ranks are assigned client-side (`assignCompetitionRanks`) from the returned order. pgTAP `segment_leaderboard_tiered_test.sql`.
+
 #### `global_segments` / `global_segment_efforts`
 
 Free-standing global/famous-segment catalogue (decisions §232, migration `20270411_001`). Unlike v1 `segments`, a `global_segments` row carries its **own** polyline (`waypoints jsonb`, same `[{lat,lng,ele?}]` shape as `routes.waypoints`) with no `route_id` dependency — so a run can match it without anyone having re-created the road as an in-app route first (the imported-run, `route_id`-null case). `global_segments` is world-readable for `is_active = true` rows; only the `app_admins` allow-list (`private.is_admin`, migration `20270105_001`) may insert / edit / pull, and `is_active` is a soft-delete so pulling a bad entry doesn't cascade away athletes' efforts. `global_segment_efforts` (`unique(global_segment_id, run_id)`) mirrors `segment_efforts`: run-owner-only insert, base-table SELECT gated on `segment active AND private.is_run_visible_to(run_id, caller)` so a private run never leaks onto a catalogue leaderboard.
@@ -811,7 +817,7 @@ Supplementary user data not stored in `auth.users`. As of `20260521_001_user_fol
 ```sql
 create table user_profiles (
   id                       uuid primary key references auth.users,
-  display_name             text,
+  display_name             text,                                -- rejects control chars (CHECK user_profiles_display_name_no_control_chars, 20270423_001)
   avatar_url               text,
   parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
   preferred_unit           text default 'km',                   -- 'km' | 'mi'
@@ -828,6 +834,15 @@ create table user_profiles (
 -- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
 -- 'premium' values to 'pro'. Keep this list in lockstep with the
 -- SubscriptionTier TS union in apps/web/src/lib/types.ts.
+--
+-- `user_profiles_display_name_no_control_chars` (20270423_001) rejects any
+-- control character (CR/LF/other C0/DEL) in display_name. display_name is
+-- interpolated into the Subject of safety-contact emails the app relays to
+-- third parties; a raw CR/LF is an SMTP/MIME header injection (issue #375).
+-- The Go mailer (job_worker) also strips control chars from every header by
+-- construction; this CHECK is the defence-in-depth write boundary. NULL stays
+-- allowed. Added NOT VALID + VALIDATE (existing rows scrubbed first) so the
+-- DDL doesn't take a long blocking lock on the populated table.
 --
 -- `coach_consent_at` and `health_data_consent_at` were added in
 -- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
@@ -1197,8 +1212,13 @@ create table jobs (
   constraint jobs_max_attempts_pos check (max_attempts > 0)
 );
 
-create index jobs_queued
-  on jobs (scheduled_at, kind)
+-- Matches claim_next_job's `order by scheduled_at, id`: the `id`
+-- tie-break resolves same-scheduled_at bursts from the index with no
+-- in-memory sort. (Was `(scheduled_at, kind)`; `kind` bought nothing —
+-- the worker always claims with an empty kind_filter. Migration
+-- 20270423_001.)
+create index jobs_queued_v2
+  on jobs (scheduled_at, id)
   where status = 'queued';
 
 create index jobs_running
@@ -1215,7 +1235,7 @@ create unique index jobs_dedupe_map_match
 - **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
 - **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. PUBLIC EXECUTE is revoked; only `service_role` is granted. See [§ Database functions](#database-functions-rpcs).
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
-- **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
+- **Partial indexes**: the `jobs_queued_v2` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
 #### `live_run_pings`
 

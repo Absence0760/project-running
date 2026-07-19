@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyAuthError, authErrorMessageKey } from './auth_errors.js';
+import {
+	classifyAuthError,
+	authErrorMessageKey,
+	signUpErrorRevealsAccountExistence
+} from './auth_errors.js';
 
 /// Duck-typed stand-in for supabase-js's `AuthApiError` (carries `code`
 /// + `status`) so the classifier can be exercised without importing the
@@ -61,6 +65,18 @@ test('email_not_confirmed code → emailNotConfirmed', () => {
 	);
 });
 
+test('invalid_grant + "Email not confirmed" message → emailNotConfirmed (not invalidCredentials)', () => {
+	// GoTrue's token endpoint can report an unconfirmed-email sign-in via
+	// the OAuth-style `invalid_grant` error with the descriptive message
+	// "Email not confirmed", not the dedicated code. The specific message
+	// must win over the generic invalid_grant → invalidCredentials branch
+	// so the user gets the resend affordance, not a wrong-password banner.
+	assert.equal(
+		classifyAuthError(authError('Email not confirmed', { code: 'invalid_grant', status: 400 })),
+		'emailNotConfirmed'
+	);
+});
+
 test('weak_password code → weakPassword', () => {
 	assert.equal(
 		classifyAuthError(
@@ -82,6 +98,31 @@ test('null / undefined / non-error values → generic, never throw', () => {
 	assert.equal(classifyAuthError(null), 'generic');
 	assert.equal(classifyAuthError(undefined), 'generic');
 	assert.equal(classifyAuthError('boom'), 'generic');
+});
+
+test('sign-up neutralises an existing-email error (no account-existence oracle, issue #399)', () => {
+	// With GoTrue enable_confirmations=false a duplicate sign-up throws
+	// user_already_exists; the sign-up surface must collapse that to the
+	// SAME neutral check-your-email outcome a fresh sign-up shows, never
+	// a distinct "that email already has an account" message.
+	const dup = authError('User already registered', { code: 'user_already_exists', status: 422 });
+	assert.equal(signUpErrorRevealsAccountExistence(classifyAuthError(dup)), true);
+	// The message-shape classification itself is unchanged — LOGIN still
+	// reads emailExists as before; only the sign-up call site neutralises.
+	assert.equal(classifyAuthError(dup), 'emailExists');
+});
+
+test('sign-up does NOT neutralise non-enumerating auth errors', () => {
+	for (const err of [
+		new TypeError('Failed to fetch'),
+		authError('Invalid login credentials', { code: 'invalid_credentials', status: 400 }),
+		authError('Too many requests', { status: 429 }),
+		authError('Password should be at least 8 characters', { code: 'weak_password', status: 422 }),
+		authError('Email not confirmed', { code: 'email_not_confirmed', status: 400 }),
+		new Error('boom')
+	]) {
+		assert.equal(signUpErrorRevealsAccountExistence(classifyAuthError(err)), false);
+	}
 });
 
 test('every kind maps to a distinct message key', () => {

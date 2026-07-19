@@ -41,6 +41,18 @@ export function classifyAuthError(error: unknown): AuthErrorKind {
 		return 'rateLimited';
 	}
 
+	// Checked BEFORE invalidCredentials: GoTrue's token endpoint can
+	// report an unconfirmed-email sign-in as the OAuth-style
+	// `invalid_grant` error carrying the descriptive message "Email not
+	// confirmed", not only via the dedicated `email_not_confirmed` code.
+	// The invalidCredentials branch below also matches `invalid_grant`,
+	// so this specific-message check has to win first — otherwise the
+	// user gets a "wrong password" banner and no resend affordance for
+	// what is really an unconfirmed account (issue #486).
+	if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
+		return 'emailNotConfirmed';
+	}
+
 	if (
 		code === 'invalid_credentials' ||
 		code === 'invalid_grant' ||
@@ -52,10 +64,6 @@ export function classifyAuthError(error: unknown): AuthErrorKind {
 
 	if (code === 'user_already_exists' || code === 'email_exists' || msg.includes('already registered')) {
 		return 'emailExists';
-	}
-
-	if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
-		return 'emailNotConfirmed';
 	}
 
 	if (
@@ -84,4 +92,22 @@ const MESSAGE_KEYS: Record<AuthErrorKind, MessageKey> = {
 /// a `{min}` param — pass `{ min: PASSWORD_MIN_LENGTH }` to `m()`.
 export function authErrorMessageKey(kind: AuthErrorKind): MessageKey {
 	return MESSAGE_KEYS[kind];
+}
+
+/// Whether surfacing this error kind at the SIGN-UP surface would
+/// disclose that an email is already registered. GoTrue only
+/// obfuscates a duplicate sign-up (returning a session-less success
+/// identical to a fresh one) when email confirmations are ON — a
+/// dashboard-managed setting invisible from this repo. With
+/// confirmations OFF a duplicate address throws `user_already_exists`
+/// (→ `emailExists`), which would otherwise render a distinct "that
+/// email already has an account" message and turn sign-up into an
+/// account-existence oracle. Defence in depth: the sign-up call site
+/// collapses this to the same neutral check-your-email outcome a fresh
+/// sign-up shows, regardless of the server toggle. The full fix is prod
+/// GoTrue running `enable_confirmations = true` — see
+/// docs/features/web_app_auth.md. LOGIN is unaffected: an existing
+/// email there classifies as `invalidCredentials`, which is standard.
+export function signUpErrorRevealsAccountExistence(kind: AuthErrorKind): boolean {
+	return kind === 'emailExists';
 }

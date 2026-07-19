@@ -211,6 +211,62 @@ function buildSyntheticIndoorFit(): ArrayBuffer {
 	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
 }
 
+/// A malformed FIT whose `file_id` carries a serial_number but NO
+/// time_created (field 4 omitted). Two of these sharing a serial must NOT
+/// collide on a `-<serial>` dedupe key (#397).
+function buildSyntheticFitNoTimeCreated(serial: number): ArrayBuffer {
+	const chunks: Buffer[] = [];
+	function defMsg(localNum: number, globalNum: number, fields: [number, number, number][]) {
+		const def = Buffer.alloc(6 + fields.length * 3);
+		def[0] = 0x40 | localNum;
+		def.writeUInt16LE(globalNum, 3);
+		def[5] = fields.length;
+		fields.forEach(([num, size, base], i) => {
+			def[6 + i * 3] = num;
+			def[6 + i * 3 + 1] = size;
+			def[6 + i * 3 + 2] = base;
+		});
+		chunks.push(def);
+	}
+	const t0 = 1000000000;
+
+	// file_id (global 0): type(enum)=4 activity, serial(u32z). NO time_created.
+	defMsg(0, 0, [[0, 1, 0x00], [3, 4, 0x8c]]);
+	{
+		const d = Buffer.alloc(1 + 1 + 4);
+		d[0] = 0; d[1] = 4; d.writeUInt32LE(serial, 2);
+		chunks.push(d);
+	}
+
+	// session (global 18): start_time(u32), sport(enum)=1 running,
+	// total_timer_time(u32 /1000), total_distance(u32 /100).
+	defMsg(1, 18, [[2, 4, 0x86], [5, 1, 0x00], [7, 4, 0x86], [9, 4, 0x86]]);
+	{
+		const d = Buffer.alloc(1 + 4 + 1 + 4 + 4);
+		let o = 0;
+		d[o] = 1; o += 1;
+		d.writeUInt32LE(t0, o); o += 4;
+		d[o] = 1; o += 1; // sport running
+		d.writeUInt32LE(1800 * 1000, o); o += 4;
+		d.writeUInt32LE(5000 * 100, o); o += 4;
+		chunks.push(d);
+	}
+
+	const body = Buffer.concat(chunks);
+	const header = Buffer.alloc(14);
+	header[0] = 14;
+	header[1] = 0x10;
+	header.writeUInt16LE(2140, 2);
+	header.writeUInt32LE(body.length, 4);
+	header.write('.FIT', 8, 'ascii');
+	header.writeUInt16LE(crc16(header.subarray(0, 12)), 12);
+	const full = Buffer.concat([header, body]);
+	const crc = Buffer.alloc(2);
+	crc.writeUInt16LE(crc16(full), 0);
+	const out = Buffer.concat([full, crc]);
+	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
 test('parseFitBuffer — outdoor run has an empty hr_series (HR rides on the track)', async () => {
 	const parsed = await parseFitBuffer(buildSyntheticTrailFit());
 	assert.ok(parsed);
@@ -269,6 +325,23 @@ test('parseFitBuffer — garmin_file_id is a stable, timezone-independent numeri
 	// runs.external_id unique index.
 	assert.equal(parsed!.garmin_file_id, '1631065600-12345');
 	assert.equal(garminExternalId(parsed!.garmin_file_id), 'garmin:1631065600-12345');
+});
+
+test('parseFitBuffer — file_id without time_created yields no dedupe key (#397)', async () => {
+	// A serial_number alone is the device id, shared by every activity that
+	// watch records. Two malformed files sharing a serial but both missing
+	// time_created must NOT form a `-<serial>` key, or the second is dropped
+	// as a duplicate though it is a different activity.
+	const a = await parseFitBuffer(buildSyntheticFitNoTimeCreated(555));
+	const b = await parseFitBuffer(buildSyntheticFitNoTimeCreated(555));
+	assert.ok(a && b);
+	assert.equal(a!.garmin_file_id, null);
+	assert.equal(b!.garmin_file_id, null);
+	assert.equal(garminExternalId(a!.garmin_file_id), null);
+	// A well-formed file carrying BOTH time_created and serial still keys and
+	// dedupes exactly as before.
+	const good = await parseFitBuffer(buildSyntheticTrailFit());
+	assert.equal(good!.garmin_file_id, '1631065600-12345');
 });
 
 test('parseFitBuffer — core scalars round-trip', async () => {

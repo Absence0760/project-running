@@ -3492,6 +3492,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileLoadError => 'Could not load profile.';
 
   @override
+  String get profileSectionError => 'Couldn\'t load this section.';
+
+  @override
   String get profileNotFound => 'Profile not found.';
 
   @override
@@ -10687,6 +10690,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get racesBib => 'Bib';
+
+  @override
+  String get racesRunSignUpBibHint =>
+      'Enter your bib number so we import only your result, not the whole field.';
 
   @override
   String get racesPasteResultHint =>

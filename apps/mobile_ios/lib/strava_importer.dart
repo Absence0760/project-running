@@ -53,6 +53,46 @@ DateTime? parseStravaDate(String raw) {
   return DateTime.utc(year, month, day, hour, minute, second);
 }
 
+/// Resolve a Strava export row's distance to metres.
+///
+/// Strava's `activities.csv` carries two "Distance" columns: a summary-block
+/// one in the athlete's DISPLAY unit (km OR miles at export time — a documented
+/// Strava quirk) and a raw-block one (~col 18) that is always metres. Prefer
+/// the raw metric column so an imperial athlete's export imports the true
+/// distance instead of a ~1.6x-short one; fall back to the display column
+/// (explicit miles→metres, or the legacy km-assumption) only when the raw
+/// column is absent. [lowerHeader] must be lower-cased (as the importer keeps
+/// it). Mirrors web `stravaDistanceMetres` in strava-zip-header.ts.
+double stravaCsvDistanceMetres(List<String> lowerHeader, List<dynamic> row) {
+  double parse(int i) => (i >= 0 && i < row.length)
+      ? (double.tryParse(row[i].toString().replaceAll(',', '')) ?? 0)
+      : 0;
+  int findAny(List<String> names) {
+    for (final n in names) {
+      final i = lowerHeader.indexWhere((h) => h.trim() == n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  }
+
+  final plain = <int>[];
+  for (var i = 0; i < lowerHeader.length; i++) {
+    if (lowerHeader[i].trim() == 'distance') plain.add(i);
+  }
+  if (plain.length >= 2) return parse(plain[1]);
+
+  final metresIdx =
+      findAny(['distance (m)', 'distance in meters', 'distance in metres']);
+  if (metresIdx >= 0) return parse(metresIdx);
+  if (plain.length == 1) return parse(plain.first) * 1000;
+  final kmIdx = findAny(
+      ['distance (km)', 'distance in kilometers', 'distance in kilometres']);
+  if (kmIdx >= 0) return parse(kmIdx) * 1000;
+  final miIdx = findAny(['distance (mi)', 'distance in miles']);
+  if (miIdx >= 0) return parse(miIdx) * 1609.344;
+  return 0;
+}
+
 /// Imports a Strava data export ZIP into [Run] objects.
 ///
 /// Strava exports look like:
@@ -120,9 +160,6 @@ class StravaImporter {
     final dateIdx = header.indexOf('activity date');
     final nameIdx = header.indexOf('activity name');
     final typeIdx = header.indexOf('activity type');
-    final distanceIdx = header.indexOf('distance (km)') != -1
-        ? header.indexOf('distance (km)')
-        : header.indexOf('distance');
     final elapsedIdx = header.indexOf('elapsed time');
     final filenameIdx = header.indexOf('filename');
 
@@ -146,9 +183,6 @@ class StravaImporter {
         final dateStr = row[dateIdx].toString();
         final name = nameIdx >= 0 ? row[nameIdx].toString() : 'Strava activity';
         final typeStr = typeIdx >= 0 ? row[typeIdx].toString() : 'Run';
-        final csvDistance = distanceIdx >= 0
-            ? double.tryParse(row[distanceIdx].toString()) ?? 0
-            : 0.0;
         final csvElapsed = elapsedIdx >= 0
             ? int.tryParse(row[elapsedIdx].toString()) ?? 0
             : 0;
@@ -160,7 +194,7 @@ class StravaImporter {
           name: name,
           stravaType: typeStr,
           startedAtRaw: dateStr,
-          fallbackDistanceMetres: csvDistance * 1000,
+          fallbackDistanceMetres: stravaCsvDistanceMetres(header, row),
           fallbackDurationSeconds: csvElapsed,
         );
         runs.add(run);
