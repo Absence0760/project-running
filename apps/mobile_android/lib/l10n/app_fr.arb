@@ -358,6 +358,7 @@
   "runDiscardA11yHint": "Supprime l'enregistrement en cours sans l'enregistrer",
   "runStopA11yLabel": "Arrêter et enregistrer la course",
   "runStopA11yHint": "Termine l'enregistrement et enregistre la course",
+  "runHoldToStopHint": "Maintenir pour arrêter",
   "runResumeA11yLabel": "Reprendre la course",
   "runPauseA11yLabel": "Mettre en pause",
   "runResumeA11yHint": "Reprend l'enregistrement en pause",
