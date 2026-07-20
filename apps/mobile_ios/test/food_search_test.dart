@@ -250,6 +250,81 @@ void main() {
     expect(out, isEmpty);
   });
 
+  test('offLang normalises a BCP-47 tag to an Open Food Facts language code', () {
+    expect(offLang('en'), 'en');
+    expect(offLang('pt-BR'), 'pt');
+    expect(offLang('FR'), 'fr');
+    expect(offLang(''), 'en');
+    expect(offLang(null), 'en');
+  });
+
+  test('parseOffSearch prefers product_name_<lc>, falling back to the generic name',
+      () {
+    final json = {
+      'products': [
+        {
+          'code': '1',
+          'product_name': 'Melk',
+          'product_name_en': 'Whole Milk',
+          'nutriments': {'energy-kcal_100g': 60},
+        },
+        {
+          'code': '2',
+          'product_name': 'Havregryn',
+          'nutriments': {'energy-kcal_100g': 370},
+        },
+      ],
+    };
+    final en = parseOffSearch(json, 'en');
+    expect(en[0].name, 'Whole Milk');
+    expect(en[1].name, 'Havregryn');
+    final de = parseOffSearch(json, 'de');
+    expect(de[0].name, 'Melk');
+  });
+
+  test('searchFoods sends lc + product_name_<lc> for the requested language',
+      () async {
+    await searchFoods('oats', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'en');
+      expect(u.queryParameters['fields'], contains('product_name_en'));
+      return jsonEncode(_sample);
+    });
+    await searchFoods('oats', lang: 'pt-BR', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'pt');
+      expect(u.queryParameters['fields'], contains('product_name_pt'));
+      return jsonEncode(_sample);
+    });
+  });
+
+  test('searchFoodSources threads the caller locale into the OFF query',
+      () async {
+    Uri? seen;
+    await searchFoodSources('oats', lang: 'fr', fetcher: (u) async {
+      seen = u;
+      return jsonEncode(_sample);
+    });
+    expect(seen!.queryParameters['lc'], 'fr');
+    expect(seen!.queryParameters['fields'], contains('product_name_fr'));
+  });
+
+  test('lookupBarcode sends lc + product_name_<lc> and prefers the localized name',
+      () async {
+    final r = await lookupBarcode('737628064502', lang: 'fr', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'fr');
+      expect(u.queryParameters['fields'], contains('product_name_fr'));
+      return jsonEncode({
+        'status': 1,
+        'product': {
+          'code': '737628064502',
+          'product_name': 'Melk',
+          'product_name_fr': 'Lait',
+          'nutriments': {'energy-kcal_100g': 60},
+        },
+      });
+    });
+    expect(r?.name, 'Lait');
+  });
+
   const product = {
     'status': 1,
     'product': {
