@@ -1,4 +1,4 @@
--- Pins migration 20270311_001 — the public-rows column lockdown on the
+-- Pins migration 20270313_001 — the public-rows column lockdown on the
 -- Phase-4 multi-modal tables gym_workouts + food_log.
 --
 -- Two Highs from audit-public-rows.md (2026-07-02): a public gym_workouts /
