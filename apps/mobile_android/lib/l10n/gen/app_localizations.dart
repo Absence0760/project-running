@@ -6233,7 +6233,7 @@ abstract class AppLocalizations {
   /// Discover tab search field placeholder
   ///
   /// In en, this message translates to:
-  /// **'Search yoga, pilates, HIIT, run clubs…'**
+  /// **'Search classes, clubs…'**
   String get discoverSearchPlaceholder;
 
   /// Discover tab — category filter chip that clears the category filter
@@ -15623,6 +15623,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fat'**
   String get nutritionFat;
+
+  /// No description provided for @nutritionFiber.
+  ///
+  /// In en, this message translates to:
+  /// **'Fiber'**
+  String get nutritionFiber;
+
+  /// No description provided for @nutritionSugar.
+  ///
+  /// In en, this message translates to:
+  /// **'Sugar'**
+  String get nutritionSugar;
+
+  /// No description provided for @nutritionSodium.
+  ///
+  /// In en, this message translates to:
+  /// **'Sodium'**
+  String get nutritionSodium;
+
+  /// No description provided for @nutritionSaturatedFat.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturated fat'**
+  String get nutritionSaturatedFat;
+
+  /// No description provided for @nutritionCholesterol.
+  ///
+  /// In en, this message translates to:
+  /// **'Cholesterol'**
+  String get nutritionCholesterol;
 
   /// No description provided for @nutritionWater.
   ///

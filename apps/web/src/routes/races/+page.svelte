@@ -13,6 +13,7 @@
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RaceCalendarCard from '$lib/components/RaceCalendarCard.svelte';
 	import RaceListingEditor from '$lib/components/RaceListingEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	let query = $state('');
@@ -297,93 +298,85 @@
 	{/if}
 </div>
 
-{#if showEditor}
+<Modal
+	open={showEditor}
+	title={m('races.editorTitle')}
+	narrow
+	onclose={() => (showEditor = false)}
+>
 	<RaceListingEditor oncreated={onCreated} oncancel={() => (showEditor = false)} />
-{/if}
+</Modal>
 
-{#if importing}
-	<div
-		class="modal-backdrop"
-		role="presentation"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) importing = null;
-		}}
-	>
-		<div
-			class="modal modal-narrow"
-			role="dialog"
-			aria-modal="true"
-			aria-label={m('races.importResult')}
-			tabindex="-1"
-		>
-			<div class="modal-header">
-				<h2>{importing.name}</h2>
-				<button type="button" class="modal-close" onclick={() => (importing = null)} aria-label={m('races.cancel')}>×</button>
-			</div>
-			<div class="modal-body import-body">
-				{#if importing.provider === 'runsignup' && runSignUpAvailable}
-					<label>
-						<span>{m('races.bib')}</span>
-						<input type="text" bind:value={runSignUpBib} data-testid="runsignup-bib" />
-					</label>
-					<p class="paste-hint">{m('races.runSignUpBibHint')}</p>
-					<button
-						type="button"
-						class="btn btn-primary"
-						disabled={importBusy || !runSignUpBib.trim()}
-						onclick={doRunSignUpImport}
-						data-testid="race-import-runsignup"
-					>
-						{m('races.importResult')}
-					</button>
-				{:else if importing.provider === 'runsignup' && !runSignUpAvailable}
-					<p class="unavailable" data-testid="race-runsignup-unavailable">
-						{m('integrations.runsignupUnavailable')}
-					</p>
-				{/if}
-
-				<form
-					class="editor-form"
-					onsubmit={(e) => {
-						e.preventDefault();
-						doPasteImport();
-					}}
+<Modal
+	open={importing != null}
+	title={importing?.name ?? ''}
+	narrow
+	onclose={() => (importing = null)}
+>
+	{#if importing}
+		<div class="import-body">
+			{#if importing.provider === 'runsignup' && runSignUpAvailable}
+				<label>
+					<span>{m('races.bib')}</span>
+					<input type="text" bind:value={runSignUpBib} data-testid="runsignup-bib" />
+				</label>
+				<p class="paste-hint">{m('races.runSignUpBibHint')}</p>
+				<button
+					type="button"
+					class="btn btn-primary"
+					disabled={importBusy || !runSignUpBib.trim()}
+					onclick={doRunSignUpImport}
+					data-testid="race-import-runsignup"
 				>
-					<p class="paste-hint">{m('races.pasteResultHint')}</p>
-					<label>
-						<span>{m('races.bib')}</span>
-						<input type="text" bind:value={pasteBib} data-testid="paste-bib" />
-					</label>
-					<label>
-						<span>{m('races.chipTime')}</span>
-						<input type="text" inputmode="numeric" placeholder="1:47:23" bind:value={pasteChip} data-testid="paste-chip" />
-					</label>
-					<label>
-						<span>{m('races.gunTime')}</span>
-						<input type="text" inputmode="numeric" placeholder="1:48:01" bind:value={pasteGun} data-testid="paste-gun" />
-					</label>
-					<label>
-						<span>{m('races.overallPlace')}</span>
-						<input type="number" inputmode="numeric" min="0" bind:value={pastePlace} data-testid="paste-place" />
-					</label>
-					<div class="form-actions">
-						<button type="button" class="btn btn-outline" onclick={() => (importing = null)}>
-							{m('races.cancel')}
-						</button>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							disabled={importBusy || (!pasteChip.trim() && !pasteGun.trim())}
-							data-testid="paste-save"
-						>
-							{m('races.matchConfirm')}
-						</button>
-					</div>
-				</form>
-			</div>
+					{m('races.importResult')}
+				</button>
+			{:else if importing.provider === 'runsignup' && !runSignUpAvailable}
+				<p class="unavailable" data-testid="race-runsignup-unavailable">
+					{m('integrations.runsignupUnavailable')}
+				</p>
+			{/if}
+
+			<form
+				class="editor-form"
+				onsubmit={(e) => {
+					e.preventDefault();
+					doPasteImport();
+				}}
+			>
+				<p class="paste-hint">{m('races.pasteResultHint')}</p>
+				<label>
+					<span>{m('races.bib')}</span>
+					<input type="text" bind:value={pasteBib} data-testid="paste-bib" />
+				</label>
+				<label>
+					<span>{m('races.chipTime')}</span>
+					<input type="text" inputmode="numeric" placeholder="1:47:23" bind:value={pasteChip} data-testid="paste-chip" />
+				</label>
+				<label>
+					<span>{m('races.gunTime')}</span>
+					<input type="text" inputmode="numeric" placeholder="1:48:01" bind:value={pasteGun} data-testid="paste-gun" />
+				</label>
+				<label>
+					<span>{m('races.overallPlace')}</span>
+					<input type="number" inputmode="numeric" min="0" bind:value={pastePlace} data-testid="paste-place" />
+				</label>
+				<div class="form-actions">
+					<button type="button" class="btn btn-outline" onclick={() => (importing = null)}>
+						{m('races.cancel')}
+					</button>
+					<button
+						type="submit"
+						class="btn btn-primary"
+						disabled={importBusy || (!pasteChip.trim() && !pasteGun.trim())}
+						data-testid="paste-save"
+					>
+						{m('races.matchConfirm')}
+					</button>
+				</div>
+			</form>
 		</div>
-	</div>
-{/if}
+	{/if}
+</Modal>
 
 <style>
 	.races-page {

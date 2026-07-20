@@ -3522,7 +3522,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get socialTabDiscover => '見つける';
 
   @override
-  String get discoverSearchPlaceholder => 'ヨガ、ピラティス、HIIT、ランクラブを検索…';
+  String get discoverSearchPlaceholder => 'クラス、クラブを検索…';
 
   @override
   String get discoverActivityAll => 'すべてのアクティビティ';
@@ -8924,6 +8924,21 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionFat => '脂質';
+
+  @override
+  String get nutritionFiber => '食物繊維';
+
+  @override
+  String get nutritionSugar => '糖質';
+
+  @override
+  String get nutritionSodium => 'ナトリウム';
+
+  @override
+  String get nutritionSaturatedFat => '飽和脂肪';
+
+  @override
+  String get nutritionCholesterol => 'コレステロール';
 
   @override
   String get nutritionWater => '水分';

@@ -121,6 +121,58 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 		expect(exAfter?.length ?? 0).toBe(0);
 	});
 
+	test('builder persists + re-renders a per-set target RPE', async ({ page }) => {
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E RPE ${stamp}`;
+		const exercise = `E2E Squat ${stamp}`;
+
+		await admin.from('gym_routines').delete().eq('author_id', USER_A.id).eq('title', title);
+
+		await page.goto('/gym/routines/new');
+		await page.getByTestId('routine-title').fill(title);
+		await page.getByTestId('routine-exercise-name').first().fill(exercise);
+		await page.getByTestId('routine-set-reps').first().fill('5');
+		await page.getByTestId('routine-set-weight').first().fill('100');
+		await page.getByTestId('routine-set-rpe').first().fill('8.5');
+		await page.getByTestId('routine-save').click();
+
+		await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
+
+		const { data: routines } = await admin
+			.from('gym_routines')
+			.select('id')
+			.eq('author_id', USER_A.id)
+			.eq('title', title);
+		expect(routines?.length).toBe(1);
+		const routineId = routines![0].id as string;
+
+		try {
+			const { data: exRows } = await admin
+				.from('gym_routine_exercises')
+				.select('id')
+				.eq('routine_id', routineId);
+			expect(exRows?.length).toBe(1);
+
+			const { data: setRows } = await admin
+				.from('gym_routine_sets')
+				.select('target_rpe')
+				.eq('routine_exercise_id', exRows![0].id);
+			expect(setRows?.length).toBe(1);
+			// The authored RPE round-trips as a non-null numeric — not the
+			// hardcoded null the editor used to write for every set.
+			expect(Number(setRows![0].target_rpe)).toBe(8.5);
+
+			// And it re-renders on the detail screen (fresh navigation).
+			await page.goto(`/gym/routines/${routineId}`);
+			await expect(page.getByTestId('routine-set-rpe-value')).toHaveText('8.5', {
+				timeout: 10_000,
+			});
+		} finally {
+			await admin.from('gym_routines').delete().eq('id', routineId);
+		}
+	});
+
 	test('save-as-routine promotes a logged workout', async ({ page }) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
