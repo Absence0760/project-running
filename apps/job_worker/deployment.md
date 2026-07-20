@@ -169,6 +169,19 @@ An `ES256` / `RS256` key means JWKS verification and no secret. An empty key set
 
 `OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` belong in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
 
+### `LIVEHUB_DISABLE_AUTH` — local / CI only
+
+Setting `LIVEHUB_DISABLE_AUTH=1` discards all token verification and runs the
+hub permissively. It exists because the e2e stack
+(`apps/web/tests-e2e/scripts/start-livehub.sh`) needs anonymous pushes, and
+emptying `SUPABASE_JWT_SECRET` no longer achieves that: the hub also derives a
+verifier from `SUPABASE_URL` via JWKS, and `SUPABASE_URL` has to stay set for
+zone and run-meta lookups.
+
+**Never set it in production.** `LIVEHUB_REQUIRE_AUTH=1` and
+`LIVEHUB_DISABLE_AUTH=1` together make the binary refuse to boot, which is the
+intended interaction — the prod sentinel wins.
+
 ### Deploying the hub before OSRM
 
 The live spectator hub and the queue drainer share one binary, so the hub can reach production before the `osrm` app exists. When it does, **`OSRM_URL` must be unset** — the checked-in `fly.toml` ships it commented out for exactly this reason.

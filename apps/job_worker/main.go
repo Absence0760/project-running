@@ -543,6 +543,16 @@ func main() {
 	// verified against its JWKS instead. Passing both keeps a local dev
 	// stack (HS256) working against a production-shaped binary.
 	verifier := supajwt.New(os.Getenv("SUPABASE_JWT_SECRET"), baseURL, client.HTTP)
+	// Permissive mode has to be asked for, not inferred. Before JWKS, an
+	// empty SUPABASE_JWT_SECRET was a reliable signal for "local dev, no
+	// auth" — it was the only key source. Now SUPABASE_URL alone yields a
+	// verifier, so that signal can never fire again, and the e2e stack
+	// that depends on anonymous pushes would 403 instead. An explicit
+	// opt-out keeps the dev path working without weakening the default.
+	if os.Getenv("LIVEHUB_DISABLE_AUTH") == "1" {
+		verifier = supajwt.New("", "", nil)
+		logger.Warn("livehub: LIVEHUB_DISABLE_AUTH=1 — token verification disabled; local/CI only")
+	}
 	allowedOrigins := parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS"))
 	if requireAuth {
 		if !verifier.Enabled() {
