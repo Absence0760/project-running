@@ -1293,6 +1293,20 @@ export async function setRouteStar(routeId: string, starred: boolean): Promise<v
 	if (error) throw error;
 }
 
+// "My routes" + the route pickers (RunEditor / EventEditor / club transfer)
+// read only these columns. `routes.geom` — a geography(LineString) duplicating
+// `waypoints` purely for server-side spatial queries — and `start_point` ship
+// as opaque binary on `select('*')`, doubling the geometry payload with no
+// client reader. Enumerate the consumed set instead. `as const` so supabase-js
+// infers the row shape (see CLUB_SELECT_COLS).
+const ROUTE_LIST_COLS =
+	'id, user_id, club_id, name, distance_m, elevation_m, surface, waypoints, is_starred, run_count, created_at' as const;
+
+// The public_routes view (saved routes owned by another user) omits
+// waypoints / is_starred / geom by construction — take the subset it exposes.
+const PUBLIC_ROUTE_LIST_COLS =
+	'id, user_id, club_id, name, distance_m, elevation_m, surface, run_count, created_at' as const;
+
 export async function fetchRoutes(): Promise<Route[]> {
 	const result = await fetchRoutesWithError();
 	return result.routes;
@@ -1323,7 +1337,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	const [ownedRes, savedIdsRes] = await Promise.all([
 		supabase
 			.from('routes')
-			.select('*')
+			.select(ROUTE_LIST_COLS)
 			.eq('user_id', userId)
 			.order('created_at', { ascending: false }),
 		supabase
@@ -1341,7 +1355,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		};
 	}
 
-	const owned = (ownedRes.data ?? []) as Route[];
+	const owned = (ownedRes.data ?? []) as unknown as Route[];
 
 	// Saved routes can't be embedded as `route:routes(*)` off saved_routes:
 	// the base `routes` SELECT RLS only exposes the caller's own + club
@@ -1358,12 +1372,12 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	let saved: Route[] = [];
 	if (savedIds.length > 0) {
 		const [savedBaseRes, savedPublicRes] = await Promise.all([
-			supabase.from('routes').select('*').in('id', savedIds),
-			supabase.from('public_routes').select('*').in('id', savedIds),
+			supabase.from('routes').select(ROUTE_LIST_COLS).in('id', savedIds),
+			supabase.from('public_routes').select(PUBLIC_ROUTE_LIST_COLS).in('id', savedIds),
 		]);
 		const byId = new Map<string, Route>();
 		for (const r of [
-			...((savedBaseRes.data ?? []) as Route[]),
+			...((savedBaseRes.data ?? []) as unknown as Route[]),
 			...((savedPublicRes.data ?? []) as unknown as Route[]),
 		]) {
 			if (!byId.has(r.id)) byId.set(r.id, r);
