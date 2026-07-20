@@ -150,8 +150,12 @@ test.describe('/clubs/[slug]/events/[id] — organiser event edit', () => {
 		await expect(warn).toBeVisible({ timeout: 5_000 });
 		await warn.getByRole('button', { name: 'Change type' }).click();
 
-		// The change applies: the athletic distance metric is gone (class layout).
+		// Confirming hides the warning synchronously and only then kicks off the
+		// save, so the editor closing — which `onsaved` does after the update
+		// resolves — is the signal the write has actually landed. Reading the
+		// row off the warning's disappearance races the request.
 		await expect(warn).toBeHidden({ timeout: 5_000 });
+		await expect(modal).toBeHidden({ timeout: 10_000 });
 		const { data: row } = await admin
 			.from('events')
 			.select('category')
