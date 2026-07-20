@@ -337,14 +337,15 @@ void main() async {
   // account's local route library.
   routeStore.currentUserIdProvider = () => api?.userId;
 
+  final social = SocialService();
   final syncService = SyncService(
     apiClient: api,
     runStore: store,
     routeStore: routeStore,
+    socialService: social,
   );
   syncService.start();
 
-  final social = SocialService();
   final raceController = RaceController(social);
   // start() -> _refresh() reads Supabase.instance.client, which throws until
   // init resolves; the unawaited call would otherwise abort the isolate.

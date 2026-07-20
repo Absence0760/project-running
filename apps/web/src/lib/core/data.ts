@@ -10,6 +10,7 @@ import { assemblePublicRoute } from '../routes/public_route_assembly';
 import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
+import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import type {
 	Run,
 	Route,
@@ -115,6 +116,7 @@ import {
 	mergeRecencyPages,
 	FEED_FOLLOWEE_CHUNK
 } from '../social/feed_merge';
+import { deleteRunsBounded } from './bulk_delete';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -736,17 +738,15 @@ export async function deleteRun(id: string): Promise<void> {
 
 /// Delete a batch of runs plus their Storage track files. One RLS-scoped
 /// REST call per delete because Supabase's batch delete doesn't return
-/// the pre-delete `track_url` we need to clean up Storage. Runs in
-/// parallel via `Promise.allSettled` — individual failures don't stop
-/// the rest. Returns the ids that failed so the caller can surface them.
+/// the pre-delete `track_url` we need to clean up Storage. Each delete is
+/// up to five sequential REST + Storage round-trips, so the ids are
+/// processed in bounded `DELETE_RUNS_CONCURRENCY`-sized waves rather than
+/// all at once — a full-page selection otherwise fires hundreds of
+/// simultaneous requests. The wave orchestration lives in the pure
+/// `deleteRunsBounded` so it is unit-testable without this Supabase-backed
+/// module. Individual failures don't stop the rest; returns the failed ids.
 export async function deleteRuns(ids: string[]): Promise<{ failed: string[] }> {
-	if (ids.length === 0) return { failed: [] };
-	const failed: string[] = [];
-	const results = await Promise.allSettled(ids.map((id) => deleteRun(id)));
-	for (let i = 0; i < results.length; i++) {
-		if (results[i].status === 'rejected') failed.push(ids[i]);
-	}
-	return { failed };
+	return deleteRunsBounded(ids, deleteRun);
 }
 
 /// Flip a route's visibility. Mirrors the Android
@@ -953,6 +953,8 @@ export async function createManualRun(input: {
 		console.warn('autoMatchRunToPlanWorkout failed', e);
 	}
 
+	await recomputeChallengesForRun(input.startedAt);
+
 	return { id: runId };
 }
 
@@ -1111,6 +1113,8 @@ export async function saveRun(input: {
 	} catch (e) {
 		console.warn('autoMatchRunToPlanWorkout failed', e);
 	}
+
+	await recomputeChallengesForRun(input.started_at);
 
 	return { id: runId, trackUploaded, trackError };
 }
@@ -1299,6 +1303,20 @@ export async function setRouteStar(routeId: string, starred: boolean): Promise<v
 	if (error) throw error;
 }
 
+// "My routes" + the route pickers (RunEditor / EventEditor / club transfer)
+// read only these columns. `routes.geom` — a geography(LineString) duplicating
+// `waypoints` purely for server-side spatial queries — and `start_point` ship
+// as opaque binary on `select('*')`, doubling the geometry payload with no
+// client reader. Enumerate the consumed set instead. `as const` so supabase-js
+// infers the row shape (see CLUB_SELECT_COLS).
+const ROUTE_LIST_COLS =
+	'id, user_id, club_id, name, distance_m, elevation_m, surface, waypoints, is_starred, run_count, created_at' as const;
+
+// The public_routes view (saved routes owned by another user) omits
+// waypoints / is_starred / geom by construction — take the subset it exposes.
+const PUBLIC_ROUTE_LIST_COLS =
+	'id, user_id, club_id, name, distance_m, elevation_m, surface, run_count, created_at' as const;
+
 export async function fetchRoutes(): Promise<Route[]> {
 	const result = await fetchRoutesWithError();
 	return result.routes;
@@ -1329,7 +1347,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	const [ownedRes, savedIdsRes] = await Promise.all([
 		supabase
 			.from('routes')
-			.select('*')
+			.select(ROUTE_LIST_COLS)
 			.eq('user_id', userId)
 			.order('created_at', { ascending: false }),
 		supabase
@@ -1347,7 +1365,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		};
 	}
 
-	const owned = (ownedRes.data ?? []) as Route[];
+	const owned = (ownedRes.data ?? []) as unknown as Route[];
 
 	// Saved routes can't be embedded as `route:routes(*)` off saved_routes:
 	// the base `routes` SELECT RLS only exposes the caller's own + club
@@ -1364,12 +1382,12 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	let saved: Route[] = [];
 	if (savedIds.length > 0) {
 		const [savedBaseRes, savedPublicRes] = await Promise.all([
-			supabase.from('routes').select('*').in('id', savedIds),
-			supabase.from('public_routes').select('*').in('id', savedIds),
+			supabase.from('routes').select(ROUTE_LIST_COLS).in('id', savedIds),
+			supabase.from('public_routes').select(PUBLIC_ROUTE_LIST_COLS).in('id', savedIds),
 		]);
 		const byId = new Map<string, Route>();
 		for (const r of [
-			...((savedBaseRes.data ?? []) as Route[]),
+			...((savedBaseRes.data ?? []) as unknown as Route[]),
 			...((savedPublicRes.data ?? []) as unknown as Route[]),
 		]) {
 			if (!byId.has(r.id)) byId.set(r.id, r);
@@ -2236,31 +2254,21 @@ export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null
 	return enriched;
 }
 
-/** Attach member_count + viewer_role + viewer_status to clubs in two queries. */
+/** Attach viewer_role + viewer_status to clubs. member_count is the
+ * trigger-maintained cache on the row (derived_state.md), not recomputed. */
 async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 	if (clubs.length === 0) return [];
 	const ids = clubs.map((c) => c.id);
 	const userId = auth.user?.id;
 
-	const [countsRes, rolesRes] = await Promise.all([
-		supabase
-			.from(TABLES.club_members)
-			.select('club_id', { count: 'exact' })
-			.in('club_id', ids)
-			.eq('status', 'active'),
-		userId
-			? supabase
-					.from(TABLES.club_members)
-					.select('club_id, role, status')
-					.in('club_id', ids)
-					.eq('user_id', userId)
-			: Promise.resolve({ data: [] as { club_id: string; role: string; status: string }[] })
-	]);
+	const rolesRes = userId
+		? await supabase
+				.from(TABLES.club_members)
+				.select('club_id, role, status')
+				.in('club_id', ids)
+				.eq('user_id', userId)
+		: { data: [] as { club_id: string; role: string; status: string }[] };
 
-	const counts = new Map<string, number>();
-	for (const row of (countsRes.data ?? []) as { club_id: string }[]) {
-		counts.set(row.club_id, (counts.get(row.club_id) ?? 0) + 1);
-	}
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
 	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
@@ -2270,7 +2278,7 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 	return clubs.map((c) => ({
 		...c,
 		join_policy: (c.join_policy ?? 'open') as JoinPolicy,
-		member_count: counts.get(c.id) ?? 0,
+		member_count: c.member_count ?? 0,
 		viewer_role: roles.get(c.id) ?? null,
 		viewer_status: statuses.get(c.id) ?? null
 	}));
@@ -2545,10 +2553,20 @@ export async function leaveClub(clubId: string): Promise<void> {
 	if (error) throw error;
 }
 
-export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
+/// One page of a club roster / event attendee list. A club with hundreds
+/// of members must be reachable via load-more rather than fetched whole on
+/// every view — see `fetchFollowers` / `FOLLOW_PAGE_SIZE` for the same shape.
+export const ROSTER_PAGE_SIZE = 50;
+
+export async function fetchClubMembers(
+	clubId: string,
+	opts?: { limit?: number; offset?: number }
+): Promise<(ClubMember & {
 	display_name: string | null;
 	avatar_url: string | null;
 })[]> {
+	const limit = opts?.limit ?? ROSTER_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: members } = await supabase
 		.from(TABLES.club_members)
 		// Enumerate columns rather than `*`: on a public club anyone can
@@ -2557,7 +2575,12 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 		// public roster data.
 		.select('club_id, user_id, role, status, joined_at')
 		.eq('club_id', clubId)
-		.order('joined_at', { ascending: true });
+		.order('joined_at', { ascending: true })
+		// Secondary key so offset pages are stable when two members share a
+		// joined_at timestamp — without it a row on a page boundary can be
+		// duplicated or skipped on load-more.
+		.order('user_id', { ascending: true })
+		.range(offset, offset + limit - 1);
 	if (!members) return [];
 	const userIds = (members as ClubMember[]).map((m) => m.user_id);
 	const byId = await fetchProfilesByIds(userIds);
@@ -3132,17 +3155,24 @@ export async function markAttendance(
 
 export async function fetchEventAttendees(
 	eventId: string,
-	instanceStart: string
+	instanceStart: string,
+	opts?: { limit?: number; offset?: number }
 ): Promise<(EventAttendee & {
 	display_name: string | null;
 	avatar_url: string | null;
 })[]> {
+	const limit = opts?.limit ?? ROSTER_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: attendees } = await supabase
 		.from(TABLES.event_attendees)
 		.select('*')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
-		.order('joined_at', { ascending: true });
+		.order('joined_at', { ascending: true })
+		// Secondary key so offset pages are stable when two RSVPs share a
+		// joined_at timestamp (see fetchClubMembers).
+		.order('user_id', { ascending: true })
+		.range(offset, offset + limit - 1);
 	if (!attendees) return [];
 	const userIds = (attendees as EventAttendee[]).map((a) => a.user_id);
 	const byId = await fetchProfilesByIds(userIds);
@@ -3151,6 +3181,48 @@ export async function fetchEventAttendees(
 		display_name: byId.get(a.user_id)?.display_name ?? null,
 		avatar_url: byId.get(a.user_id)?.avatar_url ?? null
 	}));
+}
+
+/// Exact per-status RSVP tallies + the viewer's own status for an event
+/// instance, independent of the paginated `fetchEventAttendees` roster.
+/// The going / maybe / declined / waitlisted counts drive the capacity +
+/// waitlist math and the RSVP pills, which must stay exact even when the
+/// displayed roster is only its first page — so this reads the status
+/// column alone (no profile join) rather than the full member records.
+export interface EventRsvpSummary {
+	going: number;
+	maybe: number;
+	declined: number;
+	waitlisted: number;
+	viewerStatus: RsvpStatus | null;
+}
+
+export async function fetchEventRsvpSummary(
+	eventId: string,
+	instanceStart: string
+): Promise<EventRsvpSummary> {
+	const viewerId = auth.user?.id ?? null;
+	const { data } = await supabase
+		.from(TABLES.event_attendees)
+		.select('user_id, status')
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart);
+	const summary: EventRsvpSummary = {
+		going: 0,
+		maybe: 0,
+		declined: 0,
+		waitlisted: 0,
+		viewerStatus: null
+	};
+	for (const row of data ?? []) {
+		const status = row.status as RsvpStatus;
+		if (status === 'going') summary.going += 1;
+		else if (status === 'maybe') summary.maybe += 1;
+		else if (status === 'declined') summary.declined += 1;
+		else if (status === 'waitlisted') summary.waitlisted += 1;
+		if (viewerId && row.user_id === viewerId) summary.viewerStatus = status;
+	}
+	return summary;
 }
 
 // --- Event results (leaderboard) ---
@@ -8943,6 +9015,13 @@ export interface FoodEntry {
 	protein_g: number | null;
 	carbs_g: number | null;
 	fat_g: number | null;
+	// Extended nutrients (issue #492), all nullable. Grams for fibre / sugar /
+	// saturated fat; milligrams for sodium / cholesterol.
+	fiber_g: number | null;
+	sugar_g: number | null;
+	sodium_mg: number | null;
+	saturated_fat_g: number | null;
+	cholesterol_mg: number | null;
 	is_public: boolean;
 	external_id: string | null;
 	last_modified_at: string;
@@ -8956,6 +9035,11 @@ export interface FoodEntryInput {
 	protein_g?: number | null;
 	carbs_g?: number | null;
 	fat_g?: number | null;
+	fiber_g?: number | null;
+	sugar_g?: number | null;
+	sodium_mg?: number | null;
+	saturated_fat_g?: number | null;
+	cholesterol_mg?: number | null;
 	started_at?: string;
 	external_id?: string | null;
 }
@@ -9002,6 +9086,11 @@ export async function createFoodEntry(input: FoodEntryInput): Promise<FoodEntry>
 		protein_g: input.protein_g ?? null,
 		carbs_g: input.carbs_g ?? null,
 		fat_g: input.fat_g ?? null,
+		fiber_g: input.fiber_g ?? null,
+		sugar_g: input.sugar_g ?? null,
+		sodium_mg: input.sodium_mg ?? null,
+		saturated_fat_g: input.saturated_fat_g ?? null,
+		cholesterol_mg: input.cholesterol_mg ?? null,
 		started_at: input.started_at ?? now,
 		external_id: input.external_id ?? null,
 		last_modified_at: now,
@@ -10669,6 +10758,37 @@ export async function recomputeChallengeCompletion(id: string): Promise<void> {
 		if (error) console.debug('recomputeChallengeCompletion failed', error);
 	} catch (e) {
 		console.debug('recomputeChallengeCompletion threw', e);
+	}
+}
+
+/// Opportunistic completion recompute after a run saves: fan out
+/// `recomputeChallengeCompletion` over the runner's joined challenges whose
+/// window covers the run's `started_at`. Without this the daily cron sweep is
+/// the ONLY path that awards a challenge_badge / stamps completed_at / sends the
+/// `challenge_complete` notification — so completion lags up to ~24h and a goal
+/// crossed by a late import past the sweep's tail window is never awarded.
+/// Best-effort + swallow-to-debug like the plan-workout auto-match: a failure
+/// here never blocks the save, and the RPC is idempotent (the challenge_badges
+/// unique constraint), so a redundant call from client + cron is safe.
+export async function recomputeChallengesForRun(runStartedAtIso: string): Promise<void> {
+	if (!auth.user?.id) return;
+	try {
+		const active = await myActiveChallenges();
+		const ids = challengesToRecomputeForRun(
+			active.map((c) => ({
+				id: c.id,
+				goalValue: c.goal_value ?? null,
+				startMs: Date.parse(c.starts_at),
+				endMs: Date.parse(c.ends_at),
+				completed: c.completed_at != null,
+			})),
+			Date.parse(runStartedAtIso),
+		);
+		for (const id of ids) {
+			await recomputeChallengeCompletion(id);
+		}
+	} catch (e) {
+		console.debug('recomputeChallengesForRun threw', e);
 	}
 }
 

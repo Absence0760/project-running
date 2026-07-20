@@ -481,7 +481,7 @@ void main() {
       // window in the expanded variant.
       final body = _extractMethodBody(
         source,
-        r'class _HoldToStopButtonState extends State<_HoldToStopButton>',
+        r'class _HoldToStopButtonState extends State<HoldToStopButton>',
       );
       // _extractMethodBody slices to the next top-level `}`, but
       // class bodies span more than the build method we care about.
