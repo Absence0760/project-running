@@ -6233,7 +6233,7 @@ abstract class AppLocalizations {
   /// Discover tab search field placeholder
   ///
   /// In en, this message translates to:
-  /// **'Search yoga, pilates, HIIT, run clubs…'**
+  /// **'Search classes, clubs…'**
   String get discoverSearchPlaceholder;
 
   /// Discover tab — category filter chip that clears the category filter

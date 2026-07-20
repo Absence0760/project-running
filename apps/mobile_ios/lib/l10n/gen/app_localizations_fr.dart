@@ -3753,8 +3753,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get socialTabDiscover => 'Découvrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Rechercher yoga, pilates, HIIT, clubs de course…';
+  String get discoverSearchPlaceholder => 'Rechercher cours, clubs…';
 
   @override
   String get discoverActivityAll => 'Toutes les activités';
