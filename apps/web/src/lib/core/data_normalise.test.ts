@@ -5,6 +5,10 @@ import {
 	normaliseRunMetadataFields,
 	applyRunMetadataPatch,
 	normalisePlanWorkoutNotes,
+	readGlobalSegmentsScoredCount,
+	shouldRescoreGlobalSegments,
+	stampGlobalSegmentsScored,
+	GLOBAL_SEGMENT_SCORING_LIMIT,
 } from './data_normalise.js';
 
 // ---------------------------------------------------------------------------
@@ -166,4 +170,153 @@ test('normalisePlanWorkoutNotes: whitespace-only → null', () => {
 
 test('normalisePlanWorkoutNotes: content is trimmed but preserved', () => {
 	assert.equal(normalisePlanWorkoutNotes('  Reps  '), 'Reps');
+});
+
+// ---------------------------------------------------------------------------
+// global-segments-scored stamp — the issue #333 idempotency guard that stops
+// the run-detail catalogue backfill re-fetching 500 polylines + re-matching
+// on every owner view.
+// ---------------------------------------------------------------------------
+
+test('readGlobalSegmentsScoredCount: absent key → null', () => {
+	assert.equal(readGlobalSegmentsScoredCount(null), null);
+	assert.equal(readGlobalSegmentsScoredCount(undefined), null);
+	assert.equal(readGlobalSegmentsScoredCount({}), null);
+	assert.equal(readGlobalSegmentsScoredCount({ title: 'x' }), null);
+});
+
+test('readGlobalSegmentsScoredCount: malformed value → null (fails open)', () => {
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 'nope' }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: -1 }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: Number.NaN }), null);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: null }), null);
+});
+
+test('readGlobalSegmentsScoredCount: well-formed value parses (0 is valid)', () => {
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 12 }), 12);
+	assert.equal(readGlobalSegmentsScoredCount({ global_segments_scored_count: 0 }), 0);
+});
+
+test('shouldRescoreGlobalSegments: never-scored run → true', () => {
+	assert.equal(shouldRescoreGlobalSegments(null, 12), true);
+	assert.equal(shouldRescoreGlobalSegments({}, 12), true);
+});
+
+test('shouldRescoreGlobalSegments: SKIPS the expensive path when the run was '
+	+ 'already scored against a catalogue at least this large', () => {
+	// This is the regression guard: a scored run whose catalogue has not
+	// grown must NOT re-fetch + re-match. Before the fix the function had
+	// no stamp to read, so this was unconditionally re-scored every view.
+	const meta = { global_segments_scored_count: 12 };
+	assert.equal(shouldRescoreGlobalSegments(meta, 12), false);
+	assert.equal(shouldRescoreGlobalSegments(meta, 5), false); // catalogue shrank
+});
+
+test('shouldRescoreGlobalSegments: re-scores when the catalogue grew', () => {
+	assert.equal(shouldRescoreGlobalSegments({ global_segments_scored_count: 12 }, 13), true);
+});
+
+test('shouldRescoreGlobalSegments: unknown active count fails open to true', () => {
+	const meta = { global_segments_scored_count: 12 };
+	assert.equal(shouldRescoreGlobalSegments(meta, null), true);
+	assert.equal(shouldRescoreGlobalSegments(meta, undefined), true);
+});
+
+test('shouldRescoreGlobalSegments: a saturated stamp is NOT re-scored forever '
+	+ 'once the active catalogue outgrows the fetch limit', () => {
+	// The gate compares an UNCAPPED count(*) of the active catalogue
+	// against a stamp written from a fetch capped at
+	// GLOBAL_SEGMENT_SCORING_LIMIT. Without the clamp, a catalogue of 520
+	// makes `520 > 500` permanently true, so every run re-fetches 500
+	// polylines + re-runs the haversine match on EVERY view forever —
+	// a net pessimisation vs not gating at all. Pin the exact case.
+	const saturated = { global_segments_scored_count: GLOBAL_SEGMENT_SCORING_LIMIT };
+	assert.equal(shouldRescoreGlobalSegments(saturated, 520), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 900), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 5_000), false);
+});
+
+test('shouldRescoreGlobalSegments: boundary cases around the fetch limit', () => {
+	// 499 / 500 / 501 against a 500-row stamp — the transition the drift
+	// bug turned into a cliff.
+	const saturated = { global_segments_scored_count: 500 };
+	assert.equal(GLOBAL_SEGMENT_SCORING_LIMIT, 500, 'boundary cases below assume a 500-row cap');
+	assert.equal(shouldRescoreGlobalSegments(saturated, 499), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 500), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 501), false);
+	// Below the cap the stamp still tracks real growth — clamping must
+	// not blunt the case the gate exists for.
+	const partial = { global_segments_scored_count: 499 };
+	assert.equal(shouldRescoreGlobalSegments(partial, 499), false);
+	assert.equal(shouldRescoreGlobalSegments(partial, 500), true);
+	assert.equal(shouldRescoreGlobalSegments(partial, 501), true);
+});
+
+test('shouldRescoreGlobalSegments: clamps against the caller-supplied limit', () => {
+	// The limit is a parameter so the gate and the fetch call site read
+	// the same number; pin that a different cap moves the clamp with it.
+	const meta = { global_segments_scored_count: 10 };
+	assert.equal(shouldRescoreGlobalSegments(meta, 50, 10), false);
+	assert.equal(shouldRescoreGlobalSegments(meta, 50, 11), true);
+});
+
+test('stampGlobalSegmentsScored: writes the stamp without clobbering the bag', () => {
+	const next = stampGlobalSegmentsScored({ title: 'Morning run', notes: 'felt great' }, 12);
+	assert.equal(next.title, 'Morning run');
+	assert.equal(next.notes, 'felt great');
+	assert.equal(next.global_segments_scored_count, 12);
+});
+
+test('stampGlobalSegmentsScored: round-trips through the reader as not-needing-rescore', () => {
+	const next = stampGlobalSegmentsScored(null, 8);
+	assert.equal(shouldRescoreGlobalSegments(next, 8), false);
+});
+
+// `runs.metadata` is a whole-column jsonb write, and the scoring pass that
+// sits between the gate's read and the stamp's write takes seconds (a
+// catalogue fetch + a haversine pass over every polyline). Model that window
+// against a shared row so the data-loss contract is behavioural, not prose:
+// merging into the bag read BEFORE the pass reverts anything the owner
+// changed during it; merging into a bag re-read immediately before the write
+// does not. `computeGlobalSegmentEffortsForRun` must do the latter — pinned
+// structurally in data.test.ts.
+function stampRun(
+	store: { metadata: Record<string, unknown> },
+	bagToMergeInto: Record<string, unknown> | null,
+	catalogueCount: number,
+): void {
+	store.metadata = stampGlobalSegmentsScored(bagToMergeInto, catalogueCount);
+}
+
+test('stampGlobalSegmentsScored: merging a bag re-read before the write keeps a '
+	+ 'concurrent title/notes edit', () => {
+	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+
+	// t0 — the gate reads the bag, then the expensive scoring pass starts.
+	const gateRead = { ...store.metadata };
+
+	// t1 — mid-pass, the owner renames the run from the edit dialog.
+	store.metadata = { ...store.metadata, title: 'Tempo 8k', notes: 'negative split' };
+
+	// t2 — the stamp write. Re-reading here merges onto the owner's edit.
+	stampRun(store, { ...store.metadata }, 12);
+
+	assert.equal(store.metadata.title, 'Tempo 8k', 'the concurrent rename must survive the stamp');
+	assert.equal(store.metadata.notes, 'negative split');
+	assert.equal(store.metadata.global_segments_scored_count, 12);
+	// Sanity: the stale bag is genuinely different, so the assertion above
+	// is not passing by accident.
+	assert.equal(gateRead.title, 'Morning run');
+});
+
+test('stampGlobalSegmentsScored: merging the STALE pre-pass bag silently reverts '
+	+ 'the concurrent edit (the bug this ordering exists to prevent)', () => {
+	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+	const gateRead = { ...store.metadata };
+	store.metadata = { ...store.metadata, title: 'Tempo 8k', notes: 'negative split' };
+
+	stampRun(store, gateRead, 12);
+
+	assert.equal(store.metadata.title, 'Morning run', 'stale merge reverts the rename — data loss');
+	assert.equal(store.metadata.notes, undefined, 'stale merge drops the notes the owner added');
 });
