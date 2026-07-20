@@ -271,3 +271,52 @@ test('stampGlobalSegmentsScored: round-trips through the reader as not-needing-r
 	const next = stampGlobalSegmentsScored(null, 8);
 	assert.equal(shouldRescoreGlobalSegments(next, 8), false);
 });
+
+// `runs.metadata` is a whole-column jsonb write, and the scoring pass that
+// sits between the gate's read and the stamp's write takes seconds (a
+// catalogue fetch + a haversine pass over every polyline). Model that window
+// against a shared row so the data-loss contract is behavioural, not prose:
+// merging into the bag read BEFORE the pass reverts anything the owner
+// changed during it; merging into a bag re-read immediately before the write
+// does not. `computeGlobalSegmentEffortsForRun` must do the latter — pinned
+// structurally in data.test.ts.
+function stampRun(
+	store: { metadata: Record<string, unknown> },
+	bagToMergeInto: Record<string, unknown> | null,
+	catalogueCount: number,
+): void {
+	store.metadata = stampGlobalSegmentsScored(bagToMergeInto, catalogueCount);
+}
+
+test('stampGlobalSegmentsScored: merging a bag re-read before the write keeps a '
+	+ 'concurrent title/notes edit', () => {
+	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+
+	// t0 — the gate reads the bag, then the expensive scoring pass starts.
+	const gateRead = { ...store.metadata };
+
+	// t1 — mid-pass, the owner renames the run from the edit dialog.
+	store.metadata = { ...store.metadata, title: 'Tempo 8k', notes: 'negative split' };
+
+	// t2 — the stamp write. Re-reading here merges onto the owner's edit.
+	stampRun(store, { ...store.metadata }, 12);
+
+	assert.equal(store.metadata.title, 'Tempo 8k', 'the concurrent rename must survive the stamp');
+	assert.equal(store.metadata.notes, 'negative split');
+	assert.equal(store.metadata.global_segments_scored_count, 12);
+	// Sanity: the stale bag is genuinely different, so the assertion above
+	// is not passing by accident.
+	assert.equal(gateRead.title, 'Morning run');
+});
+
+test('stampGlobalSegmentsScored: merging the STALE pre-pass bag silently reverts '
+	+ 'the concurrent edit (the bug this ordering exists to prevent)', () => {
+	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+	const gateRead = { ...store.metadata };
+	store.metadata = { ...store.metadata, title: 'Tempo 8k', notes: 'negative split' };
+
+	stampRun(store, gateRead, 12);
+
+	assert.equal(store.metadata.title, 'Morning run', 'stale merge reverts the rename — data loss');
+	assert.equal(store.metadata.notes, undefined, 'stale merge drops the notes the owner added');
+});

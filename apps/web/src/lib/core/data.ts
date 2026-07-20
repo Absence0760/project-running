@@ -7452,7 +7452,23 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 
 	// Stamp even when nothing matched (rows.length === 0): a no-match run
 	// must not re-fetch + re-match the whole catalogue every view either.
-	const next = stampGlobalSegmentsScored(runMetadata, segments.length);
+	//
+	// Re-read the bag here rather than merging into the copy read at the top
+	// of the function: the catalogue fetch + haversine pass above takes
+	// seconds, and `runs.metadata` is a whole-column jsonb write. Merging the
+	// stale copy would silently revert any title / notes edit the owner made
+	// inside that window — the run-detail edit dialog writes the same column.
+	// Keeping the read adjacent to the write is the same discipline
+	// `updateRunMetadata` follows.
+	const { data: freshRow } = await supabase
+		.from(TABLES.runs)
+		.select('metadata')
+		.eq('id', input.run_id)
+		.maybeSingle();
+	const next = stampGlobalSegmentsScored(
+		(freshRow?.metadata ?? null) as Record<string, unknown> | null,
+		segments.length,
+	);
 	const { error: stampErr } = await supabase
 		.from(TABLES.runs)
 		.update({ metadata: next })

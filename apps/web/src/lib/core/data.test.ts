@@ -522,3 +522,42 @@ test('computeGlobalSegmentEffortsForRun bounds its gate and its fetch by ONE sha
 		'data.ts must import the limit from data_normalise (where the gate clamps against it).',
 	);
 });
+
+test('computeGlobalSegmentEffortsForRun re-reads runs.metadata immediately before the stamp write', () => {
+	// Reason: `runs.metadata` is a whole-column jsonb write. The function
+	// reads the bag up front to evaluate the rescore gate, then spends
+	// seconds fetching the catalogue and running the haversine match before
+	// writing the stamp back. Merging the stamp into that stale copy
+	// silently reverts any title / notes edit the owner made in the window —
+	// the run-detail edit dialog writes the same column. The bag must be
+	// re-read immediately before the write, the same read-adjacent-to-write
+	// discipline updateRunMetadata follows.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function computeGlobalSegmentEffortsForRun');
+	assert.ok(start >= 0, 'Could not locate computeGlobalSegmentEffortsForRun — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+
+	const fetchAt = body.indexOf('fetchGlobalSegmentsWithError(');
+	const stampAt = body.indexOf('stampGlobalSegmentsScored(');
+	const writeAt = body.indexOf('.update({ metadata: next })');
+	assert.ok(fetchAt >= 0 && stampAt >= 0 && writeAt >= 0, 'scoring pass / stamp / write missing');
+
+	// A metadata read must sit between the expensive pass and the write.
+	const reads: number[] = [];
+	for (let i = body.indexOf(".select('metadata')"); i >= 0; i = body.indexOf(".select('metadata')", i + 1)) {
+		reads.push(i);
+	}
+	assert.ok(
+		reads.some((at) => at > fetchAt && at < stampAt),
+		"The stamp must be built from a runs.metadata bag re-read AFTER the catalogue fetch — merging the gate's pre-pass copy reverts a concurrent title/notes edit.",
+	);
+
+	// …and the stamp must not be fed the gate's pre-pass copy.
+	const stampCall = body.slice(stampAt, writeAt);
+	assert.doesNotMatch(
+		stampCall,
+		/\brunMetadata\b/,
+		'stampGlobalSegmentsScored must not merge into runMetadata (the pre-pass read) — that is the clobber.',
+	);
+});
