@@ -91,18 +91,17 @@ class SupabaseErrorClassificationTest {
     }
 
     @Test
-    fun `409 routes to drop-and-continue (idempotent re-upload)`() {
-        val action = classifyDrainError(HttpException(409, "duplicate key value"))
-        assertSame(DrainAction.DropAndContinue, action)
-    }
-
-    @Test
-    fun `400 404 422 route to skip-and-continue (permanent)`() {
-        for (code in listOf(400, 404, 422)) {
+    fun `400 404 409 422 route to skip-and-continue (permanent)`() {
+        // 409 is a permanent skip, not an idempotent drop (decisions.md §17).
+        // The watch's own retries never 409 — a same-id re-POST merges on the
+        // primary key via `Prefer: resolution=merge-duplicates` and returns
+        // 200 — so a 409 that does surface is a genuine conflict whose row may
+        // never have been inserted; leaving it queued avoids silent run loss.
+        for (code in listOf(400, 404, 409, 422)) {
             assertSame(
                 "code $code",
                 DrainAction.SkipAndContinue,
-                classifyDrainError(HttpException(code, "bad request")),
+                classifyDrainError(HttpException(code, "duplicate key value")),
             )
         }
     }

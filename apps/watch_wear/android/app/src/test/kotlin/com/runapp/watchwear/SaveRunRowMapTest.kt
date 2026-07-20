@@ -81,15 +81,15 @@ class SaveRunRowMapTest {
         assertEquals("watch", row[RunRow.COL_SOURCE])
     }
 
-    @Test fun `external_id equals runId — the retry-idempotency contract`() {
-        // The drain loop classifies HTTP 409 as DropAndContinue
-        // because a 409 means the row is already in the DB.
-        // PostgREST raises 409 when an insert conflicts on a unique
-        // index — for watch runs that index is `(external_id)`,
-        // populated with the runId. If a future refactor sets
-        // external_id to something else (or drops it), every retry
-        // would create a duplicate row and the drain loop's 409 path
-        // would never fire.
+    @Test fun `external_id equals runId — row-shape pin`() {
+        // Retry idempotency comes from the primary key `id` + the POST's
+        // `Prefer: resolution=merge-duplicates` (a same-id re-POST merges and
+        // returns 200), NOT from `external_id`. `external_id` is written equal
+        // to the runId only to keep the row aligned with the runs dedup
+        // crosswalk; because it always equals the PK, the per-user
+        // `runs_user_external_id` unique index can never fire independently of
+        // the PK. Pin both columns so a refactor that diverges them (which
+        // WOULD let the composite index 409 on its own) is caught.
         val row = buildSaveRunRowMap(
             runId = "my-run-id-42",
             uid = "u",

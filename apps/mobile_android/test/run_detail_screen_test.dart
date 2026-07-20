@@ -765,8 +765,10 @@ void main() {
       return runStore;
     }
 
-    Future<void> deleteViaMenu(WidgetTester tester,
-        {String? expectBanner}) async {
+    Future<void> deleteViaMenu(
+      WidgetTester tester, {
+      bool Function()? settled,
+    }) async {
       // The whole interaction runs inside runAsync so the store file
       // I/O awaited by the delete flow (sidecar persist / run-file
       // delete) completes in the tap's zone — the same pattern as the
@@ -787,15 +789,20 @@ void main() {
         // wall-clock delay — a fixed delay flaked under CI load when the
         // failure banner hadn't been posted yet by the time it elapsed.
         await pumpEventQueue();
-        // Because the delete flow runs in runAsync, showTopBanner's
-        // auto-dismiss is a REAL wall-clock timer (3 s). Assert the
-        // transient banner here, one pump after the store I/O + banner
-        // fire, so the check isn't separated from the banner by the
-        // trailing pumps + expects below — that window let the 3 s
-        // dismissal win on a loaded CI runner (found 0 widgets).
-        if (expectBanner != null) {
+        // …and for a caller that can observe the flow's END state, keep
+        // draining until it lands. `pumpEventQueue`'s 20 turns are not
+        // guaranteed to cover real file I/O on a loaded CI runner: the
+        // failure path persists a tombstone sidecar BEFORE posting its
+        // banner, so a slow write left the banner unposted (and teardown
+        // then deleted the temp dir out from under the write). Waiting on
+        // the condition the test asserts is the only bound that scales
+        // with the machine.
+        final deadline = DateTime.now().add(const Duration(seconds: 10));
+        while (settled != null &&
+            !settled() &&
+            DateTime.now().isBefore(deadline)) {
+          await pumpEventQueue();
           await tester.pump();
-          expect(find.textContaining(expectBanner), findsOneWidget);
         }
       });
       await tester.pump();
@@ -812,10 +819,15 @@ void main() {
       final api = _DeleteFailApi();
       final runStore = await pumpForDelete(tester, run, apiClient: api);
 
-      // Failure banner is asserted inside deleteViaMenu's runAsync window
-      // (its auto-dismiss is a real timer here — see the helper).
-      await deleteViaMenu(tester,
-          expectBanner: "Couldn't delete from the cloud");
+      await deleteViaMenu(
+        tester,
+        // The banner is posted right after the tombstone persist
+        // resolves — it is the last thing this flow does.
+        settled: () => find
+            .textContaining("Couldn't delete from the cloud")
+            .evaluate()
+            .isNotEmpty,
+      );
 
       expect(api.calls, 1);
       // Run NOT removed locally — the cloud row still exists, so a local
@@ -824,7 +836,9 @@ void main() {
       // Tombstoned for the SyncService retry, stamped with the owner.
       expect(runStore.pendingRemoteDeleteIds, contains(run.id));
       expect(runStore.debugPendingRemoteDeleteOwner(run.id), 'user-1');
-      // Screen not popped.
+      // Failure surfaced, screen not popped.
+      expect(find.textContaining("Couldn't delete from the cloud"),
+          findsOneWidget);
       expect(find.byType(RunDetailScreen), findsOneWidget);
 
       // A resync that pulls the still-live server row must not clear the
