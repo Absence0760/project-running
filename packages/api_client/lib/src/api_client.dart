@@ -4719,12 +4719,13 @@ class ApiClient {
   /// runs AND public gym workouts from people the caller follows, merged into
   /// one reverse-chronological window.
   ///
-  /// Runs go through the redacted `public_runs` view (decisions §33). Lifts
-  /// read `gym_workouts` directly — that table's "owner or public read" RLS
-  /// scopes a non-owner to public rows, and only the headline columns
-  /// (title / set_count / volume_kg) are projected, never notes / per-set
-  /// data. `activityType`: 'all' merges both; 'lift' / 'gym' returns lifts
-  /// only; any run activity_type returns runs only.
+  /// Runs go through the redacted `public_runs` view, lifts through the
+  /// redacted `public_gym_workouts` view (decisions §33). Both base tables are
+  /// owner-only, so a non-owner read has to come off a view; the lift view
+  /// projects only the headline columns (title / set_count / volume_kg), never
+  /// notes / metadata / per-set data. `activityType`: 'all' merges both;
+  /// 'lift' / 'gym' returns lifts only; any run activity_type returns runs
+  /// only.
   Future<List<ActivityFeedEntry>> fetchFollowingActivityFeed({
     int limit = 20,
     ({DateTime startedAt, String id})? cursor,
@@ -4793,10 +4794,13 @@ class ApiClient {
         .subtract(Duration(days: feedWindowDays))
         .toIso8601String();
 
+    // Lift feed reads go through the public_gym_workouts view (migration
+    // 20270313_001) — the base table is owner-only, so a non-owner query
+    // against it returns nothing. The view filters on is_public = true so
+    // the explicit eq filter would be redundant.
     var q = _client
-        .from(GymWorkoutRow.table)
+        .from('public_gym_workouts')
         .select('id, user_id, started_at, title, set_count, volume_kg')
-        .eq(GymWorkoutRow.colIsPublic, true)
         .inFilter(GymWorkoutRow.colUserId, filtered)
         .gte(GymWorkoutRow.colStartedAt, cutoff);
     if (cursor != null) {
