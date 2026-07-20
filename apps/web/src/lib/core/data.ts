@@ -2864,7 +2864,7 @@ export async function eventHasAthleticData(eventId: string): Promise<boolean> {
 	try {
 		const [resultsRes, sessionsRes] = await Promise.all([
 			supabase
-				.from('event_results')
+				.from(TABLES.event_results)
 				.select('event_id', { count: 'exact', head: true })
 				.eq('event_id', eventId),
 			supabase
