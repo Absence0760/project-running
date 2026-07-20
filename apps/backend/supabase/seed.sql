@@ -16,6 +16,70 @@
 -- Enable pgcrypto for password hashing
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
+-- ─────────────────── Test-fixture consent helper ───────────────────
+-- The GDPR Art 8 write gate (migration 20270424000004) refuses an
+-- `authenticated` INSERT into runs / routes / gym_workouts / food_log /
+-- body_metrics until `user_profiles.age_confirmed_at` is stamped. A real
+-- account is always in that state before it can write: the client creates
+-- the profile on first sign-in and confirm_age_and_terms() stamps it. A
+-- pgtap fixture that only does `insert into auth.users` is therefore an
+-- unreal user, and the gate correctly rejects it.
+--
+-- This helper is the ONE place a fixture declares "these synthetic users
+-- have consented", mirroring the stamps seed.sql already gives the three
+-- seeded accounts below. It lives in seed.sql — which is local/CI only and
+-- is never applied to production — deliberately: the gate must not gain a
+-- prod-reachable way to forge consent. Tests that assert the gate FIRES
+-- (consent_write_gate_test.sql, age_confirmation_gate_test.sql) simply
+-- don't call it.
+CREATE SCHEMA IF NOT EXISTS tests;
+GRANT USAGE ON SCHEMA tests TO anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION tests.confirm_consent()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_created uuid[];
+BEGIN
+  WITH created AS (
+    INSERT INTO public.user_profiles (id, age_confirmed_at, terms_accepted_at)
+    SELECT u.id, now(), now()
+      FROM auth.users u
+     WHERE NOT EXISTS (
+             SELECT 1 FROM public.user_profiles p WHERE p.id = u.id
+           )
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id
+  )
+  SELECT coalesce(array_agg(id), '{}'::uuid[]) INTO v_created FROM created;
+
+  -- The AFTER INSERT welcome-email trigger (20261202_001) enqueued a
+  -- lifecycle_email job for each profile this call materialised. A fixture
+  -- asking for consent is not asking for a welcome mail, and several
+  -- suites assert on `jobs` — so the helper leaves no trace of its own.
+  DELETE FROM public.jobs j
+   USING unnest(v_created) AS c(id)
+   WHERE j.kind = 'lifecycle_email'
+     AND j.payload->>'template' = 'welcome'
+     AND j.payload->>'user_id' = c.id::text;
+
+  UPDATE public.user_profiles
+     SET age_confirmed_at  = coalesce(age_confirmed_at, now()),
+         terms_accepted_at = coalesce(terms_accepted_at, now())
+   WHERE age_confirmed_at IS NULL OR terms_accepted_at IS NULL;
+END;
+$$;
+
+COMMENT ON FUNCTION tests.confirm_consent() IS
+  'Local/CI test-fixture helper: stamps the GDPR Art 8 consent columns on '
+  'every auth.users row that lacks them, creating the user_profiles row if '
+  'the fixture never made one. Defined in seed.sql so it can never reach '
+  'production. Call it after a pgtap fixture creates its synthetic users '
+  '(and after any user_profiles insert of its own).';
+
 -- 1. Create test user in auth.users
 INSERT INTO auth.users (
   instance_id, id, aud, role, email, encrypted_password,
