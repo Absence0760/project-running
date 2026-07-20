@@ -4130,7 +4130,7 @@ class _StatsOverlay extends StatelessWidget {
                   const SizedBox(width: 16),
                   // Stop button — hold-to-stop, 800ms. Prevents accidental
                   // one-tap stops mid-run.
-                  _HoldToStopButton(
+                  HoldToStopButton(
                     onHoldComplete: onHoldComplete,
                   ),
                   const SizedBox(width: 16),
@@ -4336,9 +4336,10 @@ class _CollapsedStatsBar extends StatelessWidget {
               ),
             ),
           ),
-          _HoldToStopButton(
+          HoldToStopButton(
             size: 48,
             iconSize: 24,
+            showHint: false,
             onHoldComplete: onHoldComplete,
           ),
         ],
@@ -4347,32 +4348,36 @@ class _CollapsedStatsBar extends StatelessWidget {
   }
 }
 
-/// Big red stop button that must be *held* for ~800 ms before the run is
-/// actually stopped. The circular progress ring grows during the hold so
-/// the user gets clear visual feedback. Cancels cleanly on release.
-class _HoldToStopButton extends StatefulWidget {
-  /// Fires after the user has held the button for [holdDuration]. Wired to
-  /// the run's `_stop` in RunScreen.
-  static const _holdDuration = Duration(milliseconds: 800);
+/// Big red stop button that must be *held* for [holdDuration] before the run
+/// is actually stopped. The circular progress ring grows during the hold so
+/// the user gets clear visual feedback, and (when [showHint]) a "hold to stop"
+/// caption tells the user the control needs a press-and-hold, not a tap.
+/// Cancels cleanly on release.
+@visibleForTesting
+class HoldToStopButton extends StatefulWidget {
+  static const holdDuration = Duration(milliseconds: 800);
 
   final VoidCallback onHoldComplete;
   final double size;
   final double iconSize;
+  final bool showHint;
 
-  const _HoldToStopButton({
+  const HoldToStopButton({
+    super.key,
     required this.onHoldComplete,
     this.size = 68,
     this.iconSize = 36,
+    this.showHint = true,
   });
 
   @override
-  State<_HoldToStopButton> createState() => _HoldToStopButtonState();
+  State<HoldToStopButton> createState() => _HoldToStopButtonState();
 }
 
 /// Owns the 60 Hz progress ticker locally so the surrounding run screen
 /// (map, stats panel, banners) doesn't rebuild at 60 Hz during a hold.
 /// Only this ~68 px button rebuilds while the user holds the stop.
-class _HoldToStopButtonState extends State<_HoldToStopButton>
+class _HoldToStopButtonState extends State<HoldToStopButton>
     with TickerProviderStateMixin {
   Ticker? _ticker;
   Duration _holdStart = Duration.zero;
@@ -4390,7 +4395,7 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
     _ticker = createTicker((elapsed) {
       if (_holdStart == Duration.zero) _holdStart = elapsed;
       final held = elapsed - _holdStart;
-      final p = (held.inMilliseconds / _HoldToStopButton._holdDuration.inMilliseconds)
+      final p = (held.inMilliseconds / HoldToStopButton.holdDuration.inMilliseconds)
           .clamp(0.0, 1.0);
       if (p != _progress && mounted) setState(() => _progress = p);
       if (p >= 1.0) {
@@ -4420,7 +4425,7 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
     // routes the activate gesture straight to onHoldComplete;
     // ExcludeSemantics drops the bare Container/Icon below so the node
     // has no competing child semantics.
-    return Semantics(
+    final button = Semantics(
       button: true,
       enabled: true,
       label: l10n.runStopA11yLabel,
@@ -4483,6 +4488,25 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
           ),
         ),
       ),
+    );
+
+    if (!widget.showHint) return button;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        button,
+        const SizedBox(height: 6),
+        ExcludeSemantics(
+          child: Text(
+            l10n.runHoldToStopHint,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+      ],
     );
   }
 }

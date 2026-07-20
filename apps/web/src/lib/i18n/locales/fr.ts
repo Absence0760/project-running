@@ -3760,6 +3760,11 @@ export const messages = {
 	"nutrition.protein": "Protéines",
 	"nutrition.carbs": "Glucides",
 	"nutrition.fat": "Lipides",
+	"nutrition.fiber": "Fibres",
+	"nutrition.sugar": "Sucre",
+	"nutrition.sodium": "Sodium",
+	"nutrition.saturatedFat": "Graisses saturées",
+	"nutrition.cholesterol": "Cholestérol",
 	"nutrition.noTargets": "Renseigne ta taille, ton poids, ton âge et ton sexe dans les réglages pour voir les objectifs de calories et de macros.",
 	"nutrition.goalBreakdown": "Objectif {base} + {exercise} kcal brûlées aujourd'hui",
 	"nutrition.remaining": "{n} kcal restantes",
@@ -4273,6 +4278,9 @@ export const messages = {
 	"gym.session.restSkip": "Passer le repos",
 	"gym.session.target": "Objectif",
 	"gym.session.noTarget": "Aucun objectif",
+	"gym.session.holdSeconds": "Tenu (s)",
+	"gym.session.startHold": "Démarrer le maintien",
+	"gym.session.stopHold": "Arrêter le maintien",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Prévu vs réalisé",
