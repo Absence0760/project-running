@@ -76,6 +76,10 @@ values
   ('00000000-0000-0000-0000-000000cc0006', 'Repeat Runner', 'male', (now() - interval '30 years')::date),
   ('00000000-0000-0000-0000-000000cc0007', 'Single Effort', 'male', (now() - interval '30 years')::date);
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 -- Route owner (cc0001) creates a public route + a private route.
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000cc0001"}';

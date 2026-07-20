@@ -86,7 +86,14 @@ export async function createSagaUsers(
 					// redirected away. The wizard's own e2e spec mints
 					// a separate saga user with onboarded_at: null to
 					// exercise the gate.
-					onboarded_at: new Date().toISOString()
+					onboarded_at: new Date().toISOString(),
+					// Same reason these need stamping by hand: a real signup
+					// reaches confirm_age_and_terms() via /auth/callback, and
+					// without the stamp the server-side GDPR Art 8 write gate
+					// (migration 20270424000004) rejects this user's first
+					// run / route / gym / food / body-metrics insert.
+					age_confirmed_at: new Date().toISOString(),
+					terms_accepted_at: new Date().toISOString()
 				});
 			if (profileError) {
 				throw new Error(
