@@ -24,6 +24,10 @@ insert into clubs (id, owner_id, name, slug)
 values ('cccccccc-0000-0000-0000-0000000000c1',
         '77777777-0000-0000-0000-0000000000a1', 'Lockdown Club', 'lockdown-club');
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 -- ───────────────── 1. the closed hole — outsider injection ─────────────────
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"77777777-0000-0000-0000-0000000000a2","role":"authenticated"}';
