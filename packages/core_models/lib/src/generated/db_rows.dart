@@ -4960,27 +4960,37 @@ class UserSettingRow {
   static const String colUserId = 'user_id';
   static const String colPrefs = 'prefs';
   static const String colUpdatedAt = 'updated_at';
+  static const String colDiscoverableArea = 'discoverable_area';
+  static const String colDiscoverableAreaLabel = 'discoverable_area_label';
 
   final String userId;
   final dynamic prefs;
   final DateTime updatedAt;
+  final dynamic discoverableArea;
+  final String? discoverableAreaLabel;
 
   const UserSettingRow({
     required this.userId,
     required this.prefs,
     required this.updatedAt,
+    this.discoverableArea,
+    this.discoverableAreaLabel,
   });
 
   factory UserSettingRow.fromJson(Map<String, dynamic> json) => UserSettingRow(
     userId: json['user_id'] as String,
     prefs: json['prefs'],
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    discoverableArea: json['discoverable_area'],
+    discoverableAreaLabel: json['discoverable_area_label'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     colUserId: userId,
     colPrefs: prefs,
     colUpdatedAt: updatedAt.toIso8601String(),
+    colDiscoverableArea: discoverableArea,
+    colDiscoverableAreaLabel: discoverableAreaLabel,
   };
 }
 
