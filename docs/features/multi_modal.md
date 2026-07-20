@@ -524,6 +524,21 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   Open-settings affordance. Web is **not** a scan surface (no camera-record
   surface); the helper exists on web only for TS↔Dart lockstep.
 - Manual macro entry remains as the **fallback**, not the primary path.
+- **Extended nutrients** (shipped web + mobile, issue #492, migration
+  `20270426_001`). Beyond the four headline macros, `food_log` carries five
+  nullable nutrition-label fields: `fiber_g`, `sugar_g`, `sodium_mg`,
+  `saturated_fat_g`, `cholesterol_mg` (grams for fibre / sugar / saturated
+  fat; milligrams for sodium / cholesterol). A searched food fills them for
+  free — the `food_search` parity pair maps them from both sources (Open Food
+  Facts normalises mass nutriments to grams per 100 g, so its `sodium_100g`
+  and `cholesterol_100g` are converted g→mg; USDA already reports mg for those
+  two). A missing upstream value stays **null**, never a phantom 0, and
+  `scalePortion` carries the nulls through. Manual entry exposes the five as
+  optional numeric inputs. They surface on the searched-portion preview and as
+  a per-item breakdown on `/nutrition/[date]/[slot]`. They are **not** daily
+  targets yet — `nutrition_targets` / `nutrition_budget` still only budget
+  kcal + the three macros; folding these five into daily targets is a
+  follow-up.
 - **Dynamic TDEE ("base + exercise").** The daily calorie goal is the
   Mifflin-St Jeor base (activity level treated as your *non-exercise*
   baseline) **plus** the calories burned by today's logged runs + gym

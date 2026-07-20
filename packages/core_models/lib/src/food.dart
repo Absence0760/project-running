@@ -14,6 +14,11 @@ class FoodEntry {
     this.proteinG,
     this.carbsG,
     this.fatG,
+    this.fiberG,
+    this.sugarG,
+    this.sodiumMg,
+    this.saturatedFatG,
+    this.cholesterolMg,
     this.isPublic = false,
     this.externalId,
     this.lastModifiedAt,
@@ -28,6 +33,14 @@ class FoodEntry {
   final double? proteinG;
   final double? carbsG;
   final double? fatG;
+
+  /// Extended nutrients (issue #492), all nullable. Grams for fibre / sugar /
+  /// saturated fat; milligrams for sodium / cholesterol.
+  final double? fiberG;
+  final double? sugarG;
+  final double? sodiumMg;
+  final double? saturatedFatG;
+  final double? cholesterolMg;
   final bool isPublic;
   final String? externalId;
   final DateTime? lastModifiedAt;
@@ -42,6 +55,11 @@ class FoodEntry {
         proteinG: (row[FoodLogRow.colProteinG] as num?)?.toDouble(),
         carbsG: (row[FoodLogRow.colCarbsG] as num?)?.toDouble(),
         fatG: (row[FoodLogRow.colFatG] as num?)?.toDouble(),
+        fiberG: (row[FoodLogRow.colFiberG] as num?)?.toDouble(),
+        sugarG: (row[FoodLogRow.colSugarG] as num?)?.toDouble(),
+        sodiumMg: (row[FoodLogRow.colSodiumMg] as num?)?.toDouble(),
+        saturatedFatG: (row[FoodLogRow.colSaturatedFatG] as num?)?.toDouble(),
+        cholesterolMg: (row[FoodLogRow.colCholesterolMg] as num?)?.toDouble(),
         isPublic: (row[FoodLogRow.colIsPublic] as bool?) ?? false,
         externalId: row[FoodLogRow.colExternalId] as String?,
         lastModifiedAt: _parseTs(row[FoodLogRow.colLastModifiedAt]),

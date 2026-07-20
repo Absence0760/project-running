@@ -185,7 +185,7 @@ Components (`apps/web/src/lib/components/`):
 - `fetchChallenges(opts)`, `fetchChallengeById(id)`, `createChallenge(input)`, `updateChallenge(id, patch)`, `deleteChallenge(id)`, `joinChallenge(id, teamClubId?)`, `leaveChallenge(id)`.
 - `fetchChallengeLeaderboard(id, byTeam?)` → wraps `challenge_leaderboard` RPC.
 - `myActiveChallenges()` → wraps `my_active_challenges` RPC (the self-hide driver).
-- `recomputeChallengeCompletion(id)` → wraps the SECURITY DEFINER RPC; call it from the run-save success path (best-effort, swallow-to-debug like other auxiliary effects) so a finished run that crosses the line awards the badge promptly.
+- `recomputeChallengeCompletion(id)` → wraps the SECURITY DEFINER RPC. It is fired from the run-save success path via `recomputeChallengesForRun(runStartedAtIso)`, which fans it out over the runner's joined challenges whose window covers the run's `started_at` (the `challengesToRecomputeForRun` parity helper picks the set). Wired into `createManualRun` + `saveRun` (best-effort, swallow-to-debug like the plan-workout auto-match) so a finished run that crosses the line awards the badge promptly instead of waiting up to ~24h for the cron sweep. On mobile (offline-first), the fan-out fires after `saveRunsBatch` lands, from `SyncService` → `SocialService.recomputeChallengesForRuns` over the just-synced runs' `started_at`.
 - Route all `.from('challenges' | 'challenge_participants' | 'challenge_badges')` through `core/schema.ts` TABLES registry (add the three names) so the `core/schema.test.ts` bare-string guard stays green.
 
 Pure logic (`apps/web/src/lib/social/`):

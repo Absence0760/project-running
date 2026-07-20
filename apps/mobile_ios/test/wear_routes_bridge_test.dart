@@ -1114,13 +1114,15 @@ void main() {
 
     test('5 rapid notifications within the window coalesce into ONE push',
         () async {
-      // The burst must be SYNCHRONOUS by construction (see the sibling
-      // test below): a real `await store.save(...)` between the "rapid"
-      // saves puts a disk write inside the burst, and a runner stall
-      // can cross the window and fire a push mid-burst (CI run
-      // 29628162205). Seed the routes on disk FIRST, then drive the
-      // bridge with back-to-back synchronous notifications that involve
-      // no I/O at all, so nothing can cross the window mid-burst.
+      // The burst must be SYNCHRONOUS by construction. An `await
+      // store.save(...)` per notification puts a disk write inside
+      // the "rapid" burst, and a runner stall between two saves
+      // crosses whatever window is chosen and fires the debounce
+      // timer mid-burst, splitting the push (CI flakes 26523370163,
+      // 29520492396, 29628162205, 29629619415 — raising the window
+      // only moves it). So: seed the routes on disk FIRST, then drive
+      // the bridge with back-to-back store notifications that involve
+      // no I/O at all.
       WearRoutesBridge.kPushDebounceWindow =
           const Duration(milliseconds: 250);
       // 4 of the 5 routes exist before attach — the burst must change
@@ -1135,7 +1137,8 @@ void main() {
       channel.pushCalls.clear();
 
       // The one disk write opens the burst; the other four
-      // notifications are synchronous re-notifies — no I/O, no spacing.
+      // notifications are synchronous re-notifies — no await, no I/O
+      // between them, so no timer can fire mid-burst.
       await store.save(_makeRoute(id: 'r-4', isStarred: true));
       for (var i = 0; i < 4; i++) {
         // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member

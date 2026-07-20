@@ -363,109 +363,72 @@ export async function handleCoach(
 		...rateLimitHeaders(tier, usedToday),
 	};
 
-	const encoder = new TextEncoder();
-	const userIdForStream = authUser.id;
-	async function* sseStream(): AsyncIterable<Uint8Array> {
-		const sendEvent = (event: string, data: unknown): Uint8Array =>
-			encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-
-		yield sendEvent('meta', {
-			user_message_id: userMessageId,
-			tier,
-			limits: {
-				daily_limit: limits.dailyLimit,
-				max_tokens: limits.maxTokens,
-				max_runs_limit: limits.maxRunsLimit,
-			},
+	// Persist an assistant turn — the FULL reply on the happy path, the
+	// PARTIAL reply on a mid-stream failure. Both callers route through
+	// here so the rule "a consumed daily-cap slot always has its content
+	// durably written" holds: a slot is only refunded when the stream
+	// yielded nothing, so anything the user was actually charged for
+	// survives a reload / second device / navigate-away instead of
+	// living only in the browser that saw it stream. Returns the new row
+	// id, or null when persistence is skipped (no service key) or fails.
+	async function persistAssistant(content: string): Promise<string | null> {
+		// Assistant rows must be written by a role that bypasses RLS:
+		// the coach_messages INSERT policy confines the user-JWT client
+		// to role='user' turns (XSS audit H1, migration 20261122_001).
+		// A service-role client is the trusted writer; without the key
+		// we skip persistence (the reply still streamed to the user) and
+		// log loudly so a misconfigured env is visible.
+		if (!config.supabaseServiceRoleKey) {
+			console.error(
+				'[coach] SUPABASE_SERVICE_ROLE_KEY not set — assistant message ' +
+					'not persisted. Cross-device coach history will be incomplete ' +
+					'until the secret is configured.',
+			);
+			return null;
+		}
+		// Bound the persisted content to the same cap the DB CHECK
+		// enforces (coach_messages_content_len_chk) so a long reply
+		// can't be rejected at insert time and lost.
+		const bounded = content.slice(0, MAX_COACH_ASSISTANT_CONTENT_BYTES);
+		const supabaseService = makeClient(config.publicSupabaseUrl, config.supabaseServiceRoleKey, {
+			auth: { persistSession: false, autoRefreshToken: false },
 		});
-
-		let accumulated = '';
 		try {
-			for await (const chunk of providerStream.tokens) {
-				if (!chunk) continue;
-				accumulated += chunk;
-				yield sendEvent('token', { text: chunk });
+			const { data, error: insertErr } = await supabaseService
+				.from('coach_messages')
+				.insert({
+					user_id: authUserId,
+					plan_id: body.plan_id ?? null,
+					role: 'assistant',
+					content: bounded,
+				})
+				.select('id')
+				.single();
+			if (insertErr) {
+				console.error('[coach] persist assistant failed', supabaseErrorFields(insertErr));
+				return null;
 			}
+			return data?.id ?? null;
 		} catch (e) {
-			const msg = e instanceof Error ? e.message : 'stream failed';
-			// Structured log line for the CloudWatch metric filter +
-			// alarm — pin the shape so the metric stays stable
-			// across refactors. Audit/coach May 2026 Medium #8.
-			console.error('[coach] mid_stream_error', {
-				tier,
-				provider: config.provider,
-				elapsed_ms: Date.now() - streamStartMs,
-				accumulated_chars: accumulated.length,
-				message: msg,
+			console.error('[coach] persist assistant exception', {
+				message: e instanceof Error ? e.message : String(e),
 			});
-			// Refund the daily-cap slot when the user got no useful
-			// content from the stream. We treat "zero accumulated
-			// tokens" as a complete failure; a partial answer
-			// (accumulated.length > 0) still consumes the slot
-			// because the user did get something. Audit/coach High #3.
-			if (accumulated.length === 0) {
-				await refundCapSlot('mid_stream_error_zero_tokens');
-			}
-			yield sendEvent('error', { message: msg });
-			return;
+			return null;
 		}
+	}
 
-		let usage: ProviderUsage = emptyUsage();
-		try {
-			usage = await providerStream.finalUsage();
-		} catch (_) {
-			/* usage is best-effort */
-		}
-
-		let assistantMessageId: string | null = null;
-		if (accumulated) {
-			// Assistant rows must be written by a role that bypasses RLS:
-			// the coach_messages INSERT policy confines the user-JWT client
-			// to role='user' turns (XSS audit H1, migration 20261122_001).
-			// A service-role client is the trusted writer; without the key
-			// we skip persistence (the reply still streams to the user) and
-			// log loudly so a misconfigured env is visible.
-			if (!config.supabaseServiceRoleKey) {
-				console.error(
-					'[coach] SUPABASE_SERVICE_ROLE_KEY not set — assistant message ' +
-						'not persisted. Cross-device coach history will be incomplete ' +
-						'until the secret is configured.',
-				);
-			} else {
-				// Bound the persisted content to the same cap the DB CHECK
-				// enforces (coach_messages_content_len_chk) so a long reply
-				// can't be rejected at insert time and lost.
-				const content = accumulated.slice(0, MAX_COACH_ASSISTANT_CONTENT_BYTES);
-				const supabaseService = makeClient(
-					config.publicSupabaseUrl,
-					config.supabaseServiceRoleKey,
-					{ auth: { persistSession: false, autoRefreshToken: false } },
-				);
-				try {
-					const { data, error: insertErr } = await supabaseService
-						.from('coach_messages')
-						.insert({
-							user_id: userIdForStream,
-							plan_id: body.plan_id ?? null,
-							role: 'assistant',
-							content,
-						})
-						.select('id')
-						.single();
-					if (insertErr) console.error('[coach] persist assistant failed', supabaseErrorFields(insertErr));
-					else assistantMessageId = data?.id ?? null;
-				} catch (e) {
-					console.error('[coach] persist assistant exception', {
-						message: e instanceof Error ? e.message : String(e),
-					});
-				}
-			}
-		}
-
-		yield sendEvent('done', {
-			assistant_message_id: assistantMessageId,
-			cache: usage,
-			used_today: usedToday,
+	// Structured log line for the CloudWatch metric filter + alarm — pin
+	// the shape so the metric stays stable across refactors. Kept in the
+	// handler (not the generator) so the `tier` / `provider` / elapsed
+	// context stays with the config it's derived from. Audit/coach May
+	// 2026 Medium #8.
+	function logMidStreamError(accumulatedChars: number, message: string): void {
+		console.error('[coach] mid_stream_error', {
+			tier,
+			provider: config.provider,
+			elapsed_ms: Date.now() - streamStartMs,
+			accumulated_chars: accumulatedChars,
+			message,
 		});
 	}
 
@@ -473,8 +436,94 @@ export async function handleCoach(
 		kind: 'sse',
 		status: 200,
 		headers: sseHeaders,
-		body: sseStream(),
+		body: coachSseStream({
+			providerStream,
+			meta: {
+				user_message_id: userMessageId,
+				tier,
+				limits: {
+					daily_limit: limits.dailyLimit,
+					max_tokens: limits.maxTokens,
+					max_runs_limit: limits.maxRunsLimit,
+				},
+			},
+			usedToday,
+			persistAssistant,
+			refundSlot: refundCapSlot,
+			logMidStreamError,
+		}),
 	};
+}
+
+export interface CoachStreamDeps {
+	providerStream: ProviderStream;
+	meta: {
+		user_message_id: string | null;
+		tier: Tier;
+		limits: { daily_limit: number; max_tokens: number; max_runs_limit: number };
+	};
+	usedToday: number;
+	persistAssistant: (content: string) => Promise<string | null>;
+	refundSlot: (reason: string) => Promise<void>;
+	logMidStreamError: (accumulatedChars: number, message: string) => void;
+}
+
+// The SSE body: emit `meta`, drain the provider's token stream, then
+// `done` on success or `error` on a mid-stream throw. Extracted from
+// handleCoach so the quota/persistence branch logic is unit-testable
+// with a fake ProviderStream + spy dependencies (handler.test.ts) — the
+// surrounding auth / consent / cap gates need a live Supabase and stay
+// covered by the e2e mocked-route tests.
+export async function* coachSseStream(deps: CoachStreamDeps): AsyncIterable<Uint8Array> {
+	const encoder = new TextEncoder();
+	const sendEvent = (event: string, data: unknown): Uint8Array =>
+		encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+	yield sendEvent('meta', deps.meta);
+
+	let accumulated = '';
+	try {
+		for await (const chunk of deps.providerStream.tokens) {
+			if (!chunk) continue;
+			accumulated += chunk;
+			yield sendEvent('token', { text: chunk });
+		}
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'stream failed';
+		deps.logMidStreamError(accumulated.length, msg);
+		// Zero accumulated tokens = a complete failure the user got
+		// nothing from: refund the slot. A PARTIAL answer already
+		// consumed the slot AND was shown to the user token-by-token —
+		// persist it (mirroring the happy path) so the paid-for content
+		// survives a reload instead of vanishing when loadThread re-reads
+		// from the DB. Persist BEFORE yielding `error` so an abandoned
+		// stream can't cut the insert short.
+		if (accumulated.length === 0) {
+			await deps.refundSlot('mid_stream_error_zero_tokens');
+		} else {
+			await deps.persistAssistant(accumulated);
+		}
+		yield sendEvent('error', { message: msg });
+		return;
+	}
+
+	let usage: ProviderUsage = emptyUsage();
+	try {
+		usage = await deps.providerStream.finalUsage();
+	} catch (_) {
+		/* usage is best-effort */
+	}
+
+	let assistantMessageId: string | null = null;
+	if (accumulated) {
+		assistantMessageId = await deps.persistAssistant(accumulated);
+	}
+
+	yield sendEvent('done', {
+		assistant_message_id: assistantMessageId,
+		cache: usage,
+		used_today: deps.usedToday,
+	});
 }
 
 function jsonError(

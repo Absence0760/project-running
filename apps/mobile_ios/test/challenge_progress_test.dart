@@ -189,4 +189,56 @@ void main() {
     expect(p.daysRemaining, 5);
     expect(p.requiredPerDay, 12);
   });
+
+  RecomputeCandidate candidate({
+    String id = 'c1',
+    num? goalValue = 100,
+    int startMs = 0,
+    int endMs = 10 * _day,
+    bool completed = false,
+  }) =>
+      RecomputeCandidate(
+        id: id,
+        goalValue: goalValue,
+        startMs: startMs,
+        endMs: endMs,
+        completed: completed,
+      );
+
+  test('challengesToRecomputeForRun includes a goal challenge whose window covers the run',
+      () {
+    expect(challengesToRecomputeForRun([candidate()], 5 * _day), ['c1']);
+  });
+
+  test('challengesToRecomputeForRun excludes a goal-less (pure-ranking) board', () {
+    expect(challengesToRecomputeForRun([candidate(goalValue: null)], 5 * _day), []);
+  });
+
+  test('challengesToRecomputeForRun excludes an already-completed challenge', () {
+    expect(challengesToRecomputeForRun([candidate(completed: true)], 5 * _day), []);
+  });
+
+  test('challengesToRecomputeForRun excludes a run before the window opens', () {
+    expect(challengesToRecomputeForRun([candidate(startMs: 2 * _day)], _day), []);
+  });
+
+  test('challengesToRecomputeForRun excludes a run at/after ends_at (half-open window)',
+      () {
+    expect(challengesToRecomputeForRun([candidate()], 10 * _day), []);
+    expect(challengesToRecomputeForRun([candidate()], 0), ['c1']);
+  });
+
+  test('challengesToRecomputeForRun returns only the qualifying ids in input order', () {
+    final cs = [
+      candidate(id: 'a'),
+      candidate(id: 'b', completed: true),
+      candidate(id: 'c', goalValue: null),
+      candidate(id: 'd', endMs: 3 * _day),
+    ];
+    expect(challengesToRecomputeForRun(cs, 5 * _day), ['a']);
+  });
+
+  test('challengesToRecomputeForRun returns [] for a non-finite run time', () {
+    expect(challengesToRecomputeForRun([candidate()], double.nan), []);
+  });
 }
