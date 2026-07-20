@@ -2015,6 +2015,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Introduce una distancia y duración válidas';
 
   @override
+  String get runDetailEditFailed =>
+      'No se pudieron guardar los cambios. Inténtalo de nuevo.';
+
+  @override
   String get runDetailSave => 'Guardar';
 
   @override

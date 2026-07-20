@@ -1,0 +1,37 @@
+# gps_dropout — decoded defmt excerpts (2026-07-19)
+
+## Idle face, healthy phase: 3/4 signal bars (GSA fix 3 + 8 sats), live position
+#   frame dump: THREKIR / MODE PERF EST 110H / GPS 8 SATS / LAT 40.01500 / SPD 3.0 M/S
+
+## Idle face, mid-dropout: GPS STALE 6S, meter 0/4 bars DESPITE 8 sats in view
+#   (GSA fix-type 1 + GSV re-announcing 8 sats mid-void — bars_for_fix gates on fix type)
+
+## Idle BTN3: short = GNSS mode cycle; long = QNH re-zero -> honest NO BARO banner
+515.917877 INFO  button: BTN3 -> gnss mode Balanced (fix interval 15s, ~180h)
+517.420837 INFO  button: BTN3 -> gnss mode Expedition (fix interval 60s, ~220h)
+518.922302 INFO  button: BTN3 -> gnss mode Performance (fix interval 1s, ~110h)
+521.625457 INFO  button: BTN3 long -> qnh re-zero requested
+#   frame dump: 2x 'NO BARO' banner over the idle title row (sim has no BMP581; the parked
+#   baro task answers the request instead of dropping it)
+
+## Recording through the dropout — PRE-FIX firmware (the #330 freeze, root-caused):
+#   BTN1 start 553.4; dist banked 5.97 m; then the >100 m reacquire hop was rejected at 1 Hz
+#   and the anchor never rebased — distance frozen from 559.6 s onward:
+553.368896 DEBUG record: recording dist=0.0m moving=0s pacer=Nones
+559.368896 DEBUG record: recording dist=5.968013198690702m moving=4s pacer=Nones
+566.067504 DEBUG record: paused dist=5.968013198690702m moving=4s pacer=Nones
+573.085693 DEBUG record: paused dist=5.968013198690702m moving=4s pacer=Nones
+579.368896 DEBUG record: paused dist=5.968013198690702m moving=4s pacer=Nones
+
+## Recording through the dropout — FIXED firmware (run_recorder #330 re-anchor ported):
+#   dist accrues to 113.4 m -> frozen exactly for the 40 s void -> re-anchors on the
+#   reacquire fix (gap hop NOT credited) -> normal accrual resumes:
+78.815673 record: dist=107.42m
+83.328277 record: dist=113.39m
+127.939270 record: dist=119.36m
+131.950469 record: dist=125.32m
+134.958282 record: dist=131.29m
+138.468872 record: dist=137.26m
+
+## Run view mid-dropout (frame dump): elapsed hero keeps counting, PAU tag,
+#   GPS row 'STALE 13S PERF' — honest staleness while recording

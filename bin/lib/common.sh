@@ -61,3 +61,29 @@ confirm() {
 	read -rp "$prompt [y/N] " yn
 	[[ "$yn" =~ ^[Yy]$ ]]
 }
+
+watch_sim_latest_link() {
+	# Path of the "most recent watch sim" pointer symlink, written by
+	# bin/watch-sim.sh and followed by bin/watch-monitor.sh.
+	#
+	# Scoped to this checkout, not global. It used to be one shared
+	# /tmp/watch-sim.latest, so two concurrent sim sessions (two worktrees,
+	# two people, two agents) overwrote each other's pointer: watch-monitor.sh
+	# would silently attach to the *other* session's Renode, where a `quit`
+	# killed a run that wasn't yours — and whichever sim exited first deleted
+	# the pointer out from under the one still running.
+	#
+	# Deriving the name from REPO_ROOT keeps each checkout on its own pointer
+	# while staying stable and argument-free for the normal single-session
+	# case. The checksum disambiguates two checkouts with the same basename;
+	# the basename is there so `ls /tmp` stays readable. WATCH_SIM_LATEST
+	# overrides the whole thing.
+	if [[ -n "${WATCH_SIM_LATEST:-}" ]]; then
+		printf '%s\n' "$WATCH_SIM_LATEST"
+		return
+	fi
+	local tag
+	tag="$(printf '%s' "$REPO_ROOT" | cksum | cut -d' ' -f1)"
+	printf '%s/watch-sim.latest-%s-%s\n' \
+		"${TMPDIR:-/tmp}" "$(basename "$REPO_ROOT")" "$tag"
+}

@@ -329,6 +329,7 @@ pub fn page_rows(
             Page::RunStats => run_stats_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::PrRecency => pr_recency_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::PlanReplan => plan_replan_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::PlanAdaptive => plan_adaptive_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Readiness => readiness_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Goals => goals_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::TurnCue => turn_cue_glance(fix, snap, tag, uptime_s, animate, mode),
@@ -377,6 +378,7 @@ pub fn page_icons(
         | Page::RunStats
         | Page::PrRecency
         | Page::PlanReplan
+        | Page::PlanAdaptive
         | Page::Readiness
         | Page::Goals
         | Page::TurnCue
@@ -569,13 +571,14 @@ pub fn page_hero(
             }
             row
         }
-        // The twelve 2026-07-11 synced-summary pages are rows-only (no 2x hero):
+        // The phone-pushed synced-summary pages are rows-only (no 2x hero):
         // each headlines its number in the rows, like the Nav page.
         Page::Recap
         | Page::Streaks
         | Page::RunStats
         | Page::PrRecency
         | Page::PlanReplan
+        | Page::PlanAdaptive
         | Page::Readiness
         | Page::Goals
         | Page::TurnCue
@@ -1572,6 +1575,53 @@ fn plan_replan_glance(
     rows
 }
 
+/// The PlanAdaptive glance: the multi-week adherence trend behind the adaptive
+/// re-plan — verdict, flagged weeks over the window, proposed change count, and
+/// confidence (or the fatigue hold that withheld a do-more suggestion).
+#[allow(clippy::too_many_arguments)]
+fn plan_adaptive_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.plan_adaptive {
+        None => {
+            let _ = write!(rows[2], "ADAPT --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let trend = match v.trend {
+                0 => "ON TRACK",
+                1 => "DO MORE",
+                _ => "EASE OFF",
+            };
+            let _ = write!(rows[2], "{:<8}{}", "ADAPT", trend);
+            let _ = write!(
+                rows[4],
+                "{:<8}{}/{}",
+                "WEEKS", v.flagged_weeks, v.window_weeks
+            );
+            let _ = write!(rows[5], "{:<8}{}", "CHANGES", v.changes);
+            if v.fitness_gated {
+                let _ = write!(rows[6], "HELD FATIGUE");
+            } else {
+                let conf = match v.confidence {
+                    0 => "LOW",
+                    1 => "MEDIUM",
+                    _ => "HIGH",
+                };
+                let _ = write!(rows[6], "{:<8}{}", "CONF", conf);
+            }
+        }
+    }
+    rows
+}
+
 /// The Readiness glance: the training-readiness score + its band.
 #[allow(clippy::too_many_arguments)]
 fn readiness_glance(
@@ -2310,6 +2360,7 @@ mod tests {
             run_stats: None,
             pr_recency: None,
             plan_replan: None,
+            plan_adaptive: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -2422,9 +2473,9 @@ mod tests {
     fn every_page_fits_the_grid_active_and_inactive() {
         use crate::record::{
             AutoEffortView, ElevProfileView, FitnessView, FuelCarryView, FuelView, GoalsView,
-            PlanReplanView, PrRecencyView, RaceDayView, ReadinessView, RecapView, RoadbookLegView,
-            RoadbookView, RouteElevView, RouteSimplifyView, RunStatsView, StreaksView,
-            TrainingPacesView, TurnCueView, ELEV_PROFILE_CAP,
+            PlanAdaptiveView, PlanReplanView, PrRecencyView, RaceDayView, ReadinessView, RecapView,
+            RoadbookLegView, RoadbookView, RouteElevView, RouteSimplifyView, RunStatsView,
+            StreaksView, TrainingPacesView, TurnCueView, ELEV_PROFILE_CAP,
         };
         // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
@@ -2495,6 +2546,16 @@ mod tests {
             make_ups: 255,
             ease_offs: 255,
         });
+        // Raw (setter-unclamped) extremes: the rows must fit even off a view
+        // the clamping setter never shaped.
+        rec.plan_adaptive = Some(PlanAdaptiveView {
+            trend: 255,
+            confidence: 1,
+            flagged_weeks: 255,
+            window_weeks: 255,
+            changes: 255,
+            fitness_gated: false,
+        });
         rec.readiness = Some(ReadinessView {
             score: 100,
             band: 1,
@@ -2528,7 +2589,7 @@ mod tests {
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
-        for _ in 0..31 {
+        for _ in 0..32 {
             let rows = page_rows(
                 p,
                 Some(&fix()),
@@ -2563,7 +2624,7 @@ mod tests {
         // page must render its honest empty state and still fit the grid.
         let inactive = snapshot(RecordState::Recording, 15_000.0);
         let mut p = Page::default();
-        for _ in 0..31 {
+        for _ in 0..32 {
             let rows = page_rows(
                 p,
                 None,
@@ -4534,5 +4595,76 @@ mod tests {
             false,
         );
         assert_eq!(rows[4].as_str(), "2 MONTHS");
+    }
+
+    #[test]
+    fn plan_adaptive_glance_renders_trend_weeks_changes_and_the_fatigue_hold() {
+        // Empty state — nothing pushed yet.
+        let inactive = snapshot(RecordState::Recording, 5000.0);
+        let rows = page_rows(
+            Page::PlanAdaptive,
+            Some(&fix()),
+            None,
+            Some(&inactive),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "ADAPT --");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+
+        // A sustained under-trend with proposed changes.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
+            trend: 1,
+            confidence: 1,
+            flagged_weeks: 2,
+            window_weeks: 3,
+            changes: 1,
+            fitness_gated: false,
+        });
+        let rows = page_rows(
+            Page::PlanAdaptive,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "ADAPT   DO MORE");
+        assert_eq!(rows[4].as_str(), "WEEKS   2/3");
+        assert_eq!(rows[5].as_str(), "CHANGES 1");
+        assert_eq!(rows[6].as_str(), "CONF    MEDIUM");
+
+        // The fatigue hold: a suppressed do-more shows the hold, not a
+        // confidence that pretends a verdict was issued.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
+            trend: 0,
+            confidence: 0,
+            flagged_weeks: 3,
+            window_weeks: 3,
+            changes: 0,
+            fitness_gated: true,
+        });
+        let rows = page_rows(
+            Page::PlanAdaptive,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "ADAPT   ON TRACK");
+        assert_eq!(rows[4].as_str(), "WEEKS   3/3");
+        assert_eq!(rows[6].as_str(), "HELD FATIGUE");
     }
 }

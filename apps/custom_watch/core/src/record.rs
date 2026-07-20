@@ -52,6 +52,17 @@ pub const MAX_JUMP_M: f64 = 100.0;
 /// `run_recorder`.
 pub const MAX_SPEED_MPS: f64 = 10.0;
 
+/// A rejected hop that spans at least this many seconds is a real GPS gap
+/// (canyon, tunnel, dense cover — fixes stopped while the runner kept
+/// moving), not a corrupt teleport: the anchor is rebased to the fresh fix
+/// WITHOUT crediting the un-sampled gap distance. Without this the anchor
+/// stays stale after any 1 Hz dropout that displaced the runner past
+/// [`MAX_JUMP_M`], every later delta only grows, and distance is frozen for
+/// the rest of the run. `_gpsReanchorAfterSeconds` in `run_recorder`
+/// (its #330); long enough that a 1 Hz corrupt outlier (dt ≈ 1 s) still
+/// fails closed.
+pub const GPS_REANCHOR_AFTER_S: u32 = 10;
+
 /// A segment slower than this counts its distance but not its time toward
 /// moving time — the `minSpeedMps` of `run_stats.movingTimeOf`, which replaced
 /// the removed live auto-pause as the way moving time is derived.
@@ -268,6 +279,21 @@ pub struct PlanReplanView {
     pub ease_offs: u8,
 }
 
+/// The adaptive re-plan trend summary ([`crate::plan_adaptive_replan`]): the
+/// multi-week adherence trend verdict (`trend` 0 on-track / 1 under — do more /
+/// 2 over — ease off), its confidence (0 low / 1 medium / 2 high), the flagged
+/// weeks over the trailing window, the proposed future-change count, and
+/// whether a do-more suggestion was withheld for a fatigued runner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanAdaptiveView {
+    pub trend: u8,
+    pub confidence: u8,
+    pub flagged_weeks: u8,
+    pub window_weeks: u8,
+    pub changes: u8,
+    pub fitness_gated: bool,
+}
+
 /// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
 /// `band` is 0 low / 1 moderate / 2 high.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -441,6 +467,8 @@ pub struct Snapshot {
     pub pr_recency: Option<PrRecencyView>,
     /// The synced re-plan proposal counts, or `None` until pushed.
     pub plan_replan: Option<PlanReplanView>,
+    /// The synced adaptive re-plan trend summary, or `None` until pushed.
+    pub plan_adaptive: Option<PlanAdaptiveView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -461,6 +489,38 @@ pub struct Snapshot {
     /// Lets the face surface the truncation on the wrist instead of it being a
     /// cable-only `warn!`.
     pub track_full: bool,
+}
+
+impl Snapshot {
+    /// Is the runner physically moving right now?
+    ///
+    /// The barometric vert accumulator gates on this
+    /// ([`crate::elevation::VertAccumulator::push`]'s `moving`): while stopped,
+    /// an altitude change is weather drift rather than climb, so the reference
+    /// re-bases and banks nothing.
+    ///
+    /// The answer comes from the receiver's own speed, **not** from
+    /// `state == Recording`. [`RecordState::Paused`] means one of three
+    /// different things here: a manual pause, an auto-pause (a segment under
+    /// [`MIN_MOVING_SPEED_MPS`]), or merely a fix whose displacement failed the
+    /// point-acceptance min-move filter ([`TRACK_THRESHOLD_M`]). That last one
+    /// is a *sampling artifact of the GPS filter*, not a stop: a runner
+    /// power-hiking a climb at ~1–2 m/s covers under 3 m per 1 Hz fix, so the
+    /// state legitimately alternates Recording/Paused fix by fix. Gating vert on
+    /// `Recording` re-based the deadband reference on every other sample, and a
+    /// climb slower than [`TRACK_THRESHOLD_M`] per second — i.e. every real
+    /// climb — banked exactly zero gain.
+    ///
+    /// Speed is honest across all three cases: `on_fix` stamps
+    /// `current_speed_mps` from the fix before the min-move filter can flip the
+    /// state, while [`Recorder::pause`], [`Recorder::stop`] and
+    /// [`Recorder::start`] all zero it — so a real stop (aid station, sleep,
+    /// waiting out weather on a col) still reads as not-moving and the
+    /// phantom-vert protection is unchanged.
+    pub fn is_moving(&self) -> bool {
+        !matches!(self.state, RecordState::Idle | RecordState::Finished)
+            && self.current_speed_mps as f64 >= MIN_MOVING_SPEED_MPS
+    }
 }
 
 /// Fixed-RAM decimated elevation series feeding [`ElevProfileView`]. Mirrors the
@@ -543,7 +603,8 @@ pub struct Recorder {
     /// from. Cleared on start / resume so a pause gap is never one huge hop.
     last: Option<Fix>,
     /// Whether the most recent [`on_fix`](Recorder::on_fix) call adopted the
-    /// fix as a new anchor (the run's first fix or an accepted move). Read-only
+    /// fix as a new anchor (the run's first fix, an accepted move, or a
+    /// post-gap re-anchor — see [`GPS_REANCHOR_AFTER_S`]). Read-only
     /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
     last_fix_stored: bool,
     /// Count of anchor-adopting fixes this run — the points the app's flash
@@ -628,6 +689,7 @@ pub struct Recorder {
     run_stats: Option<RunStatsView>,
     pr_recency: Option<PrRecencyView>,
     plan_replan: Option<PlanReplanView>,
+    plan_adaptive: Option<PlanAdaptiveView>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -683,6 +745,7 @@ impl Recorder {
             run_stats: None,
             pr_recency: None,
             plan_replan: None,
+            plan_adaptive: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -703,7 +766,10 @@ impl Recorder {
     /// scaled by the actual time between fixes rather than an assumed 1 s.
     /// Deliberately keyed off the configured interval, not off `dt` alone, so
     /// the full-rate filter is never silently loosened: at 1 Hz a 150 m hop
-    /// after a 30 s signal gap is still rejected as corrupt, exactly as today.
+    /// after a 30 s signal gap still credits no distance. (The hop does
+    /// rebase the anchor when the gap is [`GPS_REANCHOR_AFTER_S`] or longer —
+    /// `run_recorder`'s #330 — so recording resumes from the reacquire point
+    /// instead of freezing against a stale anchor.)
     pub fn set_fix_interval_s(&mut self, interval_s: u32) {
         self.fix_interval_s = interval_s.max(1);
     }
@@ -846,6 +912,25 @@ impl Recorder {
 
     pub fn set_plan_replan(&mut self, view: Option<PlanReplanView>) {
         self.plan_replan = view;
+    }
+
+    /// The trend + confidence are clamped to their 0..=2 code spaces and the
+    /// week counts to the trend window, so a corrupt push can't render an
+    /// unknown verdict or an impossible "9/3 weeks".
+    pub fn set_plan_adaptive(&mut self, view: Option<PlanAdaptiveView>) {
+        self.plan_adaptive = view.map(|v| {
+            let window = v
+                .window_weeks
+                .min(crate::plan_adaptive_replan::ADAPTIVE_TREND_WINDOW as u8);
+            PlanAdaptiveView {
+                trend: v.trend.min(2),
+                confidence: v.confidence.min(2),
+                flagged_weeks: v.flagged_weeks.min(window),
+                window_weeks: window,
+                changes: v.changes,
+                fitness_gated: v.fitness_gated,
+            }
+        });
     }
 
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
@@ -1036,6 +1121,28 @@ impl Recorder {
             MAX_JUMP_M
         };
         if dt == 0 || delta >= max_jump_m || delta / dt as f64 > MAX_SPEED_MPS {
+            // Real GPS gap, not a teleport: the hop failed the one-hop cap but
+            // a genuine interval elapsed (`run_recorder`'s #330 re-anchor,
+            // `_gpsReanchorAfterSeconds`). Rebase the anchor to the fresh fix
+            // WITHOUT crediting the un-sampled gap distance or its time —
+            // exactly how the first fix of a run anchors. The rebased point is
+            // stored so the flash track carries the reacquire position, and
+            // the gap banks no moving time. Without this, a 1 Hz dropout that
+            // displaced the runner past MAX_JUMP_M froze distance for the rest
+            // of the run: the fixed cap never scales, so the stale anchor only
+            // ever receded. 1 Hz only, mirroring the Dart recorder it ports —
+            // a throttled mode needs no re-anchor because its `MAX_SPEED_MPS *
+            // dt` ceiling grows faster than any real displacement, so a held
+            // anchor self-heals on a later fix. A dt == 0 duplicate can never
+            // reach here (dt >= the gate), so timestamp dupes stay
+            // failed-closed.
+            if self.fix_interval_s <= 1 && dt >= GPS_REANCHOR_AFTER_S {
+                self.current_speed_mps = fix.speed_mps.max(0.0);
+                self.last = Some(*fix);
+                self.last_fix_stored = true;
+                self.stored_points = self.stored_points.saturating_add(1);
+                self.feed_gap(fix);
+            }
             return;
         }
         self.current_speed_mps = fix.speed_mps.max(0.0);
@@ -1190,6 +1297,7 @@ impl Recorder {
             run_stats: self.run_stats,
             pr_recency: self.pr_recency,
             plan_replan: self.plan_replan,
+            plan_adaptive: self.plan_adaptive,
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
@@ -1708,6 +1816,64 @@ mod tests {
         assert_eq!(s.state, RecordState::Recording);
         assert!(s.moving_s > 3);
         assert!(s.distance_m > dist_before);
+    }
+
+    #[test]
+    fn dropout_reacquire_rebases_anchor_without_crediting_gap() {
+        // run_recorder's #330: a hop that fails the one-hop cap after a real
+        // signal gap re-anchors instead of freezing distance forever.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 0));
+        r.on_fix(&fix(40.00005, -105.0, 3.0, 1));
+        let dist_before = r.snapshot().distance_m;
+        assert!(dist_before > 5.0, "sanity: pre-gap segment accrued");
+        assert_eq!(r.snapshot().moving_s, 1);
+
+        // 41 s dropout during which the runner moved ~150 m: past MAX_JUMP_M,
+        // so the hop credits nothing — but the anchor rebases (and the point
+        // is stored so the flash track carries the reacquire position).
+        r.on_fix(&fix(40.00140, -105.0, 3.0, 42));
+        let s = r.snapshot();
+        assert_eq!(s.distance_m, dist_before, "gap distance never credited");
+        assert_eq!(s.moving_s, 1, "gap banks no moving time");
+        assert!(r.last_fix_stored(), "reacquire point stored to the track");
+
+        // The very next fix measures from the reacquire point — ~5.6 m, not
+        // ~155 m from the pre-gap anchor. Before the re-anchor this fix (and
+        // every one after it) was rejected and distance stayed frozen.
+        r.on_fix(&fix(40.00145, -105.0, 3.0, 43));
+        let s = r.snapshot();
+        let resumed = s.distance_m - dist_before;
+        assert!(
+            (5.0..7.0).contains(&resumed),
+            "recording resumed from the reacquire point (got {resumed} m)"
+        );
+        assert_eq!(s.state, RecordState::Recording);
+    }
+
+    #[test]
+    fn short_gap_teleport_still_rejected_and_keeps_anchor() {
+        // Under GPS_REANCHOR_AFTER_S the one-hop cap keeps its old semantics:
+        // reject AND hold the anchor, so a corrupt teleport can't re-base.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 0));
+
+        // 150 m in 9 s (16.7 m/s): both implausible and past the cap, and
+        // too soon to be a trusted gap — dropped, anchor untouched.
+        r.on_fix(&fix(40.00135, -105.0, 3.0, 9));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        assert!(!r.last_fix_stored(), "teleport not stored");
+
+        // A fix near the ORIGINAL anchor is accepted and measures from it —
+        // proof the teleport did not move the anchor.
+        r.on_fix(&fix(40.00004, -105.0, 3.0, 10));
+        let d = r.snapshot().distance_m;
+        assert!(
+            (3.0..6.0).contains(&d),
+            "next fix measured from the held anchor (got {d} m)"
+        );
     }
 
     #[test]
@@ -2510,6 +2676,7 @@ mod tests {
         // Unset by default — every synced page reads its honest empty state.
         let s = r.snapshot();
         assert!(s.recap.is_none() && s.readiness.is_none() && s.race_day.is_none());
+        assert!(s.plan_adaptive.is_none());
 
         r.set_recap(Some(RecapView {
             runs: 120,
@@ -2547,8 +2714,143 @@ mod tests {
         }));
         assert_eq!(r.snapshot().race_day.unwrap().feasible, 2);
 
+        r.set_plan_adaptive(Some(PlanAdaptiveView {
+            trend: 9,
+            confidence: 9,
+            flagged_weeks: 9,
+            window_weeks: 9,
+            changes: 4,
+            fitness_gated: true,
+        }));
+        let pa = r.snapshot().plan_adaptive.unwrap();
+        assert_eq!((pa.trend, pa.confidence), (2, 2));
+        assert_eq!((pa.flagged_weeks, pa.window_weeks), (3, 3));
+        assert_eq!(pa.changes, 4);
+        assert!(pa.fitness_gated);
+
+        r.set_plan_adaptive(Some(PlanAdaptiveView {
+            trend: 1,
+            confidence: 1,
+            flagged_weeks: 2,
+            window_weeks: 3,
+            changes: 1,
+            fitness_gated: false,
+        }));
+        let pa = r.snapshot().plan_adaptive.unwrap();
+        assert_eq!((pa.flagged_weeks, pa.window_weeks), (2, 3));
+
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    // --- Snapshot::is_moving — the barometric vert gate --------------------
+
+    #[test]
+    fn is_moving_true_through_the_min_move_filters_paused_state() {
+        // A runner power-hiking a climb at ~1.7 m/s covers under the 3 m
+        // min-move threshold in one 1 Hz fix, so the point-acceptance filter
+        // flips the state to Paused even though the receiver reports real
+        // speed. That is a GPS sampling artifact, not a stop — the vert gate
+        // must stay open or a whole climb banks zero gain.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 1.7, 0));
+        // ~1.7 m north: under TRACK_THRESHOLD_M, so the filter pauses.
+        r.on_fix(&fix(40.0000153, -105.0, 1.7, 1));
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused, "min-move filter paused");
+        assert!(
+            s.current_speed_mps as f64 >= MIN_MOVING_SPEED_MPS,
+            "the receiver still reports real speed"
+        );
+        assert!(s.is_moving(), "a sub-threshold hop is not a stop");
+    }
+
+    #[test]
+    fn is_moving_false_when_genuinely_stopped_or_inert() {
+        // Idle before any run.
+        let mut r = Recorder::new();
+        assert!(!r.snapshot().is_moving());
+
+        // Standing still with a good fix: the receiver reports ~0 speed, so the
+        // phantom-vert protection still closes the gate.
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        assert!(r.snapshot().is_moving());
+        r.on_fix(&fix(40.0, -105.0, 0.0, 1));
+        assert!(!r.snapshot().is_moving(), "stationary banks nothing");
+
+        // A manual pause zeroes speed even though the last fix was fast.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r.on_fix(&fix(40.0005, -105.0, 5.0, 1));
+        assert!(r.snapshot().is_moving());
+        r.pause(2);
+        assert!(!r.snapshot().is_moving(), "manual pause banks nothing");
+
+        // So does a stop.
+        r.resume(3);
+        r.on_fix(&fix(40.001, -105.0, 5.0, 4));
+        assert!(r.snapshot().is_moving());
+        r.stop(5);
+        assert!(!r.snapshot().is_moving(), "finished banks nothing");
+    }
+
+    #[test]
+    fn sustained_climb_banks_vert_through_min_move_pauses() {
+        // End-to-end regression for the bug the Renode BMP581 model surfaced:
+        // gating the vert accumulator on `state == Recording` discarded every
+        // metre of a real climb, because the min-move filter alternated the
+        // state fix by fix and each Paused sample re-based the deadband
+        // reference before the pending gain could cross it.
+        use crate::elevation::VertAccumulator;
+
+        let mut r = Recorder::new();
+        r.start(0);
+        let mut vert = VertAccumulator::new();
+        let mut alt = 1600.0f32;
+        // 120 s of climbing at ~1.7 m/s over the ground and 0.4 m/s vertical —
+        // a 24 % grade power-hike, the mountain_loop fixture's terrain.
+        for t in 0..120u32 {
+            let lat = 40.0 + f64::from(t) * 0.0000153;
+            r.on_fix(&fix(lat, -105.0, 1.7, t));
+            alt += 0.4;
+            vert.push(alt, r.snapshot().is_moving(), None);
+        }
+        assert!(
+            r.snapshot().state == RecordState::Paused
+                || r.snapshot().state == RecordState::Recording,
+            "run stayed active"
+        );
+        // ~48 m of real climb; the deadband holds back at most one 3 m step.
+        assert!(
+            vert.gain_m() > 44.0,
+            "a sustained climb banks its gain (got {})",
+            vert.gain_m()
+        );
+        assert_eq!(vert.loss_m(), 0.0, "a pure climb banks no loss");
+    }
+
+    #[test]
+    fn stationary_drift_banks_no_vert() {
+        // The phantom-vert protection the moving gate exists for: a weather
+        // front moves the barometer while the runner sits at an aid station.
+        use crate::elevation::VertAccumulator;
+
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        let mut vert = VertAccumulator::new();
+        let mut alt = 1600.0f32;
+        for t in 1..120u32 {
+            // Stationary: same position, receiver reports no speed.
+            r.on_fix(&fix(40.0, -105.0, 0.0, t));
+            alt += 0.4; // 48 m of pure barometric drift
+            vert.push(alt, r.snapshot().is_moving(), None);
+        }
+        assert_eq!(vert.gain_m(), 0.0, "drift while stopped banks nothing");
+        assert_eq!(vert.loss_m(), 0.0);
     }
 }

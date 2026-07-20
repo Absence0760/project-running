@@ -2,42 +2,56 @@
 //!
 //! Persists a finished run's [`watch_core::run_store`] blob to a reserved region
 //! at the top of the nRF52840's internal flash (slot layout in
-//! [`watch_core::flash_store`]) over embassy-nrf's NVMC, and serves it back to
-//! the BLE run-sync characteristics as a manifest + byte-range chunks.
+//! [`watch_core::flash_store`]) over the build's flash backend, and serves it
+//! back to the BLE run-sync characteristics as a manifest + byte-range chunks.
 //!
 //! **Best-effort / L4.** Flash is the highest recording layer: a flash error
 //! only `warn!`-logs and is dropped — it never panics and never disturbs the
-//! L0/L1 recording math in `watch_core::record`. The store probes the NVMC
-//! controller once at construction; if it is absent (the Renode sim models
+//! L0/L1 recording math in `watch_core::record`. The default build probes the
+//! NVMC controller once at construction; if it is absent (the Renode sim models
 //! flash as plain memory with *no* NVMC controller, so the controller's READY
 //! register never asserts) the store marks itself unavailable and every
 //! operation no-ops — which is exactly what stops the sim spinning forever in
-//! NVMC's ready-poll. Recording is unaffected either way.
+//! NVMC's ready-poll. The `ble` build cannot run under the sim at all (no
+//! SoftDevice there), so it skips the probe. Recording is unaffected either way.
 //!
 //! **Tier-1 shape.** A run is staged in RAM by the caller (`run_store::RunWriter`
 //! over a slot-sized `heapless::Vec`) and committed to flash in one erase+write
 //! at stop, rather than streaming each point straight to flash. At the tier-1
 //! 4 KiB-per-run budget ([`watch_core::flash_store::MAX_POINTS_PER_RUN`]) that is
 //! simpler and keeps flash idle during recording; tier-2's megabyte QSPI tracks
-//! will stream incrementally through [`FlashSink`] instead.
+//! will stream incrementally instead.
 //!
-//! **BLE / hardware caveat (UNVERIFIED).** embassy-nrf's `Nvmc` pokes the flash
-//! controller directly. That is fine with no SoftDevice, but on the `ble` build
-//! the S140 SoftDevice must arbitrate flash access — a real hardware bring-up
-//! has to swap this backend for `nrf_softdevice::Flash` (which implements the
-//! async NorFlash traits and coordinates page erase/write with the stack).
-//! Direct NVMC access while the SoftDevice is enabled can fault or assert. This
-//! compiles and is structured for that swap; it has never run on hardware.
+//! **Flash backend split.** The default (no-SoftDevice) build pokes the NVMC
+//! controller directly through embassy-nrf's blocking `Nvmc`. On the `ble`
+//! build the S140 SoftDevice must arbitrate all flash access — direct NVMC
+//! access while it is enabled can fault or assert — so the backend there is
+//! `nrf_softdevice::Flash`, which routes every erase/write through
+//! `sd_flash_*` and completes it via a SoC event. That makes the mutating half
+//! of the store async: the `ble` path genuinely awaits the SoftDevice's
+//! completion signal (never spin-blocks the executor), while the default path
+//! keeps the NVMC backend's blocking behaviour unchanged behind the same async
+//! signatures. Reads stay synchronous on both builds — SoC flash is
+//! memory-mapped and `nrf_softdevice::Flash` itself reads with a plain copy.
+//! The `ble` backend is compile-only but correct by construction: it is the
+//! arbitrated path the S140 requires, and only hardware bring-up (no dev kit
+//! yet) remains to verify it.
 
 use defmt::{debug, info, warn};
-use embassy_nrf::nvmc::{self, Nvmc};
+use embassy_nrf::nvmc;
+#[cfg(not(feature = "ble"))]
+use embassy_nrf::nvmc::Nvmc;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+#[cfg(not(feature = "ble"))]
+use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::ReadNorFlash;
+#[cfg(feature = "ble")]
+use embedded_storage_async::nor_flash::NorFlash;
 use heapless::Vec;
 use watch_core::flash_store::{self, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
-use watch_core::run_store::{ByteSink, ManifestEntry};
+use watch_core::run_store::ManifestEntry;
 
 /// Absolute flash offset of the run-store region: the top `REGION_LEN` bytes of
 /// the chip's flash, carved out of both `memory.x` and `memory-ble.x`.
@@ -57,53 +71,41 @@ const _: () = assert!(CONFIG_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u3
 /// nRF52840 NVMC `READY` register (base 0x4001E000, offset 0x400). Bit 0 set
 /// means the controller is present and idle — the probe for a real NVMC vs the
 /// Renode sim's bare flash memory.
+#[cfg(not(feature = "ble"))]
 const NVMC_READY_ADDR: usize = 0x4001_E400;
+
+/// The per-build flash backend: embassy-nrf's blocking NVMC by default,
+/// the SoftDevice-arbitrated `nrf_softdevice::Flash` on the `ble` build
+/// (see the module doc's backend-split note).
+#[cfg(not(feature = "ble"))]
+pub type FlashBackend = Nvmc<'static>;
+#[cfg(feature = "ble")]
+pub type FlashBackend = nrf_softdevice::Flash;
+
+#[cfg(not(feature = "ble"))]
+type FlashError = nvmc::Error;
+#[cfg(feature = "ble")]
+type FlashError = nrf_softdevice::FlashError;
 
 /// Shared run store: the `record` task commits into it, the `ble` task reads
 /// from it. Held behind an async mutex so each op takes it only briefly.
-pub type SharedStore = Mutex<CriticalSectionRawMutex, RunStore<'static>>;
+pub type SharedStore = Mutex<CriticalSectionRawMutex, RunStore>;
 
-/// A [`ByteSink`] appending to an already-erased flash slot. Lengths must be a
-/// multiple of the NVMC 4-byte write size — every `run_store` record is.
-pub struct FlashSink<'f, 'd> {
-    flash: &'f mut Nvmc<'d>,
-    offset: u32,
-    end: u32,
-}
-
-impl<'f, 'd> FlashSink<'f, 'd> {
-    pub fn new(flash: &'f mut Nvmc<'d>, start: u32, end: u32) -> Self {
-        Self {
-            flash,
-            offset: start,
-            end,
-        }
-    }
-}
-
-impl ByteSink for FlashSink<'_, '_> {
-    type Error = nvmc::Error;
-
-    fn write(&mut self, bytes: &[u8]) -> Result<(), nvmc::Error> {
-        let len = bytes.len() as u32;
-        if self.offset + len > self.end {
-            return Err(nvmc::Error::OutOfBounds);
-        }
-        self.flash.write(self.offset, bytes)?;
-        self.offset += len;
-        Ok(())
-    }
-}
-
-pub struct RunStore<'d> {
-    flash: Nvmc<'d>,
+pub struct RunStore {
+    flash: FlashBackend,
     dir: SlotDir,
     available: bool,
 }
 
-impl<'d> RunStore<'d> {
-    pub fn new(mut flash: Nvmc<'d>) -> Self {
+impl RunStore {
+    pub fn new(mut flash: FlashBackend) -> Self {
+        #[cfg(not(feature = "ble"))]
         let available = nvmc_present();
+        // The ble build cannot run under the Renode sim (no SoftDevice there),
+        // so the sim-detection probe is moot: the SoftDevice flash API is
+        // always present on real silicon.
+        #[cfg(feature = "ble")]
+        let available = true;
         // Rebuild the slot directory from flash so runs recorded in a prior
         // power cycle are advertised again — their blobs survive, only the
         // in-RAM index is lost on reset. No NVMC (sim) → empty directory.
@@ -114,7 +116,7 @@ impl<'d> RunStore<'d> {
         };
         if available {
             info!(
-                "run_flash: NVMC present, run store armed at {=u32:#x}, {=u8} run(s) recovered",
+                "run_flash: run store armed at {=u32:#x}, {=u8} run(s) recovered",
                 REGION_OFFSET,
                 dir.run_count()
             );
@@ -128,6 +130,46 @@ impl<'d> RunStore<'d> {
             dir,
             available,
         }
+    }
+
+    /// The one seam where the two backends diverge: NVMC erases in place
+    /// (blocking, unchanged), the SoftDevice schedules the erase between radio
+    /// events and signals completion — so the ble variant awaits that signal
+    /// instead of polling.
+    #[cfg(not(feature = "ble"))]
+    async fn flash_erase(&mut self, from: u32, to: u32) -> Result<(), FlashError> {
+        self.flash.erase(from, to)
+    }
+
+    #[cfg(feature = "ble")]
+    async fn flash_erase(&mut self, from: u32, to: u32) -> Result<(), FlashError> {
+        self.flash.erase(from, to).await
+    }
+
+    #[cfg(not(feature = "ble"))]
+    async fn flash_write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), FlashError> {
+        self.flash.write(offset, bytes)
+    }
+
+    /// `sd_flash_write` requires a word-aligned source and the staging buffers
+    /// are byte-aligned (`heapless::Vec<u8>` / `[u8; N]`), so bounce through an
+    /// aligned chunk. Every store record length is a multiple of the 4-byte
+    /// write size, so each chunk stays word-sized.
+    #[cfg(feature = "ble")]
+    async fn flash_write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), FlashError> {
+        #[repr(align(4))]
+        struct AlignedChunk([u8; 256]);
+        let mut chunk = AlignedChunk([0; 256]);
+        let mut written = 0;
+        while written < bytes.len() {
+            let n = (bytes.len() - written).min(chunk.0.len());
+            chunk.0[..n].copy_from_slice(&bytes[written..written + n]);
+            self.flash
+                .write(offset + written as u32, &chunk.0[..n])
+                .await?;
+            written += n;
+        }
+        Ok(())
     }
 
     /// The `run_seq` the record task should start numbering from so a new run
@@ -160,18 +202,18 @@ impl<'d> RunStore<'d> {
     /// button task calls this only when the mode actually changes, so the page is
     /// erased at most once per user mode switch — trivially within flash
     /// endurance and off the per-tick path.
-    pub fn persist_gnss_mode(&mut self, mode: GnssMode) {
+    pub async fn persist_gnss_mode(&mut self, mode: GnssMode) {
         if !self.available {
             return;
         }
         let start = CONFIG_OFFSET;
         let end = start + flash_store::CONFIG_LEN as u32;
-        if let Err(e) = self.flash.erase(start, end) {
+        if let Err(e) = self.flash_erase(start, end).await {
             warn!("run_flash: config erase failed {:?}", e);
             return;
         }
         let rec = flash_store::encode_config(mode.to_byte());
-        if let Err(e) = self.flash.write(start, &rec) {
+        if let Err(e) = self.flash_write(start, &rec).await {
             warn!("run_flash: config write failed {:?}", e);
             return;
         }
@@ -181,7 +223,7 @@ impl<'d> RunStore<'d> {
     /// Persist a finished run's staged blob. Best-effort: any failure warns,
     /// forgets the slot so the manifest can't advertise a half-written run, and
     /// returns — the caller ignores the outcome (L4).
-    pub fn commit(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+    pub async fn commit(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
         if !self.available {
             return;
         }
@@ -201,13 +243,12 @@ impl<'d> RunStore<'d> {
             .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
         let start = flash_store::slot_offset(REGION_OFFSET, slot);
         let end = start + SLOT_LEN as u32;
-        if let Err(e) = self.flash.erase(start, end) {
+        if let Err(e) = self.flash_erase(start, end).await {
             warn!("run_flash: erase slot {=usize} failed {:?}", slot, e);
             self.dir.forget(slot);
             return;
         }
-        let mut sink = FlashSink::new(&mut self.flash, start, end);
-        if let Err(e) = sink.write(blob) {
+        if let Err(e) = self.flash_write(start, blob).await {
             warn!("run_flash: write run {=u32} failed {:?}", run_seq, e);
             self.dir.forget(slot);
             return;
@@ -229,7 +270,7 @@ impl<'d> RunStore<'d> {
     /// slot and supersedes it. L4 / best-effort: any flash error only warns and
     /// drops, so recording is never blocked (same contract as `commit`). The
     /// caller bounds the cadence to keep flash erase cycles within endurance.
-    pub fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+    pub async fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
         if !self.available {
             return;
         }
@@ -246,7 +287,7 @@ impl<'d> RunStore<'d> {
             .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
         let start = flash_store::slot_offset(REGION_OFFSET, slot);
         let end = start + SLOT_LEN as u32;
-        if let Err(e) = self.flash.erase(start, end) {
+        if let Err(e) = self.flash_erase(start, end).await {
             warn!(
                 "run_flash: checkpoint erase slot {=usize} failed {:?}",
                 slot, e
@@ -254,8 +295,7 @@ impl<'d> RunStore<'d> {
             self.dir.forget(slot);
             return;
         }
-        let mut sink = FlashSink::new(&mut self.flash, start, end);
-        if let Err(e) = sink.write(blob) {
+        if let Err(e) = self.flash_write(start, blob).await {
             warn!(
                 "run_flash: checkpoint write run {=u32} failed {:?}",
                 run_seq, e
@@ -330,7 +370,7 @@ impl<'d> RunStore<'d> {
 /// and never blocks boot. The one-slot scratch buffer is transient — this runs
 /// before the record task stages its own slot-sized blob, so the two never
 /// coexist on the stack.
-fn recover_dir(flash: &mut Nvmc<'_>) -> SlotDir {
+fn recover_dir(flash: &mut FlashBackend) -> SlotDir {
     let mut recovered: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
     let mut buf = [0u8; SLOT_LEN];
     for (slot, entry) in recovered.iter_mut().enumerate() {
@@ -344,6 +384,7 @@ fn recover_dir(flash: &mut Nvmc<'_>) -> SlotDir {
     SlotDir::from_recovered(recovered)
 }
 
+#[cfg(not(feature = "ble"))]
 fn nvmc_present() -> bool {
     // A single read of the NVMC READY register. On real silicon the controller
     // is ready at boot and bit 0 reads 1. Renode models the nRF52840's flash as

@@ -163,6 +163,7 @@
 				<input
 					type="text"
 					placeholder={m('clubPhotos.captionPlaceholder')}
+					aria-label={m('clubPhotos.captionAriaLabel')}
 					maxlength="280"
 					bind:value={pendingCaption}
 					disabled={uploading}
@@ -212,6 +213,7 @@
 								bind:value={editingCaption}
 								maxlength="280"
 								placeholder={m('clubPhotos.captionEditPlaceholder')}
+								aria-label={m('clubPhotos.captionEditAriaLabel')}
 							/>
 							<button class="btn btn-primary btn-sm" type="submit">{m('clubPhotos.save')}</button>
 							<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editingId = null)}>

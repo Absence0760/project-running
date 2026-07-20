@@ -557,6 +557,7 @@
   "runDetailMarkDnf": "Marquer comme DNF",
   "runDetailMarkDnfSubtitle": "Exclut cette course des records personnels",
   "runDetailEditInvalid": "Saisissez une distance et une durée valides",
+  "runDetailEditFailed": "Impossible d'enregistrer vos modifications. Veuillez réessayer.",
   "runDetailSave": "Enregistrer",
   "runDetailCancel": "Annuler",
   "runDetailDelete": "Supprimer",

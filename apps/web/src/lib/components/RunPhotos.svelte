@@ -155,6 +155,7 @@
 				<input
 					type="text"
 					placeholder={m('runPhotos.captionPlaceholder')}
+					aria-label={m('runPhotos.captionAriaLabel')}
 					maxlength="280"
 					bind:value={pendingCaption}
 					disabled={uploading}
@@ -204,6 +205,7 @@
 								bind:value={editingCaption}
 								maxlength="280"
 								placeholder={m('runPhotos.captionEditPlaceholder')}
+								aria-label={m('runPhotos.captionEditAriaLabel')}
 							/>
 							<button class="btn btn-primary btn-sm" type="submit">{m('runPhotos.save')}</button>
 							<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editingId = null)}>

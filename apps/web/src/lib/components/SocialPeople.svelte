@@ -5,10 +5,15 @@
 	import {
 		searchPeople,
 		fetchSuggestedPeople,
+		fetchNearbyRunners,
 		followUser,
 		unfollowUser,
 		type PeopleSuggestion,
+		type NearbyRunner,
 	} from '$lib/core/data';
+	import { NEARBY_RUNNERS_ENABLED } from '$lib/social/nearby_flag';
+	import { NEARBY_BUCKET_BOUNDS_M, nearbyBucketUpperBoundM } from '$lib/social/nearby';
+	import { formatDistance } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -16,9 +21,20 @@
 	let query = $state('');
 	let results = $state<PeopleSuggestion[]>([]);
 	let suggestions = $state<PeopleSuggestion[]>([]);
+	let nearby = $state<NearbyRunner[]>([]);
+	let loadingNearby = $state(NEARBY_RUNNERS_ENABLED);
 	let searching = $state(false);
 	let loadingSuggestions = $state(true);
 	let rowBusy = $state<Set<string>>(new Set());
+
+	function bucketLabel(bucket: number): string {
+		const bound = nearbyBucketUpperBoundM(bucket);
+		return bound == null
+			? m('socialNearby.beyond', {
+					d: formatDistance(NEARBY_BUCKET_BOUNDS_M[NEARBY_BUCKET_BOUNDS_M.length - 1]),
+				})
+			: m('socialNearby.within', { d: formatDistance(bound) });
+	}
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	let searchGen = 0;
@@ -34,6 +50,15 @@
 			suggestions = await fetchSuggestedPeople(12);
 		} finally {
 			loadingSuggestions = false;
+		}
+		// Opt-in "runners nearby" — only when the surface flag is on (default
+		// off pending owner + CISO/counsel sign-off). Inert otherwise.
+		if (NEARBY_RUNNERS_ENABLED) {
+			try {
+				nearby = await fetchNearbyRunners();
+			} finally {
+				loadingNearby = false;
+			}
 		}
 	});
 
@@ -73,7 +98,10 @@
 		searchGen++;
 	}
 
-	async function toggleFollow(target: PeopleSuggestion, e: MouseEvent) {
+	async function toggleFollow(
+		target: { id: string; viewer_follows: boolean; display_name: string | null },
+		e: MouseEvent
+	) {
 		e.preventDefault();
 		e.stopPropagation();
 		if (!auth.loggedIn || rowBusy.has(target.id)) return;
@@ -97,6 +125,7 @@
 	function flipFollow(id: string, viewer_follows: boolean) {
 		results = results.map((r) => (r.id === id ? { ...r, viewer_follows } : r));
 		suggestions = suggestions.map((r) => (r.id === id ? { ...r, viewer_follows } : r));
+		nearby = nearby.map((r) => (r.id === id ? { ...r, viewer_follows } : r));
 	}
 
 
@@ -183,6 +212,9 @@
 					/>
 					<div class="person-body">
 						<span class="person-name">{person.display_name ?? m('socialPeople.runnerFallback')}</span>
+						{#if person.handle}
+							<span class="person-handle">@{person.handle}</span>
+						{/if}
 						<span class="person-meta">
 							{m(person.public_runs_count === 1 ? 'socialPeople.publicRunsOne' : 'socialPeople.publicRunsMany', { n: person.public_runs_count })}
 							{#if person.shared_clubs > 0}
@@ -214,9 +246,77 @@
 			{/each}
 		</div>
 	{/if}
+
+	{#if NEARBY_RUNNERS_ENABLED && !hasQuery}
+		<section class="nearby" aria-labelledby="nearby-heading">
+			<h2 class="section-title" id="nearby-heading">{m('socialNearby.heading')}</h2>
+			<p class="muted nearby-subtitle">{m('socialNearby.subtitle')}</p>
+			{#if loadingNearby}
+				<p class="muted" role="status">{m('socialNearby.loading')}</p>
+			{:else if nearby.length === 0}
+				<div class="empty-card">
+					<span class="material-symbols empty-icon" aria-hidden="true">near_me</span>
+					<h3>{m('socialNearby.empty')}</h3>
+					<p class="empty-text">{m('socialNearby.emptyHelp')}</p>
+					<a class="btn btn-outline" href="/settings/preferences">
+						<span class="material-symbols" aria-hidden="true">settings</span>
+						{m('shell.settings')}
+					</a>
+				</div>
+			{:else}
+				<div class="grid">
+					{#each nearby as person (person.id)}
+						<a class="person-row" href="/u/{person.id}">
+							<Avatar
+								url={person.avatar_url}
+								name={person.display_name}
+								size="2.5rem"
+								font="1.05rem"
+								bg="seed"
+								seedHue={hashHue(person.id)}
+							/>
+							<div class="person-body">
+								<span class="person-name">{person.display_name ?? m('socialPeople.runnerFallback')}</span>
+								<span class="person-meta">{bucketLabel(person.bucket)}</span>
+							</div>
+							{#if auth.loggedIn}
+								<button
+									type="button"
+									class="follow-btn"
+									class:following={person.viewer_follows}
+									disabled={rowBusy.has(person.id)}
+									onclick={(e) => toggleFollow(person, e)}
+									aria-label={person.viewer_follows
+										? m('socialPeople.unfollowName', { name: person.display_name ?? m('socialPeople.runnerFallbackLower') })
+										: m('socialPeople.followName', { name: person.display_name ?? m('socialPeople.runnerFallbackLower') })}
+								>
+									<span class="material-symbols" aria-hidden="true">
+										{person.viewer_follows ? 'check' : 'person_add'}
+									</span>
+									<span class="follow-label">
+										{person.viewer_follows ? m('socialPeople.following') : m('socialPeople.follow')}
+									</span>
+								</button>
+							{/if}
+						</a>
+					{/each}
+				</div>
+			{/if}
+		</section>
+	{/if}
 </div>
 
 <style>
+	.nearby {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		margin-top: var(--space-md);
+	}
+	.nearby-subtitle {
+		margin: 0;
+		font-size: 0.85rem;
+	}
 	.people {
 		display: flex;
 		flex-direction: column;
@@ -323,6 +423,13 @@
 	.person-name {
 		font-weight: 600;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.person-handle {
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

@@ -32,9 +32,10 @@
 //!   `course_store::decode` turns it into a `Course`, and it is published to the
 //!   `nav` task via `state::COURSE`, which switches off `NO COURSE LOADED`.
 //!
-//! Also UNVERIFIED, and additionally: with the SoftDevice enabled, flash
-//! access must be SoftDevice-coordinated — see the `run_flash` hardware caveat
-//! (the NVMC backend must become `nrf_softdevice::Flash` before hardware use).
+//! Also UNVERIFIED on hardware, but flash access IS SoftDevice-coordinated:
+//! on this build `run_flash`'s backend is `nrf_softdevice::Flash`, so every
+//! erase/write is arbitrated by the S140 (see the `run_flash` module doc's
+//! backend-split note).
 
 #[cfg(not(feature = "ble"))]
 #[embassy_executor::task]

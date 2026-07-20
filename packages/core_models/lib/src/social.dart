@@ -196,6 +196,9 @@ class PeopleSuggestion extends PublicProfile {
   final int sharedClubs;
   final bool viewerFollows;
 
+  /// Public @handle (issue #465). Null until the runner claims one.
+  final String? handle;
+
   const PeopleSuggestion({
     required super.id,
     super.displayName,
@@ -203,6 +206,7 @@ class PeopleSuggestion extends PublicProfile {
     required this.publicRunsCount,
     required this.sharedClubs,
     required this.viewerFollows,
+    this.handle,
   });
 }
 

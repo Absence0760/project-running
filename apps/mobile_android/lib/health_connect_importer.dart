@@ -1,7 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
-import 'package:uuid/uuid.dart';
+
+import 'imported_run_id.dart';
 
 /// Pulls workouts from Android Health Connect (Google Fit, Samsung Health,
 /// Garmin Connect, Fitbit, etc. all sync into Health Connect on Android 14+).
@@ -12,7 +13,6 @@ import 'package:uuid/uuid.dart';
 /// runs without GPS tracks. The user can still see them in Runs; the
 /// detail screen just shows stats and no map.
 class HealthConnectImporter {
-  static const _uuid = Uuid();
   static final _health = Health();
 
   /// Request permission to read workouts from Health Connect.
@@ -80,14 +80,18 @@ class HealthConnectImporter {
         };
         if (avgBpm != null) metadata[MetadataKeys.avgBpm] = avgBpm;
 
+        final externalId = 'healthconnect:${point.uuid}';
         runs.add(Run(
-          id: _uuid.v4(),
+          // Stable id derived from external_id so a re-import maps to the same
+          // local run (no duplicate) and the server upsert never rewrites the
+          // primary key — see imported_run_id.dart (#361).
+          id: stableRunIdFromExternalId(externalId),
           startedAt: point.dateFrom,
           duration: point.dateTo.difference(point.dateFrom),
           distanceMetres: distance,
           track: const [], // Health Connect doesn't expose route geometry
           source: RunSource.healthconnect,
-          externalId: 'healthconnect:${point.uuid}',
+          externalId: externalId,
           metadata: metadata,
         ));
       } catch (e) {

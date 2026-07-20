@@ -1,0 +1,50 @@
+# bench_jog — decoded defmt excerpts (2026-07-19, Renode v1.16.1, DEFMT_LOG=debug)
+
+## Boot, autostart, fix flow, distance accrual
+0.000183 INFO  run_flash: run store armed at 0xfc000, 0 run(s) recovered
+0.000671 INFO  nav: course loaded, 3 points, 179 m
+5.188995 INFO  record: sim-autostart on first fix
+5.180694 DEBUG gps: fix lat=40.015 lon=-105.2705 speed=2.9992085 sats=8
+5.189270 DEBUG record: recording dist=0.0m moving=0s pacer=Some(0)s
+6.182769 DEBUG gps: fix lat=40.015 lon=-105.2705 speed=2.9992085 sats=8
+6.684173 DEBUG gps: fix lat=40.015 lon=-105.270465 speed=2.9992085 sats=8
+81.407073 DEBUG gps: fix lat=40.015188333333334 lon=-105.269445 speed=2.9992085 sats=8
+81.908691 DEBUG gps: fix lat=40.015215 lon=-105.269445 speed=2.9992085 sats=8
+82.911376 DEBUG gps: fix lat=40.015215 lon=-105.269445 speed=2.9992085 sats=8
+84.415771 DEBUG gps: fix lat=40.01524333333333 lon=-105.269445 speed=2.9992085 sats=8
+...
+39.189086 DEBUG record: recording dist=48.028296688628835m moving=33s pacer=Some(-19)s
+
+## Course follow: off-course alert + re-arm (sim-course two-leg course)
+0.000671 INFO  nav: course loaded, 3 points, 179 m
+153.557189 INFO  nav: back on course (0 m along)
+169.650177 INFO  nav: back on course (0 m along)
+87.374481 WARN  nav: OFF COURSE (41 m off, 179 m along)
+93.943176 WARN  nav: OFF COURSE (41 m off, 179 m along)
+
+## Fuel alerts on moving-time cadence (sim 30s drink / 45s eat)
+38.208068 INFO  record: alert Drink
+46.189086 INFO  record: alert cleared
+50.832183 INFO  record: alert Eat
+58.189086 INFO  record: alert cleared
+
+## BTN3 32-page cycle (33 presses; press 14 read long -> one page-back, re-advanced) + wrap
+BTN3 -> page Distance|BTN3 -> page Pace|BTN3 -> page Lap|BTN3 -> page Splits
+|BTN3 -> page Zones|BTN3 -> page Pacer|BTN3 -> page RacePredictor|BTN3 -> pa
+ge TrainingLoad|BTN3 -> page DistanceBand|BTN3 -> page CutoffEta|BTN3 -> pag
+e Roadbook|BTN3 -> page Fuel|BTN3 -> page Nav|BTN3 -> page Fuel|BTN3 -> page
+ Nav|BTN3 -> page BackToStart|BTN3 -> page GearWear|BTN3 -> page TrainingPac
+es|BTN3 -> page Fitness|BTN3 -> page ElevationProfile|BTN3 -> page Recap|BTN
+3 -> page Streaks|BTN3 -> page RunStats|BTN3 -> page PrRecency|BTN3 -> page 
+PlanReplan|BTN3 -> page PlanAdaptive|BTN3 -> page Readiness|BTN3 -> page Goa
+ls|BTN3 -> page TurnCue|BTN3 -> page RouteSimplify|BTN3 -> page AutoEffort|B
+TN3 -> page RouteElev|BTN3 -> page RaceDay|BTN3 -> page Dashboard
+
+## BTN4 lap, BTN2 stop guard, flash commit (the end-to-end capture step 7 owed)
+101.429687 INFO  button: Lap -> Lap
+101.429779 INFO  record: command Lap -> paused
+104.430480 INFO  button: BTN2 armed — press again within 4s to stop
+105.440002 INFO  button: BTN2 -> stop (confirmed)
+105.440673 INFO  run_flash: stored run 0 (500 B) in slot 0
+105.440673 INFO  record: command Stop -> finished
+105.440887 DEBUG record: finished dist=157.22144026617664m moving=100s pacer=Some(-53)s

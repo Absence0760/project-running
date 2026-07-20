@@ -286,6 +286,7 @@
 								<input
 									type="text"
 									placeholder={t('runSocial.writeReplyPlaceholder')}
+									aria-label={t('runSocial.writeReplyAriaLabel')}
 									bind:value={replyBody}
 									maxlength="2000"
 								/>

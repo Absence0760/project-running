@@ -74,6 +74,11 @@ const MEAS1_CONFIG_1: u8 = 0x20;
 const MEAS1_CONFIG_2: u8 = 0x00;
 const MEAS1_LEDA_CURRENT: u8 = 0x40;
 
+/// The LED-A drive code [`Max86177::init`] programs. An AGC loop seeds its
+/// notion of the current drive from this, so the first correction steps from
+/// what the part is actually doing.
+pub const LED_PA_DEFAULT: u8 = MEAS1_LEDA_CURRENT;
+
 /// MEAS2 is the ambient / dark channel: the same photodiode and ADC settings as
 /// MEAS1 but with no LED selected, so it samples only the ambient light bleeding
 /// into the diode. `MEAS2_SELECT` drives no LED (the LED-select nibble is zero —
@@ -155,16 +160,19 @@ pub enum Error<E> {
     TempTimeout,
 }
 
-/// LED-current auto-gain window for [`agc_next_pa`]. `target_low`/`target_high`
-/// are the desired DC operating band in raw 19-bit photodiode counts; the band
-/// itself is the hysteresis dead-zone, so a level already inside it never moves
-/// the drive. `step` is how many LEDx_PA codes each correction walks, and
+/// LED-current auto-gain window for [`agc_next_pa`] / [`agc_next_pa_ambient`].
+/// `target_low`/`target_high` are the desired DC operating band in raw 19-bit
+/// photodiode counts; the band itself is the hysteresis dead-zone, so a level
+/// already inside it never moves the drive. `raw_ceiling` is the *raw*
+/// (pre-subtraction) DC bound the ambient-aware loop guards clipping headroom
+/// against. `step` is how many LEDx_PA codes each correction walks, and
 /// `min_pa`/`max_pa` clamp the result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AgcConfig {
     pub target_low: u32,
     pub target_high: u32,
+    pub raw_ceiling: u32,
     pub step: u8,
     pub min_pa: u8,
     pub max_pa: u8,
@@ -172,12 +180,17 @@ pub struct AgcConfig {
 
 impl Default for AgcConfig {
     /// Centres the DC on roughly a quarter-to-three-fifths of the 0x7_FFFF full
-    /// scale, leaving headroom for the pulsatile AC before the ADC rails. Bench-
-    /// verify values alongside `MEAS1_LEDA_CURRENT`.
+    /// scale, leaving headroom for the pulsatile AC before the ADC rails.
+    /// `raw_ceiling` keeps ~44k counts (~8 % of full scale) of raw headroom —
+    /// enough for the pulse swing plus ambient flicker — and sits below the
+    /// peak detector's raw-rail floor, so the loop sheds drive before the read
+    /// has to be declared `Saturated`. Bench-verify values alongside
+    /// `MEAS1_LEDA_CURRENT`.
     fn default() -> Self {
         Self {
             target_low: 130_000,
             target_high: 300_000,
+            raw_ceiling: 480_000,
             step: 8,
             min_pa: 0x08,
             max_pa: 0xC0,
@@ -201,6 +214,35 @@ pub fn agc_next_pa(dc: u32, current_pa: u8, cfg: &AgcConfig) -> u8 {
         current_pa
     };
     next.clamp(cfg.min_pa, cfg.max_pa)
+}
+
+/// Ambient-aware LED auto-gain step, for the two-channel (MEAS1 + MEAS2)
+/// configuration. Which magnitude drives the decision is deliberate:
+///
+/// - **The brightness target judges the *corrected* DC** (`raw − ambient`, the
+///   LED-reflected operating point the pulse rides on). Ambient cancels out of
+///   it by construction, so a cloud passing or an arm swinging through shade
+///   cannot walk the LED drive — the loop cannot oscillate against ambient
+///   swings. Judging the raw DC here would do exactly that.
+/// - **A one-sided rail guard judges the *raw* DC** (what the ADC actually
+///   converts — clipping happens there, corrected or not). A raw DC above
+///   `cfg.raw_ceiling` sheds one `step` of drive to recover conversion
+///   headroom, overriding a dim corrected level: stepping the LED *up* into an
+///   ADC that is already near its rail only deepens the clip that destroys the
+///   pulse. Under ambient the LED cannot out-shine, the guard walks the drive
+///   to `min_pa` and holds — the honest floor; the peak detector reports that
+///   scene `Saturated`.
+///
+/// The guard never steps up, so ambient variation below the ceiling leaves the
+/// drive untouched unless the corrected band asks for a change. Result is
+/// clamped into `[min_pa, max_pa]` like [`agc_next_pa`].
+pub fn agc_next_pa_ambient(raw_dc: u32, corrected_dc: u32, current_pa: u8, cfg: &AgcConfig) -> u8 {
+    if raw_dc > cfg.raw_ceiling {
+        return current_pa
+            .saturating_sub(cfg.step)
+            .clamp(cfg.min_pa, cfg.max_pa);
+    }
+    agc_next_pa(corrected_dc, current_pa, cfg)
 }
 
 /// Decode the MAX86177 internal temperature channel to milli-degrees Celsius.
@@ -292,9 +334,19 @@ impl<I2C: I2c> Max86177<I2C> {
         Ok(decode_die_temp_milli_c(whole, frac))
     }
 
-    /// Put the part into shutdown, releasing the LED drive current.
+    /// Put the part into shutdown, releasing the LED drive current. Register
+    /// state survives shutdown, so [`wake`](Self::wake) resumes sampling
+    /// without a re-[`init`](Self::init).
     pub fn shutdown(&mut self) -> Result<(), Error<I2C::Error>> {
         self.write_reg(reg::SYSTEM_CONFIG_1, SHUTDOWN)
+    }
+
+    /// Wake the part from [`shutdown`](Self::shutdown) and resume sampling,
+    /// flushing the FIFO so counts buffered before the shutdown can't replay
+    /// into a freshly reset detector as if they were a live pulse.
+    pub fn wake(&mut self) -> Result<(), Error<I2C::Error>> {
+        self.write_reg(reg::SYSTEM_CONFIG_1, 0)?;
+        self.write_reg(reg::FIFO_CONFIG_2, FIFO_FLUSH | FIFO_ROLLOVER)
     }
 
     fn wait_temp(&mut self) -> Result<(), Error<I2C::Error>> {

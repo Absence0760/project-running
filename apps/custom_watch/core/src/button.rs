@@ -57,24 +57,32 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
     }
 }
 
-/// What BTN3 does in the current run state. The run-view pages only exist
-/// once a run is under way (the idle status face ignores the page entirely —
-/// see [`crate::face`]), so while idle the otherwise-dead page button doubles
-/// as the GNSS-mode selector, keeping the mode surface inside decisions §81's
-/// five-button budget with no chorded or long-press input. Any non-idle state
-/// (recording, paused, finished — all of which show a run view) keeps BTN3 on
-/// pages, which also freezes the GNSS mode for the duration of a run.
+/// What a BTN3 press does, given the run state and whether the press was held
+/// to a long-press. The run-view pages only exist once a run is under way (the
+/// idle status face ignores the page entirely — see [`crate::face`]), so while
+/// idle the otherwise-dead page button doubles as the GNSS-mode selector and
+/// its long-press as the manual QNH re-zero, keeping both surfaces inside
+/// decisions §81's five-button, no-chord budget. Any non-idle state (recording,
+/// paused, finished — all of which show a run view) keeps BTN3 on pages (short
+/// forward, long backward), which also freezes the GNSS mode — and parks the
+/// re-zero — for the duration of a run: mid-run the elevation complementary
+/// filter auto-corrects drift, so the manual snap is an idle (trailhead)
+/// affordance and a run's recording controls stay untouched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Btn3Action {
-    CyclePage,
+    PageNext,
+    PagePrev,
     CycleGnssMode,
+    QnhRezero,
 }
 
-pub fn btn3_action(state: RecordState) -> Btn3Action {
-    match state {
-        RecordState::Idle => Btn3Action::CycleGnssMode,
-        _ => Btn3Action::CyclePage,
+pub fn btn3_action(state: RecordState, long: bool) -> Btn3Action {
+    match (state, long) {
+        (RecordState::Idle, false) => Btn3Action::CycleGnssMode,
+        (RecordState::Idle, true) => Btn3Action::QnhRezero,
+        (_, false) => Btn3Action::PageNext,
+        (_, true) => Btn3Action::PagePrev,
     }
 }
 
@@ -194,12 +202,41 @@ mod tests {
 
     #[test]
     fn btn3_cycles_gnss_mode_only_while_idle() {
-        assert_eq!(btn3_action(RecordState::Idle), Btn3Action::CycleGnssMode);
+        assert_eq!(
+            btn3_action(RecordState::Idle, false),
+            Btn3Action::CycleGnssMode
+        );
         // Every run-view state keeps BTN3 on pages — a mid-run (or post-run)
         // press must never silently change the GNSS mode.
-        assert_eq!(btn3_action(RecordState::Recording), Btn3Action::CyclePage);
-        assert_eq!(btn3_action(RecordState::Paused), Btn3Action::CyclePage);
-        assert_eq!(btn3_action(RecordState::Finished), Btn3Action::CyclePage);
+        assert_eq!(
+            btn3_action(RecordState::Recording, false),
+            Btn3Action::PageNext
+        );
+        assert_eq!(
+            btn3_action(RecordState::Paused, false),
+            Btn3Action::PageNext
+        );
+        assert_eq!(
+            btn3_action(RecordState::Finished, false),
+            Btn3Action::PageNext
+        );
+    }
+
+    #[test]
+    fn btn3_long_press_is_rezero_while_idle_and_page_back_in_a_run() {
+        assert_eq!(btn3_action(RecordState::Idle, true), Btn3Action::QnhRezero);
+        // Every run-view state keeps the long-press on the reverse page walk —
+        // a mid-run hold must never re-zero the altitude reference out from
+        // under a recording.
+        assert_eq!(
+            btn3_action(RecordState::Recording, true),
+            Btn3Action::PagePrev
+        );
+        assert_eq!(btn3_action(RecordState::Paused, true), Btn3Action::PagePrev);
+        assert_eq!(
+            btn3_action(RecordState::Finished, true),
+            Btn3Action::PagePrev
+        );
     }
 
     #[test]
