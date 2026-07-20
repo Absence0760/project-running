@@ -557,6 +557,7 @@
   "runDetailMarkDnf": "Marcar como DNF",
   "runDetailMarkDnfSubtitle": "Exclui esta corrida dos recordes pessoais",
   "runDetailEditInvalid": "Insira uma distância e duração válidas",
+  "runDetailEditFailed": "Não foi possível salvar suas alterações. Tente novamente.",
   "runDetailSave": "Salvar",
   "runDetailCancel": "Cancelar",
   "runDetailDelete": "Excluir",

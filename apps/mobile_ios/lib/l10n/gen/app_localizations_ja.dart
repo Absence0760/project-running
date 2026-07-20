@@ -1910,6 +1910,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailEditInvalid => '有効な距離と時間を入力してください';
 
   @override
+  String get runDetailEditFailed => '変更を保存できませんでした。もう一度お試しください。';
+
+  @override
   String get runDetailSave => '保存';
 
   @override

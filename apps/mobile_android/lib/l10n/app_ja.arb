@@ -557,6 +557,7 @@
   "runDetailMarkDnf": "DNF としてマーク",
   "runDetailMarkDnfSubtitle": "このランを自己ベストから除外します",
   "runDetailEditInvalid": "有効な距離と時間を入力してください",
+  "runDetailEditFailed": "変更を保存できませんでした。もう一度お試しください。",
   "runDetailSave": "保存",
   "runDetailCancel": "キャンセル",
   "runDetailDelete": "削除",
