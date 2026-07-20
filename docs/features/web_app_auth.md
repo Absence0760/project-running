@@ -144,9 +144,9 @@ Mapping pinned in `lib/core/auth_errors.test.ts` (incl. the `invalid_grant` + "E
 
 ## Password confirmation
 
-All three surfaces that **mint** a password — sign-up (`/login?signup=1`), reset (`/auth/reset`), and change-password (`/settings/account`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts`. Sign-in and the reset-*request* form don't mint a password and take one field / none. **If you add a fourth, route it through the same helper.**
+All three surfaces that **mint** a password — sign-up (`/login?signup=1`), reset (`/auth/reset`), and change-password (`/settings/account`) — take it in two fields and validate the pair through `checkPasswordPair` in `lib/core/auth_gates.ts` (change-password reaches it via `changePassword`, which runs the pair check first and then the current-password step-up below). Sign-in and the reset-*request* form don't mint a password and take one field / none. **If you add a fourth, route it through the same helper.**
 
-On mobile the only password-minting surface is sign-up (`sign_up_screen.dart`) — there is no reset or change-password screen — and it routes through the Dart twin `auth_gates.dart` (whose `minPasswordLength` re-exports `kPasswordMinLength` from `auth_validation.dart`). **The two helpers are a TS↔Dart parity pair: keep the rule in lockstep.**
+On mobile the password-minting surfaces are sign-up (`sign_up_screen.dart`) and the change-password dialog on `settings_account_screen.dart` — there is no reset screen — and sign-up routes through the Dart twin `auth_gates.dart` (whose `minPasswordLength` re-exports `kPasswordMinLength` from `auth_validation.dart`). **The two helpers are a TS↔Dart parity pair: keep the rule in lockstep.**
 
 The rule: at least `MIN_PASSWORD_LENGTH` (a re-export of `PASSWORD_MIN_LENGTH` from `auth_rules.ts` — 8, enforced server-side via `minimum_password_length` in `config.toml`, prod via the dashboard Auth settings), then exact equality. Length is reported first so two matching-but-too-short entries name the fixable problem. **Neither side is trimmed** — whitespace is a real password character and is exactly the typo class the confirmation catches.
 
@@ -155,6 +155,25 @@ The rule: at least `MIN_PASSWORD_LENGTH` (a re-export of `PASSWORD_MIN_LENGTH` f
 Contract pinned in `lib/core/auth_gates.test.ts` (precedence, exactness, the length boundary); wiring pinned in `tests-e2e/auth/signup-confirm-password.spec.ts` and `tests-e2e/settings/account.spec.ts`. The settings tests exercise the rejection branches only — a successful save there would rotate the shared fixture user's password out from under every other spec.
 
 On mobile the contract is pinned in `test/auth_gates_test.dart` (17 mirror cases, one per web case) and the wiring in `test/sign_up_screen_test.dart`. Mobile has no e2e tier by design (`docs/testing/testing.md § What's not covered`), so the widget test is the wiring pin.
+
+## Change password requires the current password (issue #381)
+
+`/settings/account` used to call `supabase.auth.updateUser({ password })` straight off the ambient session. Every path that yields a live access token for a signed-in user — `localStorage` copied off an unlocked device, an XSS anywhere in the authenticated app, a debugging token pasted into a ticket — was therefore a **permanent account takeover**: the holder sets a new password, and the owner is locked out of their own account with no knowledge of the old one required (OWASP ASVS V2.1.14 / CWE-620). The `password_changed_notification` mail is detection after the fact, not prevention.
+
+The section now takes a **Current Password** field and proves it before the write. The rule lives in `lib/core/password_change.ts` (`changePassword`), which the page drives with two injected effects so the ordering and the fail-closed posture are unit-testable:
+
+1. `checkPasswordPair(new, confirm)` — the same local check as every other minting surface, run first so a typo in the new field never burns a sign-in attempt against GoTrue's rate limit.
+2. A non-empty current password (`current_missing`).
+3. `verifyCurrentPassword` → `supabase.auth.signInWithPassword({ email, password: current })`. **Only an error-free response counts as proof.** A rejection, a thrown network error, and a session carrying no email all resolve the same way: `current_invalid`, and `updateUser` is never reached.
+4. `updateUser({ password })`.
+
+`/auth/reset` deliberately does **not** come through here. That flow is already gated by a single-use recovery token mailed to the address on file — the same proof, by another route — and adding a current-password field there would break the one flow a user reaches *because* they don't know their password.
+
+**Accounts with no password.** A Google / Apple signup has nothing to prove, and there is no client-side signal that reliably says so (GoTrue does not add an `email` identity when an OAuth account later sets a password, so inferring from `getUserIdentities()` would fail *open* for exactly those accounts). Rather than guess, the section carries an **Email me a reset link** button — `resetPasswordForEmail(auth.user.email)` → `/auth/reset`. Possession of the mailbox is the alternative proof, and unlike the session it isn't something the token holder has. That keeps the documented "set a password so you can sign in on the Wear OS watch app" path working without an exception in the step-up.
+
+Contract pinned in `lib/core/password_change.test.ts` (7 cases: the happy path, wrong password, empty current, a verifier that throws, pair-check precedence over the network call, the length/mismatch precedence, and a failed update). Wiring pinned in `tests-e2e/settings/account.spec.ts` (`change password — step-up + validation`), which additionally aborts `PUT /auth/v1/user` so a regression can't rotate the shared fixture user's password out from under every other spec.
+
+**Mobile still has the hole.** `settings_account_screen.dart`'s change-password dialog calls `ApiClient.updatePassword` (→ `updateUser`) off the ambient session with no current-password field, exactly as web did. Web is canonical (§24) so the rule landed here first; porting `changePassword` to Dart — at which point `password_change.ts` becomes a parity pair — is tracked in [`followups.md § Mobile`](../product/followups.md). Until then it is web-only and `auth_gates` remains the only shared half.
 
 ## Change email
 

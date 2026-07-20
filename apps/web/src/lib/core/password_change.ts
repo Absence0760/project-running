@@ -10,8 +10,10 @@
 /// already gated by a single-use recovery token mailed to the address on
 /// file, which is the proof this function is asking for by another route.
 ///
-/// Web-only: mobile has no change-password surface, so there is no Dart
-/// twin to keep in lockstep (`auth_gates` is the shared half).
+/// Web-only for now. Mobile's `settings_account_screen.dart` dialog has
+/// the same hole and wants the same rule ported, tracked in
+/// `docs/product/followups.md § Mobile`; until then this is not a parity
+/// pair (`auth_gates` remains the shared half).
 
 import { checkPasswordPair, type PasswordPairReason } from './auth_gates';
 
