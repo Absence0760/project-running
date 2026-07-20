@@ -2150,6 +2150,7 @@
 				onfocusin={() => { if (searchResults.length > 0) showResults = true; }}
 				type="text"
 				placeholder={t('routeBuilder.searchPlaceholder')}
+				aria-label={t('routeBuilder.searchAriaLabel')}
 			/>
 			<button class="locate-btn" onclick={goToMyLocation} title={t('routeBuilder.goToMyLocation')} aria-label={t('routeBuilder.goToMyLocation')}>
 				<span class="material-symbols">my_location</span>
