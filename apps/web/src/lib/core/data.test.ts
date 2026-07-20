@@ -335,6 +335,38 @@ test('plans/new loads club templates with one batched query, not one per club', 
 	);
 });
 
+test('enrichClubs reads the trigger-maintained member_count cache, not a per-member roster recount', () => {
+	// Reason: clubs.member_count is a denormalised, trigger-maintained cache
+	// (migration 20260906_001; derived_state.md cache=authoritative-query
+	// contract) added SPECIFICALLY so enrichClubs would stop computing it with
+	// a post-query aggregate. CLUB_SELECT_COLS already selects member_count on
+	// every club row, and the search_clubs RPC branch already reads
+	// r.member_count. enrichClubs must trust the cache — it must NOT fire a
+	// second `club_members ... status = 'active'` count query pulling one row
+	// per active member across every club just to re-derive (and stomp) a value
+	// already on the row (bug-hunt-2026-07 H1, issue #331). The viewer
+	// role/status query stays — that is per-user membership, not a recount.
+	const source = read('src/lib/core/data.ts');
+	const fnMatch = source.match(/async function enrichClubs[\s\S]*?\n}/);
+	assert.ok(fnMatch, 'Could not locate enrichClubs — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/member_count:\s*c\.member_count/,
+		'enrichClubs must read member_count from the already-fetched row (the trigger-maintained cache), not a recount map.',
+	);
+	assert.doesNotMatch(
+		body,
+		/count:\s*'exact'/,
+		"enrichClubs must not issue a { count: 'exact' } roster query — member_count is the authoritative cache on the row.",
+	);
+	assert.doesNotMatch(
+		body,
+		/\.eq\('status',\s*'active'\)/,
+		"enrichClubs must not re-scan active club_members to recount — that is the redundant per-member fetch #331 removed.",
+	);
+});
+
 test('deleteNotifications batches into one .in() delete, guards empty, surfaces errors', () => {
 	// Reason: bulk-dismissing a collapsed notification group used to await
 	// deleteNotification(id) in a for-loop — one DELETE round-trip per

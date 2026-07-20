@@ -2248,31 +2248,21 @@ export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null
 	return enriched;
 }
 
-/** Attach member_count + viewer_role + viewer_status to clubs in two queries. */
+/** Attach viewer_role + viewer_status to clubs. member_count is the
+ * trigger-maintained cache on the row (derived_state.md), not recomputed. */
 async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 	if (clubs.length === 0) return [];
 	const ids = clubs.map((c) => c.id);
 	const userId = auth.user?.id;
 
-	const [countsRes, rolesRes] = await Promise.all([
-		supabase
-			.from(TABLES.club_members)
-			.select('club_id', { count: 'exact' })
-			.in('club_id', ids)
-			.eq('status', 'active'),
-		userId
-			? supabase
-					.from(TABLES.club_members)
-					.select('club_id, role, status')
-					.in('club_id', ids)
-					.eq('user_id', userId)
-			: Promise.resolve({ data: [] as { club_id: string; role: string; status: string }[] })
-	]);
+	const rolesRes = userId
+		? await supabase
+				.from(TABLES.club_members)
+				.select('club_id, role, status')
+				.in('club_id', ids)
+				.eq('user_id', userId)
+		: { data: [] as { club_id: string; role: string; status: string }[] };
 
-	const counts = new Map<string, number>();
-	for (const row of (countsRes.data ?? []) as { club_id: string }[]) {
-		counts.set(row.club_id, (counts.get(row.club_id) ?? 0) + 1);
-	}
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
 	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
@@ -2282,7 +2272,7 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 	return clubs.map((c) => ({
 		...c,
 		join_policy: (c.join_policy ?? 'open') as JoinPolicy,
-		member_count: counts.get(c.id) ?? 0,
+		member_count: c.member_count ?? 0,
 		viewer_role: roles.get(c.id) ?? null,
 		viewer_status: statuses.get(c.id) ?? null
 	}));
