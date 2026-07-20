@@ -25,6 +25,7 @@
 	import { m, initLocale } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import { coachEnabled } from '$lib/coach/coach_flag';
+	import { strayConfirmationTarget } from '$lib/core/auth_confirmation';
 	import { env } from '$env/dynamic/public';
 
 	// Warm the connection to the Supabase origin every page hits on
@@ -40,6 +41,26 @@
 			return '';
 		}
 	})();
+
+	// Fail-closed signup-confirmation landing. GoTrue only honours our
+	// `emailRedirectTo` when the hosted project's Redirect-URLs allow-list
+	// contains it; otherwise it lands the confirmation on the project Site
+	// URL (`/?code=<pkce>`), where detectSessionInUrl still mints a live
+	// session but the consent-stamp retry and the Art 8 gate never run.
+	// Snapshotting here — during hydration, before supabase-js' async
+	// bootstrap can consume the code and rewrite the address bar — means
+	// the hop happens even if that exchange wins the race. See
+	// docs/features/web_app_auth.md § Email confirmation redirect.
+	const strayLanding = browser
+		? strayConfirmationTarget(
+				window.location.pathname,
+				window.location.search,
+				window.location.hash,
+			)
+		: null;
+	onMount(() => {
+		if (strayLanding) goto(strayLanding, { replaceState: true });
+	});
 
 	// Apply the persisted theme on first client mount. A blocking
 	// bootstrap <script> in app.html would kill the first-paint flash

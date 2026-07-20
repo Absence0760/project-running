@@ -18,6 +18,7 @@
 	} from '$lib/core/auth_errors';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
+	import { verifyConsentStamped } from '$lib/core/auth_confirmation';
 	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
 	import { googleAuthEnabled } from '$lib/core/google_auth_flag';
 	import { m } from '$lib/i18n/store.svelte';
@@ -201,21 +202,26 @@
 					info = m('login.checkEmail', { email });
 					return;
 				}
-				// Server-side consent stamp on user_profiles. Fire-
-				// and-forget — if email confirmation is pending and no
-				// JWT exists yet, the /auth/callback fallback retries.
-				// Also seeds the region unit default from the browser
-				// locale on this brand-new-row insert (the server has no
-				// locale); returning users are never overwritten (#488).
+				// Server-side consent stamp on user_profiles. Also seeds
+				// the region unit default from the browser locale on this
+				// brand-new-row insert (the server has no locale);
+				// returning users are never overwritten (#488).
 				try {
 					await supabase.rpc('confirm_age_and_terms', {
 						p_preferred_unit: defaultUnitForLocale(navigator.language),
 					});
 				} catch (_) {
-					/* Retry path covers the failure. */
+					/* Verified below — a failed stamp routes to the gate. */
 				}
 				await auth.refreshSession();
-				goto(safeReturnTo());
+				// A session was issued straight away, so there is no
+				// /auth/callback hop to retry the stamp on: a silently
+				// failed RPC would otherwise leave a live session with no
+				// recorded consent. Fail closed to the Art 8 gate instead.
+				const consent = await verifyConsentStamped(() =>
+					supabase.rpc('get_my_profile').maybeSingle(),
+				);
+				goto(consent === 'ok' ? safeReturnTo() : '/auth/confirm-age');
 			} else {
 				const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 				if (signInError) throw signInError;
