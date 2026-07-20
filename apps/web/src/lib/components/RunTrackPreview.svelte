@@ -29,6 +29,7 @@
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { isTrackOwner } from '$lib/runs/track_ownership';
 	import { consent } from '$lib/settings/consent.svelte';
 	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/routes/static_map';
 
@@ -57,9 +58,11 @@
 	const viewerId = $derived(auth.user?.id ?? null);
 	// Treat anon (`viewerId == null`) as non-owner — they can hit
 	// public share routes without signing in and must still see a
-	// clipped track.
+	// clipped track. onMount gates the load on auth.ready() so this
+	// derivation reads a settled session, not a mid-restore null that
+	// would misclassify the owner as a non-owner (issue #347).
 	const shouldClip = $derived(
-		ownerUserId != null && ownerUserId !== viewerId,
+		ownerUserId != null && !isTrackOwner(viewerId, ownerUserId),
 	);
 	// The non-owner clip path fetches by `runId` (the EF derives the Storage
 	// path server-side), so it never needs `trackUrl` — public-view callers
@@ -81,29 +84,37 @@
 	let attempted = $state(false);
 
 	onMount(() => {
-		if (!cacheKey) return;
-		// Hit cache synchronously if we've fetched this one before in
-		// this session — common when the user scrolls up / re-enters the
-		// list page.
-		if (CACHE.has(cacheKey)) {
-			points = CACHE.get(cacheKey) ?? null;
-			attempted = true;
-			return;
-		}
-		const io = new IntersectionObserver(
-			(entries) => {
-				for (const e of entries) {
-					if (e.isIntersecting) {
-						io.disconnect();
-						void load();
-						break;
+		let io: IntersectionObserver | null = null;
+		// Wait for auth to settle before reading `cacheKey` / `shouldClip`
+		// — this component mounts on shell-less public surfaces before the
+		// root layout's auth gate resolves, and an owner whose session is
+		// still restoring would otherwise be clipped (issue #347).
+		void (async () => {
+			await auth.ready();
+			if (!cacheKey) return;
+			// Hit cache synchronously if we've fetched this one before in
+			// this session — common when the user scrolls up / re-enters the
+			// list page.
+			if (CACHE.has(cacheKey)) {
+				points = CACHE.get(cacheKey) ?? null;
+				attempted = true;
+				return;
+			}
+			io = new IntersectionObserver(
+				(entries) => {
+					for (const e of entries) {
+						if (e.isIntersecting) {
+							io?.disconnect();
+							void load();
+							break;
+						}
 					}
-				}
-			},
-			{ rootMargin: '200px' }, // Pre-fetch slightly before visible
-		);
-		io.observe(el);
-		return () => io.disconnect();
+				},
+				{ rootMargin: '200px' }, // Pre-fetch slightly before visible
+			);
+			io.observe(el);
+		})();
+		return () => io?.disconnect();
 	});
 
 	async function load() {
