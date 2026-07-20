@@ -1256,6 +1256,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
 
   @override
+  String get runHoldToStopHint => 'Segure para parar';
+
+  @override
   String get runResumeA11yLabel => 'Retomar corrida';
 
   @override
@@ -3741,8 +3744,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Buscar yoga, pilates, HIIT, clubes de corrida…';
+  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';
@@ -9403,6 +9405,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionFat => 'Gorduras';
 
   @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
+
+  @override
   String get nutritionWater => 'Água';
 
   @override
@@ -12619,6 +12636,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
 
   @override
+  String get runHoldToStopHint => 'Segure para parar';
+
+  @override
   String get runResumeA11yLabel => 'Retomar corrida';
 
   @override
@@ -15103,8 +15123,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Buscar yoga, pilates, HIIT, clubes de corrida…';
+  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';
@@ -20762,6 +20781,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
 
   @override
   String get nutritionWater => 'Água';

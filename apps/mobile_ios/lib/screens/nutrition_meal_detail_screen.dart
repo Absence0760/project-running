@@ -229,20 +229,49 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
             for (final e in entries)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                        child: Text(e.itemName,
-                            style: theme.textTheme.bodyMedium)),
-                    Text('${(e.calories ?? 0).round()} kcal',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline)),
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Text(e.itemName,
+                                style: theme.textTheme.bodyMedium)),
+                        Text('${(e.calories ?? 0).round()} kcal',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.outline)),
+                      ],
+                    ),
+                    if (_extendedLine(l10n, e) case final line?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(line,
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: theme.colorScheme.outline)),
+                      ),
                   ],
                 ),
               ),
         ],
       ),
     );
+  }
+
+  /// The extended-nutrients line (issue #492) for the present fields on a food
+  /// entry, or null when none are carried. Grams for fibre / sugar / saturated
+  /// fat; milligrams for sodium / cholesterol.
+  String? _extendedLine(AppLocalizations l10n, FoodEntry e) {
+    String g(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
+    final parts = <String>[
+      if (e.fiberG != null) '${l10n.nutritionFiber} ${g(e.fiberG!)} g',
+      if (e.sugarG != null) '${l10n.nutritionSugar} ${g(e.sugarG!)} g',
+      if (e.saturatedFatG != null)
+        '${l10n.nutritionSaturatedFat} ${g(e.saturatedFatG!)} g',
+      if (e.sodiumMg != null) '${l10n.nutritionSodium} ${g(e.sodiumMg!)} mg',
+      if (e.cholesterolMg != null)
+        '${l10n.nutritionCholesterol} ${g(e.cholesterolMg!)} mg',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   Widget _trendCard(
