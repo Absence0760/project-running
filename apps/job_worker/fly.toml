@@ -10,7 +10,11 @@
 # up without --config flags.
 
 app = "job_worker"
-primary_region = "lhr"
+# Sited next to Postgres, not next to us: the Supabase project lives in
+# East US (Ohio), and every job claim / zone lookup / premium request is
+# a round trip to it. lhr would add ~80 ms to each. Spectator WebSocket
+# latency is unaffected — that terminates at Fly's edge.
+primary_region = "ord"
 
 [build]
 # The Dockerfile in this directory is multi-stage; the final image is
@@ -24,9 +28,13 @@ dockerfile = "Dockerfile"
 # multiple replicas have distinct IDs.
 WORKER_ID = "fly-${FLY_MACHINE_ID}"
 
-# OSRM_URL points at the sibling osrm app over Fly's private 6PN
-# network. Never publicly resolvable — see apps/job_worker/osrm/fly.toml.
-OSRM_URL = "http://osrm.internal:5000"
+# OSRM_URL is deliberately unset: the live spectator hub is deploying
+# ahead of the sibling osrm app, and pointing at an osrm.internal that
+# doesn't resolve would fail every map_match job on a retry loop.
+# Unset selects PassthroughMatcher (main.go:279), so map-matching is a
+# no-op and runs still ship — just without the snapped line. Restore
+# `OSRM_URL = "http://osrm.internal:5000"` (private 6PN, never publicly
+# resolvable — see apps/job_worker/osrm/fly.toml) when osrm deploys.
 
 # Live spectator hub WS upgrade origin allow-list. Comma-separated;
 # only requests whose Origin header matches one of these are allowed

@@ -13,7 +13,7 @@ Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker cont
 The worker is small (single Go binary, ~9 MB distroless) and the OSRM engine is heavy (~50 MB binary plus a multi-GB graph). They have different sizing, different update cadences, and different failure modes — they want to be separate Fly.io apps even though they always deploy together.
 
 ```
-Fly.io organisation: runonward
+Fly.io organisation: project-running
 ├── job_worker           (1+ machines, shared-cpu-1x, 256 MB RAM)
 │   ├─ Queue drain: claims `jobs` rows over Supabase REST + Storage
 │   ├─ Live hub HTTP + WebSocket on :8080 (Fly TLS-terminates at :443)
@@ -45,9 +45,13 @@ Why the worker app stays separate from OSRM: independent restart (worker → 5 s
 
 **Why not a dedicated VM:** Fly.io has the same cost-per-RAM as a small DO/Linode/EC2 with batteries-included logging, secrets, and zero-downtime deploys. We'd reach for a dedicated VM only if the OSRM RAM goes past ~64 GB — at which point we're talking continent-scale extracts and the discussion shifts.
 
-**Region:** `lhr` (London) or `cdg` (Paris). Match the Supabase region to keep the worker → Postgres round-trip under 10 ms; OSRM lives in the same region so 6PN traffic is intra-DC.
+**Region:** `ord` (Chicago). The rule is *follow Postgres, not the team* — the worker round-trips to Supabase on every job claim, zone lookup, and premium request, so the deciding factor is distance to the database. The Supabase project (`Project Runner`) sits in **East US (Ohio)**, which makes `ord` or `iad` right and `lhr` roughly 80 ms per round trip worse. Spectator WebSocket latency does not enter into it: that terminates at Fly's edge wherever the viewer is.
 
-**Account org**: create a `runonward` Fly.io org. Both apps live under it. Billing is per-org; secrets are per-app.
+If the database ever moves to an EU region, this flips back to `lhr`/`cdg` — and the worker should move with it.
+
+> **Sibling services still say `lhr`.** `osrm/fly.toml`, `graphhopper/fly.toml`, and `apps/graph_cycle/fly.toml` were all written against the old assumption. The 6PN intra-DC claim below only holds if they share the worker's region, so reconcile them before any of the three deploys — see the OSM-extract note in the OSRM section, since a UK extract served from a US region is a separate judgement call.
+
+**Account org**: create a `project-running` Fly.io org. Both apps live under it. Billing is per-org; secrets are per-app. The name matches the AWS account slug so the estate reads consistently across providers — Fly org slugs are embedded in billing and token scoping and are painful to change later, so get it right at creation.
 
 ---
 
@@ -65,14 +69,16 @@ Lives at [`fly.toml`](fly.toml). Shape (matches the actual checked-in file — k
 
 ```toml
 app = "job_worker"
-primary_region = "lhr"
+primary_region = "ord"
 
 [build]
 dockerfile = "Dockerfile"
 
 [env]
 WORKER_ID = "fly-${FLY_MACHINE_ID}"
-OSRM_URL = "http://osrm.internal:5000"
+# OSRM_URL deliberately unset while the hub deploys ahead of osrm —
+# restore it when the osrm app exists. See "Deploying the hub before
+# OSRM" below.
 # Comma-separated WS Origin allow-list. Anything not listed gets a 403 at
 # the WS handshake. Production clients: apps/web prod + preview.
 LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://preview.threkir.com"
@@ -119,20 +125,49 @@ cpus = 1
 
 ### Secrets
 
+Set them from stdin, never as command arguments — `flyctl secrets set` puts the service-role key into shell history and into `ps` output while it runs. This mirrors the rule `bin/secret-set.sh` already enforces for the sops path.
+
 ```bash
-flyctl secrets set --app job_worker \
-  SUPABASE_URL="https://<ref>.supabase.co" \
-  SUPABASE_SERVICE_ROLE_KEY="..." \
-  SUPABASE_JWT_SECRET="..." \  # Studio → Project Settings → API → JWT Secret
-  STRAVA_CLIENT_ID="..." \      # optional — only needed for token_refresh
-  STRAVA_CLIENT_SECRET="..."    # jobs (Strava OAuth rotation)
+flyctl secrets import --app job_worker
 ```
+
+Then paste the following and press Ctrl-D (real values, no quotes):
+
+```
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<legacy service_role key, a JWT>
+SUPABASE_JWT_SECRET=<shared HS256 secret, NOT a JWT>
+STRAVA_CLIENT_ID=<optional — only for token_refresh jobs>
+STRAVA_CLIENT_SECRET=<optional — Strava OAuth rotation>
+```
+
+`flyctl secrets list --app job_worker` confirms names and digests afterwards; values are never echoed back.
+
+**Where these live in the Supabase dashboard.** The old single "Settings → API" page has been split, so navigate by direct link rather than by sidebar:
+
+| Value | Page |
+|---|---|
+| `SUPABASE_URL` | `…/project/<ref>/settings/api-keys` — also just `https://<ref>.supabase.co`, and it is not secret |
+| `SUPABASE_SERVICE_ROLE_KEY` | `…/project/<ref>/settings/api-keys` — take the **legacy `service_role`** key (a JWT), not an `sb_secret_…` key: the worker sends it as both `apikey` and `Authorization: Bearer` |
+| `SUPABASE_JWT_SECRET` | `…/project/<ref>/settings/jwt` — the shared HS256 secret |
+
+**`SUPABASE_JWT_SECRET` is not the anon key.** The anon key is a *token* signed by this secret; the secret is the signing key itself. A quick tell: the secret has no dots, the anon key is `eyJ…` with two. Supplying the anon key fails every signature check at `internal/livehub/auth.go:169` — fail-closed, but every push 401s.
+
+**If the project has migrated to asymmetric JWT signing keys** (ECC/RSA, published as a JWK) there is no shared secret to copy, and the hub cannot verify those tokens: `auth.go:169` pins `jwt.WithValidMethods([]string{"HS256"})`. That is a code change to the verifier, not a config problem — resolve it before deploying.
 
 `SUPABASE_SERVICE_ROLE_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
 
 `SUPABASE_JWT_SECRET` is the HS256 signing key the Supabase project mints user tokens with — the hub's `JWTAuthorizer` verifies the recorder's bearer token against it. **The hub refuses to accept production traffic without this set** — when `SUPABASE_JWT_SECRET` is empty the authorizer is nil and the hub falls back to permissive mode (everything allowed), which is fine for the local smoke flow but a hard blocker for the public route. Set it before running `flyctl deploy` and confirm the boot log shows `livehub auth: enabled (Supabase JWT)`.
 
-`OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` are in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
+`OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` belong in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
+
+### Deploying the hub before OSRM
+
+The live spectator hub and the queue drainer share one binary, so the hub can reach production before the `osrm` app exists. When it does, **`OSRM_URL` must be unset** — the checked-in `fly.toml` ships it commented out for exactly this reason.
+
+Pointing at an `osrm.internal` that doesn't resolve would fail every `map_match` job and leave it retrying on a loop. Unset, `main.go:279` selects `PassthroughMatcher`: map-matching becomes a no-op, the boot log reads `"matcher selected" engine=passthrough`, and runs still ship — just without the snapped line. That is the correct degraded state, not a bug.
+
+Restore the line when `osrm` deploys, and expect the boot log to flip to `engine=osrm`.
 
 ### Job kinds + cutover from Edge Functions
 
@@ -624,7 +659,7 @@ Stateless. Deleting and recreating the app loses nothing. Procedure:
 
 ```bash
 flyctl apps destroy job_worker --yes
-flyctl launch --copy-config --no-deploy --name job_worker --region lhr
+flyctl launch --copy-config --no-deploy --name job_worker --region ord
 flyctl secrets set --app job_worker SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
 flyctl deploy --app job_worker
 ```
@@ -679,10 +714,10 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 
 ### Worker
 
-- [ ] Fly.io org `runonward` created, `job_worker` app exists in `lhr`
+- [ ] Fly.io org `project-running` created, `job_worker` app exists in `ord`
 - [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets
-- [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]`
-- [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm`
+- [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]` — **only once the `osrm` app exists**; leave it unset for a hub-first deploy (see "Deploying the hub before OSRM")
+- [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm` (or `engine=passthrough` on a hub-first deploy)
 - [ ] Drained at least one real `map_match` job end-to-end (insert test run, watch `run_matched_tracks` flip to matched)
 - [ ] Queue-lag alert wired
 - [x] Failed-jobs alert wired (`jobs-failed-alert` pg_cron → `jobs_failed_summary()`; route a scraper on `failed_count > 0`)
