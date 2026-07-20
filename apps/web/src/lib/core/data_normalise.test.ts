@@ -8,6 +8,7 @@ import {
 	readGlobalSegmentsScoredCount,
 	shouldRescoreGlobalSegments,
 	stampGlobalSegmentsScored,
+	GLOBAL_SEGMENT_SCORING_LIMIT,
 } from './data_normalise.js';
 
 // ---------------------------------------------------------------------------
@@ -219,6 +220,44 @@ test('shouldRescoreGlobalSegments: unknown active count fails open to true', () 
 	const meta = { global_segments_scored_count: 12 };
 	assert.equal(shouldRescoreGlobalSegments(meta, null), true);
 	assert.equal(shouldRescoreGlobalSegments(meta, undefined), true);
+});
+
+test('shouldRescoreGlobalSegments: a saturated stamp is NOT re-scored forever '
+	+ 'once the active catalogue outgrows the fetch limit', () => {
+	// The gate compares an UNCAPPED count(*) of the active catalogue
+	// against a stamp written from a fetch capped at
+	// GLOBAL_SEGMENT_SCORING_LIMIT. Without the clamp, a catalogue of 520
+	// makes `520 > 500` permanently true, so every run re-fetches 500
+	// polylines + re-runs the haversine match on EVERY view forever —
+	// a net pessimisation vs not gating at all. Pin the exact case.
+	const saturated = { global_segments_scored_count: GLOBAL_SEGMENT_SCORING_LIMIT };
+	assert.equal(shouldRescoreGlobalSegments(saturated, 520), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 900), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 5_000), false);
+});
+
+test('shouldRescoreGlobalSegments: boundary cases around the fetch limit', () => {
+	// 499 / 500 / 501 against a 500-row stamp — the transition the drift
+	// bug turned into a cliff.
+	const saturated = { global_segments_scored_count: 500 };
+	assert.equal(GLOBAL_SEGMENT_SCORING_LIMIT, 500, 'boundary cases below assume a 500-row cap');
+	assert.equal(shouldRescoreGlobalSegments(saturated, 499), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 500), false);
+	assert.equal(shouldRescoreGlobalSegments(saturated, 501), false);
+	// Below the cap the stamp still tracks real growth — clamping must
+	// not blunt the case the gate exists for.
+	const partial = { global_segments_scored_count: 499 };
+	assert.equal(shouldRescoreGlobalSegments(partial, 499), false);
+	assert.equal(shouldRescoreGlobalSegments(partial, 500), true);
+	assert.equal(shouldRescoreGlobalSegments(partial, 501), true);
+});
+
+test('shouldRescoreGlobalSegments: clamps against the caller-supplied limit', () => {
+	// The limit is a parameter so the gate and the fetch call site read
+	// the same number; pin that a different cap moves the clamp with it.
+	const meta = { global_segments_scored_count: 10 };
+	assert.equal(shouldRescoreGlobalSegments(meta, 50, 10), false);
+	assert.equal(shouldRescoreGlobalSegments(meta, 50, 11), true);
 });
 
 test('stampGlobalSegmentsScored: writes the stamp without clobbering the bag', () => {

@@ -62,11 +62,24 @@ export function applyRunMetadataPatch(
 	return next;
 }
 
+/// Row cap on the catalogue fetch the run-detail backfill scores a run
+/// against, and therefore the ceiling the `global_segments_scored_count`
+/// stamp can ever reach. Owned here, next to the gate that consumes it,
+/// and imported by the `data.ts` fetch call site so the two numbers
+/// cannot drift — the same contract `DASHBOARD_RUNS_WINDOW_DAYS` holds
+/// for the dashboard window. Drift is not a rounding error: gating an
+/// UNCAPPED `count(*)` against a stamp a CAPPED fetch can never exceed
+/// saturates the stamp once the active catalogue passes this limit, so
+/// `activeCount > scored` stays permanently true and every run re-scores
+/// on every view forever — strictly worse than not gating at all (same
+/// heavy fetch, plus a count query and a metadata read + write per view).
+export const GLOBAL_SEGMENT_SCORING_LIMIT = 500;
+
 /// The `runs.metadata.global_segments_scored_count` stamp: the number
 /// of active `global_segments` a run's catalogue efforts were last
 /// computed against. Lets the run-detail backfill skip the expensive
-/// 500-row catalogue fetch + client-side haversine match on every view
-/// once a run is scored, while still re-scoring when the (deliberately
+/// catalogue fetch + client-side haversine match on every view once a
+/// run is scored, while still re-scoring when the (deliberately
 /// growing) catalogue gains segments. Value-only (no view timestamp) so
 /// the key carries no per-run private signal — the catalogue size is
 /// identical for every run and public — and needs no `public_runs`
@@ -86,14 +99,21 @@ export function readGlobalSegmentsScoredCount(
 /// last scored against. `activeCount` null (an unknown / failed count
 /// query) fails open to true — better to re-score once than to never
 /// score a run whose catalogue size we couldn't read.
+///
+/// `activeCount` is an unbounded `count(*)` of the active catalogue but
+/// the stamp records a fetch capped at `scoringLimit`, so the comparison
+/// is made against the clamped count — an active catalogue of 520 was
+/// still only scored against 500 rows, and demanding a 520 stamp the
+/// fetch can never produce would re-score forever.
 export function shouldRescoreGlobalSegments(
 	metadata: Record<string, unknown> | null | undefined,
 	activeCount: number | null | undefined,
+	scoringLimit: number = GLOBAL_SEGMENT_SCORING_LIMIT,
 ): boolean {
 	const scored = readGlobalSegmentsScoredCount(metadata);
 	if (scored == null) return true;
 	if (typeof activeCount !== 'number' || !Number.isFinite(activeCount)) return true;
-	return activeCount > scored;
+	return Math.min(activeCount, scoringLimit) > scored;
 }
 
 /// Merge the `global_segments_scored_count` stamp into a run's metadata

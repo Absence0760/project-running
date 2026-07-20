@@ -104,6 +104,7 @@ import {
 	normalisePlanWorkoutNotes,
 	shouldRescoreGlobalSegments,
 	stampGlobalSegmentsScored,
+	GLOBAL_SEGMENT_SCORING_LIMIT,
 } from './data_normalise';
 import { dashboardRunsWindowStart } from './dashboard_runs';
 import { bucketWeeklyMileage } from './weekly_mileage';
@@ -7385,8 +7386,10 @@ export async function fetchGlobalSegmentLeaderboard(
 /// match are not — without a short-circuit they'd re-run on every owner view
 /// forever (issue #333). A `runs.metadata.global_segments_scored_count` stamp
 /// records the catalogue size a run was last scored against; a cheap `count`
-/// query gates the expensive 500-row polyline fetch so a scored run only
-/// recomputes when the (deliberately growing) catalogue gains segments.
+/// query gates the expensive polyline fetch so a scored run only recomputes
+/// when the (deliberately growing) catalogue gains segments. Both the gate
+/// and the fetch are bounded by the shared GLOBAL_SEGMENT_SCORING_LIMIT —
+/// see its doc comment for why a drift between the two is a pessimisation.
 export async function computeGlobalSegmentEffortsForRun(input: {
 	run_id: string;
 	user_id: string;
@@ -7406,7 +7409,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
 	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
 
-	const { segments } = await fetchGlobalSegmentsWithError(500);
+	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
 	if (segments.length === 0) return 0;
 
 	const { computeGlobalSegmentEffort } = await import('../segments/segments');

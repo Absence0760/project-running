@@ -490,3 +490,35 @@ test('/live/[id] hydrateBacklog fetches newest-first + capped, then replays reve
 		'Newest-first rows must be replayed reversed so the newest ping wins the trace.',
 	);
 });
+
+test('computeGlobalSegmentEffortsForRun bounds its gate and its fetch by ONE shared constant', () => {
+	// Reason: the rescore gate compares an UNCAPPED count(*) of the active
+	// catalogue against a stamp written from a CAPPED fetch. If the gate's
+	// clamp and the fetch's `.limit()` are separate literals they drift, and
+	// once the catalogue passes the fetch cap the stamp saturates —
+	// `activeCount > scored` is then permanently true and every run re-scores
+	// on EVERY view forever, a net pessimisation over having no gate at all
+	// (same heavy fetch, plus a count query and a metadata read + write per
+	// view). The only structural defence is that both sides read the same
+	// exported constant, so a bare numeric literal here is the bug.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function computeGlobalSegmentEffortsForRun');
+	assert.ok(start >= 0, 'Could not locate computeGlobalSegmentEffortsForRun — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/fetchGlobalSegmentsWithError\(GLOBAL_SEGMENT_SCORING_LIMIT\)/,
+		'The catalogue fetch must be bounded by the shared GLOBAL_SEGMENT_SCORING_LIMIT, not a literal.',
+	);
+	assert.doesNotMatch(
+		body,
+		/fetchGlobalSegmentsWithError\(\s*\d+\s*\)/,
+		'A numeric literal here drifts from the gate clamp — that is the saturation bug.',
+	);
+	assert.match(
+		source,
+		/GLOBAL_SEGMENT_SCORING_LIMIT,?\n\}\s*from '\.\/data_normalise'|GLOBAL_SEGMENT_SCORING_LIMIT,/,
+		'data.ts must import the limit from data_normalise (where the gate clamps against it).',
+	);
+});
