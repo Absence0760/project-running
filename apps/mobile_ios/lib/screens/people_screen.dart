@@ -402,7 +402,24 @@ class _PersonRow extends StatelessWidget {
       l10n.peoplePublicRunCount(person.publicRunsCount),
       if (person.sharedClubs > 0) l10n.peopleSharedClubsCount(person.sharedClubs),
     ];
+    final handle = person.handle;
+    final hasHandle = handle != null && handle.isNotEmpty;
+    final subtitle = hasHandle
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '@$handle',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              Text(metaParts.join(' · ')),
+            ],
+          )
+        : Text(metaParts.join(' · '));
     return ListTile(
+      isThreeLine: hasHandle,
       leading: CircleAvatar(
         backgroundColor: theme.colorScheme.primary,
         foregroundImage: (person.avatarUrl != null && person.avatarUrl!.isNotEmpty)
@@ -417,7 +434,7 @@ class _PersonRow extends StatelessWidget {
         ),
       ),
       title: Text(person.displayName ?? l10n.peopleFallbackDisplayName),
-      subtitle: Text(metaParts.join(' · ')),
+      subtitle: subtitle,
       trailing: FilledButton.tonal(
         onPressed: busy ? null : onToggleFollow,
         style: FilledButton.styleFrom(

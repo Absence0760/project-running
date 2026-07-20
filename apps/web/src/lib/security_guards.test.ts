@@ -2486,7 +2486,9 @@ test('client user_profiles selects only touch public-safe columns', () => {
 	// and the save flow silently short-circuited. The web e2e suite that
 	// would normally catch it had been dark for ~2 days behind a broken
 	// stack. This unit guard fails fast instead.
-	const PUBLIC_SAFE = new Set(['id', 'display_name', 'avatar_url', 'created_at']);
+	// 20270424000002 re-emits that grant list plus `handle` — the public
+	// @handle is cross-user readable by design (People search renders it).
+	const PUBLIC_SAFE = new Set(['id', 'display_name', 'avatar_url', 'created_at', 'handle']);
 	const root = resolve(__dirname, '..');
 	const walk = (dir: string, out: string[] = []): string[] => {
 		for (const ent of readdirSync(dir, { withFileTypes: true })) {

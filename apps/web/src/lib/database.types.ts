@@ -4110,6 +4110,7 @@ export type Database = {
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          handle: string | null
           health_data_consent_at: string | null
           height_cm: number | null
           id: string
@@ -4131,6 +4132,7 @@ export type Database = {
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          handle?: string | null
           health_data_consent_at?: string | null
           height_cm?: number | null
           id: string
@@ -4152,6 +4154,7 @@ export type Database = {
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          handle?: string | null
           health_data_consent_at?: string | null
           height_cm?: number | null
           id?: string
@@ -5171,6 +5174,7 @@ export type Database = {
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          handle: string | null
           health_data_consent_at: string | null
           height_cm: number | null
           id: string
@@ -5796,6 +5800,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_my_handle: { Args: { p_handle: string }; Returns: string }
       set_push_subscription: {
         Args: {
           p_device_id: string

@@ -4860,6 +4860,7 @@ class UserProfileRow {
   static const String colHeightCm = 'height_cm';
   static const String colShadowHidden = 'shadow_hidden';
   static const String colTierUpdatedEventTs = 'tier_updated_event_ts';
+  static const String colHandle = 'handle';
 
   final String id;
   final String? displayName;
@@ -4880,6 +4881,7 @@ class UserProfileRow {
   final double? heightCm;
   final bool shadowHidden;
   final int? tierUpdatedEventTs;
+  final String? handle;
 
   const UserProfileRow({
     required this.id,
@@ -4901,6 +4903,7 @@ class UserProfileRow {
     this.heightCm,
     required this.shadowHidden,
     this.tierUpdatedEventTs,
+    this.handle,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -4923,6 +4926,7 @@ class UserProfileRow {
     heightCm: (json['height_cm'] as num?)?.toDouble(),
     shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
     tierUpdatedEventTs: (json['tier_updated_event_ts'] as num?)?.toInt(),
+    handle: json['handle'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4945,6 +4949,7 @@ class UserProfileRow {
     colHeightCm: heightCm,
     colShadowHidden: shadowHidden,
     colTierUpdatedEventTs: tierUpdatedEventTs,
+    colHandle: handle,
   };
 }
 
