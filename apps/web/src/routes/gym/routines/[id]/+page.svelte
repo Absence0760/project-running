@@ -243,6 +243,7 @@
 							<tr>
 								<th class="section-label">{t('gym.routine.setType')}</th>
 								<th class="section-label">{t('gym.routine.targetReps')}</th>
+								<th class="section-label">{t('gym.rpe')}</th>
 								<th class="section-label">{t('gym.routine.restLabel')}</th>
 							</tr>
 						</thead>
@@ -251,6 +252,7 @@
 								<tr>
 									<td>{t(`gym.routine.setType.${s.set_type}`)}</td>
 									<td>{targetLabel(ex.modality, s)}</td>
+									<td data-testid="routine-set-rpe-value">{s.target_rpe == null ? '—' : s.target_rpe}</td>
 									<td>{s.rest_s == null ? '—' : t('gym.durationValue', { seconds: s.rest_s })}</td>
 								</tr>
 							{/each}
