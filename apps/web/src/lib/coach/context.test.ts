@@ -16,6 +16,8 @@ import {
 	summarizeRecentLifts,
 	summarizeNutrition,
 	COACH_LIFTS_CAP,
+	COACH_PLAN_WEEKS_CAP,
+	COACH_PLAN_WORKOUTS_CAP,
 } from './context';
 import type { CoachProfileRow } from './context';
 
@@ -120,6 +122,57 @@ test('nutrition_7d is gated on health-data consent', () => {
 	);
 });
 
+test('plan_weeks + plan_workouts queries are bounded by a .limit()', () => {
+	// bug-hunt 2026-07-r2 H2 (issue #374). Every other context lane caps
+	// itself (recent_runs .limit(runsLimit), recent_lifts, nutrition_7d)
+	// so prompt size + per-call cost stay flat as history grows. The plan
+	// lane used to fetch EVERY week + workout with no bound — a long or
+	// REST-inserted plan then re-serialised its whole history into the
+	// prompt on every call. Pin the caps in the source so a refactor that
+	// drops one fails here rather than silently reintroducing the leak.
+	assert.match(
+		SRC,
+		/from\('plan_weeks'\)[\s\S]*?\.limit\(COACH_PLAN_WEEKS_CAP\)/,
+		'the plan_weeks query must be capped with .limit(COACH_PLAN_WEEKS_CAP)',
+	);
+	assert.match(
+		SRC,
+		/from\('plan_workouts'\)[\s\S]*?\.limit\(COACH_PLAN_WORKOUTS_CAP\)/,
+		'the plan_workouts query must be capped with .limit(COACH_PLAN_WORKOUTS_CAP)',
+	);
+});
+
+test('buildContext caps plan_weeks + plan_workouts row counts', async () => {
+	// End-to-end over the chainable stub (whose .limit(n) truncates like
+	// PostgREST): a plan with far more than the caps' worth of weeks +
+	// workouts must not send them all. Fails before the fix (unbounded →
+	// full history returned) and passes after (arrays clamped to the caps).
+	const planRow = { id: 'p1', start_date: '2026-06-01', status: 'active' };
+	const weeks = Array.from({ length: COACH_PLAN_WEEKS_CAP + 12 }, (_, i) => ({
+		id: `w${i}`,
+		plan_id: 'p1',
+		week_index: i,
+	}));
+	const workouts = Array.from(
+		{ length: COACH_PLAN_WORKOUTS_CAP + 60 },
+		(_, i) => ({ id: `k${i}`, week_id: 'w0', scheduled_date: '2026-06-01' }),
+	);
+	const ctx = await buildContext(
+		fakeSupabase({
+			training_plans: planRow,
+			plan_weeks: weeks,
+			plan_workouts: workouts,
+		}) as never,
+		'user-1',
+		null,
+		10,
+		{ display_name: 'R', preferred_unit: 'km', health_data_consent_at: null },
+	);
+	const data = ctx.data as { plan_weeks: unknown[]; plan_workouts: unknown[] };
+	assert.equal(data.plan_weeks.length, COACH_PLAN_WEEKS_CAP);
+	assert.equal(data.plan_workouts.length, COACH_PLAN_WORKOUTS_CAP);
+});
+
 test('buildContext runs its independent reads in parallel, not serially', () => {
 	// perf-hunt 2026-06-10 (coach request path): plan, recent_runs,
 	// recent_lifts, user_settings and the consent-gated nutrition rollup
@@ -172,7 +225,12 @@ function fakeSupabase(tableData: Record<string, unknown>) {
 			for (const m of ['select', 'eq', 'in', 'order', 'gte']) {
 				q[m] = () => q;
 			}
-			q.limit = () => Promise.resolve(result);
+			q.limit = (n?: number) =>
+				Promise.resolve(
+					Array.isArray(result.data) && typeof n === 'number'
+						? { data: result.data.slice(0, n), error: null }
+						: result,
+				);
 			q.maybeSingle = () => Promise.resolve(result);
 			return q;
 		},
