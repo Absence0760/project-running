@@ -15624,6 +15624,36 @@ abstract class AppLocalizations {
   /// **'Fat'**
   String get nutritionFat;
 
+  /// No description provided for @nutritionFiber.
+  ///
+  /// In en, this message translates to:
+  /// **'Fiber'**
+  String get nutritionFiber;
+
+  /// No description provided for @nutritionSugar.
+  ///
+  /// In en, this message translates to:
+  /// **'Sugar'**
+  String get nutritionSugar;
+
+  /// No description provided for @nutritionSodium.
+  ///
+  /// In en, this message translates to:
+  /// **'Sodium'**
+  String get nutritionSodium;
+
+  /// No description provided for @nutritionSaturatedFat.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturated fat'**
+  String get nutritionSaturatedFat;
+
+  /// No description provided for @nutritionCholesterol.
+  ///
+  /// In en, this message translates to:
+  /// **'Cholesterol'**
+  String get nutritionCholesterol;
+
   /// No description provided for @nutritionWater.
   ///
   /// In en, this message translates to:
