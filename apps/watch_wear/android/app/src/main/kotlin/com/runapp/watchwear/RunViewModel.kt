@@ -31,12 +31,10 @@ enum class Stage { PreRun, Running, Paused, PostRun, SignIn, RoutePicker }
 internal sealed class DrainAction {
     /// 401 — refresh access token, then retry this run once.
     data object RetryAfterRefresh : DrainAction()
-    /// 409 — already in the DB (idempotent upload). Drop and move on.
-    data object DropAndContinue : DrainAction()
     /// 5xx / network drop / timeout. Bail out of the loop; let the next
     /// drain signal retry the whole queue.
     data object StopAndRetryLater : DrainAction()
-    /// 400 / 404 / 422 / unknown 4xx — leave queued, skip to next run.
+    /// 400 / 404 / 409 / 422 / unknown 4xx — leave queued, skip to next run.
     data object SkipAndContinue : DrainAction()
 }
 
@@ -50,9 +48,17 @@ internal fun classifyDrainError(e: Throwable): DrainAction {
     if (e is HttpException) {
         return when {
             e.code == 401 -> DrainAction.RetryAfterRefresh
-            e.code == 409 -> DrainAction.DropAndContinue
             e.code in 500..599 -> DrainAction.StopAndRetryLater
-            e.code == 400 || e.code == 404 || e.code == 422 -> DrainAction.SkipAndContinue
+            // 409 sits with the other permanent 4xx (decisions.md §17): a
+            // duplicate-key insert leaves the queued run in place to be
+            // discarded manually, never silently dropped. It is NOT an
+            // idempotent-success signal — the watch's own retries never 409
+            // (same run id re-POSTs merge on the PK via
+            // `Prefer: resolution=merge-duplicates`, returning 200), so the
+            // only 409 the drain path can see is a genuine conflict whose row
+            // may never have been inserted.
+            e.code == 400 || e.code == 404 || e.code == 409 || e.code == 422 ->
+                DrainAction.SkipAndContinue
             else -> DrainAction.SkipAndContinue
         }
     }
