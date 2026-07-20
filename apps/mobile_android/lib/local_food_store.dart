@@ -165,6 +165,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
     bool isPublic = false,
   }) async {
     final id = OfflineSyncStore.newUuid();
@@ -178,6 +183,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
       'protein_g': proteinG,
       'carbs_g': carbsG,
       'fat_g': fatG,
+      'fiber_g': fiberG,
+      'sugar_g': sugarG,
+      'sodium_mg': sodiumMg,
+      'saturated_fat_g': saturatedFatG,
+      'cholesterol_mg': cholesterolMg,
       'is_public': isPublic,
       'external_id': null,
       'last_modified_at': now.toIso8601String(),
@@ -203,6 +213,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
     bool? isPublic,
   }) async {
     final existing = rowsById[id];
@@ -215,6 +230,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     if (proteinG != null) next['protein_g'] = proteinG;
     if (carbsG != null) next['carbs_g'] = carbsG;
     if (fatG != null) next['fat_g'] = fatG;
+    if (fiberG != null) next['fiber_g'] = fiberG;
+    if (sugarG != null) next['sugar_g'] = sugarG;
+    if (sodiumMg != null) next['sodium_mg'] = sodiumMg;
+    if (saturatedFatG != null) next['saturated_fat_g'] = saturatedFatG;
+    if (cholesterolMg != null) next['cholesterol_mg'] = cholesterolMg;
     if (isPublic != null) next['is_public'] = isPublic;
     next['last_modified_at'] = now.toIso8601String();
     final stored = StoredFood(
@@ -332,6 +352,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
         proteinG: (stored.row['protein_g'] as num?)?.toDouble(),
         carbsG: (stored.row['carbs_g'] as num?)?.toDouble(),
         fatG: (stored.row['fat_g'] as num?)?.toDouble(),
+        fiberG: (stored.row['fiber_g'] as num?)?.toDouble(),
+        sugarG: (stored.row['sugar_g'] as num?)?.toDouble(),
+        sodiumMg: (stored.row['sodium_mg'] as num?)?.toDouble(),
+        saturatedFatG: (stored.row['saturated_fat_g'] as num?)?.toDouble(),
+        cholesterolMg: (stored.row['cholesterol_mg'] as num?)?.toDouble(),
         isPublic: (stored.row['is_public'] as bool?) ?? false,
         lastModifiedAt: stored.lastModifiedAt,
       );
@@ -346,6 +371,11 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
         proteinG: (stored.row['protein_g'] as num?)?.toDouble(),
         carbsG: (stored.row['carbs_g'] as num?)?.toDouble(),
         fatG: (stored.row['fat_g'] as num?)?.toDouble(),
+        fiberG: (stored.row['fiber_g'] as num?)?.toDouble(),
+        sugarG: (stored.row['sugar_g'] as num?)?.toDouble(),
+        sodiumMg: (stored.row['sodium_mg'] as num?)?.toDouble(),
+        saturatedFatG: (stored.row['saturated_fat_g'] as num?)?.toDouble(),
+        cholesterolMg: (stored.row['cholesterol_mg'] as num?)?.toDouble(),
         isPublic: (stored.row['is_public'] as bool?) ?? false,
         lastModifiedAt: stored.lastModifiedAt,
       );
