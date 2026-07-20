@@ -86,10 +86,17 @@ runs:
         set -uo pipefail
 
         # Host ports config.toml publishes: api 54321, db 54322,
-        # studio 54323, mailpit 54324; the CLI also publishes analytics
-        # on 54327. 54322 is the one that actually collides, but a
-        # partial start can strand any of them, so clear them all.
-        PORTS="54321 54322 54323 54324 54327"
+        # studio 54323, inbucket web 54324 / SMTP 54325 / POP3 54326;
+        # the CLI also publishes analytics on 54327. 54322 is the one
+        # that collides most often, but a partial start can strand any
+        # of them, so clear them all. This list MUST cover every port
+        # the sysctl below reserves: when 54325/54326 were missing here,
+        # an inbucket bind failure on 54326 was invisible to every probe
+        # (the pre-attempt gate reported "clear", free_ports had no
+        # publish filter for it, and settle_ports fell straight through
+        # its wait loop), so all three attempts re-hit the identical
+        # bind error — CI run 29711236891, schema-codegen-drift.
+        PORTS="54321 54322 54323 54324 54325 54326 54327"
 
         # Keep the kernel from handing any stack port out as an outbound
         # connection's ephemeral source port (incident 3 above) — they
