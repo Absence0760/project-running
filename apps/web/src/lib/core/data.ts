@@ -109,6 +109,7 @@ import {
 	mergeRecencyPages,
 	FEED_FOLLOWEE_CHUNK
 } from '../social/feed_merge';
+import { deleteRunsBounded } from './bulk_delete';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -730,17 +731,15 @@ export async function deleteRun(id: string): Promise<void> {
 
 /// Delete a batch of runs plus their Storage track files. One RLS-scoped
 /// REST call per delete because Supabase's batch delete doesn't return
-/// the pre-delete `track_url` we need to clean up Storage. Runs in
-/// parallel via `Promise.allSettled` — individual failures don't stop
-/// the rest. Returns the ids that failed so the caller can surface them.
+/// the pre-delete `track_url` we need to clean up Storage. Each delete is
+/// up to five sequential REST + Storage round-trips, so the ids are
+/// processed in bounded `DELETE_RUNS_CONCURRENCY`-sized waves rather than
+/// all at once — a full-page selection otherwise fires hundreds of
+/// simultaneous requests. The wave orchestration lives in the pure
+/// `deleteRunsBounded` so it is unit-testable without this Supabase-backed
+/// module. Individual failures don't stop the rest; returns the failed ids.
 export async function deleteRuns(ids: string[]): Promise<{ failed: string[] }> {
-	if (ids.length === 0) return { failed: [] };
-	const failed: string[] = [];
-	const results = await Promise.allSettled(ids.map((id) => deleteRun(id)));
-	for (let i = 0; i < results.length; i++) {
-		if (results[i].status === 'rejected') failed.push(ids[i]);
-	}
-	return { failed };
+	return deleteRunsBounded(ids, deleteRun);
 }
 
 /// Flip a route's visibility. Mirrors the Android
