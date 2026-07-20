@@ -104,7 +104,9 @@ Narrow client-side unions in `apps/web/src/lib/types.ts`:
 - `RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly'`
 - `Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'`
 - `ClubWithMeta = Club & { member_count, viewer_role, viewer_status }` — returned by `browseClubs`, `fetchMyClubs`, `fetchClubBySlug`
-- `EventWithMeta = Event & { attendee_count, viewer_rsvp, next_instance_start }` — returned by the event fetchers. `viewer_rsvp` is always scoped to `next_instance_start`; per-instance RSVPs use `fetchEventAttendees(eventId, instanceStart)`.
+- `EventWithMeta = Event & { attendee_count, viewer_rsvp, next_instance_start }` — returned by the event fetchers. `viewer_rsvp` is always scoped to `next_instance_start`; per-instance RSVPs use `fetchEventAttendees(eventId, instanceStart, opts?)`.
+
+Roster reads are **paginated** so a club with hundreds of members / a large event doesn't refetch the whole roster on every view (mirrors `fetchFollowers` / `FOLLOW_PAGE_SIZE`). Both `fetchClubMembers(clubId, opts?)` and `fetchEventAttendees(eventId, instanceStart, opts?)` take `{ limit?, offset? }` defaulting to `ROSTER_PAGE_SIZE` (50); the Members tab and the event attendee list render page 1 plus a "Load more" affordance (`hasMore` = page came back full). The event page's exact going/maybe/declined/waitlisted counts (RSVP pills + capacity/waitlist math) come from `fetchEventRsvpSummary(eventId, instanceStart)` — a status-only scan independent of the paginated display roster, so the counts stay exact past page 1.
 - `ClubPostWithAuthor = ClubPost & { author_display_name, author_avatar_url, reply_count }` — returned by `fetchClubPosts`. Reply bodies come from `fetchPostReplies(parentId)`.
 
 The enrichment fields are joined client-side in `data.ts` rather than through a Postgres view — small fan-out, fewer moving parts, and it means RLS governs everything.

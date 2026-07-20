@@ -12,6 +12,9 @@
 		fetchEventById,
 		fetchClubBySlug,
 		fetchEventAttendees,
+		fetchEventRsvpSummary,
+		ROSTER_PAGE_SIZE,
+		type EventRsvpSummary,
 		fetchClubPosts,
 		fetchRouteById,
 		rsvpEvent,
@@ -133,6 +136,17 @@
 			: null
 	);
 	let attendees = $state<(EventAttendee & { display_name: string | null; avatar_url: string | null })[]>([]);
+	let attendeesHasMore = $state(false);
+	let attendeesLoadingMore = $state(false);
+	// Exact counts, independent of the paginated `attendees` roster (which is
+	// only its first page). Drives the RSVP pills + capacity/waitlist math.
+	let rsvpSummary = $state<EventRsvpSummary>({
+		going: 0,
+		maybe: 0,
+		declined: 0,
+		waitlisted: 0,
+		viewerStatus: null
+	});
 	let eventPosts = $state<ClubPostWithAuthor[]>([]);
 	let route = $state<Route | null>(null);
 	let loading = $state(true);
@@ -356,22 +370,20 @@
 				: new Date(event.starts_at).getTime() < Date.now())
 	);
 
-	let rsvpCounts = $derived.by(() => {
-		const c = { going: 0, maybe: 0, declined: 0, waitlisted: 0 };
-		for (const a of attendees) {
-			if (a.status === 'going') c.going += 1;
-			else if (a.status === 'maybe') c.maybe += 1;
-			else if (a.status === 'declined') c.declined += 1;
-			else if (a.status === 'waitlisted') c.waitlisted += 1;
-		}
-		return c;
+	let rsvpCounts = $derived({
+		going: rsvpSummary.going,
+		maybe: rsvpSummary.maybe,
+		declined: rsvpSummary.declined,
+		waitlisted: rsvpSummary.waitlisted
 	});
+	let attendeeTotal = $derived(
+		rsvpSummary.going + rsvpSummary.maybe + rsvpSummary.declined + rsvpSummary.waitlisted
+	);
 
 	let viewerRsvpForActive = $derived.by(() => {
 		if (!event || !activeInstance) return null;
 		if (activeInstance === event.next_instance_start) return event.viewer_rsvp;
-		const me = attendees.find((a) => a.user_id === auth.user?.id);
-		return (me?.status as RsvpStatus | undefined) ?? null;
+		return rsvpSummary.viewerStatus;
 	});
 
 	// A paid registration is the order-backed `going` row (not maybe/declined).
@@ -445,14 +457,16 @@
 	async function reloadInstance() {
 		if (!event || !club || !activeInstance) return;
 		const res = await Promise.all([
-			fetchEventAttendees(event.id, activeInstance),
+			fetchEventAttendees(event.id, activeInstance, { limit: ROSTER_PAGE_SIZE }),
 			event.route_id ? fetchRouteById(event.route_id) : Promise.resolve(null),
 			fetchClubPosts(club.id, 50),
 			fetchEventResults(event.id, activeInstance),
 			fetchRaceSession(event.id, activeInstance),
-			fetchEventPhotos(event.id, activeInstance)
+			fetchEventPhotos(event.id, activeInstance),
+			fetchEventRsvpSummary(event.id, activeInstance)
 		]);
 		attendees = res[0];
+		attendeesHasMore = res[0].length === ROSTER_PAGE_SIZE;
 		route = res[1];
 		eventPosts = (res[2] as ClubPostWithAuthor[]).filter(
 			(p) => p.event_id === event!.id && (!p.event_instance_start || p.event_instance_start === activeInstance)
@@ -460,6 +474,7 @@
 		results = res[3];
 		raceSession = res[4];
 		eventPhotos = res[5];
+		rsvpSummary = res[6];
 		pricing = await fetchEventPricing(event.id, activeInstance);
 		// The buyer's own order for this instance, so the registered-state
 		// surface can offer Cancel + reflect an in-flight refund (P2). Only
@@ -473,6 +488,23 @@
 		pendingClaims = isEventOrganiser
 			? await fetchPendingEventResultClaims(event.id, activeInstance)
 			: [];
+	}
+
+	async function loadMoreAttendees() {
+		if (!event || !activeInstance || attendeesLoadingMore || !attendeesHasMore) return;
+		attendeesLoadingMore = true;
+		try {
+			const more = await fetchEventAttendees(event.id, activeInstance, {
+				limit: ROSTER_PAGE_SIZE,
+				offset: attendees.length
+			});
+			attendees = [...attendees, ...more];
+			attendeesHasMore = more.length === ROSTER_PAGE_SIZE;
+		} catch (e) {
+			showToast(m('profile.loadMoreError', { error: String(e) }), 'error');
+		} finally {
+			attendeesLoadingMore = false;
+		}
 	}
 
 	let myClaims = $state<Map<string, 'pending' | 'approved' | 'rejected'>>(new Map());
@@ -2150,8 +2182,8 @@
 		<FundraiserSection eventId={event.id} isOwner={isEventOrganiser} />
 
 		<section class="card">
-			<h3>{m('clubEvent.attendeesTitle', { n: attendees.length })}</h3>
-			{#if attendees.length === 0}
+			<h3>{m('clubEvent.attendeesTitle', { n: attendeeTotal })}</h3>
+			{#if attendeeTotal === 0}
 				<div class="attendees-empty">
 					<span class="material-symbols" aria-hidden="true">group_add</span>
 					<div>
@@ -2211,6 +2243,13 @@
 						</div>
 					{/each}
 				</div>
+				{#if attendeesHasMore}
+					<div class="load-more">
+						<button class="btn btn-outline" onclick={loadMoreAttendees} disabled={attendeesLoadingMore}>
+							{attendeesLoadingMore ? m('profile.loadingShort') : m('profile.loadMore')}
+						</button>
+					</div>
+				{/if}
 			{/if}
 		</section>
 	</div>
@@ -2966,6 +3005,11 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
 		gap: 0.5rem;
+	}
+
+	.load-more {
+		text-align: center;
+		padding: var(--space-lg) 0 0;
 	}
 
 	.attendee {
