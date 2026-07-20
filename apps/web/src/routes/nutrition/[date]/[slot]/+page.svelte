@@ -109,8 +109,19 @@
 					<ul class="item-list">
 						{#each slotEntries as e (e.id)}
 							<li>
-								<span class="item-name">{e.item_name}</span>
-								<span class="item-kcal">{e.calories ?? 0} kcal</span>
+								<div class="item-row">
+									<span class="item-name">{e.item_name}</span>
+									<span class="item-kcal">{e.calories ?? 0} kcal</span>
+								</div>
+								{#if e.fiber_g != null || e.sugar_g != null || e.saturated_fat_g != null || e.sodium_mg != null || e.cholesterol_mg != null}
+									<ul class="item-extended" data-testid="item-extended">
+										{#if e.fiber_g != null}<li>{m('nutrition.fiber')} {e.fiber_g} g</li>{/if}
+										{#if e.sugar_g != null}<li>{m('nutrition.sugar')} {e.sugar_g} g</li>{/if}
+										{#if e.saturated_fat_g != null}<li>{m('nutrition.saturatedFat')} {e.saturated_fat_g} g</li>{/if}
+										{#if e.sodium_mg != null}<li>{m('nutrition.sodium')} {e.sodium_mg} mg</li>{/if}
+										{#if e.cholesterol_mg != null}<li>{m('nutrition.cholesterol')} {e.cholesterol_mg} mg</li>{/if}
+									</ul>
+								{/if}
 							</li>
 						{/each}
 					</ul>
@@ -213,14 +224,31 @@
 		padding: 0;
 	}
 	.item-list li {
-		display: flex;
-		justify-content: space-between;
-		gap: var(--space-md);
 		padding: 0.5rem 0;
 		border-bottom: 1px solid var(--color-border);
 	}
 	.item-list li:last-child {
 		border-bottom: none;
+	}
+	.item-row {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+	.item-extended {
+		list-style: none;
+		margin: 0.35rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.75rem;
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
+	.item-extended li {
+		padding: 0;
+		border: none;
+		font-variant-numeric: tabular-nums;
 	}
 	.item-name {
 		overflow: hidden;
