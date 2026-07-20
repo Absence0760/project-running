@@ -1,0 +1,26 @@
+# mountain_loop — decoded defmt excerpts (2026-07-19; fixed RTC1 sim model)
+
+## 42 min continuous run on the repaired RTC1 model — monotonic past 512 s and 1024 s
+## (three full ~970 m laps; the stock model froze every uptime consumer at 511 s)
+500.639953 DEBUG record: recording dist=493.6399488070509m moving=494s pacer=Some(-346)s
+500.922576 DEBUG record: paused dist=493.6399488070509m moving=494s pacer=Some(-346)s
+1020.270965 DEBUG record: recording dist=1076.0255563412766m moving=1015s pacer=Some(-668)s
+1021.263366 DEBUG record: paused dist=1076.0255563412766m moving=1015s pacer=Some(-668)s
+2663.208831 DEBUG record: paused dist=3125.646140728458m moving=2655s pacer=Some(-668)s
+
+## Varying satellite counts through the loop (fixture GSV/GGA 07..11)
+    644 sats=10
+    369 sats=11
+    168 sats=7
+    924 sats=8
+    687 sats=9
+
+## GAP on the sustained 18-26 % climb (Pace page, frame-dump transcription)
+#   hero AVG pace 16:34 /KM (raw, moving-time), row: GAP  2:48 /KM  — GPS-alt fed
+#   (VERT row stays honest '--': the VertAccumulator is baro-only and Renode has no BMP581)
+
+## ElevationProfile page (frame-dump transcription, after ~2 laps)
+#   hero 1744 (current alt), ELEV PROFILE sparkline showing two full 1600->1800->1600 cycles
+
+## Pacer finish-latch (1 km demo goal): delta froze at -668 s once past goal distance
+973.149566 DEBUG record: recording dist=1001.0034418253526m moving=968s pacer=Some(-668)s

@@ -126,9 +126,11 @@ void main() {
       ]);
       final a = CsvRunImporter.parse(csv);
       final b = CsvRunImporter.parse(csv);
-      // Fresh uuid IDs each pass, but external_id is stable so DB +
-      // local store dedupe at re-import time.
+      // Both external_id AND id are derived deterministically from the row, so
+      // a re-import dedupes on the DB `external_id` unique index and on
+      // `LocalRunStore.save`'s id-replace semantics locally (#361).
       expect(a.runs.single.externalId, b.runs.single.externalId);
+      expect(a.runs.single.id, b.runs.single.id);
     });
   });
 

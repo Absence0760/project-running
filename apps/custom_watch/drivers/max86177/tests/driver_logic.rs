@@ -5,9 +5,43 @@
 //! that decides a register value.
 
 use max86177::{
-    agc_next_pa, decode_die_temp_milli_c, decode_fifo_word, AgcConfig, FifoWord, LED_PA_MAX,
-    MEAS1_TAG, MEAS2_TAG,
+    agc_next_pa, agc_next_pa_ambient, decode_die_temp_milli_c, decode_fifo_word, AgcConfig,
+    FifoWord, Max86177, I2C_ADDR, LED_PA_MAX, MEAS1_TAG, MEAS2_TAG,
 };
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+/// Records every register write into a shared log so a test can pin the exact
+/// wire traffic a driver method produces (the driver owns the bus, so the log
+/// handle is what stays inspectable); reads return zeroes.
+#[derive(Clone, Default)]
+struct MockI2c {
+    writes: Rc<RefCell<Vec<Vec<u8>>>>,
+}
+
+impl embedded_hal::i2c::ErrorType for MockI2c {
+    type Error = core::convert::Infallible;
+}
+
+impl embedded_hal::i2c::I2c for MockI2c {
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [embedded_hal::i2c::Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        assert_eq!(address, I2C_ADDR);
+        for op in operations {
+            match op {
+                embedded_hal::i2c::Operation::Write(bytes) => {
+                    self.writes.borrow_mut().push(bytes.to_vec())
+                }
+                embedded_hal::i2c::Operation::Read(buf) => buf.fill(0),
+            }
+        }
+        Ok(())
+    }
+}
 
 #[test]
 fn dim_signal_steps_current_up() {
@@ -178,6 +212,210 @@ fn decode_temp_negative() {
     // Two's-complement whole part with a positive added fraction: -6 + 8/16.
     assert_eq!(decode_die_temp_milli_c(0xFA, 8), -5_500);
     assert_eq!(decode_die_temp_milli_c(0xFF, 0), -1_000);
+}
+
+#[test]
+fn rail_guard_sheds_drive_even_when_corrected_is_dim() {
+    // Blinding ambient: the raw DC is past the clip guard while the corrected
+    // (LED-reflected) DC reads dim. A corrected-only loop would step UP into
+    // the rail; the guard must win and step DOWN — driving the LED harder into
+    // an ADC near its rail only deepens the clip.
+    let cfg = AgcConfig::default();
+    let next = agc_next_pa_ambient(cfg.raw_ceiling + 10_000, 1_000, 0x40, &cfg);
+    assert_eq!(next, 0x40 - cfg.step);
+}
+
+#[test]
+fn rail_guard_clamps_at_min_pa() {
+    let cfg = AgcConfig::default();
+    let next = agc_next_pa_ambient(cfg.raw_ceiling + 10_000, 1_000, cfg.min_pa, &cfg);
+    assert_eq!(next, cfg.min_pa, "the guard clamps at min_pa, never wraps");
+}
+
+#[test]
+fn ambient_swings_below_the_ceiling_never_move_the_drive() {
+    // The anti-oscillation property: with the corrected DC parked inside the
+    // target band, raw-DC excursions from ambient (clouds, shade, a headlamp)
+    // anywhere up to the ceiling must not walk the LED current — ambient
+    // cancels out of the corrected level the band judges.
+    let cfg = AgcConfig::default();
+    let corrected = (cfg.target_low + cfg.target_high) / 2;
+    for raw in [corrected, 350_000, 460_000, cfg.raw_ceiling] {
+        assert_eq!(
+            agc_next_pa_ambient(raw, corrected, 0x40, &cfg),
+            0x40,
+            "raw {raw} at/below the ceiling must hold the drive"
+        );
+    }
+}
+
+#[test]
+fn ambient_loop_converges_and_holds_under_steady_ambient() {
+    // Closed-loop model with a large but sub-rail ambient bleed: raw = ambient
+    // + gain*pa, corrected = gain*pa. Starting over-driven (raw past the
+    // ceiling), the guard walks the drive down until conversion headroom is
+    // back, the band then finishes the job, and the settled point holds — the
+    // whole-loop anti-oscillation guarantee of `converges_into_the_window_and_
+    // holds`, under ambient.
+    let cfg = AgcConfig::default();
+    let ambient = 150_000u32;
+    let gain = 3_000u32;
+    let mut pa = cfg.max_pa;
+
+    for _ in 0..256 {
+        let corrected = u32::from(pa) * gain;
+        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
+    }
+
+    let settled = pa;
+    let corrected = u32::from(settled) * gain;
+    assert!(
+        corrected >= cfg.target_low && corrected <= cfg.target_high,
+        "loop must settle the corrected DC inside the window, got {corrected} at pa {settled}"
+    );
+    assert!(
+        ambient + corrected <= cfg.raw_ceiling,
+        "the settled raw level must respect the ceiling"
+    );
+
+    for _ in 0..32 {
+        let corrected = u32::from(pa) * gain;
+        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
+        assert_eq!(pa, settled, "a settled ambient loop must not oscillate");
+    }
+}
+
+#[test]
+fn blinding_ambient_walks_to_the_floor_and_stays() {
+    // Ambient alone far past the ceiling, whatever the LED does: the loop must
+    // walk the drive to min_pa and hold — the honest floor while the peak
+    // detector reports Saturated. It must never bounce back up against the dim
+    // corrected read that scene produces.
+    let cfg = AgcConfig::default();
+    let ambient = 520_000u32;
+    let gain = 500u32;
+    let mut pa = 0x40;
+    for _ in 0..64 {
+        let corrected = u32::from(pa) * gain;
+        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
+    }
+    assert_eq!(pa, cfg.min_pa);
+    let corrected = u32::from(pa) * gain; // dim — unguarded, this would step up
+    assert_eq!(
+        agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg),
+        cfg.min_pa
+    );
+}
+
+#[test]
+fn init_configures_the_interleaved_ambient_channel() {
+    // Pin the full init register sequence — the config "wire format". The
+    // ambient path hinges on the MEAS2 block: the same ADC config as MEAS1
+    // (same scale, so the two counts subtract directly) with NO LED selected
+    // (0x00 — what makes it a dark read), and BOTH measurement slots enabled
+    // (0x03) so the FIFO interleaves tagged PPG + ambient words. Reads (the
+    // reset poll) aren't writes and don't appear in the log.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.init().unwrap();
+    // A register write is a 2-byte [reg, val] transfer; the reset poll's read
+    // addressing shows up as a 1-byte [reg] write — drop it, keep the config.
+    let writes: Vec<Vec<u8>> = log
+        .borrow()
+        .iter()
+        .filter(|w| w.len() == 2)
+        .cloned()
+        .collect();
+    assert_eq!(
+        writes,
+        vec![
+            vec![0x10, 0x01], // SYSTEM_CONFIG_1 <- SW_RESET
+            vec![0x0E, 0x12], // FIFO_CONFIG_2 <- FLUSH | ROLLOVER
+            vec![0x0D, 0x0F], // FIFO_CONFIG_1 <- almost-full threshold
+            vec![0x11, 0x24], // PPG_CONFIG_1 <- 100 Hz, no averaging
+            vec![0x12, 0x18], // PPG_CONFIG_2 <- mid-scale ADC range
+            vec![0x14, 0x01], // MEAS1_SELECT <- LED A: the PPG slot
+            vec![0x15, 0x20], // MEAS1_CONFIG_1
+            vec![0x16, 0x00], // MEAS1_CONFIG_2
+            vec![0x19, 0x40], // MEAS1_LEDA_CURRENT <- LED_PA_DEFAULT
+            vec![0x1A, 0x00], // MEAS2_SELECT <- no LED: the ambient slot
+            vec![0x1B, 0x20], // MEAS2_CONFIG_1 == MEAS1_CONFIG_1 (same scale)
+            vec![0x1C, 0x00], // MEAS2_CONFIG_2 == MEAS1_CONFIG_2
+            vec![0x13, 0x03], // MEAS_ENABLE <- MEAS1 | MEAS2 (interleaved)
+            vec![0x10, 0x00], // SYSTEM_CONFIG_1 <- run
+        ]
+    );
+}
+
+#[test]
+fn duty_cycle_wake_leaves_the_ambient_config_in_place() {
+    // The HR duty-cycle path: init once, then shutdown/wake per window. Wake
+    // touches only SYSTEM_CONFIG_1 (resume) + FIFO_CONFIG_2 (flush the
+    // interleaved pre-shutdown words, PPG and ambient alike) — it must NOT
+    // rewrite or clobber the MEAS2 block or MEAS_ENABLE, whose survival across
+    // shutdown is register retention (SHDN keeps register state; a datasheet
+    // assumption to bench-verify). If wake needed a re-init, the ambient
+    // channel would silently drop out after the first duty window.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.init().unwrap();
+    log.borrow_mut().clear();
+    sensor.shutdown().unwrap();
+    sensor.wake().unwrap();
+    let traffic = log.borrow().clone();
+    assert_eq!(
+        traffic,
+        vec![vec![0x10, 0x02], vec![0x10, 0x00], vec![0x0E, 0x12]]
+    );
+    for w in &traffic {
+        assert!(
+            !matches!(w[0], 0x13 | 0x1A | 0x1B | 0x1C),
+            "shutdown/wake must not touch the ambient measurement config"
+        );
+    }
+}
+
+#[test]
+fn shutdown_sets_only_the_shutdown_bit() {
+    // SYSTEM_CONFIG_1 (0x10) <- SHDN (bit 1), and nothing else: RESET (bit 0)
+    // alongside it would wipe the measurement config wake() relies on
+    // surviving. A stored wire format in spirit — pin it.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.shutdown().unwrap();
+    assert_eq!(*log.borrow(), vec![vec![0x10, 0x02]]);
+}
+
+#[test]
+fn wake_clears_shutdown_then_flushes_the_fifo() {
+    // SYSTEM_CONFIG_1 (0x10) <- 0 resumes sampling; FIFO_CONFIG_2 (0x0E) <-
+    // FLUSH|ROLLOVER (0x12) discards counts buffered before the shutdown so
+    // they can't replay into a freshly reset detector, keeping the rollover
+    // behaviour init configured. Order matters: flushing after the wake also
+    // drops any pre-wake residue.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.wake().unwrap();
+    assert_eq!(*log.borrow(), vec![vec![0x10, 0x00], vec![0x0E, 0x12]]);
+}
+
+#[test]
+fn wake_round_trips_a_shutdown() {
+    // The duty-cycling pattern: shutdown then wake leaves the part sampling
+    // with the same traffic a bare wake produces — no re-init in between.
+    let bus = MockI2c::default();
+    let log = bus.writes.clone();
+    let mut sensor = Max86177::new(bus);
+    sensor.shutdown().unwrap();
+    sensor.wake().unwrap();
+    assert_eq!(
+        *log.borrow(),
+        vec![vec![0x10, 0x02], vec![0x10, 0x00], vec![0x0E, 0x12]]
+    );
 }
 
 #[test]

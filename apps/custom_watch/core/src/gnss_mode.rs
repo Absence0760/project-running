@@ -4,12 +4,13 @@
 //!
 //! A mode decides how often the GPS task forwards a fix to the recorder /
 //! face / phone consumers **while a run is recording**, generalising the
-//! existing idle fix de-rate in `app/src/tasks/gps.rs`. Tier-1's u-blox
-//! MAX-M10S keeps streaming NMEA regardless — the UART drain is untouched —
-//! so on the bench a throttled mode saves only the downstream wakes. Powering
-//! the module itself down between fixes (u-blox power-save / backup mode, or
-//! a load switch) is the hardware-gated tier-2 win this mode surface plugs
-//! into (`docs/custom_watch/performance_path.md` § GNSS, README § Power
+//! existing idle fix de-rate in `app/src/tasks/gps.rs`. The deeper half —
+//! powering the receiver itself down between the fixes a throttled mode owes
+//! (u-blox backup mode via UBX-RXM-PMREQ) — is scheduled by
+//! [`crate::gnss_power`] and sent by the same gps task; its effect on the
+//! real module is bench-gated (the Renode sim ignores PMREQ), and the tier-2
+//! snapshot-GNSS silicon is where the lever's full win lands
+//! (`docs/custom_watch/performance_path.md` § GNSS, README § Power
 //! discipline).
 //!
 //! Interval choices, from real-watch precedent:

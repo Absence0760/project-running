@@ -134,6 +134,31 @@ void main() {
       expect(store.runs.first.metadata?['last_modified_at'], isA<String>());
     });
 
+    test('update recovers a corrupt on-disk file instead of throwing',
+        () async {
+      // A malformed run file (partial write, tampering, restore-from-backup)
+      // must not make update() throw uncaught — every sibling read path here
+      // recovers, and a throw silently drops the edit + risks a phantom server
+      // push. update() overwrites the file, so it must tolerate garbage bytes.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'corrupt', distance: 5000));
+
+      final file = File('${tempDir.path}/corrupt.json');
+      file.writeAsStringSync('{ this is not valid json');
+
+      final edited = makeRun(id: 'corrupt', distance: 6000);
+      await expectLater(store.update(edited), completes);
+
+      // The file now holds a valid envelope with the updated run.
+      final raw = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      expect(raw['synced'], false);
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+      final run = Run.fromJson(raw['run'] as Map<String, dynamic>);
+      expect(run.distanceMetres, 6000);
+      expect(store.runs.single.distanceMetres, 6000);
+    });
+
     test('markSynced flips synced state', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);

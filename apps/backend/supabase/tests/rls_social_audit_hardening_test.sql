@@ -41,6 +41,10 @@ values
   ('00000000-0000-0000-0000-00000000ec01',
    '00000000-0000-0000-0000-00000000e102', 'member', 'pending');
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 -- ─────────────────────────────────────────────────────────────────────
 -- 1. Direct INSERT into `reports` is blocked.
 -- ─────────────────────────────────────────────────────────────────────

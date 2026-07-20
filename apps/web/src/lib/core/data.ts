@@ -100,7 +100,13 @@ import {
 } from '../social/event_gym_template';
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
-import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import {
+	applyRunMetadataPatch,
+	normalisePlanWorkoutNotes,
+	shouldRescoreGlobalSegments,
+	stampGlobalSegmentsScored,
+	GLOBAL_SEGMENT_SCORING_LIMIT,
+} from './data_normalise';
 import { dashboardRunsWindowStart } from './dashboard_runs';
 import { bucketWeeklyMileage } from './weekly_mileage';
 import {
@@ -2830,6 +2836,55 @@ export async function createEvent(input: {
 	return normaliseEvent(data as Event);
 }
 
+export async function updateEvent(
+	id: string,
+	patch: Partial<{
+		title: string;
+		category: EventCategory;
+		discipline: string | null;
+		gym_template: EventGymTemplate | null;
+		description: string | null;
+		starts_at: string;
+		duration_min: number | null;
+		meet_label: string | null;
+		route_id: string | null;
+		distance_m: number | null;
+		pace_target_sec: number | null;
+		capacity: number | null;
+		is_public: boolean;
+	}>
+): Promise<void> {
+	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
+	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
+	const { error } = await supabase.from('events').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+/// Whether an event carries any race session or finisher result across ANY of
+/// its instances. Drives the editor's warning before an organiser switches an
+/// athletic event to a non-athletic category — the athletic surfaces gate on
+/// isAthleticCategory, so the switch hides the leaderboard/race controls and
+/// orphans those rows. Fail-safe: a read error returns true so we still warn
+/// when we can't be sure.
+export async function eventHasAthleticData(eventId: string): Promise<boolean> {
+	try {
+		const [resultsRes, sessionsRes] = await Promise.all([
+			supabase
+				.from(TABLES.event_results)
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId),
+			supabase
+				.from('race_sessions')
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId)
+		]);
+		if (resultsRes.error || sessionsRes.error) return true;
+		return (resultsRes.count ?? 0) > 0 || (sessionsRes.count ?? 0) > 0;
+	} catch {
+		return true;
+	}
+}
+
 export async function deleteEvent(id: string): Promise<void> {
 	const { error } = await supabase.from('events').delete().eq('id', id);
 	if (error) throw error;
@@ -4899,6 +4954,8 @@ export interface PeopleSuggestion extends PublicProfile {
 	public_runs_count: number;
 	shared_clubs: number;
 	viewer_follows: boolean;
+	// Public @handle (issue #465). Null until the runner claims one.
+	handle: string | null;
 }
 
 /// Free-text people search for /social People tab. Used to do a
@@ -4924,6 +4981,20 @@ export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggest
 	if (term.length < 1) return [];
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id ?? null;
+
+	// Direct-id / profile-URL lookup: a pasted uuid (or `/u/<uuid>` link)
+	// resolves that exact runner. Safe — it needs the full uuid, so there's
+	// no enumeration surface, and it deliberately bypasses the
+	// discoverable_in_search opt-out the same way the public /u/[id] page
+	// already does. shadow_hidden + block filters still apply because the
+	// resolve goes through the same hydrate path (issue #465).
+	const { extractProfileId } = await import('../social/profile_query');
+	const directId = extractProfileId(term);
+	if (directId) {
+		if (directId === viewerId) return [];
+		return hydratePeopleSuggestions([directId], viewerId);
+	}
+
 	const candidateLimit = Math.min(limit * 3, 120);
 	const { data: profiles, error } = await supabase.rpc('search_user_profiles', {
 		p_query: term,
@@ -4941,7 +5012,17 @@ export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggest
 	// exact name may not have posted any runs yet), they just rank
 	// last within the result set.
 	const { comparePeopleRank } = await import('../social/search_ranking');
-	return hydrated.sort(comparePeopleRank).slice(0, limit);
+	const ranked = hydrated.sort(comparePeopleRank);
+	// A searched-for exact @handle floats above the reputation sort, so
+	// `@janedoe` surfaces janedoe first even if a busier account also
+	// prefix-matches the handle (mirrors the RPC's exact-handle-first order,
+	// which the reputation re-sort would otherwise mask).
+	const handleTerm = term.replace(/^@/, '').toLowerCase();
+	if (!handleTerm) return ranked.slice(0, limit);
+	const exact = ranked.filter((p) => p.handle?.toLowerCase() === handleTerm);
+	if (exact.length === 0) return ranked.slice(0, limit);
+	const rest = ranked.filter((p) => p.handle?.toLowerCase() !== handleTerm);
+	return [...exact, ...rest].slice(0, limit);
 }
 
 /// Suggested people for the Social People tab: members of the viewer's
@@ -4954,48 +5035,164 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 	const viewerId = sessionData.session?.user?.id ?? null;
 	if (!viewerId) return [];
 
+	// Signal 1: co-members of the viewer's clubs, weighted by shared-club count.
+	const sharedClubs = new Map<string, number>();
 	const { data: myMemberRows } = await supabase
 		.from(TABLES.club_members)
 		.select('club_id')
 		.eq('user_id', viewerId)
 		.eq('status', 'active');
 	const myClubIds = (myMemberRows ?? []).map((r) => r.club_id as string);
-	if (myClubIds.length === 0) return [];
-
-	const { data: coMemberRows } = await supabase
-		.from(TABLES.club_members)
-		.select('user_id, club_id')
-		.in('club_id', myClubIds)
-		.eq('status', 'active')
-		.neq('user_id', viewerId);
-	if (!coMemberRows || coMemberRows.length === 0) return [];
-
-	const shared = new Map<string, number>();
-	for (const row of coMemberRows) {
-		const uid = row.user_id as string;
-		shared.set(uid, (shared.get(uid) ?? 0) + 1);
+	if (myClubIds.length > 0) {
+		const { data: coMemberRows } = await supabase
+			.from(TABLES.club_members)
+			.select('user_id, club_id')
+			.in('club_id', myClubIds)
+			.eq('status', 'active')
+			.neq('user_id', viewerId);
+		for (const row of coMemberRows ?? []) {
+			const uid = row.user_id as string;
+			sharedClubs.set(uid, (sharedClubs.get(uid) ?? 0) + 1);
+		}
 	}
+
+	// Signal 2: co-attendees of the local events the viewer is going to — the
+	// "runners around you" path that needs NO person-location surface. RLS on
+	// event_attendees only exposes co-attendees of events the viewer can see
+	// (public-club or member events), so this stays a plain invoker read.
+	const sharedEvents = new Map<string, number>();
+	const { data: myRsvpRows } = await supabase
+		.from(TABLES.event_attendees)
+		.select('event_id')
+		.eq('user_id', viewerId)
+		.eq('status', 'going');
+	const myEventIds = (myRsvpRows ?? []).map((r) => r.event_id as string);
+	if (myEventIds.length > 0) {
+		const { data: coAttendeeRows } = await supabase
+			.from(TABLES.event_attendees)
+			.select('user_id, event_id')
+			.in('event_id', myEventIds)
+			.eq('status', 'going')
+			.neq('user_id', viewerId);
+		for (const row of coAttendeeRows ?? []) {
+			const uid = row.user_id as string;
+			sharedEvents.set(uid, (sharedEvents.get(uid) ?? 0) + 1);
+		}
+	}
+
+	const candidateIds = new Set<string>([...sharedClubs.keys(), ...sharedEvents.keys()]);
+	if (candidateIds.size === 0) return [];
 
 	const { data: followedRows } = await supabase
 		.from('user_follows')
 		.select('followee_id')
 		.eq('follower_id', viewerId)
-		.in('followee_id', [...shared.keys()]);
+		.in('followee_id', [...candidateIds]);
 	for (const r of followedRows ?? []) {
-		shared.delete(r.followee_id as string);
+		candidateIds.delete(r.followee_id as string);
 	}
-	if (shared.size === 0) return [];
+	if (candidateIds.size === 0) return [];
 
-	const ids = [...shared.keys()];
+	const ids = [...candidateIds];
 	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
-	// Rank by shared-club count desc, then display_name.
+	// Rank by combined local signal (shared clubs + shared events) desc, then
+	// shared-club count desc, then display_name. `shared_clubs` stays the
+	// displayed count so the existing People-tab subtitle is unchanged.
 	return hydrated
-		.map((p) => ({ ...p, shared_clubs: shared.get(p.id) ?? 0 }))
+		.map((p) => ({
+			...p,
+			shared_clubs: sharedClubs.get(p.id) ?? 0,
+			_score: (sharedClubs.get(p.id) ?? 0) + (sharedEvents.get(p.id) ?? 0),
+		}))
 		.sort((a, b) => {
+			if (b._score !== a._score) return b._score - a._score;
 			if (b.shared_clubs !== a.shared_clubs) return b.shared_clubs - a.shared_clubs;
 			return (a.display_name ?? '').localeCompare(b.display_name ?? '');
 		})
-		.slice(0, limit);
+		.slice(0, limit)
+		.map(({ _score, ...p }) => p);
+}
+
+export interface NearbyRunner {
+	id: string;
+	display_name: string | null;
+	avatar_url: string | null;
+	bucket: number;
+	viewer_follows: boolean;
+}
+
+/// Opt-in coarse-location "runners nearby" discovery (issue #466). Calls the
+/// `discoverable_runners_near` SECURITY DEFINER RPC, which centres on the
+/// CALLER's own stored coarse area and applies every eligibility filter
+/// (opt-in, minor exclusion, shadow_hidden, search opt-out, blocks) server-
+/// side, returning only a coarse distance BUCKET per runner — never a
+/// coordinate. Gated in the UI behind the default-off `PUBLIC_ENABLE_NEARBY_RUNNERS`
+/// flag pending owner + CISO/counsel sign-off; this data function is inert
+/// (returns []) for anyone who has not opted in with an area set.
+export async function fetchNearbyRunners(radiusM = 25000): Promise<NearbyRunner[]> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id ?? null;
+	if (!viewerId) return [];
+
+	const { data, error } = await supabase.rpc('discoverable_runners_near', {
+		p_radius_m: radiusM,
+	});
+	if (error || !data) return [];
+	const rows = data as Array<{
+		id: string;
+		display_name: string | null;
+		avatar_url: string | null;
+		bucket: number;
+	}>;
+	if (rows.length === 0) return [];
+
+	const ids = rows.map((r) => r.id);
+	const { data: followedRows } = await supabase
+		.from('user_follows')
+		.select('followee_id')
+		.eq('follower_id', viewerId)
+		.in('followee_id', ids);
+	const following = new Set((followedRows ?? []).map((r) => r.followee_id as string));
+
+	return rows.map((r) => ({
+		id: r.id,
+		display_name: r.display_name,
+		avatar_url: r.avatar_url,
+		bucket: r.bucket,
+		viewer_follows: following.has(r.id),
+	}));
+}
+
+/// Store the caller's coarse discoverable area (a geocoded city / area
+/// centroid, rounded server-side to ~1 km). Never live GPS. Returns the
+/// stored label so the settings UI can echo it back.
+export async function setDiscoverableArea(
+	lng: number,
+	lat: number,
+	label: string | null
+): Promise<string | null> {
+	const { data, error } = await supabase.rpc('set_discoverable_area', {
+		p_lng: lng,
+		p_lat: lat,
+		p_label: label,
+	});
+	if (error) throw error;
+	return (data as string | null) ?? null;
+}
+
+/// Forget the caller's stored coarse area — removes them from nearby discovery
+/// regardless of the `discoverable_nearby` pref.
+export async function clearDiscoverableArea(): Promise<void> {
+	const { error } = await supabase.rpc('clear_discoverable_area');
+	if (error) throw error;
+}
+
+/// The caller's own stored area label (never the coordinate), for the settings
+/// UI. Null when no area is set.
+export async function fetchMyDiscoverableArea(): Promise<string | null> {
+	const { data, error } = await supabase.rpc('my_discoverable_area');
+	if (error) return null;
+	return (data as string | null) ?? null;
 }
 
 /// The subset of `candidateIds` the viewer has NOT blocked. One batched read
@@ -5037,7 +5234,7 @@ async function hydratePeopleSuggestions(
 	const [profilesRes, countsRes, followsRes] = await Promise.all([
 		supabase
 			.from('user_profiles')
-			.select('id, display_name, avatar_url')
+			.select('id, display_name, avatar_url, handle')
 			.in('id', visibleIds),
 		// Public-run counts via a SECURITY DEFINER GROUP BY RPC — one small row
 		// per candidate, not one row per public run (which also can't be read
@@ -5067,6 +5264,7 @@ async function hydratePeopleSuggestions(
 		id: p.id as string,
 		display_name: (p.display_name as string) ?? null,
 		avatar_url: (p.avatar_url as string) ?? null,
+		handle: ((p as { handle?: string | null }).handle as string) ?? null,
 		public_runs_count: counts.get(p.id as string) ?? 0,
 		shared_clubs: 0,
 		viewer_follows: follows.has(p.id as string),
@@ -7452,6 +7650,15 @@ export async function fetchGlobalSegmentLeaderboard(
 /// every active catalogue geometry via the pure `computeGlobalSegmentEffort`
 /// (end-to-end match, curated v1) and batch-upserts matches. Idempotent via
 /// unique(global_segment_id, run_id) + ignoreDuplicates. Returns new count.
+///
+/// The write-side upsert is idempotent, but the FETCH + client-side haversine
+/// match are not — without a short-circuit they'd re-run on every owner view
+/// forever (issue #333). A `runs.metadata.global_segments_scored_count` stamp
+/// records the catalogue size a run was last scored against; a cheap `count`
+/// query gates the expensive polyline fetch so a scored run only recomputes
+/// when the (deliberately growing) catalogue gains segments. Both the gate
+/// and the fetch are bounded by the shared GLOBAL_SEGMENT_SCORING_LIMIT —
+/// see its doc comment for why a drift between the two is a pessimisation.
 export async function computeGlobalSegmentEffortsForRun(input: {
 	run_id: string;
 	user_id: string;
@@ -7461,7 +7668,17 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	const userId = auth.user?.id;
 	if (!userId || userId !== input.user_id) return 0;
 
-	const { segments } = await fetchGlobalSegmentsWithError(500);
+	const [{ data: runRow }, { count: activeCount }] = await Promise.all([
+		supabase.from(TABLES.runs).select('metadata').eq('id', input.run_id).maybeSingle(),
+		supabase
+			.from(TABLES.global_segments)
+			.select('id', { count: 'exact', head: true })
+			.eq('is_active', true),
+	]);
+	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
+	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
+
+	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
 	if (segments.length === 0) return 0;
 
 	const { computeGlobalSegmentEffort } = await import('../segments/segments');
@@ -7487,16 +7704,46 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 			started_at: eff.started_at,
 		});
 	}
-	if (rows.length === 0) return 0;
-	const { data: inserted, error } = await supabase
-		.from(TABLES.global_segment_efforts)
-		.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
-		.select('id');
-	if (error) {
-		console.warn('global segment effort batch upsert failed', input.run_id, error);
-		return 0;
+	let newCount = 0;
+	if (rows.length > 0) {
+		const { data: inserted, error } = await supabase
+			.from(TABLES.global_segment_efforts)
+			.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
+			.select('id');
+		if (error) {
+			// Don't stamp on a failed write — the run stays un-scored so
+			// the next view retries rather than dropping real matches.
+			console.warn('global segment effort batch upsert failed', input.run_id, error);
+			return 0;
+		}
+		newCount = inserted?.length ?? 0;
 	}
-	return inserted?.length ?? 0;
+
+	// Stamp even when nothing matched (rows.length === 0): a no-match run
+	// must not re-fetch + re-match the whole catalogue every view either.
+	//
+	// Re-read the bag here rather than merging into the copy read at the top
+	// of the function: the catalogue fetch + haversine pass above takes
+	// seconds, and `runs.metadata` is a whole-column jsonb write. Merging the
+	// stale copy would silently revert any title / notes edit the owner made
+	// inside that window — the run-detail edit dialog writes the same column.
+	// Keeping the read adjacent to the write is the same discipline
+	// `updateRunMetadata` follows.
+	const { data: freshRow } = await supabase
+		.from(TABLES.runs)
+		.select('metadata')
+		.eq('id', input.run_id)
+		.maybeSingle();
+	const next = stampGlobalSegmentsScored(
+		(freshRow?.metadata ?? null) as Record<string, unknown> | null,
+		segments.length,
+	);
+	const { error: stampErr } = await supabase
+		.from(TABLES.runs)
+		.update({ metadata: next })
+		.eq('id', input.run_id);
+	if (stampErr) console.warn('global segment scored stamp failed', input.run_id, stampErr);
+	return newCount;
 }
 
 /// Catalogue-segment efforts a run earned, joined to the segment + ranked

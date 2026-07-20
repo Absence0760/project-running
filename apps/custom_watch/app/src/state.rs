@@ -7,14 +7,14 @@
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::watch::Watch;
-use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::course::Course;
-use watch_core::elevation::Reading as ElevationReading;
+use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
+use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
 use watch_core::settings::WatchSettings;
@@ -25,9 +25,13 @@ use watch_core::trackback::TrackbackView;
 /// subscribe.
 pub static FIX: Watch<CriticalSectionRawMutex, Fix, 5> = Watch::new();
 
-/// Latest heart-rate estimate: `hr` publishes; the `ui` face and `record`
-/// (to stamp each stored track point's bpm) subscribe.
-pub static HR: Watch<CriticalSectionRawMutex, HrReading, 2> = Watch::new();
+/// Latest heart-rate estimate, stamped with the uptime it was produced at:
+/// `hr` publishes; the `ui` face and `record` (to stamp each stored track
+/// point's bpm) subscribe. Both consumers age the sample through
+/// `hr_duty::shown_bpm`, so a duty-cycled (or wedged) sensor's last reading
+/// holds only within the mode's bounded staleness and then blanks / stops
+/// banking everywhere at once.
+pub static HR: Watch<CriticalSectionRawMutex, HrSample, 2> = Watch::new();
 
 /// Live recording totals: `record` publishes on change, the `ui` face, the
 /// `button` task (for the state its toggle keys off), the `gps` task (which
@@ -78,9 +82,11 @@ pub static TRACKBACK: Watch<CriticalSectionRawMutex, TrackbackView, 1> = Watch::
 
 /// Selected GNSS recording mode: the `button` task cycles it on an idle-face
 /// BTN3 press; the `gps` task reads the fix-forwarding cadence, `record` the
-/// interval its acceptance filter scales to, and the `ui` face the mode rows +
-/// staleness budget. No value published means the default (Performance).
-pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 3> = Watch::new();
+/// interval its acceptance filter scales to, the `ui` face the mode rows +
+/// staleness budget, and the `hr` task its sampling duty cycle
+/// (`hr_duty::duty_window`). No value published means the default
+/// (Performance).
+pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 4> = Watch::new();
 
 /// Uptime (seconds) of the last button press — any button. The `button` task
 /// stamps it on every confirmed press; the `ui` task reads it to gate the
@@ -116,3 +122,15 @@ pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = 
 /// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
 /// baro task keeps its default reference. One receiver (the `baro` task).
 pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
+
+/// Manual QNH re-zero request: the `button` task sends one on an idle-face
+/// BTN3 long-press; the `baro` task (which owns the vert accumulator the snap
+/// applies to) receives and performs it. Capacity 1 — a press while one is
+/// pending has nothing extra to ask for.
+pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::new();
+
+/// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
+/// was decided: the `baro` task publishes it (honest refusals included — no
+/// fresh GPS, no barometer); the `ui` task shows it as a transient idle-face
+/// banner. One receiver (the `ui` task).
+pub static QNH_REZERO: Watch<CriticalSectionRawMutex, (RezeroStatus, u32), 1> = Watch::new();

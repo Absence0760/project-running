@@ -267,7 +267,7 @@ Per the [layered-resilience contract](../architecture/conventions.md#layered-res
 - **Webhook never arrives** → success-page poll + periodic reconciliation vs Stripe's API; buyer sees "processing", not a false failure.
 - **Capacity race** → soft reservation + confirm-time recheck; invariant: never oversell.
 - **Refund fails at Stripe** → surfaced to host + ops, order flagged `refund_failed`, retried; user told a refund is in progress, never silently dropped.
-- **A class accidentally created as a `run`** (or vice-versa) → category is editable; switching to a non-athletic category hides + (at the data layer) blocks the athletic features, and warns if results/race data already exists.
+- **A class accidentally created as a `run`** (or vice-versa) → category is editable (**shipped on web**, issue #335: `EventEditor` edit mode via the "Edit event" button on the detail page + `updateEvent`); switching to a non-athletic category hides + (at the data layer) blocks the athletic features, and warns first (`ConfirmDialog`, fail-safe) if results/race data already exists.
 
 ## Testing
 

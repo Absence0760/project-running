@@ -1,0 +1,96 @@
+# BMP581 barometric path — decoded defmt excerpts (2026-07-19)
+#
+# First sim pass with a barometer: sim/NRF52840_TWIM.cs (a real TWIM master —
+# the stock twi1 models the legacy byte interface embassy-nrf never programs)
+# + sim/BMP581.cs (the sensor, with a scripted altitude source). Every run
+# below is `bin/watch-sim.sh --phone-port 7797`, DEFMT_LOG=debug, driven from
+# one long-lived monitor connection.
+
+## The task comes alive — it used to park on a timed-out probe
+0.000671 INFO  baro: BMP581 streaming
+# (was: "baro: no BMP581 on I2C (probe timed out); task parked")
+
+## Scripted altitude round-trips through pressure and back to the firmware
+# monitor: sysbus.twi1.bmp581 SetAltitudeMeters 1600   (the model's default)
+1.000671 DEBUG baro: alt=1599.9999m gain=0.0m loss=0.0m
+# 0.1 mm of round-trip error: the model inverts the same ISA constants
+# watch_core::elevation::altitude_m applies.
+
+## GPS-baro complementary filter engages (bench_jog, GGA alt 1624.0)
+# Pure baro-only for the first SEED_SAMPLES pairings, then the seed lands and
+# the published altitude re-frames onto the weather-unbiased GPS altitude —
+# the auto-QNH correction, observed end to end for the first time.
+38.000671 DEBUG baro: alt=1599.9999m gain=0.0m loss=0.0m
+39.000671 DEBUG baro: alt=1624.18m    gain=0.0m loss=0.0m
+40.000671 DEBUG baro: alt=1624.1823m  gain=0.0m loss=0.0m
+
+## VERT accrues over a scripted climb + descent (mountain_loop)
+# monitor: sysbus.twi1.bmp581 StartTriangleProfile 1600 1800 417 660
+#   (417/660 mm/s track the fixture's own GPS altitude ramp, so baro and GPS
+#    co-vary and the complementary filter is exercised, not bypassed)
+18:16:29 [INFO] twi1.bmp581: triangle profile 1600..1800 m, +417/-660 mm/s
+169.000793 DEBUG baro: alt=1651.0803m gain=51.83484m  loss=0.0m
+527.000793 DEBUG baro: alt=1708.2245m gain=133.8728m  loss=20.082764m
+
+### Run dashboard at t=530 s (frame-dump transcription)
+#   0:08:50                                    PAU
+#   [foot] 0.49 KM                             D+E
+#   PACE 18:04 /KM
+#   NOW  8:46 /KM
+#   [heart] --
+#   [mtn]  1704 M            <- ALT prefers the barometric reading
+#   [vert] +133 -23 M        <- VERT gain/loss, both accruing
+#   [sat]  9 SATS PERF
+
+## The ALT row really is the barometer, not fix.alt_m
+# Set a static altitude far from the fixture's GPS altitude (~1700 m) and the
+# row follows the barometer within one sample:
+# monitor: sysbus.twi1.bmp581 SetAltitudeMeters 2400
+559.000701 DEBUG baro: alt=2306.2747m gain=766.975m loss=57.32129m
+#   [mtn]  2324 M
+#   [vert] +766 -39 M
+# (2324, not 2400: the complementary bias — baro minus GPS — is subtracted,
+#  which is the auto-QNH correction doing its job. It then slews back.)
+
+## Elevation mini-profile sparkline, baro-driven (ElevationProfile page)
+# BTN3 x18 from the Dashboard. Transcription at t=190 s:
+#   ELEV D+61 D-0
+#   <sparkline: a monotonic climb across the full 168 px panel width>
+#   GPS  10 SATS PERF
+
+## Manual QNH re-zero — both previously bench-gated paths
+### SET <alt>: idle face, fresh fix (gps_dropout, GGA alt 1624.0)
+12.176879 INFO  button: BTN3 long -> qnh re-zero requested
+12.176879 INFO  baro: qnh re-zero -> Applied(1624.0)
+# Frame: 2x banner "SET 1624M" over the idle face, and the ALT row below it
+# reads 1624 M — the bias snap is visible in the published altitude, not just
+# the banner (the raw barometer is still at 1600 m).
+#   SET 1624M
+#   GPS  8 SATS
+#   LAT     40.01500
+#   LON  -105.27018
+#   SPD  3.0 M/S
+#   ALT  1624 M
+#   VERT +0 -0 M
+
+### NO GPS FIX: the same press inside the fixture's 40 s void window
+87.344116 INFO  button: BTN3 long -> qnh re-zero requested
+87.344177 INFO  baro: qnh re-zero -> NoGps
+#   NO GPS FIX
+#   GPS  STALE 10S
+#   ...
+#   ALT  1624 M            <- unchanged: a refusal is a no-op, not a snap
+# (The NO BARO variant was already verified on 2026-07-19 with the task parked.)
+
+## Phantom-vert moving gate, both directions
+### Idle recorder (--no-autostart), 0.9 m/s of scripted climb: banks nothing
+# monitor: sysbus.twi1.bmp581 StartTriangleProfile 1600 1900 900 900
+107.000793 DEBUG baro: alt=1624.4...m gain=0.0m loss=0.0m
+156.000793 DEBUG baro: alt=1667.3873m gain=0.0m loss=0.0m
+157.000793 DEBUG baro: alt=1667.8455m gain=0.0m loss=0.0m
+# 43 m of altitude gained, 0.0 m banked — drift while stopped is not climb.
+
+### BTN1 starts the run and the gate opens on the same climb
+166.695892 DEBUG record: recording dist=0.0m moving=0s pacer=Nones
+178.000793 DEBUG baro: alt=1680.7725m gain=3.0166016m loss=0.0m
+# First deadband commit lands ~10 s after the run starts.

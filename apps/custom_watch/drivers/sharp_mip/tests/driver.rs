@@ -956,3 +956,50 @@ fn draw_arc_degenerate_and_offscreen_clip() {
     fb.draw_arc(-40, 70, 30, 0, 270, true);
     fb.draw_arc(WIDTH as i32 + 40, 70, 30, 45, 200, true);
 }
+
+/// Two distinct printable characters that pack to the same pixels are
+/// indistinguishable on the panel — always a rasterisation failure, never a
+/// font property. `+` used to lose its 1px vertical stem at this cell size and
+/// packed byte-identical to `-`, so every `+` the UI writes (the face's VERT
+/// `+gain -loss` row, the Pacer page's ahead/behind sign) rendered as a minus:
+/// a climb read as a descent, and "ahead of the partner" read the same as
+/// "behind". `scripts/gen_font.py` now supersamples any colliding glyph; this
+/// pins the invariant so a regenerated table can never reintroduce it silently.
+#[test]
+fn no_two_glyphs_rasterise_identically() {
+    // Space is *not* skipped. Excusing it hides the same bug in its worst
+    // form — a glyph the rasteriser blanked out entirely, which collides with
+    // space and renders as nothing at all. That is how '|' shipped invisible.
+    for (i, a) in font::FONT.iter().enumerate() {
+        let ch_a = font::FIRST_CHAR + i as u8;
+        for (j, b) in font::FONT.iter().enumerate().skip(i + 1) {
+            let ch_b = font::FIRST_CHAR + j as u8;
+            assert_ne!(
+                a, b,
+                "glyphs {:?} and {:?} rasterise identically",
+                ch_a as char, ch_b as char
+            );
+        }
+    }
+}
+
+/// The specific shape the collision guard above exists for: a `+` must carry
+/// ink both above and below its crossbar, or it is a `-`.
+#[test]
+fn plus_glyph_has_a_vertical_stem() {
+    let plus = &font::FONT[(b'+' - font::FIRST_CHAR) as usize];
+    let bar = plus
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, row)| row.count_ones())
+        .map(|(y, _)| y)
+        .expect("glyph has rows");
+    assert!(
+        plus[..bar].iter().any(|r| *r != 0),
+        "no ink above the crossbar — this renders as a minus"
+    );
+    assert!(
+        plus[bar + 1..].iter().any(|r| *r != 0),
+        "no ink below the crossbar — this renders as a minus"
+    );
+}

@@ -20,8 +20,13 @@ values
   ('99999999-0000-0000-0000-0000000000b1', 'authenticated', 'authenticated', 'owner@bm.local', '', now(), now()),
   ('99999999-0000-0000-0000-0000000000b2', 'authenticated', 'authenticated', 'stranger@bm.local', '', now(), now());
 
--- user_profiles rows exist via the handle_new_user trigger on auth.users
--- insert; set the owner's height (superuser, RLS bypassed).
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004). It
+-- also materialises the user_profiles rows the height assertions below
+-- update — nothing creates them on an auth.users insert.
+select tests.confirm_consent();
+
+-- Set the owner's height (superuser, RLS bypassed).
 update user_profiles set height_cm = 178.0 where id = '99999999-0000-0000-0000-0000000000b1';
 
 -- Seed two weight entries for the owner (superuser).

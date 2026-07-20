@@ -38,6 +38,10 @@ values
   ('99999999-0000-0000-0000-00000000ff01', '99999999-0000-0000-0000-0000000000a1', now(), 1800, 5000, 'app', true,  '{"activity_type":"run"}'),
   ('99999999-0000-0000-0000-00000000ff02', '99999999-0000-0000-0000-0000000000a1', now(), 1800, 5000, 'app', false, '{"activity_type":"run"}');
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 set local role authenticated;
 
 -- ============================================================

@@ -93,6 +93,9 @@ pub enum Page {
     /// The re-plan proposal counts around missed sessions ([`crate::plan_replan`]);
     /// empty until synced.
     PlanReplan,
+    /// The multi-week adherence trend behind the adaptive re-plan
+    /// ([`crate::plan_adaptive_replan`]); empty until synced.
+    PlanAdaptive,
     /// The training-readiness score + band ([`crate::readiness`]); empty until
     /// synced.
     Readiness,
@@ -142,7 +145,8 @@ impl Page {
             Page::Streaks => Page::RunStats,
             Page::RunStats => Page::PrRecency,
             Page::PrRecency => Page::PlanReplan,
-            Page::PlanReplan => Page::Readiness,
+            Page::PlanReplan => Page::PlanAdaptive,
+            Page::PlanAdaptive => Page::Readiness,
             Page::Readiness => Page::Goals,
             Page::Goals => Page::TurnCue,
             Page::TurnCue => Page::RouteSimplify,
@@ -154,8 +158,8 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 31 pages a forward-
-    /// only walk needs up to ~30 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 32 pages a forward-
+    /// only walk needs up to ~31 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
@@ -179,7 +183,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 31] = [
+    const ALL: [Page; 32] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -204,6 +208,7 @@ mod tests {
         Page::RunStats,
         Page::PrRecency,
         Page::PlanReplan,
+        Page::PlanAdaptive,
         Page::Readiness,
         Page::Goals,
         Page::TurnCue,
@@ -230,6 +235,8 @@ mod tests {
         assert_eq!(Page::Fitness.next(), Page::ElevationProfile);
         assert_eq!(Page::ElevationProfile.next(), Page::Recap);
         assert_eq!(Page::Recap.next(), Page::Streaks);
+        assert_eq!(Page::PlanReplan.next(), Page::PlanAdaptive);
+        assert_eq!(Page::PlanAdaptive.next(), Page::Readiness);
         assert_eq!(Page::Goals.next(), Page::TurnCue);
         assert_eq!(Page::RouteElev.next(), Page::RaceDay);
         assert_eq!(Page::RaceDay.next(), Page::Dashboard);

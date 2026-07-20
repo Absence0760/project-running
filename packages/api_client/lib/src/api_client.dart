@@ -2055,6 +2055,20 @@ class ApiClient {
     final term = query.trim();
     if (term.isEmpty) return const [];
     final viewerId = _client.auth.currentUser?.id;
+
+    // Direct-id / profile-URL lookup: a pasted uuid (or `/u/<uuid>` link)
+    // resolves that exact runner. Safe — it needs the full uuid, so there's
+    // no enumeration surface, and it deliberately bypasses the
+    // discoverable_in_search opt-out the way the public /u/[id] page does.
+    // shadow_hidden + block filters still apply via the hydrate path
+    // (issue #465). Mirrors web `searchPeople`.
+    final directId = extractProfileId(term);
+    if (directId != null) {
+      if (directId == viewerId) return const [];
+      return _hydratePeopleSuggestions([directId], viewerId,
+          sharedCounts: const {});
+    }
+
     final candidateLimit = limit * 3 > 120 ? 120 : limit * 3;
     final profiles = await _client.rpc('search_user_profiles', params: {
       'p_query': term,
@@ -2068,6 +2082,23 @@ class ApiClient {
     final hydrated =
         await _hydratePeopleSuggestions(ids, viewerId, sharedCounts: const {});
     hydrated.sort(comparePeopleRank);
+    // A searched-for exact @handle floats above the reputation sort, so
+    // `@janedoe` surfaces janedoe first even if a busier account also
+    // prefix-matches (mirrors the RPC's exact-handle-first order, which the
+    // reputation re-sort would otherwise mask).
+    final handleTerm =
+        (term.startsWith('@') ? term.substring(1) : term).toLowerCase();
+    if (handleTerm.isNotEmpty) {
+      final exact = hydrated
+          .where((p) => p.handle?.toLowerCase() == handleTerm)
+          .toList();
+      if (exact.isNotEmpty) {
+        final rest = hydrated
+            .where((p) => p.handle?.toLowerCase() != handleTerm)
+            .toList();
+        return [...exact, ...rest].take(limit).toList();
+      }
+    }
     return hydrated.take(limit).toList();
   }
 
@@ -2155,7 +2186,7 @@ class ApiClient {
     if (ids.isEmpty) return const [];
     final profilesF = _client
         .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
+        .select('id, display_name, avatar_url, handle')
         .inFilter(UserProfileRow.colId, ids);
     final runsF = _client
         .from(RunRow.table)
@@ -2192,6 +2223,7 @@ class ApiClient {
         id: id,
         displayName: row['display_name'] as String?,
         avatarUrl: row['avatar_url'] as String?,
+        handle: row['handle'] as String?,
         publicRunsCount: counts[id] ?? 0,
         sharedClubs: sharedCounts[id] ?? 0,
         viewerFollows: follows.contains(id),
@@ -3312,13 +3344,17 @@ class ApiClient {
     return (data as List).cast<Map<String, dynamic>>();
   }
 
-  /// Insert a new gear row and return the persisted shape.
+  /// Upsert a gear row on its primary key and return the persisted shape.
   ///
   /// When [id] is supplied (offline-create path), the client mints a v4
-  /// UUID, persists it to [LocalGearStore], then replays the INSERT on
+  /// UUID, persists it to [LocalGearStore], then replays the create on
   /// the same id once online. The id column on `gear` defaults to
   /// `gen_random_uuid()` but accepts client-minted values — no temp-id
-  /// reconciliation needed since the local id IS the server id.
+  /// reconciliation needed since the local id IS the server id. The
+  /// upsert (not insert) makes that replay idempotent: if a first attempt
+  /// committed server-side but the response was lost, the retry no-ops on
+  /// the PK instead of unique-violating and stranding the row as pending
+  /// forever (issue #365).
   Future<GearRow> createGear({
     required String kind,
     required String name,
@@ -3333,7 +3369,7 @@ class ApiClient {
     if (viewerId == null) throw Exception('Not authenticated');
     final row = await _client
         .from(GearRow.table)
-        .insert({
+        .upsert({
           if (id != null) GearRow.colId: id,
           GearRow.colOwnerId: viewerId,
           GearRow.colKind: kind,
@@ -3344,7 +3380,7 @@ class ApiClient {
               purchasedAt?.toIso8601String().substring(0, 10),
           GearRow.colTargetDistanceM: targetDistanceM,
           GearRow.colNotes: notes,
-        })
+        }, onConflict: GearRow.colId)
         .select()
         .single();
     return GearRow.fromJson(row);
@@ -5660,7 +5696,7 @@ class ApiClient {
     if (uid == null) throw Exception('Not authenticated');
     final row = await _client
         .from(SessionPlanRow.table)
-        .insert({
+        .upsert({
           if (id != null) SessionPlanRow.colId: id,
           SessionPlanRow.colAuthorId: uid,
           SessionPlanRow.colTitle: title.trim(),
@@ -5670,12 +5706,15 @@ class ApiClient {
           SessionPlanRow.colIsPublic: isPublic,
           if (updatedAt != null)
             SessionPlanRow.colUpdatedAt: updatedAt.toIso8601String(),
-        })
+        }, onConflict: SessionPlanRow.colId)
         .select()
         .single();
     final plan = SessionPlanRow.fromJson(row);
+    // Blocks + items carry client-minted ids, so upsert on the PK keeps the
+    // offline-drain replay idempotent: a lost-ack retry no-ops instead of
+    // duplicating children under the (no-op'd) parent (issue #365).
     if (blocks.isNotEmpty) {
-      await _client.from(SessionPlanBlockRow.table).insert([
+      await _client.from(SessionPlanBlockRow.table).upsert([
         for (final b in blocks)
           {
             SessionPlanBlockRow.colId: b.id,
@@ -5683,10 +5722,10 @@ class ApiClient {
             SessionPlanBlockRow.colPosition: b.position,
             SessionPlanBlockRow.colName: b.name,
           },
-      ]);
+      ], onConflict: SessionPlanBlockRow.colId);
     }
     if (items.isNotEmpty) {
-      await _client.from(SessionPlanItemRow.table).insert([
+      await _client.from(SessionPlanItemRow.table).upsert([
         for (final it in items)
           {
             SessionPlanItemRow.colId: it.id,
@@ -5701,7 +5740,7 @@ class ApiClient {
             SessionPlanItemRow.colTempo: it.tempo,
             SessionPlanItemRow.colCue: it.cue,
           },
-      ]);
+      ], onConflict: SessionPlanItemRow.colId);
     }
     return plan;
   }
@@ -5745,10 +5784,12 @@ class ApiClient {
     return out;
   }
 
-  /// Insert a workout + its sets. The caller may mint [id] (offline-create
-  /// path) — `gym_workouts.id` defaults to gen_random_uuid() but accepts a
-  /// client value, so the local id IS the server id (no reconciliation),
-  /// matching the LocalGearStore pattern (decisions §73).
+  /// Upsert a workout on its PK + replace its sets. The caller may mint [id]
+  /// (offline-create path) — `gym_workouts.id` defaults to gen_random_uuid()
+  /// but accepts a client value, so the local id IS the server id (no
+  /// reconciliation), matching the LocalGearStore pattern (decisions §73).
+  /// Upsert (not insert) keeps the offline-drain replay idempotent after a
+  /// lost-ack (issue #365).
   Future<GymWorkoutRow> createGymWorkout({
     String? id,
     String? title,
@@ -5765,7 +5806,7 @@ class ApiClient {
     if (uid == null) throw Exception('Not authenticated');
     final row = await _client
         .from(GymWorkoutRow.table)
-        .insert({
+        .upsert({
           if (id != null) GymWorkoutRow.colId: id,
           GymWorkoutRow.colUserId: uid,
           GymWorkoutRow.colTitle: title,
@@ -5778,11 +5819,15 @@ class ApiClient {
             GymWorkoutRow.colMetadata: metadata,
           if (lastModifiedAt != null)
             GymWorkoutRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
-        })
+        }, onConflict: GymWorkoutRow.colId)
         .select()
         .single();
     final workout = GymWorkoutRow.fromJson(row);
-    if (sets.isNotEmpty) await _replaceGymSets(workout.id, sets);
+    // Always replace sets (delete + re-insert = idempotent), even for an
+    // empty list. On a lost-ack retry the workout upsert no-ops on the PK,
+    // so this is the only path that reaches the sets step — guarding it on
+    // isNotEmpty would leave a retried workout with zero sets (issue #365).
+    await _replaceGymSets(workout.id, sets);
     return workout;
   }
 
@@ -5961,7 +6006,7 @@ class ApiClient {
         .toList(growable: false);
     final row = await _client
         .from(GymRoutineRow.table)
-        .insert({
+        .upsert({
           if (id != null) GymRoutineRow.colId: id,
           GymRoutineRow.colAuthorId: uid,
           GymRoutineRow.colTitle: title.trim(),
@@ -5969,10 +6014,18 @@ class ApiClient {
           GymRoutineRow.colExerciseCount: kept.length,
           if (lastModifiedAt != null)
             GymRoutineRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
-        })
+        }, onConflict: GymRoutineRow.colId)
         .select()
         .single();
     final routine = GymRoutineRow.fromJson(row);
+    // Exercises (and their sets, via cascade) are server-id'd, so a lost-ack
+    // retry of the offline-drain create can't upsert them on a client id —
+    // clear then re-insert makes the children step idempotent under the
+    // (no-op'd) parent upsert instead of duplicating them (issue #365).
+    await _client
+        .from(GymRoutineExerciseRow.table)
+        .delete()
+        .eq(GymRoutineExerciseRow.colRoutineId, routine.id);
     for (var p = 0; p < kept.length; p++) {
       final ex = kept[p];
       // gym_routine_exercises_superset_chk requires the group + order to be
@@ -6172,7 +6225,7 @@ class ApiClient {
     if (uid == null) throw Exception('Not authenticated');
     final row = await _client
         .from(FoodLogRow.table)
-        .insert({
+        .upsert({
           if (id != null) FoodLogRow.colId: id,
           FoodLogRow.colUserId: uid,
           FoodLogRow.colStartedAt: startedAt.toIso8601String(),
@@ -6191,7 +6244,7 @@ class ApiClient {
           FoodLogRow.colExternalId: externalId,
           if (lastModifiedAt != null)
             FoodLogRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
-        })
+        }, onConflict: FoodLogRow.colId)
         .select()
         .single();
     return FoodLogRow.fromJson(row);
@@ -6302,7 +6355,7 @@ class ApiClient {
         items.where((it) => it.itemName.trim().isNotEmpty).toList(growable: false);
     final row = await _client
         .from(MealTemplateRow.table)
-        .insert({
+        .upsert({
           if (id != null) MealTemplateRow.colId: id,
           MealTemplateRow.colUserId: uid,
           MealTemplateRow.colName: name.trim(),
@@ -6310,10 +6363,17 @@ class ApiClient {
           MealTemplateRow.colItemCount: kept.length,
           if (lastModifiedAt != null)
             MealTemplateRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
-        })
+        }, onConflict: MealTemplateRow.colId)
         .select()
         .single();
     final template = MealTemplateRow.fromJson(row);
+    // Items are server-id'd, so clear then re-insert to keep the offline-drain
+    // replay idempotent after a lost-ack instead of duplicating them under the
+    // (no-op'd) parent upsert (issue #365).
+    await _client
+        .from(MealTemplateItemRow.table)
+        .delete()
+        .eq(MealTemplateItemRow.colTemplateId, template.id);
     if (kept.isNotEmpty) {
       await _client.from(MealTemplateItemRow.table).insert([
         for (var i = 0; i < kept.length; i++)
@@ -6408,7 +6468,7 @@ class ApiClient {
         .toList(growable: false);
     final row = await _client
         .from(RecipeRow.table)
-        .insert({
+        .upsert({
           if (id != null) RecipeRow.colId: id,
           RecipeRow.colUserId: uid,
           RecipeRow.colName: name.trim(),
@@ -6417,10 +6477,17 @@ class ApiClient {
           RecipeRow.colIngredientCount: kept.length,
           if (lastModifiedAt != null)
             RecipeRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
-        })
+        }, onConflict: RecipeRow.colId)
         .select()
         .single();
     final recipe = RecipeRow.fromJson(row);
+    // Ingredients are server-id'd, so clear then re-insert to keep the
+    // offline-drain replay idempotent after a lost-ack instead of duplicating
+    // them under the (no-op'd) parent upsert (issue #365).
+    await _client
+        .from(RecipeIngredientRow.table)
+        .delete()
+        .eq(RecipeIngredientRow.colRecipeId, recipe.id);
     if (kept.isNotEmpty) {
       await _client.from(RecipeIngredientRow.table).insert([
         for (var i = 0; i < kept.length; i++)

@@ -30,6 +30,7 @@ PeopleSuggestion _person({
   int runs = 12,
   int sharedClubs = 1,
   bool follows = false,
+  String? handle,
 }) =>
     PeopleSuggestion(
       id: id,
@@ -37,6 +38,7 @@ PeopleSuggestion _person({
       publicRunsCount: runs,
       sharedClubs: sharedClubs,
       viewerFollows: follows,
+      handle: handle,
     );
 
 /// Fake people-backing ApiClient: canned suggestions + search results, and
@@ -172,6 +174,19 @@ void main() {
       )));
       // Don't settle: the suggestions load is in flight.
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('a suggestion with a handle renders its @handle (issue #465)',
+        (tester) async {
+      await tester.pumpWidget(_wrap(PeopleScreen(
+        api: _FakeApi(suggestions: [
+          _person(id: 'a', name: 'Casey Marathon', handle: 'caseyruns'),
+        ]),
+        embedded: true,
+      )));
+      await _settle(tester);
+      expect(find.text('Casey Marathon'), findsOneWidget);
+      expect(find.text('@caseyruns'), findsOneWidget);
     });
 
     testWidgets('empty suggestions show the suggestions empty state',

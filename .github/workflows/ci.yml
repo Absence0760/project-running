@@ -3,16 +3,21 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
+
+concurrency:
+  # A run is ~19 jobs at ~85-90 min, and every workflow in the repo competes
+  # for one hosted-runner job budget — so a superseded run left queued starves
+  # the ones behind it. A merge sweep did exactly that for over an hour,
+  # including the `CI gate` aggregator branch protection requires. Only a PR's
+  # tip is worth building, so cancel the rest; dropping `paths-ignore` above
+  # makes that pressure worse, since docs-only pushes now build too. Pushes to
+  # main take a per-SHA group rather than a shared one: every merge commit
+  # still gets its own validated run, and back-to-back merges run
+  # independently instead of serialising behind one group.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least-privilege default: every job inherits `contents: read` and
 # must opt in to anything more. CodeQL's
@@ -30,6 +35,58 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ci.yml used to skip itself on docs-only diffs via `paths-ignore`, which
+  # left the required "CI gate" context pending forever — so ci-gate-docs.yml
+  # existed purely to emit a same-named passing check. A PR touching BOTH docs
+  # and code triggered both workflows, and the trivial one could satisfy the
+  # required check while the real jobs were still queued, letting unverified
+  # code merge. Now ci.yml always runs and is the sole emitter of "CI gate";
+  # the heavy jobs skip on a docs-only diff instead of the workflow skipping,
+  # and the gate below already counts `skipped` as a pass.
+  changes:
+    name: Detect non-docs changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Decide whether anything outside docs changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          if [ "$EVENT" = pull_request ]; then
+            files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename') || files=""
+          else
+            files=$(git diff --name-only "$BEFORE" "$SHA" 2>/dev/null) || files=""
+          fi
+          # Fail OPEN: an undeterminable change list runs the full suite. The
+          # cost of a needless run is minutes; the cost of wrongly skipping is
+          # unverified code on main.
+          if [ -z "$files" ]; then
+            echo "::notice::could not determine changed files — running full CI"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$files"
+          if echo "$files" | grep -qvE '^(docs/|\.claude/)|\.md$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::docs-only diff — heavy jobs skip, CI gate still reports"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # A workflow file GitHub's parser rejects never fails a PR job — it produces
   # zero-job failed runs on main and silently kills the release it gates
   # (release-android.yml was invalidated by an empty GitHub expression inside a
@@ -37,6 +94,8 @@ jobs:
   # release event deployed nothing). actionlint reproduces GitHub's expression
   # parser statically so that class of break fails here, before merge.
   workflow-lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Workflow lint (actionlint)
     runs-on: ubuntu-latest
     steps:
@@ -49,6 +108,8 @@ jobs:
       - run: "$(go env GOPATH)/bin/actionlint -color -shellcheck= -pyflakes="
 
   test-packages:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Test Flutter packages
     runs-on: ubuntu-latest
     steps:
@@ -68,6 +129,8 @@ jobs:
       - run: melos exec -- dart analyze
 
   test-worker:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Test job_worker (Go)
     runs-on: ubuntu-latest
     steps:
@@ -88,6 +151,8 @@ jobs:
         run: go test ./...
 
   test-graph-cycle:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Test graph_cycle sidecar (Go)
     runs-on: ubuntu-latest
     steps:
@@ -107,6 +172,8 @@ jobs:
         run: go test ./...
 
   parity-types:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Schema / type drift
     runs-on: ubuntu-latest
     steps:
@@ -164,6 +231,8 @@ jobs:
           echo "Run 'npm run gen:types' locally and commit the result."
 
   build-web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Web build compile check (no deploy)
     runs-on: ubuntu-latest
     # A route that fails to compile under the pinned Svelte/Vite was only
@@ -199,6 +268,8 @@ jobs:
           BASE_PATH: ""
 
   parity-matrix:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Parity matrix drift
     # Lightweight markdown audit — runs the Dart script that walks
     # docs/product/parity.md, asserts every row has 7 cells, uses only the
@@ -215,6 +286,8 @@ jobs:
       - run: dart run scripts/check_parity_matrix.dart
 
   build-watch-wear:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Build Wear OS app (Kotlin)
     runs-on: ubuntu-latest
     steps:
@@ -234,6 +307,8 @@ jobs:
         run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
 
   build-firmware:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Build custom_watch firmware (Rust + Embassy)
     runs-on: ubuntu-latest
     steps:
@@ -270,6 +345,8 @@ jobs:
         run: cargo fmt --check
 
   build-mobile-android:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Build mobile_android APK (smoke)
     runs-on: ubuntu-latest
     # `flutter test` (in test-packages) catches Dart-level regressions
@@ -331,6 +408,8 @@ jobs:
         run: flutter build apk --release --no-tree-shake-icons --target-platform android-arm64
 
   twin-parity:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: mobile_android ↔ mobile_ios twin parity
     runs-on: ubuntu-latest
     # decisions.md §39 — apps/mobile_android/lib + test must be
@@ -367,6 +446,8 @@ jobs:
           fi
 
   schema-codegen-drift:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Kotlin row codegen drift
     runs-on: ubuntu-latest
     steps:
@@ -391,6 +472,8 @@ jobs:
           fi
 
   api-client-integration:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: api_client integration (real Supabase)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -455,6 +538,8 @@ jobs:
         run: flutter test test/services_integration_test.dart
 
   cross-client-roundtrip:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Cross-client round-trip (Dart write -> web read)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -605,6 +690,8 @@ jobs:
         run: npx tsx scripts/cross_client_roundtrip_sync_read.mjs
 
   edge-functions:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Edge Function tests (Deno)
     runs-on: ubuntu-latest
     # Steady-state runtime is ~2 min, but the supabase-start retry can
@@ -763,6 +850,8 @@ jobs:
         run: deno test --no-check --allow-read --allow-env supabase/functions/
 
   pgtap-rls:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: pgtap RLS suite
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -779,6 +868,8 @@ jobs:
         run: supabase test db --local
 
   e2e-web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # Shard the Playwright suite across 10 parallel jobs. Each shard
     # boots its own Supabase + dev server so there's zero shared-DB
     # state risk between shards. With workers=1 inside a shard (per
@@ -958,6 +1049,8 @@ jobs:
           retention-days: 7
 
   e2e-web-livehub:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The Go live-hub WebSocket path, end-to-end. The sharded e2e-web
     # job above tests the spectator page against the Supabase Realtime
     # FALLBACK (PUBLIC_LIVE_HUB_URL unset). This single, UNSHARDED job
@@ -1062,6 +1155,8 @@ jobs:
           retention-days: 7
 
   e2e-web-sso:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The OAuth / SSO login path, end-to-end, against a mock OIDC
     # provider. Real Google/Apple can't run in CI and GoTrue special-cases
     # them, so config.toml's [auth.external.keycloak] is pointed at a
@@ -1188,6 +1283,8 @@ jobs:
           retention-days: 7
 
   test-watch-ios:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Test watchOS app (Swift)
     runs-on: macos-latest
     steps:
@@ -1270,15 +1367,17 @@ jobs:
   # `needs`-cascade skip behind a genuine failure still fails here via
   # the failing job itself.
   #
-  # Docs-only / *.md / .claude-only PRs skip this whole workflow via the
-  # top-level `paths-ignore`; `ci-gate-docs.yml` reports an identically
-  # named "CI gate" context as passing for those so the required check
-  # is always satisfied. Keep the two job names in lock-step.
+  # This workflow always runs, so it is the ONLY emitter of "CI gate" and
+  # the required check always reflects real results. On a docs-only diff
+  # the `changes` filter skips the heavy jobs rather than the workflow
+  # skipping itself, and the skipped-counts-as-passing rule above lets the
+  # gate report green without a second workflow faking the context.
   ci-gate:
     name: CI gate
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - changes
       - workflow-lint
       - test-packages
       - test-worker

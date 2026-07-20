@@ -15,7 +15,15 @@
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
-	import { fetchLatestWeightKg, recordWeightKg } from '$lib/core/data';
+	import {
+		fetchLatestWeightKg,
+		recordWeightKg,
+		setDiscoverableArea,
+		clearDiscoverableArea,
+		fetchMyDiscoverableArea,
+	} from '$lib/core/data';
+	import { NEARBY_RUNNERS_ENABLED } from '$lib/social/nearby_flag';
+	import { geocodePlace } from '$lib/routes/geocoding';
 	import { kgToDisplay, displayToKg, roundWeight } from '$lib/format/weight';
 	import {
 		ACTIVITY_LEVELS,
@@ -86,6 +94,10 @@
 	// actively opt out via this toggle. The `search_user_profiles`
 	// RPC reads the same key.
 	let discoverableInSearch = $state(true);
+	let discoverableNearby = $state(false);
+	let nearbyAreaLabel = $state<string | null>(null);
+	let nearbyAreaInput = $state('');
+	let nearbySavingArea = $state(false);
 	// Opt-out: drop gym load from the run fitness/fatigue/form curve so the
 	// dashboard readiness stays run-only. Default off (gym counts).
 	let excludeGymFromReadiness = $state(false);
@@ -159,12 +171,66 @@
 		}
 	}
 
+	// Re-opting into an engagement stream must lift any prior one-click
+	// unsubscribe address block (email_suppressions, reason 'unsubscribe'), or
+	// the send stays silently hard-blocked while the toggle reads 'on' (#392).
+	// The suppression row is address-keyed (covers every stream), so either
+	// toggle turning on clears it; the SECURITY DEFINER RPC is scoped to the
+	// caller's own address and never touches a bounce/complaint/manual row.
+	async function setEngagementPref(
+		key: 'email_weekly_digest' | 'email_lifecycle_drip',
+		on: boolean
+	) {
+		autoSave({ [key]: on ? 'on' : 'off' });
+		if (!on || !auth.user) return;
+		const { error } = await supabase.rpc('clear_my_unsubscribe_suppression');
+		if (error) showToast(m('prefs.saveFailed', { error: error.message }), 'error');
+	}
+
 	// Flush any debounced change before leaving so a quick change-then-navigate
 	// doesn't drop it (the write-through cache captures it even if the network
 	// leg is interrupted mid-navigation).
 	beforeNavigate(() => {
 		void flushPending();
 	});
+
+	// Opt-in "runners nearby" area (issue #466). Geocodes the typed place to a
+	// coarse centroid via MapTiler (same path as ClubEditor), then hands it to
+	// the definer RPC which rounds it to ~1 km before storing. Never live GPS.
+	async function saveNearbyArea() {
+		const q = nearbyAreaInput.trim();
+		if (!q || nearbySavingArea) return;
+		nearbySavingArea = true;
+		try {
+			const place = await geocodePlace(q);
+			if (!place) {
+				showToast(m('prefs.nearbyAreaNotFound'), 'error');
+				return;
+			}
+			const stored = await setDiscoverableArea(place.center.lng, place.center.lat, q);
+			nearbyAreaLabel = stored ?? q;
+			nearbyAreaInput = '';
+			showToast(m('prefs.nearbyAreaSaved'), 'success');
+		} catch (e) {
+			showToast(m('prefs.nearbyAreaFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			nearbySavingArea = false;
+		}
+	}
+
+	async function clearNearbyArea() {
+		if (nearbySavingArea) return;
+		nearbySavingArea = true;
+		try {
+			await clearDiscoverableArea();
+			nearbyAreaLabel = null;
+			showToast(m('prefs.nearbyAreaCleared'), 'success');
+		} catch (e) {
+			showToast(m('prefs.nearbyAreaFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			nearbySavingArea = false;
+		}
+	}
 
 	// When the user picks a distance unit, snap the pace format to the
 	// matching min-per-unit choice (unless they've chosen a speed format),
@@ -313,6 +379,10 @@
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
 			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
+			discoverableNearby = effective(settings, 'discoverable_nearby', false) ?? false;
+			if (NEARBY_RUNNERS_ENABLED) {
+				nearbyAreaLabel = await fetchMyDiscoverableArea();
+			}
 			excludeGymFromReadiness = effective<boolean>(settings, 'exclude_gym_from_readiness', false) === true;
 			showCalories = effective<boolean>(settings, 'show_calories', true) !== false;
 
@@ -788,6 +858,53 @@
 						</span>
 					</span>
 				</label>
+				{#if NEARBY_RUNNERS_ENABLED}
+					<label class="checkbox-row">
+						<input
+							type="checkbox"
+							bind:checked={discoverableNearby}
+							onchange={() => autoSave({ discoverable_nearby: discoverableNearby })}
+						/>
+						<span>
+							{m('prefs.discoverableNearby')}
+							<span class="hint">{m('prefs.discoverableNearbyHint')}</span>
+						</span>
+					</label>
+					<div class="nearby-area">
+						<span class="label-text">{m('prefs.nearbyAreaLabel')}</span>
+						<p class="hint" data-testid="nearby-area-status">
+							{nearbyAreaLabel
+								? m('prefs.nearbyAreaCurrent', { label: nearbyAreaLabel })
+								: m('prefs.nearbyAreaNone')}
+						</p>
+						<div class="nearby-area-row">
+							<input
+								type="text"
+								bind:value={nearbyAreaInput}
+								placeholder={m('prefs.nearbyAreaPlaceholder')}
+								aria-label={m('prefs.nearbyAreaLabel')}
+							/>
+							<button
+								type="button"
+								class="btn btn-outline btn-sm"
+								disabled={nearbySavingArea || nearbyAreaInput.trim().length === 0}
+								onclick={saveNearbyArea}
+							>
+								{m('prefs.nearbyAreaSet')}
+							</button>
+							{#if nearbyAreaLabel}
+								<button
+									type="button"
+									class="btn btn-outline btn-sm"
+									disabled={nearbySavingArea}
+									onclick={clearNearbyArea}
+								>
+									{m('prefs.nearbyAreaClear')}
+								</button>
+							{/if}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</section>
 
@@ -1016,7 +1133,7 @@
 				<input
 					type="checkbox"
 					bind:checked={emailWeeklyDigest}
-					onchange={() => autoSave({ email_weekly_digest: emailWeeklyDigest ? 'on' : 'off' })}
+					onchange={() => setEngagementPref('email_weekly_digest', emailWeeklyDigest)}
 					data-testid="email-weekly-digest"
 				/>
 				<span>
@@ -1028,7 +1145,7 @@
 				<input
 					type="checkbox"
 					bind:checked={emailLifecycleDrip}
-					onchange={() => autoSave({ email_lifecycle_drip: emailLifecycleDrip ? 'on' : 'off' })}
+					onchange={() => setEngagementPref('email_lifecycle_drip', emailLifecycleDrip)}
 					data-testid="email-lifecycle-drip"
 				/>
 				<span>
@@ -1230,6 +1347,10 @@
 		margin-top: 0.2rem;
 	}
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
+	.nearby-area { margin-top: var(--space-sm); }
+	.nearby-area .hint { display: block; font-size: 0.78rem; color: var(--color-text-secondary); margin: 0 0 var(--space-xs); }
+	.nearby-area-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; }
+	.nearby-area-row input { flex: 1 1 14rem; width: auto; }
 	input, select { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }
 	input[type="checkbox"] { width: auto; padding: 0; flex-shrink: 0; }
 	input:focus, select:focus { outline: none; border-color: var(--color-primary); }

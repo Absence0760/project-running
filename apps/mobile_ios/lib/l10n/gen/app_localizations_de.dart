@@ -2017,6 +2017,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailEditInvalid => 'Gib eine gültige Distanz und Dauer ein';
 
   @override
+  String get runDetailEditFailed =>
+      'Änderungen konnten nicht gespeichert werden. Bitte versuche es erneut.';
+
+  @override
   String get runDetailSave => 'Speichern';
 
   @override

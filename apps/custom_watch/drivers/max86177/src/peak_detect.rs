@@ -32,6 +32,14 @@
 //! ambient-subtracted DC is railed (`Saturated`) or collapses to the dark floor
 //! (`OffWrist`), the reading stays invalid — subtraction recovers a real pulse,
 //! it never fabricates one.
+//!
+//! Subtraction has one hard limit: it can only cancel ambient the ADC actually
+//! resolved. Once the *raw* LED-on sample pins at (or hovers just under) the
+//! 19-bit full scale, the converter is clipping — the pulse information is
+//! destroyed before subtraction runs, and the "corrected" difference is
+//! arithmetic over a flat rail, not a signal. The detector therefore tracks the
+//! raw DC alongside the corrected one and classifies a pinned raw baseline as
+//! `Saturated` even when the corrected DC lands back inside the worn band.
 
 /// DC-baseline EMA shift: alpha = 1/64, ~0.64 s time constant at 100 Hz, a
 /// corner well below the heart-rate band.
@@ -64,6 +72,16 @@ const MIN_ENVELOPE: i32 = 20;
 /// them on the bench alongside `MEAS1_LEDA_CURRENT`.
 const CONTACT_DC_MIN: i32 = 2_000;
 const CONTACT_DC_MAX: i32 = 480_000;
+
+/// Raw-rail floor, in raw 19-bit counts: a *raw* (pre-subtraction) DC baseline
+/// above this is treated as a pinned ADC. Full scale is 0x7_FFFF = 524287, so
+/// this leaves ~9k counts (<2 %) of headroom — too little for the pulsatile AC
+/// to swing in without clipping, which destroys the pulse before ambient
+/// subtraction can recover it. Sits above the AGC's `raw_ceiling` (the loop
+/// sheds LED drive well before the read has to be declared dead) and above the
+/// headline recovery scene (~500k raw), and is a bench-verify value like the
+/// contact band.
+const RAW_RAIL_DC: i32 = 515_000;
 
 /// Reportable physiological band. An inter-beat interval implying a rate
 /// outside this is a double-trigger or a dropout, not a heartbeat, and is
@@ -132,6 +150,7 @@ pub struct PeakDetector {
 
     initialized: bool,
     baseline: i32,
+    raw_baseline: i32,
     smoothed: i32,
     envelope: i32,
     beat_ref: i32,
@@ -152,6 +171,7 @@ impl PeakDetector {
             timeout_samples: samples_per_min / MIN_BPM,
             initialized: false,
             baseline: 0,
+            raw_baseline: 0,
             smoothed: 0,
             envelope: 0,
             beat_ref: 0,
@@ -166,6 +186,7 @@ impl PeakDetector {
     pub fn reset(&mut self) {
         self.initialized = false;
         self.baseline = 0;
+        self.raw_baseline = 0;
         self.smoothed = 0;
         self.envelope = 0;
         self.beat_ref = 0;
@@ -180,17 +201,36 @@ impl PeakDetector {
     /// count for the same instant, subtracting the ambient before the DC/AC
     /// pipeline runs. In bright sun the ambient bleed rails the PPG channel;
     /// removing it recovers the LED-reflected pulse that would otherwise be lost
-    /// to `Contact::Saturated`. The difference is floored at zero — the LED can
-    /// only *add* reflected light, so a negative net is sensor noise, not a
-    /// signal. With `ambient == 0` this is exactly [`push`](Self::push), so the
+    /// to `Contact::Saturated`.
+    ///
+    /// The subtraction is saturating and floored at zero — the LED can only
+    /// *add* reflected light, so a negative net is sensor noise, not a signal,
+    /// and no argument pair can overflow the integer math. Headroom assumption:
+    /// both counts are 19-bit ADC values on the same scale (MEAS2 mirrors
+    /// MEAS1's ADC config), so their true difference always fits an `i32` with
+    /// room to spare. The *raw* count is tracked separately so [`contact`]
+    /// (Self::contact) can spot a pinned ADC — once the raw sample clips at
+    /// full scale the corrected difference is arithmetic over a flat rail, and
+    /// subtraction must not launder it into a plausible-looking DC. With
+    /// `ambient == 0` this is exactly [`push`](Self::push), so the
     /// single-channel path is unchanged.
     pub fn push_ambient(&mut self, ppg: i32, ambient: i32) -> Reading {
-        self.push((ppg - ambient).max(0))
+        if !self.initialized {
+            self.raw_baseline = ppg;
+        }
+        self.raw_baseline += ppg.saturating_sub(self.raw_baseline) >> BASELINE_SHIFT;
+        self.process(ppg.saturating_sub(ambient).max(0))
     }
 
     /// Feed one raw photodiode count. Returns the current estimate; `valid` is
     /// false until a stable pulse is established and again once it is lost.
+    /// Identical to [`push_ambient`](Self::push_ambient) with `ambient == 0`.
     pub fn push(&mut self, sample: i32) -> Reading {
+        self.push_ambient(sample, 0)
+    }
+
+    /// The shared DC/AC pipeline over the (ambient-corrected) sample.
+    fn process(&mut self, sample: i32) -> Reading {
         if !self.initialized {
             self.baseline = sample;
             self.initialized = true;
@@ -274,20 +314,22 @@ impl PeakDetector {
         self.last_interval = interval;
     }
 
-    /// Skin-contact state from the DC baseline + AC envelope the beat detector
+    /// Skin-contact state from the DC baselines + AC envelope the beat detector
     /// already tracks — no second pass over the samples. When fed via
     /// [`push_ambient`](Self::push_ambient) the baseline is the ambient-subtracted
     /// DC, so a bright-sun wrist whose raw PPG would rail can still read `Worn`.
-    /// `Worn` requires the DC to sit inside the plausible band *and* the envelope
-    /// to clear the pulse floor. A DC still railed near full scale after
-    /// subtraction is `Saturated`; a dark floor, a flat (non-pulsatile)
-    /// reflector, or a fresh detector are `OffWrist`. Fail-closed: uninitialised
-    /// is `OffWrist`.
+    /// `Worn` requires the corrected DC to sit inside the plausible band *and*
+    /// the envelope to clear the pulse floor. Two rails read `Saturated`: a
+    /// *raw* baseline pinned at/near full scale (the ADC is clipping, so the
+    /// corrected DC is fiction no matter where it lands — see [`RAW_RAIL_DC`]),
+    /// and a corrected DC still railed past the worn band. A dark floor, a flat
+    /// (non-pulsatile) reflector, or a fresh detector are `OffWrist`.
+    /// Fail-closed: uninitialised is `OffWrist`.
     pub fn contact(&self) -> Contact {
         if !self.initialized {
             return Contact::OffWrist;
         }
-        if self.baseline > CONTACT_DC_MAX {
+        if self.raw_baseline > RAW_RAIL_DC || self.baseline > CONTACT_DC_MAX {
             return Contact::Saturated;
         }
         if self.baseline >= CONTACT_DC_MIN && self.envelope >= MIN_ENVELOPE {
@@ -295,6 +337,22 @@ impl PeakDetector {
         } else {
             Contact::OffWrist
         }
+    }
+
+    /// The slow DC estimate of the *raw* (LED-on, pre-subtraction) stream, or
+    /// `None` before the first sample. This is the level the ADC actually
+    /// converts, so it is what an LED auto-gain loop must judge clipping
+    /// headroom against (see `agc_next_pa_ambient` in the driver crate).
+    pub fn raw_dc(&self) -> Option<u32> {
+        self.initialized.then(|| self.raw_baseline.max(0) as u32)
+    }
+
+    /// The slow DC estimate of the ambient-corrected stream — the LED-reflected
+    /// operating point the pulse rides on — or `None` before the first sample.
+    /// The AGC's brightness target judges this level: ambient cancels out of
+    /// it, so ambient swings can't walk the LED drive.
+    pub fn corrected_dc(&self) -> Option<u32> {
+        self.initialized.then(|| self.baseline.max(0) as u32)
     }
 
     fn reading(&self) -> Reading {

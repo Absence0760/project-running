@@ -24,6 +24,10 @@ values ('77777777-7777-7777-7777-0000000e0001',
    '00000000-0000-0000-0000-0000000e0001',
    'E2 Club', 'e2-club', true, 'open');
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000e0001"}';
 insert into club_posts (id, club_id, author_id, body)

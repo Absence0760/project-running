@@ -2665,6 +2665,10 @@
   "@runDetailEditInvalid": {
     "description": "Banner shown when the edit-run dialog has invalid distance/duration"
   },
+  "runDetailEditFailed": "Couldn't save your changes. Please try again.",
+  "@runDetailEditFailed": {
+    "description": "Banner shown when saving the run edit to local storage fails"
+  },
   "runDetailSave": "Save",
   "@runDetailSave": {
     "description": "Save action in run-detail dialogs"

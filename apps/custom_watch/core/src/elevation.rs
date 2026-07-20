@@ -79,6 +79,57 @@ const SEED_SAMPLES: u16 = 30;
 const GPS_ALT_MIN_M: f32 = -500.0;
 const GPS_ALT_MAX_M: f32 = 9000.0;
 
+/// A GPS fix older than this cannot back a manual re-zero. Idle fix
+/// publication is de-rated to just under the face's 5 s staleness budget (see
+/// the gps task), so a healthy idle signal always passes; anything older is
+/// the signal-lost case the re-zero must refuse rather than snap to a stale
+/// altitude.
+pub const REZERO_MAX_FIX_AGE_S: u32 = 5;
+
+/// The GPS altitude a manual re-zero may re-base against, or `None` when
+/// there is nothing honest to re-base to: no fix yet, a fix older than
+/// [`REZERO_MAX_FIX_AGE_S`], a fix without an altitude (RMC-only), or an
+/// implausible altitude.
+pub fn rezero_reference(fix: Option<&crate::fix::Fix>, now_s: u32) -> Option<f32> {
+    let fix = fix.filter(|f| now_s.saturating_sub(f.uptime_s) <= REZERO_MAX_FIX_AGE_S)?;
+    plausible_gps(fix.alt_m)
+}
+
+/// The outcome of a manual QNH re-zero request, published for the face's
+/// transient banner — honest about a refusal, never a silent no-op.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum RezeroStatus {
+    /// The altitude reference snapped to this GPS altitude (metres).
+    Applied(f32),
+    /// No fresh, plausible GPS altitude to re-base against; nothing changed.
+    NoGps,
+    /// No barometer streaming (absent sensor, or no sample yet); nothing to
+    /// re-base.
+    NoBaro,
+}
+
+/// How long the re-zero feedback banner stays on screen — the same dwell as
+/// the on-run alert banners ([`crate::alerts::ALERT_TTL_S`]).
+pub const REZERO_BANNER_TTL_S: u32 = 8;
+
+/// The 2x banner text for a re-zero outcome, sized like [`crate::alerts::Banner`]
+/// so it fits the face doubled.
+pub type RezeroBanner = heapless::String<10>;
+
+pub fn rezero_banner(status: RezeroStatus) -> RezeroBanner {
+    use core::fmt::Write;
+    let mut b = RezeroBanner::new();
+    let _ = match status {
+        // The plausibility window bounds the altitude at -500..=9000, so the
+        // rounded figure always fits the 10-cell banner.
+        RezeroStatus::Applied(alt_m) => write!(b, "SET {}M", libm::roundf(alt_m) as i32),
+        RezeroStatus::NoGps => write!(b, "NO GPS FIX"),
+        RezeroStatus::NoBaro => write!(b, "NO BARO"),
+    };
+    b
+}
+
 fn plausible_gps(gps_alt_m: Option<f32>) -> Option<f32> {
     gps_alt_m.filter(|a| a.is_finite() && (GPS_ALT_MIN_M..=GPS_ALT_MAX_M).contains(a))
 }
@@ -234,6 +285,32 @@ impl VertAccumulator {
                 None
             }
         }
+    }
+
+    /// Manual QNH re-zero: snap the complementary-filter bias so the corrected
+    /// altitude reads exactly `gps_alt_m` right now, instead of waiting out the
+    /// slow [`GPS_PULL`] convergence. Returns the snapped altitude, or `None`
+    /// (a no-op, nothing changed) when the GPS altitude is implausible.
+    ///
+    /// Snapping the bias — rather than recomputing the QNH pressure reference —
+    /// keeps the correction in the frame the filter already tracks: a new
+    /// sea-level reference would shift the raw baro altitude and the filter
+    /// would slowly slew the bias to cancel it again, nullifying the
+    /// calibration. The deadband anchor is re-framed by the same shift (the
+    /// seed-engage pattern in [`Self::push`]) so the one-time reference step is
+    /// never banked as vert, while a real climb pending since the last commit
+    /// is preserved. A snapped bias is `Tracking`, so the ongoing filter
+    /// continues from it with no convergence transient — and any in-progress
+    /// seed is superseded by the runner's explicit calibration.
+    pub fn rezero(&mut self, baro_alt_m: f32, gps_alt_m: Option<f32>) -> Option<f32> {
+        let gps = plausible_gps(gps_alt_m)?;
+        let snapped = baro_alt_m - gps;
+        let shift = snapped - self.bias.offset();
+        if let Some(reference) = self.reference {
+            self.reference = Some(reference - shift);
+        }
+        self.bias = Bias::Tracking(snapped);
+        Some(gps)
     }
 
     pub fn gain_m(&self) -> f32 {
@@ -479,6 +556,129 @@ mod tests {
         }
         assert_eq!(acc.gain_m(), after_recovery_start);
         assert_eq!(acc.loss_m(), 0.0);
+    }
+
+    // --- Manual QNH re-zero: the phone-free, instant bias snap ---
+
+    #[test]
+    fn rezero_snaps_the_published_altitude_instantly() {
+        // Baro-only frame reads 1624 m but GPS says 1610 m: one re-zero snaps
+        // the corrected altitude to GPS with no seed window or slow pull.
+        let mut acc = VertAccumulator::new();
+        acc.push(1624.0, true, None);
+        assert_eq!(acc.rezero(1624.0, Some(1610.0)), Some(1610.0));
+        assert!((acc.push(1624.0, true, None) - 1610.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn rezero_banks_no_vert_and_preserves_a_pending_climb() {
+        let mut acc = VertAccumulator::new();
+        acc.push(100.0, true, None);
+        // 2 m of real climb pending, below the 3 m deadband.
+        acc.push(102.0, true, None);
+        acc.rezero(102.0, Some(88.0));
+        assert_eq!(acc.gain_m(), 0.0, "the snap itself must bank nothing");
+        assert_eq!(acc.loss_m(), 0.0);
+        // Another 2 m of climb joins the pending 2 m and commits the full 4 m
+        // in the snapped frame — the anchor was re-framed, not reset.
+        acc.push(104.0, true, None);
+        assert!((acc.gain_m() - 4.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn rezero_with_implausible_gps_is_a_refused_no_op() {
+        let mut acc = VertAccumulator::new();
+        acc.push(500.0, true, None);
+        for bad in [None, Some(f32::NAN), Some(1.0e9), Some(-2000.0)] {
+            assert_eq!(acc.rezero(500.0, bad), None);
+        }
+        // Nothing changed: the altitude frame is still raw baro.
+        assert!((acc.push(500.0, true, None) - 500.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn rezero_engages_tracking_so_later_drift_is_still_corrected() {
+        // After a snap the filter must keep tracking from the snapped bias: a
+        // flat-GPS baro drift is corrected, not banked, with no seed transient.
+        let mut acc = VertAccumulator::new();
+        acc.push(100.0, true, None);
+        acc.rezero(100.0, Some(100.0));
+        for n in 0..1500 {
+            let baro = 100.0 + 30.0 * (n as f32) / 1500.0;
+            acc.push(baro, true, Some(100.0));
+        }
+        assert_eq!(acc.gain_m(), 0.0);
+        assert_eq!(acc.loss_m(), 0.0);
+    }
+
+    #[test]
+    fn rezero_supersedes_an_in_progress_seed() {
+        let mut acc = VertAccumulator::new();
+        // Part-way through the seed window (baro reads 20 m high)...
+        for _ in 0..10 {
+            acc.push(1020.0, true, Some(1000.0));
+        }
+        // ...the runner snaps to a known-good fix. The seed must not later
+        // engage over the explicit calibration.
+        acc.rezero(1020.0, Some(1000.0));
+        for _ in 0..100 {
+            let corrected = acc.push(1020.0, true, Some(1000.0));
+            assert!((corrected - 1000.0).abs() < 1e-3);
+        }
+        assert_eq!(acc.gain_m(), 0.0);
+        assert_eq!(acc.loss_m(), 0.0);
+    }
+
+    fn fix_at(alt_m: Option<f32>, uptime_s: u32) -> crate::fix::Fix {
+        crate::fix::Fix {
+            lat_deg: 40.0,
+            lon_deg: -105.0,
+            speed_mps: 0.0,
+            course_deg: None,
+            sats: 8,
+            alt_m,
+            time_of_day: None,
+            uptime_s,
+        }
+    }
+
+    #[test]
+    fn rezero_reference_needs_a_fresh_plausible_gps_altitude() {
+        let fresh = fix_at(Some(1610.0), 100);
+        assert_eq!(rezero_reference(Some(&fresh), 100), Some(1610.0));
+        assert_eq!(
+            rezero_reference(Some(&fresh), 100 + REZERO_MAX_FIX_AGE_S),
+            Some(1610.0)
+        );
+        // Stale, altitude-less, implausible, or absent fixes all refuse.
+        assert_eq!(
+            rezero_reference(Some(&fresh), 101 + REZERO_MAX_FIX_AGE_S),
+            None
+        );
+        assert_eq!(rezero_reference(Some(&fix_at(None, 100)), 100), None);
+        assert_eq!(
+            rezero_reference(Some(&fix_at(Some(f32::NAN), 100)), 100),
+            None
+        );
+        assert_eq!(rezero_reference(None, 100), None);
+    }
+
+    #[test]
+    fn rezero_banner_states_the_outcome() {
+        assert_eq!(
+            rezero_banner(RezeroStatus::Applied(1610.4)).as_str(),
+            "SET 1610M"
+        );
+        assert_eq!(
+            rezero_banner(RezeroStatus::Applied(-500.0)).as_str(),
+            "SET -500M"
+        );
+        assert_eq!(
+            rezero_banner(RezeroStatus::Applied(9000.0)).as_str(),
+            "SET 9000M"
+        );
+        assert_eq!(rezero_banner(RezeroStatus::NoGps).as_str(), "NO GPS FIX");
+        assert_eq!(rezero_banner(RezeroStatus::NoBaro).as_str(), "NO BARO");
     }
 
     // --- Moving-gate: the GPS-independent safety (GPS absent throughout) ---

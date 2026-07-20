@@ -14,8 +14,14 @@
 //! date + time) and GST (position-error stats, for an honest
 //! horizontal-accuracy figure). Everything else returns `Sentence::Other`
 //! so callers can count-but-ignore it.
+//!
+//! The transmit side lives in [`ubx`]: UBX binary frame encoding for the
+//! messages the firmware sends back to the receiver (today just RXM-PMREQ,
+//! the power-down between duty-cycled fixes).
 
 #![no_std]
+
+pub mod ubx;
 
 /// NMEA 0183 caps sentences at 82 chars including `$` and CRLF; leave slack
 /// for out-of-spec receivers.

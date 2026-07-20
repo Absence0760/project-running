@@ -25,6 +25,10 @@ values
   ('00000000-0000-0000-0000-0000000cc001', 'authenticated', 'authenticated',
    'route-enqueue@photo.local', '', now(), now());
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc001","role":"authenticated"}';
 

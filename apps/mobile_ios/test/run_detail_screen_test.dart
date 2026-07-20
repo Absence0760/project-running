@@ -829,6 +829,25 @@ void main() {
             .isNotEmpty,
       );
 
+      // The queued-delete banner is shown only after markPendingRemoteDelete
+      // completes its atomic sidecar write (a real temp-file + rename). Under
+      // CI disk load that real I/O outlasts deleteViaMenu's fixed runAsync
+      // window, so the in-memory tombstone is set (the assertion below passes)
+      // but showTopBanner hasn't run yet. Pump the real event loop until the
+      // banner mounts rather than racing a fixed delay.
+      await tester.runAsync(() async {
+        for (var i = 0; i < 200; i++) {
+          if (find
+              .textContaining("Couldn't delete from the cloud")
+              .evaluate()
+              .isNotEmpty) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+        }
+      });
+
       expect(api.calls, 1);
       // Run NOT removed locally — the cloud row still exists, so a local
       // delete would just resurrect on the next resync.
@@ -857,7 +876,12 @@ void main() {
       final api = _DeleteOkApi();
       final runStore = await pumpForDelete(tester, run, apiClient: api);
 
-      await deleteViaMenu(tester);
+      await deleteViaMenu(
+        tester,
+        // Popping the detail route is the last thing this flow does, after
+        // the local store I/O the delete awaits.
+        settled: () => find.byType(RunDetailScreen).evaluate().isEmpty,
+      );
 
       expect(api.calls, 1);
       // Gone locally and nothing queued: the cloud row was removed, so
@@ -874,7 +898,10 @@ void main() {
       final run = _run(title: 'Morning Tempo');
       final runStore = await pumpForDelete(tester, run);
 
-      await deleteViaMenu(tester);
+      await deleteViaMenu(
+        tester,
+        settled: () => find.byType(RunDetailScreen).evaluate().isEmpty,
+      );
 
       expect(runStore.runs, isEmpty);
       expect(runStore.pendingRemoteDeleteIds, isEmpty);
