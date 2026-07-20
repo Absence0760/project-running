@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -17,10 +17,11 @@ use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::alerts::{self, Alert};
 use watch_core::course::{Course, CoursePoint, PanelFit};
-use watch_core::elevation::Reading as ElevationReading;
+use watch_core::elevation::{self, Reading as ElevationReading, RezeroStatus};
 use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
+use watch_core::hr_duty::{self, HrSample};
 use watch_core::page::Page;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
@@ -175,8 +176,9 @@ pub async fn screen_task(
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
+    let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut latest: Option<Fix> = None;
-    let mut hr_bpm: Option<u16> = None;
+    let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
@@ -186,6 +188,7 @@ pub async fn screen_task(
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
+    let mut rezero: Option<(RezeroStatus, u32)> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -211,8 +214,8 @@ pub async fn screen_task(
         if let Some(fix) = fix_rx.try_changed() {
             latest = Some(fix);
         }
-        if let Some(reading) = hr_rx.try_changed() {
-            hr_bpm = reading.valid.then_some(reading.bpm);
+        if let Some(sample) = hr_rx.try_changed() {
+            hr = Some(sample);
         }
         if let Some(snap) = rec_rx.try_changed() {
             rec = Some(snap);
@@ -249,10 +252,17 @@ pub async fn screen_task(
         if let Some(q) = fix_quality_rx.try_changed() {
             fix_quality = Some(q);
         }
+        if let Some(r) = rezero_rx.try_changed() {
+            rezero = Some(r);
+        }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
         let animate = uptime_s.saturating_sub(last_interaction_s) < ANIM_WINDOW_S;
+        // The face renders only what the duty-cycle hold budget lets it vouch
+        // for: the last valid reading holds through one off-window and then
+        // blanks to `--` — a duty-cycled HR must never look continuous.
+        let hr_bpm = hr_duty::shown_bpm(hr, uptime_s, mode);
         let mut rows = face::page_rows(
             page,
             latest.as_ref(),
@@ -363,8 +373,18 @@ pub async fn screen_task(
         // takes the hero band over for its TTL — the banner ("! DRINK") is the
         // most unmissable treatment a 1-bit panel gives, and the alert engine
         // only emits during a run, so the idle face never loses its title.
+        // The manual QNH re-zero's transient feedback: a 2x banner over the
+        // idle face's title band for its TTL, mirroring the on-run alert
+        // treatment. Idle-only — the gesture only exists on the idle face, and
+        // a run view's hero band belongs to the run's own alerts.
+        let rezero_banner = rezero
+            .filter(|(_, at)| uptime_s.saturating_sub(*at) < elevation::REZERO_BANNER_TTL_S)
+            .filter(|_| !face::run_view(rec.as_ref()))
+            .map(|(status, _)| elevation::rezero_banner(status));
         if let Some(a) = alert {
             fb.draw_text_2x(0, 0, &alerts::banner(a));
+        } else if let Some(banner) = &rezero_banner {
+            fb.draw_text_2x(0, 0, banner);
         } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
             // The single-metric glance pages headline their number triple-size
             // (their face reserves rows 0-2 + puts the label on row 3); every
@@ -444,7 +464,11 @@ pub async fn screen_task(
         let fix_fresh = latest
             .as_ref()
             .is_some_and(|f| uptime_s.saturating_sub(f.uptime_s) <= stale_after);
-        let tick = if animate || fix_fresh {
+        // A shown HR is another time-based refresh owed: its blank must land
+        // when the hold budget expires, not at the next long heartbeat — the
+        // HR analogue of the fresh→stale fix flip above. A showing re-zero
+        // banner needs the same timely tick to expire on schedule.
+        let tick = if animate || fix_fresh || hr_bpm.is_some() || rezero_banner.is_some() {
             TICK_ACTIVE
         } else {
             TICK_IDLE
@@ -476,15 +500,17 @@ pub async fn screen_task(
                 tb_rx.changed(),
                 mode_rx.changed(),
                 sats_rx.changed(),
-                select(fix_quality_rx.changed(), Timer::after(tick)),
+                select3(
+                    fix_quality_rx.changed(),
+                    rezero_rx.changed(),
+                    Timer::after(tick),
+                ),
             ),
         )
         .await
         {
             Either3::First(Either4::First(fix)) => latest = Some(fix),
-            Either3::First(Either4::Second(reading)) => {
-                hr_bpm = reading.valid.then_some(reading.bpm)
-            }
+            Either3::First(Either4::Second(sample)) => hr = Some(sample),
             Either3::First(Either4::Third(snap)) => rec = Some(snap),
             Either3::First(Either4::Fourth(reading)) => elev = Some(reading),
             Either3::Second(Either4::First(p)) => page = p,
@@ -494,8 +520,9 @@ pub async fn screen_task(
             Either3::Third(Either4::First(v)) => tb = Some(v),
             Either3::Third(Either4::Second(m)) => mode = m,
             Either3::Third(Either4::Third(s)) => sats = Some(s),
-            Either3::Third(Either4::Fourth(Either::First(q))) => fix_quality = Some(q),
-            Either3::Third(Either4::Fourth(Either::Second(()))) => {}
+            Either3::Third(Either4::Fourth(Either3::First(q))) => fix_quality = Some(q),
+            Either3::Third(Either4::Fourth(Either3::Second(r))) => rezero = Some(r),
+            Either3::Third(Either4::Fourth(Either3::Third(()))) => {}
         }
     }
 }

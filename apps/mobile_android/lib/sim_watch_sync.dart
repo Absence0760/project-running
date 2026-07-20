@@ -263,6 +263,14 @@ Uint8List encodeChunkRequest(int runSeq, int offset, int len) {
 /// drift accumulated during the run — acceptable for the tier-1 bench
 /// prototype (see decisions.md; documented as the started_at
 /// approximation).
+///
+/// A run recovered from a PRIOR power cycle has its `startUptimeS`
+/// clamped by the watch to the current uptime (`flash_store.rs`
+/// `manifest_at`), so the uptime offset under-ages it. The tell is an
+/// offset shorter than the footer's `elapsedS` — a run cannot have
+/// started less than its own elapsed time before its end — and in that
+/// case we date the run as ending now-ish: `startedAt = phoneNow -
+/// elapsedS`.
 Map<String, dynamic> payloadFromBlob(
   List<int> blob,
   ManifestEntry entry,
@@ -274,10 +282,10 @@ Map<String, dynamic> payloadFromBlob(
   if (n < 0) {
     throw const FormatException('blob is not a valid run_store blob');
   }
-  final startedAt = phoneNow
-      .toUtc()
-      .subtract(Duration(
-        seconds: manifestHeader.watchUptimeS - entry.startUptimeS,
+  final uptimeOffsetS = manifestHeader.watchUptimeS - entry.startUptimeS;
+  final startedAt = phoneNow.toUtc().subtract(Duration(
+        seconds:
+            uptimeOffsetS < footer.elapsedS ? footer.elapsedS : uptimeOffsetS,
       ));
 
   final track = <Map<String, dynamic>>[];

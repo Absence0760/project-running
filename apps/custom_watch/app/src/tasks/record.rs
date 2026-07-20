@@ -38,7 +38,6 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
-use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::{Alert, AlertEngine};
 use watch_core::button::RecordCommand;
 #[cfg(feature = "sim-course")]
@@ -46,6 +45,8 @@ use watch_core::cutoff_eta::CutoffLeg;
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
+use watch_core::gnss_mode::GnssMode;
+use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::run_store::{verify_blob, RunWriter, TrackPoint};
 use watch_core::settings::WatchSettings;
@@ -176,7 +177,8 @@ async fn checkpoint_run(store: &'static SharedStore, open: &OpenRun, snap: &Snap
     store
         .lock()
         .await
-        .checkpoint(open.run_seq, open.start_uptime_s, &blob);
+        .checkpoint(open.run_seq, open.start_uptime_s, &blob)
+        .await;
 }
 
 /// Finalise the staged blob with the snapshot totals and commit it to flash.
@@ -202,7 +204,8 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
     store
         .lock()
         .await
-        .commit(open.run_seq, open.start_uptime_s, &blob);
+        .commit(open.run_seq, open.start_uptime_s, &blob)
+        .await;
 }
 
 /// Altitude in metres → wire-format decimetres, dropping values outside the
@@ -217,10 +220,9 @@ fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
     }
 }
 
-/// Latest HR reading → a track point's `bpm`, dropping invalid or out-of-`u8`
-/// estimates.
-fn bpm_of(r: &HrReading) -> Option<u8> {
-    (r.valid && (1..=255).contains(&r.bpm)).then_some(r.bpm as u8)
+/// A held HR estimate → a track point's `bpm`, dropping out-of-`u8` values.
+fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
+    bpm.and_then(|b| ((1..=255).contains(&b)).then_some(b as u8))
 }
 
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
@@ -292,7 +294,8 @@ pub async fn run(store: &'static SharedStore) {
     // recovered run's id (which would confuse the phone's manifest + chunk pull).
     let mut next_seq: u32 = store.lock().await.next_run_seq();
     let mut open: Option<OpenRun> = None;
-    let mut latest_bpm: Option<u8> = None;
+    let mut hr: Option<HrSample> = None;
+    let mut mode = GnssMode::default();
     let mut latest_baro_alt_m: Option<f32> = None;
     let mut trackback = Trackback::new();
     let mut crumb_len: usize = 0;
@@ -364,8 +367,9 @@ pub async fn run(store: &'static SharedStore) {
         // only changes while idle (BTN3 cycles pages once a run is under way),
         // so it is always applied here before the Start command that opens the
         // run reaches the recorder.
-        if let Some(mode) = mode_rx.try_changed() {
-            recorder.set_fix_interval_s(mode.fix_interval_s());
+        if let Some(m) = mode_rx.try_changed() {
+            mode = m;
+            recorder.set_fix_interval_s(m.fix_interval_s());
         }
 
         // Feed the nav task's course projection to the recorder for the cut-off
@@ -396,13 +400,17 @@ pub async fn run(store: &'static SharedStore) {
         match event {
             Event::Tick => recorder.tick(Instant::now().as_secs() as u32),
             Event::Fix(fix) => {
-                if let Some(r) = hr_rx.try_changed() {
-                    latest_bpm = bpm_of(&r);
-                    // The recorder's zone-time accumulators bank against the
-                    // same HR the track points are stamped with; a dropped
-                    // pulse (None) stops the accrual.
-                    recorder.set_hr(latest_bpm.map(u16::from));
+                if let Some(s) = hr_rx.try_changed() {
+                    hr = Some(s);
                 }
+                // The recorder's zone-time accumulators bank against the same
+                // HR the track points are stamped with, and only within the
+                // mode's duty-cycle hold budget (`hr_duty::shown_bpm`): a
+                // duty-cycled gap banks the held zone through one off-window,
+                // past that it banks nothing — the same rule the face shows
+                // by. A dropped pulse (bpm None) stops the accrual instantly.
+                let held = hr_duty::shown_bpm(hr, fix.uptime_s, mode);
+                recorder.set_hr(held);
                 if let Some(r) = elev_rx.try_changed() {
                     latest_baro_alt_m = Some(r.alt_m);
                     // The recorder's live-GAP grade prefers the barometric
@@ -422,7 +430,7 @@ pub async fn run(store: &'static SharedStore) {
                 recorder.on_fix(&fix);
                 if recorder.last_fix_stored() {
                     if let Some(o) = open.as_mut() {
-                        push_point(o, &fix, latest_bpm, latest_baro_alt_m);
+                        push_point(o, &fix, bpm_u8(held), latest_baro_alt_m);
                     }
                     trackback.on_point(fix.lat_deg, fix.lon_deg, fix.uptime_s);
                     let view = trackback.view();
@@ -499,10 +507,14 @@ pub async fn run(store: &'static SharedStore) {
                 }
             }
         }
+        // The zone-ceiling alert judges the same staleness-bounded HR the
+        // recorder banks with — a reading past its hold budget must not keep
+        // an "over ceiling" alert alive.
+        let alert_now_s = Instant::now().as_secs() as u32;
         let alert = alerts.on_update(
             &snap,
-            latest_bpm.map(u16::from),
-            Instant::now().as_secs() as u32,
+            hr_duty::shown_bpm(hr, alert_now_s, mode),
+            alert_now_s,
         );
         if alert != last_alert {
             match alert {

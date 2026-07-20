@@ -18,6 +18,7 @@
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
+#[cfg(not(feature = "ble"))]
 use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::{bind_interrupts, peripherals, spim, twim, uarte};
 use embassy_sync::mutex::Mutex;
@@ -75,7 +76,9 @@ async fn main(spawner: Spawner) {
         Irqs,
         gps_config,
     );
-    let (_gps_tx, gps_rx) = gps_uart.split();
+    // TX carries the UBX-RXM-PMREQ power-down frames + the 0xFF wake byte the
+    // gps task sends to duty-cycle the receiver in throttled recording modes.
+    let (gps_tx, gps_rx) = gps_uart.split();
 
     // Sharp MIP wants LSB-first (datasheet bit M0 leads) and mode 0; the
     // panel tops out at 2 MHz.
@@ -130,13 +133,34 @@ async fn main(spawner: Spawner) {
     let btn3 = Input::new(board.buttons.btn3, Pull::Up);
     let btn4 = Input::new(board.buttons.btn4, Pull::Up);
 
+    // The BLE build brings the SoftDevice up before the run store because the
+    // S140 arbitrates all flash access: the store's backend there is
+    // `nrf_softdevice::Flash`, which needs the enabled stack. Its background
+    // task is spawned here too, ahead of any flash erase/write — those complete
+    // via SoC events only that task dispatches.
+    #[cfg(feature = "ble")]
+    let (sd, server) = {
+        // `enable` hands back &'static mut; `Server::new` needs the &mut to
+        // register attributes, after which we reborrow it as a shared &'static
+        // for the two tasks that share the stack.
+        let sd = Softdevice::enable(&tasks::ble::config());
+        static SERVER: StaticCell<tasks::ble::Server> = StaticCell::new();
+        let server = SERVER.init(unwrap!(tasks::ble::Server::new(sd)));
+        let sd: &'static Softdevice = sd;
+        spawner.spawn(unwrap!(tasks::ble::softdevice_task(sd)));
+        (sd, server)
+    };
+
     // Shared flash run store: `record` commits finished runs, `ble` reads them
-    // back for sync. Probes for the NVMC controller at construction and no-ops
-    // if it is absent (the sim), so recording is never blocked on flash.
+    // back for sync. Default build: embassy-nrf NVMC, probed at construction
+    // and no-op'd when absent (the sim), so recording is never blocked on
+    // flash. BLE build: the SoftDevice-arbitrated flash handle taken above.
+    #[cfg(not(feature = "ble"))]
+    let flash = Nvmc::new(board.flash.nvmc);
+    #[cfg(feature = "ble")]
+    let flash = nrf_softdevice::Flash::take(sd);
     static STORE: StaticCell<run_flash::SharedStore> = StaticCell::new();
-    let store = STORE.init(Mutex::new(run_flash::RunStore::new(Nvmc::new(
-        board.flash.nvmc,
-    ))));
+    let store = STORE.init(Mutex::new(run_flash::RunStore::new(flash)));
 
     // Boot-seed the persisted GNSS recording mode so a deliberate Expedition /
     // Balanced choice survives reboot / brown-out instead of silently reverting
@@ -177,7 +201,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(unwrap!(tasks::button::run(
         btn1, btn2, btn3, btn4, boot_mode, store
     )));
-    spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
+    spawner.spawn(unwrap!(tasks::gps::run(gps_tx, gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
@@ -201,16 +225,5 @@ async fn main(spawner: Spawner) {
     }
 
     #[cfg(feature = "ble")]
-    {
-        use static_cell::StaticCell;
-        // `enable` hands back &'static mut; `Server::new` needs the &mut to
-        // register attributes, after which we reborrow it as a shared &'static
-        // for the two tasks that share the stack.
-        let sd = Softdevice::enable(&tasks::ble::config());
-        static SERVER: StaticCell<tasks::ble::Server> = StaticCell::new();
-        let server = SERVER.init(unwrap!(tasks::ble::Server::new(sd)));
-        let sd: &'static Softdevice = sd;
-        spawner.spawn(unwrap!(tasks::ble::softdevice_task(sd)));
-        spawner.spawn(unwrap!(tasks::ble::run(sd, server, store)));
-    }
+    spawner.spawn(unwrap!(tasks::ble::run(sd, server, store)));
 }

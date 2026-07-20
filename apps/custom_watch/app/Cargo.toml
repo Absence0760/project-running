@@ -59,7 +59,7 @@ dev-blink = []
 # sim (Renode has no SoftDevice) — build with:
 #   cargo build --release --no-default-features --features ble
 # UNVERIFIED pending the dev kit; see apps/custom_watch/README.md step 6.
-ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140"]
+ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140", "dep:embedded-storage-async"]
 
 # Versions pinned to crates.io latest as of 2026-05-28 (post-scaffold audit).
 # When bumping, check the relevant CHANGELOG — Embassy's executor / time / nrf
@@ -84,8 +84,13 @@ cortex-m-rt      = "0.7"
 
 # I²C Operation type for the timeout-bounded sensor presence probes
 embedded-hal     = "1.0"
-# NorFlash traits for the on-device run store over embassy-nrf's NVMC (step 7)
-embedded-storage = "0.3"
+# NorFlash traits for the on-device run store (step 7): the blocking traits
+# cover the default NVMC backend + reads on both builds; the async traits are
+# what nrf_softdevice::Flash implements for its SoftDevice-arbitrated
+# erase/write, so the ble feature pulls them in (version matched to the
+# nrf-softdevice pin so the trait impls line up).
+embedded-storage       = "0.3"
+embedded-storage-async = { version = "0.4", optional = true }
 
 # Run-store staging buffer + FlashSink + the BLE notify characteristics' Vec<u8, N>
 # (matches the heapless 0.9 the workspace + nrf-softdevice use, so the GattValue

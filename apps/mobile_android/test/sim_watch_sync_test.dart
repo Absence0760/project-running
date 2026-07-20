@@ -27,9 +27,10 @@ Uint8List _hex(String s) {
 
 Uint8List _goldenBlob() => _hex(_goldenHex);
 
-/// MAN1 manifest describing exactly the golden run: watch uptime 100 s,
-/// one entry run_seq=7 size=84 start_uptime=41.
-Uint8List _goldenManifest() {
+/// MAN1 manifest describing exactly the golden run: watch uptime 700 s,
+/// one entry run_seq=7 size=84 start_uptime=41 — a same-boot run whose
+/// uptime offset (659 s) covers the footer's 620 s elapsed.
+Uint8List _goldenManifest({int watchUptimeS = 700, int startUptimeS = 41}) {
   final d = ByteData(12 + 12);
   d.setUint8(0, 'M'.codeUnitAt(0));
   d.setUint8(1, 'A'.codeUnitAt(0));
@@ -37,10 +38,10 @@ Uint8List _goldenManifest() {
   d.setUint8(3, '1'.codeUnitAt(0));
   d.setUint8(4, 1); // version
   d.setUint8(5, 1); // run_count
-  d.setUint32(8, 100, Endian.little); // watch_uptime_s
+  d.setUint32(8, watchUptimeS, Endian.little); // watch_uptime_s
   d.setUint32(12, 7, Endian.little); // run_seq
   d.setUint32(16, 84, Endian.little); // size
-  d.setUint32(20, 41, Endian.little); // start_uptime_s
+  d.setUint32(20, startUptimeS, Endian.little); // start_uptime_s
   return d.buffer.asUint8List();
 }
 
@@ -182,7 +183,7 @@ void main() {
       final m = decodeManifest(_goldenManifest());
       expect(m.header.version, 1);
       expect(m.header.runCount, 1);
-      expect(m.header.watchUptimeS, 100);
+      expect(m.header.watchUptimeS, 700);
       expect(m.entries, hasLength(1));
       expect(m.entries.single.runSeq, 7);
       expect(m.entries.single.size, 84);
@@ -210,8 +211,8 @@ void main() {
         phoneNow,
       );
 
-      // started_at = phoneNow - (watch_uptime 100 - start_uptime 41) = -59 s.
-      expect(payload['started_at'], DateTime.utc(2026, 7, 8, 11, 59, 1).toIso8601String());
+      // started_at = phoneNow - (watch_uptime 700 - start_uptime 41) = -659 s.
+      expect(payload['started_at'], DateTime.utc(2026, 7, 8, 11, 49, 1).toIso8601String());
       expect(payload['duration_s'], 620); // elapsed_s
       expect(payload['distance_m'], 1234.0);
       expect(payload['source'], 'watch');
@@ -224,10 +225,71 @@ void main() {
       expect(track[0]['lng'], closeTo(-105.2705000, 1e-9));
       expect(track[0]['ele'], closeTo(1624.0, 1e-9));
       expect(track[0]['bpm'], 120);
-      expect(track[0]['ts'], DateTime.utc(2026, 7, 8, 11, 59, 1).toIso8601String());
-      expect(track[2]['ts'], DateTime.utc(2026, 7, 8, 11, 59, 3).toIso8601String());
+      expect(track[0]['ts'], DateTime.utc(2026, 7, 8, 11, 49, 1).toIso8601String());
+      expect(track[2]['ts'], DateTime.utc(2026, 7, 8, 11, 49, 3).toIso8601String());
       expect(track[2]['ele'], isNull);
       expect(track[2]['bpm'], isNull);
+    });
+
+    test('a recovered prior-boot run dates from the footer elapsed fallback',
+        () {
+      // The watch clamps a prior-boot start_uptime_s to the current uptime
+      // (flash_store.rs manifest_at), so the manifest reads uptime 100 /
+      // start 100: offset 0 < elapsed 620 → the run must predate this boot.
+      final m = decodeManifest(_goldenManifest(
+        watchUptimeS: 100,
+        startUptimeS: 100,
+      ));
+      final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
+      final payload = payloadFromBlob(
+        _goldenBlob(),
+        m.entries.single,
+        m.header,
+        phoneNow,
+      );
+
+      // started_at = phoneNow - elapsed_s 620, not phoneNow - offset 0.
+      expect(payload['started_at'],
+          DateTime.utc(2026, 7, 8, 11, 49, 40).toIso8601String());
+      final track = (payload['track'] as List).cast<Map<String, dynamic>>();
+      expect(track[0]['ts'],
+          DateTime.utc(2026, 7, 8, 11, 49, 40).toIso8601String());
+      expect(track[2]['ts'],
+          DateTime.utc(2026, 7, 8, 11, 49, 42).toIso8601String());
+    });
+
+    test('a partially clamped offset (offset < elapsed) also falls back', () {
+      // uptime 100 - start 41 = 59 s < elapsed 620 s: impossible for a
+      // same-boot run, so it dates as ending now-ish.
+      final m = decodeManifest(_goldenManifest(
+        watchUptimeS: 100,
+        startUptimeS: 41,
+      ));
+      final payload = payloadFromBlob(
+        _goldenBlob(),
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12, 0, 0),
+      );
+      expect(payload['started_at'],
+          DateTime.utc(2026, 7, 8, 11, 49, 40).toIso8601String());
+    });
+
+    test('an offset just past elapsed keeps the uptime dating', () {
+      // uptime 662 - start 41 = 621 s >= elapsed 620 s: consistent, so the
+      // uptime offset wins (fallback would say 11:49:40).
+      final m = decodeManifest(_goldenManifest(
+        watchUptimeS: 662,
+        startUptimeS: 41,
+      ));
+      final payload = payloadFromBlob(
+        _goldenBlob(),
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12, 0, 0),
+      );
+      expect(payload['started_at'],
+          DateTime.utc(2026, 7, 8, 11, 49, 39).toIso8601String());
     });
 
     test('the reshaped payload feeds runFromWatchPayload cleanly', () {

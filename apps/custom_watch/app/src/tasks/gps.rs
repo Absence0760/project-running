@@ -1,9 +1,11 @@
 //! GPS task — reads NMEA from the u-blox MAX-M10S over UARTE0, parses
-//! sentences, and publishes merged fixes to `state::FIX`.
+//! sentences, publishes merged fixes to `state::FIX`, and powers the
+//! receiver down between the fixes a throttled recording mode owes.
 //!
 //! Thin glue by design: byte assembly + parsing live in `ublox_nmea`,
-//! RMC/GGA merging in `watch_core::fix` — both host-tested. This task only
-//! moves bytes from the peripheral into those modules.
+//! RMC/GGA merging in `watch_core::fix`, the power-down schedule in
+//! `watch_core::gnss_power` — all host-tested. This task only moves bytes
+//! between the peripheral and those modules.
 //!
 //! Publication is **throttled to the cadence the current situation needs**,
 //! generalised from the original idle-only de-rate:
@@ -16,10 +18,23 @@
 //!   full-rate path), one per 15 s in Balanced, one per 60 s in Expedition
 //!   (`watch_core::gnss_mode`).
 //!
-//! Either way this is the software half of GPS duty-cycling — it cuts the
-//! downstream wakes, not the UART stream; powering the GNSS module down
-//! between fixes is the separate, hardware-gated tier-2 win the mode surface
-//! plugs into.
+//! On top of the throttle, **the receiver itself now sleeps between the
+//! fixes a throttled mode owes** — the deeper win the README's power
+//! discipline owed: while a run is *Recording* in Balanced / Expedition,
+//! each published fix earns a `gnss_power::sleep_window`, the task sends
+//! UBX-RXM-PMREQ (backup mode, bounded duration — `ublox_nmea::ubx`) on the
+//! module's UART, and at the scheduled wake writes the 0xFF RX-activity wake
+//! byte, leaving the reacquire margin before the next fix is due. Paused and
+//! idle keep the receiver on (an auto-pause resumes off the next moving fix;
+//! the idle face wants a live position within seconds), and a run-state
+//! change mid-window wakes the receiver early. Everything is best-effort /
+//! L4: a failed PMREQ or wake write only costs the power it was meant to
+//! save — the receiver stays (or self-wakes) on, never a lost fix. The
+//! Renode sim's UART feed ignores PMREQ entirely; that is tolerated by
+//! construction, because every fix a never-sleeping receiver delivers inside
+//! a sleep window is one the publication throttle already drops (host-pinned
+//! in `gnss_power`). The receiver's *actual* power state is bench-gated
+//! until the dev kit lands.
 //!
 //! Reads are burst-DMA: the UARTE fills an [`RX_BURST`]-byte buffer over
 //! EasyDMA and wakes the CPU once per buffer, not once per byte. A
@@ -32,12 +47,15 @@
 //! so it's a tier-2 profiling item, not a bench-prototype one.)
 
 use defmt::{debug, info, unwrap, warn};
-use embassy_nrf::uarte::UarteRx;
+use embassy_futures::select::{select3, Either3};
+use embassy_nrf::uarte::{UarteRx, UarteTx};
+use embassy_sync::watch::DynSender;
 use embassy_time::{Duration, Instant, Timer};
-use ublox_nmea::{Parser, Sentence};
+use ublox_nmea::{ubx, Parser, Sentence};
 use watch_core::face::STALE_AFTER_S;
-use watch_core::fix::FixAccumulator;
+use watch_core::fix::{Fix, FixAccumulator};
 use watch_core::gnss_mode::GnssMode;
+use watch_core::gnss_power::{self, SleepWindow};
 use watch_core::record::RecordState;
 
 use crate::state;
@@ -54,9 +72,9 @@ const RX_BURST: usize = 32;
 /// on — the "de-rate the display when not recording" half of GPS duty-cycling.
 /// Held one second under the face's `STALE_AFTER_S` freshness budget so the idle
 /// status face still shows a locked fix as fresh; a longer gap would flip it to
-/// the "searching" state even though GNSS has a lock. Powering the GNSS module
-/// itself down between fixes is the separate, hardware-gated tier-2 win (README
-/// power discipline) — this cuts only the downstream wakes, not the UART stream.
+/// the "searching" state even though GNSS has a lock. The receiver itself stays
+/// on while idle: a ~4 s gap is under `gnss_power`'s minimum worthwhile sleep,
+/// and the idle face owes a live position within seconds of a glance.
 const IDLE_FIX_MIN_INTERVAL_S: u32 = STALE_AFTER_S - 1;
 
 /// Run-cadence fixes are only owed while a run consumes them — Recording, and
@@ -75,19 +93,95 @@ fn min_interval_s(active: bool, mode: GnssMode) -> u32 {
     }
 }
 
+/// The parse→merge→publish pipeline both loop branches feed: byte assembly +
+/// sentence parsing (`ublox_nmea`), best-effort GSV/GSA side channels, RMC/GGA
+/// merging (`watch_core::fix`), and the publication throttle.
+struct Pipeline {
+    parser: Parser,
+    acc: FixAccumulator,
+    fix_tx: DynSender<'static, Fix>,
+    sats_tx: DynSender<'static, u8>,
+    quality_tx: DynSender<'static, u8>,
+    last_published_s: u32,
+}
+
+impl Pipeline {
+    /// Feed one burst buffer through the pipeline; returns the uptime a fix
+    /// was published at, if this buffer completed one that cleared the
+    /// throttle.
+    fn feed(&mut self, buf: &[u8], interval_s: u32) -> Option<u32> {
+        let mut published = None;
+        for &b in buf {
+            let Some(sentence) = self.parser.feed(b) else {
+                continue;
+            };
+            let uptime_s = Instant::now().as_secs() as u32;
+            // Best-effort satellite count + GSA fix quality for an honest
+            // signal meter (L4): publish alongside the fix pipeline, never
+            // gating it. Fix quality lets the meter read "searching" on a
+            // no-fix even under a full sky in view.
+            if let Sentence::Gsv { sats_in_view } = sentence {
+                self.sats_tx.send(sats_in_view);
+            }
+            if let Sentence::Gsa { fix_type, .. } = sentence {
+                self.quality_tx.send(fix_type);
+            }
+            if let Some(fix) = self.acc.apply(&sentence, uptime_s) {
+                // Throttle to the cadence in force: the idle de-rate, or the
+                // selected mode's interval while recording. An interval of 1
+                // (Performance) forwards every fix unconditionally — the
+                // second-resolution clock must never drop a same-second fix
+                // the full-rate path would have delivered.
+                if interval_s > 1 && uptime_s.saturating_sub(self.last_published_s) < interval_s {
+                    continue;
+                }
+                self.last_published_s = uptime_s;
+                debug!(
+                    "gps: fix lat={} lon={} speed={} sats={}",
+                    fix.lat_deg, fix.lon_deg, fix.speed_mps, fix.sats
+                );
+                self.fix_tx.send(fix);
+                published = Some(uptime_s);
+            }
+        }
+        published
+    }
+}
+
+/// Wake a sleeping receiver: any RX-line activity does it, and 0xFF is the
+/// documented dummy byte it consumes without parsing. Best-effort — the
+/// PMREQ's bounded duration is the self-wake backstop if this write fails.
+async fn wake_receiver(tx: &mut UarteTx<'static>, why: &str) {
+    let wake = [ubx::WAKE_BYTE];
+    match tx.write(&wake).await {
+        Ok(()) => info!("gps: wake byte sent ({=str})", why),
+        Err(e) => warn!(
+            "gps: wake byte failed {:?} ({=str}); PMREQ backstop will self-wake the receiver",
+            e, why
+        ),
+    }
+}
+
 #[embassy_executor::task]
-pub async fn run(mut rx: UarteRx<'static>) {
-    let mut parser = Parser::new();
-    let mut acc = FixAccumulator::new();
-    let sender = state::FIX.sender();
-    let sats_sender = state::SATS.sender();
-    let fix_quality_sender = state::FIX_QUALITY.sender();
+pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
+    let mut pipe = Pipeline {
+        parser: Parser::new(),
+        acc: FixAccumulator::new(),
+        fix_tx: state::FIX.dyn_sender(),
+        sats_tx: state::SATS.dyn_sender(),
+        quality_tx: state::FIX_QUALITY.dyn_sender(),
+        last_published_s: 0,
+    };
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut buf = [0u8; RX_BURST];
     let mut active = false;
+    let mut recording = false;
     let mut mode = GnssMode::default();
-    let mut last_published_s: u32 = 0;
+    // The window a sent PMREQ opened, `None` while the receiver is (believed)
+    // on. The mode is frozen mid-run (BTN3 cycles pages then), so a window
+    // never spans a mode change.
+    let mut sleep: Option<SleepWindow> = None;
     info!("gps: listening on UARTE0");
     loop {
         // Pick up run start/stop and mode changes without blocking on them;
@@ -95,6 +189,7 @@ pub async fn run(mut rx: UarteRx<'static>) {
         // change is observed well within a fix interval.
         if let Some(snap) = rec_rx.try_changed() {
             active = run_active(snap.state);
+            recording = matches!(snap.state, RecordState::Recording);
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -104,41 +199,71 @@ pub async fn run(mut rx: UarteRx<'static>) {
                 mode.fix_interval_s()
             );
         }
+
+        if let Some(w) = sleep {
+            // Receiver believed asleep (PMREQ sent). Wait for the wake time —
+            // or a run-state change ending the recording the window was for —
+            // while still draining the UART: the Renode sim ignores PMREQ and
+            // keeps streaming, and every fix arriving inside the window is
+            // younger than the mode interval, i.e. one the publication
+            // throttle drops anyway (host-pinned in `gnss_power`). The timer
+            // leads the select so a stream that never pauses can't starve the
+            // wake past its slot.
+            match select3(
+                Timer::at(Instant::from_secs(u64::from(w.wake_at_s))),
+                rx.read(&mut buf),
+                rec_rx.changed(),
+            )
+            .await
+            {
+                Either3::First(()) => {
+                    wake_receiver(&mut tx, "window over").await;
+                    sleep = None;
+                }
+                Either3::Second(Ok(())) => {
+                    pipe.feed(&buf, min_interval_s(active, mode));
+                }
+                Either3::Second(Err(e)) => {
+                    warn!("gps: uart read error {:?}, backing off", e);
+                    Timer::after(Duration::from_millis(100)).await;
+                }
+                Either3::Third(snap) => {
+                    active = run_active(snap.state);
+                    recording = matches!(snap.state, RecordState::Recording);
+                    if !recording {
+                        // The run stopped or paused mid-window: the idle face
+                        // (or the pause's resume gate) wants live fixes now,
+                        // not at the next scheduled wake.
+                        wake_receiver(&mut tx, "run state changed").await;
+                        sleep = None;
+                    }
+                }
+            }
+            continue;
+        }
+
         match rx.read(&mut buf).await {
             Ok(()) => {
-                for &b in &buf {
-                    let Some(sentence) = parser.feed(b) else {
-                        continue;
-                    };
-                    let uptime_s = Instant::now().as_secs() as u32;
-                    // Best-effort satellite count + GSA fix quality for an honest
-                    // signal meter (L4): publish alongside the fix pipeline, never
-                    // gating it. Fix quality lets the meter read "searching" on a
-                    // no-fix even under a full sky in view.
-                    if let Sentence::Gsv { sats_in_view } = sentence {
-                        sats_sender.send(sats_in_view);
-                    }
-                    if let Sentence::Gsa { fix_type, .. } = sentence {
-                        fix_quality_sender.send(fix_type);
-                    }
-                    if let Some(fix) = acc.apply(&sentence, uptime_s) {
-                        // Throttle to the cadence in force: the idle de-rate,
-                        // or the selected mode's interval while recording. An
-                        // interval of 1 (Performance) forwards every fix
-                        // unconditionally — the second-resolution clock must
-                        // never drop a same-second fix the full-rate path
-                        // would have delivered.
-                        let interval_s = min_interval_s(active, mode);
-                        if interval_s > 1 && uptime_s.saturating_sub(last_published_s) < interval_s
-                        {
-                            continue;
+                let published = pipe.feed(&buf, min_interval_s(active, mode));
+                let window = if recording {
+                    published.and_then(|at_s| gnss_power::sleep_window(mode, at_s))
+                } else {
+                    None
+                };
+                if let Some(w) = window {
+                    // Power the receiver down until the next fix is owed.
+                    // Best-effort (L4): a failed send leaves it on — the
+                    // status-quo full-rate draw, never a lost fix.
+                    let frame = ubx::pmreq_backup(w.duration_ms);
+                    match tx.write(&frame).await {
+                        Ok(()) => {
+                            info!(
+                                "gps: receiver to backup until {=u32}s ({=u32} ms backstop)",
+                                w.wake_at_s, w.duration_ms
+                            );
+                            sleep = Some(w);
                         }
-                        last_published_s = uptime_s;
-                        debug!(
-                            "gps: fix lat={} lon={} speed={} sats={}",
-                            fix.lat_deg, fix.lon_deg, fix.speed_mps, fix.sats
-                        );
-                        sender.send(fix);
+                        Err(e) => warn!("gps: PMREQ send failed {:?}; receiver stays on", e),
                     }
                 }
             }
