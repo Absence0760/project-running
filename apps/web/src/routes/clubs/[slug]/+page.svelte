@@ -16,6 +16,7 @@
 		fetchUpcomingEvents,
 		fetchPastEvents,
 		fetchClubMembers,
+		ROSTER_PAGE_SIZE,
 		fetchClubPosts,
 		fetchPostReplies,
 		fetchPendingRequests,
@@ -72,6 +73,8 @@
 	let past = $state<EventWithMeta[]>([]);
 	let posts = $state<ClubPostWithAuthor[]>([]);
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
+	let membersHasMore = $state(false);
+	let membersLoadingMore = $state(false);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
 	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'photos' | 'members';
@@ -169,7 +172,7 @@
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
-			fetchClubMembers(club.id),
+			fetchClubMembers(club.id, { limit: ROSTER_PAGE_SIZE }),
 			club.viewer_role === 'owner' || club.viewer_role === 'admin'
 				? fetchPendingRequests(club.id)
 				: Promise.resolve([]),
@@ -182,12 +185,30 @@
 		past = pa;
 		posts = po;
 		members = me;
+		membersHasMore = me.length === ROSTER_PAGE_SIZE;
 		pending = pe;
 		clubRoutes = rt;
 		clubTemplates = tp;
 		sessionTemplates = st;
 		gymRoutineTemplates = gr;
 		loading = false;
+	}
+
+	async function loadMoreMembers() {
+		if (!club || membersLoadingMore || !membersHasMore) return;
+		membersLoadingMore = true;
+		try {
+			const more = await fetchClubMembers(club.id, {
+				limit: ROSTER_PAGE_SIZE,
+				offset: members.length
+			});
+			members = [...members, ...more];
+			membersHasMore = more.length === ROSTER_PAGE_SIZE;
+		} catch (e) {
+			showToast(tr('profile.loadMoreError', { error: String(e) }), 'error');
+		} finally {
+			membersLoadingMore = false;
+		}
 	}
 
 	async function adoptGymRoutineTemplate(templateId: string) {
@@ -1554,6 +1575,13 @@
 						</div>
 					{/each}
 				</div>
+				{#if membersHasMore}
+					<div class="load-more">
+						<button class="btn btn-outline" onclick={loadMoreMembers} disabled={membersLoadingMore}>
+							{membersLoadingMore ? tr('profile.loadingShort') : tr('profile.loadMore')}
+						</button>
+					</div>
+				{/if}
 			{/if}
 		{/if}
 	</div>
@@ -2213,6 +2241,11 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
 		gap: 0.6rem;
+	}
+
+	.load-more {
+		text-align: center;
+		padding: var(--space-xl);
 	}
 
 	.member {

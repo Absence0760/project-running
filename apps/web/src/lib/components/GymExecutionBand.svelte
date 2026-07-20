@@ -1,6 +1,15 @@
 <script lang="ts">
 	import type { RoutineStep } from '$lib/gym/gym_routine';
 	import type { EnteredSet } from '$lib/gym/gym_session_types';
+	import {
+		idleStopwatch,
+		isRunning,
+		elapsedSeconds,
+		startStopwatch,
+		stopStopwatch,
+		parseDurationInput,
+		type StopwatchState,
+	} from '$lib/gym/gym_stopwatch';
 	import { weightInputValue, parseWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -21,6 +30,14 @@
 	let weightStr = $state('');
 	let rpeStr = $state('');
 	let distanceStr = $state('');
+	// The ACTUAL held time for a time-modality set, in seconds. Never prefilled
+	// from the target — an untracked hold must log null, not a fake full hit.
+	let durationStr = $state('');
+	let stopwatch = $state<StopwatchState>(idleStopwatch());
+	let nowMs = $state(0);
+
+	const isTimed = $derived(step.targetDurationS != null);
+	const stopwatchRunning = $derived(isRunning(stopwatch));
 
 	// Re-seed the inputs whenever we move to a different set (the band is reused
 	// across steps). `entered` carries a prior in-progress edit if the user
@@ -41,7 +58,32 @@
 				: step.targetDistanceM != null
 					? String(step.targetDistanceM)
 					: '';
+		durationStr = entered.durationS != null ? String(entered.durationS) : '';
+		stopwatch = idleStopwatch();
 	});
+
+	// Live display tick while the stopwatch runs. The value is recomputed from the
+	// wall-clock anchor each tick (not accumulated per tick), so a throttled or
+	// backgrounded tab reports the true elapsed once it resumes.
+	$effect(() => {
+		if (!stopwatchRunning) return;
+		const id = setInterval(() => {
+			nowMs = Date.now();
+			durationStr = String(elapsedSeconds(stopwatch, nowMs));
+		}, 250);
+		return () => clearInterval(id);
+	});
+
+	function toggleStopwatch() {
+		const now = Date.now();
+		if (stopwatchRunning) {
+			stopwatch = stopStopwatch(stopwatch, now);
+			durationStr = String(elapsedSeconds(stopwatch, now));
+		} else {
+			stopwatch = startStopwatch(stopwatch, now);
+			nowMs = now;
+		}
+	}
 
 	function targetRepsValue(): string {
 		if (step.targetRepsMin == null) return '';
@@ -99,11 +141,18 @@
 		const rpe = rpeRaw.trim() === '' ? null : parseFloat(rpeRaw);
 		const distanceM =
 			step.targetDistanceM == null || distanceRaw.trim() === '' ? null : parseFloat(distanceRaw);
+		// If the stopwatch is still running when Complete is tapped, capture the
+		// live elapsed rather than the last committed tick.
+		const durationS = isTimed
+			? stopwatchRunning
+				? elapsedSeconds(stopwatch, Date.now())
+				: parseDurationInput(durationStr)
+			: null;
 		return {
 			reps: reps != null && Number.isFinite(reps) ? reps : null,
 			weightKg,
 			rpe: rpe != null && Number.isFinite(rpe) ? rpe : null,
-			durationS: step.targetDurationS,
+			durationS,
 			distanceM: distanceM != null && Number.isFinite(distanceM) ? distanceM : null,
 		};
 	}
@@ -159,7 +208,35 @@
 		</span>
 	</header>
 
+	{#if isTimed}
+		<div class="timed" data-testid="gym-set-timed">
+			<label class="field">
+				<span class="field-label section-label">{t('gym.session.holdSeconds')}</span>
+				<input
+					type="number"
+					inputmode="numeric"
+					min="0"
+					bind:value={durationStr}
+					readonly={stopwatchRunning}
+					data-testid="gym-set-duration"
+				/>
+			</label>
+			<button
+				type="button"
+				class="btn btn-secondary btn-sm stopwatch"
+				class:running={stopwatchRunning}
+				onclick={toggleStopwatch}
+				data-testid="gym-set-stopwatch"
+				aria-pressed={stopwatchRunning}
+			>
+				<span class="material-symbols" aria-hidden="true">{stopwatchRunning ? 'stop' : 'timer'}</span>
+				{stopwatchRunning ? t('gym.session.stopHold') : t('gym.session.startHold')}
+			</button>
+		</div>
+	{/if}
+
 	<div class="inputs" class:has-distance={step.targetDistanceM != null}>
+
 		<label class="field">
 			<span class="field-label section-label">{t('gym.reps')}</span>
 			<input
@@ -301,6 +378,21 @@
 		color: var(--color-text-tertiary);
 	}
 
+	.timed {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-md);
+	}
+	.timed .field {
+		flex: 1 1 auto;
+	}
+	.timed .stopwatch {
+		flex: 0 0 auto;
+	}
+	.timed .stopwatch.running {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+	}
 	.inputs {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
