@@ -14,7 +14,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 |---|---|---|---|
 | Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | Plan |
 | Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | Plan |
-| Job worker (Go) | `apps/job_worker/` | **Fly.io** (`job_worker`, region `lhr`) — single machine, distroless | Plan |
+| Job worker (Go) | `apps/job_worker/` | **Fly.io** (`job_worker`, region `ord`) — single machine, distroless; sited next to the Ohio Supabase project, not next to the team | Plan |
 | OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** (`osrm`, region `lhr`) — single machine + Volume | Plan |
 | GraphHopper (`round_trip` route generator, `foot` profile) | `apps/job_worker/graphhopper/` | **Fly.io** (`graphhopper`, region `lhr`) — serves the "Generate a route by distance" loop endpoint; reached by the generate-route Lambda over public https with an `X-Engine-Key` Caddy guard | Plan |
 | graph_cycle (v3 loop generator map sidecar) | `apps/graph_cycle/` | **Fly.io** (`graph-cycle`, region `lhr`) — distroless Go service, parses an OSM PBF into an in-memory foot graph; in-process `X-Engine-Key` guard | Plan |

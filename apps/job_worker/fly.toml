@@ -10,7 +10,11 @@
 # up without --config flags.
 
 app = "job_worker"
-primary_region = "lhr"
+# Sited next to Postgres, not next to us: the Supabase project lives in
+# East US (Ohio), and every job claim / zone lookup / premium request is
+# a round trip to it. lhr would add ~80 ms to each. Spectator WebSocket
+# latency is unaffected — that terminates at Fly's edge.
+primary_region = "ord"
 
 [build]
 # The Dockerfile in this directory is multi-stage; the final image is
