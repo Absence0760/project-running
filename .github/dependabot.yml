@@ -264,6 +264,25 @@ updates:
       # lockstep with whatever ceiling that AGP documents).
       - dependency-name: "gradle-wrapper"
         versions: [">= 9.6"]
+      # AGP is held at 8.x until the Flutter plugin ecosystem finishes its
+      # built-in-Kotlin migration (flutter/flutter#181557, open P1 — Flutter's
+      # own guidance is still "don't adopt AGP 9 yet"). AGP 9 turns built-in
+      # Kotlin on and rejects any module that applies KGP, so the Flutter tool
+      # auto-writes `android.builtInKotlin=false` + `android.newDsl=false` into
+      # gradle.properties (Flutter 3.44's DisableBuiltInKotlinMigration /
+      # DisableNewDslMigration) to keep the legacy KGP path alive for the ~15
+      # unmigrated plugins in this app's graph. file_picker 11.x bets the other
+      # way — it skips `apply plugin: 'org.jetbrains.kotlin.android'` when it
+      # detects AGP >= 9 and relies on built-in Kotlin, which Flutter has just
+      # switched off — so nothing compiles its Kotlin and the app's
+      # GeneratedPluginRegistrant fails with "cannot find symbol
+      # FilePickerPlugin" (PR #563, run 29721601600). Setting either flag by
+      # hand is a no-op (the migrator already wrote them) and flipping
+      # builtInKotlin on just moves the failure onto the other 15 plugins —
+      # this needs the plugin authors, not a build-file change here. Lift once
+      # flutter/flutter#181557 closes; keep settings.gradle.kts in lockstep.
+      - dependency-name: "com.android.application"
+        versions: [">= 9"]
 
   # ---------------------------------------------------------------------------
   # terraform — infra stacks
