@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	parseWeightUnit,
+	defaultWeightUnitForDistanceUnit,
 	kgToDisplay,
 	displayToKg,
 	roundWeight,
@@ -61,6 +62,11 @@ test('formatWeightKg: null / NaN render as an em dash', () => {
 	assert.equal(formatWeightKg(null, 'kg'), '—');
 	assert.equal(formatWeightKg(undefined, 'lbs'), '—');
 	assert.equal(formatWeightKg(NaN, 'kg'), '—');
+});
+
+test('defaultWeightUnitForDistanceUnit: imperial distance implies lbs, metric implies kg', () => {
+	assert.equal(defaultWeightUnitForDistanceUnit('mi'), 'lbs');
+	assert.equal(defaultWeightUnitForDistanceUnit('km'), 'kg');
 });
 
 test('parseWeightToKg: interprets the typed value in the active unit', () => {

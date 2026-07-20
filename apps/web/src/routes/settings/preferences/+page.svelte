@@ -7,6 +7,7 @@
 		loadSettings,
 		updateUniversal,
 		effective,
+		effectivePreferredUnit,
 		type LoadedSettings,
 	} from '$lib/settings/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
@@ -24,7 +25,12 @@
 	} from '$lib/core/data';
 	import { NEARBY_RUNNERS_ENABLED } from '$lib/social/nearby_flag';
 	import { geocodePlace } from '$lib/routes/geocoding';
-	import { kgToDisplay, displayToKg, roundWeight } from '$lib/format/weight';
+	import {
+		kgToDisplay,
+		displayToKg,
+		roundWeight,
+		defaultWeightUnitForDistanceUnit,
+	} from '$lib/format/weight';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -347,9 +353,18 @@
 		loadError = null;
 		try {
 			settings = await loadSettings(auth.user.id);
-			preferredUnit = effective(settings, 'preferred_unit', 'km') ?? 'km';
+			// Fold the device→universal bag on top of the profile column
+			// (same overlay the app-wide signal uses) so a US user whose
+			// region default lives only on the column — never opened the
+			// unit toggle — isn't silently reset to km here (issue #488).
+			preferredUnit = effectivePreferredUnit(settings, auth.user.preferred_unit);
 			setUnit(preferredUnit);
-			weightUnit = effective(settings, 'weight_unit', 'kg') ?? 'kg';
+			// Unset weight_unit follows the distance unit (lbs for imperial)
+			// rather than a hard-coded kg — matches +layout + onboarding.
+			const storedWeightUnit = effective<string>(settings, 'weight_unit');
+			weightUnit = storedWeightUnit === 'lbs' || storedWeightUnit === 'kg'
+				? storedWeightUnit
+				: defaultWeightUnitForDistanceUnit(preferredUnit);
 			setWeightUnit(weightUnit);
 			paceFormat = effective(settings, 'units_pace_format', 'min_per_km') ?? 'min_per_km';
 			defaultActivity = effective(settings, 'default_activity_type', 'run') ?? 'run';

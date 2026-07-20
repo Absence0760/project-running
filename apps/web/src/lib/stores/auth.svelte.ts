@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { supabase } from '$lib/core/supabase';
 import { dropUserCache } from '$lib/settings/settings';
 import { setUnit } from '$lib/format/units.svelte';
+import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 import { showToast } from '$lib/stores/toast.svelte';
 import { m } from '$lib/i18n/store.svelte';
 import { createReadyGate, isAuthSettled } from './auth_ready';
@@ -129,9 +130,20 @@ function createAuthStore() {
 			// Profile doesn't exist yet — create it. `onboarded_at`
 			// stays null so the layout's gate routes the new user to
 			// /onboarding.
+			//
+			// Seed the region default (mi for US/GB/LR/MM, km otherwise)
+			// from the browser locale rather than hard-coding km: the
+			// `preferred_unit` column default is a locale-blind 'km', and
+			// the server has no browser locale at insert time, so the client
+			// bootstrap is the only place the region default can reach a
+			// brand-new account. Persisting it here flows through the
+			// app-wide unit signal, the onboarding units step, and the
+			// skip-onboarding path — and stays overridable in Settings
+			// afterward (issue #488).
+			const defaultUnit = browser ? defaultUnitForLocale(navigator.language) : 'km';
 			const { error: createErr } = await supabase.from('user_profiles').upsert({
 				id: userId,
-				preferred_unit: 'km',
+				preferred_unit: defaultUnit,
 				subscription_tier: 'free',
 			});
 			if (createErr) {
@@ -150,12 +162,12 @@ function createAuthStore() {
 				display_name: null,
 				avatar_url: null,
 				parkrun_number: null,
-				preferred_unit: 'km',
+				preferred_unit: defaultUnit,
 				subscription_tier: 'free',
 				billing_issue_at: null,
 				onboarded_at: null,
 			};
-			setUnit('km');
+			setUnit(defaultUnit);
 		}
 		gate.markSettled();
 	}

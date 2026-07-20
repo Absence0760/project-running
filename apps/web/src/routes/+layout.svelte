@@ -16,6 +16,7 @@
 	import { initTheme } from '$lib/settings/theme';
 	import { setMapStyle, type MapStyle } from '$lib/routes/map-style.svelte';
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
+	import { defaultWeightUnitForDistanceUnit } from '$lib/format/weight';
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -103,8 +104,15 @@
 				const settings = await loadSettings(uid);
 				const ms = effective<MapStyle>(settings, 'map_style');
 				setMapStyle(ms);
-				setUnit(effectivePreferredUnit(settings, auth.user?.preferred_unit));
-				setWeightUnit(effective<string>(settings, 'weight_unit', 'kg') ?? 'kg');
+				const distanceUnit = effectivePreferredUnit(settings, auth.user?.preferred_unit);
+				setUnit(distanceUnit);
+				// When `weight_unit` was never explicitly set (e.g. a US user
+				// who skipped onboarding), follow the distance unit — lbs for
+				// imperial — rather than snapping back to kg (issue #488).
+				setWeightUnit(
+					effective<string>(settings, 'weight_unit') ??
+						defaultWeightUnitForDistanceUnit(distanceUnit),
+				);
 			} catch (_) {
 				/* silent — falls back to default */
 			}

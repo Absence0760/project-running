@@ -3,6 +3,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { checkSignUpGates } from '$lib/core/auth_gates';
+	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 
 	// Post-OAuth fallback gate. Reached from /auth/callback when the
 	// user's user_profiles row is missing `age_confirmed_at` or
@@ -31,7 +32,9 @@
 		}
 		loading = true;
 		try {
-			const { error: rpcError } = await supabase.rpc('confirm_age_and_terms');
+			const { error: rpcError } = await supabase.rpc('confirm_age_and_terms', {
+				p_preferred_unit: defaultUnitForLocale(navigator.language),
+			});
 			if (rpcError) throw rpcError;
 			goto('/dashboard');
 		} catch (err) {

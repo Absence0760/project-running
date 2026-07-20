@@ -4947,7 +4947,10 @@ export type Database = {
           runs_7d: number
         }[]
       }
-      confirm_age_and_terms: { Args: never; Returns: undefined }
+      confirm_age_and_terms: {
+        Args: { p_preferred_unit?: string }
+        Returns: undefined
+      }
       confirm_safety_contact: {
         Args: { p_id: string; p_sms_opt_in?: boolean }
         Returns: boolean

@@ -12,9 +12,13 @@
 --      replay the RPC on every login, and consent is a once-per-
 --      account act.
 --   4. EXECUTE grants are narrow: authenticated only.
+--   5. Region unit default (migration 20270424000006, issue #488):
+--      `p_preferred_unit` seeds preferred_unit on the brand-new-row
+--      insert only; a returning user's existing choice is never
+--      overwritten by a later call.
 
 begin;
-select plan(11);
+select plan(13);
 
 -- ─── columns ───────────────────────────────────────────────────────
 select has_column(
@@ -41,18 +45,18 @@ select col_type_is(
 
 -- ─── function + grants ─────────────────────────────────────────────
 select has_function(
-  'public', 'confirm_age_and_terms', ARRAY[]::text[],
-  'confirm_age_and_terms() must exist'
+  'public', 'confirm_age_and_terms', ARRAY['text'],
+  'confirm_age_and_terms(text) must exist'
 );
 
 select function_privs_are(
-  'public', 'confirm_age_and_terms', ARRAY[]::text[],
+  'public', 'confirm_age_and_terms', ARRAY['text'],
   'authenticated', ARRAY['EXECUTE'],
   'authenticated role must have EXECUTE on confirm_age_and_terms'
 );
 
 select function_privs_are(
-  'public', 'confirm_age_and_terms', ARRAY[]::text[],
+  'public', 'confirm_age_and_terms', ARRAY['text'],
   'anon', ARRAY[]::text[],
   'anon role must NOT have EXECUTE on confirm_age_and_terms'
 );
@@ -136,6 +140,89 @@ select isnt_empty(
         and age_confirmed_at is not null
         and terms_accepted_at is not null$$,
   'seed runner@test.com must be backfilled with both consent timestamps'
+);
+
+-- ─── region unit default (issue #488) ──────────────────────────────
+-- The client passes its locale-derived default; the RPC applies it on
+-- the brand-new-row insert. A later call (a returning user, or a
+-- no-locale caller defaulting to km) must NOT overwrite that choice.
+do $$
+declare
+  v_user uuid := '77777777-7777-7777-7777-777777777777';
+  v_unit text;
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  insert into auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    values (v_user, 'unit-default-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    on conflict (id) do nothing;
+  delete from public.user_profiles where id = v_user;
+
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', v_user::text, true);
+
+  -- Brand-new US-region signup seeds miles.
+  perform confirm_age_and_terms('mi');
+  select preferred_unit into v_unit
+    from public.user_profiles where id = v_user;
+  if v_unit is distinct from 'mi' then
+    raise exception 'new-row insert must apply p_preferred_unit (got %)', v_unit;
+  end if;
+
+  -- A subsequent call carrying km (returning user / no-locale caller)
+  -- must leave the existing choice untouched.
+  perform confirm_age_and_terms('km');
+  select preferred_unit into v_unit
+    from public.user_profiles where id = v_user;
+  if v_unit is distinct from 'mi' then
+    raise exception 'returning-call must not overwrite unit (got %)', v_unit;
+  end if;
+
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  delete from public.user_profiles where id = v_user;
+  delete from auth.users where id = v_user;
+end $$;
+
+select pass(
+  'confirm_age_and_terms seeds preferred_unit on insert only (new=mi kept)'
+);
+
+-- A garbage / null unit falls back to the metric default on insert.
+do $$
+declare
+  v_user uuid := '66666666-6666-6666-6666-666666666666';
+  v_unit text;
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  insert into auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    values (v_user, 'unit-fallback-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    on conflict (id) do nothing;
+  delete from public.user_profiles where id = v_user;
+
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', v_user::text, true);
+
+  perform confirm_age_and_terms('furlongs');
+  select preferred_unit into v_unit
+    from public.user_profiles where id = v_user;
+  if v_unit is distinct from 'km' then
+    raise exception 'unrecognised unit must fall back to km (got %)', v_unit;
+  end if;
+
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  delete from public.user_profiles where id = v_user;
+  delete from auth.users where id = v_user;
+end $$;
+
+select pass(
+  'confirm_age_and_terms normalises an unrecognised unit to km on insert'
 );
 
 select * from finish();
