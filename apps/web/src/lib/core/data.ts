@@ -5134,7 +5134,7 @@ export async function fetchFollowers(
 ): Promise<PublicProfile[]> {
 	const limit = opts?.limit ?? FOLLOW_PAGE_SIZE;
 	const offset = opts?.offset ?? 0;
-	const { data: edges } = await supabase
+	const { data: edges, error } = await supabase
 		.from('user_follows')
 		.select('follower_id, followed_at')
 		.eq('followee_id', userId)
@@ -5144,12 +5144,14 @@ export async function fetchFollowers(
 		// duplicated or skipped on load-more.
 		.order('follower_id', { ascending: true })
 		.range(offset, offset + limit - 1);
+	if (error) throw error;
 	const ids = (edges ?? []).map((e) => e.follower_id as string);
 	if (ids.length === 0) return [];
-	const { data: profiles } = await supabase
+	const { data: profiles, error: profilesError } = await supabase
 		.from('user_profiles')
 		.select('id, display_name, avatar_url')
 		.in('id', ids);
+	if (profilesError) throw profilesError;
 	const byId = new Map<string, PublicProfile>();
 	for (const p of profiles ?? []) byId.set(p.id, p);
 	// Preserve the followed_at ordering.
@@ -5163,7 +5165,7 @@ export async function fetchFollowing(
 ): Promise<PublicProfile[]> {
 	const limit = opts?.limit ?? FOLLOW_PAGE_SIZE;
 	const offset = opts?.offset ?? 0;
-	const { data: edges } = await supabase
+	const { data: edges, error } = await supabase
 		.from('user_follows')
 		.select('followee_id, followed_at')
 		.eq('follower_id', userId)
@@ -5172,12 +5174,14 @@ export async function fetchFollowing(
 		// followed_at timestamp (see fetchFollowers).
 		.order('followee_id', { ascending: true })
 		.range(offset, offset + limit - 1);
+	if (error) throw error;
 	const ids = (edges ?? []).map((e) => e.followee_id as string);
 	if (ids.length === 0) return [];
-	const { data: profiles } = await supabase
+	const { data: profiles, error: profilesError } = await supabase
 		.from('user_profiles')
 		.select('id, display_name, avatar_url')
 		.in('id', ids);
+	if (profilesError) throw profilesError;
 	const byId = new Map<string, PublicProfile>();
 	for (const p of profiles ?? []) byId.set(p.id, p);
 	return ids.map((id) => byId.get(id)).filter((p): p is PublicProfile => p != null);
@@ -5464,12 +5468,13 @@ export async function clipTrackForUser(
 /// 20260626_001) so the redaction applies on the wire even when the
 /// caller is signed in.
 export async function fetchPublicRunsByUser(userId: string, limit = 20): Promise<Run[]> {
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from('public_runs')
 		.select('*')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
+	if (error) throw error;
 	return (data ?? []) as Run[];
 }
 

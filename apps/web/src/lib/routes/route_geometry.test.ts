@@ -268,3 +268,12 @@ test('distanceAlongRoute — clamps to [0, totalLength]', () => {
 	assert.ok(d !== null);
 	assert.ok(d! >= 0 && d! <= total + 1e-6, `got ${d} (total ${total})`);
 });
+
+test('distanceAlongRoute — null on a non-finite point (not 0)', () => {
+	const wps = [distWp(0), distWp(100), distWp(200)];
+	// A finite point still resolves to its along-distance.
+	assert.ok(distanceAlongRoute(distWp(100), wps) !== null);
+	// A NaN or Infinity fix is "unknown position", not "at the start".
+	assert.equal(distanceAlongRoute({ lat: NaN, lng: 0 }, wps), null);
+	assert.equal(distanceAlongRoute({ lat: 0, lng: Infinity }, wps), null);
+});
