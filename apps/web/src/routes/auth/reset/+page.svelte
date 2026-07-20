@@ -6,6 +6,7 @@
 	import { checkPasswordPair } from '$lib/core/auth_gates';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { m } from '$lib/i18n/store.svelte';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let password = $state('');
 	let confirmPassword = $state('');
@@ -109,16 +110,14 @@
 				{/if}
 
 				<form class="reset-form" onsubmit={handleSubmit}>
-					<input
-						type="password"
+					<PasswordInput
 						bind:value={password}
 						placeholder={m('authReset.newPasswordPlaceholder')}
 						required
 						minlength={PASSWORD_MIN_LENGTH}
 						autocomplete="new-password"
 					/>
-					<input
-						type="password"
+					<PasswordInput
 						bind:value={confirmPassword}
 						placeholder={m('authReset.confirmPasswordPlaceholder')}
 						required
@@ -236,31 +235,6 @@
 		gap: var(--space-sm);
 		text-align: start;
 	}
-	.reset-form input {
-		padding: 0.7rem var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		font-size: 0.95rem;
-		font-family: inherit;
-		background: var(--color-surface);
-		color: var(--color-text);
-		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-	}
-	.reset-form input:focus {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
-	}
-	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
-	   :focus rule above with :focus-visible so keyboard users get a real
-	   outline. The :focus rule still removes the default ring on mouse
-	   focus (no visible outline on click); :focus-visible re-adds a
-	   proper one for keyboard / programmatic focus. */
-	.reset-form input:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: 2px;
-	}
-
 
 	.reset-cta {
 		width: 100%;
