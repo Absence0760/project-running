@@ -10,6 +10,7 @@ import { assemblePublicRoute } from '../routes/public_route_assembly';
 import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
+import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import type {
 	Run,
 	Route,
@@ -946,6 +947,8 @@ export async function createManualRun(input: {
 		console.warn('autoMatchRunToPlanWorkout failed', e);
 	}
 
+	await recomputeChallengesForRun(input.startedAt);
+
 	return { id: runId };
 }
 
@@ -1104,6 +1107,8 @@ export async function saveRun(input: {
 	} catch (e) {
 		console.warn('autoMatchRunToPlanWorkout failed', e);
 	}
+
+	await recomputeChallengesForRun(input.started_at);
 
 	return { id: runId, trackUploaded, trackError };
 }
@@ -10691,6 +10696,37 @@ export async function recomputeChallengeCompletion(id: string): Promise<void> {
 		if (error) console.debug('recomputeChallengeCompletion failed', error);
 	} catch (e) {
 		console.debug('recomputeChallengeCompletion threw', e);
+	}
+}
+
+/// Opportunistic completion recompute after a run saves: fan out
+/// `recomputeChallengeCompletion` over the runner's joined challenges whose
+/// window covers the run's `started_at`. Without this the daily cron sweep is
+/// the ONLY path that awards a challenge_badge / stamps completed_at / sends the
+/// `challenge_complete` notification — so completion lags up to ~24h and a goal
+/// crossed by a late import past the sweep's tail window is never awarded.
+/// Best-effort + swallow-to-debug like the plan-workout auto-match: a failure
+/// here never blocks the save, and the RPC is idempotent (the challenge_badges
+/// unique constraint), so a redundant call from client + cron is safe.
+export async function recomputeChallengesForRun(runStartedAtIso: string): Promise<void> {
+	if (!auth.user?.id) return;
+	try {
+		const active = await myActiveChallenges();
+		const ids = challengesToRecomputeForRun(
+			active.map((c) => ({
+				id: c.id,
+				goalValue: c.goal_value ?? null,
+				startMs: Date.parse(c.starts_at),
+				endMs: Date.parse(c.ends_at),
+				completed: c.completed_at != null,
+			})),
+			Date.parse(runStartedAtIso),
+		);
+		for (const id of ids) {
+			await recomputeChallengeCompletion(id);
+		}
+	} catch (e) {
+		console.debug('recomputeChallengesForRun threw', e);
 	}
 }
 
