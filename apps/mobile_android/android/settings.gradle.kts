@@ -27,7 +27,7 @@ plugins {
     // with "cannot find symbol FilePickerPlugin" (PR #563, run 29721601600).
     // Flutter's own AGP 9 tracking issue (flutter/flutter#181557) is still open.
     // Bump only with the matching Dependabot ignore in .github/dependabot.yml.
-    id("com.android.application") version "8.13.0" apply false
+    id("com.android.application") version "8.13.2" apply false
     id("org.jetbrains.kotlin.android") version "2.4.10" apply false
 }
 
