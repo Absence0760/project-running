@@ -3761,6 +3761,11 @@ export const messages = {
 	"nutrition.protein": "Eiweiß",
 	"nutrition.carbs": "Kohlenhydrate",
 	"nutrition.fat": "Fett",
+	"nutrition.fiber": "Ballaststoffe",
+	"nutrition.sugar": "Zucker",
+	"nutrition.sodium": "Natrium",
+	"nutrition.saturatedFat": "Gesättigte Fettsäuren",
+	"nutrition.cholesterol": "Cholesterin",
 	"nutrition.noTargets": "Gib in den Einstellungen Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.",
 	"nutrition.goalBreakdown": "Ziel {base} + {exercise} kcal heute verbrannt",
 	"nutrition.remaining": "{n} kcal übrig",
@@ -4274,6 +4279,9 @@ export const messages = {
 	"gym.session.restSkip": "Pause überspringen",
 	"gym.session.target": "Ziel",
 	"gym.session.noTarget": "Kein Ziel",
+	"gym.session.holdSeconds": "Gehalten (s)",
+	"gym.session.startHold": "Halten starten",
+	"gym.session.stopHold": "Halten stoppen",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Plan vs. Ist",

@@ -3756,6 +3756,11 @@ export const messages = {
 	"nutrition.protein": "たんぱく質",
 	"nutrition.carbs": "炭水化物",
 	"nutrition.fat": "脂質",
+	"nutrition.fiber": "食物繊維",
+	"nutrition.sugar": "糖質",
+	"nutrition.sodium": "ナトリウム",
+	"nutrition.saturatedFat": "飽和脂肪",
+	"nutrition.cholesterol": "コレステロール",
 	"nutrition.noTargets": "カロリー・マクロの目標を表示するには、設定で身長・体重・年齢・性別を入力してください。",
 	"nutrition.goalBreakdown": "目標 {base} + 本日消費 {exercise} kcal",
 	"nutrition.remaining": "残り {n} kcal",
@@ -4269,6 +4274,9 @@ export const messages = {
 	"gym.session.restSkip": "休憩をスキップ",
 	"gym.session.target": "目標",
 	"gym.session.noTarget": "目標なし",
+	"gym.session.holdSeconds": "実績（秒）",
+	"gym.session.startHold": "計測開始",
+	"gym.session.stopHold": "計測停止",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "計画と実績",

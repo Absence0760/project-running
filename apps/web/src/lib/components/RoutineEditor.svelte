@@ -41,6 +41,7 @@
 		rest: string | number;
 		duration: string | number;
 		distance: string | number;
+		rpe: string | number;
 	};
 	type EditExercise = {
 		name: string;
@@ -77,6 +78,7 @@
 			rest: '',
 			duration: '',
 			distance: '',
+			rpe: '',
 		};
 	}
 
@@ -180,7 +182,7 @@
 					target_reps_min: isRepModality ? intOrNull(s.reps) : null,
 					target_reps_max: isRepModality ? intOrNull(s.repsMax) : null,
 					target_weight_kg: ex.modality === 'weight_reps' ? parseWeight(s.weight) : null,
-					target_rpe: null,
+					target_rpe: floatOrNull(s.rpe),
 					rest_s: intOrNull(s.rest),
 					target_duration_s: ex.modality === 'time' ? intOrNull(s.duration) : null,
 					target_distance_m: ex.modality === 'distance' ? floatOrNull(s.distance) : null,
@@ -283,6 +285,7 @@
 					>
 				{/if}
 				<span class="section-label set-cap">{t('gym.routine.restLabel')}</span>
+				<span class="section-label set-cap">{t('gym.rpe')}</span>
 				<span></span>
 			</div>
 
@@ -365,6 +368,18 @@
 						bind:value={exercises[ei].sets[si].rest}
 						aria-label={t('gym.routine.restLabel')}
 						data-testid="routine-set-rest"
+					/>
+
+					<input
+						class="text-input"
+						type="number"
+						inputmode="decimal"
+						min="0"
+						max="10"
+						step="0.5"
+						bind:value={exercises[ei].sets[si].rpe}
+						aria-label={t('gym.rpe')}
+						data-testid="routine-set-rpe"
 					/>
 
 					<button
@@ -558,13 +573,13 @@
 	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: 8rem 1fr 6rem 2.25rem;
+		grid-template-columns: 8rem 1fr 6rem 5rem 2.25rem;
 		gap: var(--space-sm);
 		align-items: center;
 	}
 	.set-head.wr,
 	.set-row.wr {
-		grid-template-columns: 8rem 1fr 6rem 6rem 2.25rem;
+		grid-template-columns: 8rem 1fr 6rem 6rem 5rem 2.25rem;
 	}
 	.set-head {
 		gap: var(--space-sm);

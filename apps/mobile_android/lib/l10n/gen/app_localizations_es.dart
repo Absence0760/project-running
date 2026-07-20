@@ -1257,6 +1257,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runStopA11yHint => 'Finaliza la grabación y guarda la carrera';
 
   @override
+  String get runHoldToStopHint => 'Mantén para detener';
+
+  @override
   String get runResumeA11yLabel => 'Reanudar carrera';
 
   @override
@@ -3735,8 +3738,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get socialTabDiscover => 'Descubrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Busca yoga, pilates, HIIT, clubes de running…';
+  String get discoverSearchPlaceholder => 'Busca clases, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas las actividades';
@@ -9400,6 +9402,21 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nutritionFat => 'Grasas';
+
+  @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Azúcar';
+
+  @override
+  String get nutritionSodium => 'Sodio';
+
+  @override
+  String get nutritionSaturatedFat => 'Grasas saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
 
   @override
   String get nutritionWater => 'Agua';
