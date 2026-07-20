@@ -3740,8 +3740,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Buscar yoga, pilates, HIIT, clubes de corrida…';
+  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';
@@ -9400,6 +9399,21 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
 
   @override
   String get nutritionWater => 'Água';
@@ -15101,8 +15115,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get socialTabDiscover => 'Descobrir';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Buscar yoga, pilates, HIIT, clubes de corrida…';
+  String get discoverSearchPlaceholder => 'Buscar aulas, clubes…';
 
   @override
   String get discoverActivityAll => 'Todas as atividades';
@@ -20760,6 +20773,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionFiber => 'Fibra';
+
+  @override
+  String get nutritionSugar => 'Açúcar';
+
+  @override
+  String get nutritionSodium => 'Sódio';
+
+  @override
+  String get nutritionSaturatedFat => 'Gorduras saturadas';
+
+  @override
+  String get nutritionCholesterol => 'Colesterol';
 
   @override
   String get nutritionWater => 'Água';

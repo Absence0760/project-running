@@ -3710,8 +3710,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get socialTabDiscover => 'Discover';
 
   @override
-  String get discoverSearchPlaceholder =>
-      'Search yoga, pilates, HIIT, run clubs…';
+  String get discoverSearchPlaceholder => 'Search classes, clubs…';
 
   @override
   String get discoverActivityAll => 'All activities';
@@ -9304,6 +9303,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionFat => 'Fat';
+
+  @override
+  String get nutritionFiber => 'Fiber';
+
+  @override
+  String get nutritionSugar => 'Sugar';
+
+  @override
+  String get nutritionSodium => 'Sodium';
+
+  @override
+  String get nutritionSaturatedFat => 'Saturated fat';
+
+  @override
+  String get nutritionCholesterol => 'Cholesterol';
 
   @override
   String get nutritionWater => 'Water';
