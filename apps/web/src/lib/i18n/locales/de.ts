@@ -633,6 +633,7 @@ export const messages = {
 	"profile.loadingProfile": "Profil wird geladen…",
 	"profile.loadError": "Dieses Profil konnte nicht geladen werden.",
 	"profile.retry": "Erneut versuchen",
+	"profile.sectionLoadError": "Dieser Abschnitt konnte nicht geladen werden.",
 	"profile.notFoundTitle": "Profil nicht gefunden",
 	"profile.notFoundText": "Diesen Läufer gibt es nicht oder sein Profil ist nicht sichtbar. Vielleicht wurde das Konto gelöscht.",
 	"profile.backToDashboard": "Zurück zum Dashboard",

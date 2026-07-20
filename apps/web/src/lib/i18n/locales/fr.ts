@@ -633,6 +633,7 @@ export const messages = {
 	"profile.loadingProfile": "Chargement du profil…",
 	"profile.loadError": "Impossible de charger ce profil.",
 	"profile.retry": "Réessayer",
+	"profile.sectionLoadError": "Impossible de charger cette section.",
 	"profile.notFoundTitle": "Profil introuvable",
 	"profile.notFoundText": "Ce coureur n'existe pas ou son profil n'est pas visible. Il a peut-être supprimé son compte.",
 	"profile.backToDashboard": "Retour au tableau de bord",

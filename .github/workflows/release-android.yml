@@ -189,7 +189,7 @@ jobs:
         # rule), the signed AAB must still land somewhere durable so it
         # can be hand-uploaded — run 29344377051 built a good bundle and
         # lost it with the runner.
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: apps/mobile_android/build/app/outputs/bundle/release/app-release.aab

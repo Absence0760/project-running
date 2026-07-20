@@ -633,6 +633,7 @@ export const messages = {
 	"profile.loadingProfile": "Cargando perfil…",
 	"profile.loadError": "No se pudo cargar este perfil.",
 	"profile.retry": "Reintentar",
+	"profile.sectionLoadError": "No se pudo cargar esta sección.",
 	"profile.notFoundTitle": "Perfil no encontrado",
 	"profile.notFoundText": "Este corredor no existe o su perfil no es visible. Es posible que haya eliminado su cuenta.",
 	"profile.backToDashboard": "Volver al panel",
