@@ -6180,6 +6180,11 @@ class ApiClient {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
     bool isPublic = false,
     String? externalId,
     DateTime? lastModifiedAt,
@@ -6198,6 +6203,11 @@ class ApiClient {
           FoodLogRow.colProteinG: proteinG,
           FoodLogRow.colCarbsG: carbsG,
           FoodLogRow.colFatG: fatG,
+          FoodLogRow.colFiberG: fiberG,
+          FoodLogRow.colSugarG: sugarG,
+          FoodLogRow.colSodiumMg: sodiumMg,
+          FoodLogRow.colSaturatedFatG: saturatedFatG,
+          FoodLogRow.colCholesterolMg: cholesterolMg,
           FoodLogRow.colIsPublic: isPublic,
           FoodLogRow.colExternalId: externalId,
           if (lastModifiedAt != null)
@@ -6217,6 +6227,11 @@ class ApiClient {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
     bool? isPublic,
     DateTime? lastModifiedAt,
   }) async {
@@ -6230,6 +6245,11 @@ class ApiClient {
     if (proteinG != null) patch[FoodLogRow.colProteinG] = proteinG;
     if (carbsG != null) patch[FoodLogRow.colCarbsG] = carbsG;
     if (fatG != null) patch[FoodLogRow.colFatG] = fatG;
+    if (fiberG != null) patch[FoodLogRow.colFiberG] = fiberG;
+    if (sugarG != null) patch[FoodLogRow.colSugarG] = sugarG;
+    if (sodiumMg != null) patch[FoodLogRow.colSodiumMg] = sodiumMg;
+    if (saturatedFatG != null) patch[FoodLogRow.colSaturatedFatG] = saturatedFatG;
+    if (cholesterolMg != null) patch[FoodLogRow.colCholesterolMg] = cholesterolMg;
     if (isPublic != null) patch[FoodLogRow.colIsPublic] = isPublic;
     await _client.from(FoodLogRow.table).update(patch).eq(FoodLogRow.colId, id);
   }
