@@ -288,8 +288,17 @@ test.describe('/settings/preferences', () => {
 				(req.postData() ?? '').includes('"email_weekly_digest":"on"'),
 			{ timeout: 8_000 }
 		);
+		// Re-opting in must lift any prior one-click-unsubscribe address block, or
+		// the send stays silently hard-blocked while the toggle reads 'on' (#392).
+		const clearSuppression = page.waitForRequest(
+			(req) =>
+				req.method() === 'POST' &&
+				req.url().includes('/rest/v1/rpc/clear_my_unsubscribe_suppression'),
+			{ timeout: 8_000 }
+		);
 		await toggle.check();
 		await optInPatch; // throws if the opt-in write never fires
+		await clearSuppression; // throws if the re-opt-in un-suppress call never fires
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		await page.reload();
@@ -329,8 +338,16 @@ test.describe('/settings/preferences', () => {
 				(req.postData() ?? '').includes('"email_lifecycle_drip":"on"'),
 			{ timeout: 8_000 }
 		);
+		// Re-opting in must lift any prior one-click-unsubscribe address block (#392).
+		const clearSuppression = page.waitForRequest(
+			(req) =>
+				req.method() === 'POST' &&
+				req.url().includes('/rest/v1/rpc/clear_my_unsubscribe_suppression'),
+			{ timeout: 8_000 }
+		);
 		await toggle.check();
 		await optInPatch; // throws if the opt-in write never fires
+		await clearSuppression; // throws if the re-opt-in un-suppress call never fires
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		await page.reload();
