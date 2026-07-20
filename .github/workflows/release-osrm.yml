@@ -11,7 +11,7 @@ name: Release OSRM
 #
 # Secret required:
 #   FLY_API_TOKEN  — same token as release-worker.yml; scoped to the
-#                    runonward org.
+#                    project-running org.
 
 # Release-triggered: publishing a GitHub Release whose tag is `osrm@*`
 # runs this workflow — a bare `osrm@*` tag push does NOT deploy. `on:

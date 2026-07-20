@@ -6,7 +6,7 @@ name: Release worker
 #
 # Secret required:
 #   FLY_API_TOKEN  — Fly.io dashboard → Account → Access Tokens, scoped
-#                    to the runonward org.
+#                    to the project-running org.
 #
 # See apps/job_worker/deployment.md for the cross-cutting concerns
 # (sizing, secrets, observability, rollback, DR) and docs/ops/releasing.md

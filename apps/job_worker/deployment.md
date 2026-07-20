@@ -13,7 +13,7 @@ Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker cont
 The worker is small (single Go binary, ~9 MB distroless) and the OSRM engine is heavy (~50 MB binary plus a multi-GB graph). They have different sizing, different update cadences, and different failure modes — they want to be separate Fly.io apps even though they always deploy together.
 
 ```
-Fly.io organisation: runonward
+Fly.io organisation: project-running
 ├── job_worker           (1+ machines, shared-cpu-1x, 256 MB RAM)
 │   ├─ Queue drain: claims `jobs` rows over Supabase REST + Storage
 │   ├─ Live hub HTTP + WebSocket on :8080 (Fly TLS-terminates at :443)
@@ -47,7 +47,7 @@ Why the worker app stays separate from OSRM: independent restart (worker → 5 s
 
 **Region:** `lhr` (London) or `cdg` (Paris). Match the Supabase region to keep the worker → Postgres round-trip under 10 ms; OSRM lives in the same region so 6PN traffic is intra-DC.
 
-**Account org**: create a `runonward` Fly.io org. Both apps live under it. Billing is per-org; secrets are per-app.
+**Account org**: create a `project-running` Fly.io org. Both apps live under it. Billing is per-org; secrets are per-app. The name matches the AWS account slug so the estate reads consistently across providers — Fly org slugs are embedded in billing and token scoping and are painful to change later, so get it right at creation.
 
 ---
 
@@ -679,7 +679,7 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 
 ### Worker
 
-- [ ] Fly.io org `runonward` created, `job_worker` app exists in `lhr`
+- [ ] Fly.io org `project-running` created, `job_worker` app exists in `lhr`
 - [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets
 - [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]`
 - [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm`

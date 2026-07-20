@@ -218,7 +218,7 @@ For the AWS-side deploy + rotation flows (preflight, orchestrated apply, sops bo
 
 | Secret | What |
 |---|---|
-| `FLY_API_TOKEN` | Fly.io API token scoped to the `runonward` org (verify the current org name — the AWS account was renamed `runonward` → `project-running`; the Fly org may or may not have been renamed too). Same token covers the `worker@*`, `osrm@*`, and `graph-cycle@*` workflows. |
+| `FLY_API_TOKEN` | Fly.io API token scoped to the `project-running` org — named to match the AWS account slug (`374902171933`), which was itself renamed from the retired `runonward` brand. Same token covers the `worker@*`, `osrm@*`, and `graph-cycle@*` workflows. |
 
 ## Rollback
 
