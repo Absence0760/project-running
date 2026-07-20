@@ -41,6 +41,10 @@ values
 -- Curator is an admin.
 insert into app_admins (user_id) values ('00000000-0000-0000-0000-00000000c001');
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 -- Seed catalogue rows as service_role (bypasses RLS, mirrors seed.sql).
 set local role service_role;
 insert into global_segments (id, name, waypoints, distance_m, region, country_code, is_active)

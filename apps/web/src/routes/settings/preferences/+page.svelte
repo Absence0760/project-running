@@ -177,6 +177,22 @@
 		}
 	}
 
+	// Re-opting into an engagement stream must lift any prior one-click
+	// unsubscribe address block (email_suppressions, reason 'unsubscribe'), or
+	// the send stays silently hard-blocked while the toggle reads 'on' (#392).
+	// The suppression row is address-keyed (covers every stream), so either
+	// toggle turning on clears it; the SECURITY DEFINER RPC is scoped to the
+	// caller's own address and never touches a bounce/complaint/manual row.
+	async function setEngagementPref(
+		key: 'email_weekly_digest' | 'email_lifecycle_drip',
+		on: boolean
+	) {
+		autoSave({ [key]: on ? 'on' : 'off' });
+		if (!on || !auth.user) return;
+		const { error } = await supabase.rpc('clear_my_unsubscribe_suppression');
+		if (error) showToast(m('prefs.saveFailed', { error: error.message }), 'error');
+	}
+
 	// Flush any debounced change before leaving so a quick change-then-navigate
 	// doesn't drop it (the write-through cache captures it even if the network
 	// leg is interrupted mid-navigation).
@@ -1132,7 +1148,7 @@
 				<input
 					type="checkbox"
 					bind:checked={emailWeeklyDigest}
-					onchange={() => autoSave({ email_weekly_digest: emailWeeklyDigest ? 'on' : 'off' })}
+					onchange={() => setEngagementPref('email_weekly_digest', emailWeeklyDigest)}
 					data-testid="email-weekly-digest"
 				/>
 				<span>
@@ -1144,7 +1160,7 @@
 				<input
 					type="checkbox"
 					bind:checked={emailLifecycleDrip}
-					onchange={() => autoSave({ email_lifecycle_drip: emailLifecycleDrip ? 'on' : 'off' })}
+					onchange={() => setEngagementPref('email_lifecycle_drip', emailLifecycleDrip)}
 					data-testid="email-lifecycle-drip"
 				/>
 				<span>

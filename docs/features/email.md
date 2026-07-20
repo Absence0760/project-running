@@ -254,7 +254,16 @@ Dashboard → Auth → Hooks in prod):
   and the unauth one-click **unsubscribe endpoint** (`internal/unsubscribe/` →
   `/unsubscribe/weekly-digest`, verifies the HMAC, flips the pref off + inserts
   a suppression row, fail-closed on a bad/missing token; keyed by
-  `WEEKLY_DIGEST_UNSUB_SECRET`). **NOT enabled:** the builder is
+  `WEEKLY_DIGEST_UNSUB_SECRET`). The **reverse path** — a user re-opting into a
+  stream via Settings (a pref flips off→on) — calls the SECURITY DEFINER
+  `clear_my_unsubscribe_suppression()` RPC (migration `20270425_001`), which
+  deletes the caller's OWN `reason='unsubscribe'` suppression only (never a
+  `bounce`/`complaint`/`manual` row), scoped to the caller's own address via
+  `auth.uid()`. Without it the address-keyed hard-block outlived the pref and
+  silently dropped every future send while the toggle read 'on' (#392); the
+  address-keyed row covers every stream, so re-opting into either engagement
+  stream lifts it and the per-stream opt-in prefs become the authoritative gate
+  again. **NOT enabled:** the builder is
   **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires). The **opt-in
   preference toggle** ships on web `/settings/preferences` + mobile Settings →
   Preferences (default off). The **provider bounce/complaint suppression

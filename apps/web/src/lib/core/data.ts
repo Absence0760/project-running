@@ -100,7 +100,13 @@ import {
 } from '../social/event_gym_template';
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
-import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import {
+	applyRunMetadataPatch,
+	normalisePlanWorkoutNotes,
+	shouldRescoreGlobalSegments,
+	stampGlobalSegmentsScored,
+	GLOBAL_SEGMENT_SCORING_LIMIT,
+} from './data_normalise';
 import { dashboardRunsWindowStart } from './dashboard_runs';
 import { bucketWeeklyMileage } from './weekly_mileage';
 import {
@@ -2828,6 +2834,55 @@ export async function createEvent(input: {
 		.single();
 	if (error) throw error;
 	return normaliseEvent(data as Event);
+}
+
+export async function updateEvent(
+	id: string,
+	patch: Partial<{
+		title: string;
+		category: EventCategory;
+		discipline: string | null;
+		gym_template: EventGymTemplate | null;
+		description: string | null;
+		starts_at: string;
+		duration_min: number | null;
+		meet_label: string | null;
+		route_id: string | null;
+		distance_m: number | null;
+		pace_target_sec: number | null;
+		capacity: number | null;
+		is_public: boolean;
+	}>
+): Promise<void> {
+	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
+	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
+	const { error } = await supabase.from('events').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+/// Whether an event carries any race session or finisher result across ANY of
+/// its instances. Drives the editor's warning before an organiser switches an
+/// athletic event to a non-athletic category — the athletic surfaces gate on
+/// isAthleticCategory, so the switch hides the leaderboard/race controls and
+/// orphans those rows. Fail-safe: a read error returns true so we still warn
+/// when we can't be sure.
+export async function eventHasAthleticData(eventId: string): Promise<boolean> {
+	try {
+		const [resultsRes, sessionsRes] = await Promise.all([
+			supabase
+				.from(TABLES.event_results)
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId),
+			supabase
+				.from('race_sessions')
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId)
+		]);
+		if (resultsRes.error || sessionsRes.error) return true;
+		return (resultsRes.count ?? 0) > 0 || (sessionsRes.count ?? 0) > 0;
+	} catch {
+		return true;
+	}
 }
 
 export async function deleteEvent(id: string): Promise<void> {
@@ -7595,6 +7650,15 @@ export async function fetchGlobalSegmentLeaderboard(
 /// every active catalogue geometry via the pure `computeGlobalSegmentEffort`
 /// (end-to-end match, curated v1) and batch-upserts matches. Idempotent via
 /// unique(global_segment_id, run_id) + ignoreDuplicates. Returns new count.
+///
+/// The write-side upsert is idempotent, but the FETCH + client-side haversine
+/// match are not — without a short-circuit they'd re-run on every owner view
+/// forever (issue #333). A `runs.metadata.global_segments_scored_count` stamp
+/// records the catalogue size a run was last scored against; a cheap `count`
+/// query gates the expensive polyline fetch so a scored run only recomputes
+/// when the (deliberately growing) catalogue gains segments. Both the gate
+/// and the fetch are bounded by the shared GLOBAL_SEGMENT_SCORING_LIMIT —
+/// see its doc comment for why a drift between the two is a pessimisation.
 export async function computeGlobalSegmentEffortsForRun(input: {
 	run_id: string;
 	user_id: string;
@@ -7604,7 +7668,17 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	const userId = auth.user?.id;
 	if (!userId || userId !== input.user_id) return 0;
 
-	const { segments } = await fetchGlobalSegmentsWithError(500);
+	const [{ data: runRow }, { count: activeCount }] = await Promise.all([
+		supabase.from(TABLES.runs).select('metadata').eq('id', input.run_id).maybeSingle(),
+		supabase
+			.from(TABLES.global_segments)
+			.select('id', { count: 'exact', head: true })
+			.eq('is_active', true),
+	]);
+	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
+	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
+
+	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
 	if (segments.length === 0) return 0;
 
 	const { computeGlobalSegmentEffort } = await import('../segments/segments');
@@ -7630,16 +7704,46 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 			started_at: eff.started_at,
 		});
 	}
-	if (rows.length === 0) return 0;
-	const { data: inserted, error } = await supabase
-		.from(TABLES.global_segment_efforts)
-		.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
-		.select('id');
-	if (error) {
-		console.warn('global segment effort batch upsert failed', input.run_id, error);
-		return 0;
+	let newCount = 0;
+	if (rows.length > 0) {
+		const { data: inserted, error } = await supabase
+			.from(TABLES.global_segment_efforts)
+			.upsert(rows, { onConflict: 'global_segment_id,run_id', ignoreDuplicates: true })
+			.select('id');
+		if (error) {
+			// Don't stamp on a failed write — the run stays un-scored so
+			// the next view retries rather than dropping real matches.
+			console.warn('global segment effort batch upsert failed', input.run_id, error);
+			return 0;
+		}
+		newCount = inserted?.length ?? 0;
 	}
-	return inserted?.length ?? 0;
+
+	// Stamp even when nothing matched (rows.length === 0): a no-match run
+	// must not re-fetch + re-match the whole catalogue every view either.
+	//
+	// Re-read the bag here rather than merging into the copy read at the top
+	// of the function: the catalogue fetch + haversine pass above takes
+	// seconds, and `runs.metadata` is a whole-column jsonb write. Merging the
+	// stale copy would silently revert any title / notes edit the owner made
+	// inside that window — the run-detail edit dialog writes the same column.
+	// Keeping the read adjacent to the write is the same discipline
+	// `updateRunMetadata` follows.
+	const { data: freshRow } = await supabase
+		.from(TABLES.runs)
+		.select('metadata')
+		.eq('id', input.run_id)
+		.maybeSingle();
+	const next = stampGlobalSegmentsScored(
+		(freshRow?.metadata ?? null) as Record<string, unknown> | null,
+		segments.length,
+	);
+	const { error: stampErr } = await supabase
+		.from(TABLES.runs)
+		.update({ metadata: next })
+		.eq('id', input.run_id);
+	if (stampErr) console.warn('global segment scored stamp failed', input.run_id, stampErr);
+	return newCount;
 }
 
 /// Catalogue-segment efforts a run earned, joined to the segment + ranked

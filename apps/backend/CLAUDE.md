@@ -272,6 +272,20 @@ values (..., 'app', '{"activity_type":"run"}');
 
 Or with `jsonb_build_object`: `jsonb_build_object('activity_type', 'run', ...other keys...)`. Forgetting it errors test setup before any assertion runs → "Bad plan" again.
 
+### An authenticated fixture write needs `select tests.confirm_consent();`
+
+The GDPR Art 8 write gate (`20270424000004_consent_write_gate.sql`) is a fail-closed BEFORE INSERT trigger on `runs` / `routes` / `gym_workouts` / `food_log` / `body_metrics`: an `authenticated` caller whose `user_profiles.age_confirmed_at` is NULL is rejected with `42501 consent required: confirm age and terms before writing user data`. A real account is never in that state — the client creates the profile on first sign-in and `confirm_age_and_terms()` stamps it — but a fixture that only does `insert into auth.users` produces exactly that unreal user, and the gate correctly refuses it. Nothing creates a `user_profiles` row on an `auth.users` insert (there is no `handle_new_user` trigger in this schema, despite what a couple of older test comments claimed).
+
+So any pgtap fixture that switches to `authenticated` and then writes one of those five tables must first call:
+
+```sql
+select tests.confirm_consent();
+```
+
+It stamps `age_confirmed_at` + `terms_accepted_at` on every `auth.users` row that lacks them, creating the `user_profiles` row when the fixture never made one, and cleans up the `lifecycle_email` welcome job its inserts trigger so suites that assert on `jobs` are unaffected. **Call it after any `user_profiles` insert of your own** (it upserts, your plain insert would collide), and before the first `set local role authenticated`.
+
+The helper is defined in `seed.sql`, not a migration — deliberately. `seed.sql` runs only on `supabase start` / `db reset`, so there is no production-reachable way to forge consent. Tests that assert the gate *fires* (`consent_write_gate_test.sql`, `age_confirmation_gate_test.sql`) simply don't call it. The Playwright equivalent is the `age_confirmed_at` / `terms_accepted_at` stamp in `createSagaUsers` (`apps/web/tests-e2e/fixtures/saga-users.ts`); service-role seeding from a spec is never gated, because `auth.uid()` is null for it.
+
 ### `set local "request.jwt.claims"` needs double quotes
 
 The parameter name contains a dot, so PostgreSQL requires double quotes around it in `SET LOCAL`. Unquoted form `set local request.jwt.claims = '...'` is parsed differently and silently fails to set the JWT context — `auth.uid()` returns NULL, your RLS test passes (or fails) for the wrong reason. Always:

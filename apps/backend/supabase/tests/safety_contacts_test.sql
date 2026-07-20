@@ -23,6 +23,10 @@ values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c01', 'Ada Owner', now(), now(), 'km',
 
 -- ─────────── owner add (RLS insert) + confirm-email enqueue ───────────
 
+-- Synthetic fixture users stand in for signed-up accounts, which always
+-- carry the GDPR Art 8 stamp before they can write (20270424000004).
+select tests.confirm_consent();
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c01"}';
 
