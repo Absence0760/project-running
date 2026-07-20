@@ -76,9 +76,15 @@ class DrainQueueLoopTest {
         assertNull(result.lastError)
     }
 
-    // ─────────────────── DropAndContinue (409) ───────────────────
+    // ─────────────────── SkipAndContinue (4xx) ───────────────────
 
-    @Test fun `409 drops the id from the queue and continues`() = runBlocking {
+    @Test fun `409 keeps the id queued (skip) and keeps draining`() = runBlocking {
+        // Regression guard for issue #404: a 409 must NOT drop the run.
+        // The watch's own retries never 409 (a same-id re-POST merges on the
+        // primary key and returns 200), so a 409 that surfaces is a genuine
+        // conflict whose row may never have been inserted — dropping it would
+        // silently lose the run. It is classified permanent-skip
+        // (decisions.md §17), leaving it queued for manual discard.
         val removed = mutableListOf<String>()
         val pushedIds = mutableListOf<String>()
         val result = drainQueueLoop(
@@ -92,16 +98,12 @@ class DrainQueueLoopTest {
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("conflict", "clean"), pushedIds)
-        // 409 must STILL remove the id — the row is in the DB.
-        assertEquals(listOf("conflict", "clean"), removed)
-        assertEquals(listOf("conflict", "clean"), result.drainedIds)
-        // 409 is idempotent success, not transient failure.
+        // 409 must NOT remove the conflicting id — only the clean run drains.
+        assertEquals(listOf("clean"), removed)
+        assertEquals(listOf("clean"), result.drainedIds)
+        // 409 is permanent, not transient — no backoff arming.
         assertFalse(result.anyTransientFailure)
-        // 409 followed by success clears the error banner.
-        assertNull(result.lastError)
     }
-
-    // ─────────────────── SkipAndContinue (4xx) ───────────────────
 
     @Test fun `400 skips the id (no remove) and keeps draining`() = runBlocking {
         val removed = mutableListOf<String>()
