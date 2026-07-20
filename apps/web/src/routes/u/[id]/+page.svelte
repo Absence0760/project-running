@@ -61,6 +61,17 @@
 	let followingHasMore = $state(false);
 	let followersLoadingMore = $state(false);
 	let followingLoadingMore = $state(false);
+	// Each independent section owns its own loading + error so a failure in one
+	// (a broken runs query, a stale followers page) scopes to that tab's error +
+	// retry instead of blanking the whole profile. Only the header summary
+	// (`loading` / `loadError`) — which is structurally required to render
+	// anything — gates the page. Mirrors the mobile fix in #508.
+	let runsLoading = $state(true);
+	let runsError = $state<string | null>(null);
+	let followersLoading = $state(true);
+	let followersError = $state<string | null>(null);
+	let followingLoading = $state(true);
+	let followingError = $state<string | null>(null);
 	let loading = $state(true);
 	let busy = $state(false);
 	let tab = $state<
@@ -151,36 +162,80 @@
 	];
 	let followsAnyone = $derived(following.length > 0);
 
-	async function load() {
+	function load() {
+		loadSummary();
+		loadRuns();
+		loadFollowers();
+		loadFollowing();
+	}
+
+	// The header summary is the only fetch that gates the page — nothing renders
+	// without it. The block-state check rides along here (the header's Block /
+	// Unblock button needs it) but must never gate the page, so its failure is
+	// swallowed to a default of not-blocked.
+	async function loadSummary() {
 		loading = true;
 		loadError = null;
 		try {
-			const [p, r, fr, fg, blocked] = await Promise.all([
-				fetchPublicProfile(userId),
-				fetchPublicRunsByUser(userId, 20),
-				fetchFollowers(userId, { limit: FOLLOW_PAGE_SIZE }),
-				fetchFollowing(userId, { limit: FOLLOW_PAGE_SIZE }),
-				auth.loggedIn && auth.user?.id !== userId
-					? isBlockedByViewer(userId)
-					: Promise.resolve(false),
-			]);
+			const p = await fetchPublicProfile(userId);
 			profile = p.profile;
 			loadError = p.error;
-			runs = r;
-			followers = fr;
-			following = fg;
-			followersHasMore = fr.length === FOLLOW_PAGE_SIZE;
-			followingHasMore = fg.length === FOLLOW_PAGE_SIZE;
-			viewerHasBlocked = blocked;
+			if (auth.loggedIn && auth.user?.id !== userId) {
+				try {
+					viewerHasBlocked = await isBlockedByViewer(userId);
+				} catch (e) {
+					console.warn('profile block check failed', e);
+				}
+			}
 		} catch (e) {
 			// A rejected fetch would otherwise leave the profile stuck on its
 			// loading skeleton forever — surface it with a retry instead.
 			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
 			loading = false;
-			return;
 		}
-		loading = false;
-		hydrateViewerFollows();
+	}
+
+	async function loadRuns() {
+		runsLoading = true;
+		runsError = null;
+		try {
+			runs = await fetchPublicRunsByUser(userId, 20);
+		} catch (e) {
+			runsError = e instanceof Error ? e.message : String(e);
+		} finally {
+			runsLoading = false;
+		}
+	}
+
+	async function loadFollowers() {
+		followersLoading = true;
+		followersError = null;
+		try {
+			const fr = await fetchFollowers(userId, { limit: FOLLOW_PAGE_SIZE });
+			followers = fr;
+			followersHasMore = fr.length === FOLLOW_PAGE_SIZE;
+			hydrateViewerFollows();
+		} catch (e) {
+			followersError = e instanceof Error ? e.message : String(e);
+		} finally {
+			followersLoading = false;
+		}
+	}
+
+	async function loadFollowing() {
+		followingLoading = true;
+		followingError = null;
+		try {
+			const fg = await fetchFollowing(userId, { limit: FOLLOW_PAGE_SIZE });
+			following = fg;
+			followingHasMore = fg.length === FOLLOW_PAGE_SIZE;
+			hydrateViewerFollows();
+		} catch (e) {
+			followingError = e instanceof Error ? e.message : String(e);
+		} finally {
+			followingLoading = false;
+		}
 	}
 
 	async function loadMoreFollowers() {
@@ -513,6 +568,26 @@
 	<link rel="canonical" href={canonicalUrl} />
 </svelte:head>
 
+{#snippet sectionError(detail: string, retry: () => void)}
+	<div class="error-banner" role="alert">
+		<span class="material-symbols" aria-hidden="true">error</span>
+		<div>
+			<strong>{m('profile.sectionLoadError')}</strong>
+			<span class="error-detail">{detail}</span>
+		</div>
+		<button class="btn btn-outline" onclick={retry}>{m('profile.retry')}</button>
+	</div>
+{/snippet}
+
+{#snippet sectionLoading()}
+	<div class="section-loading" role="status">
+		<span class="sr-only">{m('profile.loadingShort')}</span>
+		<span class="skel skel-line skel-w-60"></span>
+		<span class="skel skel-line skel-w-40"></span>
+		<span class="skel skel-line skel-w-50"></span>
+	</div>
+{/snippet}
+
 <div class="page">
 	<button type="button" class="back-link" onclick={goBack}>
 		<span class="material-symbols" aria-hidden="true">arrow_back</span>
@@ -702,7 +777,11 @@
 		</div>
 
 		{#if tab === 'runs'}
-			{#if runs.length === 0}
+			{#if runsError}
+				{@render sectionError(runsError, loadRuns)}
+			{:else if runsLoading}
+				{@render sectionLoading()}
+			{:else if runs.length === 0}
 				<div class="empty-card">
 					{#if isSelf}
 						<img src="/logo-mark.svg" alt="" width="64" height="64" class="empty-mark" />
@@ -784,7 +863,11 @@
 				/>
 			{/if}
 		{:else if tab === 'followers'}
-			{#if followers.length === 0}
+			{#if followersError}
+				{@render sectionError(followersError, loadFollowers)}
+			{:else if followersLoading}
+				{@render sectionLoading()}
+			{:else if followers.length === 0}
 				<div class="empty-card">
 					<span class="material-symbols empty-icon" aria-hidden="true">group_add</span>
 					<h3>{m('profile.followersEmptyTitle')}</h3>
@@ -842,7 +925,11 @@
 				{/if}
 			{/if}
 		{:else if tab === 'following'}
-			{#if following.length === 0}
+			{#if followingError}
+				{@render sectionError(followingError, loadFollowing)}
+			{:else if followingLoading}
+				{@render sectionLoading()}
+			{:else if following.length === 0}
 				<div class="empty-card">
 					<span class="material-symbols empty-icon" aria-hidden="true">person_search</span>
 					<h3>
@@ -1832,6 +1919,13 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	.section-loading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: var(--space-lg) 0;
 	}
 
 	@media (max-width: 50rem) {

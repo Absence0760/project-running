@@ -509,8 +509,16 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   composer falls back to manual entry only when nothing matches. USDA is
   **fail-closed on its API key** (`PUBLIC_USDA_FDC_API_KEY` web /
   `USDA_FDC_API_KEY` mobile dotenv): unset → USDA simply absent, OFF still
-  works. A partial-failure of one source degrades to the other. TS↔Dart
-  parity pair; see [decisions.md § 188](../architecture/decisions.md).
+  works. A partial-failure of one source degrades to the other. Results are
+  **locale-biased**: `searchFoods` / `lookupBarcode` pass the user's app
+  language as Open Food Facts' `lc` code (`pt-BR` → `pt`, default `en`) and
+  request the `product_name_<lc>` field, preferring it over the generic
+  `product_name`. Open Food Facts is community-contributed and stores each
+  product's name in whatever language the contributor typed (Nordic
+  contributors are very active), so an unbiased global query surfaced
+  non-English (often Norwegian) names (#491). USDA is US-English only and
+  takes no language param. TS↔Dart parity pair; see
+  [decisions.md § 188](../architecture/decisions.md).
 - **Barcode scan** (mobile-only, camera — the one place mobile leads) is
   the fast path on top of the same Open Food Facts lookup; the data layer
   is shared with search. **Shipped (2026-06-20, mobile):** a Scan-barcode
