@@ -211,9 +211,21 @@ When the client sends no redirect, GoTrue falls back to the hosted project's **S
 
 **Why landing on `/auth/callback` matters (not cosmetic):** the callback page (`auth/callback/+page.svelte`) exchanges the PKCE code, then replays the age/terms consent stamps via `confirm_age_and_terms` and runs the GDPR Art 8 consent gate. For password signup the immediate post-`signUp()` `confirm_age_and_terms` call 401s (no session until confirmation), so the stamp **retry lives on the callback**. A confirmation that lands on `/` (root) skips that retry — `detectSessionInUrl` may still exchange the code, but the consent capture/gate is bypassed.
 
-**A complete fix is two parts, neither sufficient alone:**
-1. **Code (shipped)** — web `signUp` sends `emailRedirectTo: ${origin}/auth/callback`. Mobile `signUp` (`packages/api_client`) sends the custom-scheme deep link `com.threkir.app://login-callback` (`ApiClient.kAuthDeepLinkRedirect`), registered as an Android intent-filter (`MainActivity`) + an iOS `CFBundleURLTypes` scheme; `supabase_flutter`'s `app_links` listener completes the PKCE session in-app. Mobile `sendPasswordResetEmail` sends `${WEB_BASE_URL}/auth/reset` (reset stays on web — mobile hosts no reset form).
-2. **Dashboard (pending)** — set Site URL to the prod origin and add every redirect target to the allow-list: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and `com.threkir.app://login-callback` (+ preview origin). See Production setup below.
+**A complete fix is three parts:**
+1. **Code — the redirect (shipped)** — web `signUp` sends `emailRedirectTo: ${origin}/auth/callback`. Mobile `signUp` (`packages/api_client`) sends the custom-scheme deep link `com.threkir.app://login-callback` (`ApiClient.kAuthDeepLinkRedirect`), registered as an Android intent-filter (`MainActivity`) + an iOS `CFBundleURLTypes` scheme; `supabase_flutter`'s `app_links` listener completes the PKCE session in-app. Mobile `sendPasswordResetEmail` sends `${WEB_BASE_URL}/auth/reset` (reset stays on web — mobile hosts no reset form).
+2. **Code — the fail-closed guard (shipped, issue #363)** — see "A stray confirmation landing fails closed" below. The redirect above is a *request*; the allow-list decides whether GoTrue honours it, so the app can never assume it was honoured.
+3. **Dashboard — a PRE-DEPLOY CHECKLIST ITEM, not a follow-up** — set Site URL to the prod origin and add every redirect target to the allow-list: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and `com.threkir.app://login-callback` (+ preview origin). Verified at every release, not once at first setup — see Production setup below and [releasing.md § Before cutting a release](../ops/releasing.md#before-cutting-a-release).
+
+---
+
+## A stray confirmation landing fails closed (issue #363)
+
+The redirect above is a request the hosted project can silently refuse: a Site URL still on the Supabase default, or an allow-list missing `/auth/callback`, lands the confirmation on the Site URL instead (`/?code=<pkce>`). `detectSessionInUrl` still exchanges the code there, so the user ends up **signed in** while the `confirm_age_and_terms()` retry and the Art 8 gate never ran — `age_confirmed_at` / `terms_accepted_at` stay null on a live account. A dashboard setting must not be able to drop a consent stamp silently, so the app defends itself in code (`lib/core/auth_confirmation.ts`):
+
+- **`strayConfirmationTarget(pathname, search, hash)`** — a PKCE `?code=` (or an implicit-flow `#access_token=`) arriving on any route that does **not** own one is routed to `/auth/callback` with the query and hash carried through, so the callback still runs the exchange + stamp retry + gate. Three routes own their own code and are exempt: `/auth/callback`, `/auth/reset` (password recovery), and `/settings/integrations` (the Strava OAuth return). `+layout.svelte` snapshots the URL **during hydration**, before supabase-js' async bootstrap can consume the code and rewrite the address bar, so the hop happens even when that exchange wins the race.
+- **`verifyConsentStamped(readProfile)`** — the fail-closed profile check the callback already ran, extracted so `/login` can run it too. Every ambiguity (missing row, null stamp, failed read, thrown error) returns `needs-consent` → `/auth/confirm-age`; `confirm_age_and_terms()` is idempotent, so an already-consented user pays at most one extra click. `/login`'s sign-up path needs it because with `enable_confirmations = false` a session is issued immediately — there is no callback hop on which a silently-failed stamp RPC would be retried.
+
+Pinned by `lib/core/auth_confirmation.test.ts` (14 unit tests) + `tests-e2e/auth/stray-confirmation-landing.spec.ts`. Decisions §276.
 
 ---
 
@@ -292,8 +304,8 @@ PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 
 Supabase Auth dashboard:
 
-- Set **Authentication → URL Configuration → Site URL** to the prod origin (`https://threkir.com`). A fresh project defaults this to `http://localhost:3000`; leaving it there sends every fallback redirect (notably signup confirmation, which passes no `emailRedirectTo` — see "Email confirmation redirect" above) to localhost.
-- Add **every** redirect target to **Redirect URLs**: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and the mobile deep link `com.threkir.app://login-callback` (+ the preview origin). The allow-list is enforced — a redirect not on it falls back to the Site URL.
+- **Pre-deploy consent gate:** set **Authentication → URL Configuration → Site URL** to the prod origin (`https://threkir.com`). A fresh project defaults this to `http://localhost:3000`; leaving it there sends every fallback redirect (notably signup confirmation — see "Email confirmation redirect" above) to localhost.
+- **Pre-deploy consent gate:** add **every** redirect target to **Redirect URLs**: `https://threkir.com/auth/callback`, `https://threkir.com/auth/reset`, and the mobile deep link `com.threkir.app://login-callback` (+ the preview origin). The allow-list is enforced — a redirect not on it falls back to the Site URL. Getting either of these two wrong used to hand out a live session with an unstamped GDPR Art 8 consent record; the app now fails closed in code (issue #363, "A stray confirmation landing fails closed" above), but that guard is the safety net, **not** a licence to skip the config — verify both at every release.
 - Enable Google and Apple providers under **Authentication → Providers**
 - Enable **Allow manual linking** under **Authentication → Settings** so `linkIdentity()` works
 - Mirror the same redirect URI in each external provider's app config
