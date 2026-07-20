@@ -115,4 +115,5 @@ export const METADATA_KEYS = {
 	steps: 'steps',
 	age_grade: 'age_grade',
 	elevation_m: 'elevation_m',
+	global_segments_scored_count: 'global_segments_scored_count',
 } as const;
