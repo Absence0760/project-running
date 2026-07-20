@@ -48,10 +48,18 @@ private val errorBodyJson = Json { ignoreUnknownKeys = true }
 /// `ApiClient.saveRun` (Dart) so a watch-saved run reads back
 /// identically to a phone-saved run. `source` is always `"watch"`
 /// (the [RunSource] enum value the row labels the watch with).
-/// `external_id` is set to [runId] for idempotency on retry — the
-/// drain loop's 409 / `DropAndContinue` path counts on the unique
-/// constraint here. `is_public` is OMITTED (not null) when the
-/// caller doesn't pass it, so the DB default (`false`) applies.
+///
+/// Retry idempotency does NOT rely on `external_id`: the row's primary
+/// key is [runId], and the POST carries `Prefer: resolution=merge-duplicates`,
+/// so a re-POST of the same run conflicts on the PK and merges (200) —
+/// it never reaches the drain loop's error path. `external_id` is set to
+/// [runId] only to keep the row shape aligned with the runs dedup
+/// crosswalk; because it always equals the PK, the per-user
+/// `runs_user_external_id` unique index can never fire independently of
+/// the PK, so it produces no 409 of its own.
+///
+/// `is_public` is OMITTED (not null) when the caller doesn't pass it,
+/// so the DB default (`false`) applies.
 internal fun buildSaveRunRowMap(
     runId: String,
     uid: String,
