@@ -1,23 +1,26 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { formatISO } from '$lib/training/training';
 	import {
 		fetchRoutes,
 		fetchClubRoutes,
 		createEvent,
+		updateEvent,
+		eventHasAthleticData,
 		fetchPayoutAccount,
 		setEventPricing,
 		fetchSessionPlans,
 		setEventSessionPlan,
 		type SessionPlan
 	} from '$lib/core/data';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
 	import { gymTemplateFromInputs } from '$lib/social/event_gym_template';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { Route, RecurrenceFreq, Weekday, EventCategory, RefundPolicy } from '$lib/types';
+	import type { Route, RecurrenceFreq, Weekday, EventCategory, RefundPolicy, Event as ClubEvent } from '$lib/types';
 
 	// Conversion factor for the unit label / pace target. The form
 	// keeps its working value in the user's preferred unit (km or mi)
@@ -33,12 +36,22 @@
 		// members-only via the club gate, so we hide the toggle there. Defaults
 		// to true (show the toggle) when the caller doesn't know.
 		clubIsPublic?: boolean | null;
+		// When set, the editor edits this event instead of creating a new one.
+		// Recurrence + paid-pricing + session-plan structural fields are hidden
+		// in edit mode (each has its own instance-aware write path on the event
+		// page); edit covers the descriptive fields an organiser fixes typos in.
+		existing?: ClubEvent;
 		// Fired with the newly created event so the host can either close
 		// the modal + refresh, or navigate to the event detail page.
 		oncreated?: (event: { id: string }) => void;
+		// Fired after an in-place edit is saved.
+		onsaved?: () => void;
 		oncancel?: () => void;
 	}
-	let { clubId, clubName, clubIsPublic = true, oncreated, oncancel }: Props = $props();
+	let { clubId, clubName, clubIsPublic = true, existing, oncreated, onsaved, oncancel }: Props = $props();
+	// Snapshot the display unit once so the prefill (distance / pace) is derived
+	// off a stable value rather than the reactive metresPerUnit before it settles.
+	const initMetresPerUnit = getUnit() === 'mi' ? METRES_PER_MILE : 1000;
 	// Show the members-only toggle unless the club is explicitly private (a
 	// private club's events are already members-only; null/legacy → treat as
 	// public, matching the clubs.is_public default).
@@ -47,33 +60,44 @@
 	let myRoutes = $state<Route[]>([]);
 	let clubRoutes = $state<Route[]>([]);
 
-	let category = $state<EventCategory>('run');
-	let discipline = $state('');
+	let category = $state<EventCategory>(untrack(() => existing?.category ?? 'run'));
+	let discipline = $state(untrack(() => existing?.discipline ?? ''));
 	// Optional default workout length for the class -> gym seam. The discipline
 	// above doubles as the workout title source — no second discipline field.
-	let gymTemplateDurationMin = $state<number | null>(null);
+	let gymTemplateDurationMin = $state<number | null>(
+		untrack(() => existing?.gym_template?.duration_min ?? null)
+	);
 	// Optional follow-along session plan to attach to a class event (M5).
 	let sessionPlans = $state<SessionPlan[]>([]);
 	let sessionPlanId = $state<string>('');
-	let title = $state('');
-	let description = $state('');
-	let date = $state(defaultDate());
-	let time = $state('07:00');
-	let durationMin = $state<number | null>(null);
-	let meetLabel = $state('');
-	let routeId = $state<string>('');
+	let title = $state(untrack(() => existing?.title ?? ''));
+	let description = $state(untrack(() => existing?.description ?? ''));
+	let date = $state(untrack(() => initDate(existing?.starts_at)));
+	let time = $state(untrack(() => initTime(existing?.starts_at)));
+	let durationMin = $state<number | null>(untrack(() => existing?.duration_min ?? null));
+	let meetLabel = $state(untrack(() => existing?.meet_label ?? ''));
+	let routeId = $state<string>(untrack(() => existing?.route_id ?? ''));
 	// `distanceInUnit` holds the value in the user's preferred unit
 	// (km or mi). Conversion to metres happens at save time.
-	let distanceInUnit = $state<number | null>(null);
+	let distanceInUnit = $state<number | null>(
+		untrack(() =>
+			existing?.distance_m != null ? +(existing.distance_m / initMetresPerUnit).toFixed(2) : null
+		)
+	);
 	// pace per the user's preferred unit (sec / km or sec / mi).
-	let paceMin = $state<number | null>(null);
-	let paceSec = $state<number | null>(null);
+	let paceMin = $state<number | null>(untrack(() => initPaceMin(existing?.pace_target_sec)));
+	let paceSec = $state<number | null>(untrack(() => initPaceSec(existing?.pace_target_sec)));
 	let distanceUnitLabel = $derived(getUnit() === 'mi' ? 'mi' : 'km');
 	let paceUnitLabel = $derived(getUnit() === 'mi' ? 'per mi' : 'per km');
 	let metresPerUnit = $derived(getUnit() === 'mi' ? METRES_PER_MILE : 1000);
-	let capacity = $state<number | null>(null);
+	let capacity = $state<number | null>(untrack(() => existing?.capacity ?? null));
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+	// Set on mount for an athletic event being edited: true when it carries
+	// race sessions / results (or the check couldn't be made — fail-safe), so
+	// switching it to a non-athletic category warns first.
+	let athleticDataAtRisk = $state(false);
+	let showCategoryWarn = $state(false);
 
 	// Paid registration (club_events.md slice P1). The toggle is disabled
 	// until the host has a charges-enabled Stripe payout account — the DB
@@ -90,7 +114,7 @@
 
 	// Members-only events (is_public = false) are hidden from non-members +
 	// discovery. Default public.
-	let isPublic = $state(true);
+	let isPublic = $state(untrack(() => existing?.is_public ?? true));
 
 	let recurrence = $state<'none' | RecurrenceFreq>('none');
 	let byday = $state<Weekday[]>([]);
@@ -134,10 +158,36 @@
 		return formatISO(d);
 	}
 
+	// Split a stored ISO instant back into the local date + time the two form
+	// inputs bind to (mirrors the `${date}T${time}` reassembly at save time).
+	function initDate(iso: string | undefined): string {
+		if (!iso) return defaultDate();
+		const d = new Date(iso);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+	}
+	function initTime(iso: string | undefined): string {
+		if (!iso) return '07:00';
+		const d = new Date(iso);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	}
+	// Stored pace is seconds per kilometre; the form edits minutes:seconds per
+	// the user's unit, so convert back through the snapshotted unit factor.
+	function initPaceSecPerUnit(paceSecPerKm: number | null | undefined): number | null {
+		if (paceSecPerKm == null) return null;
+		return Math.round(paceSecPerKm * (initMetresPerUnit / 1000));
+	}
+	function initPaceMin(paceSecPerKm: number | null | undefined): number | null {
+		const perUnit = initPaceSecPerUnit(paceSecPerKm);
+		return perUnit == null ? null : Math.floor(perUnit / 60);
+	}
+	function initPaceSec(paceSecPerKm: number | null | undefined): number | null {
+		const perUnit = initPaceSecPerUnit(paceSecPerKm);
+		return perUnit == null ? null : perUnit % 60;
+	}
+
 	onMount(async () => {
-		const acct = await fetchPayoutAccount();
-		chargesEnabled = acct?.charges_enabled ?? false;
-		if (acct?.default_currency) currency = acct.default_currency;
 		const [mine, clubs] = await Promise.all([fetchRoutes(), fetchClubRoutes(clubId)]);
 		// fetchRoutes() already includes the user's bookmarked routes (via
 		// saved_routes union). Drop anything that's also in this club's
@@ -145,10 +195,19 @@
 		const clubIds = new Set(clubs.map((r) => r.id));
 		myRoutes = mine.filter((r) => !clubIds.has(r.id));
 		clubRoutes = clubs;
-		try {
-			sessionPlans = await fetchSessionPlans();
-		} catch (e) {
-			console.error('fetchSessionPlans failed', e);
+		// Pricing + session-plan controls are create-only (edit hides them, each
+		// has its own instance-aware write path on the event page).
+		if (!existing) {
+			const acct = await fetchPayoutAccount();
+			chargesEnabled = acct?.charges_enabled ?? false;
+			if (acct?.default_currency) currency = acct.default_currency;
+			try {
+				sessionPlans = await fetchSessionPlans();
+			} catch (e) {
+				console.error('fetchSessionPlans failed', e);
+			}
+		} else if (isAthleticCategory(existing.category)) {
+			athleticDataAtRisk = await eventHasAthleticData(existing.id);
 		}
 	});
 
@@ -160,9 +219,23 @@
 		}
 	});
 
-	async function submit(e: Event) {
+	function submit(e: Event) {
 		e.preventDefault();
 		if (!title.trim() || busy) return;
+		// Switching an athletic event that already has race sessions / results
+		// to a class or social type hides its leaderboard + race controls (they
+		// gate on isAthleticCategory) and orphans those rows. Warn first;
+		// athleticDataAtRisk is fail-safe (true when the check couldn't run), so
+		// we warn when unsure. Only reachable in edit mode.
+		if (existing && athleticDataAtRisk && !isAthleticCategory(category)) {
+			showCategoryWarn = true;
+			return;
+		}
+		void persist();
+	}
+
+	async function persist() {
+		if (busy) return;
 		busy = true;
 		error = null;
 		try {
@@ -177,8 +250,31 @@
 				paceSecPerUnit != null
 					? Math.round(paceSecPerUnit * (1000 / metresPerUnit))
 					: null;
-			const recurrenceFreq = recurrence === 'none' ? null : recurrence;
 			const athletic = isAthleticCategory(category);
+			if (existing) {
+				await updateEvent(existing.id, {
+					title: title.trim(),
+					category,
+					discipline: category === 'class' ? discipline.trim() || null : null,
+					gym_template:
+						category === 'class'
+							? gymTemplateFromInputs(discipline.trim(), gymTemplateDurationMin)
+							: null,
+					description: description.trim() || null,
+					starts_at: startsAt,
+					duration_min: durationMin ?? null,
+					meet_label: meetLabel.trim() || null,
+					route_id: athletic ? routeId || null : null,
+					distance_m:
+						athletic && distanceInUnit != null ? distanceInUnit * metresPerUnit : null,
+					pace_target_sec: athletic ? paceSecPerKm : null,
+					capacity: capacity ?? null,
+					is_public: showVisibilityToggle ? isPublic : true
+				});
+				onsaved?.();
+				return;
+			}
+			const recurrenceFreq = recurrence === 'none' ? null : recurrence;
 			const event = await createEvent({
 				club_id: clubId,
 				title: title.trim(),
@@ -242,7 +338,9 @@
 			}
 			oncreated?.(event);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : m('eventEditor.createFailed');
+			error = e instanceof Error
+				? e.message
+				: m(existing ? 'eventEditor.updateFailed' : 'eventEditor.createFailed');
 		} finally {
 			busy = false;
 		}
@@ -250,7 +348,7 @@
 </script>
 
 <form onsubmit={submit} class="editor-form event-editor">
-	<p class="sub">{m('eventEditor.sub', { clubName })}</p>
+	<p class="sub">{existing ? m('eventEditor.editSub', { clubName }) : m('eventEditor.sub', { clubName })}</p>
 
 	<div class="cat-field">
 		<span class="cat-legend">{m('eventEditor.category')}</span>
@@ -293,18 +391,20 @@
 			/>
 			<span class="hint">{m('eventEditor.gymTemplateHint')}</span>
 		</label>
-		<label>
-			<span>{m('session.event.planPicker')} <span class="optional">{m('eventEditor.optional')}</span></span>
-			<select bind:value={sessionPlanId} data-testid="session-plan-picker">
-				<option value="">{m('session.event.planNone')}</option>
-				{#each sessionPlans as sp (sp.id)}
-					<option value={sp.id}>{sp.title}</option>
-				{/each}
-			</select>
-			{#if sessionPlans.length === 0}
-				<span class="hint">{m('session.event.planEmptyHint')}</span>
-			{/if}
-		</label>
+		{#if !existing}
+			<label>
+				<span>{m('session.event.planPicker')} <span class="optional">{m('eventEditor.optional')}</span></span>
+				<select bind:value={sessionPlanId} data-testid="session-plan-picker">
+					<option value="">{m('session.event.planNone')}</option>
+					{#each sessionPlans as sp (sp.id)}
+						<option value={sp.id}>{sp.title}</option>
+					{/each}
+				</select>
+				{#if sessionPlans.length === 0}
+					<span class="hint">{m('session.event.planEmptyHint')}</span>
+				{/if}
+			</label>
+		{/if}
 	{/if}
 
 	<label>
@@ -365,6 +465,7 @@
 		</label>
 	{/if}
 
+	{#if !existing}
 	<fieldset>
 		<legend>{m('eventEditor.repeats')}</legend>
 		<div class="freq-row">
@@ -419,6 +520,7 @@
 			</label>
 		{/if}
 	</fieldset>
+	{/if}
 
 	<div class="row">
 		{#if isAthleticCategory(category)}
@@ -462,6 +564,7 @@
 		</fieldset>
 	{/if}
 
+	{#if !existing}
 	<fieldset class="charge-field">
 		<label class="charge-toggle">
 			<input
@@ -509,6 +612,7 @@
 			</label>
 		{/if}
 	</fieldset>
+	{/if}
 
 	{#if error}
 		<p class="error">{error}</p>
@@ -519,10 +623,27 @@
 			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>{m('eventEditor.cancel')}</button>
 		{/if}
 		<button type="submit" class="btn btn-primary" disabled={!title.trim() || busy}>
-			{busy ? m('eventEditor.creating') : m('eventEditor.createEvent')}
+			{#if existing}
+				{busy ? m('eventEditor.saving') : m('eventEditor.saveChanges')}
+			{:else}
+				{busy ? m('eventEditor.creating') : m('eventEditor.createEvent')}
+			{/if}
 		</button>
 	</div>
 </form>
+
+<ConfirmDialog
+	open={showCategoryWarn}
+	title={m('eventEditor.categoryChangeTitle')}
+	message={m('eventEditor.categoryChangeWarning')}
+	confirmLabel={m('eventEditor.categoryChangeConfirm')}
+	danger
+	onconfirm={() => {
+		showCategoryWarn = false;
+		void persist();
+	}}
+	oncancel={() => (showCategoryWarn = false)}
+/>
 
 <style>
 	.sub {
