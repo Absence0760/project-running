@@ -4273,6 +4273,9 @@ export const messages = {
 	"gym.session.restSkip": "Passer le repos",
 	"gym.session.target": "Objectif",
 	"gym.session.noTarget": "Aucun objectif",
+	"gym.session.holdSeconds": "Tenu (s)",
+	"gym.session.startHold": "Démarrer le maintien",
+	"gym.session.stopHold": "Arrêter le maintien",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Prévu vs réalisé",

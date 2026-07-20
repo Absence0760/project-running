@@ -4273,6 +4273,9 @@ export const messages = {
 	"gym.session.restSkip": "Saltar descanso",
 	"gym.session.target": "Objetivo",
 	"gym.session.noTarget": "Sin objetivo",
+	"gym.session.holdSeconds": "Mantenido (s)",
+	"gym.session.startHold": "Iniciar aguante",
+	"gym.session.stopHold": "Detener aguante",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Planificado vs real",
