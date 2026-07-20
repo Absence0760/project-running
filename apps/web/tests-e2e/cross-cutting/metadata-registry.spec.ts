@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 /**
  * `runs.metadata` jsonb registry — web parity with the mobile
@@ -12,7 +11,7 @@ import { readFileSync } from 'node:fs';
  * doesn't know about (or vice versa), data silently disappears at
  * the platform boundary.
  *
- * This test greps web TS / Svelte sources for every `metadata.X` /
+ * This test scans web TS / Svelte sources for every `metadata.X` /
  * `metadata['X']` / `metadata?.X` access and asserts each key is
  * documented in `docs/backend/metadata.md`. Mirrors the mobile test so a key
  * added on either side without a doc update fails CI on both.
@@ -28,22 +27,34 @@ const ALLOW_LIST = new Set<string>([
 	'data', // metadata.data is sometimes a generic blob field
 ]);
 
+function webSourceFiles(): string[] {
+	return readdirSync('src', { recursive: true, encoding: 'utf-8' })
+		.filter((p) => p.endsWith('.ts') || p.endsWith('.svelte'))
+		.map((p) => `src/${p}`);
+}
+
 function repoMetadataKeys(): string[] {
-	// Walk apps/web/src for any `metadata.<key>` / `metadata?.<key>` /
-	// `metadata['<key>']`. The grep is intentionally broad — the
-	// allow-list filters false positives.
-	const out = execSync(
-		`grep -rohE "metadata[\\?]?[\\.\\['][a-zA-Z_][a-zA-Z0-9_]*['\\]]?" src --include='*.ts' --include='*.svelte' || true`,
-		{ encoding: 'utf-8' }
-	);
+	// Two precise patterns, mirroring the mobile test, rather than one broad
+	// grep: a dotted access, and a subscript whose key is a quoted literal.
+	// A bare `metadata[key]` subscripts a variable whose value isn't knowable
+	// statically, so it is deliberately not collected as a key.
+	const dotted = /(?<![A-Za-z0-9_])metadata[!?]?\.([a-zA-Z_][a-zA-Z0-9_]*)/g;
+	const subscript =
+		/(?<![A-Za-z0-9_])metadata[!?]?\s*\[\s*(['"])([a-zA-Z_][a-zA-Z0-9_]*)\1\s*\]/g;
+
 	const keys = new Set<string>();
-	for (const m of out.matchAll(/[\.\[]['"]?([a-zA-Z_][a-zA-Z0-9_]*)['"]?\]?/g)) {
-		const k = m[1];
-		if (k && k !== 'metadata' && !ALLOW_LIST.has(k)) {
-			keys.add(k);
+	for (const file of webSourceFiles()) {
+		const source = readFileSync(file, 'utf-8');
+		for (const m of source.matchAll(dotted)) {
+			// `docs/backend/metadata.md` is this guard's own registry document,
+			// cited in comments throughout the source — a filename, not a key.
+			// A genuine `md` key would still be caught by the subscript form.
+			if (m[1] === 'md') continue;
+			keys.add(m[1]);
 		}
+		for (const m of source.matchAll(subscript)) keys.add(m[2]);
 	}
-	return [...keys].sort();
+	return [...keys].filter((k) => k !== 'metadata' && !ALLOW_LIST.has(k)).sort();
 }
 
 function documentedKeys(): Set<string> {
