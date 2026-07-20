@@ -7,7 +7,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import { checkPasswordPair } from '$lib/core/auth_gates';
+	import { changePassword, type PasswordChangeReason } from '$lib/core/password_change';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -87,11 +87,13 @@
 	let showRestoreConfirm = $state(false);
 	let pendingRestoreFile = $state<File | null>(null);
 
+	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
 	let passwordSaving = $state(false);
 	let passwordStatus = $state<string | null>(null);
 	let passwordError = $state<string | null>(null);
+	let resetLinkSending = $state(false);
 
 	// Change-email flow. `auth.updateUser({ email })` starts GoTrue's
 	// secure double-confirmation: a link goes to BOTH the current and the
@@ -492,23 +494,63 @@
 		setTimeout(() => (saved = false), 2000);
 	}
 
+	function passwordChangeMessage(reason: PasswordChangeReason, detail?: string): string {
+		switch (reason) {
+			case 'too_short':
+				return m('settingsAccount.passwordTooShort', { min: PASSWORD_MIN_LENGTH });
+			case 'mismatch':
+				return m('settingsAccount.passwordsMismatch');
+			case 'current_missing':
+				return m('settingsAccount.currentPasswordRequired');
+			case 'current_invalid':
+				return m('settingsAccount.currentPasswordIncorrect');
+			case 'update_failed':
+				return detail ?? m('settingsAccount.passwordUpdateFailed');
+		}
+	}
+
 	async function handleSavePassword() {
-		const pair = checkPasswordPair(newPassword, confirmPassword);
-		if (!pair.ok) {
-			passwordError = pair.reason === 'too_short'
-				? m('settingsAccount.passwordTooShort', { min: PASSWORD_MIN_LENGTH })
-				: m('settingsAccount.passwordsMismatch');
+		passwordError = null; passwordStatus = null;
+		passwordSaving = true;
+		const result = await changePassword(
+			{ currentPassword, newPassword, confirmPassword },
+			{
+				verifyCurrentPassword: async (current) => {
+					const email = auth.user?.email ?? '';
+					if (!email) return false;
+					const { error } = await supabase.auth.signInWithPassword({ email, password: current });
+					return !error;
+				},
+				updatePassword: async (password) => {
+					const { error } = await supabase.auth.updateUser({ password });
+					return { error: error?.message ?? null };
+				},
+			},
+		);
+		passwordSaving = false;
+		if (!result.ok) {
+			passwordError = passwordChangeMessage(result.reason, result.detail);
 			return;
 		}
-		passwordSaving = true; passwordError = null; passwordStatus = null;
-		const { error } = await supabase.auth.updateUser({ password: newPassword });
-		passwordSaving = false;
-		if (error) { passwordError = error.message; }
-		else {
-			passwordStatus = m('settingsAccount.passwordSaved');
-			newPassword = ''; confirmPassword = '';
-			setTimeout(() => (passwordStatus = null), 5000);
-		}
+		passwordStatus = m('settingsAccount.passwordSaved');
+		currentPassword = ''; newPassword = ''; confirmPassword = '';
+		setTimeout(() => (passwordStatus = null), 5000);
+	}
+
+	/// An account created through Google / Apple has no password to prove,
+	/// so the step-up above can never pass for it. The mailed recovery
+	/// token on /auth/reset is the equivalent proof, and it reaches the
+	/// address on file rather than whoever holds the current session.
+	async function handleSendResetLink() {
+		const email = auth.user?.email ?? '';
+		if (!email) return;
+		resetLinkSending = true; passwordError = null; passwordStatus = null;
+		const { error } = await supabase.auth.resetPasswordForEmail(email, {
+			redirectTo: `${window.location.origin}/auth/reset`,
+		});
+		resetLinkSending = false;
+		if (error) passwordError = error.message;
+		else passwordStatus = m('settingsAccount.resetLinkSent');
 	}
 
 	async function handleExportCsv() {
@@ -1123,6 +1165,10 @@
 		</p>
 		<div class="form-grid">
 			<label>
+				<span class="label-text">{m('settingsAccount.currentPassword')}</span>
+				<PasswordInput autocomplete="current-password" bind:value={currentPassword} />
+			</label>
+			<label>
 				<span class="label-text">{m('settingsAccount.newPassword')}</span>
 				<PasswordInput autocomplete="new-password" bind:value={newPassword} placeholder={m('settingsAccount.newPasswordPlaceholder')} />
 			</label>
@@ -1133,9 +1179,14 @@
 		</div>
 		{#if passwordError}<p class="error-text" role="alert">{passwordError}</p>{/if}
 		{#if passwordStatus}<p class="ok-text">{passwordStatus}</p>{/if}
-		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
-			{passwordSaving ? m('settingsAccount.saving') : m('settingsAccount.savePassword')}
-		</button>
+		<div class="btn-row">
+			<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}>
+				{passwordSaving ? m('settingsAccount.saving') : m('settingsAccount.savePassword')}
+			</button>
+			<button class="btn btn-secondary" onclick={handleSendResetLink} disabled={resetLinkSending}>
+				{resetLinkSending ? m('settingsAccount.sendingResetLink') : m('settingsAccount.sendResetLink')}
+			</button>
+		</div>
 	</section>
 
 	<!-- Safety — points at the real, double-opt-in safety-contacts surface.
