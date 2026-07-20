@@ -765,7 +765,10 @@ void main() {
       return runStore;
     }
 
-    Future<void> deleteViaMenu(WidgetTester tester) async {
+    Future<void> deleteViaMenu(
+      WidgetTester tester, {
+      bool Function()? settled,
+    }) async {
       // The whole interaction runs inside runAsync so the store file
       // I/O awaited by the delete flow (sidecar persist / run-file
       // delete) completes in the tap's zone — the same pattern as the
@@ -786,6 +789,21 @@ void main() {
         // wall-clock delay — a fixed delay flaked under CI load when the
         // failure banner hadn't been posted yet by the time it elapsed.
         await pumpEventQueue();
+        // …and for a caller that can observe the flow's END state, keep
+        // draining until it lands. `pumpEventQueue`'s 20 turns are not
+        // guaranteed to cover real file I/O on a loaded CI runner: the
+        // failure path persists a tombstone sidecar BEFORE posting its
+        // banner, so a slow write left the banner unposted (and teardown
+        // then deleted the temp dir out from under the write). Waiting on
+        // the condition the test asserts is the only bound that scales
+        // with the machine.
+        final deadline = DateTime.now().add(const Duration(seconds: 10));
+        while (settled != null &&
+            !settled() &&
+            DateTime.now().isBefore(deadline)) {
+          await pumpEventQueue();
+          await tester.pump();
+        }
       });
       await tester.pump();
       // Two 300 ms pumps: the first finishes the dialog dismissal, the
@@ -801,7 +819,15 @@ void main() {
       final api = _DeleteFailApi();
       final runStore = await pumpForDelete(tester, run, apiClient: api);
 
-      await deleteViaMenu(tester);
+      await deleteViaMenu(
+        tester,
+        // The banner is posted right after the tombstone persist
+        // resolves — it is the last thing this flow does.
+        settled: () => find
+            .textContaining("Couldn't delete from the cloud")
+            .evaluate()
+            .isNotEmpty,
+      );
 
       expect(api.calls, 1);
       // Run NOT removed locally — the cloud row still exists, so a local

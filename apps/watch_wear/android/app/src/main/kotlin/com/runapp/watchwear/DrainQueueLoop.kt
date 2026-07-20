@@ -18,8 +18,8 @@ package com.runapp.watchwear
 ///     [classifyDrainError]; tests inject deterministic mappings)
 ///
 /// And get back a [DrainQueueLoopResult] capturing:
-///   - the ids that were removed from the queue this pass (combination
-///     of full successes and 409-style idempotent drops)
+///   - the ids that were removed from the queue this pass (the runs that
+///     uploaded successfully)
 ///   - whether any transient failure occurred (drives the
 ///     `DrainBackoff.onFailure` / `onSuccess` decision in the caller)
 ///   - the last error message (used as the UI's `syncError` banner)
@@ -31,8 +31,8 @@ package com.runapp.watchwear
 /// stuck and the user can clear it manually.
 
 data class DrainQueueLoopResult(
-    /// Run ids removed from the persistent queue this pass — either
-    /// a fresh upload (200) or an idempotent 409 (already in DB).
+    /// Run ids removed from the persistent queue this pass — the runs
+    /// whose upload succeeded (200).
     val drainedIds: List<String>,
     /// True iff at least one classification was `StopAndRetryLater`
     /// or `RetryAfterRefresh` followed by another transient failure.
@@ -108,13 +108,6 @@ internal suspend fun drainQueueLoop(
                         break
                     }
                 }
-                DrainAction.DropAndContinue -> {
-                    // 409: already in the DB. Removing is the correct
-                    // outcome — the upload was effectively idempotent.
-                    onSuccessfulDrain.invoke(run.id)
-                    drained += run.id
-                    lastError = null
-                }
                 DrainAction.StopAndRetryLater -> {
                     // Transient (timeout / 5xx / network drop). Stop
                     // iterating so we don't hammer the backend, keep
@@ -124,7 +117,7 @@ internal suspend fun drainQueueLoop(
                     break
                 }
                 DrainAction.SkipAndContinue -> {
-                    // Permanent (400/404/422 / unknown). Move on to
+                    // Permanent (400/404/409/422 / unknown). Move on to
                     // the next run — retrying would just re-skip. The
                     // run stays in the queue until the user manually
                     // discards it from the UI.

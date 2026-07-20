@@ -120,15 +120,38 @@ double? _offGToMg(dynamic v) {
   return n == null ? null : n * 1000;
 }
 
+/// Normalise a BCP-47 locale/tag to an Open Food Facts language code (`lc`) —
+/// the primary subtag, lowercased (`pt-BR` -> `pt`, `en` -> `en`). Blank/unknown
+/// falls back to English. Kept in lockstep with the web twin's `offLang`.
+String offLang(String? locale) {
+  if (locale == null) return 'en';
+  final base = locale.split('-').first.trim().toLowerCase();
+  return base.isEmpty ? 'en' : base;
+}
+
+/// The best display name for an Open Food Facts product in language [lc].
+/// Open Food Facts is a global, community-contributed database: `product_name`
+/// holds whatever language the contributor typed (Nordic contributors are very
+/// active, so unfiltered it skews non-English), while `product_name_<lc>` holds
+/// the per-language name where one exists. Prefer the localized field, fall
+/// back to the generic name. Kept in lockstep with the web twin.
+String _offProductName(Map<dynamic, dynamic> p, String lc) {
+  final localized = (p['product_name_$lc'] as String?)?.trim() ?? '';
+  if (localized.isNotEmpty) return localized;
+  return (p['product_name'] as String?)?.trim() ?? '';
+}
+
 /// Map a raw Open Food Facts search response into result shapes. Pure.
 /// Drops products with no name or no calorie figure (unloggable noise).
-List<FoodSearchResult> parseOffSearch(dynamic json) {
+/// [lang] picks which `product_name_<lc>` to prefer (see [_offProductName]).
+List<FoodSearchResult> parseOffSearch(dynamic json, [String lang = 'en']) {
   final products = (json is Map ? json['products'] : null);
   if (products is! List) return const [];
+  final lc = offLang(lang);
   final out = <FoodSearchResult>[];
   for (final p in products) {
     if (p is! Map) continue;
-    final name = (p['product_name'] as String?)?.trim() ?? '';
+    final name = _offProductName(p, lc);
     final code = p['code'] as String?;
     final nutr = p['nutriments'];
     final n = nutr is Map ? nutr : const {};
@@ -162,12 +185,12 @@ List<FoodSearchResult> parseOffSearch(dynamic json) {
 /// endpoint returns), so it can't reuse [parseOffSearch]. Returns null when
 /// the product is missing (`status != 1`) or unloggable (no name / no calorie
 /// figure) — the caller treats null as "no match, fall back to search".
-FoodSearchResult? parseOffProduct(dynamic json) {
+FoodSearchResult? parseOffProduct(dynamic json, [String lang = 'en']) {
   final map = json is Map ? json : null;
   if (map == null || map['status'] != 1) return null;
   final p = map['product'];
   if (p is! Map) return null;
-  final name = (p['product_name'] as String?)?.trim() ?? '';
+  final name = _offProductName(p, offLang(lang));
   final code = p['code'] as String?;
   final nutr = p['nutriments'];
   final n = nutr is Map ? nutr : const {};
@@ -310,26 +333,22 @@ Future<List<FoodSearchResult>> searchFoods(
   String query, {
   FoodFetcher? fetcher,
   int limit = 20,
+  String lang = 'en',
 }) async {
   final q = query.trim();
   if (q.isEmpty) return const [];
+  final lc = offLang(lang);
   final url = Uri.parse(_searchUrl).replace(queryParameters: {
     'search_terms': q,
     'search_simple': '1',
     'action': 'process',
     'json': '1',
+    'lc': lc,
     'page_size': '$limit',
-    'fields': 'code,product_name,brands,nutriments',
-    // Open Food Facts is a global, community-contributed database —
-    // without a language hint it returns whichever language each
-    // product's name happens to be entered in (Nordic contributors are
-    // unusually active, hence the reported Norwegian results). `lc`
-    // asks it to prefer the English name, falling back to the
-    // product's default name when no English one exists.
-    'lc': 'en',
+    'fields': 'code,product_name,product_name_$lc,brands,nutriments',
   });
   final body = await (fetcher ?? _defaultFetcher)(url);
-  return parseOffSearch(jsonDecode(body));
+  return parseOffSearch(jsonDecode(body), lc);
 }
 
 /// Look up a single product by scanned EAN/UPC barcode (the v1.1 camera
@@ -341,15 +360,17 @@ Future<List<FoodSearchResult>> searchFoods(
 Future<FoodSearchResult?> lookupBarcode(
   String barcode, {
   FoodFetcher? fetcher,
+  String lang = 'en',
 }) async {
   final code = normaliseBarcode(barcode);
   if (code == null) return null;
+  final lc = offLang(lang);
   final url = Uri.parse('$_productUrl/$code.json').replace(queryParameters: {
-    'fields': 'code,product_name,brands,nutriments',
-    'lc': 'en',
+    'lc': lc,
+    'fields': 'code,product_name,product_name_$lc,brands,nutriments',
   });
   final body = await (fetcher ?? _defaultFetcher)(url);
-  return parseOffProduct(jsonDecode(body));
+  return parseOffProduct(jsonDecode(body), lc);
 }
 
 /// Search USDA FoodData Central. Returns [] for a blank query OR a blank API
@@ -390,13 +411,14 @@ Future<List<FoodSearchResult>> searchFoodSources(
   FoodFetcher? fetcher,
   String? usdaApiKey,
   int limit = 20,
+  String lang = 'en',
 }) async {
   final q = query.trim();
   if (q.isEmpty) return const [];
   final usdaKey = (usdaApiKey ?? '').trim();
 
   final tasks = <Future<List<FoodSearchResult>>>[
-    searchFoods(q, fetcher: fetcher, limit: limit),
+    searchFoods(q, fetcher: fetcher, limit: limit, lang: lang),
   ];
   if (usdaKey.isNotEmpty) {
     tasks.add(searchUsda(q, usdaKey, fetcher: fetcher, limit: limit));
