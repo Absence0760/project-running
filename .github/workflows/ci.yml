@@ -6,6 +6,19 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  # A run is ~19 jobs at ~85-90 min, and every workflow in the repo competes
+  # for one hosted-runner job budget — so a superseded run left queued starves
+  # the ones behind it. A merge sweep did exactly that for over an hour,
+  # including the `CI gate` aggregator branch protection requires. Only a PR's
+  # tip is worth building, so cancel the rest; dropping `paths-ignore` above
+  # makes that pressure worse, since docs-only pushes now build too. Pushes to
+  # main take a per-SHA group rather than a shared one: every merge commit
+  # still gets its own validated run, and back-to-back merges run
+  # independently instead of serialising behind one group.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Least-privilege default: every job inherits `contents: read` and
 # must opt in to anything more. CodeQL's
 # `actions/missing-workflow-permissions` flags individual jobs when
