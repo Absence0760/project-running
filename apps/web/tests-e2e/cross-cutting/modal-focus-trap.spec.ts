@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -57,5 +58,104 @@ test.describe('Modal focus trap', () => {
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
 		await expect(page.getByRole('button', { name: '+ Add run' })).toBeFocused();
+	});
+});
+
+/**
+ * Issue #367: /races shipped two hand-rolled dialogs — the "Submit a race"
+ * editor and the import-result modal — that reproduced the modal markup by
+ * hand and inherited none of the Modal primitive's keyboard behaviour (no
+ * focus-on-open, no Escape, no Tab trap). Both now wrap the shared <Modal>,
+ * so this pins the three guarantees on each: focus moves in on open, Escape
+ * closes, and Tab never escapes the dialog subtree.
+ */
+test.describe('Modal focus trap — /races dialogs', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	const raceName = `E2E Focus Trap Race ${Date.now()}`;
+	let listingId: string | null = null;
+
+	test.beforeAll(async () => {
+		const admin = getAdminClient();
+		const { data } = await admin
+			.from('race_listings')
+			.insert({
+				provider: 'manual',
+				name: raceName,
+				race_date: '2027-11-06',
+				distance_m: 21097,
+				location_label: 'Richmond, VA',
+				is_verified: true
+			})
+			.select('id')
+			.single();
+		listingId = (data as { id: string }).id;
+	});
+
+	test.afterAll(async () => {
+		const admin = getAdminClient();
+		if (listingId) await admin.from('race_listings').delete().eq('id', listingId);
+	});
+
+	const focusIsInsideDialog = (page: import('@playwright/test').Page) =>
+		page.evaluate(() => document.activeElement?.closest('[role="dialog"]') != null);
+
+	test('Submit-a-race dialog: focus-on-open, Tab trapped, Escape closes', async ({ page }) => {
+		await page.goto('/races');
+
+		const opener = page.getByTestId('race-submit');
+		await opener.click();
+
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible();
+
+		// Focus moves into the dialog on open (the shared Modal focuses the
+		// dialog container so Escape works without a first click inside).
+		expect(await focusIsInsideDialog(page)).toBe(true);
+
+		// First Tab lands on the Modal's header close button.
+		await page.keyboard.press('Tab');
+		await expect(dialog.locator('button.modal-close')).toBeFocused();
+
+		// However far a run of forward Tabs goes, focus never leaves the dialog.
+		for (let i = 0; i < 25; i++) {
+			await page.keyboard.press('Tab');
+		}
+		expect(await focusIsInsideDialog(page)).toBe(true);
+
+		// Escape closes and restores focus to the opener.
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(opener).toBeFocused();
+	});
+
+	test('Import-result dialog: focus-on-open, Tab trapped, Escape closes', async ({ page }) => {
+		await page.goto('/races');
+
+		await page.getByTestId('races-search').fill(raceName);
+		const card = page
+			.getByTestId('races-results')
+			.getByTestId('race-card')
+			.filter({ hasText: raceName });
+		await expect(card).toBeVisible({ timeout: 10_000 });
+
+		await card.getByTestId('race-import').click();
+
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible();
+		await expect(dialog).toContainText(raceName);
+
+		expect(await focusIsInsideDialog(page)).toBe(true);
+
+		await page.keyboard.press('Tab');
+		await expect(dialog.locator('button.modal-close')).toBeFocused();
+
+		for (let i = 0; i < 25; i++) {
+			await page.keyboard.press('Tab');
+		}
+		expect(await focusIsInsideDialog(page)).toBe(true);
+
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
 	});
 });

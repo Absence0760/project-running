@@ -81,11 +81,18 @@ test('scalePortion — scales up past 100 g linearly', () => {
 
 test('scalePortion — a negative gram amount yields all zeros (never negative macros)', () => {
 	const per100g = { calories: 200, proteinG: 10, carbsG: 20, fatG: 5 };
+	// The four base macros clamp to 0; the extended nutrients this source
+	// didn't report stay null (unknown is not zero).
 	assert.deepEqual(scalePortion(per100g, -50), {
 		calories: 0,
 		proteinG: 0,
 		carbsG: 0,
 		fatG: 0,
+		fiberG: null,
+		sugarG: null,
+		sodiumMg: null,
+		saturatedFatG: null,
+		cholesterolMg: null,
 	});
 });
 
