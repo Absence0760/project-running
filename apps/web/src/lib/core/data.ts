@@ -2836,6 +2836,55 @@ export async function createEvent(input: {
 	return normaliseEvent(data as Event);
 }
 
+export async function updateEvent(
+	id: string,
+	patch: Partial<{
+		title: string;
+		category: EventCategory;
+		discipline: string | null;
+		gym_template: EventGymTemplate | null;
+		description: string | null;
+		starts_at: string;
+		duration_min: number | null;
+		meet_label: string | null;
+		route_id: string | null;
+		distance_m: number | null;
+		pace_target_sec: number | null;
+		capacity: number | null;
+		is_public: boolean;
+	}>
+): Promise<void> {
+	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
+	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
+	const { error } = await supabase.from('events').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+/// Whether an event carries any race session or finisher result across ANY of
+/// its instances. Drives the editor's warning before an organiser switches an
+/// athletic event to a non-athletic category — the athletic surfaces gate on
+/// isAthleticCategory, so the switch hides the leaderboard/race controls and
+/// orphans those rows. Fail-safe: a read error returns true so we still warn
+/// when we can't be sure.
+export async function eventHasAthleticData(eventId: string): Promise<boolean> {
+	try {
+		const [resultsRes, sessionsRes] = await Promise.all([
+			supabase
+				.from(TABLES.event_results)
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId),
+			supabase
+				.from('race_sessions')
+				.select('event_id', { count: 'exact', head: true })
+				.eq('event_id', eventId)
+		]);
+		if (resultsRes.error || sessionsRes.error) return true;
+		return (resultsRes.count ?? 0) > 0 || (sessionsRes.count ?? 0) > 0;
+	} catch {
+		return true;
+	}
+}
+
 export async function deleteEvent(id: string): Promise<void> {
 	const { error } = await supabase.from('events').delete().eq('id', id);
 	if (error) throw error;
