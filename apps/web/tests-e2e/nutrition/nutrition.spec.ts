@@ -102,6 +102,86 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
 
+	test('extended nutrients round-trip: OFF search → portion preview → logged row → meal detail', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const item = `E2E Cereal ${stamp}`;
+
+		// Open Food Facts stores mass nutriments per 100 g in GRAMS. sodium 0.5 g
+		// and cholesterol 0.03 g must land as 500 mg / 30 mg in the food_log
+		// columns; fibre / sugar / saturated fat stay in grams.
+		await page.route('**/world.openfoodfacts.org/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					products: [
+						{
+							code: `e2e-${stamp}`,
+							product_name: item,
+							brands: 'E2E Foods',
+							nutriments: {
+								'energy-kcal_100g': 380,
+								proteins_100g: 8,
+								carbohydrates_100g: 70,
+								fat_100g: 6,
+								fiber_100g: 4,
+								sugars_100g: 10,
+								sodium_100g: 0.5,
+								'saturated-fat_100g': 2,
+								cholesterol_100g: 0.03
+							}
+						}
+					]
+				})
+			});
+		});
+
+		await page.goto('/nutrition/log');
+		await page.getByTestId('meal-slot').selectOption('breakfast');
+		await page.getByTestId('food-search').fill('cereal');
+
+		// Pick the mocked result → the portion step previews the extended
+		// nutrients at the default 100 g portion (with the g→mg conversion).
+		await page.getByRole('button', { name: item }).click();
+		const extended = page.getByTestId('portion-extended');
+		await expect(extended).toBeVisible();
+		await expect(extended).toContainText('4 g'); // fibre
+		await expect(extended).toContainText('500 mg'); // sodium (0.5 g → 500 mg)
+		await expect(extended).toContainText('30 mg'); // cholesterol (0.03 g → 30 mg)
+
+		await page.getByTestId('confirm-log').click();
+		await expect(page).toHaveURL(/\/nutrition$/, { timeout: 10_000 });
+
+		// The logged row carries the extended nutrients with sodium/cholesterol
+		// stored in mg.
+		const { data: created } = await admin
+			.from('food_log')
+			.select('id, fiber_g, sugar_g, sodium_mg, saturated_fat_g, cholesterol_mg')
+			.eq('user_id', USER_A.id)
+			.eq('item_name', item);
+		expect(created?.length).toBe(1);
+		expect(Number(created![0].fiber_g)).toBe(4);
+		expect(Number(created![0].sugar_g)).toBe(10);
+		expect(Number(created![0].sodium_mg)).toBe(500);
+		expect(Number(created![0].saturated_fat_g)).toBe(2);
+		expect(Number(created![0].cholesterol_mg)).toBe(30);
+
+		try {
+			// Meal detail surfaces the per-item extended breakdown.
+			await page.locator('.meal-head-link', { hasText: 'Breakfast' }).click();
+			await expect(page).toHaveURL(/\/nutrition\/\d{4}-\d{2}-\d{2}\/breakfast$/, {
+				timeout: 10_000
+			});
+			const detailItem = page.getByTestId('item-extended');
+			await expect(detailItem.first()).toContainText('500 mg');
+		} finally {
+			await admin.from('food_log').delete().eq('id', created![0].id);
+		}
+	});
+
 	test('a failed Open Food Facts search shows a retry state, not a misleading "no matches"', async ({
 		page
 	}) => {
