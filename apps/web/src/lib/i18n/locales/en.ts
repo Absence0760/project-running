@@ -136,6 +136,7 @@ export const en = {
 	"coachChat.errorSignInFirst": "Please sign in first.",
 	"coachChat.errorSessionExpired": "Your session expired. Please sign in again.",
 	"coachChat.errorServerEndpoint": "Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.",
+	"coachChat.errorStaleThread": "This conversation is out of date. Reload the page and try again.",
 	"coachChat.errorDailyLimit": "Daily limit reached ({count, plural, one {# message} other {# messages}}). Come back tomorrow!",
 	"coachChat.errorGeneric": "Coach error ({status})",
 	"coachChat.errorTransport": "Could not reach the Coach. Check your connection and try again.",

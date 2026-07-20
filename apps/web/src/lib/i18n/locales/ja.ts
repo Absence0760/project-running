@@ -123,6 +123,7 @@ export const messages = {
 	"coachChat.errorSignInFirst": "まずサインインしてください。",
 	"coachChat.errorSessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
 	"coachChat.errorServerEndpoint": "Coach はサーバーエンドポイントとして動作します。このデプロイは静的アダプターを使用しています。チャットを有効にするには、サーバーデプロイ（Vercel/Node）に切り替えて ANTHROPIC_API_KEY を設定してください。",
+	"coachChat.errorStaleThread": "この会話は最新ではありません。ページを再読み込みしてからもう一度お試しください。",
 	"coachChat.errorDailyLimit": "1日の上限に達しました（{count, plural, other {#件のメッセージ}}）。また明日来てね！",
 	"coachChat.errorGeneric": "Coach エラー（{status}）",
 	"coachChat.errorTransport": "Coach に接続できませんでした。接続を確認してもう一度お試しください。",

@@ -6,7 +6,21 @@
 //
 // See decisions.md § 53.
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export type CoachMode = 'send' | 'regenerate' | 'edit';
+
+/// Factory shape for the Supabase client the handler builds internally.
+/// Prod leaves `CoachConfig.createClient` unset and the handler falls back
+/// to the real `@supabase/supabase-js` `createClient`; the field exists so
+/// unit tests can inject a fake client and exercise the post-auth branches
+/// (e.g. the regenerate/edit anchor-miss fail-closed path) without a live
+/// Supabase.
+export type SupabaseClientFactory = (
+	url: string,
+	key: string,
+	options?: Record<string, unknown>,
+) => SupabaseClient;
 
 export interface CoachRequestBody {
 	messages: { role: 'user' | 'assistant'; content: string }[];
@@ -57,6 +71,12 @@ export interface CoachConfig {
 	// env, but it logs a loud warning when this is true so any
 	// accidental prod activation shows up immediately in CloudWatch.
 	bypassPaywallEnabled: boolean;
+
+	// Test seam only. Injects the Supabase-client factory so the handler's
+	// post-auth branches (notably the regenerate/edit anchor-miss fail-
+	// closed path) can be unit-tested without a live Supabase. Prod callers
+	// leave this unset — the handler falls back to the real `createClient`.
+	createClient?: SupabaseClientFactory;
 }
 
 export type CoachResult =
