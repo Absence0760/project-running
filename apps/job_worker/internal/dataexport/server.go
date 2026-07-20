@@ -43,19 +43,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 // Server wires the data-export HTTP endpoint to the worker's
 // service-role Supabase client. Mounted from main.go on the same
 // mux as /health and the live hub.
 type Server struct {
-	// JWTSecret is the Supabase project's HS256 signing key. When
-	// empty the endpoint refuses every request (503) — production
-	// must set SUPABASE_JWT_SECRET, same as the live hub.
-	JWTSecret []byte
+	// Verifier resolves a bearer token to its `sub` claim. When it has
+	// no key material the endpoint refuses every request (503) —
+	// production must supply it, same as the live hub.
+	Verifier *supajwt.Verifier
 
 	// Backend wraps the Supabase REST calls. Production wires the
 	// worker's existing SupabaseClient (it implements this
@@ -264,7 +263,7 @@ type exportRequest struct {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
-	if len(s.JWTSecret) == 0 {
+	if !s.Verifier.Enabled() {
 		s.log().Error("dataexport: JWT secret not configured; refusing")
 		http.Error(w, `{"error":"export_not_configured"}`, http.StatusServiceUnavailable)
 		return
@@ -432,27 +431,9 @@ func (s *Server) extractUserID(r *http.Request) (string, error) {
 	if raw == "" {
 		return "", errors.New("missing_bearer")
 	}
-	tok, err := jwt.Parse(raw, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected alg: %v", t.Header["alg"])
-		}
-		return s.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}),
-		// golang-jwt validates `exp` only when present, so a token that
-		// omits it would be valid forever. Supabase always issues
-		// short-lived tokens with `exp` — same guard as livehub's
-		// extractSub.
-		jwt.WithExpirationRequired())
-	if err != nil || !tok.Valid {
+	sub, err := s.Verifier.Subject(raw)
+	if err != nil {
 		return "", errors.New("invalid_token")
-	}
-	claims, ok := tok.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", errors.New("invalid_claims")
-	}
-	sub, ok := claims["sub"].(string)
-	if !ok || sub == "" {
-		return "", errors.New("missing_sub")
 	}
 	return sub, nil
 }

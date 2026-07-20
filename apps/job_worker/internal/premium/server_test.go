@@ -11,21 +11,23 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 const testJWTSecret = "test-jwt-secret"
 
 type fakeBackend struct {
-	tier        string
-	tierErr     error
-	tierByUser  map[string]string
-	runs        []PremiumRun
-	runsErr     error
-	lastUserID  string
-	lastSince   time.Time
-	lastLimit   int
-	tierCalls   int
-	runsCalls   int
+	tier       string
+	tierErr    error
+	tierByUser map[string]string
+	runs       []PremiumRun
+	runsErr    error
+	lastUserID string
+	lastSince  time.Time
+	lastLimit  int
+	tierCalls  int
+	runsCalls  int
 }
 
 func (f *fakeBackend) FetchUserSubscriptionTier(_ context.Context, userID string) (string, error) {
@@ -88,8 +90,8 @@ func newTestServer(t *testing.T, srv *Server) (string, func()) {
 func newProServer(t *testing.T, be *fakeBackend) (string, func()) {
 	t.Helper()
 	srv := &Server{
-		JWTSecret: []byte(testJWTSecret),
-		Backend:   be,
+		Verifier: supajwt.New(testJWTSecret, "", nil),
+		Backend:  be,
 	}
 	return newTestServer(t, srv)
 }

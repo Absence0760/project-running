@@ -151,13 +151,21 @@ STRAVA_CLIENT_SECRET=<optional — Strava OAuth rotation>
 | `SUPABASE_SERVICE_ROLE_KEY` | `…/project/<ref>/settings/api-keys` — take the **legacy `service_role`** key (a JWT), not an `sb_secret_…` key: the worker sends it as both `apikey` and `Authorization: Bearer` |
 | `SUPABASE_JWT_SECRET` | `…/project/<ref>/settings/jwt` — the shared HS256 secret |
 
-**`SUPABASE_JWT_SECRET` is not the anon key.** The anon key is a *token* signed by this secret; the secret is the signing key itself. A quick tell: the secret has no dots, the anon key is `eyJ…` with two. Supplying the anon key fails every signature check at `internal/livehub/auth.go:169` — fail-closed, but every push 401s.
+**`SUPABASE_JWT_SECRET` is optional, and is not the anon key.** The anon key is a *token* signed by the secret; the secret is the signing key itself. A quick tell: the secret has no dots, the anon key is `eyJ…` with two.
 
-**If the project has migrated to asymmetric JWT signing keys** (ECC/RSA, published as a JWK) there is no shared secret to copy, and the hub cannot verify those tokens: `auth.go:169` pins `jwt.WithValidMethods([]string{"HS256"})`. That is a code change to the verifier, not a config problem — resolve it before deploying.
+**The production project signs with ES256, so there is no shared secret to set.** Its JWKS publishes a single ECC P-256 key. `internal/supajwt` verifies against that JWKS automatically — derived from `SUPABASE_URL`, no extra config — so `SUPABASE_JWT_SECRET` is left unset in production and only matters for a legacy HS256 project or a local stack. See [decisions.md § 276](../../docs/architecture/decisions.md).
+
+Confirm which scheme a project uses before deploying:
+
+```bash
+curl -s https://<ref>.supabase.co/auth/v1/.well-known/jwks.json | jq '.keys[] | {alg, kty, crv, kid}'
+```
+
+An `ES256` / `RS256` key means JWKS verification and no secret. An empty key set means the project is still on the legacy HS256 secret, which then must be set.
 
 `SUPABASE_SERVICE_ROLE_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
 
-`SUPABASE_JWT_SECRET` is the HS256 signing key the Supabase project mints user tokens with — the hub's `JWTAuthorizer` verifies the recorder's bearer token against it. **The hub refuses to accept production traffic without this set** — when `SUPABASE_JWT_SECRET` is empty the authorizer is nil and the hub falls back to permissive mode (everything allowed), which is fine for the local smoke flow but a hard blocker for the public route. Set it before running `flyctl deploy` and confirm the boot log shows `livehub auth: enabled (Supabase JWT)`.
+`SUPABASE_JWT_SECRET` is the HS256 signing key a *legacy* Supabase project mints user tokens with. This project is on ES256, so it stays unset and the JWKS path (derived from `SUPABASE_URL`) does the verifying. **The hub refuses to accept production traffic when neither path resolves** — the authorizer goes nil and the hub falls back to permissive mode, which is fine for a local smoke flow and a hard blocker for the public route. `LIVEHUB_REQUIRE_AUTH=1` turns that into a refusal to boot. Confirm the boot log shows `livehub auth: enabled (Supabase JWT)` and a `verification=` value naming the scheme you expect.
 
 `OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` belong in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
 
@@ -320,13 +328,13 @@ Enforced by `apps/job_worker/internal/livehub/auth.go` when `SUPABASE_JWT_SECRET
 
 A `runs` row that doesn't exist denies — the hub refuses to register a phantom room for a runID Supabase has never seen. The per-room run-meta cache means the Supabase lookup runs at most once per active run; the hot publisher's per-5s push is a single map hit thereafter.
 
-Token verification uses HS256 with the Supabase project's JWT secret. `alg:none` is rejected — `golang-jwt/jwt/v5` is configured with `WithValidMethods([]string{"HS256"})` so a forged token claiming `alg:none` fails before the secret is even consulted. Expired tokens are rejected. The 16 `auth_test.go` cases pin all of this in place.
+Token verification runs through `internal/supajwt`, which covers both schemes: the legacy shared HS256 secret and asymmetric ES256/RS256 keys resolved from the project's JWKS by `kid`. The allow-list handed to `golang-jwt/jwt/v5` is built from the key material actually configured, so an algorithm with no key behind it is never accepted — `alg:none` fails before any key is consulted, and a JWKS-only deploy refuses HS256 outright (which is what stops a public JWKS key being replayed as an HMAC secret). Expired tokens and tokens with no `exp` are rejected. The `auth_test.go` cases plus `internal/supajwt/verifier_test.go` pin all of this.
 
 ### Hub deploy checklist
 
-- [ ] `SUPABASE_JWT_SECRET` set as a Fly secret (Studio → Project Settings → API → JWT Secret)
+- [ ] Token verification resolves: `SUPABASE_URL` set (JWKS path), or `SUPABASE_JWT_SECRET` set for a legacy HS256 project
 - [ ] `flyctl deploy --remote-only` from `apps/job_worker/` (or push a `worker@*` tag once `release-worker.yml` lands)
-- [ ] Boot log shows `livehub auth: enabled (Supabase JWT)` — if it says DISABLED, the env var didn't land
+- [ ] Boot log shows `livehub auth: enabled (Supabase JWT)` with `verification="JWKS (ES256/RS256)"` — if it says DISABLED, no key material resolved
 - [ ] `flyctl certs add live.threkir.com --app job_worker` and Route 53 record pointing at it
 - [ ] `flyctl certs show live.threkir.com` shows a valid Let's Encrypt cert
 - [ ] `curl https://live.threkir.com/health` returns `{"status":"ok"}`
@@ -715,7 +723,7 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 ### Worker
 
 - [ ] Fly.io org `project-running` created, `job_worker` app exists in `ord`
-- [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets
+- [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets (`SUPABASE_JWT_SECRET` only if the project is still on legacy HS256 — check the JWKS first)
 - [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]` — **only once the `osrm` app exists**; leave it unset for a hub-first deploy (see "Deploying the hub before OSRM")
 - [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm` (or `engine=passthrough` on a hub-first deploy)
 - [ ] Drained at least one real `map_match` job end-to-end (insert test run, watch `run_matched_tracks` flip to matched)

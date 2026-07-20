@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 const testJWTSecret = "test-secret-do-not-use-in-prod"
@@ -81,7 +83,7 @@ func TestJWTAuthorizer_PushOwnerAllowed(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-A", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionPush); err != nil {
@@ -94,7 +96,7 @@ func TestJWTAuthorizer_PushNonOwnerDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: true}, // public on read; still owner-only on push
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-B", 60)
 
 	err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionPush)
@@ -108,7 +110,7 @@ func TestJWTAuthorizer_PushMissingHeaderDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	err := a.Authorize(reqWith(""), "run-1", ActionPush)
 	if err == nil {
@@ -121,7 +123,7 @@ func TestJWTAuthorizer_SubscribeAnonAllowedOnPublic(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	if err := a.Authorize(reqWith(""), "run-1", ActionSubscribe); err != nil {
 		t.Fatalf("anon subscribe to public run must be allowed: %v", err)
@@ -136,7 +138,7 @@ func TestJWTAuthorizer_SubscribeAnonDeniedOnPrivate(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	if err := a.Authorize(reqWith(""), "run-1", ActionSubscribe); err == nil {
 		t.Fatal("anon subscribe to private run must be denied")
@@ -148,7 +150,7 @@ func TestJWTAuthorizer_SubscribeOwnerAllowedOnPrivate(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-A", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err != nil {
@@ -161,7 +163,7 @@ func TestJWTAuthorizer_SubscribeNonOwnerDeniedOnPrivate(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-B", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
@@ -178,7 +180,7 @@ func TestJWTAuthorizer_BlockedViewerDeniedOnPublic(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	a.Blocks = &fakeBlockChecker{blocked: map[[2]string]bool{
 		{"owner-A", "viewer-B"}: true, // owner blocked viewer
 	}}
@@ -199,7 +201,7 @@ func TestJWTAuthorizer_NormalViewerAllowedOnPublic(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	a.Blocks = &fakeBlockChecker{blocked: map[[2]string]bool{}}
 	token := signTestToken(t, "viewer-B", 60)
 
@@ -218,7 +220,7 @@ func TestJWTAuthorizer_AnonAllowedOnPublicSkipsBlockCheck(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	bc := &fakeBlockChecker{blocked: map[[2]string]bool{}}
 	a.Blocks = bc
 
@@ -237,7 +239,7 @@ func TestJWTAuthorizer_OwnerAllowedOnPublicSkipsBlockCheck(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	bc := &fakeBlockChecker{blocked: map[[2]string]bool{}}
 	a.Blocks = bc
 	token := signTestToken(t, "owner-A", 60)
@@ -256,7 +258,7 @@ func TestJWTAuthorizer_BlockCheckErrorDenies(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	a.Blocks = &fakeBlockChecker{err: context.DeadlineExceeded}
 	token := signTestToken(t, "viewer-B", 60)
 
@@ -273,7 +275,7 @@ func TestJWTAuthorizer_NilBlockCheckerDeniesAuthedPublicViewer(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "owner-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f) // Blocks left nil
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f) // Blocks left nil
 	token := signTestToken(t, "viewer-B", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
@@ -286,7 +288,7 @@ func TestJWTAuthorizer_ExpiredTokenDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	// `exp` was 10 minutes ago
 	token := signTestToken(t, "user-A", -600)
 
@@ -300,7 +302,7 @@ func TestJWTAuthorizer_TokenWithoutExpDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	// A correctly-signed token with the right `sub` but NO `exp` claim
 	// (signTestToken omits exp when expSecsFromNow == 0). Without
 	// WithExpirationRequired such a token is valid forever — it must be
@@ -317,7 +319,7 @@ func TestJWTAuthorizer_TamperedSignatureDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-A", 60)
 	// Flip the FIRST character of the signature segment to invalidate it.
 	// Flipping the LAST base64url char is unreliable: a 32-byte HMAC
@@ -348,7 +350,7 @@ func TestJWTAuthorizer_DifferentSecretDenied(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	// Sign with a different secret — Supabase rotation scenario.
 	claims := jwt.MapClaims{"sub": "user-A", "exp": time.Now().Add(time.Minute).Unix()}
@@ -364,7 +366,7 @@ func TestJWTAuthorizer_UnknownRunDenied(t *testing.T) {
 	hub := NewHub()
 	// Empty rows → fetcher returns (nil, nil) for any runID.
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-A", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "ghost-run", ActionPush); err == nil {
@@ -375,7 +377,7 @@ func TestJWTAuthorizer_UnknownRunDenied(t *testing.T) {
 func TestJWTAuthorizer_FetcherErrorDenied(t *testing.T) {
 	hub := NewHub()
 	f := &fakeRunMetaFetcher{err: context.DeadlineExceeded}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 	token := signTestToken(t, "user-A", 60)
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionPush); err == nil {
@@ -388,7 +390,7 @@ func TestJWTAuthorizer_CachesRunMetaPerRoom(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: true},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	for i := 0; i < 10; i++ {
 		if err := a.Authorize(reqWith(""), "run-1", ActionSubscribe); err != nil {
@@ -405,7 +407,7 @@ func TestJWTAuthorizer_AlgNoneRejected(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	// Hand-craft a `alg: none` token (no signature). Vulnerable
 	// libraries accept this; ours must reject.
@@ -421,7 +423,7 @@ func TestJWTAuthorizer_AlgNoneRejected(t *testing.T) {
 func TestJWTAuthorizer_NilSecretFactoryReturnsNil(t *testing.T) {
 	hub := NewHub()
 	f := &fakeRunMetaFetcher{}
-	if a := NewJWTAuthorizer("", hub, f); a != nil {
+	if a := NewJWTAuthorizer(supajwt.New("", "", nil), hub, f); a != nil {
 		t.Fatal("empty secret must produce a nil authorizer so callers fall back to permissive dev mode")
 	}
 }
@@ -484,7 +486,7 @@ func TestJWTAuthorizer_EndToEndOnServer(t *testing.T) {
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
 		"run-1": {UserID: "user-A", IsPublic: false},
 	}}
-	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
 
 	srv := &Server{Hub: hub, Authorizer: a.Authorize}
 	mux := http.NewServeMux()
