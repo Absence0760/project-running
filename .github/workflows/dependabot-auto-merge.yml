@@ -57,4 +57,18 @@ jobs:
           # check turns green. If branch protection blocks the merge,
           # `--auto` queues it — the user can land it manually after
           # the protection is satisfied.
-          gh pr merge --auto --squash "$PR_URL"
+          #
+          # If the "Allow auto-merge" repo setting is off, this returns
+          # `enablePullRequestAutoMerge` and the header above promises the
+          # workflow degrades to "a human merges it like before". Under
+          # `bash -e` it did the opposite: a hard failure that painted a red
+          # check on every Dependabot PR. Keep the promise — the approval
+          # above still stands and the PR just waits for a human.
+          if ! err=$(gh pr merge --auto --squash "$PR_URL" 2>&1); then
+            echo "$err"
+            if echo "$err" | grep -q 'enablePullRequestAutoMerge'; then
+              echo "::warning::Auto-merge is disabled for this repository (Settings → General → Pull Requests → Allow auto-merge). Approved; leaving the PR for a human to merge."
+              exit 0
+            fi
+            exit 1
+          fi
