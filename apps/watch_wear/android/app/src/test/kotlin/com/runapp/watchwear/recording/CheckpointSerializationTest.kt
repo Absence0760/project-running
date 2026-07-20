@@ -49,6 +49,7 @@ class CheckpointSerializationTest {
         ),
         steps = 6_400,
         privacyDefault = "public",
+        pausedAccumulatedMs = 120_000,
     )
 
     @Test
@@ -124,6 +125,62 @@ class CheckpointSerializationTest {
     }
 
     @Test
+    fun `decode populates pausedAccumulatedMs = 0 when absent (v1 payload)`() {
+        // Pre-pause-tracking checkpoints had no pausedAccumulatedMs — the
+        // model only carried startedAtMs / savedAtMs, so recovery computed
+        // raw wall-clock duration. A regression that removed the `= 0L`
+        // default would throw MissingFieldException, CheckpointStore.current
+        // would catch + return null, and the in-flight run would vanish.
+        val v1Json = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), v1Json)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
+    }
+
+    @Test
+    fun `recovered duration subtracts paused time, matching active not wall-clock`() {
+        // The corruption bug (#370): a checkpoint spanning 900 s of
+        // wall-clock with 120 s paused must recover 780 s of ACTIVE
+        // duration, not the raw 900 s span — otherwise the uploaded
+        // runs.duration_s (and every derived pace) is permanently inflated.
+        val cp = sample.copy(
+            startedAtMs = 1_700_000_000_000L,
+            savedAtMs = 1_700_000_900_000L, // +900 s wall-clock
+            pausedAccumulatedMs = 120_000,  // 120 s paused
+        )
+        assertEquals(780, checkpointActiveDurationS(cp))
+    }
+
+    @Test
+    fun `recovered duration of a v1 checkpoint (no paused field) stays wall-clock`() {
+        // Back-compat: an old on-disk checkpoint decodes with
+        // pausedAccumulatedMs = 0, so recovery subtracts 0 and yields the
+        // same wall-clock duration it always did — no regression for runs
+        // recorded before the field existed.
+        val v1Json = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), v1Json)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
+        assertEquals(900, checkpointActiveDurationS(decoded))
+    }
+
+    @Test
     fun `v1 payload with NO post-v1 fields decodes into a fully-recoverable Checkpoint`() {
         // Belt-and-braces: a worst-case v1 payload — every defaulted
         // field absent — must still produce a Checkpoint with sensible
@@ -155,6 +212,7 @@ class CheckpointSerializationTest {
         assertTrue(decoded.laps.isEmpty())
         assertNull(decoded.steps)
         assertNull(decoded.privacyDefault)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
     }
 
     @Test
