@@ -27,6 +27,7 @@ class PlannedSetRef {
   final num? targetRepsMax;
   final num? targetWeightKg;
   final num? targetDurationS;
+  final num? targetDistanceM;
   const PlannedSetRef({
     required this.exerciseKey,
     required this.setIndex,
@@ -35,6 +36,7 @@ class PlannedSetRef {
     this.targetRepsMax,
     this.targetWeightKg,
     this.targetDurationS,
+    this.targetDistanceM,
   });
 }
 
@@ -44,12 +46,14 @@ class ActualSetRef {
   final num? reps;
   final num? weightKg;
   final num? durationS;
+  final num? distanceM;
   const ActualSetRef({
     required this.exerciseKey,
     required this.setIndex,
     this.reps,
     this.weightKg,
     this.durationS,
+    this.distanceM,
   });
 }
 
@@ -107,16 +111,17 @@ String _refKey(String exerciseKey, int setIndex) => '$exerciseKey $setIndex';
 /// Reduce planned set targets against logged sets into per-set verdicts and a
 /// session roll-up. A planned set is `hit` when the actual reps reach 80% of the
 /// rep floor AND (no weight target, or the actual weight reaches 80% of it); a
-/// duration target is hit at 80% of the target. A set with reps logged but below
-/// the floor is `partial`; a weight-target set whose logged weight fell short is
-/// `missed`, as is a weight-only set with no logged weight. When a set carries
-/// BOTH a weight and a duration target, duration is the primary axis while the
-/// weight isn't recorded — an unlogged weight is graded on duration instead of
-/// auto-missing; a weight that IS logged and falls short still misses.
-/// `amrap`/`failure` sets count as `hit` whenever any reps (or duration) were
-/// logged. `warmup` sets are excluded from the denominator entirely (skipping a
-/// warmup never marks a session partial). A logged set with no matching plan
-/// entry is `extra` and is excluded from `plannedCount`.
+/// duration or distance target is hit at 80% of the target. A set with reps
+/// logged but below the floor is `partial`; a weight-target set whose logged
+/// weight fell short is `missed`, as is a weight-only set with no logged weight.
+/// When a set carries BOTH a weight and a duration/distance target, the
+/// duration/distance is the primary axis while the weight isn't recorded — an
+/// unlogged weight is graded on that axis instead of auto-missing; a weight that
+/// IS logged and falls short still misses. `amrap`/`failure` sets count as `hit`
+/// whenever any reps, duration, or distance were logged. `warmup` sets are
+/// excluded from the denominator entirely (skipping a warmup never marks a
+/// session partial). A logged set with no matching plan entry is `extra` and is
+/// excluded from `plannedCount`.
 RoutineAdherence computeRoutineAdherence(
   List<PlannedSetRef> planned,
   List<ActualSetRef> actual,
@@ -152,14 +157,17 @@ RoutineAdherence computeRoutineAdherence(
       status = SetAdherenceStatus.missed;
     } else if (p.setType == 'amrap' || p.setType == 'failure') {
       status = (a.reps != null && a.reps! > 0) ||
-              (a.durationS != null && a.durationS! > 0)
+              (a.durationS != null && a.durationS! > 0) ||
+              (a.distanceM != null && a.distanceM! > 0)
           ? SetAdherenceStatus.hit
           : SetAdherenceStatus.missed;
     } else if (p.targetWeightKg != null &&
         p.targetWeightKg! > 0 &&
         ((a.weightKg != null &&
                 a.weightKg! < p.targetWeightKg! * _axisHitFraction) ||
-            (a.weightKg == null && p.targetDurationS == null))) {
+            (a.weightKg == null &&
+                p.targetDurationS == null &&
+                p.targetDistanceM == null))) {
       status = SetAdherenceStatus.missed;
     } else if (p.targetRepsMin != null) {
       status =
@@ -170,6 +178,12 @@ RoutineAdherence computeRoutineAdherence(
       status =
           a.durationS != null &&
               a.durationS! >= p.targetDurationS! * _axisHitFraction
+          ? SetAdherenceStatus.hit
+          : SetAdherenceStatus.partial;
+    } else if (p.targetDistanceM != null) {
+      status =
+          a.distanceM != null &&
+              a.distanceM! >= p.targetDistanceM! * _axisHitFraction
           ? SetAdherenceStatus.hit
           : SetAdherenceStatus.partial;
     } else {

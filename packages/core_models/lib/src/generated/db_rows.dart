@@ -1630,6 +1630,11 @@ class FoodLogRow {
   static const String colLastModifiedAt = 'last_modified_at';
   static const String colCreatedAt = 'created_at';
   static const String colStartedAt = 'started_at';
+  static const String colFiberG = 'fiber_g';
+  static const String colSugarG = 'sugar_g';
+  static const String colSodiumMg = 'sodium_mg';
+  static const String colSaturatedFatG = 'saturated_fat_g';
+  static const String colCholesterolMg = 'cholesterol_mg';
 
   final String id;
   final String userId;
@@ -1644,6 +1649,11 @@ class FoodLogRow {
   final DateTime lastModifiedAt;
   final DateTime createdAt;
   final DateTime startedAt;
+  final double? fiberG;
+  final double? sugarG;
+  final double? sodiumMg;
+  final double? saturatedFatG;
+  final double? cholesterolMg;
 
   const FoodLogRow({
     required this.id,
@@ -1659,6 +1669,11 @@ class FoodLogRow {
     required this.lastModifiedAt,
     required this.createdAt,
     required this.startedAt,
+    this.fiberG,
+    this.sugarG,
+    this.sodiumMg,
+    this.saturatedFatG,
+    this.cholesterolMg,
   });
 
   factory FoodLogRow.fromJson(Map<String, dynamic> json) => FoodLogRow(
@@ -1675,6 +1690,11 @@ class FoodLogRow {
     lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
     startedAt: DateTime.parse(json['started_at'] as String),
+    fiberG: (json['fiber_g'] as num?)?.toDouble(),
+    sugarG: (json['sugar_g'] as num?)?.toDouble(),
+    sodiumMg: (json['sodium_mg'] as num?)?.toDouble(),
+    saturatedFatG: (json['saturated_fat_g'] as num?)?.toDouble(),
+    cholesterolMg: (json['cholesterol_mg'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1691,6 +1711,11 @@ class FoodLogRow {
     colLastModifiedAt: lastModifiedAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
     colStartedAt: startedAt.toIso8601String(),
+    colFiberG: fiberG,
+    colSugarG: sugarG,
+    colSodiumMg: sodiumMg,
+    colSaturatedFatG: saturatedFatG,
+    colCholesterolMg: cholesterolMg,
   };
 }
 

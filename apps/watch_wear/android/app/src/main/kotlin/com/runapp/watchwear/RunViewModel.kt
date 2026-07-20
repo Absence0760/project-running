@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
+import com.runapp.watchwear.recording.checkpointActiveDurationS
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RunRecordingService
 import com.runapp.watchwear.system.BatteryOptimization
@@ -211,6 +212,17 @@ data class FinishedLap(
 /// `docs/backend/metadata.md`; this helper feeds the FinishedLap shape that
 /// `WatchRunMetadata.buildRunMetadata` later writes through to the
 /// row's `metadata.laps` jsonb.
+/// Map a universal `privacy_default` ("public" / "followers" / "private")
+/// to the wrist's `is_public` boolean snapshot. Null in → null out (the
+/// prefs bag never loaded), so the caller omits the column and the DB
+/// default (`false`, non-public) applies. `public → true`, everything
+/// else → false — the `followers` nuance lives in the phone/web social
+/// layer. The single source of truth for BOTH the normal stop path
+/// (`snapshotIsPublic`) and crash recovery (`recoverCheckpoint`), so a
+/// recovered run can't drift from a normally-stopped one.
+internal fun isPublicFromPrivacyDefault(privacyDefault: String?): Boolean? =
+    privacyDefault?.let { it == "public" }
+
 internal fun buildFinishedLapsList(
     laps: List<RecordingRepository.Lap>,
     totalDistanceM: Double,
@@ -599,7 +611,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         viewModelScope.launch {
-            val durationS = ((cp.savedAtMs - cp.startedAtMs) / 1000).toInt()
+            val durationS = checkpointActiveDurationS(cp)
             val avgBpm = if (cp.bpmCount == 0L) null
                 else cp.bpmSum.toDouble() / cp.bpmCount
             val sealed = sealTrackFile(cp.trackFilePath)
@@ -613,6 +625,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     avgBpm = avgBpm,
                     activityType = cp.activityType,
                     laps = cp.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
+                    steps = cp.steps,
+                    // Same snapshot the normal stop path stamps — the
+                    // checkpoint carried the privacy default from record
+                    // time, so a recovered run uploads with the runner's
+                    // visibility, not the always-non-public DB default.
+                    isPublic = isPublicFromPrivacyDefault(cp.privacyDefault),
                 )
             )
             checkpoints.clear()
@@ -740,10 +758,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// "private") to the wrist's boolean snapshot. Null when the bag
     /// fetch hasn't returned or returned no value — caller omits the
     /// column and the DB default (`false`) applies.
-    internal fun snapshotIsPublic(): Boolean? {
-        val v = universalPrivacyDefault ?: return null
-        return v == "public"
-    }
+    internal fun snapshotIsPublic(): Boolean? =
+        isPublicFromPrivacyDefault(universalPrivacyDefault)
 
     private suspend fun refreshIfExpired(s: StoredSession) {
         if (!s.isExpired()) return
@@ -793,6 +809,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             routeWaypointsJson = route?.waypointsAsJson(),
             targetPaceSecPerKm = _state.value.targetPaceSecPerKm,
             preferredUnit = _state.value.preferredUnit,
+            privacyDefault = universalPrivacyDefault,
         )
     }
 

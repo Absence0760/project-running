@@ -1673,6 +1673,10 @@
   "@runStopA11yHint": {
     "description": "Screen-reader hint for the stop-and-save control"
   },
+  "runHoldToStopHint": "Hold to stop",
+  "@runHoldToStopHint": {
+    "description": "Caption under the stop button telling the user to press and hold (not tap) to end the run"
+  },
   "runResumeA11yLabel": "Resume run",
   "@runResumeA11yLabel": {
     "description": "Screen-reader label for the pause/resume control when paused"
@@ -4710,6 +4714,10 @@
   "@profileLoadError": {
     "description": "Error state shown when the profile fails to load"
   },
+  "profileSectionError": "Couldn't load this section.",
+  "@profileSectionError": {
+    "description": "Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab"
+  },
   "profileNotFound": "Profile not found.",
   "@profileNotFound": {
     "description": "Shown when the profile does not exist"
@@ -5068,7 +5076,7 @@
   "@socialTabDiscover": {
     "description": "Social hub sub-tab label — cross-club activity discovery"
   },
-  "discoverSearchPlaceholder": "Search yoga, pilates, HIIT, run clubs…",
+  "discoverSearchPlaceholder": "Search classes, clubs…",
   "@discoverSearchPlaceholder": {
     "description": "Discover tab search field placeholder"
   },
@@ -12270,6 +12278,11 @@
   "nutritionProtein": "Protein",
   "nutritionCarbs": "Carbs",
   "nutritionFat": "Fat",
+  "nutritionFiber": "Fiber",
+  "nutritionSugar": "Sugar",
+  "nutritionSodium": "Sodium",
+  "nutritionSaturatedFat": "Saturated fat",
+  "nutritionCholesterol": "Cholesterol",
   "nutritionWater": "Water",
   "nutritionWaterAdd": "Add water",
   "nutritionWaterRemove": "Remove water",

@@ -190,10 +190,11 @@ create index gym_routine_sets_exercise_idx
 
 > One coherent rule across the engine, review panel, and progression input — **per-axis, never volume-product.** For each **non-warmup** planned set, it is a **hit** when `actual_reps >= 0.8 * target_reps_min` **AND** (when load is prescribed) `actual_weight_kg >= 0.8 * target_weight_kg`. Load is skipped for bodyweight / time / distance modalities.
 
+- A **time** set (`target_duration_s`) with no rep target is graded on its own axis: `hit` when `actual_duration_s >= 0.8 * target_duration_s`, else `partial`. A **distance** set (`target_distance_m`) mirrors it: `hit` when `actual_distance_m >= 0.8 * target_distance_m`, else `partial` (a distance/duration target left unlogged is `partial`, not `hit`). When a set carries a weight target *and* a duration/distance target, the duration/distance is the primary axis while the weight is unrecorded (an unlogged weight is graded on that axis, not auto-missed); a weight that IS logged and falls short still misses. This closed issue #328 — a distance-modality set used to fall through to `else` and grade `hit` unconditionally, and its target never reached `GymExecutionBand`.
 - Any **skipped** step OR any step under the per-axis cutoff → `partial`.
 - Abandon flag → `abandoned`.
 - Otherwise → `completed`.
-- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps were logged**.
+- `warmup` sets are **excluded** from the adherence denominator (skipping a warmup must not mark the session `partial`). `amrap` / `failure` sets count as **completed if any reps, duration, or distance were logged**.
 
 Per-axis (not the reps×weight product) is the chosen resolution: it matches how lifters think (you got the reps or you didn't) and the run precedent's per-step semantics, and it is the load-bearing `evaluateHit` input the progression engine consumes — so the same rule governs the review pill and the next-target computation.
 
@@ -431,6 +432,8 @@ A focused single-page surface (40–48rem cap), **not** a modal — execution is
 3. collapsible controls: **rest countdown** (`RestTimer.svelte`, auto-starts on check-off), skip-set, mark-done.
 
 Each prescribed set is a checkable row pre-filled with the target; the user edits reps/weight/RPE to actual and checks it off. **Crash-safety:** debounced in-progress write + a final write on finish. On finish → real `gym_workouts` + `gym_sets` log via `buildSets` / `replaceGymSets`, plus the metadata trio. Components: `GymSessionRunner.svelte`, `GymExecutionBand.svelte`, `RestTimer.svelte`.
+
+**Time-modality sets (e.g. a plank) capture the ACTUAL hold, not the target.** When a step carries `targetDurationS`, the band shows a "Held (s)" field plus a Start/Stop stopwatch (`gym_stopwatch.ts`, a wall-clock-anchored pure helper — elapsed is recomputed from `now − anchor` each tick, not accumulated per tick, so a backgrounded/throttled tab reports the true elapsed on resume). The captured seconds — or a manually-entered value — flow into `EnteredSet.durationS`; **an untracked hold logs `null`, never the prescribed target.** This is the fix for the bug where `currentEntered()` hardcoded `durationS: step.targetDurationS`, so a plank cut short at 20s of 60s recorded a full 60s "hit". Only `Skip` records nothing. **Adherence history for time-modality sets logged before this fix was never real** (every timed set scored the target as its actual) — noted in release notes.
 
 ### Planned-vs-actual review — on `/gym/[id]`
 

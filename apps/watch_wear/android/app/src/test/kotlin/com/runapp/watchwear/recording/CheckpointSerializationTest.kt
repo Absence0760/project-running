@@ -1,5 +1,6 @@
 package com.runapp.watchwear.recording
 
+import com.runapp.watchwear.isPublicFromPrivacyDefault
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,6 +47,9 @@ class CheckpointSerializationTest {
             CheckpointLap(number = 1, atMs = 300_000, distanceM = 1_000.0),
             CheckpointLap(number = 2, atMs = 600_000, distanceM = 1_000.0),
         ),
+        steps = 6_400,
+        privacyDefault = "public",
+        pausedAccumulatedMs = 120_000,
     )
 
     @Test
@@ -121,6 +125,62 @@ class CheckpointSerializationTest {
     }
 
     @Test
+    fun `decode populates pausedAccumulatedMs = 0 when absent (v1 payload)`() {
+        // Pre-pause-tracking checkpoints had no pausedAccumulatedMs — the
+        // model only carried startedAtMs / savedAtMs, so recovery computed
+        // raw wall-clock duration. A regression that removed the `= 0L`
+        // default would throw MissingFieldException, CheckpointStore.current
+        // would catch + return null, and the in-flight run would vanish.
+        val v1Json = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), v1Json)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
+    }
+
+    @Test
+    fun `recovered duration subtracts paused time, matching active not wall-clock`() {
+        // The corruption bug (#370): a checkpoint spanning 900 s of
+        // wall-clock with 120 s paused must recover 780 s of ACTIVE
+        // duration, not the raw 900 s span — otherwise the uploaded
+        // runs.duration_s (and every derived pace) is permanently inflated.
+        val cp = sample.copy(
+            startedAtMs = 1_700_000_000_000L,
+            savedAtMs = 1_700_000_900_000L, // +900 s wall-clock
+            pausedAccumulatedMs = 120_000,  // 120 s paused
+        )
+        assertEquals(780, checkpointActiveDurationS(cp))
+    }
+
+    @Test
+    fun `recovered duration of a v1 checkpoint (no paused field) stays wall-clock`() {
+        // Back-compat: an old on-disk checkpoint decodes with
+        // pausedAccumulatedMs = 0, so recovery subtracts 0 and yields the
+        // same wall-clock duration it always did — no regression for runs
+        // recorded before the field existed.
+        val v1Json = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), v1Json)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
+        assertEquals(900, checkpointActiveDurationS(decoded))
+    }
+
+    @Test
     fun `v1 payload with NO post-v1 fields decodes into a fully-recoverable Checkpoint`() {
         // Belt-and-braces: a worst-case v1 payload — every defaulted
         // field absent — must still produce a Checkpoint with sensible
@@ -145,11 +205,14 @@ class CheckpointSerializationTest {
         assertEquals(5_000.0, decoded.distanceM, 0.0)
         assertEquals("/old/path.json", decoded.trackFilePath)
         assertEquals(1_200, decoded.trackPointCount)
-        // Defaults apply for all four newer fields.
+        // Defaults apply for all newer fields.
         assertEquals(0L, decoded.bpmSum)
         assertEquals(0L, decoded.bpmCount)
         assertEquals("run", decoded.activityType)
         assertTrue(decoded.laps.isEmpty())
+        assertNull(decoded.steps)
+        assertNull(decoded.privacyDefault)
+        assertEquals(0L, decoded.pausedAccumulatedMs)
     }
 
     @Test
@@ -253,5 +316,82 @@ class CheckpointSerializationTest {
             result.isFailure ||
                 result.getOrNull()?.runId?.isEmpty() == true,
         )
+    }
+
+    @Test
+    fun `decode populates steps + privacyDefault = null when absent (pre-#389 payload)`() {
+        // Before #389, Checkpoint carried neither field. A payload
+        // written by such a build must decode cleanly with both null so
+        // a mid-upgrade recovery isn't dropped — null steps omits
+        // metadata.steps, null privacyDefault falls back to the DB
+        // default (non-public), the fail-closed choice.
+        val preFix = """
+        {
+            "runId": "old-run",
+            "startedAtMs": 1700000000000,
+            "savedAtMs": 1700000900000,
+            "distanceM": 5000.0,
+            "trackFilePath": "/old/path.json",
+            "trackPointCount": 1200,
+            "bpmSum": 87000,
+            "bpmCount": 600,
+            "activityType": "run",
+            "laps": []
+        }
+        """.trimIndent()
+        val decoded = json.decodeFromString(Checkpoint.serializer(), preFix)
+        assertNull(decoded.steps)
+        assertNull(decoded.privacyDefault)
+    }
+
+    @Test
+    fun `steps + privacyDefault round-trip through JSON`() {
+        val cp = sample.copy(steps = 9_001, privacyDefault = "followers")
+        val decoded = json.decodeFromString(
+            Checkpoint.serializer(),
+            json.encodeToString(Checkpoint.serializer(), cp),
+        )
+        assertEquals(9_001, decoded.steps)
+        assertEquals("followers", decoded.privacyDefault)
+    }
+
+    @Test
+    fun `recovered run's steps + isPublic match a normal stop given the same live metrics`() {
+        // The root of #389: the crash-recovery path (recoverCheckpoint)
+        // must build a QueuedRun with the SAME steps + isPublic a normal
+        // stop (handleFinishedRun) would, given identical live metrics.
+        // Before the fix, Checkpoint carried neither, so a recovered run
+        // dropped step count (null) and always uploaded non-public
+        // regardless of the runner's privacy_default. A checkpoint now
+        // snapshots both; recovery maps privacyDefault through the SAME
+        // isPublicFromPrivacyDefault the normal stop's snapshotIsPublic
+        // uses, so the two paths can't drift.
+        val liveSteps = 8_432
+        val livePrivacy = "public"
+
+        val cp = sample.copy(steps = liveSteps, privacyDefault = livePrivacy)
+        val recovered = json.decodeFromString(
+            Checkpoint.serializer(),
+            json.encodeToString(Checkpoint.serializer(), cp),
+        )
+
+        // Normal stop: QueuedRun.steps = m.steps (the live pedometer
+        // count), isPublic = snapshotIsPublic() = isPublicFromPrivacyDefault(pref).
+        assertEquals(liveSteps, recovered.steps)
+        assertEquals(
+            isPublicFromPrivacyDefault(livePrivacy),
+            isPublicFromPrivacyDefault(recovered.privacyDefault),
+        )
+        assertEquals(true, isPublicFromPrivacyDefault(recovered.privacyDefault))
+    }
+
+    @Test
+    fun `recovered non-public default stays fail-closed (followers - private - null)`() {
+        // The visibility mapping the wrist can express is a boolean, so
+        // followers / private / an unloaded pref all resolve to
+        // non-public — identical on the recovery and normal-stop paths.
+        assertEquals(false, isPublicFromPrivacyDefault("followers"))
+        assertEquals(false, isPublicFromPrivacyDefault("private"))
+        assertNull(isPublicFromPrivacyDefault(null))
     }
 }

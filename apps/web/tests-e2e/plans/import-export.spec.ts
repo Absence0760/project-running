@@ -38,6 +38,44 @@ test.describe('plan import / export', () => {
 		expect(content).toMatch(/\|\s*1\s*\|\s*\d{4}-\d{2}-\d{2}\s*\|/);
 	});
 
+	test('export menu supports arrow-key / Home / End navigation and Escape', async ({ page }) => {
+		await page.goto('/plans');
+		await page.getByRole('link', { name: /Richmond Half 2026/ }).click();
+		await expect(page.getByRole('heading', { level: 1, name: /Richmond Half 2026/ }))
+			.toBeVisible({ timeout: 10_000 });
+
+		const copy = page.getByRole('menuitem', { name: 'Copy as Markdown' });
+		const md = page.getByRole('menuitem', { name: 'Download .md' });
+		const json = page.getByRole('menuitem', { name: 'Download .json' });
+
+		// Opening moves focus into the menu (first item).
+		await page.locator('.export-menu summary').click();
+		await expect(copy).toBeFocused();
+
+		// ArrowDown walks forward and wraps.
+		await page.keyboard.press('ArrowDown');
+		await expect(md).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(json).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(copy).toBeFocused();
+
+		// ArrowUp walks backward and wraps.
+		await page.keyboard.press('ArrowUp');
+		await expect(json).toBeFocused();
+
+		// Home / End jump to first / last.
+		await page.keyboard.press('Home');
+		await expect(copy).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(json).toBeFocused();
+
+		// Escape closes the menu and returns focus to the trigger.
+		await page.keyboard.press('Escape');
+		await expect(copy).toBeHidden();
+		await expect(page.locator('.export-menu summary')).toBeFocused();
+	});
+
 	test('paste-import parses a Markdown table into the editable preview', async ({ page }) => {
 		await page.goto('/plans/new');
 		// The generator shows a default (half-marathon) outline first.

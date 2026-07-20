@@ -1,6 +1,15 @@
 <script lang="ts">
 	import type { RoutineStep } from '$lib/gym/gym_routine';
 	import type { EnteredSet } from '$lib/gym/gym_session_types';
+	import {
+		idleStopwatch,
+		isRunning,
+		elapsedSeconds,
+		startStopwatch,
+		stopStopwatch,
+		parseDurationInput,
+		type StopwatchState,
+	} from '$lib/gym/gym_stopwatch';
 	import { weightInputValue, parseWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -20,6 +29,15 @@
 	let repsStr = $state('');
 	let weightStr = $state('');
 	let rpeStr = $state('');
+	let distanceStr = $state('');
+	// The ACTUAL held time for a time-modality set, in seconds. Never prefilled
+	// from the target — an untracked hold must log null, not a fake full hit.
+	let durationStr = $state('');
+	let stopwatch = $state<StopwatchState>(idleStopwatch());
+	let nowMs = $state(0);
+
+	const isTimed = $derived(step.targetDurationS != null);
+	const stopwatchRunning = $derived(isRunning(stopwatch));
 
 	// Re-seed the inputs whenever we move to a different set (the band is reused
 	// across steps). `entered` carries a prior in-progress edit if the user
@@ -34,7 +52,38 @@
 					? weightInputValue(step.targetWeightKg)
 					: '';
 		rpeStr = entered.rpe != null ? String(entered.rpe) : step.targetRpe != null ? String(step.targetRpe) : '';
+		distanceStr =
+			entered.distanceM != null
+				? String(entered.distanceM)
+				: step.targetDistanceM != null
+					? String(step.targetDistanceM)
+					: '';
+		durationStr = entered.durationS != null ? String(entered.durationS) : '';
+		stopwatch = idleStopwatch();
 	});
+
+	// Live display tick while the stopwatch runs. The value is recomputed from the
+	// wall-clock anchor each tick (not accumulated per tick), so a throttled or
+	// backgrounded tab reports the true elapsed once it resumes.
+	$effect(() => {
+		if (!stopwatchRunning) return;
+		const id = setInterval(() => {
+			nowMs = Date.now();
+			durationStr = String(elapsedSeconds(stopwatch, nowMs));
+		}, 250);
+		return () => clearInterval(id);
+	});
+
+	function toggleStopwatch() {
+		const now = Date.now();
+		if (stopwatchRunning) {
+			stopwatch = stopStopwatch(stopwatch, now);
+			durationStr = String(elapsedSeconds(stopwatch, now));
+		} else {
+			stopwatch = startStopwatch(stopwatch, now);
+			nowMs = now;
+		}
+	}
 
 	function targetRepsValue(): string {
 		if (step.targetRepsMin == null) return '';
@@ -42,7 +91,10 @@
 	}
 
 	const hasTarget = $derived(
-		step.targetRepsMin != null || step.targetWeightKg != null || step.targetDurationS != null,
+		step.targetRepsMin != null ||
+			step.targetWeightKg != null ||
+			step.targetDurationS != null ||
+			step.targetDistanceM != null,
 	);
 
 	function targetLabel(): string {
@@ -59,11 +111,16 @@
 			parts.push(formatTargetWeight(step.targetWeightKg));
 		}
 		const repWeight = parts.join(' × ');
+		const extras: string[] = [];
 		if (step.targetDurationS != null) {
-			const dur = t('gym.durationValue', { seconds: step.targetDurationS });
-			return repWeight ? `${repWeight} · ${dur}` : dur;
+			extras.push(t('gym.durationValue', { seconds: step.targetDurationS }));
 		}
-		return repWeight;
+		if (step.targetDistanceM != null) {
+			extras.push(t('gym.distanceValue', { metres: step.targetDistanceM }));
+		}
+		const tail = extras.join(' · ');
+		if (!tail) return repWeight;
+		return repWeight ? `${repWeight} · ${tail}` : tail;
 	}
 
 	function formatTargetWeight(kg: number): string {
@@ -78,14 +135,25 @@
 		// routes through `parseWeight`, which coerces; reps + rpe must too).
 		const repsRaw = typeof repsStr === 'number' ? String(repsStr) : repsStr;
 		const rpeRaw = typeof rpeStr === 'number' ? String(rpeStr) : rpeStr;
+		const distanceRaw = typeof distanceStr === 'number' ? String(distanceStr) : distanceStr;
 		const reps = repsRaw.trim() === '' ? null : parseInt(repsRaw, 10);
 		const weightKg = parseWeight(weightStr);
 		const rpe = rpeRaw.trim() === '' ? null : parseFloat(rpeRaw);
+		const distanceM =
+			step.targetDistanceM == null || distanceRaw.trim() === '' ? null : parseFloat(distanceRaw);
+		// If the stopwatch is still running when Complete is tapped, capture the
+		// live elapsed rather than the last committed tick.
+		const durationS = isTimed
+			? stopwatchRunning
+				? elapsedSeconds(stopwatch, Date.now())
+				: parseDurationInput(durationStr)
+			: null;
 		return {
 			reps: reps != null && Number.isFinite(reps) ? reps : null,
 			weightKg,
 			rpe: rpe != null && Number.isFinite(rpe) ? rpe : null,
-			durationS: step.targetDurationS,
+			durationS,
+			distanceM: distanceM != null && Number.isFinite(distanceM) ? distanceM : null,
 		};
 	}
 
@@ -97,7 +165,8 @@
 		const loggedReps = e.reps != null;
 		const loggedWeight = e.weightKg != null;
 		const loggedDuration = step.targetDurationS != null && e.durationS != null;
-		if (!loggedReps && !loggedWeight && !loggedDuration) {
+		const loggedDistance = step.targetDistanceM != null && e.distanceM != null;
+		if (!loggedReps && !loggedWeight && !loggedDuration && !loggedDistance) {
 			return { state: 'pending', icon: 'radio_button_unchecked' };
 		}
 		const repsOk = step.targetRepsMin == null || (e.reps != null && e.reps >= step.targetRepsMin);
@@ -105,7 +174,9 @@
 			step.targetWeightKg == null || (e.weightKg != null && e.weightKg >= step.targetWeightKg);
 		const durationOk =
 			step.targetDurationS == null || (e.durationS != null && e.durationS >= step.targetDurationS);
-		return repsOk && weightOk && durationOk
+		const distanceOk =
+			step.targetDistanceM == null || (e.distanceM != null && e.distanceM >= step.targetDistanceM);
+		return repsOk && weightOk && durationOk && distanceOk
 			? { state: 'hit', icon: 'check_circle' }
 			: { state: 'under', icon: 'error' };
 	});
@@ -137,7 +208,35 @@
 		</span>
 	</header>
 
-	<div class="inputs">
+	{#if isTimed}
+		<div class="timed" data-testid="gym-set-timed">
+			<label class="field">
+				<span class="field-label section-label">{t('gym.session.holdSeconds')}</span>
+				<input
+					type="number"
+					inputmode="numeric"
+					min="0"
+					bind:value={durationStr}
+					readonly={stopwatchRunning}
+					data-testid="gym-set-duration"
+				/>
+			</label>
+			<button
+				type="button"
+				class="btn btn-secondary btn-sm stopwatch"
+				class:running={stopwatchRunning}
+				onclick={toggleStopwatch}
+				data-testid="gym-set-stopwatch"
+				aria-pressed={stopwatchRunning}
+			>
+				<span class="material-symbols" aria-hidden="true">{stopwatchRunning ? 'stop' : 'timer'}</span>
+				{stopwatchRunning ? t('gym.session.stopHold') : t('gym.session.startHold')}
+			</button>
+		</div>
+	{/if}
+
+	<div class="inputs" class:has-distance={step.targetDistanceM != null}>
+
 		<label class="field">
 			<span class="field-label section-label">{t('gym.reps')}</span>
 			<input
@@ -171,6 +270,19 @@
 				data-testid="gym-set-rpe"
 			/>
 		</label>
+		{#if step.targetDistanceM != null}
+			<label class="field">
+				<span class="field-label section-label">{t('gym.distanceUnit')}</span>
+				<input
+					type="number"
+					inputmode="decimal"
+					min="0"
+					step="1"
+					bind:value={distanceStr}
+					data-testid="gym-set-distance"
+				/>
+			</label>
+		{/if}
 	</div>
 
 	<div class="actions">
@@ -260,16 +372,39 @@
 		color: var(--color-success);
 	}
 	.pip-under {
-		color: var(--color-warning);
+		color: var(--color-warning-text);
 	}
 	.pip-pending {
 		color: var(--color-text-tertiary);
 	}
 
+	.timed {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-md);
+	}
+	.timed .field {
+		flex: 1 1 auto;
+	}
+	.timed .stopwatch {
+		flex: 0 0 auto;
+	}
+	.timed .stopwatch.running {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+	}
 	.inputs {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-md);
+	}
+	.inputs.has-distance {
+		grid-template-columns: repeat(4, 1fr);
+	}
+	@media (max-width: 30rem) {
+		.inputs.has-distance {
+			grid-template-columns: repeat(2, 1fr);
+		}
 	}
 	.field {
 		display: flex;

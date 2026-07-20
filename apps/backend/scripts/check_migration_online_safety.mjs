@@ -34,7 +34,7 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // reviewably ship a guarded-table constraint the blocking way (and say why in
 // the PR) — the normal path is the NOT VALID + VALIDATE two-step, which passes
 // this guard without any change here.
-export const GRANDFATHER_CUTOFF = '20270424';
+export const GRANDFATHER_CUTOFF = '20270426';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
@@ -42,6 +42,7 @@ export const GRANDFATHER_CUTOFF = '20270424';
 export const GUARDED_TABLES = new Set([
   'runs',
   'notifications',
+  'jobs',
   'live_run_pings',
   'race_pings',
   'segment_efforts',

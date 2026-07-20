@@ -32,10 +32,33 @@ data class Checkpoint(
     val bpmCount: Long = 0L,
     val activityType: String = "run",
     val laps: List<CheckpointLap> = emptyList(),
+    // Cumulative pedometer steps for the in-flight run, and the runner's
+    // universal `privacy_default` ("public" / "followers" / "private")
+    // snapshotted at write time. Both are what the NORMAL stop path
+    // (`RunViewModel.handleFinishedRun`) stamps onto `QueuedRun`; a
+    // crash-recovered run must carry them too or it silently uploads with
+    // no step count and always non-public. Null `steps` ⇒ omit
+    // `metadata.steps`; null `privacyDefault` ⇒ DB default (`false`,
+    // non-public) — the fail-closed choice when the pref never loaded.
+    val steps: Int? = null,
+    val privacyDefault: String? = null,
+    // Total paused time (ms) accumulated by `savedAtMs`, folding any
+    // in-progress pause at write time. Recovery subtracts it from the
+    // wall-clock span to get active duration. Defaults to 0 so a v1
+    // checkpoint (no paused field) recovers the raw span exactly as it
+    // did before the field existed — see the forward-compat note above.
+    val pausedAccumulatedMs: Long = 0L,
 )
 
 @Serializable
 data class CheckpointLap(val number: Int, val atMs: Long, val distanceM: Double)
+
+/// Active recording duration (seconds) a recovered checkpoint uploads as:
+/// the wall-clock span from start to the last saved snapshot, minus the
+/// paused time banked by then. A v1 checkpoint with no `pausedAccumulatedMs`
+/// subtracts 0 and recovers the raw span — matching pre-field behaviour.
+internal fun checkpointActiveDurationS(cp: Checkpoint): Int =
+    (((cp.savedAtMs - cp.startedAtMs) - cp.pausedAccumulatedMs) / 1000).toInt()
 
 private val Context.checkpointDataStore by preferencesDataStore(name = "watch_wear_checkpoint")
 private val KEY_CHECKPOINT: Preferences.Key<String> = stringPreferencesKey("checkpoint_v2")

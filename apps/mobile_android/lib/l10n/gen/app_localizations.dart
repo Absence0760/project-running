@@ -2261,6 +2261,12 @@ abstract class AppLocalizations {
   /// **'Ends the recording and saves the run'**
   String get runStopA11yHint;
 
+  /// Caption under the stop button telling the user to press and hold (not tap) to end the run
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to stop'**
+  String get runHoldToStopHint;
+
   /// Screen-reader label for the pause/resume control when paused
   ///
   /// In en, this message translates to:
@@ -5900,6 +5906,12 @@ abstract class AppLocalizations {
   /// **'Could not load profile.'**
   String get profileLoadError;
 
+  /// Error state shown when one profile tab (Runs / Achievements / Followers / Following / Notifications) fails to load, scoped to that tab
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this section.'**
+  String get profileSectionError;
+
   /// Shown when the profile does not exist
   ///
   /// In en, this message translates to:
@@ -6221,7 +6233,7 @@ abstract class AppLocalizations {
   /// Discover tab search field placeholder
   ///
   /// In en, this message translates to:
-  /// **'Search yoga, pilates, HIIT, run clubs…'**
+  /// **'Search classes, clubs…'**
   String get discoverSearchPlaceholder;
 
   /// Discover tab — category filter chip that clears the category filter
@@ -15611,6 +15623,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fat'**
   String get nutritionFat;
+
+  /// No description provided for @nutritionFiber.
+  ///
+  /// In en, this message translates to:
+  /// **'Fiber'**
+  String get nutritionFiber;
+
+  /// No description provided for @nutritionSugar.
+  ///
+  /// In en, this message translates to:
+  /// **'Sugar'**
+  String get nutritionSugar;
+
+  /// No description provided for @nutritionSodium.
+  ///
+  /// In en, this message translates to:
+  /// **'Sodium'**
+  String get nutritionSodium;
+
+  /// No description provided for @nutritionSaturatedFat.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturated fat'**
+  String get nutritionSaturatedFat;
+
+  /// No description provided for @nutritionCholesterol.
+  ///
+  /// In en, this message translates to:
+  /// **'Cholesterol'**
+  String get nutritionCholesterol;
 
   /// No description provided for @nutritionWater.
   ///

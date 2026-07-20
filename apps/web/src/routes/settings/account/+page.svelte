@@ -682,7 +682,7 @@
 			if (error) throw error;
 			identities = (data?.identities ?? []) as unknown as Identity[];
 		} catch (e) {
-			identityError = (e as Error).message ?? m('settingsAccount.identitiesLoadFailed');
+			identityError = m('settingsAccount.identitiesLoadFailed', { error: e instanceof Error ? e.message : String(e) });
 		} finally {
 			identitiesLoading = false;
 		}
@@ -699,7 +699,7 @@
 			// Successful path navigates away to the OAuth provider. If we
 			// reach here without redirect, surface a generic failure.
 		} catch (e) {
-			identityError = (e as Error).message ?? m('settingsAccount.linkFailed', { provider: PROVIDER_LABEL[provider] });
+			identityError = m('settingsAccount.linkFailed', { provider: PROVIDER_LABEL[provider], error: e instanceof Error ? e.message : String(e) });
 			linkingProvider = null;
 		}
 	}
@@ -742,7 +742,7 @@
 			showToast(m('settingsAccount.unlinked', { provider: label }));
 			await loadIdentities();
 		} catch (e) {
-			identityError = (e as Error).message ?? m('settingsAccount.unlinkFailed', { provider: label });
+			identityError = m('settingsAccount.unlinkFailed', { provider: label, error: e instanceof Error ? e.message : String(e) });
 		} finally {
 			unlinkingProvider = null;
 		}
