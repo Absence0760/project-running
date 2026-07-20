@@ -10,6 +10,8 @@
 /// (`trimToNull`); the test suites on both sides pin the same
 /// edge cases (null / empty / whitespace / "0" truthiness / emoji).
 
+import { METADATA_KEYS } from './schema';
+
 /// Trim a string and collapse empty-after-trim to null. Mirrors
 /// `s?.trim() || null`. Pulled out so it can be reused without the
 /// `||` truthiness ambiguity at every call site.
@@ -88,7 +90,7 @@ export function readGlobalSegmentsScoredCount(
 	metadata: Record<string, unknown> | null | undefined,
 ): number | null {
 	if (!metadata || typeof metadata !== 'object') return null;
-	const count = (metadata as Record<string, unknown>).global_segments_scored_count;
+	const count = (metadata as Record<string, unknown>)[METADATA_KEYS.global_segments_scored_count];
 	if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) return null;
 	return count;
 }
@@ -124,7 +126,7 @@ export function stampGlobalSegmentsScored(
 	catalogueCount: number,
 ): Record<string, unknown> {
 	const base = metadata ?? {};
-	return { ...base, global_segments_scored_count: catalogueCount };
+	return { ...base, [METADATA_KEYS.global_segments_scored_count]: catalogueCount };
 }
 
 /// Normalise the `notes` field of a plan-workout update patch. Trims
