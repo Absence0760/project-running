@@ -3792,6 +3792,11 @@ export const en = {
 	"nutrition.protein": "Protein",
 	"nutrition.carbs": "Carbs",
 	"nutrition.fat": "Fat",
+	"nutrition.fiber": "Fiber",
+	"nutrition.sugar": "Sugar",
+	"nutrition.sodium": "Sodium",
+	"nutrition.saturatedFat": "Saturated fat",
+	"nutrition.cholesterol": "Cholesterol",
 	"nutrition.noTargets": "Add your height, weight, age and sex in Settings to see calorie + macro targets.",
 	"nutrition.goalBreakdown": "Goal {base} + {exercise} kcal burned today",
 	"nutrition.remaining": "{n} kcal left",
@@ -4306,6 +4311,9 @@ export const en = {
 	"gym.session.restSkip": "Skip rest",
 	"gym.session.target": "Target",
 	"gym.session.noTarget": "No target",
+	"gym.session.holdSeconds": "Held (s)",
+	"gym.session.startHold": "Start hold",
+	"gym.session.stopHold": "Stop hold",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Planned vs actual",

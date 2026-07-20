@@ -3778,6 +3778,11 @@ export const messages = {
 	"nutrition.protein": "Proteínas",
 	"nutrition.carbs": "Carboidratos",
 	"nutrition.fat": "Gorduras",
+	"nutrition.fiber": "Fibra",
+	"nutrition.sugar": "Açúcar",
+	"nutrition.sodium": "Sódio",
+	"nutrition.saturatedFat": "Gorduras saturadas",
+	"nutrition.cholesterol": "Colesterol",
 	"nutrition.noTargets": "Informe sua altura, peso, idade e sexo nas Configurações para ver as metas de calorias e macros.",
 	"nutrition.goalBreakdown": "Meta {base} + {exercise} kcal queimadas hoje",
 	"nutrition.remaining": "{n} kcal restantes",
@@ -4291,6 +4296,9 @@ export const messages = {
 	"gym.session.restSkip": "Pular descanso",
 	"gym.session.target": "Meta",
 	"gym.session.noTarget": "Sem meta",
+	"gym.session.holdSeconds": "Sustentado (s)",
+	"gym.session.startHold": "Iniciar sustentação",
+	"gym.session.stopHold": "Parar sustentação",
 
 	// Post-workout planned-vs-actual adherence review (gym_adherence.ts)
 	"gym.review.title": "Planejado vs realizado",
