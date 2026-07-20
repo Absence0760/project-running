@@ -86,6 +86,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
   final _manualProtein = TextEditingController();
   final _manualCarbs = TextEditingController();
   final _manualFat = TextEditingController();
+  final _manualFiber = TextEditingController();
+  final _manualSugar = TextEditingController();
+  final _manualSodium = TextEditingController();
+  final _manualSatFat = TextEditingController();
+  final _manualCholesterol = TextEditingController();
 
   @override
   void dispose() {
@@ -96,6 +101,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
     _manualProtein.dispose();
     _manualCarbs.dispose();
     _manualFat.dispose();
+    _manualFiber.dispose();
+    _manualSugar.dispose();
+    _manualSodium.dispose();
+    _manualSatFat.dispose();
+    _manualCholesterol.dispose();
     super.dispose();
   }
 
@@ -201,6 +211,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
       proteinG: m.proteinG.toDouble(),
       carbsG: m.carbsG.toDouble(),
       fatG: m.fatG.toDouble(),
+      fiberG: m.fiberG?.toDouble(),
+      sugarG: m.sugarG?.toDouble(),
+      sodiumMg: m.sodiumMg?.toDouble(),
+      saturatedFatG: m.saturatedFatG?.toDouble(),
+      cholesterolMg: m.cholesterolMg?.toDouble(),
     );
   }
 
@@ -213,6 +228,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
       proteinG: double.tryParse(_manualProtein.text),
       carbsG: double.tryParse(_manualCarbs.text),
       fatG: double.tryParse(_manualFat.text),
+      fiberG: double.tryParse(_manualFiber.text),
+      sugarG: double.tryParse(_manualSugar.text),
+      sodiumMg: double.tryParse(_manualSodium.text),
+      saturatedFatG: double.tryParse(_manualSatFat.text),
+      cholesterolMg: double.tryParse(_manualCholesterol.text),
     );
   }
 
@@ -222,6 +242,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
   }) async {
     setState(() {
       _saving = true;
@@ -236,6 +261,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         proteinG: proteinG,
         carbsG: carbsG,
         fatG: fatG,
+        fiberG: fiberG,
+        sugarG: sugarG,
+        sodiumMg: sodiumMg,
+        saturatedFatG: saturatedFatG,
+        cholesterolMg: cholesterolMg,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -380,6 +410,27 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
               Expanded(child: _numField(_manualFat, '${l10n.nutritionFat} (g)')),
             ],
           ),
+          Row(
+            children: [
+              Expanded(child: _numField(_manualFiber, '${l10n.nutritionFiber} (g)')),
+              const SizedBox(width: 8),
+              Expanded(child: _numField(_manualSugar, '${l10n.nutritionSugar} (g)')),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: _numField(_manualSatFat, '${l10n.nutritionSaturatedFat} (g)')),
+              const SizedBox(width: 8),
+              Expanded(child: _numField(_manualSodium, '${l10n.nutritionSodium} (mg)')),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: _numField(_manualCholesterol, '${l10n.nutritionCholesterol} (mg)')),
+              const SizedBox(width: 8),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: _saving || _manualName.text.trim().isEmpty ? null : _saveManual,
@@ -474,6 +525,13 @@ class _PortionDialogState extends State<_PortionDialog> {
           ),
           const SizedBox(height: 12),
           Text('${m.calories} kcal · ${m.proteinG}g P · ${m.carbsG}g C · ${m.fatG}g F'),
+          if (_extendedLine(l10n, m) case final line?) ...[
+            const SizedBox(height: 6),
+            Text(
+              line,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
       actions: [
@@ -487,6 +545,20 @@ class _PortionDialogState extends State<_PortionDialog> {
         ),
       ],
     );
+  }
+
+  /// The extended-nutrients preview line for the present fields, or null when
+  /// none of the five are carried (so the dialog stays compact). Grams for
+  /// fibre / sugar / saturated fat; milligrams for sodium / cholesterol.
+  String? _extendedLine(AppLocalizations l10n, FoodMacros m) {
+    final parts = <String>[
+      if (m.fiberG != null) '${l10n.nutritionFiber} ${m.fiberG}g',
+      if (m.sugarG != null) '${l10n.nutritionSugar} ${m.sugarG}g',
+      if (m.saturatedFatG != null) '${l10n.nutritionSaturatedFat} ${m.saturatedFatG}g',
+      if (m.sodiumMg != null) '${l10n.nutritionSodium} ${m.sodiumMg}mg',
+      if (m.cholesterolMg != null) '${l10n.nutritionCholesterol} ${m.cholesterolMg}mg',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 }
 

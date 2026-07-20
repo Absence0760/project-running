@@ -93,6 +93,58 @@ test('parseOffSearch returns [] on malformed input', () => {
 	assert.deepEqual(parseOffSearch({ products: 'nope' }), []);
 });
 
+test('parseOffSearch maps the extended nutrients, converting sodium + cholesterol g→mg', () => {
+	// Open Food Facts stores every mass nutriment in `_100g` in GRAMS — so
+	// sodium 0.5 = 500 mg and cholesterol 0.02 = 20 mg once landed in the mg
+	// columns; fibre / sugar / saturated fat stay in grams.
+	const out = parseOffSearch({
+		products: [
+			{
+				code: '1',
+				product_name: 'Loaded',
+				nutriments: {
+					'energy-kcal_100g': 200,
+					fiber_100g: 3.1,
+					sugars_100g: 12,
+					sodium_100g: 0.5,
+					'saturated-fat_100g': 2.4,
+					cholesterol_100g: 0.02,
+				},
+			},
+		],
+	});
+	assert.equal(out[0].per100g.fiberG, 3.1);
+	assert.equal(out[0].per100g.sugarG, 12);
+	assert.equal(out[0].per100g.sodiumMg, 500);
+	assert.equal(out[0].per100g.saturatedFatG, 2.4);
+	assert.equal(out[0].per100g.cholesterolMg, 20);
+});
+
+test('parseOffSearch leaves an absent extended nutrient null (never a phantom 0)', () => {
+	const out = parseOffSearch({
+		products: [{ code: '1', product_name: 'Bare', nutriments: { 'energy-kcal_100g': 100 } }],
+	});
+	assert.equal(out[0].per100g.fiberG, null);
+	assert.equal(out[0].per100g.sugarG, null);
+	assert.equal(out[0].per100g.sodiumMg, null);
+	assert.equal(out[0].per100g.saturatedFatG, null);
+	assert.equal(out[0].per100g.cholesterolMg, null);
+});
+
+test('parseOffProduct maps the extended nutrients too', () => {
+	const r = parseOffProduct({
+		status: 1,
+		product: {
+			code: 'x',
+			product_name: 'Barcoded',
+			nutriments: { 'energy-kcal_100g': 100, sodium_100g: 1, fiber_100g: 5 },
+		},
+	});
+	assert.equal(r?.per100g.sodiumMg, 1000);
+	assert.equal(r?.per100g.fiberG, 5);
+	assert.equal(r?.per100g.sugarG, null);
+});
+
 test('scalePortion scales per-100g to a gram portion, rounded', () => {
 	const per100g = { calories: 389, proteinG: 16.9, carbsG: 66.3, fatG: 6.9 };
 	const half = scalePortion(per100g, 50);
@@ -100,6 +152,26 @@ test('scalePortion scales per-100g to a gram portion, rounded', () => {
 	assert.equal(half.proteinG, 8); // 8.45 → 8
 	const none = scalePortion(per100g, 0);
 	assert.equal(none.calories, 0);
+});
+
+test('scalePortion scales the extended nutrients, keeping an absent one null', () => {
+	const per100g = {
+		calories: 200,
+		proteinG: 10,
+		carbsG: 20,
+		fatG: 5,
+		fiberG: 4,
+		sugarG: 8,
+		sodiumMg: 500,
+		saturatedFatG: null, // absent upstream — must stay null after scaling
+		cholesterolMg: 20,
+	};
+	const half = scalePortion(per100g, 50);
+	assert.equal(half.fiberG, 2);
+	assert.equal(half.sugarG, 4);
+	assert.equal(half.sodiumMg, 250);
+	assert.equal(half.saturatedFatG, null);
+	assert.equal(half.cholesterolMg, 10);
 });
 
 test('searchFoods returns [] for an empty query without calling the fetcher', async () => {
@@ -275,6 +347,14 @@ test('lookupBarcode parses a found product via the injected fetcher', async () =
 	assert.equal(r?.name, 'Rolled Oats');
 });
 
+test('lookupBarcode requests English-localized names (regression: Norwegian results)', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=en'));
+		return new Response(JSON.stringify(productSample), { status: 200 });
+	};
+	await lookupBarcode('737628064502', fetcher);
+});
+
 test('lookupBarcode returns null on a genuine no-match (status 0)', async () => {
 	const fetcher: Fetcher = async () => new Response(JSON.stringify({ status: 0 }), { status: 200 });
 	assert.equal(await lookupBarcode('000000000000', fetcher), null);
@@ -364,6 +444,41 @@ test('parseUsdaSearch returns [] on malformed input', () => {
 	assert.deepEqual(parseUsdaSearch(null), []);
 	assert.deepEqual(parseUsdaSearch({}), []);
 	assert.deepEqual(parseUsdaSearch({ foods: 'nope' }), []);
+});
+
+test('parseUsdaSearch maps the extended nutrients as-is (USDA already reports mg for sodium/cholesterol)', () => {
+	const out = parseUsdaSearch({
+		foods: [
+			{
+				fdcId: 1,
+				description: 'Loaded',
+				foodNutrients: [
+					{ nutrientNumber: '208', value: 200 },
+					{ nutrientNumber: '291', value: 3.1 }, // fibre, g
+					{ nutrientNumber: '269', value: 12 }, // sugars, g
+					{ nutrientNumber: '307', value: 500 }, // sodium, mg (no conversion)
+					{ nutrientNumber: '606', value: 2.4 }, // saturated fat, g
+					{ nutrientNumber: '601', value: 20 }, // cholesterol, mg (no conversion)
+				],
+			},
+		],
+	});
+	assert.equal(out[0].per100g.fiberG, 3.1);
+	assert.equal(out[0].per100g.sugarG, 12);
+	assert.equal(out[0].per100g.sodiumMg, 500);
+	assert.equal(out[0].per100g.saturatedFatG, 2.4);
+	assert.equal(out[0].per100g.cholesterolMg, 20);
+});
+
+test('parseUsdaSearch leaves an absent extended nutrient null', () => {
+	const out = parseUsdaSearch({
+		foods: [
+			{ fdcId: 1, description: 'Bare', foodNutrients: [{ nutrientNumber: '208', value: 100 }] },
+		],
+	});
+	assert.equal(out[0].per100g.fiberG, null);
+	assert.equal(out[0].per100g.sodiumMg, null);
+	assert.equal(out[0].per100g.cholesterolMg, null);
 });
 
 test('searchUsda short-circuits to [] when the API key is blank (fail-closed gate)', async () => {

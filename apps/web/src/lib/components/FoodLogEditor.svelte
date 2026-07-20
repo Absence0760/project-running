@@ -39,6 +39,11 @@
 	let manualProtein = $state<number | null>(null);
 	let manualCarbs = $state<number | null>(null);
 	let manualFat = $state<number | null>(null);
+	let manualFiber = $state<number | null>(null);
+	let manualSugar = $state<number | null>(null);
+	let manualSodium = $state<number | null>(null);
+	let manualSatFat = $state<number | null>(null);
+	let manualCholesterol = $state<number | null>(null);
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	function onQueryInput() {
@@ -89,6 +94,11 @@
 				protein_g: portionMacros.proteinG,
 				carbs_g: portionMacros.carbsG,
 				fat_g: portionMacros.fatG,
+				fiber_g: portionMacros.fiberG,
+				sugar_g: portionMacros.sugarG,
+				sodium_mg: portionMacros.sodiumMg,
+				saturated_fat_g: portionMacros.saturatedFatG,
+				cholesterol_mg: portionMacros.cholesterolMg,
 				external_id: `${picked.source}:${picked.code}`,
 			});
 			showToast(m('nutrition.added'), 'success');
@@ -111,6 +121,11 @@
 				protein_g: manualProtein,
 				carbs_g: manualCarbs,
 				fat_g: manualFat,
+				fiber_g: manualFiber,
+				sugar_g: manualSugar,
+				sodium_mg: manualSodium,
+				saturated_fat_g: manualSatFat,
+				cholesterol_mg: manualCholesterol,
 			});
 			showToast(m('nutrition.added'), 'success');
 			oncreated();
@@ -145,6 +160,15 @@
 						<div><dt>{m('nutrition.fat')}</dt><dd>{portionMacros.fatG} g</dd></div>
 					</dl>
 				</div>
+				{#if portionMacros.fiberG != null || portionMacros.sugarG != null || portionMacros.sodiumMg != null || portionMacros.saturatedFatG != null || portionMacros.cholesterolMg != null}
+					<dl class="portion-extended" data-testid="portion-extended">
+						{#if portionMacros.fiberG != null}<div><dt>{m('nutrition.fiber')}</dt><dd>{portionMacros.fiberG} g</dd></div>{/if}
+						{#if portionMacros.sugarG != null}<div><dt>{m('nutrition.sugar')}</dt><dd>{portionMacros.sugarG} g</dd></div>{/if}
+						{#if portionMacros.saturatedFatG != null}<div><dt>{m('nutrition.saturatedFat')}</dt><dd>{portionMacros.saturatedFatG} g</dd></div>{/if}
+						{#if portionMacros.sodiumMg != null}<div><dt>{m('nutrition.sodium')}</dt><dd>{portionMacros.sodiumMg} mg</dd></div>{/if}
+						{#if portionMacros.cholesterolMg != null}<div><dt>{m('nutrition.cholesterol')}</dt><dd>{portionMacros.cholesterolMg} mg</dd></div>{/if}
+					</dl>
+				{/if}
 			{/if}
 			<div class="portion-actions">
 				<button class="btn btn-outline" type="button" onclick={() => (picked = null)}>{m('nutrition.cancel')}</button>
@@ -235,6 +259,16 @@
 							<input type="number" min="0" inputmode="numeric" bind:value={manualCarbs} /></label>
 						<label class="field"><span class="section-label">{m('nutrition.fat')} (g)</span>
 							<input type="number" min="0" inputmode="numeric" bind:value={manualFat} /></label>
+						<label class="field"><span class="section-label">{m('nutrition.fiber')} (g)</span>
+							<input type="number" min="0" inputmode="numeric" bind:value={manualFiber} /></label>
+						<label class="field"><span class="section-label">{m('nutrition.sugar')} (g)</span>
+							<input type="number" min="0" inputmode="numeric" bind:value={manualSugar} /></label>
+						<label class="field"><span class="section-label">{m('nutrition.saturatedFat')} (g)</span>
+							<input type="number" min="0" inputmode="numeric" bind:value={manualSatFat} /></label>
+						<label class="field"><span class="section-label">{m('nutrition.sodium')} (mg)</span>
+							<input type="number" min="0" inputmode="numeric" bind:value={manualSodium} /></label>
+						<label class="field"><span class="section-label">{m('nutrition.cholesterol')} (mg)</span>
+							<input type="number" min="0" inputmode="numeric" bind:value={manualCholesterol} /></label>
 					</div>
 					<button class="btn btn-primary manual-save" type="button" disabled={saving || !manualName.trim()} onclick={saveManual}>
 						{m('nutrition.add')}
@@ -450,5 +484,23 @@
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
+	.portion-extended {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		gap: var(--space-sm) var(--space-md);
+		margin: 0;
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+	.portion-extended div { display: flex; justify-content: space-between; gap: var(--space-sm); }
+	.portion-extended dt {
+		font-size: var(--font-size-section-label);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: var(--section-label-tracking);
+		color: var(--color-text-tertiary);
+	}
+	.portion-extended dd { margin: 0; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
 	.portion-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 </style>

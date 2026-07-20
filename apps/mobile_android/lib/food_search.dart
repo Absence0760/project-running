@@ -21,11 +21,26 @@ class FoodMacros {
   final int proteinG;
   final int carbsG;
   final int fatG;
+
+  // Extended nutrients (issue #492). Nullable: both food sources carry these
+  // unevenly, so a missing value stays null (never a phantom 0). Grams for
+  // fibre / sugar / saturated fat; milligrams for sodium / cholesterol.
+  final int? fiberG;
+  final int? sugarG;
+  final int? sodiumMg;
+  final int? saturatedFatG;
+  final int? cholesterolMg;
+
   const FoodMacros({
     required this.calories,
     required this.proteinG,
     required this.carbsG,
     required this.fatG,
+    this.fiberG,
+    this.sugarG,
+    this.sodiumMg,
+    this.saturatedFatG,
+    this.cholesterolMg,
   });
 }
 
@@ -49,6 +64,15 @@ class FoodSearchResult {
   final double carbs100g;
   final double fat100g;
 
+  /// Extended nutrients per 100 g (issue #492), nullable when absent upstream.
+  /// Grams for fibre / sugar / saturated fat; milligrams for sodium /
+  /// cholesterol.
+  final double? fiber100g;
+  final double? sugar100g;
+  final double? sodiumMg100g;
+  final double? saturatedFat100g;
+  final double? cholesterolMg100g;
+
   const FoodSearchResult({
     required this.code,
     required this.source,
@@ -58,6 +82,11 @@ class FoodSearchResult {
     required this.protein100g,
     required this.carbs100g,
     required this.fat100g,
+    this.fiber100g,
+    this.sugar100g,
+    this.sodiumMg100g,
+    this.saturatedFat100g,
+    this.cholesterolMg100g,
   });
 }
 
@@ -79,6 +108,16 @@ double? _num(dynamic v) {
   final n = v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
   if (n == null || !n.isFinite || n < 0) return null;
   return n;
+}
+
+/// Open Food Facts normalises every mass nutriment in a `_100g` field to GRAMS
+/// (sodium 0.5 -> 0.5 g, cholesterol 0.02 -> 0.02 g), but the food_log columns
+/// store sodium + cholesterol in milligrams. Scale grams -> mg; a missing value
+/// stays null (never a phantom 0). Note the issue text only called out sodium,
+/// but cholesterol_100g is grams too, so both need the x1000.
+double? _offGToMg(dynamic v) {
+  final n = _num(v);
+  return n == null ? null : n * 1000;
 }
 
 /// Normalise a BCP-47 locale/tag to an Open Food Facts language code (`lc`) —
@@ -130,6 +169,11 @@ List<FoodSearchResult> parseOffSearch(dynamic json, [String lang = 'en']) {
       protein100g: _num(n['proteins_100g']) ?? 0,
       carbs100g: _num(n['carbohydrates_100g']) ?? 0,
       fat100g: _num(n['fat_100g']) ?? 0,
+      fiber100g: _num(n['fiber_100g']),
+      sugar100g: _num(n['sugars_100g']),
+      sodiumMg100g: _offGToMg(n['sodium_100g']),
+      saturatedFat100g: _num(n['saturated-fat_100g']),
+      cholesterolMg100g: _offGToMg(n['cholesterol_100g']),
     ));
   }
   return out;
@@ -164,6 +208,11 @@ FoodSearchResult? parseOffProduct(dynamic json, [String lang = 'en']) {
     protein100g: _num(n['proteins_100g']) ?? 0,
     carbs100g: _num(n['carbohydrates_100g']) ?? 0,
     fat100g: _num(n['fat_100g']) ?? 0,
+    fiber100g: _num(n['fiber_100g']),
+    sugar100g: _num(n['sugars_100g']),
+    sodiumMg100g: _offGToMg(n['sodium_100g']),
+    saturatedFat100g: _num(n['saturated-fat_100g']),
+    cholesterolMg100g: _offGToMg(n['cholesterol_100g']),
   );
 }
 
@@ -175,6 +224,14 @@ const _usdaEnergyKcal = '208';
 const _usdaProtein = '203';
 const _usdaCarbs = '205';
 const _usdaFat = '204';
+// Extended nutrients (issue #492). USDA already reports sodium (307) and
+// cholesterol (601) in mg and fibre/sugar/saturated-fat in g — the exact units
+// the food_log columns store — so no conversion is needed on the USDA side.
+const _usdaFiber = '291';
+const _usdaSugar = '269';
+const _usdaSodium = '307';
+const _usdaSatFat = '606';
+const _usdaCholesterol = '601';
 
 double? _usdaNutrient(dynamic nutrients, String nutrientNumber) {
   if (nutrients is! List) return null;
@@ -224,19 +281,32 @@ List<FoodSearchResult> parseUsdaSearch(dynamic json) {
       protein100g: _usdaNutrient(f['foodNutrients'], _usdaProtein) ?? 0,
       carbs100g: _usdaNutrient(f['foodNutrients'], _usdaCarbs) ?? 0,
       fat100g: _usdaNutrient(f['foodNutrients'], _usdaFat) ?? 0,
+      fiber100g: _usdaNutrient(f['foodNutrients'], _usdaFiber),
+      sugar100g: _usdaNutrient(f['foodNutrients'], _usdaSugar),
+      sodiumMg100g: _usdaNutrient(f['foodNutrients'], _usdaSodium),
+      saturatedFat100g: _usdaNutrient(f['foodNutrients'], _usdaSatFat),
+      cholesterolMg100g: _usdaNutrient(f['foodNutrients'], _usdaCholesterol),
     ));
   }
   return out;
 }
 
-/// Scale a per-100 g result to a portion in grams, rounded to whole units.
+/// Scale a per-100 g result to a portion in grams, rounded to whole units. The
+/// extended nutrients (issue #492) are nullable: a null (absent upstream) stays
+/// null through the scale, never becoming a phantom 0.
 FoodMacros scalePortion(FoodSearchResult r, double grams) {
   final f = grams > 0 ? grams / 100 : 0;
+  int? scale(double? v) => v == null ? null : (v * f).round();
   return FoodMacros(
     calories: (r.calories100g * f).round(),
     proteinG: (r.protein100g * f).round(),
     carbsG: (r.carbs100g * f).round(),
     fatG: (r.fat100g * f).round(),
+    fiberG: scale(r.fiber100g),
+    sugarG: scale(r.sugar100g),
+    sodiumMg: scale(r.sodiumMg100g),
+    saturatedFatG: scale(r.saturatedFat100g),
+    cholesterolMg: scale(r.cholesterolMg100g),
   );
 }
 

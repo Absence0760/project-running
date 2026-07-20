@@ -20,6 +20,15 @@ export interface FoodMacros {
 	proteinG: number;
 	carbsG: number;
 	fatG: number;
+	// Extended nutrients (issue #492). Optional + nullable: both food sources
+	// carry these unevenly, so a missing value stays null (never a phantom 0),
+	// and consumers that only need the headline macros ignore them. Grams for
+	// fibre / sugar / saturated fat; milligrams for sodium / cholesterol.
+	fiberG?: number | null;
+	sugarG?: number | null;
+	sodiumMg?: number | null;
+	saturatedFatG?: number | null;
+	cholesterolMg?: number | null;
 }
 
 /// Which database a result came from. Drives the source label in the
@@ -72,6 +81,31 @@ function num(v: unknown): number | null {
 	return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+/// Open Food Facts normalises every mass nutriment in a `_100g` field to GRAMS
+/// (sodium 0.5 → 0.5 g, cholesterol 0.02 → 0.02 g), but the food_log columns
+/// store sodium + cholesterol in milligrams. Scale grams → mg; a missing value
+/// stays null (never a phantom 0). Note the issue text only called out sodium,
+/// but cholesterol_100g is grams too, so both need the ×1000.
+function offGToMg(v: unknown): number | null {
+	const n = num(v);
+	return n == null ? null : n * 1000;
+}
+
+/// Extended nutrients (issue #492) from an Open Food Facts `nutriments` object.
+/// Every field is optional upstream, so a missing one stays null, never 0.
+function offExtended(n: Record<string, unknown>): Pick<
+	FoodMacros,
+	'fiberG' | 'sugarG' | 'sodiumMg' | 'saturatedFatG' | 'cholesterolMg'
+> {
+	return {
+		fiberG: num(n.fiber_100g),
+		sugarG: num(n.sugars_100g),
+		sodiumMg: offGToMg(n.sodium_100g),
+		saturatedFatG: num(n['saturated-fat_100g']),
+		cholesterolMg: offGToMg(n.cholesterol_100g),
+	};
+}
+
 /// Normalise a BCP-47 locale/tag to an Open Food Facts language code (`lc`) —
 /// the primary subtag, lowercased (`pt-BR` → `pt`, `en` → `en`). Blank/unknown
 /// falls back to English. Kept in lockstep with the Dart twin's `offLang`.
@@ -120,6 +154,7 @@ export function parseOffSearch(json: unknown, lang = 'en'): FoodSearchResult[] {
 				proteinG: num(n.proteins_100g) ?? 0,
 				carbsG: num(n.carbohydrates_100g) ?? 0,
 				fatG: num(n.fat_100g) ?? 0,
+				...offExtended(n),
 			},
 		});
 	}
@@ -153,18 +188,28 @@ export function parseOffProduct(json: unknown, lang = 'en'): FoodSearchResult | 
 			proteinG: num(n.proteins_100g) ?? 0,
 			carbsG: num(n.carbohydrates_100g) ?? 0,
 			fatG: num(n.fat_100g) ?? 0,
+			...offExtended(n),
 		},
 	};
 }
 
-/// Scale a per-100 g result to a portion in grams, rounded to whole units.
+/// Scale a per-100 g result to a portion in grams, rounded to whole units. The
+/// extended nutrients (issue #492) are nullable: a null (absent upstream) stays
+/// null through the scale, never becoming a phantom 0.
 export function scalePortion(per100g: FoodMacros, grams: number): FoodMacros {
 	const f = grams > 0 ? grams / 100 : 0;
+	const scale = (v: number | null | undefined): number | null =>
+		v == null ? null : Math.round(v * f);
 	return {
 		calories: Math.round(per100g.calories * f),
 		proteinG: Math.round(per100g.proteinG * f),
 		carbsG: Math.round(per100g.carbsG * f),
 		fatG: Math.round(per100g.fatG * f),
+		fiberG: scale(per100g.fiberG),
+		sugarG: scale(per100g.sugarG),
+		sodiumMg: scale(per100g.sodiumMg),
+		saturatedFatG: scale(per100g.saturatedFatG),
+		cholesterolMg: scale(per100g.cholesterolMg),
 	};
 }
 
@@ -226,6 +271,14 @@ const USDA_ENERGY_KCAL = '208';
 const USDA_PROTEIN = '203';
 const USDA_CARBS = '205';
 const USDA_FAT = '204';
+// Extended nutrients (issue #492). USDA already reports sodium (307) and
+// cholesterol (601) in mg and fibre/sugar/saturated-fat in g — the exact units
+// the food_log columns store — so no conversion is needed on the USDA side.
+const USDA_FIBER = '291';
+const USDA_SUGAR = '269';
+const USDA_SODIUM = '307';
+const USDA_SAT_FAT = '606';
+const USDA_CHOLESTEROL = '601';
 
 function usdaNutrient(nutrients: unknown, nutrientNumber: string): number | null {
 	if (!Array.isArray(nutrients)) return null;
@@ -276,6 +329,11 @@ export function parseUsdaSearch(json: unknown): FoodSearchResult[] {
 				proteinG: usdaNutrient(food.foodNutrients, USDA_PROTEIN) ?? 0,
 				carbsG: usdaNutrient(food.foodNutrients, USDA_CARBS) ?? 0,
 				fatG: usdaNutrient(food.foodNutrients, USDA_FAT) ?? 0,
+				fiberG: usdaNutrient(food.foodNutrients, USDA_FIBER),
+				sugarG: usdaNutrient(food.foodNutrients, USDA_SUGAR),
+				sodiumMg: usdaNutrient(food.foodNutrients, USDA_SODIUM),
+				saturatedFatG: usdaNutrient(food.foodNutrients, USDA_SAT_FAT),
+				cholesterolMg: usdaNutrient(food.foodNutrients, USDA_CHOLESTEROL),
 			},
 		});
 	}

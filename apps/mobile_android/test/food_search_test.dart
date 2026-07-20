@@ -121,12 +121,83 @@ void main() {
     expect(parseOffSearch(const {'products': 'nope'}), isEmpty);
   });
 
+  test('parseOffSearch maps the extended nutrients, converting sodium + cholesterol g->mg',
+      () {
+    // Open Food Facts stores every mass nutriment in `_100g` in GRAMS — so
+    // sodium 0.5 = 500 mg and cholesterol 0.02 = 20 mg once landed in the mg
+    // columns; fibre / sugar / saturated fat stay in grams.
+    final out = parseOffSearch({
+      'products': [
+        {
+          'code': '1',
+          'product_name': 'Loaded',
+          'nutriments': {
+            'energy-kcal_100g': 200,
+            'fiber_100g': 3.1,
+            'sugars_100g': 12,
+            'sodium_100g': 0.5,
+            'saturated-fat_100g': 2.4,
+            'cholesterol_100g': 0.02,
+          },
+        },
+      ],
+    });
+    expect(out[0].fiber100g, 3.1);
+    expect(out[0].sugar100g, 12);
+    expect(out[0].sodiumMg100g, 500);
+    expect(out[0].saturatedFat100g, 2.4);
+    expect(out[0].cholesterolMg100g, 20);
+  });
+
+  test('parseOffSearch leaves an absent extended nutrient null (never a phantom 0)',
+      () {
+    final out = parseOffSearch({
+      'products': [
+        {
+          'code': '1',
+          'product_name': 'Bare',
+          'nutriments': {'energy-kcal_100g': 100},
+        },
+      ],
+    });
+    expect(out[0].fiber100g, isNull);
+    expect(out[0].sugar100g, isNull);
+    expect(out[0].sodiumMg100g, isNull);
+    expect(out[0].saturatedFat100g, isNull);
+    expect(out[0].cholesterolMg100g, isNull);
+  });
+
   test('scalePortion scales per-100g to a gram portion, rounded', () {
     final r = parseOffSearch(_sample)[0];
     final half = scalePortion(r, 50);
     expect(half.calories, 195); // 389 * 0.5 = 194.5 -> 195
     expect(half.proteinG, 8); // 8.45 -> 8
     expect(scalePortion(r, 0).calories, 0);
+  });
+
+  test('scalePortion scales the extended nutrients, keeping an absent one null',
+      () {
+    const r = FoodSearchResult(
+      code: '1',
+      source: FoodSource.off,
+      name: 'Loaded',
+      brand: null,
+      calories100g: 200,
+      protein100g: 10,
+      carbs100g: 20,
+      fat100g: 5,
+      fiber100g: 4,
+      sugar100g: 8,
+      sodiumMg100g: 500,
+      saturatedFat100g: null, // absent upstream — must stay null after scaling
+      cholesterolMg100g: 20,
+    );
+    final half = scalePortion(r, 50);
+    expect(half.fiberG, 2);
+    expect(half.sugarG, 4);
+    expect(half.sodiumMg, 250);
+    expect(half.saturatedFatG, isNull);
+    expect(half.cholesterolMg, 10);
   });
 
   test('searchFoods returns [] for an empty query without calling the fetcher',
@@ -148,6 +219,19 @@ void main() {
     });
     expect(out.length, 1);
     expect(out[0].name, 'Rolled Oats');
+  });
+
+  test(
+      'searchFoods requests English-localized names (regression: Norwegian results)',
+      () async {
+    // Open Food Facts is a global, community-contributed database —
+    // without a language hint it returns whichever language a
+    // product's name was entered in. Pin that the request always asks
+    // for lc=en.
+    await searchFoods('oats', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'en');
+      return jsonEncode(_sample);
+    });
   });
 
   test('searchFoods rethrows a fetch failure (so the caller can show retry, not empty)',
@@ -286,6 +370,24 @@ void main() {
     );
   });
 
+  test('parseOffProduct maps the extended nutrients too', () {
+    final r = parseOffProduct({
+      'status': 1,
+      'product': {
+        'code': 'x',
+        'product_name': 'Barcoded',
+        'nutriments': {
+          'energy-kcal_100g': 100,
+          'sodium_100g': 1,
+          'fiber_100g': 5,
+        },
+      },
+    });
+    expect(r?.sodiumMg100g, 1000);
+    expect(r?.fiber100g, 5);
+    expect(r?.sugar100g, isNull);
+  });
+
   test(
       'lookupBarcode returns null for a blank/non-numeric code without calling the fetcher',
       () async {
@@ -306,6 +408,15 @@ void main() {
     });
     expect(r, isNotNull);
     expect(r!.name, 'Rolled Oats');
+  });
+
+  test(
+      'lookupBarcode requests English-localized names (regression: Norwegian results)',
+      () async {
+    await lookupBarcode('737628064502', fetcher: (u) async {
+      expect(u.queryParameters['lc'], 'en');
+      return jsonEncode(product);
+    });
   });
 
   test('lookupBarcode returns null on a genuine no-match (status 0)', () async {
@@ -386,6 +497,48 @@ void main() {
     expect(parseUsdaSearch(null), isEmpty);
     expect(parseUsdaSearch(const {}), isEmpty);
     expect(parseUsdaSearch(const {'foods': 'nope'}), isEmpty);
+  });
+
+  test('parseUsdaSearch maps the extended nutrients as-is (USDA already reports mg for sodium/cholesterol)',
+      () {
+    final out = parseUsdaSearch({
+      'foods': [
+        {
+          'fdcId': 1,
+          'description': 'Loaded',
+          'foodNutrients': [
+            {'nutrientNumber': '208', 'value': 200},
+            {'nutrientNumber': '291', 'value': 3.1}, // fibre, g
+            {'nutrientNumber': '269', 'value': 12}, // sugars, g
+            {'nutrientNumber': '307', 'value': 500}, // sodium, mg (no conversion)
+            {'nutrientNumber': '606', 'value': 2.4}, // saturated fat, g
+            {'nutrientNumber': '601', 'value': 20}, // cholesterol, mg (no conversion)
+          ],
+        },
+      ],
+    });
+    expect(out[0].fiber100g, 3.1);
+    expect(out[0].sugar100g, 12);
+    expect(out[0].sodiumMg100g, 500);
+    expect(out[0].saturatedFat100g, 2.4);
+    expect(out[0].cholesterolMg100g, 20);
+  });
+
+  test('parseUsdaSearch leaves an absent extended nutrient null', () {
+    final out = parseUsdaSearch({
+      'foods': [
+        {
+          'fdcId': 1,
+          'description': 'Bare',
+          'foodNutrients': [
+            {'nutrientNumber': '208', 'value': 100},
+          ],
+        },
+      ],
+    });
+    expect(out[0].fiber100g, isNull);
+    expect(out[0].sodiumMg100g, isNull);
+    expect(out[0].cholesterolMg100g, isNull);
   });
 
   test('searchUsda short-circuits to [] when the API key is blank (fail-closed gate)',
