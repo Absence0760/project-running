@@ -194,6 +194,17 @@ test('searchFoods parses a successful response via the injected fetcher', async 
 	assert.equal(out[0].name, 'Rolled Oats');
 });
 
+test('searchFoods requests English-localized names (regression: Norwegian results)', async () => {
+	// Open Food Facts is a global, community-contributed database — without
+	// a language hint it returns whichever language a product's name was
+	// entered in. Pin that the request always asks for `lc=en`.
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=en'));
+		return new Response(JSON.stringify(sample), { status: 200 });
+	};
+	await searchFoods('oats', fetcher);
+});
+
 test('searchFoods throws on a non-OK response (so the caller can show retry, not empty)', async () => {
 	const bad: Fetcher = async () => new Response('', { status: 500 });
 	await assert.rejects(() => searchFoods('oats', bad));
@@ -263,6 +274,14 @@ test('lookupBarcode parses a found product via the injected fetcher', async () =
 	};
 	const r = await lookupBarcode('737628064502', fetcher);
 	assert.equal(r?.name, 'Rolled Oats');
+});
+
+test('lookupBarcode requests English-localized names (regression: Norwegian results)', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('lc=en'));
+		return new Response(JSON.stringify(productSample), { status: 200 });
+	};
+	await lookupBarcode('737628064502', fetcher);
 });
 
 test('lookupBarcode returns null on a genuine no-match (status 0)', async () => {

@@ -320,6 +320,13 @@ Future<List<FoodSearchResult>> searchFoods(
     'json': '1',
     'page_size': '$limit',
     'fields': 'code,product_name,brands,nutriments',
+    // Open Food Facts is a global, community-contributed database —
+    // without a language hint it returns whichever language each
+    // product's name happens to be entered in (Nordic contributors are
+    // unusually active, hence the reported Norwegian results). `lc`
+    // asks it to prefer the English name, falling back to the
+    // product's default name when no English one exists.
+    'lc': 'en',
   });
   final body = await (fetcher ?? _defaultFetcher)(url);
   return parseOffSearch(jsonDecode(body));
@@ -339,6 +346,7 @@ Future<FoodSearchResult?> lookupBarcode(
   if (code == null) return null;
   final url = Uri.parse('$_productUrl/$code.json').replace(queryParameters: {
     'fields': 'code,product_name,brands,nutriments',
+    'lc': 'en',
   });
   final body = await (fetcher ?? _defaultFetcher)(url);
   return parseOffProduct(jsonDecode(body));
