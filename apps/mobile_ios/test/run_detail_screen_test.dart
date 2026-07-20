@@ -876,7 +876,12 @@ void main() {
       final api = _DeleteOkApi();
       final runStore = await pumpForDelete(tester, run, apiClient: api);
 
-      await deleteViaMenu(tester);
+      await deleteViaMenu(
+        tester,
+        // Popping the detail route is the last thing this flow does, after
+        // the local store I/O the delete awaits.
+        settled: () => find.byType(RunDetailScreen).evaluate().isEmpty,
+      );
 
       expect(api.calls, 1);
       // Gone locally and nothing queued: the cloud row was removed, so
@@ -893,7 +898,10 @@ void main() {
       final run = _run(title: 'Morning Tempo');
       final runStore = await pumpForDelete(tester, run);
 
-      await deleteViaMenu(tester);
+      await deleteViaMenu(
+        tester,
+        settled: () => find.byType(RunDetailScreen).evaluate().isEmpty,
+      );
 
       expect(runStore.runs, isEmpty);
       expect(runStore.pendingRemoteDeleteIds, isEmpty);
