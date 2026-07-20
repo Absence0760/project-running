@@ -4890,6 +4890,7 @@ export type Database = {
       cleanup_stale_user_coach_usage: { Args: never; Returns: number }
       clear_device_token: { Args: { p_token: string }; Returns: undefined }
       clear_discoverable_area: { Args: never; Returns: undefined }
+      clear_my_unsubscribe_suppression: { Args: never; Returns: number }
       clear_push_subscription: {
         Args: { p_device_id: string; p_user_id: string }
         Returns: undefined
