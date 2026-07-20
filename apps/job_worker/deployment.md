@@ -72,7 +72,9 @@ dockerfile = "Dockerfile"
 
 [env]
 WORKER_ID = "fly-${FLY_MACHINE_ID}"
-OSRM_URL = "http://osrm.internal:5000"
+# OSRM_URL deliberately unset while the hub deploys ahead of osrm —
+# restore it when the osrm app exists. See "Deploying the hub before
+# OSRM" below.
 # Comma-separated WS Origin allow-list. Anything not listed gets a 403 at
 # the WS handshake. Production clients: apps/web prod + preview.
 LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://preview.threkir.com"
@@ -132,7 +134,15 @@ flyctl secrets set --app job_worker \
 
 `SUPABASE_JWT_SECRET` is the HS256 signing key the Supabase project mints user tokens with — the hub's `JWTAuthorizer` verifies the recorder's bearer token against it. **The hub refuses to accept production traffic without this set** — when `SUPABASE_JWT_SECRET` is empty the authorizer is nil and the hub falls back to permissive mode (everything allowed), which is fine for the local smoke flow but a hard blocker for the public route. Set it before running `flyctl deploy` and confirm the boot log shows `livehub auth: enabled (Supabase JWT)`.
 
-`OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` are in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
+`OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` belong in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
+
+### Deploying the hub before OSRM
+
+The live spectator hub and the queue drainer share one binary, so the hub can reach production before the `osrm` app exists. When it does, **`OSRM_URL` must be unset** — the checked-in `fly.toml` ships it commented out for exactly this reason.
+
+Pointing at an `osrm.internal` that doesn't resolve would fail every `map_match` job and leave it retrying on a loop. Unset, `main.go:279` selects `PassthroughMatcher`: map-matching becomes a no-op, the boot log reads `"matcher selected" engine=passthrough`, and runs still ship — just without the snapped line. That is the correct degraded state, not a bug.
+
+Restore the line when `osrm` deploys, and expect the boot log to flip to `engine=osrm`.
 
 ### Job kinds + cutover from Edge Functions
 
@@ -681,8 +691,8 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 
 - [ ] Fly.io org `project-running` created, `job_worker` app exists in `lhr`
 - [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets
-- [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]`
-- [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm`
+- [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]` — **only once the `osrm` app exists**; leave it unset for a hub-first deploy (see "Deploying the hub before OSRM")
+- [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm` (or `engine=passthrough` on a hub-first deploy)
 - [ ] Drained at least one real `map_match` job end-to-end (insert test run, watch `run_matched_tracks` flip to matched)
 - [ ] Queue-lag alert wired
 - [x] Failed-jobs alert wired (`jobs-failed-alert` pg_cron → `jobs_failed_summary()`; route a scraper on `failed_count > 0`)
