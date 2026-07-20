@@ -28,7 +28,7 @@ plugins {
     // Flutter's own AGP 9 tracking issue (flutter/flutter#181557) is still open.
     // Bump only with the matching Dependabot ignore in .github/dependabot.yml.
     id("com.android.application") version "8.13.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.10" apply false
 }
 
 include(":app")
