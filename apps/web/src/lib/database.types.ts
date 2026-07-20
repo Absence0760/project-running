@@ -1392,46 +1392,61 @@ export type Database = {
         Row: {
           calories: number | null
           carbs_g: number | null
+          cholesterol_mg: number | null
           created_at: string
           external_id: string | null
           fat_g: number | null
+          fiber_g: number | null
           id: string
           is_public: boolean
           item_name: string
           last_modified_at: string
           meal_slot: string | null
           protein_g: number | null
+          saturated_fat_g: number | null
+          sodium_mg: number | null
           started_at: string
+          sugar_g: number | null
           user_id: string
         }
         Insert: {
           calories?: number | null
           carbs_g?: number | null
+          cholesterol_mg?: number | null
           created_at?: string
           external_id?: string | null
           fat_g?: number | null
+          fiber_g?: number | null
           id?: string
           is_public?: boolean
           item_name: string
           last_modified_at?: string
           meal_slot?: string | null
           protein_g?: number | null
+          saturated_fat_g?: number | null
+          sodium_mg?: number | null
           started_at?: string
+          sugar_g?: number | null
           user_id: string
         }
         Update: {
           calories?: number | null
           carbs_g?: number | null
+          cholesterol_mg?: number | null
           created_at?: string
           external_id?: string | null
           fat_g?: number | null
+          fiber_g?: number | null
           id?: string
           is_public?: boolean
           item_name?: string
           last_modified_at?: string
           meal_slot?: string | null
           protein_g?: number | null
+          saturated_fat_g?: number | null
+          sodium_mg?: number | null
           started_at?: string
+          sugar_g?: number | null
           user_id?: string
         }
         Relationships: []

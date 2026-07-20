@@ -27,6 +27,11 @@ class _ThrowingFoodStore extends LocalFoodStore {
     double? proteinG,
     double? carbsG,
     double? fatG,
+    double? fiberG,
+    double? sugarG,
+    double? sodiumMg,
+    double? saturatedFatG,
+    double? cholesterolMg,
     bool isPublic = false,
   }) async {
     throw StateError('disk write failed');
@@ -91,6 +96,8 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'Item name'), 'Banana');
       await tester.enterText(find.widgetWithText(TextField, 'Calories'), '105');
       await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 50)));
@@ -100,6 +107,37 @@ void main() {
       expect(e['item_name'], 'Banana');
       expect(e['meal_slot'], 'breakfast');
       expect(e['calories'], 105.0);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('manual entry persists the extended nutrients (issue #492)',
+      (tester) async {
+    final f = await _store('manual_ext_');
+    try {
+      await tester.pumpWidget(_host(f.store));
+      await tester.pump();
+      await tester.tap(find.text('Enter manually'));
+      await tester.pump();
+      await tester.enterText(find.widgetWithText(TextField, 'Item name'), 'Cereal');
+      await tester.enterText(find.widgetWithText(TextField, 'Calories'), '380');
+      await tester.enterText(find.widgetWithText(TextField, 'Fiber (g)'), '4');
+      await tester.enterText(find.widgetWithText(TextField, 'Sodium (mg)'), '500');
+      await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      expect(f.store.rows, hasLength(1));
+      final e = f.store.rows.first;
+      expect(e['fiber_g'], 4.0);
+      expect(e['sodium_mg'], 500.0);
+      // An unfilled extended field stays null, never a phantom 0.
+      expect(e['sugar_g'], isNull);
+      expect(e['cholesterol_mg'], isNull);
     } finally {
       f.dir.deleteSync(recursive: true);
     }
@@ -172,6 +210,8 @@ void main() {
     await tester.pump();
     await tester.enterText(find.widgetWithText(TextField, 'Item name'), 'Banana');
     await tester.enterText(find.widgetWithText(TextField, 'Calories'), '105');
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
     await tester.pump();
     await tester.runAsync(
         () => tester.tap(find.widgetWithText(FilledButton, 'Add')));

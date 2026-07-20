@@ -23,8 +23,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { handleCoach, supabaseErrorFields } from './handler';
-import type { CoachConfig } from './types';
+import { coachSseStream, handleCoach, supabaseErrorFields, type CoachStreamDeps } from './handler';
+import { emptyUsage, type CoachConfig, type ProviderStream } from './types';
 
 /// Run `fn` with console.error captured, returning every line emitted.
 /// Used to assert the bypass-paywall alarm log without a real Supabase
@@ -273,4 +273,108 @@ test('returns 400 with the canonical jsonError shape (kind + content-type)', asy
 	}
 	assert.equal(result.headers['content-type'], 'application/json');
 	assert.equal(result.status, 400);
+});
+
+// ───────────── coachSseStream — quota × persistence branches ─────────────
+//
+// The SSE body is extracted from handleCoach so its quota/persistence
+// branch logic is unit-testable without a live Supabase: a fake
+// ProviderStream + spy persistAssistant / refundSlot make the "who paid,
+// who got persisted" contract assertable directly. Issue #391 — a
+// mid-stream failure with a non-empty partial used to consume a daily-cap
+// slot but return before any persistence, so the streamed reply was lost
+// on the next loadThread re-read. It must now persist the partial.
+
+/// A ProviderStream that yields `chunks` then optionally throws mid-stream.
+function fakeStream(chunks: string[], throwAfter: boolean): ProviderStream {
+	return {
+		tokens: (async function* () {
+			for (const c of chunks) yield c;
+			if (throwAfter) throw new Error('upstream connection reset');
+		})(),
+		finalUsage: async () => emptyUsage(),
+	};
+}
+
+/// Drain the SSE byte stream into one decoded string.
+async function drain(stream: AsyncIterable<Uint8Array>): Promise<string> {
+	const decoder = new TextDecoder();
+	let out = '';
+	for await (const chunk of stream) out += decoder.decode(chunk);
+	return out;
+}
+
+/// Build deps with recording spies; the caller overrides `providerStream`.
+function streamDeps(overrides: Partial<CoachStreamDeps> = {}): {
+	deps: CoachStreamDeps;
+	persisted: string[];
+	refunds: string[];
+} {
+	const persisted: string[] = [];
+	const refunds: string[] = [];
+	const deps: CoachStreamDeps = {
+		providerStream: fakeStream([], false),
+		meta: {
+			user_message_id: 'user-msg-1',
+			tier: 'free',
+			limits: { daily_limit: 2, max_tokens: 768, max_runs_limit: 30 },
+		},
+		usedToday: 1,
+		persistAssistant: async (content) => {
+			persisted.push(content);
+			return 'assistant-row-1';
+		},
+		refundSlot: async (reason) => {
+			refunds.push(reason);
+		},
+		logMidStreamError: () => {},
+		...overrides,
+	};
+	return { deps, persisted, refunds };
+}
+
+test('mid-stream failure with a partial reply persists the partial and does NOT refund', async () => {
+	// Reason: issue #391. The user was streamed "Hello there" (consuming a
+	// daily-cap slot) before the provider dropped. That partial must be
+	// written to coach_messages so a reload / second device recovers it;
+	// the slot is not refunded because the user genuinely received content.
+	const { deps, persisted, refunds } = streamDeps({
+		providerStream: fakeStream(['Hello ', 'there'], true),
+	});
+	const out = await drain(coachSseStream(deps));
+
+	assert.deepEqual(persisted, ['Hello there'], 'partial must be persisted verbatim');
+	assert.deepEqual(refunds, [], 'a consumed slot with content must NOT be refunded');
+	assert.match(out, /event: error/, 'client still gets the error event');
+	assert.doesNotMatch(out, /event: done/, 'no done event on a failed stream');
+});
+
+test('mid-stream failure with ZERO tokens refunds the slot and persists nothing', async () => {
+	// Reason: the complementary contract — a total failure (no content
+	// streamed) refunds the slot and writes no row. Pins that the partial
+	// fix didn't turn every failure into a persist.
+	const { deps, persisted, refunds } = streamDeps({
+		providerStream: fakeStream([], true),
+	});
+	const out = await drain(coachSseStream(deps));
+
+	assert.deepEqual(persisted, [], 'nothing to persist when the stream yielded nothing');
+	assert.deepEqual(refunds, ['mid_stream_error_zero_tokens'], 'the empty slot must be refunded');
+	assert.match(out, /event: error/);
+});
+
+test('happy path persists the full reply, emits done, refunds nothing', async () => {
+	// Reason: the extraction must not regress the success path — the full
+	// accumulated reply persists once, the done event carries the row id,
+	// and no refund fires.
+	const { deps, persisted, refunds } = streamDeps({
+		providerStream: fakeStream(['Run ', 'easy ', 'today'], false),
+	});
+	const out = await drain(coachSseStream(deps));
+
+	assert.deepEqual(persisted, ['Run easy today']);
+	assert.deepEqual(refunds, []);
+	assert.match(out, /event: done/);
+	assert.match(out, /assistant-row-1/, 'done event carries the persisted assistant_message_id');
+	assert.match(out, /"used_today":1/);
 });
