@@ -314,7 +314,7 @@ void main() {
     return s.runStore;
   }
 
-  /// Complete a Finish hold. The button (`_HoldToStopButton`) only fires
+  /// Complete a Finish hold. The button (`HoldToStopButton`) only fires
   /// `onHoldComplete` after an 800 ms `Ticker`-driven hold; driving that
   /// Ticker to the threshold under the fake test clock is unreliable, so
   /// we assert the button is present + hit-testable in the recording UI
@@ -323,7 +323,7 @@ void main() {
   /// through the real `_stop()`, which persists via `runStore.save(run)`.
   Future<void> holdFinish(WidgetTester tester) async {
     final btnFinder =
-        find.byWidgetPredicate((w) => w.runtimeType.toString() == '_HoldToStopButton');
+        find.byWidgetPredicate((w) => w.runtimeType.toString() == 'HoldToStopButton');
     expect(btnFinder.hitTestable(), findsOneWidget,
         reason: 'a hit-testable Finish button must be present while recording');
     final hitButton = btnFinder.hitTestable().evaluate().single.widget;
