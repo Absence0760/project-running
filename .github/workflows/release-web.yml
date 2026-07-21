@@ -138,6 +138,10 @@ jobs:
           PUBLIC_SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
           PUBLIC_COACH_ENABLED: ${{ secrets.PUBLIC_COACH_ENABLED }}
           PUBLIC_ROUTE_GEN_ENABLED: ${{ secrets.PUBLIC_ROUTE_GEN_ENABLED }}
+          # Optional — unset keeps the web client on the Supabase
+          # Realtime live path; set to https://live.threkir.com once the
+          # Fly live hub is deployed (apps/job_worker/deployment.md).
+          PUBLIC_LIVE_HUB_URL: ${{ secrets.PUBLIC_LIVE_HUB_URL }}
           PUBLIC_APP_RELEASE: web@${{ steps.env.outputs.version }}
         run: |
           cat <<EOF > apps/web/.env
@@ -149,6 +153,7 @@ jobs:
           PUBLIC_SENTRY_DSN=${PUBLIC_SENTRY_DSN}
           PUBLIC_COACH_ENABLED=${PUBLIC_COACH_ENABLED}
           PUBLIC_ROUTE_GEN_ENABLED=${PUBLIC_ROUTE_GEN_ENABLED}
+          PUBLIC_LIVE_HUB_URL=${PUBLIC_LIVE_HUB_URL}
           PUBLIC_APP_RELEASE=${PUBLIC_APP_RELEASE}
           EOF
 
