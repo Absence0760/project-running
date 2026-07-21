@@ -14,7 +14,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 |---|---|---|---|
 | Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | **Live** — threkir.com serves from CloudFront (verified 2026-07-20) |
 | Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | **Live** — project `mcbgrgvegqcmdmtraikl`, East US (Ohio) |
-| Job worker (Go) | `apps/job_worker/` | **Fly.io** (`job_worker`, region `ord`) — single machine, distroless; sited next to the Ohio Supabase project, not next to the team | Plan |
+| Job worker (Go) | `apps/job_worker/` | **Fly.io** (`threkir-worker`, region `ord`) — single machine, distroless; sited next to the Ohio Supabase project, not next to the team | **Live** — deployed 2026-07-21, queue draining + live hub serving (auth JWKS-verified, smoke matrix passed); client cutover pending (`PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` unset, so recorders/spectators still ride Supabase Realtime) |
 | OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** (`osrm`, region `lhr`) — single machine + Volume | Plan |
 | GraphHopper (`round_trip` route generator, `foot` profile) | `apps/job_worker/graphhopper/` | **Fly.io** (`graphhopper`, region `lhr`) — serves the "Generate a route by distance" loop endpoint; reached by the generate-route Lambda over public https with an `X-Engine-Key` Caddy guard | Plan |
 | graph_cycle (v3 loop generator map sidecar) | `apps/graph_cycle/` | **Fly.io** (`graph-cycle`, region `lhr`) — distroless Go service, parses an OSM PBF into an in-memory foot graph; in-process `X-Engine-Key` guard | Plan |
@@ -96,6 +96,7 @@ Subdomain map:
 | `threkir.com` | Route 53 ALIAS → CloudFront distribution | 300 |
 | `www.threkir.com` | Route 53 ALIAS → CloudFront distribution | 300 |
 | `api.threkir.com` | Reserved for the Supabase custom domain (Pro + add-on) — **not provisioned on the current Free tier**; clients use the raw `<ref>.supabase.co` | 300 |
+| `live.threkir.com` | CNAME → `threkir-worker.fly.dev` — the Go live spectator hub (TLS at Fly's edge via `flyctl certs add`) | 300 |
 | `worker.threkir.com` | Not exposed publicly — internal Fly.io 6PN address only | — |
 | `osrm.threkir.com` | Same — never publicly resolvable | — |
 
@@ -153,7 +154,7 @@ The bar for v1 is: **someone gets paged when the site is down, can read the rele
 |---|---|---|---|
 | Web (AWS) | CloudFront access logs (S3) + CloudWatch Logs (Lambda) + CloudWatch Metrics | request volume, 4xx/5xx rate, cache hit ratio, Lambda p95 + cold-start rate | <$1/mo |
 | Backend (Supabase) | Supabase Dashboard → Logs | Postgres slow queries, EF invocations, Auth events | included |
-| Worker + OSRM (Fly.io) | `fly logs -a job_worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
+| Worker + OSRM (Fly.io) | `fly logs -a threkir-worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
 | Cross-service errors | **Sentry** — single org, separate projects per service | grouped exceptions, release tagging, breadcrumb trail on mobile | $0 (free tier) → $26 (team) |
 | Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `<ref>.supabase.co/rest/v1/…`, `threkir.com/api/coach` (HEAD-only) | $0 (free tier) |
 | RevenueCat / Stripe events | dashboards on each | subscription lifecycle, churn signals | included |
