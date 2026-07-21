@@ -46,6 +46,24 @@ Deno.test('every anon-reachable function has an explicit verify_jwt = false', as
   }
 })
 
+Deno.test('clip-public-track keeps its in-handler missing-auth gate', async () => {
+  // Reason: with verify_jwt = false the platform no longer rejects an
+  // Authorization-less request, so this handler branch is the only
+  // thing standing between a bare bot POST and the anon code path.
+  // The web e2e cannot pin it over the wire — the local functions
+  // relay injects the stack's anon key as Authorization — so it is
+  // pinned at source level here (same pattern as
+  // delete-account/wiring.test.ts).
+  const src = await Deno.readTextFile(
+    new URL('../clip-public-track/index.ts', import.meta.url),
+  )
+  assert(
+    src.includes("if (!authHeader) {") &&
+      src.includes("{ error: 'missing authorization' }, { status: 401 }"),
+    'clip-public-track lost its in-handler missing-authorization 401 gate',
+  )
+})
+
 Deno.test('no function disables verify_jwt without being on the anon-reachable allowlist', async () => {
   // Reason: a silent verify_jwt=false widens the anonymous surface —
   // the flip must arrive together with a caller audit here.
