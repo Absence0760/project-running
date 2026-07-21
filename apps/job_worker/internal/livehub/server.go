@@ -14,6 +14,21 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
+// PingPersister writes an accepted /push into `live_run_pings` — the
+// hub→Realtime half of the bridge (decisions §282). Implemented by the
+// worker's SupabaseClient (service-role insert; the BEFORE-INSERT zone
+// trigger still fires as defence in depth). Best-effort: the HTTP push
+// already succeeded via the in-process fan-out, so a persist error is
+// logged and swallowed, never surfaced to the recorder.
+type PingPersister interface {
+	InsertLivePing(ctx context.Context, runID, userID string, p Ping) error
+}
+
+// persistTimeout bounds the detached insert so a hung Supabase call
+// can't leak a goroutine per push. Generous vs the recorder's ~5 s
+// cadence.
+const persistTimeout = 15 * time.Second
+
 // Server wires the [Hub] to HTTP handlers. Routes registered:
 //
 //   - POST /v1/live/{run_id}/push     — recorder pushes a ping body
@@ -68,6 +83,22 @@ type Server struct {
 	// upgrade accepts. Empty → no origin check (dev). Set to the
 	// production web host(s) for any non-localhost build.
 	AllowedOrigins []string
+
+	// Persister + RunMeta are the hub→Realtime half of the live-ping
+	// bridge (decisions §282): every accepted /push is also written
+	// (async, best-effort) into `live_run_pings` so a spectator on
+	// the legacy Supabase Realtime path — every mobile spectator, and
+	// old web builds — sees a run recorded on the hub transport. The
+	// insert needs the run's `user_id` (NOT NULL): RunMeta resolves it
+	// from the per-room cache the authorizer already warmed, so a hot
+	// publisher's persist is one cached read + one insert, no extra
+	// run-row round-trip. Both nil (local dev / permissive) → the hub
+	// stays fan-out-only, matching pre-bridge behaviour. The
+	// Realtime→hub half is the Bridge in bridge.go; the Bridge's
+	// hub-native guard skips these self-inserts so they aren't
+	// re-forwarded to hub rooms.
+	Persister PingPersister
+	RunMeta   RunMetaFetcher
 
 	// pushLimit is the per-room token bucket protecting against a
 	// runaway / hostile recorder spamming /push at 100 Hz. Lazy-
@@ -326,12 +357,59 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		return
 	}
 	delivered := s.Hub.Publish(runID, p)
+	// Mark the run hub-native so the live-ping Bridge won't also
+	// forward this run's persisted rows back into the room. Optional
+	// interface — only the in-process Hub tracks this; the Redis path
+	// doesn't implement it (nor is the single-replica Bridge wired
+	// against it).
+	if pm, ok := s.Hub.(interface{ MarkPushed(string) }); ok {
+		pm.MarkPushed(runID)
+	}
+	// hub→Realtime persist (decisions §282): mirror the ping into
+	// live_run_pings so legacy Realtime spectators see this
+	// hub-transport run. Detached + async — the recorder's response
+	// doesn't wait on the DB, and a persist failure never fails the
+	// push. Runs unconditionally (not gated on hub subscribers): the
+	// whole point is the Realtime spectators, who may be watching even
+	// when no hub spectator is.
+	s.persistAsync(runID, p)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":               true,
 		"subscribers_sent": delivered,
 	})
+}
+
+// persistAsync fires the live_run_pings mirror insert in a detached
+// goroutine when the persist path is wired. No-op (fan-out-only, the
+// pre-bridge behaviour) when Persister or RunMeta is unset.
+func (s *Server) persistAsync(runID string, p Ping) {
+	if s.Persister == nil || s.RunMeta == nil {
+		return
+	}
+	go s.persistLivePing(runID, p)
+}
+
+// persistLivePing resolves the run owner (from the per-room cache the
+// authorizer already warmed) and inserts the ping into live_run_pings.
+// Best-effort: every failure is logged and swallowed.
+func (s *Server) persistLivePing(runID string, p Ping) {
+	ctx, cancel := context.WithTimeout(context.Background(), persistTimeout)
+	defer cancel()
+	meta, err := s.Hub.LoadRunMeta(ctx, runID, s.RunMeta)
+	if err != nil {
+		s.log().Warn("bridge persist: run-meta lookup failed", "err", err, "run_id", runID)
+		return
+	}
+	if meta == nil {
+		// Run row vanished (deleted mid-broadcast). The authorizer
+		// would already have denied; nothing to persist.
+		return
+	}
+	if err := s.Persister.InsertLivePing(ctx, runID, meta.UserID, p); err != nil {
+		s.log().Warn("bridge persist: live_run_pings insert failed", "err", err, "run_id", runID)
+	}
 }
 
 // shouldDrop checks the ping against the broadcaster's cached
