@@ -375,12 +375,12 @@ export async function handleCoach(
 		// Assistant rows must be written by a role that bypasses RLS:
 		// the coach_messages INSERT policy confines the user-JWT client
 		// to role='user' turns (XSS audit H1, migration 20261122_001).
-		// A service-role client is the trusted writer; without the key
+		// A secret-key client is the trusted writer; without the key
 		// we skip persistence (the reply still streamed to the user) and
 		// log loudly so a misconfigured env is visible.
-		if (!config.supabaseServiceRoleKey) {
+		if (!config.supabaseSecretKey) {
 			console.error(
-				'[coach] SUPABASE_SERVICE_ROLE_KEY not set — assistant message ' +
+				'[coach] SUPABASE_SECRET_KEY not set — assistant message ' +
 					'not persisted. Cross-device coach history will be incomplete ' +
 					'until the secret is configured.',
 			);
@@ -390,7 +390,7 @@ export async function handleCoach(
 		// enforces (coach_messages_content_len_chk) so a long reply
 		// can't be rejected at insert time and lost.
 		const bounded = content.slice(0, MAX_COACH_ASSISTANT_CONTENT_BYTES);
-		const supabaseService = makeClient(config.publicSupabaseUrl, config.supabaseServiceRoleKey, {
+		const supabaseService = makeClient(config.publicSupabaseUrl, config.supabaseSecretKey, {
 			auth: { persistSession: false, autoRefreshToken: false },
 		});
 		try {

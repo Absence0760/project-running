@@ -30,7 +30,7 @@
 /// rows. A webhook firing while a backfill is mid-run is harmless —
 /// the dedupe check on `metadata.strava_id` short-circuits.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import {
 	fetchStravaActivity,
 	ingestActivity,
@@ -44,6 +44,7 @@ import { withSentry } from '../_shared/sentry.ts';
 import * as Sentry from 'https://deno.land/x/sentry@8.40.0/index.mjs';
 import { sanitizeErrorForCapture } from '../_shared/sentry_scrub.ts';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
+import { secretKey } from '../_shared/api_keys.ts';
 
 Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	// Body cap is enforced in the POST branch below via readJsonWithLimit
@@ -74,7 +75,7 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	// `auth.uid()` guard in `check_rate_limit`.
 	const adminClient = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+		secretKey(),
 	);
 	{
 		const anonKey = await ipBucketKey(req);
@@ -167,7 +168,7 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 
 	const supabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+		secretKey(),
 	);
 
 	const eventId = `${ownerId}:${activityId}:${event.aspect_type}:${eventTime}`;

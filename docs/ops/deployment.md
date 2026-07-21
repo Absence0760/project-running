@@ -12,8 +12,8 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 
 | Service | Path | Provider | Status |
 |---|---|---|---|
-| Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | Plan |
-| Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | Plan |
+| Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | **Live** — threkir.com serves from CloudFront (verified 2026-07-20) |
+| Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | **Live** — project `mcbgrgvegqcmdmtraikl`, East US (Ohio) |
 | Job worker (Go) | `apps/job_worker/` | **Fly.io** (`job_worker`, region `ord`) — single machine, distroless; sited next to the Ohio Supabase project, not next to the team | Plan |
 | OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** (`osrm`, region `lhr`) — single machine + Volume | Plan |
 | GraphHopper (`round_trip` route generator, `foot` profile) | `apps/job_worker/graphhopper/` | **Fly.io** (`graphhopper`, region `lhr`) — serves the "Generate a route by distance" loop endpoint; reached by the generate-route Lambda over public https with an `X-Engine-Key` Caddy guard | Plan |
@@ -202,7 +202,7 @@ The matrix of "what lives where":
 
 | Secret | Origin | Stored in |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings | Fly.io secrets (worker) |
+| `SUPABASE_SECRET_KEY` (`sb_secret_…`; legacy `service_role` JWT also accepted) | Supabase project settings | Fly.io secrets (worker) |
 | `SUPABASE_ANON_KEY` (publishable) | Supabase | GitHub Secrets (injected into web build at CI build-time as `PUBLIC_SUPABASE_ANON_KEY`); Mobile build configs |
 | `STRAVA_CLIENT_SECRET` | Strava developer dashboard | Supabase Vault |
 | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET` | We invent | Supabase EF env |

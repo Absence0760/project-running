@@ -21,7 +21,7 @@ dependencies:
     path: ../../packages/api_client
   ui_kit:
     path: ../../packages/ui_kit
-  supabase_flutter: ^2.3.0
+  supabase_flutter: ^2.16.0
   geolocator: ^14.0.0
   path_provider: ^2.1.0
   flutter_dotenv: ^6.0.0

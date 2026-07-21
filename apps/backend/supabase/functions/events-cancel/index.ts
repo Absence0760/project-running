@@ -30,11 +30,12 @@
 /// TEST MODE ONLY in P1/P2: STRIPE_SECRET_KEY must be an sk_test_ key.
 
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { cancelAction, resolveRefundEligibility, type RefundPolicy } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 interface CancelBody {
   event_id?: string;
@@ -46,8 +47,8 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }
 
-  const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secretKey) {
+  const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+  if (!stripeSecretKey) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
 
@@ -66,7 +67,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
   }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
   const { data: { user } } = await userClient.auth.getUser();
@@ -76,7 +77,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
   const denied = await checkRateLimit(
     service,
@@ -128,7 +129,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
   const eligibility = resolveRefundEligibility(refundPolicy, Date.now(), instanceStart);
   const action = cancelAction(order.status as string, eligibility.eligible);
 
-  const stripe = new Stripe(secretKey, {
+  const stripe = new Stripe(stripeSecretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
 

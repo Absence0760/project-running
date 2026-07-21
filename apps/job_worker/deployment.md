@@ -135,7 +135,7 @@ Then paste the following and press Ctrl-D (real values, no quotes):
 
 ```
 SUPABASE_URL=https://<ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<legacy service_role key, a JWT>
+SUPABASE_SECRET_KEY=<sb_secret_… key; a legacy service_role JWT also works>
 SUPABASE_JWT_SECRET=<shared HS256 secret, NOT a JWT>
 STRAVA_CLIENT_ID=<optional — only for token_refresh jobs>
 STRAVA_CLIENT_SECRET=<optional — Strava OAuth rotation>
@@ -148,7 +148,7 @@ STRAVA_CLIENT_SECRET=<optional — Strava OAuth rotation>
 | Value | Page |
 |---|---|
 | `SUPABASE_URL` | `…/project/<ref>/settings/api-keys` — also just `https://<ref>.supabase.co`, and it is not secret |
-| `SUPABASE_SERVICE_ROLE_KEY` | `…/project/<ref>/settings/api-keys` — take the **legacy `service_role`** key (a JWT), not an `sb_secret_…` key: the worker sends it as both `apikey` and `Authorization: Bearer` |
+| `SUPABASE_SECRET_KEY` | `…/project/<ref>/settings/api-keys` — take the **`sb_secret_…`** key. A legacy `service_role` JWT also works: `internal/supakey` sends an `sb_…` key as `apikey` alone (the docs require new-format keys off the `Authorization` header — decisions §280) and a legacy JWT as both `apikey` and `Authorization: Bearer` |
 | `SUPABASE_JWT_SECRET` | `…/project/<ref>/settings/jwt` — the shared HS256 secret |
 
 **`SUPABASE_JWT_SECRET` is optional, and is not the anon key.** The anon key is a *token* signed by the secret; the secret is the signing key itself. A quick tell: the secret has no dots, the anon key is `eyJ…` with two.
@@ -163,7 +163,7 @@ curl -s https://<ref>.supabase.co/auth/v1/.well-known/jwks.json | jq '.keys[] | 
 
 An `ES256` / `RS256` key means JWKS verification and no secret. An empty key set means the project is still on the legacy HS256 secret, which then must be set.
 
-`SUPABASE_SERVICE_ROLE_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
+`SUPABASE_SECRET_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
 
 `SUPABASE_JWT_SECRET` is the HS256 signing key a *legacy* Supabase project mints user tokens with. This project is on ES256, so it stays unset and the JWKS path (derived from `SUPABASE_URL`) does the verifying. **The hub refuses to accept production traffic when neither path resolves** — the authorizer goes nil and the hub falls back to permissive mode, which is fine for a local smoke flow and a hard blocker for the public route. `LIVEHUB_REQUIRE_AUTH=1` turns that into a refusal to boot. Confirm the boot log shows `livehub auth: enabled (Supabase JWT)` and a `verification=` value naming the scheme you expect.
 
@@ -318,7 +318,7 @@ Once the cert lights up green in `flyctl certs show live.threkir.com`, the hub i
 
 After DNS resolves and a smoke-test push round-trips:
 
-1. **Web** — set `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` in the prod sops blob (`infra/envs/prod/secrets.sops.json` → `runtime.PUBLIC_LIVE_HUB_URL`). Rebuild + redeploy via the `web@*` tag.
+1. **Web** — add `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` as a **GitHub Actions repo secret**. Web `PUBLIC_*` values are inlined at CI build time from GitHub Secrets (`release-web.yml` writes them into `apps/web/.env`), not from the sops blob — sops feeds Terraform/Lambda runtime env only. Rebuild + redeploy via the `web@*` tag; unset, the client stays on the Supabase Realtime path.
 2. **Mobile** — set `LIVE_HUB_URL=https://live.threkir.com` in the Android + iOS release `.env` (not committed; injected at build time). Ship a new build through the Play Console / TestFlight.
 
 Both clients pick up the new transport on next launch. Old builds with the env unset stay on the Supabase Realtime path — they continue to work because the trigger-driven `live_run_pings` table still receives pings from any recorder that hasn't been updated. Roll-forward is gradual.
@@ -354,7 +354,7 @@ Token verification runs through `internal/supajwt`, which covers both schemes: t
 - [ ] Smoke push without auth → 403: `curl -i -X POST https://live.threkir.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
 - [ ] Smoke push with the seed user's JWT → 202 with `{ok:true,...}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
 - [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
-- [ ] `PUBLIC_LIVE_HUB_URL` set in the web prod sops blob, redeployed
+- [ ] `PUBLIC_LIVE_HUB_URL` set as a GitHub Actions repo secret, web redeployed
 - [ ] `LIVE_HUB_URL` set in the next mobile release builds
 - [ ] After the cutover, watch `flyctl logs --app job_worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %), and that 403s only come from genuinely unauthenticated traffic (curl probes / bots) and not from legit recorders
 
@@ -681,7 +681,7 @@ Stateless. Deleting and recreating the app loses nothing. Procedure:
 ```bash
 flyctl apps destroy job_worker --yes
 flyctl launch --copy-config --no-deploy --name job_worker --region ord
-flyctl secrets set --app job_worker SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
+flyctl secrets set --app job_worker SUPABASE_URL=... SUPABASE_SECRET_KEY=...
 flyctl deploy --app job_worker
 ```
 
@@ -736,7 +736,7 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 ### Worker
 
 - [ ] Fly.io org `project-running` created, `job_worker` app exists in `ord`
-- [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set as secrets (`SUPABASE_JWT_SECRET` only if the project is still on legacy HS256 — check the JWKS first)
+- [ ] `SUPABASE_URL` + `SUPABASE_SECRET_KEY` set as secrets (`SUPABASE_JWT_SECRET` only if the project is still on legacy HS256 — check the JWKS first)
 - [ ] `OSRM_URL` set to `http://osrm.internal:5000` in `[env]` — **only once the `osrm` app exists**; leave it unset for a hub-first deploy (see "Deploying the hub before OSRM")
 - [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm` (or `engine=passthrough` on a hub-first deploy)
 - [ ] Drained at least one real `map_match` job end-to-end (insert test run, watch `run_matched_tracks` flip to matched)

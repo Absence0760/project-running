@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supakey"
 )
 
 // SupabaseClient wraps the REST surface the worker needs. All calls
@@ -86,8 +87,7 @@ func (e *HTTPError) Error() string {
 }
 
 func (c *SupabaseClient) do(ctx context.Context, req *http.Request) ([]byte, error) {
-	req.Header.Set("apikey", c.ServiceKey)
-	req.Header.Set("Authorization", "Bearer "+c.ServiceKey)
+	supakey.SetAuthHeaders(req.Header, c.ServiceKey)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -272,8 +272,7 @@ func (c *SupabaseClient) downloadFromBucket(ctx context.Context, bucket, path st
 	// We need the response headers, not just the body — re-use
 	// http.Client directly here rather than go through `c.do` which
 	// throws the response away.
-	req.Header.Set("apikey", c.ServiceKey)
-	req.Header.Set("Authorization", "Bearer "+c.ServiceKey)
+	supakey.SetAuthHeaders(req.Header, c.ServiceKey)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, "", err

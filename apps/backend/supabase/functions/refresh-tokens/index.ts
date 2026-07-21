@@ -1,8 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { discardBody } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual } from '../_shared/webhook_security.ts';
 import { refreshExpiringStravaTokens } from './lib.ts';
+import { secretKey } from '../_shared/api_keys.ts';
 
 /// pg_cron schedules this function on the hour; the cron job invokes
 /// it with `Authorization: Bearer ${CRON_SECRET}`. Without the gate
@@ -36,7 +37,7 @@ Deno.serve(withSentry('refresh-tokens', async (req: Request) => {
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   const { refreshed } = await refreshExpiringStravaTokens(supabase);

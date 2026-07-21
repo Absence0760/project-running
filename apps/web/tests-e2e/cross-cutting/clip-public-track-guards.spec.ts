@@ -17,8 +17,11 @@ import { USER_A } from '../fixtures/users';
  * the function's CPU / memory. Pin the early-return shape so a
  * refactor that loosened any of the gates would fail loud.
  *
- * Mirror of `strava-import-guards.spec.ts` for the second of five
- * JWT-gated functions.
+ * Mirror of `strava-import-guards.spec.ts`. Unlike strava-import,
+ * this function runs `verify_jwt = false` (decisions §280 — a
+ * logged-out spectator's bearer is the non-JWT publishable key, which
+ * the platform gate would reject), so every guard below is the
+ * handler's own work, not the platform's.
  */
 
 const FUNCTION_URL_PATH = '/functions/v1/clip-public-track';
@@ -67,11 +70,6 @@ test.describe('clip-public-track — pre-side-effect guards', () => {
 		// debug-side endpoint) would fail loud — GET would let a
 		// querystring `?run_id=...` slip past the body-shape guard
 		// in step 2 and bypass the 1 KB body-limit cap.
-		//
-		// Must include a valid Authorization header: the platform
-		// verify_jwt gate 401s any unauthenticated request before
-		// the handler runs. To reach the handler's 405 branch we
-		// need to clear the platform gate first.
 		const auth = await freshUserToken();
 		const r = await callEf({ method: 'GET', authHeader: auth });
 		expect(r.status).toBe(405);
@@ -86,18 +84,21 @@ test.describe('clip-public-track — pre-side-effect guards', () => {
 		expect(r.status).toBe(405);
 	});
 
-	test('POST without Authorization header → 401 (platform gate)', async () => {
-		// The handler has its OWN missing-auth gate (line 35-37) for
-		// defence-in-depth, but the platform verify_jwt=true config
-		// (apps/backend/supabase/config.toml) 401s first — so the
-		// wire response carries the platform's body, not the
-		// handler's `{ error: 'missing authorization' }`. Pin the
-		// status only; the platform's response shape is its own
-		// contract. A regression that loosened the platform gate
-		// (verify_jwt = false without an equivalent in-handler gate)
-		// would surface here.
+	test('POST without Authorization header → guards still fire in-handler', async () => {
+		// verify_jwt = false (decisions §280), so an Authorization-less
+		// POST reaches the handler instead of dying at the platform
+		// 401. The local functions relay injects the stack's anon key
+		// as Authorization, which means the handler's own missing-auth
+		// 401 branch is NOT reachable over the wire here — it is
+		// pinned at source level by
+		// functions/_shared/verify_jwt_config.test.ts instead. What
+		// this test CAN pin: an unauthenticated caller's request still
+		// hits every pre-side-effect body gate before any DB / Storage
+		// cost — the UUID gate rejects it exactly as it does for an
+		// authenticated caller.
 		const r = await callEf({ body: { run_id: 'whatever' } });
-		expect(r.status).toBe(401);
+		expect(r.status).toBe(400);
+		expect(r.json?.error).toBe('run_id must be a UUID');
 	});
 
 	test('POST with auth + missing run_id → 400 run_id required', async () => {

@@ -356,10 +356,10 @@ func TestDownloadRawTrackBytes_404ReturnsHTTPError(t *testing.T) {
 }
 
 func TestDownloadRawTrackBytes_AuthHeadersPresent(t *testing.T) {
-	// Storage GETs from service-role must carry both apikey +
-	// Authorization headers. The shared do() helper enforces
-	// this; this test pins that the auth path applies to the
-	// raw-track download too (it goes through the same do()).
+	// Storage GETs with a legacy service-role key must carry both
+	// apikey + Authorization headers (the key is a JWT). The shared
+	// do() helper delegates to supakey.SetAuthHeaders; this test pins
+	// that the auth path applies to the raw-track download too.
 	var auth, apikey string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		auth = r.Header.Get("Authorization")
@@ -374,6 +374,32 @@ func TestDownloadRawTrackBytes_AuthHeadersPresent(t *testing.T) {
 		t.Errorf("Authorization=%q", auth)
 	}
 	if apikey != testServiceKey {
+		t.Errorf("apikey=%q", apikey)
+	}
+}
+
+func TestSecretKeyClientOmitsAuthorizationHeader(t *testing.T) {
+	// A new-format sb_secret_… key is not a JWT: sending it as the
+	// Authorization bearer makes the gateway forward it to Postgres
+	// where it is rejected. do() must send apikey alone.
+	var auth, apikey string
+	var authPresent bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		_, authPresent = r.Header["Authorization"]
+		apikey = r.Header.Get("apikey")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	client := NewSupabaseClient(srv.URL, "sb_secret_test123")
+	_, err := client.DownloadRawTrackBytes(context.Background(), "user-A/r.json.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if authPresent {
+		t.Errorf("Authorization must be absent for a secret key; got %q", auth)
+	}
+	if apikey != "sb_secret_test123" {
 		t.Errorf("apikey=%q", apikey)
 	}
 }

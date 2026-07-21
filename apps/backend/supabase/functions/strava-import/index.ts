@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -12,6 +12,7 @@ import {
 	isStravaRunFamily,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 // `strava-import` handles two modes, selected by the `action` field:
 //
@@ -47,7 +48,7 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 
 	const supabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_ANON_KEY')!,
+		publishableKey(),
 		{ global: { headers: { Authorization: authHeader } } },
 	);
 
@@ -150,7 +151,7 @@ async function handleDisconnect(
 	// either, so consolidating on one client keeps the path uniform.
 	const supabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+		secretKey(),
 	);
 
 	const { data: tokenRows } = await supabase.rpc('get_integration_tokens', {

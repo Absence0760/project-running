@@ -124,7 +124,7 @@ While you're in the GitHub Secrets UI, add the **build-input** secrets too. Thes
 | Secret name | Source | Required? |
 |---|---|---|
 | `PUBLIC_SUPABASE_URL` | Supabase project settings → API → URL | yes |
-| `PUBLIC_SUPABASE_ANON_KEY` | Supabase project settings → API → `anon` `publishable` key (NOT `service_role`) | yes |
+| `PUBLIC_SUPABASE_ANON_KEY` | Supabase project settings → API keys → the **`sb_publishable_…`** key (the legacy `anon` JWT still works until legacy keys are disabled; NEVER a secret/`service_role` key) | yes |
 | `PUBLIC_MAPTILER_KEY` | maptiler.com → Account → Keys | yes (maps don't render without it) |
 | `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat dashboard → Web Paywall Link (`https://pay.rev.cat/<token>`) | only when Pro is sellable — `PUBLIC_COACH_ENABLED` or `PUBLIC_ROUTE_GEN_ENABLED` truthy (the build guard enforces it then; with both flags unset — the rock-bottom tier — leave it unset too) |
 | `PUBLIC_COACH_ENABLED` / `PUBLIC_ROUTE_GEN_ENABLED` | set `true` when the coach / route engines go live (decisions §204) | no — leave unset at rock-bottom; unset = Pro not sold, coach UI hidden |
@@ -167,7 +167,7 @@ sed -i "s|KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER|$ARN|" .sops.yaml
 grep -q 'KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the preview placeholder'; exit 1; }
 mkdir -p running
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
-echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies
+echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies. Use the sb_secret_… key (decisions §280), not the legacy service_role JWT
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
 sops --encrypt /tmp/coach.yaml > running/preview.sops.yaml
 shred -u /tmp/coach.yaml
@@ -207,7 +207,7 @@ ARN=$(terraform output -raw kms_key_arn)
   grep -q 'KMS_RUNNING_PROD_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the prod placeholder'; exit 1; }
   mkdir -p running
   echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
-  echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
+  echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
   sops --encrypt /tmp/coach.yaml > running/prod.sops.yaml
   shred -u /tmp/coach.yaml
   git add running/prod.sops.yaml .sops.yaml && git commit -m 'running: prod secrets' )

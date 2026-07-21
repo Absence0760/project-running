@@ -54,7 +54,7 @@ test('system prompt does NOT leak internal field names as forbidden secrets', ()
 	// That's intentional — they're not secrets, just internal labels.
 	// This test exists as a placeholder so a future contributor who
 	// adds a real secret name to the prompt gets a CI bounce.
-	const FORBIDDEN = ['ANTHROPIC_API_KEY', 'service_role', 'SUPABASE_SERVICE_ROLE_KEY'];
+	const FORBIDDEN = ['ANTHROPIC_API_KEY', 'service_role', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'sb_secret_'];
 	for (const k of FORBIDDEN) {
 		assert.equal(
 			COACH_SYSTEM_PROMPT.includes(k),

@@ -261,7 +261,10 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	baseURL := requireEnv(logger, "SUPABASE_URL")
-	serviceKey := requireEnv(logger, "SUPABASE_SERVICE_ROLE_KEY")
+	// Accepts either key generation: a new-format sb_secret_… key or a
+	// legacy service_role JWT. internal/supakey derives the right header
+	// shape from the value.
+	serviceKey := requireEnv(logger, "SUPABASE_SECRET_KEY")
 	workerID := os.Getenv("WORKER_ID")
 	if workerID == "" {
 		host, _ := os.Hostname()

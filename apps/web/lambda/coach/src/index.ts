@@ -137,7 +137,7 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			// confines the user-JWT client to role='user' rows, so the
 			// assistant turn needs an RLS-bypassing writer. Provisioned via
 			// the env's sops secrets file (see infra/modules/web-stack).
-			supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+			supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
 			bypassPaywallEnabled: false,
 		};
 

@@ -40,7 +40,7 @@ BIN_DIR="$(mktemp -d)"
 
 cd "$WORKER_DIR"
 export SUPABASE_URL="$API_URL"
-export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
+export SUPABASE_SECRET_KEY="$SERVICE_KEY"
 export HEALTH_PORT
 export WORKER_ID="livehub-e2e"
 # Force permissive (auth-OFF) mode so the anon pushLivePing the spec relies

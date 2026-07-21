@@ -16,10 +16,11 @@
 /// (service-role read; decisions §120), falling back to the
 /// signup-time user_metadata.locale, then English.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { withSentry } from '../_shared/sentry.ts';
 import { makeAuthEmailHandler } from './handler.ts';
 import { smtpSend } from './smtp.ts';
+import { secretKey } from '../_shared/api_keys.ts';
 
 let admin: ReturnType<typeof createClient> | null = null;
 
@@ -27,7 +28,7 @@ function adminClient() {
   if (!admin) {
     admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      secretKey(),
     );
   }
   return admin;

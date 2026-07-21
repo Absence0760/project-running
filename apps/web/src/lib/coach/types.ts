@@ -62,7 +62,7 @@ export interface CoachConfig {
 	// assistant persistence is skipped with a logged warning and the
 	// rest of the coach flow still works. Never logged, never sent to
 	// the provider (system_prompt.test.ts guards prompt leakage).
-	supabaseServiceRoleKey?: string;
+	supabaseSecretKey?: string;
 
 	// Pre-computed by the caller. True iff the bypass is honoured. The
 	// caller is responsible for the prod-env gate (NODE_ENV check +

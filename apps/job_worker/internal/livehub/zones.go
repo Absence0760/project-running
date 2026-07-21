@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supakey"
 )
 
 // ZoneFetcher resolves the privacy zones the broadcaster has
@@ -128,8 +130,7 @@ func (f *SupabaseZoneFetcher) get(ctx context.Context, path string) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("apikey", f.ServiceKey)
-	req.Header.Set("Authorization", "Bearer "+f.ServiceKey)
+	supakey.SetAuthHeaders(req.Header, f.ServiceKey)
 	req.Header.Set("Accept", "application/json")
 	client := f.HTTP
 	if client == nil {

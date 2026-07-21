@@ -23,7 +23,7 @@
 /// P1: STRIPE_SECRET_KEY must be an sk_test_ key. See decisions.md §166.
 
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -37,6 +37,7 @@ import {
   MAX_MESSAGE_LEN,
   validateDonationAmount,
 } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 interface DonationBody {
   fundraiser_id?: string;
@@ -53,8 +54,8 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }
 
-  const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secretKey) {
+  const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+  if (!stripeSecretKey) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
   const allowlist = (Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS') ?? '')
@@ -83,7 +84,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   // otherwise donor_user_id stays null. Either way the visibility read is done
   // as the caller (anon or user) so a private-anchor fundraiser is unreachable.
   const authHeader = req.headers.get('Authorization');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const anonKey = publishableKey();
   const callerClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     anonKey,
@@ -97,7 +98,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   // Rate-limit before any DB read or the Stripe session create. The donor path
@@ -194,7 +195,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     ? body.cancel_url
     : `${new URL(allowlist[0]).origin}/fundraisers/${fundraiserId}?donated=0`;
 
-  const stripe = new Stripe(secretKey, {
+  const stripe = new Stripe(stripeSecretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
 
