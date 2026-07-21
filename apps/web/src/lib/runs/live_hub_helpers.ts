@@ -31,23 +31,35 @@ export function buildSnapshotUrl(baseUrl: string, runId: string): string {
 
 /// Build the WebSocket subscription URL for [runId] against [baseUrl].
 /// Flips `http(s)://` to `ws(s)://` per the WebSocket scheme rule.
-/// When [accessToken] is provided, it is appended as `?token=<jwt>`
-/// so the Go authorizer can read it via querystring fallback — the
-/// browser WebSocket API can't set headers on the upgrade. Mobile +
-/// server-to-server callers use the Authorization header instead.
-/// /audit/livehub May 2026 C1.
-export function buildSubscribeUrl(
-	baseUrl: string,
-	runId: string,
-	accessToken?: string | null,
-): string {
+/// The URL is deliberately token-free: the JWT rides the
+/// `Sec-WebSocket-Protocol` header via [subscribeProtocols] — a token
+/// in a URL leaks into anything that ever logs URLs (access logs,
+/// proxies, client-side telemetry), whereas nothing records upgrade
+/// headers. Mirrors `bearerToken` in
+/// `apps/job_worker/internal/livehub/auth.go`.
+export function buildSubscribeUrl(baseUrl: string, runId: string): string {
 	const trimmed = trimTrailingSlash(baseUrl);
 	const wsBase = trimmed.replace(/^http(s?):\/\//, 'ws$1://');
-	const base = `${wsBase}/v1/live/${encodeURIComponent(runId)}/subscribe`;
+	return `${wsBase}/v1/live/${encodeURIComponent(runId)}/subscribe`;
+}
+
+/// Marker subprotocol the hub echoes back on an authenticated
+/// upgrade. Must equal `SubprotocolBearer` in
+/// `apps/job_worker/internal/livehub/auth.go` — the server selects
+/// this entry (never the token) and a browser aborts the connection
+/// if the response names a protocol it didn't offer.
+export const LIVEHUB_BEARER_SUBPROTOCOL = 'livehub-bearer';
+
+/// WebSocket subprotocol list for an authenticated subscribe:
+/// `[marker, jwt]`, so the JWT travels in the
+/// `Sec-WebSocket-Protocol` request header — the only header a
+/// browser WebSocket client can set. Anonymous subscribes (public
+/// runs, signed-out spectators) return undefined and offer nothing.
+export function subscribeProtocols(accessToken?: string | null): string[] | undefined {
 	if (accessToken && accessToken.length > 0) {
-		return `${base}?token=${encodeURIComponent(accessToken)}`;
+		return [LIVEHUB_BEARER_SUBPROTOCOL, accessToken];
 	}
-	return base;
+	return undefined;
 }
 
 /// Compute the next reconnect-backoff delay. Caps at 30 s so a
@@ -81,8 +93,10 @@ export interface ReconnectingSocketOpts {
 	getToken: () => string | null | undefined;
 	/// Builds the platform socket. Injected so the loop is testable
 	/// without a real `WebSocket`; production passes
-	/// `(url) => new WebSocket(url)`.
-	createSocket: (url: string) => SocketLike;
+	/// `(url, protocols) => new WebSocket(url, protocols)`. The
+	/// protocols argument carries the auth subprotocol pair from
+	/// [subscribeProtocols] (undefined for anonymous subscribes).
+	createSocket: (url: string, protocols?: string[]) => SocketLike;
 	onPing: (p: LivePing) => void;
 	onStatus?: (s: LiveHubStatus) => void;
 	setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
@@ -116,9 +130,11 @@ export function createReconnectingSocket(opts: ReconnectingSocketOpts): { close:
 	function connect() {
 		if (closed) return;
 		emitStatus('connecting');
-		const url = buildSubscribeUrl(opts.baseUrl, opts.runId, opts.getToken());
+		const url = buildSubscribeUrl(opts.baseUrl, opts.runId);
+		// Token re-read on EVERY (re)connect — see getToken's doc.
+		const protocols = subscribeProtocols(opts.getToken());
 		try {
-			ws = opts.createSocket(url);
+			ws = opts.createSocket(url, protocols);
 		} catch {
 			scheduleRetry();
 			return;

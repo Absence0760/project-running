@@ -69,13 +69,14 @@ export async function fetchLiveSnapshot(
 interface OpenOpts {
 	onPing: (p: LivePing) => void;
 	onStatus?: (s: LiveHubStatus) => void;
-	/// Re-reads the caller's current Supabase JWT, appended to the WS
-	/// URL as `?token=...` so the Go authorizer can verify it on the
-	/// upgrade request. Browser WebSocket can't set Authorization
-	/// headers — the querystring fallback is the only available channel.
-	/// Passed as a PROVIDER (not a captured string) so each reconnect
-	/// authorizes with the live token: a long-lived spectator tab would
-	/// otherwise 403 forever once the original token expires (~1 h).
+	/// Re-reads the caller's current Supabase JWT, offered to the hub
+	/// as the `Sec-WebSocket-Protocol: livehub-bearer, <jwt>` pair —
+	/// the one header a browser WebSocket client can set, so the token
+	/// never appears in a URL (URLs leak into access logs and
+	/// telemetry; upgrade headers don't). Passed as a PROVIDER (not a
+	/// captured string) so each reconnect authorizes with the live
+	/// token: a long-lived spectator tab would otherwise 403 forever
+	/// once the original token expires (~1 h).
 	/// /audit/livehub May 2026 C1.
 	getToken: () => string | null | undefined;
 }
@@ -95,7 +96,7 @@ export function openLiveWebSocket(runId: string, opts: OpenOpts): { close: () =>
 		baseUrl: PUBLIC_LIVE_HUB_URL,
 		runId,
 		getToken: opts.getToken,
-		createSocket: (url) => new WebSocket(url),
+		createSocket: (url, protocols) => new WebSocket(url, protocols),
 		onPing: opts.onPing,
 		onStatus: opts.onStatus,
 	});
