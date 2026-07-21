@@ -9,7 +9,11 @@
 # This file lives next to the Dockerfile so `flyctl deploy` picks it
 # up without --config flags.
 
-app = "job_worker"
+# Name differs from the directory: Fly app names allow only lowercase
+# letters, numbers and dashes (they become <name>.fly.dev hostnames),
+# so `job_worker` is invalid. `threkir-` matches the product-scoped
+# prefix the AWS resources use.
+app = "threkir-worker"
 # Sited next to Postgres, not next to us: the Supabase project lives in
 # East US (Ohio), and every job claim / zone lookup / premium request is
 # a round trip to it. lhr would add ~80 ms to each. Spectator WebSocket
@@ -23,10 +27,11 @@ primary_region = "ord"
 dockerfile = "Dockerfile"
 
 [env]
-# WORKER_ID is read by main.go and stamped on jobs.locked_by for
-# stuck-job debugging. ${FLY_MACHINE_ID} expands per-machine so
-# multiple replicas have distinct IDs.
-WORKER_ID = "fly-${FLY_MACHINE_ID}"
+# WORKER_ID is deliberately NOT set here. Fly does not interpolate
+# variables in [env] (a `${FLY_MACHINE_ID}` value ships as that
+# literal string), and main.go's fallback — os.Hostname() — already
+# yields the machine ID on Fly, so each machine stamps a distinct
+# jobs.locked_by without any config.
 
 # OSRM_URL is deliberately unset: the live spectator hub is deploying
 # ahead of the sibling osrm app, and pointing at an osrm.internal that
@@ -110,17 +115,23 @@ size = "shared-cpu-1x"
 memory = "256mb"
 cpus = 1
 
-# Secrets (set via `flyctl secrets set`):
+# Secrets:
 #   SUPABASE_URL                  — Supabase API endpoint
 #   SUPABASE_SECRET_KEY           — used by both the worker (jobs)
 #                                   and the hub's SupabaseZoneFetcher
 #                                   (privacy zones) + SupabaseRunMetaFetcher
 #                                   (authorizer).
-#   SUPABASE_JWT_SECRET           — used by the hub's JWTAuthorizer to
-#                                   verify the recorder's bearer token
-#                                   on /push. Without it the hub falls
-#                                   back to permissive (dev) mode and
-#                                   refuses to accept production traffic.
+#   SUPABASE_JWT_SECRET           — optional; only for legacy HS256
+#                                   projects. Prod signs ES256, so the
+#                                   hub verifies against the JWKS
+#                                   derived from SUPABASE_URL
+#                                   (decisions §276) — leave unset.
+#                                   Permissive (no-auth) mode is never
+#                                   inferred from a missing secret; it
+#                                   takes an explicit
+#                                   LIVEHUB_DISABLE_AUTH=1 (local/CI
+#                                   only, refused when
+#                                   LIVEHUB_REQUIRE_AUTH=1).
 #   STRAVA_CLIENT_ID              — optional; required for the
 #   STRAVA_CLIENT_SECRET          — `token_refresh` + `strava_event`
 #                                   job kinds that replace
@@ -140,13 +151,11 @@ cpus = 1
 #                                   value we pass when registering
 #                                   the subscription via the
 #                                   /api/v3/push_subscriptions API).
-# Set with:
-#   flyctl secrets set --app job_worker \
-#     SUPABASE_URL=https://<ref>.supabase.co \
-#     SUPABASE_SECRET_KEY=sb_secret_... \
-#     SUPABASE_JWT_SECRET=...   \  # Studio → Project Settings → API → JWT Secret
-#     STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... \
-#     STRAVA_WEBHOOK_SECRET=... STRAVA_VERIFY_TOKEN=...
+# Set from stdin — `flyctl secrets set` puts values into shell history
+# and `ps` output (the leak class bin/secret-set.sh exists to prevent):
+#   flyctl secrets import --app threkir-worker
+# then paste NAME=VALUE lines (SUPABASE_URL, SUPABASE_SECRET_KEY, plus
+# the STRAVA_* four when enabling Strava) and press Ctrl-D.
 #
 # Optional:
 #   REDIS_URL                     — `redis://[user:pass@]host:port[/db]`

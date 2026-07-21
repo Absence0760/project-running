@@ -249,8 +249,12 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
+	// application/gzip, mirroring the client's raw-track upload: the
+	// runs bucket's allowed_mime_types rejects application/json
+	// (invalid_mime_type), and a Content-Encoding: gzip header would
+	// invite intermediaries to transparently decompress a body the
+	// consumers gunzip explicitly.
+	req.Header.Set("Content-Type", "application/gzip")
 	// Storage's "x-upsert: true" header lets re-matches overwrite the
 	// previous file rather than 409ing.
 	req.Header.Set("x-upsert", "true")

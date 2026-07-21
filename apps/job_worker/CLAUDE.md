@@ -46,15 +46,19 @@ Function moves per
    by run_id; the roadmap calls for Upstash Redis pub/sub with a 24h
    TTL — the swap is mechanical because the Hub's Publish + Subscribe
    surface is the only touchpoint. **Auth** is enforced by
-   `livehub.JWTAuthorizer` (HS256 over `SUPABASE_JWT_SECRET`) when
-   that env var is set: pushes are owner-only (no anon path even on
-   public runs); subscribes/snapshots are anon for `is_public=true`
-   runs and owner-only otherwise; missing or expired tokens 403;
-   unknown run ids 403; tokens signed with the wrong key 403. The
-   `(user_id, is_public)` lookup is cached per-room via
-   `Hub.LoadRunMeta` so a hot publisher's per-5s push is one map
-   hit after warm-up. When `SUPABASE_JWT_SECRET` is empty the
-   authorizer is nil — permissive mode, dev-only. **Privacy zones** are
+   `livehub.JWTAuthorizer` over `internal/supajwt`, which verifies
+   asymmetric tokens (ES256/RS256) against the JWKS derived from
+   `SUPABASE_URL` and, additionally, HS256 over `SUPABASE_JWT_SECRET`
+   when that legacy shared secret is set (decisions §276): pushes are
+   owner-only (no anon path even on public runs); subscribes/snapshots
+   are anon for `is_public=true` runs and owner-only otherwise;
+   missing or expired tokens 403; unknown run ids 403; tokens signed
+   with the wrong key 403. The `(user_id, is_public)` lookup is cached
+   per-room via `Hub.LoadRunMeta` so a hot publisher's per-5s push is
+   one map hit after warm-up. Permissive (no-auth) mode is never
+   inferred from missing config — it takes an explicit
+   `LIVEHUB_DISABLE_AUTH=1` (local/CI only, refused when
+   `LIVEHUB_REQUIRE_AUTH=1`). **Privacy zones** are
    enforced server-side: `Server.shouldDrop` runs
    `IsInAnyZone(p.lat, p.lng, room.zones)` on every `/push`. Zones
    are fetched once per room via `SupabaseZoneFetcher` and cached
@@ -141,8 +145,7 @@ Function moves per
   job-queue shape because the user is waiting on a signed URL.
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
-  late-joiner replay of more than the most recent ping, JWKS-based
-  JWT verification if Supabase migrates the project off HS256.
+  late-joiner replay of more than the most recent ping.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
   election if multiple workers don't suffice. None shipped today.
 

@@ -462,7 +462,7 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 	if len(matched) < 2 {
 		err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, trackURL, MatchedTrackRow{
 			Status:           "skipped",
-			MatchedTrackURL:  "",
+			MatchedTrackURL:  nil,
 			Algorithm:        w.Matcher.Algorithm(),
 			AlgorithmVersion: w.Matcher.Version(),
 		})
@@ -482,7 +482,7 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 		now := time.Now().UTC()
 		err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, trackURL, MatchedTrackRow{
 			Status:           "matched",
-			MatchedTrackURL:  matchedPath,
+			MatchedTrackURL:  &matchedPath,
 			MatchedAt:        &now,
 			Algorithm:        w.Matcher.Algorithm(),
 			AlgorithmVersion: w.Matcher.Version(),

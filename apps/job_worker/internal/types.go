@@ -49,8 +49,11 @@ type MatchOutput struct {
 // MatchedTrackRow is the subset of run_matched_tracks the worker writes
 // after a successful match. PATCH'd via PostgREST.
 type MatchedTrackRow struct {
-	Status           string     `json:"status"`
-	MatchedTrackURL  string     `json:"matched_track_url"`
+	Status string `json:"status"`
+	// Pointer, not string: the run_matched_tracks_matched_track_url_shape
+	// CHECK accepts NULL or the canonical path — an empty string violates
+	// it (23514), so "no matched track" must marshal as null.
+	MatchedTrackURL  *string    `json:"matched_track_url"`
 	MatchedAt        *time.Time `json:"matched_at,omitempty"`
 	Algorithm        string     `json:"algorithm"`
 	AlgorithmVersion string     `json:"algorithm_version"`

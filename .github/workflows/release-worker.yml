@@ -1,7 +1,7 @@
 name: Release worker
 
 # Per-app tag convention: `worker@1.2.3`. The workflow runs `flyctl deploy`
-# against the `job_worker` Fly.io app. Fly.io builds the Docker image remotely so the runner
+# against the `threkir-worker` Fly.io app. Fly.io builds the Docker image remotely so the runner
 # stays small.
 #
 # Secret required:
@@ -63,8 +63,8 @@ jobs:
       - name: Deploy to Fly.io
         # --remote-only builds the image on Fly's builder rather than the
         # runner; saves us shipping the Go toolchain into the runner.
-        # The fly.toml in apps/job_worker/ pins app=job_worker and
-        # primary_region=lhr.
+        # The fly.toml in apps/job_worker/ pins app=threkir-worker and
+        # primary_region=ord.
         run: flyctl deploy --remote-only
         working-directory: apps/job_worker
         env:
@@ -74,6 +74,6 @@ jobs:
         # Confirms the new release is the one Fly is serving. flyctl
         # status exits non-zero if no machine is healthy, which surfaces
         # a deploy-but-machine-crashloops failure as a workflow failure.
-        run: flyctl status --app job_worker
+        run: flyctl status --app threkir-worker
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
