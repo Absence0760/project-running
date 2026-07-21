@@ -401,6 +401,12 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	}
 	acceptOpts := &websocket.AcceptOptions{
 		OriginPatterns: s.AllowedOrigins,
+		// Authenticated browser clients offer [SubprotocolBearer, <jwt>]
+		// (see bearerToken); the handshake must select the marker — a
+		// browser that offered protocols aborts when the response names
+		// none, and it must never select the token entry. Anonymous
+		// clients offer nothing and get no protocol echoed.
+		Subprotocols: []string{SubprotocolBearer},
 	}
 	if len(s.AllowedOrigins) == 0 {
 		// Empty list → CHIP origin check skipped. Acceptable for dev /

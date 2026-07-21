@@ -160,6 +160,15 @@ func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 	return sub, nil
 }
 
+// SubprotocolBearer is the Sec-WebSocket-Protocol marker a browser
+// client offers alongside its JWT: `new WebSocket(url,
+// [SubprotocolBearer, jwt])`. The server must echo exactly this
+// value back in the handshake (server.go's AcceptOptions) — a
+// browser that offered protocols fails the connection when the
+// response selects none, and the selected value must never be the
+// token itself.
+const SubprotocolBearer = "livehub-bearer"
+
 // bearerToken pulls the raw token out of an `Authorization: Bearer
 // <jwt>` header. Returns "" when absent or malformed — the caller
 // produces the 403, so this is a pure parse helper.
@@ -168,33 +177,58 @@ func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 // in the wild send `bearer`, `BEARER`, etc. Audit/livehub M9.
 //
 // Browser WebSocket clients can't set arbitrary headers on the
-// `Upgrade` request — fall back to `?token=<jwt>` for GET requests
-// (subscribe + snapshot only — push always requires the header,
-// since a mobile / server caller can set headers freely and we
-// don't want pings logged in webserver access logs). The token-
-// in-URL is acceptable for WS subscribe because the client owns
-// the URL and there's no third-party redirect surface.
-// Audit/livehub C1.
+// `Upgrade` request, but they CAN set `Sec-WebSocket-Protocol` via
+// the constructor's protocols argument — so an authenticated
+// subscribe offers `[livehub-bearer, <jwt>]` and the JWT rides a
+// header instead of the URL. The former `?token=` querystring
+// fallback is deliberately GONE: a token in a URL leaks into any
+// access log, proxy log, or client-side telemetry that ever records
+// URLs, whereas nothing records upgrade headers. Decided while zero
+// clients were cut over, so there is no compat shim. Push (POST) and
+// snapshot (plain fetch) keep using the Authorization header.
 //
-// SECURITY: any code in this file (or in server.go) that logs a
-// request URL MUST scrub the `token` query parameter before emitting
-// — the JWT grants the same access as a session cookie. The handler
-// path today never logs r.URL; the audit/owasp May 2026 High #2b
-// pin is the standing reminder. Fly.io's edge access logs are
-// considered secret-bearing for the live-hub app; redaction in the
-// Fly log pipeline is an operator task documented in fly.toml.
+// SECURITY: never log the Sec-WebSocket-Protocol header (or r.URL,
+// which is token-free now but stays out of logs anyway) — the JWT
+// grants the same access as a session cookie. The handler path today
+// logs neither; audit/owasp May 2026 High #2b is the standing pin.
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if len(h) >= 7 && strings.EqualFold(h[:7], "Bearer ") {
 		return strings.TrimSpace(h[7:])
 	}
-	// GET-only querystring fallback for WS subscribe + snapshot.
+	// GET-only: the subprotocol channel exists for the WS upgrade
+	// (and upgrades are always GET). POST pushes require the header.
 	if r.Method == http.MethodGet {
-		if q := r.URL.Query().Get("token"); q != "" {
-			return strings.TrimSpace(q)
-		}
+		return subprotocolToken(r.Header)
 	}
 	return ""
+}
+
+// subprotocolToken extracts the JWT from a
+// `Sec-WebSocket-Protocol: livehub-bearer, <jwt>` offer. Entries may
+// arrive comma-separated on one line, spread across repeated header
+// lines, or in either order. Fail-closed: without the
+// [SubprotocolBearer] marker the offer is some unrelated subprotocol
+// list, not credentials — return "" rather than guessing.
+func subprotocolToken(h http.Header) string {
+	marker := false
+	token := ""
+	for _, line := range h.Values("Sec-Websocket-Protocol") {
+		for _, e := range strings.Split(line, ",") {
+			e = strings.TrimSpace(e)
+			switch {
+			case e == "":
+			case strings.EqualFold(e, SubprotocolBearer):
+				marker = true
+			case token == "":
+				token = e
+			}
+		}
+	}
+	if !marker {
+		return ""
+	}
+	return token
 }
 
 // Compile-time check that JWTAuthorizer.Authorize matches the

@@ -9,6 +9,8 @@ import {
 	trimTrailingSlash,
 	buildSnapshotUrl,
 	buildSubscribeUrl,
+	subscribeProtocols,
+	LIVEHUB_BEARER_SUBPROTOCOL,
 	nextBackoff,
 	createReconnectingSocket,
 	type SocketLike,
@@ -52,45 +54,39 @@ test('nextBackoff — doubles up to a 30s cap', () => {
 	assert.equal(nextBackoff(60_000), 30_000);
 });
 
-test('buildSubscribeUrl — appends ?token= when accessToken provided (audit/livehub C1)', () => {
-	const url = buildSubscribeUrl('https://live.threkir.com', 'run-1', 'eyJ.fake.jwt');
-	assert.equal(url, 'wss://live.threkir.com/v1/live/run-1/subscribe?token=eyJ.fake.jwt');
+test('buildSubscribeUrl — never carries a token (the querystring channel is gone)', () => {
+	// The former `?token=` fallback leaked JWTs into anything that
+	// logs URLs; the token rides Sec-WebSocket-Protocol now. Pin the
+	// URL shape so the query channel can't quietly return.
+	const url = buildSubscribeUrl('https://live.threkir.com', 'run-1');
+	assert.equal(url, 'wss://live.threkir.com/v1/live/run-1/subscribe');
+	assert.ok(!url.includes('token'), 'subscribe URLs must be token-free');
 });
 
-test('buildSubscribeUrl — URL-encodes the token (defence against JWT-containing-`+`)', () => {
-	// Real Supabase JWTs contain `.` and `_` and rarely `+` (base64url
-	// → no padding), but a future migration could break that. The URL
-	// builder MUST encode whatever it's given so a fluky token byte
-	// doesn't break the subscribe.
-	const url = buildSubscribeUrl('https://x', 'r', 'a b+c');
-	assert.equal(url, 'wss://x/v1/live/r/subscribe?token=a%20b%2Bc');
+test('subscribeProtocols — pairs the marker with the JWT', () => {
+	assert.deepEqual(subscribeProtocols('eyJ.fake.jwt'), ['livehub-bearer', 'eyJ.fake.jwt']);
+	assert.equal(subscribeProtocols('eyJ.fake.jwt')?.[0], LIVEHUB_BEARER_SUBPROTOCOL);
 });
 
-test('buildSubscribeUrl — null / undefined / empty token skips the querystring', () => {
-	assert.equal(
-		buildSubscribeUrl('https://x', 'r', null),
-		'wss://x/v1/live/r/subscribe',
-	);
-	assert.equal(
-		buildSubscribeUrl('https://x', 'r', undefined),
-		'wss://x/v1/live/r/subscribe',
-	);
-	assert.equal(
-		buildSubscribeUrl('https://x', 'r', ''),
-		'wss://x/v1/live/r/subscribe',
-	);
+test('subscribeProtocols — null / undefined / empty token offers nothing', () => {
+	assert.equal(subscribeProtocols(null), undefined);
+	assert.equal(subscribeProtocols(undefined), undefined);
+	assert.equal(subscribeProtocols(''), undefined);
 });
 
 // A fake socket the reconnect loop can drive without a real WebSocket.
-// Records the URL it was opened with so the test can assert which token
-// each (re)connect authorized with.
+// Records the URL + protocols it was opened with so the test can
+// assert which token each (re)connect authorized with.
 class FakeSocket implements SocketLike {
 	onopen: ((ev: unknown) => void) | null = null;
 	onmessage: ((ev: { data: unknown }) => void) | null = null;
 	onerror: ((ev: unknown) => void) | null = null;
 	onclose: ((ev: unknown) => void) | null = null;
 	closed = false;
-	constructor(readonly url: string) {}
+	constructor(
+		readonly url: string,
+		readonly protocols?: string[],
+	) {}
 	close() {
 		this.closed = true;
 	}
@@ -108,8 +104,8 @@ test('createReconnectingSocket — reconnect re-reads the token (audit/livehub C
 		baseUrl: 'https://live.threkir.com',
 		runId: 'run-1',
 		getToken: () => tokens[Math.min(tokenIdx, tokens.length - 1)],
-		createSocket: (url) => {
-			const s = new FakeSocket(url);
+		createSocket: (url, protocols) => {
+			const s = new FakeSocket(url, protocols);
 			opened.push(s);
 			return s;
 		},
@@ -122,10 +118,8 @@ test('createReconnectingSocket — reconnect re-reads the token (audit/livehub C
 	});
 
 	assert.equal(opened.length, 1);
-	assert.equal(
-		opened[0].url,
-		'wss://live.threkir.com/v1/live/run-1/subscribe?token=stale.jwt',
-	);
+	assert.equal(opened[0].url, 'wss://live.threkir.com/v1/live/run-1/subscribe');
+	assert.deepEqual(opened[0].protocols, ['livehub-bearer', 'stale.jwt']);
 
 	// The server drops the connection (e.g. the stale token 403s); the
 	// session has since refreshed, so the next connect should use it.
@@ -135,10 +129,10 @@ test('createReconnectingSocket — reconnect re-reads the token (audit/livehub C
 	pendingTimers[0]();
 
 	assert.equal(opened.length, 2);
-	assert.equal(
-		opened[1].url,
-		'wss://live.threkir.com/v1/live/run-1/subscribe?token=fresh.jwt',
-		'the reconnect must rebuild the URL with the current token, not the captured one',
+	assert.deepEqual(
+		opened[1].protocols,
+		['livehub-bearer', 'fresh.jwt'],
+		'the reconnect must offer the current token, not the captured one',
 	);
 
 	handle.close();

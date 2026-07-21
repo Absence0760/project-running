@@ -2,12 +2,14 @@ package livehub
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
@@ -450,29 +452,65 @@ func TestBearerToken(t *testing.T) {
 	}
 }
 
-func TestBearerToken_QuerystringFallbackForGET(t *testing.T) {
-	// audit/livehub C1: browser WebSocket clients can't set Authorization
-	// headers on the upgrade. Falling back to `?token=<jwt>` is the
-	// only available channel on GET requests (subscribe + snapshot).
-	// POST (push) keeps requiring the header — mobile + server-to-
-	// server callers can set headers freely.
-	t.Run("GET reads ?token=… when header missing", func(t *testing.T) {
+func TestBearerToken_SubprotocolChannelForGET(t *testing.T) {
+	// Browser WebSocket clients can't set Authorization headers on the
+	// upgrade, but CAN offer subprotocols — an authenticated subscribe
+	// sends `Sec-WebSocket-Protocol: livehub-bearer, <jwt>`. POST
+	// (push) keeps requiring the header — mobile + server-to-server
+	// callers set headers freely.
+	get := func(proto ...string) *http.Request {
+		r, _ := http.NewRequest(http.MethodGet, "https://h/v1/live/r/subscribe", nil)
+		for _, p := range proto {
+			r.Header.Add("Sec-WebSocket-Protocol", p)
+		}
+		return r
+	}
+	t.Run("GET reads the token beside the livehub-bearer marker", func(t *testing.T) {
+		if got := bearerToken(get("livehub-bearer, abc.def")); got != "abc.def" {
+			t.Fatalf("bearerToken = %q, want %q", got, "abc.def")
+		}
+	})
+	t.Run("order-independent: token may precede the marker", func(t *testing.T) {
+		if got := bearerToken(get("abc.def, livehub-bearer")); got != "abc.def" {
+			t.Fatalf("bearerToken = %q, want %q", got, "abc.def")
+		}
+	})
+	t.Run("repeated header lines work like the comma form", func(t *testing.T) {
+		if got := bearerToken(get("livehub-bearer", "abc.def")); got != "abc.def" {
+			t.Fatalf("bearerToken = %q, want %q", got, "abc.def")
+		}
+	})
+	t.Run("fail-closed: no marker means no credentials", func(t *testing.T) {
+		if got := bearerToken(get("graphql-ws, abc.def")); got != "" {
+			t.Fatalf("bearerToken = %q, want empty without the marker", got)
+		}
+	})
+	t.Run("marker alone yields no token", func(t *testing.T) {
+		if got := bearerToken(get("livehub-bearer")); got != "" {
+			t.Fatalf("bearerToken = %q, want empty for a bare marker", got)
+		}
+	})
+	t.Run("the removed ?token= querystring is NOT read", func(t *testing.T) {
+		// The query fallback leaked JWTs into anything that ever logs
+		// URLs; it was deleted before any client cut over. Pin the
+		// removal so it can't quietly return.
 		r, _ := http.NewRequest(http.MethodGet, "https://h/v1/live/r/subscribe?token=abc.def", nil)
-		if got := bearerToken(r); got != "abc.def" {
-			t.Fatalf("bearerToken(GET ?token=) = %q, want %q", got, "abc.def")
-		}
-	})
-	t.Run("POST does NOT read ?token=… (header-only)", func(t *testing.T) {
-		r, _ := http.NewRequest(http.MethodPost, "https://h/v1/live/r/push?token=abc.def", nil)
 		if got := bearerToken(r); got != "" {
-			t.Fatalf("bearerToken(POST ?token=) = %q, want empty (POST requires header)", got)
+			t.Fatalf("bearerToken(GET ?token=) = %q, want empty (querystring channel removed)", got)
 		}
 	})
-	t.Run("Header takes precedence over querystring", func(t *testing.T) {
-		r, _ := http.NewRequest(http.MethodGet, "https://h/v1/live/r/subscribe?token=fromquery", nil)
+	t.Run("POST does NOT read the subprotocol channel", func(t *testing.T) {
+		r, _ := http.NewRequest(http.MethodPost, "https://h/v1/live/r/push", nil)
+		r.Header.Set("Sec-WebSocket-Protocol", "livehub-bearer, abc.def")
+		if got := bearerToken(r); got != "" {
+			t.Fatalf("bearerToken(POST subprotocol) = %q, want empty (POST requires header)", got)
+		}
+	})
+	t.Run("Authorization header takes precedence", func(t *testing.T) {
+		r := get("livehub-bearer, fromproto")
 		r.Header.Set("Authorization", "Bearer fromheader")
 		if got := bearerToken(r); got != "fromheader" {
-			t.Fatalf("bearerToken header+query = %q, want header value", got)
+			t.Fatalf("bearerToken header+subprotocol = %q, want header value", got)
 		}
 	})
 }
@@ -518,5 +556,66 @@ func TestJWTAuthorizer_EndToEndOnServer(t *testing.T) {
 	resp2.Body.Close()
 	if resp2.StatusCode != http.StatusAccepted {
 		t.Fatalf("owner push: status = %d, want 202", resp2.StatusCode)
+	}
+}
+
+// TestJWTAuthorizer_SubprotocolSubscribeEndToEnd pins the browser
+// auth channel over a real WS dial: the JWT rides
+// `Sec-WebSocket-Protocol: livehub-bearer, <jwt>`, the handshake
+// must echo exactly the marker back (a browser aborts otherwise —
+// and echoing the token would reflect a credential), and the
+// authorized socket must actually receive fan-out.
+func TestJWTAuthorizer_SubprotocolSubscribeEndToEnd(t *testing.T) {
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "user-A", IsPublic: false},
+	}}
+	a := NewJWTAuthorizer(supajwt.New(testJWTSecret, "", nil), hub, f)
+
+	srv := &Server{Hub: hub, Authorizer: a.Authorize}
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/v1/live/run-1/subscribe"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Anonymous subscribe to the private run → rejected at the
+	// handshake (403 before the upgrade).
+	if c, _, err := websocket.Dial(ctx, wsURL, nil); err == nil {
+		c.CloseNow()
+		t.Fatal("anonymous dial to a private run succeeded, want handshake rejection")
+	}
+
+	// Owner subscribe via the subprotocol channel → connects, and the
+	// server selected exactly the marker.
+	token := signTestToken(t, "user-A", 60)
+	c, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{SubprotocolBearer, token},
+	})
+	if err != nil {
+		t.Fatalf("owner subprotocol dial: %v", err)
+	}
+	defer c.CloseNow()
+	if got := resp.Header.Get("Sec-WebSocket-Protocol"); got != SubprotocolBearer {
+		t.Fatalf("negotiated subprotocol = %q, want %q (and never the token)", got, SubprotocolBearer)
+	}
+
+	// Fan-out reaches the authorized socket.
+	hub.Publish("run-1", Ping{Lat: 51.5, Lng: -0.1})
+	var got Ping
+	readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer readCancel()
+	_, data, err := c.Read(readCtx)
+	if err != nil {
+		t.Fatalf("read after publish: %v", err)
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("frame is not a Ping: %v", err)
+	}
+	if got.Lat != 51.5 {
+		t.Fatalf("ping lat = %v, want 51.5", got.Lat)
 	}
 }
