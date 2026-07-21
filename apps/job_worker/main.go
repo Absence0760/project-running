@@ -21,6 +21,7 @@ import (
 	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/unsubscribe"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
 )
@@ -510,15 +511,18 @@ func main() {
 		ServiceKey: serviceKey,
 		HTTP:       client.HTTP, // reuse the worker's pooled client
 	}
-	// JWT authorizer for the live hub. Source of truth is the
-	// Supabase project's JWT secret (HS256). When SUPABASE_JWT_SECRET
-	// is set the authorizer enforces:
+	// JWT authorizer for the live hub. Verification covers both
+	// signing schemes a Supabase project can use: the legacy shared
+	// HS256 secret (SUPABASE_JWT_SECRET) and asymmetric signing keys
+	// published as the project's JWKS. When either is available the
+	// authorizer enforces:
 	//   - push       : Bearer JWT required + sub == runs.user_id
 	//   - subscribe  : owner-only on private runs, anon on public
 	//   - snapshot   : same as subscribe
-	// When unset the authorizer is nil and the hub stays permissive
-	// (dev path). Production deploys MUST set the secret — fly.toml
-	// + deployment.md document this.
+	// With neither the authorizer is nil and the hub stays permissive
+	// (dev path). Since baseURL is mandatory, the JWKS path is always
+	// available in practice; the permissive branch survives only for
+	// an offline dev stack.
 	runMetaFetcher := &livehub.SupabaseRunMetaFetcher{
 		BaseURL:    baseURL,
 		ServiceKey: serviceKey,
@@ -533,11 +537,26 @@ func main() {
 	// developer experience is unchanged but prod cannot start
 	// without the secrets.
 	requireAuth := os.Getenv("LIVEHUB_REQUIRE_AUTH") == "1"
-	jwtSecretEnv := os.Getenv("SUPABASE_JWT_SECRET")
+	// One verifier, shared by the live hub, the export endpoint and the
+	// premium endpoints. A project on legacy HS256 supplies a secret; a
+	// project migrated to JWT signing keys supplies none, and tokens are
+	// verified against its JWKS instead. Passing both keeps a local dev
+	// stack (HS256) working against a production-shaped binary.
+	verifier := supajwt.New(os.Getenv("SUPABASE_JWT_SECRET"), baseURL, client.HTTP)
+	// Permissive mode has to be asked for, not inferred. Before JWKS, an
+	// empty SUPABASE_JWT_SECRET was a reliable signal for "local dev, no
+	// auth" — it was the only key source. Now SUPABASE_URL alone yields a
+	// verifier, so that signal can never fire again, and the e2e stack
+	// that depends on anonymous pushes would 403 instead. An explicit
+	// opt-out keeps the dev path working without weakening the default.
+	if os.Getenv("LIVEHUB_DISABLE_AUTH") == "1" {
+		verifier = supajwt.New("", "", nil)
+		logger.Warn("livehub: LIVEHUB_DISABLE_AUTH=1 — token verification disabled; local/CI only")
+	}
 	allowedOrigins := parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS"))
 	if requireAuth {
-		if jwtSecretEnv == "" {
-			logger.Error("livehub: LIVEHUB_REQUIRE_AUTH=1 but SUPABASE_JWT_SECRET unset — refusing to start")
+		if !verifier.Enabled() {
+			logger.Error("livehub: LIVEHUB_REQUIRE_AUTH=1 but no token verification is configured (need SUPABASE_URL for JWKS, or SUPABASE_JWT_SECRET) — refusing to start")
 			os.Exit(1)
 		}
 		if len(allowedOrigins) == 0 {
@@ -546,7 +565,7 @@ func main() {
 		}
 	}
 
-	authorizer := livehub.NewJWTAuthorizer(jwtSecretEnv, hub, runMetaFetcher)
+	authorizer := livehub.NewJWTAuthorizer(verifier, hub, runMetaFetcher)
 	if authorizer != nil {
 		// Block gate for the live stream: a spectator the runner has
 		// blocked (either direction) is denied subscribe/snapshot even on
@@ -576,9 +595,9 @@ func main() {
 	}
 	if authorizer != nil {
 		hubSrv.Authorizer = authorizer.Authorize
-		logger.Info("livehub auth: enabled (Supabase JWT)")
+		logger.Info("livehub auth: enabled (Supabase JWT)", "verification", verifier.Describe())
 	} else {
-		logger.Warn("livehub auth: DISABLED — SUPABASE_JWT_SECRET unset; permissive mode is for local dev only")
+		logger.Warn("livehub auth: DISABLED — no token verification configured; permissive mode is for local dev only")
 	}
 
 	// Strava webhook receiver — mounts /v1/strava/webhook on the same
@@ -605,37 +624,37 @@ func main() {
 		logger.Warn("stravahook: DISABLED — STRAVA_WEBHOOK_SECRET / STRAVA_VERIFY_TOKEN unset; webhook endpoint returns 503")
 	}
 
-	// Data export endpoint — POST /v1/export. JWT-authed (same
-	// SUPABASE_JWT_SECRET the live hub uses), service-role for the
-	// Storage upload + signed URL. Replaces the export-data Edge
-	// Function. Refuses with 503 when the JWT secret isn't set —
-	// matching the live hub's posture.
+	// Data export endpoint — POST /v1/export. JWT-authed (the same
+	// verifier the live hub uses), service-role for the Storage upload
+	// + signed URL. Replaces the export-data Edge Function. Refuses
+	// with 503 when no verification is configured — matching the live
+	// hub's posture.
 	var exportSrv *dataexport.Server
-	if jwtSecret := os.Getenv("SUPABASE_JWT_SECRET"); jwtSecret != "" {
+	if verifier.Enabled() {
 		exportSrv = &dataexport.Server{
-			JWTSecret: []byte(jwtSecret),
-			Backend:   &dataexportBackend{client: client},
-			Log:       logger.With("component", "dataexport"),
+			Verifier: verifier,
+			Backend:  &dataexportBackend{client: client},
+			Log:      logger.With("component", "dataexport"),
 		}
 		logger.Info("dataexport: enabled (export endpoint mounted at /v1/export)")
 	} else {
-		logger.Warn("dataexport: DISABLED — SUPABASE_JWT_SECRET unset; export endpoint returns 503")
+		logger.Warn("dataexport: DISABLED — no token verification configured; export endpoint returns 503")
 	}
 
 	// Premium endpoints — Pro-tier-gated POSTs at /v1/premium/{vo2max,
 	// race-predictor, recovery, training-plan}. Same JWT auth as the
 	// data-export endpoint; an extra subscription_tier check before
-	// the compute. Refuses with 503 when SUPABASE_JWT_SECRET unset.
+	// the compute. Refuses with 503 when no verification is configured.
 	var premiumSrv *premium.Server
-	if jwtSecret := os.Getenv("SUPABASE_JWT_SECRET"); jwtSecret != "" {
+	if verifier.Enabled() {
 		premiumSrv = &premium.Server{
-			JWTSecret: []byte(jwtSecret),
-			Backend:   &premiumBackend{client: client},
-			Log:       logger.With("component", "premium"),
+			Verifier: verifier,
+			Backend:  &premiumBackend{client: client},
+			Log:      logger.With("component", "premium"),
 		}
 		logger.Info("premium: enabled (Pro endpoints mounted at /v1/premium/*)")
 	} else {
-		logger.Warn("premium: DISABLED — SUPABASE_JWT_SECRET unset; Pro endpoints return 503")
+		logger.Warn("premium: DISABLED — no token verification configured; Pro endpoints return 503")
 	}
 
 	// Engagement-mail unsubscribe endpoints — unauthenticated RFC 8058

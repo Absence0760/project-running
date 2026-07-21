@@ -36,17 +36,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 // Server wires the four Pro endpoints to the Supabase service-role
 // client. Mounted from main.go on the same mux as /health and the
 // other endpoints.
 type Server struct {
-	// JWTSecret is the Supabase project's HS256 signing key. When
-	// empty the endpoints refuse every request (503) — same posture
-	// as the live hub + data-export endpoints.
-	JWTSecret []byte
+	// Verifier resolves a bearer token to its `sub` claim. When it has
+	// no key material the endpoints refuse every request (503) — same
+	// posture as the live hub + data-export endpoints.
+	Verifier *supajwt.Verifier
 
 	// Backend is the Supabase REST + run-data surface. Production
 	// wires the worker's SupabaseClient adapter; tests substitute
@@ -98,7 +98,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 // handler runs only when the request passes all three gates.
 func (s *Server) wrap(h func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if len(s.JWTSecret) == 0 {
+		if !s.Verifier.Enabled() {
 			s.log().Error("premium: JWT secret not configured; refusing")
 			http.Error(w, `{"error":"premium_not_configured"}`, http.StatusServiceUnavailable)
 			return
@@ -140,27 +140,9 @@ func (s *Server) extractUserID(r *http.Request) (string, error) {
 	if raw == "" {
 		return "", errors.New("missing_bearer")
 	}
-	tok, err := jwt.Parse(raw, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected alg: %v", t.Header["alg"])
-		}
-		return s.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}),
-		// golang-jwt validates `exp` only when present, so a token that
-		// omits it would be valid forever. Supabase always issues
-		// short-lived tokens with `exp` — same guard as livehub's
-		// extractSub.
-		jwt.WithExpirationRequired())
-	if err != nil || !tok.Valid {
+	sub, err := s.Verifier.Subject(raw)
+	if err != nil {
 		return "", errors.New("invalid_token")
-	}
-	claims, ok := tok.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", errors.New("invalid_claims")
-	}
-	sub, ok := claims["sub"].(string)
-	if !ok || sub == "" {
-		return "", errors.New("missing_sub")
 	}
 	return sub, nil
 }

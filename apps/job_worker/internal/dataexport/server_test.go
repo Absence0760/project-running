@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 const testJWTSecret = "test-jwt-secret"
@@ -184,7 +186,7 @@ func TestServer_MissingJwtSecretIs503(t *testing.T) {
 }
 
 func TestServer_MethodNotAllowed(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -199,7 +201,7 @@ func TestServer_MethodNotAllowed(t *testing.T) {
 }
 
 func TestServer_MissingBearerIs401(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -214,7 +216,7 @@ func TestServer_MissingBearerIs401(t *testing.T) {
 }
 
 func TestServer_BadFormatIs400(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -233,7 +235,7 @@ func TestServer_BadFormatIs400(t *testing.T) {
 
 func TestServer_RateLimitedReturns429(t *testing.T) {
 	be := &fakeBackend{denied: true, retryAfter: 1800}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -255,7 +257,7 @@ func TestServer_RateLimitedReturns429(t *testing.T) {
 
 func TestServer_RateLimitRpcErrorFailsClosed(t *testing.T) {
 	be := &fakeBackend{rateErr: errors.New("db down")}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -284,7 +286,7 @@ func TestServer_HappyPathCsvUploadsAndSigns(t *testing.T) {
 			},
 		},
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -339,7 +341,7 @@ func TestServer_HappyPathGpxZipContainsManifestAndPerRunGpx(t *testing.T) {
 			},
 		},
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -361,7 +363,7 @@ func TestServer_HappyPathGpxZipContainsManifestAndPerRunGpx(t *testing.T) {
 
 func TestServer_ExpiredTokenIsRejected(t *testing.T) {
 	be := &fakeBackend{}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -384,7 +386,7 @@ func TestServer_TokenWithoutExpIsRejected(t *testing.T) {
 	// WithExpirationRequired such a token is valid forever — it must be
 	// rejected on this security boundary, same as livehub.
 	be := &fakeBackend{}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -526,7 +528,7 @@ func TestBuildGpx_XmlEscapesTitle(t *testing.T) {
 // ---- format=backup ---------------------------------------------------
 
 func TestServer_RejectsUnknownFormat(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"made-up"}`))
@@ -581,7 +583,7 @@ func TestServer_BackupFormatHappyPath(t *testing.T) {
 			trackURL: gzipString(t, `[{"lat":51.5,"lng":-0.1},{"lat":51.6,"lng":-0.2}]`),
 		},
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -1228,7 +1230,7 @@ func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 // ---- format=backup edge cases ----------------------------------------
 
 func TestServer_BackupFormatMissingBearerIs401(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1245,7 +1247,7 @@ func TestServer_BackupFormatMissingBearerIs401(t *testing.T) {
 }
 
 func TestServer_BackupFormatExpiredTokenIs401(t *testing.T) {
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	// expDelta = -60 means the token expired 60 seconds ago.
@@ -1265,7 +1267,7 @@ func TestServer_BackupFormatExpiredTokenIs401(t *testing.T) {
 
 func TestServer_BackupFormatRateLimitedReturns429(t *testing.T) {
 	be := &fakeBackend{denied: true, retryAfter: 1800}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1287,7 +1289,7 @@ func TestServer_BackupFormatRateLimitedReturns429(t *testing.T) {
 
 func TestServer_BackupFormatRateLimitRpcErrorFailsClosed(t *testing.T) {
 	be := &fakeBackend{rateErr: errors.New("db down")}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1309,7 +1311,7 @@ func TestServer_BackupFormatRoutesFetchErrorReturns500(t *testing.T) {
 		runs:      []ExportRun{},
 		routesErr: errors.New("routes table on fire"),
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1339,7 +1341,7 @@ func TestServer_BackupFormatProfileFetchErrorDegradesGracefully(t *testing.T) {
 		profileErr: errors.New("rpc unavailable"),
 		prefs:      map[string]interface{}{"unit": "km"},
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1367,7 +1369,7 @@ func TestServer_BackupFormatPrefsFetchErrorDegradesGracefully(t *testing.T) {
 		profile:  map[string]interface{}{"display_name": "Test"},
 		prefsErr: errors.New("user_settings unavailable"),
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1387,7 +1389,7 @@ func TestServer_BackupFormatPrefsFetchErrorDegradesGracefully(t *testing.T) {
 
 func TestServer_BackupFormatRunsFetchErrorReturns500(t *testing.T) {
 	be := &fakeBackend{runsErr: errors.New("runs table down")}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
@@ -1762,7 +1764,7 @@ func TestServer_BackupFormatToleratesExtraTablesError(t *testing.T) {
 		routes:         []ExportRoute{},
 		extraTablesErr: errors.New("supabase down"),
 	}
-	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
 	mux := http.NewServeMux()
 	srv.RegisterRoutes(mux)
 	req := httptest.NewRequest(http.MethodPost, "/v1/export",

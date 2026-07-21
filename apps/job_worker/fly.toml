@@ -43,9 +43,11 @@ WORKER_ID = "fly-${FLY_MACHINE_ID}"
 # anything not listed gets a 403 at the WS handshake.
 LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://preview.threkir.com"
 
-# Fail-closed sentinel. With LIVEHUB_REQUIRE_AUTH=1, main.go refuses
-# to start the binary unless SUPABASE_JWT_SECRET + LIVEHUB_ALLOWED_ORIGINS
-# are both set. Prevents an accidental deploy from shipping in
+# Fail-closed sentinel. With LIVEHUB_REQUIRE_AUTH=1, main.go refuses to
+# start the binary unless LIVEHUB_ALLOWED_ORIGINS is set AND some token
+# verification is configured — either SUPABASE_JWT_SECRET (legacy HS256
+# projects) or SUPABASE_URL, which yields the project's JWKS for the
+# asymmetric ES256/RS256 keys this project actually signs with. Prevents an accidental deploy from shipping in
 # permissive (no-auth) mode where any caller can push pings as any
 # user. Local dev leaves this unset to keep the permissive path.
 # /audit/livehub May 2026 H3 + H4.

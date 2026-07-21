@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 // JWTAuthorizer plugs into [Server.Authorizer] to enforce the live
@@ -27,19 +27,19 @@ import (
 //     public run stays anon-viewable (matching `public_profile_by_id`,
 //     which allows `auth.uid() IS NULL`).
 //
-// Supabase issues HS256 tokens signed with the project's
-// `SUPABASE_JWT_SECRET`. Verification + `sub` extraction is done
-// here; the run-meta lookup goes through [Hub.LoadRunMeta] so a hot
-// runner's push path is one in-memory map lookup after the first
-// hit per run.
+// Token verification is delegated to [supajwt.Verifier], which covers
+// both the legacy shared-secret (HS256) projects and projects migrated
+// to asymmetric JWT signing keys (ES256/RS256 via the project's JWKS).
+// The run-meta lookup goes through [Hub.LoadRunMeta] so a hot runner's
+// push path is one in-memory map lookup after the first hit per run.
 //
 // A missing run row (RunMeta returns nil, nil) denies — we'd rather
 // drop a publish than create a phantom room for a runID the database
 // has never seen.
 type JWTAuthorizer struct {
-	// JWTSecret is the bytes the Supabase project signs tokens with.
-	// Sourced from the `SUPABASE_JWT_SECRET` environment variable.
-	JWTSecret []byte
+	// Verifier resolves a bearer token to its `sub` claim. Built in
+	// main.go from SUPABASE_JWT_SECRET and/or the project's JWKS.
+	Verifier *supajwt.Verifier
 
 	// Hub + Fetcher resolve the run owner / public flag. The
 	// authorizer never touches Supabase directly — it goes through
@@ -60,17 +60,17 @@ type JWTAuthorizer struct {
 	Blocks BlockChecker
 }
 
-// NewJWTAuthorizer is the wiring helper main.go uses. Returns nil
-// when [secret] is empty — caller falls back to the permissive
-// (dev) authorizer in that case rather than booting up insecure.
-func NewJWTAuthorizer(secret string, hub LivePubSub, fetcher RunMetaFetcher) *JWTAuthorizer {
-	if secret == "" {
+// NewJWTAuthorizer is the wiring helper main.go uses. Returns nil when
+// the verifier has no key material at all — caller falls back to the
+// permissive (dev) authorizer rather than booting up insecure.
+func NewJWTAuthorizer(v *supajwt.Verifier, hub LivePubSub, fetcher RunMetaFetcher) *JWTAuthorizer {
+	if !v.Enabled() {
 		return nil
 	}
 	return &JWTAuthorizer{
-		JWTSecret: []byte(secret),
-		Hub:       hub,
-		Fetcher:   fetcher,
+		Verifier: v,
+		Hub:      hub,
+		Fetcher:  fetcher,
 	}
 }
 
@@ -146,42 +146,18 @@ func (a *JWTAuthorizer) Authorize(r *http.Request, runID string, action AuthActi
 	return fmt.Errorf("auth: unknown action %q", action)
 }
 
-// extractSub parses the Authorization header, verifies the HS256
-// signature with [JWTSecret], and returns the `sub` claim (the
-// Supabase user_id). An `exp` claim is REQUIRED (WithExpirationRequired):
-// Supabase always issues short-lived tokens with `exp`, so a token that
-// omits it is anomalous — without this guard golang-jwt validates `exp`
-// only when present, leaving a no-`exp` token valid forever.
+// extractSub parses the Authorization header and returns the verified
+// `sub` claim (the Supabase user_id).
 func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 	raw := bearerToken(r)
 	if raw == "" {
 		return "", errors.New("auth: missing bearer token")
 	}
-	tok, err := jwt.Parse(raw, func(t *jwt.Token) (interface{}, error) {
-		// Reject any alg the issuer wouldn't sign with — defends
-		// against the classic alg-confusion attack where a forged
-		// token claims `alg: none` or an RS256 token gets verified
-		// against the HMAC secret.
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return a.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+	sub, err := a.Verifier.Subject(raw)
 	if err != nil {
-		return "", fmt.Errorf("auth: invalid token")
-	}
-	if !tok.Valid {
 		return "", errors.New("auth: invalid token")
 	}
-	claims, ok := tok.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", errors.New("auth: invalid claims")
-	}
-	subClaim, ok := claims["sub"].(string)
-	if !ok || subClaim == "" {
-		return "", errors.New("auth: missing sub claim")
-	}
-	return subClaim, nil
+	return sub, nil
 }
 
 // bearerToken pulls the raw token out of an `Authorization: Bearer

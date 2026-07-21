@@ -43,14 +43,17 @@ export SUPABASE_URL="$API_URL"
 export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
 export HEALTH_PORT
 export WORKER_ID="livehub-e2e"
-# Force permissive (auth-OFF) mode. main.go auto-loads the committed
-# apps/job_worker/.env.development, which sets SUPABASE_JWT_SECRET to the
-# Supabase demo secret — that would flip the hub into Supabase-JWT auth
-# and 403 the anon pushLivePing the spec relies on. loadEnvFiles only
-# fills vars that are NOT already in the environment (os.LookupEnv), so
-# exporting these empty here shadows the .env.development defaults and
-# keeps the authorizer nil. The auth gate itself is covered by the Go
-# unit tests (internal/livehub/auth_test.go, server_test.go).
+# Force permissive (auth-OFF) mode so the anon pushLivePing the spec relies
+# on isn't 403'd. The auth gate itself is covered by the Go unit tests
+# (internal/livehub/auth_test.go, server_test.go).
+#
+# LIVEHUB_DISABLE_AUTH is the explicit opt-out. Emptying SUPABASE_JWT_SECRET
+# is no longer sufficient on its own: the hub also derives a verifier from
+# SUPABASE_URL via the project's JWKS, and SUPABASE_URL must stay set for
+# zone and run-meta lookups. The two lines below still shadow the committed
+# apps/job_worker/.env.development defaults (loadEnvFiles only fills vars not
+# already in the environment), which keeps the boot log honest.
+export LIVEHUB_DISABLE_AUTH="1"
 export SUPABASE_JWT_SECRET=""
 export LIVEHUB_REQUIRE_AUTH=""
 exec "$BIN_DIR/jobworker-livehub-e2e"
