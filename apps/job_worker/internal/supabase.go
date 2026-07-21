@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/supakey"
 )
@@ -542,6 +543,83 @@ func (c *SupabaseClient) ReadRunTrackURL(ctx context.Context, runID string) (str
 		return "", errors.New("run has no track_url")
 	}
 	return *rows[0].TrackURL, nil
+}
+
+// MaxLivePingID returns the current highest live_run_pings.id, or 0
+// when the table is empty. The live-ping Bridge (internal/livehub)
+// starts its cursor here so a fresh worker forwards only new pings.
+func (c *SupabaseClient) MaxLivePingID(ctx context.Context) (int64, error) {
+	u := c.BaseURL + "/rest/v1/" + schema.TableLiveRunPings + "?select=id&order=id.desc&limit=1"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+	var rows []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return rows[0].ID, nil
+}
+
+// ReadLivePingsSince returns live_run_pings rows with id > afterID,
+// ascending by id, capped at limit — the read side of the live-ping
+// Bridge's poll. Column set mirrors the hub Ping wire shape plus the
+// id (cursor) and coarse (SAR-clip) flags.
+func (c *SupabaseClient) ReadLivePingsSince(
+	ctx context.Context, afterID int64, limit int,
+) ([]livehub.PersistedPing, error) {
+	q := url.Values{}
+	q.Set("id", "gt."+strconv.FormatInt(afterID, 10))
+	q.Set("select", "id,run_id,lat,lng,ele,elapsed_s,distance_m,bpm,coarse")
+	q.Set("order", "id.asc")
+	q.Set("limit", strconv.Itoa(limit))
+	u := c.BaseURL + "/rest/v1/" + schema.TableLiveRunPings + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID        int64    `json:"id"`
+		RunID     string   `json:"run_id"`
+		Lat       float64  `json:"lat"`
+		Lng       float64  `json:"lng"`
+		Ele       *float64 `json:"ele"`
+		ElapsedS  *int     `json:"elapsed_s"`
+		DistanceM *float64 `json:"distance_m"`
+		BPM       *int     `json:"bpm"`
+		Coarse    bool     `json:"coarse"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]livehub.PersistedPing, len(rows))
+	for i, r := range rows {
+		out[i] = livehub.PersistedPing{
+			ID:        r.ID,
+			RunID:     r.RunID,
+			Lat:       r.Lat,
+			Lng:       r.Lng,
+			Ele:       r.Ele,
+			ElapsedS:  r.ElapsedS,
+			DistanceM: r.DistanceM,
+			BPM:       r.BPM,
+			Coarse:    r.Coarse,
+		}
+	}
+	return out, nil
 }
 
 // RunLinkInfo bundles the columns the auto-link path needs to decide

@@ -595,6 +595,21 @@ func main() {
 		// live on the Server, not the Hub, so the room GC above doesn't
 		// touch them (they would otherwise leak one entry per distinct run).
 		hubSrv.StartLimiterGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
+		// Live-ping Bridge: republish legacy Supabase Realtime pings
+		// (recorders still on live_run_pings) into hub rooms, so a hub
+		// spectator sees a run recorded on the legacy transport during
+		// the client rollover. In-process Hub only (holds the concrete
+		// hub for the subscriber gate + hub-native guard); a Redis
+		// deploy would need the cursor + guard in Redis. Skipped in
+		// permissive local dev where there's no service key to read
+		// live_run_pings with.
+		if serviceKey != "" {
+			bridge := livehub.NewBridge(inProc, client, logger.With("component", "livehub-bridge"))
+			go bridge.Run(ctx)
+			logger.Info("live-ping bridge: enabled (Realtime → hub republish)")
+		} else {
+			logger.Warn("live-ping bridge: DISABLED — no service key; hub spectators won't see legacy-transport runs")
+		}
 	}
 	if authorizer != nil {
 		hubSrv.Authorizer = authorizer.Authorize

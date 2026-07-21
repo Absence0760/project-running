@@ -96,11 +96,56 @@ type Hub struct {
 	mu      sync.Mutex
 	rooms   map[string]*room
 	metrics *metricsAtomic
+
+	// pushedAt records the wall-clock of the last direct /push per
+	// run, so the live-ping Bridge can tell a hub-native run (a
+	// recorder pushing here) from a Realtime-native one (an old
+	// recorder writing live_run_pings). The Bridge republishes only
+	// the latter into hub rooms; a run that is being pushed to the
+	// hub already fans out directly, so re-forwarding its persisted
+	// rows would double-deliver. In-process only (single replica);
+	// the Redis path would key this in Redis. See bridge.go.
+	pushedMu sync.Mutex
+	pushedAt map[string]time.Time
 }
 
 // NewHub returns an empty Hub. Cheap — call once at process start.
 func NewHub() *Hub {
-	return &Hub{rooms: make(map[string]*room), metrics: &metricsAtomic{}}
+	return &Hub{
+		rooms:    make(map[string]*room),
+		metrics:  &metricsAtomic{},
+		pushedAt: make(map[string]time.Time),
+	}
+}
+
+// MarkPushed stamps a run as having just received a direct /push.
+// Called by the HTTP push handler (server.go), never by the Bridge's
+// republish — that distinction is the whole point.
+func (h *Hub) MarkPushed(runID string) {
+	now := time.Now()
+	h.pushedMu.Lock()
+	h.pushedAt[runID] = now
+	// Opportunistic prune so the map can't grow past the set of
+	// recently-active runs: drop entries older than a generous
+	// multiple of any plausible RecentlyPushed window.
+	if len(h.pushedAt) > 256 {
+		for id, t := range h.pushedAt {
+			if now.Sub(t) > time.Hour {
+				delete(h.pushedAt, id)
+			}
+		}
+	}
+	h.pushedMu.Unlock()
+}
+
+// RecentlyPushed reports whether the run received a direct /push
+// within [within]. The Bridge skips such runs (hub-native) so it
+// doesn't re-deliver pings the direct fan-out already sent.
+func (h *Hub) RecentlyPushed(runID string, within time.Duration) bool {
+	h.pushedMu.Lock()
+	t, ok := h.pushedAt[runID]
+	h.pushedMu.Unlock()
+	return ok && time.Since(t) < within
 }
 
 // Per-subscriber buffer. 8 outstanding pings ≈ 40 s of slack at the

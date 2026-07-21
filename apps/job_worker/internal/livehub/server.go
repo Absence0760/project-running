@@ -326,6 +326,14 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		return
 	}
 	delivered := s.Hub.Publish(runID, p)
+	// Mark the run hub-native so the live-ping Bridge won't also
+	// forward this run's persisted rows back into the room. Optional
+	// interface — only the in-process Hub tracks this; the Redis path
+	// doesn't implement it (nor is the single-replica Bridge wired
+	// against it).
+	if pm, ok := s.Hub.(interface{ MarkPushed(string) }); ok {
+		pm.MarkPushed(runID)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]any{

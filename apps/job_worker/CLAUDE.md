@@ -146,6 +146,26 @@ Function moves per
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
   late-joiner replay of more than the most recent ping.
+- **The live-ping Bridge** ([`internal/livehub/bridge.go`](internal/livehub/bridge.go),
+  decisions §282) closes the transport gap during the Realtime→hub client
+  rollover. The recorder and the web spectator each pick a transport at
+  BUILD time (hub if `LIVE_HUB_URL`/`PUBLIC_LIVE_HUB_URL` set, else Supabase
+  Realtime + `live_run_pings`), and there is no runtime failover — so a hub
+  spectator watching a runner still on the legacy recorder would see an empty
+  map. The Bridge is the **Realtime→hub** half: it polls `live_run_pings`
+  (cursor on `id`) and republishes new rows into the matching hub room,
+  gated on (a) the run having ≥1 hub subscriber and (b) the run NOT being
+  hub-native (`Hub.RecentlyPushed` — a run receiving direct `/push` already
+  fans out; re-forwarding its persisted rows would double-deliver). Coarse
+  (in-zone SAR) rows are skipped, matching the hub push path. Single-replica
+  only (holds the concrete in-process Hub + an in-memory cursor); wired in
+  `main.go` when the hub is in-process and a service key is present. **The
+  hub→Realtime half is a follow-up** — a hub `/push` also persisting to
+  `live_run_pings` so a legacy (mobile/old-web) spectator sees a
+  hub-transport run. It's only needed once recorders push to the hub (i.e.
+  at the **mobile** cutover); the web cutover only needs the Realtime→hub
+  half this ships. It needs the run's `user_id` at push time (from the cached
+  run-meta) to satisfy the NOT-NULL insert.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
   election if multiple workers don't suffice. None shipped today.
 
@@ -218,8 +238,11 @@ apps/job_worker/
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
 │   ├── livehub/             # live spectator pub/sub + HTTP + WebSocket
 │   │   ├── types.go         # Ping wire shape
-│   │   ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache
+│   │   ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache + MarkPushed/RecentlyPushed (bridge hub-native guard)
 │   │   ├── hub_test.go      # 10 hub unit tests, race-clean
+│   │   ├── hub_pushtrack_test.go # MarkPushed/RecentlyPushed + push-marks-native e2e
+│   │   ├── bridge.go        # live-ping Bridge — republishes legacy live_run_pings inserts into hub rooms (Realtime→hub half of the transport bridge)
+│   │   ├── bridge_test.go   # 8 bridge tests (fake hub + fake reader): forward gates, cursor, catch-up, read-error, Run() start-at-max
 │   │   ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
 │   │   ├── privacy_test.go  # 8 privacy unit tests
 │   │   ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher
