@@ -596,8 +596,15 @@
 			// `waiting` keeps `connecting` — the honest state for a
 			// broadcast whose first ping hasn't arrived.
 		})();
+	});
 
-		if (mapConsented) initMap();
+	// Initialise once the container exists. The `{#if mapConsented}` div
+	// only binds after the state flush, so a synchronous initMap() call
+	// from onMount ran before `mapContainer` was set and silently left a
+	// consented viewer with a blank map — the effect fires after the DOM
+	// updates on both the pre-consented and "Load map" paths.
+	$effect(() => {
+		if (mapConsented && mapContainer) initMap();
 	});
 
 	function recentreOnRunner() {
@@ -609,10 +616,6 @@
 
 	function loadMapNow() {
 		mapConsented = true;
-		// $effect below would normally pick this up, but the map
-		// container only mounts when `mapConsented` flips, so we wait
-		// one microtask for the DOM to render before initialising.
-		queueMicrotask(initMap);
 	}
 
 	function initMap() {

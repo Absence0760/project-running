@@ -49,6 +49,13 @@ test.describe('/live/[id] — pan latch + re-center on runner', () => {
 				timeout: 10_000
 			});
 
+			// The map must mount from pre-stored consent alone (no "Load
+			// map" click) — pins the $effect init path that replaced the
+			// onMount call racing the container bind.
+			await expect(page.locator('.live-map .maplibregl-canvas')).toBeVisible({
+				timeout: 10_000
+			});
+
 			// Not latched yet — the control only appears after a user pan.
 			const recentre = page.getByRole('button', {
 				name: /Re-center on runner/i
