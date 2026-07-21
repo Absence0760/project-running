@@ -82,3 +82,62 @@ test.describe('/live/[id] — pan latch + re-center on runner', () => {
 		}
 	});
 });
+
+test.describe('/live/[id] — viewer geolocate latches the follow-cam off', () => {
+	test.use({
+		storageState: { cookies: [], origins: [] },
+		permissions: ['geolocation'],
+		geolocation: { latitude: -37.81, longitude: 144.96 }
+	});
+
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+		});
+	});
+
+	test('activating the GeolocateControl surfaces the re-center control', async ({
+		page
+	}) => {
+		// The second latch trigger: tracking the viewer's own position
+		// must stop the runner follow-cam (the two camera drivers would
+		// otherwise fight on every ping), and the re-center button is
+		// the way back to the runner.
+		const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 5_000,
+			duration_s: 3_600,
+			is_public: true
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [{ lat: -37.816, lng: 144.97, distance_m: 1_000, elapsed_s: 300 }]
+			});
+
+			await page.goto(`/live/${runId}`);
+			await expect(page.locator('.live-badge')).toHaveClass(/active/, {
+				timeout: 10_000
+			});
+
+			const recentre = page.getByRole('button', {
+				name: /Re-center on runner/i
+			});
+			await expect(recentre).toBeHidden();
+
+			// Stable selector across MapLibre versions — the upstream test
+			// suite uses the same class (see routes/heatmap.spec.ts).
+			await page.locator('.maplibregl-ctrl-geolocate').click();
+
+			await expect(recentre).toBeVisible({ timeout: 10_000 });
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+});
