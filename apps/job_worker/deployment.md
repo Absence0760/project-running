@@ -318,7 +318,7 @@ Once the cert lights up green in `flyctl certs show live.threkir.com`, the hub i
 
 After DNS resolves and a smoke-test push round-trips:
 
-1. **Web** — set `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` in the prod sops blob (`infra/envs/prod/secrets.sops.json` → `runtime.PUBLIC_LIVE_HUB_URL`). Rebuild + redeploy via the `web@*` tag.
+1. **Web** — add `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` as a **GitHub Actions repo secret**. Web `PUBLIC_*` values are inlined at CI build time from GitHub Secrets (`release-web.yml` writes them into `apps/web/.env`), not from the sops blob — sops feeds Terraform/Lambda runtime env only. Rebuild + redeploy via the `web@*` tag; unset, the client stays on the Supabase Realtime path.
 2. **Mobile** — set `LIVE_HUB_URL=https://live.threkir.com` in the Android + iOS release `.env` (not committed; injected at build time). Ship a new build through the Play Console / TestFlight.
 
 Both clients pick up the new transport on next launch. Old builds with the env unset stay on the Supabase Realtime path — they continue to work because the trigger-driven `live_run_pings` table still receives pings from any recorder that hasn't been updated. Roll-forward is gradual.
@@ -354,7 +354,7 @@ Token verification runs through `internal/supajwt`, which covers both schemes: t
 - [ ] Smoke push without auth → 403: `curl -i -X POST https://live.threkir.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
 - [ ] Smoke push with the seed user's JWT → 202 with `{ok:true,...}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
 - [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
-- [ ] `PUBLIC_LIVE_HUB_URL` set in the web prod sops blob, redeployed
+- [ ] `PUBLIC_LIVE_HUB_URL` set as a GitHub Actions repo secret, web redeployed
 - [ ] `LIVE_HUB_URL` set in the next mobile release builds
 - [ ] After the cutover, watch `flyctl logs --app job_worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %), and that 403s only come from genuinely unauthenticated traffic (curl probes / bots) and not from legit recorders
 

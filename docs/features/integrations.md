@@ -182,8 +182,10 @@ const { object_type, object_id, aspect_type, owner_id } = await req.json();
 if (object_type !== 'activity') return new Response('OK');           // ack non-run events
 if (aspect_type !== 'create' && aspect_type !== 'update') return new Response('OK');
 
-// 2. Service-role client (the webhook isn't a user request)
-const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+// 2. Service-role client (the webhook isn't a user request).
+// secretKey() from _shared/api_keys.ts resolves sb_secret_… with a
+// legacy service_role fallback — never read the key env vars directly.
+const supabase = createClient(Deno.env.get('SUPABASE_URL')!, secretKey());
 
 // 3. Look up the integration WITHOUT joining secrets — tokens live in Vault
 const { data: integration } = await supabase
