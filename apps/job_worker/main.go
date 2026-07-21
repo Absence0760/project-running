@@ -585,6 +585,13 @@ func main() {
 		Log:            logger.With("component", "livehub"),
 		AllowedOrigins: allowedOrigins,
 		Zones:          zoneFetcher,
+		// hub→Realtime bridge half (decisions §282): mirror every
+		// accepted /push into live_run_pings so legacy Realtime
+		// spectators (all mobile spectators + old web) see a
+		// hub-transport run. Reuses the service-role client + the
+		// authorizer's run-meta fetcher (cache is shared per room).
+		Persister: client,
+		RunMeta:   runMetaFetcher,
 	}
 	// Start the idle-room GC sweeper. Only the in-process Hub needs
 	// it — the Redis backend's per-room key has a 24h TTL set on

@@ -159,13 +159,16 @@ Function moves per
   fans out; re-forwarding its persisted rows would double-deliver). Coarse
   (in-zone SAR) rows are skipped, matching the hub push path. Single-replica
   only (holds the concrete in-process Hub + an in-memory cursor); wired in
-  `main.go` when the hub is in-process and a service key is present. **The
-  hub→Realtime half is a follow-up** — a hub `/push` also persisting to
-  `live_run_pings` so a legacy (mobile/old-web) spectator sees a
-  hub-transport run. It's only needed once recorders push to the hub (i.e.
-  at the **mobile** cutover); the web cutover only needs the Realtime→hub
-  half this ships. It needs the run's `user_id` at push time (from the cached
-  run-meta) to satisfy the NOT-NULL insert.
+  `main.go` when the hub is in-process and a service key is present. The
+  **hub→Realtime half** (`Server.persistLivePing`, gated on
+  `Server.Persister` + `Server.RunMeta`) mirrors every accepted `/push` into
+  `live_run_pings` — async + best-effort — so a legacy Realtime spectator
+  (every mobile spectator; old web) sees a hub-transport run. It resolves the
+  run's `user_id` (NOT NULL) from the per-room run-meta cache the authorizer
+  already warmed, and the Bridge's hub-native guard skips these self-inserts
+  so they aren't re-forwarded. Both halves ship together, making transport
+  choice irrelevant during the rollover — so **both** the web and mobile
+  cutovers are safe.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
   election if multiple workers don't suffice. None shipped today.
 
@@ -243,6 +246,7 @@ apps/job_worker/
 │   │   ├── hub_pushtrack_test.go # MarkPushed/RecentlyPushed + push-marks-native e2e
 │   │   ├── bridge.go        # live-ping Bridge — republishes legacy live_run_pings inserts into hub rooms (Realtime→hub half of the transport bridge)
 │   │   ├── bridge_test.go   # 8 bridge tests (fake hub + fake reader): forward gates, cursor, catch-up, read-error, Run() start-at-max
+│   │   ├── persist_test.go  # hub→Realtime persist: /push mirrors to live_run_pings (user_id resolve, error-swallow, nil-wired skip, missing-run skip)
 │   │   ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
 │   │   ├── privacy_test.go  # 8 privacy unit tests
 │   │   ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher

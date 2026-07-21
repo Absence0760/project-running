@@ -622,6 +622,50 @@ func (c *SupabaseClient) ReadLivePingsSince(
 	return out, nil
 }
 
+// InsertLivePing writes one ping into live_run_pings on behalf of the
+// run owner — the hub→Realtime half of the live-ping bridge
+// (internal/livehub, decisions §282). Service-role insert (bypasses
+// RLS, so the worker can write for any user_id); the BEFORE-INSERT
+// `live_run_pings_drop_in_zone` trigger still fires as defence in
+// depth. Satisfies livehub.PingPersister.
+func (c *SupabaseClient) InsertLivePing(
+	ctx context.Context, runID, userID string, p livehub.Ping,
+) error {
+	row := map[string]any{
+		"run_id":  runID,
+		"user_id": userID,
+		"lat":     p.Lat,
+		"lng":     p.Lng,
+	}
+	if p.Elevation != nil {
+		row["ele"] = *p.Elevation
+	}
+	// elapsed_s / distance_m are always meaningful on a live ping
+	// (0 at the start line is a real value), so send them unconditionally
+	// — the wire shape only omits them when absent, and the hub Ping
+	// carries them as plain (non-pointer) fields.
+	row["elapsed_s"] = p.ElapsedS
+	row["distance_m"] = p.DistanceM
+	if p.BPM != nil {
+		row["bpm"] = *p.BPM
+	}
+	payload, err := json.Marshal(row)
+	if err != nil {
+		return err
+	}
+	u := c.BaseURL + "/rest/v1/" + schema.TableLiveRunPings
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// return=minimal: we don't need the inserted row back, just the
+	// 2xx. Keeps the response tiny on the hot push path.
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // RunLinkInfo bundles the columns the auto-link path needs to decide
 // "should I link this run, and to what?". Single round-trip is
 // cheaper than two narrow reads.
