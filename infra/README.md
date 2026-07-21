@@ -167,7 +167,7 @@ sed -i "s|KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER|$ARN|" .sops.yaml
 grep -q 'KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the preview placeholder'; exit 1; }
 mkdir -p running
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
-echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies
+echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies. Use the sb_secret_… key (decisions §280), not the legacy service_role JWT
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
 sops --encrypt /tmp/coach.yaml > running/preview.sops.yaml
 shred -u /tmp/coach.yaml
@@ -207,7 +207,7 @@ ARN=$(terraform output -raw kms_key_arn)
   grep -q 'KMS_RUNNING_PROD_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the prod placeholder'; exit 1; }
   mkdir -p running
   echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
-  echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
+  echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
   sops --encrypt /tmp/coach.yaml > running/prod.sops.yaml
   shred -u /tmp/coach.yaml
   git add running/prod.sops.yaml .sops.yaml && git commit -m 'running: prod secrets' )
