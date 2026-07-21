@@ -303,16 +303,21 @@ PARKRUN_USER_AGENT=RunApp/1.0 (contact@threkir.com)
 
 ### GitHub Actions secrets
 
+CI needs **no** Supabase secrets: every CI job boots the local stack and
+derives its keys from `supabase status` (there is deliberately no
+`SUPABASE_SERVICE_ROLE_KEY` repo secret — see the 2026-07-20 incident
+notes in `reviews/`). Repo secrets exist only for the release workflows:
+
 | Secret | Used by |
 |---|---|
-| `SUPABASE_URL` | All CI jobs |
-| `SUPABASE_ANON_KEY` | Flutter builds, web build |
-| `SUPABASE_SERVICE_ROLE_KEY` | Edge Function deploy |
-| `MAPTILER_KEY` | Flutter builds, web build |
-| `STRAVA_CLIENT_SECRET` | Edge Function deploy |
 | `AWS_DEPLOY_ROLE_ARN_PROD` | Web deployment — IAM role assumed via OIDC when a `web@*` GitHub Release is published (see [releasing.md § Web (AWS deploy)](../ops/releasing.md#web-aws-deploy)) |
 | `AWS_DEPLOY_ROLE_ARN_PREVIEW` | Web deployment — same shape for the preview env (push to `main`) |
-| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`, `PUBLIC_REVENUECAT_WEB_PORTAL_URL`, `PUBLIC_SENTRY_DSN` | Web build — inlined into `.env.production` before `npm run build` |
+| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY` | Web build — inlined into `apps/web/.env` (deliberately not `.env.production`; see the comment in `release-web.yml`) before `npm run build` |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`, `PUBLIC_REVENUECAT_WEB_PORTAL_URL`, `PUBLIC_SENTRY_DSN`, `PUBLIC_COACH_ENABLED`, `PUBLIC_ROUTE_GEN_ENABLED`, `PUBLIC_LIVE_HUB_URL` | Web build, optional — unset values inline as empty and each surface degrades (Pro not sold, no Sentry, Supabase Realtime live path) |
+| `FLY_API_TOKEN` | `worker@*` / `osrm@*` / `graph-cycle@*` release workflows |
+
+A stale bare `AWS_DEPLOY_ROLE_ARN` (pre-dating the prod/preview split)
+may still exist in the repo settings; nothing reads it — delete on sight.
 
 ---
 
