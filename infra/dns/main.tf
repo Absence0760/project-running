@@ -109,3 +109,17 @@ resource "aws_acm_certificate_validation" "apex" {
     create_before_destroy = true
   }
 }
+
+# ─────────────────── Live spectator hub (Fly.io) ───────────────────
+# live.threkir.com is the Go live hub (apps/job_worker) on Fly. TLS
+# terminates at Fly's edge with a cert issued by `flyctl certs add`,
+# not ACM, so a plain CNAME to the Fly app hostname is the whole
+# integration — no SAN change on the CloudFront cert above.
+
+resource "aws_route53_record" "live_hub" {
+  zone_id = aws_route53_zone.apex.zone_id
+  name    = "live.${var.apex_domain}"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["threkir-worker.fly.dev"]
+}
