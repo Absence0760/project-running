@@ -18,6 +18,7 @@ import {
   revenueCatSubscriberUrl,
   stripeAccountUrl,
 } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 const PAGE = 1000;
 
@@ -494,7 +495,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
 
@@ -514,7 +515,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
 
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   // ─── Best-effort third-party cleanups ───

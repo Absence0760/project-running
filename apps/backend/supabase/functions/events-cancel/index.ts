@@ -35,6 +35,7 @@ import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { cancelAction, resolveRefundEligibility, type RefundPolicy } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 interface CancelBody {
   event_id?: string;
@@ -66,7 +67,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
   }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
   const { data: { user } } = await userClient.auth.getUser();
@@ -76,7 +77,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
   const denied = await checkRateLimit(
     service,

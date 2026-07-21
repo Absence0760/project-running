@@ -3,6 +3,7 @@ import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { isValidUuid } from '../_shared/webhook_security.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces
 // direct Storage download for non-owner viewers (audit/storage High,
@@ -38,7 +39,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
 
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
 
@@ -71,7 +72,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   // from migration 20260616_001 rejects synthetic IP-derived keys.
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
   // Fail-closed because the anon path is the abuse surface and a DB
   // blip on the rate-limit RPC would otherwise remove the only IP-

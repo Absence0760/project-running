@@ -19,6 +19,7 @@ import {
   ultraSignUpResultsUrl,
   type MappedRaceRun,
 } from './lib.ts';
+import { publishableKey } from '../_shared/api_keys.ts';
 
 interface RequestBody {
   provider?: unknown; // 'runsignup' | 'ultrasignup' | 'chronotrack' | 'paste'
@@ -41,7 +42,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
 

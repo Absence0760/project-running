@@ -39,6 +39,7 @@ import {
   reservationExpiry,
 } from './lib.ts';
 import { validateReturnUrl } from '../events-connect-onboard/lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 interface CheckoutBody {
   event_id?: string;
@@ -83,7 +84,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
   const { data: { user } } = await userClient.auth.getUser();
@@ -93,7 +94,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
   const denied = await checkRateLimit(
     service,

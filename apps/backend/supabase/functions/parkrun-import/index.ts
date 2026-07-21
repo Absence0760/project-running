@@ -11,6 +11,7 @@ import {
   parseParkrunTime,
   readBodyTextWithCap,
 } from './lib.ts';
+import { publishableKey } from '../_shared/api_keys.ts';
 
 Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   const guarded = await readJsonWithLimit<{ athleteNumber?: unknown }>(req, 1024);
@@ -27,7 +28,7 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
 

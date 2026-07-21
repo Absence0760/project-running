@@ -37,6 +37,7 @@ import {
   MAX_MESSAGE_LEN,
   validateDonationAmount,
 } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 interface DonationBody {
   fundraiser_id?: string;
@@ -83,7 +84,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   // otherwise donor_user_id stays null. Either way the visibility read is done
   // as the caller (anon or user) so a private-anchor fundraiser is unreachable.
   const authHeader = req.headers.get('Authorization');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const anonKey = publishableKey();
   const callerClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     anonKey,
@@ -97,7 +98,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   // Rate-limit before any DB read or the Stripe session create. The donor path

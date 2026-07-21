@@ -30,6 +30,7 @@ import {
   buildAccountLinkParams,
   validateReturnUrl,
 } from './lib.ts';
+import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   if (req.method !== 'POST') {
@@ -68,7 +69,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
   );
   const { data: { user } } = await userClient.auth.getUser();
@@ -80,7 +81,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   // can't let an attacker spray account-create churn.
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
   const denied = await checkRateLimit(
     service,

@@ -39,6 +39,7 @@ import {
   parseStripeEventEnvelope,
   verifyStripeSignature,
 } from './lib.ts';
+import { secretKey } from '../_shared/api_keys.ts';
 
 const WEBHOOK_PROVIDER = 'stripe';
 
@@ -70,7 +71,7 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
 
   const service = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   // Insert-first dedupe. A replayed delivery raises 23505 -> 200 skip.

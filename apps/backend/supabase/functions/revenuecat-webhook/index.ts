@@ -25,6 +25,7 @@ import {
   mapEventToTier,
   tierEventGuardFilter,
 } from './lib.ts';
+import { secretKey } from '../_shared/api_keys.ts';
 
 Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
@@ -101,7 +102,7 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    secretKey(),
   );
 
   // Reserve the event-id row before doing any tier work. The unique

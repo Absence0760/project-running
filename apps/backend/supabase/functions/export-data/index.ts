@@ -42,6 +42,7 @@ import {
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import { publishableKey, secretKey, secretKeyHeaders } from '../_shared/api_keys.ts';
 
 const MAX_RUNS = 5000;
 const SIGNED_URL_TTL_S = 600; // 10 minutes
@@ -92,12 +93,12 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	// don't own the export rows yet).
 	const authedSupabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_ANON_KEY')!,
+		publishableKey(),
 		{ global: { headers: { Authorization: authHeader } } },
 	);
 	const adminSupabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
-		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+		secretKey(),
 	);
 
 	const { data: userData } = await authedSupabase.auth.getUser();
@@ -757,8 +758,7 @@ async function fetchBackupTable(
 		`${Deno.env.get('SUPABASE_URL')!}/rest/v1/${spec.table}?select=${encodeURIComponent(spec.select)}&${spec.filter}`;
 	const r = await fetch(url, {
 		headers: {
-			apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-			Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+			...secretKeyHeaders(),
 			Accept: 'application/json',
 		},
 	});
