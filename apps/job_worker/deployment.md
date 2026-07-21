@@ -4,7 +4,9 @@ How the Go worker at `apps/job_worker/` and the OSRM map-matching engine at `app
 
 Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker contract, scope, error classification) and [`apps/job_worker/README.md`](README.md) (local dev recipe). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md).
 
-**Status: plan.** The worker binary compiles, tests pass, OSRMMatcher is wired behind the `OSRM_URL` env switch, and the live spectator hub (HTTP + WebSocket) is wired into the same binary alongside `/health`. Neither app has been deployed. All config (fly.toml, env examples, secrets list, DNS) is ready — the remaining step is `flyctl deploy --remote-only` from an operator with `FLY_API_TOKEN`.
+**Status: worker live, OSRM plan.** The worker deployed 2026-07-21 as Fly app `threkir-worker` (org `project-running`, region `ord`, single machine): the queue backlog drained with SMTP unset, and the live hub passed the full smoke matrix (JWKS auth boundaries, privacy-zone clip, WS fan-out + snapshot replay, origin allow-list, rate limit). Client cutover has NOT happened — `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` stay unset until the log-redaction task below is done. OSRM remains undeployed (`OSRM_URL` unset → passthrough).
+
+**Deploy with `--ha=false`.** On a first deploy (or scale-from-zero) Fly auto-creates a second machine "for high availability" — wrong for this app: the in-process hub shares no state across machines, so a publisher on one and a subscriber on the other silently never connect. Single machine until `REDIS_URL` lands (which is what makes multi-replica fan-out correct).
 
 ---
 
@@ -348,15 +350,15 @@ Token verification runs through `internal/supajwt`, which covers both schemes: t
 
 ### Hub deploy checklist
 
-- [ ] Token verification resolves: `SUPABASE_URL` set (JWKS path), or `SUPABASE_JWT_SECRET` set for a legacy HS256 project
-- [ ] `flyctl deploy --remote-only` from `apps/job_worker/` (or push a `worker@*` tag once `release-worker.yml` lands)
-- [ ] Boot log shows `livehub auth: enabled (Supabase JWT)` with `verification="JWKS (ES256/RS256)"` — if it says DISABLED, no key material resolved
-- [ ] `flyctl certs add live.threkir.com --app threkir-worker` and Route 53 record pointing at it
+- [x] Token verification resolves: `SUPABASE_URL` set (JWKS path) — 2026-07-21
+- [x] `flyctl deploy --remote-only --ha=false` from `apps/job_worker/` — 2026-07-21, image 4.4 MB
+- [x] Boot log shows `livehub auth: enabled (Supabase JWT)` with `verification="JWKS (ES256/RS256)"` — 2026-07-21
+- [x] `flyctl certs add live.threkir.com --app threkir-worker` and Route 53 record (CNAME in `infra/dns`) — 2026-07-21
 - [ ] `flyctl certs show live.threkir.com` shows a valid Let's Encrypt cert
-- [ ] `curl https://live.threkir.com/health` returns `{"status":"ok"}`
-- [ ] Smoke push without auth → 403: `curl -i -X POST https://live.threkir.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
-- [ ] Smoke push with the seed user's JWT → 202 with `{ok:true,...}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
-- [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
+- [ ] `curl https://live.threkir.com/health` returns `{"status":"ok"}` (passed against `threkir-worker.fly.dev` 2026-07-21; re-check on the custom domain once DNS + cert land)
+- [x] Smoke push without auth → 403 — 2026-07-21, plus the full boundary matrix: wrong-owner 403, garbage token 403, anon-subscribe-private 403, snapshot-no-pings 204
+- [x] Smoke push with an owner JWT → 202 `{ok:true}`; inside a privacy zone → 202 `{"clipped":true,"ok":true}` (throwaway fixture users, deleted after) — 2026-07-21
+- [x] WS Origin allow-list verified live: `Origin: https://evil.example` → 403 at handshake, `https://threkir.com` → 101 — 2026-07-21
 - [ ] `PUBLIC_LIVE_HUB_URL` set as a GitHub Actions repo secret, web redeployed
 - [ ] `LIVE_HUB_URL` set in the next mobile release builds
 - [ ] After the cutover, watch `flyctl logs --app threkir-worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %), and that 403s only come from genuinely unauthenticated traffic (curl probes / bots) and not from legit recorders
