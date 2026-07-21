@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { refreshStravaToken } from '../_shared/strava.ts';
 
 /// Proactively refresh Strava integrations whose access token expires within

@@ -32,7 +32,7 @@
 /// the platform / making backups for several reasons today" without
 /// the half-hour wait.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import {
 	BlobWriter,
 	TextReader,

@@ -9,7 +9,7 @@
 /// the REVENUECAT_WEBHOOK_SECRET env var). The function runs with the
 /// Supabase service role so it can update any user's tier.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {

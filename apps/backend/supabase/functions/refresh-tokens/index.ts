@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { discardBody } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual } from '../_shared/webhook_security.ts';

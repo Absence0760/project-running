@@ -26,7 +26,7 @@
 ///
 /// TEST MODE ONLY in P1. Fails closed (503) if the secret is unset.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { capacityDecision } from '../events-checkout/lib.ts';

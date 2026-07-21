@@ -30,7 +30,7 @@
 /// rows. A webhook firing while a backfill is mid-run is harmless —
 /// the dedupe check on `metadata.strava_id` short-circuits.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import {
 	fetchStravaActivity,
 	ingestActivity,

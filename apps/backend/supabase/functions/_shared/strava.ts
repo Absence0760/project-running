@@ -9,7 +9,7 @@
 // in `docs/backend/metadata.md` (the single source of truth for which keys
 // readers can rely on).
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 
 export type StravaTokens = {
 	access_token: string;
