@@ -34,6 +34,8 @@ function verifyJwtFalseSections(toml: string): string[] {
 }
 
 Deno.test('every anon-reachable function has an explicit verify_jwt = false', async () => {
+  // Reason: losing an override 401s every anonymous caller of that
+  // function the moment clients send non-JWT publishable keys.
   const toml = await Deno.readTextFile(new URL('../../config.toml', import.meta.url))
   const off = verifyJwtFalseSections(toml)
   for (const fn of ANON_REACHABLE) {
@@ -45,6 +47,8 @@ Deno.test('every anon-reachable function has an explicit verify_jwt = false', as
 })
 
 Deno.test('no function disables verify_jwt without being on the anon-reachable allowlist', async () => {
+  // Reason: a silent verify_jwt=false widens the anonymous surface —
+  // the flip must arrive together with a caller audit here.
   const toml = await Deno.readTextFile(new URL('../../config.toml', import.meta.url))
   assertEquals(
     verifyJwtFalseSections(toml),

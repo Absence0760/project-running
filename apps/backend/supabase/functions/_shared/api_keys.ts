@@ -45,9 +45,13 @@ export function publishableKey(): string {
 
 // Headers for a raw fetch authenticated with the secret key. A legacy
 // service_role key is a JWT and travels as both apikey and the
-// Authorization bearer; an sb_secret_… key is not a JWT — the gateway
-// forwards a non-JWT bearer to Postgres where it is rejected, so it
-// goes in apikey alone. Twin of the Go worker's internal/supakey.
+// Authorization bearer; an sb_secret_… key is not a JWT and the docs
+// require it on apikey alone — a bearer that differs from the apikey
+// is forwarded to Postgres and rejected (PGRST301). The createClient
+// sites need no equivalent: sessionless supabase-js sends a bearer
+// EQUAL to the apikey, which the gateway's compat carve-out accepts
+// (verified against this project, 2026-07-21 — decisions §280).
+// Twin of the Go worker's internal/supakey.
 export function secretKeyHeaders(): Record<string, string> {
   const key = secretKey();
   return key.startsWith('sb_')

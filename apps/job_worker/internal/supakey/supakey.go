@@ -12,10 +12,12 @@ import (
 // SetAuthHeaders sets the headers for a REST call authenticated with a
 // server API key. A legacy service_role key is a JWT and must travel
 // as both `apikey` and the `Authorization` bearer. New-format keys
-// (`sb_secret_…` / `sb_publishable_…`) are not JWTs: the gateway
-// accepts one as `apikey`, but an equal `Authorization` value is
-// forwarded to the database and rejected there — so they go in
-// `apikey` alone.
+// (`sb_secret_…` / `sb_publishable_…`) are not JWTs and the docs
+// require them on `apikey` alone: a bearer that differs from the
+// apikey is forwarded to the database and rejected (PGRST301), and
+// only a bearer exactly equal to the apikey rides the gateway's
+// compat carve-out (decisions §280) — apikey-only sidesteps the
+// distinction entirely.
 func SetAuthHeaders(h http.Header, key string) {
 	h.Set("apikey", key)
 	if !strings.HasPrefix(key, "sb_") {

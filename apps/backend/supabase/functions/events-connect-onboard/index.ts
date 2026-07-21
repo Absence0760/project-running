@@ -37,8 +37,8 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }
 
-  const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secretKey) {
+  const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+  if (!stripeSecretKey) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
 
@@ -104,7 +104,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
     ? body.refresh_url
     : `${defaultOrigin}/settings/payouts?onboard=refresh`;
 
-  const stripe = new Stripe(secretKey, {
+  const stripe = new Stripe(stripeSecretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
 

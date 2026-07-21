@@ -54,8 +54,8 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }
 
-  const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secretKey) {
+  const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+  if (!stripeSecretKey) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
   const allowlist = (Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS') ?? '')
@@ -195,7 +195,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     ? body.cancel_url
     : `${new URL(allowlist[0]).origin}/fundraisers/${fundraiserId}?donated=0`;
 
-  const stripe = new Stripe(secretKey, {
+  const stripe = new Stripe(stripeSecretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
 

@@ -148,7 +148,7 @@ STRAVA_CLIENT_SECRET=<optional — Strava OAuth rotation>
 | Value | Page |
 |---|---|
 | `SUPABASE_URL` | `…/project/<ref>/settings/api-keys` — also just `https://<ref>.supabase.co`, and it is not secret |
-| `SUPABASE_SECRET_KEY` | `…/project/<ref>/settings/api-keys` — take the **`sb_secret_…`** key. A legacy `service_role` JWT also works: `internal/supakey` sends an `sb_…` key as `apikey` alone (a non-JWT bearer would be forwarded to Postgres and rejected) and a legacy JWT as both `apikey` and `Authorization: Bearer` |
+| `SUPABASE_SECRET_KEY` | `…/project/<ref>/settings/api-keys` — take the **`sb_secret_…`** key. A legacy `service_role` JWT also works: `internal/supakey` sends an `sb_…` key as `apikey` alone (the docs require new-format keys off the `Authorization` header — decisions §280) and a legacy JWT as both `apikey` and `Authorization: Bearer` |
 | `SUPABASE_JWT_SECRET` | `…/project/<ref>/settings/jwt` — the shared HS256 secret |
 
 **`SUPABASE_JWT_SECRET` is optional, and is not the anon key.** The anon key is a *token* signed by the secret; the secret is the signing key itself. A quick tell: the secret has no dots, the anon key is `eyJ…` with two.
