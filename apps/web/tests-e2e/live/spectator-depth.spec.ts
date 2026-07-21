@@ -173,7 +173,7 @@ test.describe('/live/[id] — finished-run 2-minute boundary (anon)', () => {
 	test('a run whose saved end is just inside the 2-min slack is NOT treated as finished', async ({
 		page
 	}) => {
-		// runIsFinished() treats a run finished only when its saved end
+		// isFinishedStale() (live_spectator_status.ts) treats a run finished only when its saved end
 		// is >2 min in the past. A run that ended ~30s ago is inside the
 		// slack, so the page must NOT show the Finished badge — it stays
 		// on a live/connecting path. Boundary-pins the slack window so a
