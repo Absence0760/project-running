@@ -1029,8 +1029,8 @@ func TestWorker_HappyPath(t *testing.T) {
 	if row.RunID != "run-1" || row.Row.Status != "matched" {
 		t.Errorf("rowSet=%+v, want run-1/matched", row)
 	}
-	if row.Row.MatchedTrackURL != matchedPath {
-		t.Errorf("matched_track_url=%q, want %q", row.Row.MatchedTrackURL, matchedPath)
+	if row.Row.MatchedTrackURL == nil || *row.Row.MatchedTrackURL != matchedPath {
+		t.Errorf("matched_track_url=%v, want %q", row.Row.MatchedTrackURL, matchedPath)
 	}
 }
 
@@ -1057,6 +1057,12 @@ func TestWorker_SkipsTooFewPoints(t *testing.T) {
 	}
 	if len(be.rowSets) != 1 || be.rowSets[0].Row.Status != "skipped" {
 		t.Errorf("rowSets=%+v, want one skipped row", be.rowSets)
+	}
+	// NULL, not "": the run_matched_tracks_matched_track_url_shape CHECK
+	// rejects an empty string (23514) — an "" here perma-failed every
+	// skipped run in prod on first deploy.
+	if len(be.rowSets) == 1 && be.rowSets[0].Row.MatchedTrackURL != nil {
+		t.Errorf("matched_track_url=%v, want nil on skip", *be.rowSets[0].Row.MatchedTrackURL)
 	}
 	if len(be.finished) != 1 || be.finished[0].Status != "done" {
 		t.Errorf("finish=%+v, want done", be.finished)
