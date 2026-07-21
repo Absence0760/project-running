@@ -347,7 +347,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     }
   }
 
-  /// Change-password step-up (issue #381, decisions §277). A live access
+  /// Change-password step-up (issue #381, decisions §278). A live access
   /// token alone must never be enough to rotate the password — the dialog
   /// proves possession of the CURRENT password before writing the new one.
   /// An OAuth-only account has no password to prove, so the dialog also

@@ -225,7 +225,7 @@ The redirect above is a request the hosted project can silently refuse: a Site U
 - **`strayConfirmationTarget(pathname, search, hash)`** — a PKCE `?code=` (or an implicit-flow `#access_token=`) arriving on any route that does **not** own one is routed to `/auth/callback` with the query and hash carried through, so the callback still runs the exchange + stamp retry + gate. Three routes own their own code and are exempt: `/auth/callback`, `/auth/reset` (password recovery), and `/settings/integrations` (the Strava OAuth return). `+layout.svelte` snapshots the URL **during hydration**, before supabase-js' async bootstrap can consume the code and rewrite the address bar, so the hop happens even when that exchange wins the race.
 - **`verifyConsentStamped(readProfile)`** — the fail-closed profile check the callback already ran, extracted so `/login` can run it too. Every ambiguity (missing row, null stamp, failed read, thrown error) returns `needs-consent` → `/auth/confirm-age`; `confirm_age_and_terms()` is idempotent, so an already-consented user pays at most one extra click. `/login`'s sign-up path needs it because with `enable_confirmations = false` a session is issued immediately — there is no callback hop on which a silently-failed stamp RPC would be retried.
 
-Pinned by `lib/core/auth_confirmation.test.ts` (14 unit tests) + `tests-e2e/auth/stray-confirmation-landing.spec.ts`. Decisions §276.
+Pinned by `lib/core/auth_confirmation.test.ts` (14 unit tests) + `tests-e2e/auth/stray-confirmation-landing.spec.ts`. Decisions §279.
 
 ---
 
