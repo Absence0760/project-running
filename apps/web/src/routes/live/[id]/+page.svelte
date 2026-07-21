@@ -24,6 +24,7 @@
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
 	import { freshnessFor, type Freshness } from '$lib/runs/live_freshness';
+	import { isFinishedStale, statusAfterHydrate } from '$lib/runs/live_spectator_status';
 	import { m } from '$lib/i18n/store.svelte';
 
 	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
@@ -59,17 +60,8 @@
 				})
 			: '',
 	);
-	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
+	type Status = 'connecting' | 'live' | 'finished' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
-	let demoTicker: ReturnType<typeof setInterval> | null = null;
-	// Demo-mode animation state. `demoActive` gates the Page Visibility
-	// pause: once the demo is running, we stop the interval while the
-	// tab is backgrounded and restart it on return so a multi-day
-	// spectator tab doesn't animate (and re-render the map) every 3 s
-	// off-screen. `demoAngle` is module-scope so it survives a pause.
-	let demoActive = false;
-	let demoAngle = 0;
-	let onVisibilityChange: (() => void) | null = null;
 	// Freshness: the ms timestamp of the last ping we rendered, plus a
 	// once-a-second clock so "updated N ago" / the stale badge recompute
 	// even while no new ping arrives. Without this a runner who lost
@@ -147,8 +139,8 @@
 	// so the view snaps to the runner regardless of geography.
 	let centred = false;
 
-	// Defaults that match the simulation: Melbourne CBD so the map isn't
-	// blank during `connecting` or `demo` with no credentials.
+	// Default centre before the first ping arrives so the map isn't
+	// blank while `connecting`.
 	const fallbackLat = -37.8136;
 	const fallbackLng = 144.9631;
 
@@ -341,48 +333,6 @@
 				},
 			)
 			.subscribe();
-	}
-
-	function startDemoTicker() {
-		if (demoTicker) return;
-		demoTicker = setInterval(() => {
-			demoAngle += 0.02;
-			elapsed += 3;
-			distance += 12 + Math.random() * 5;
-			const lng = fallbackLng + Math.cos(demoAngle) * 0.005;
-			const lat = fallbackLat + Math.sin(demoAngle) * 0.003;
-			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed, sent_at_ms: Date.now() });
-		}, 3000);
-	}
-
-	function stopDemoTicker() {
-		if (demoTicker) {
-			clearInterval(demoTicker);
-			demoTicker = null;
-		}
-	}
-
-	function startDemo() {
-		status = 'demo';
-		if (map) {
-			ensureMarker(fallbackLat, fallbackLng);
-			map.jumpTo({ center: [fallbackLng, fallbackLat], zoom: 15 });
-		}
-		demoActive = true;
-		demoAngle = 0;
-		// Pause the animation while the tab is hidden — a backgrounded
-		// multi-day spectator tab shouldn't burn CPU + re-render the map
-		// every 3 s with no one watching. Resume on return.
-		if (typeof document !== 'undefined' && !onVisibilityChange) {
-			onVisibilityChange = () => {
-				if (!demoActive) return;
-				if (document.hidden) stopDemoTicker();
-				else startDemoTicker();
-			};
-			document.addEventListener('visibilitychange', onVisibilityChange);
-		}
-		if (typeof document !== 'undefined' && document.hidden) return;
-		startDemoTicker();
 	}
 
 	type VisibleRun = {
@@ -580,17 +530,12 @@
 		}
 	}
 
-	// A run is treated as already finished if its saved duration places
-	// its end >2 minutes in the past. The 2 min slack covers the gap
-	// between the last ping and the recorder posting the final row +
-	// any clock skew. While finished, the spectator surface freezes on
-	// the saved totals and skips the demo / realtime paths — opening a
-	// stale share link to a completed run should read "Finished" with
-	// final stats, not loop forever on "Connecting…" or "LIVE".
-	function runIsFinished(r: VisibleRun): boolean {
-		if (!r.duration_s || r.duration_s <= 0) return false;
-		const endedMs = new Date(r.started_at).getTime() + r.duration_s * 1000;
-		return Number.isFinite(endedMs) && endedMs < Date.now() - 2 * 60 * 1000;
+	// Finished/waiting boundaries live in the pure, unit-tested
+	// $lib/runs/live_spectator_status helpers (issue #603).
+	function freezeOnSavedTotals(run: VisibleRun) {
+		distance = run.distance_m;
+		elapsed = run.duration_s;
+		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
 	}
 
 	onMount(() => {
@@ -613,29 +558,38 @@
 			currentAccessToken =
 				(await supabase.auth.getSession()).data.session?.access_token ?? null;
 			if (!(await ensureRunIsVisible())) return;
-			if (visibleRun) void loadRouteCutoffs(visibleRun);
-			if (visibleRun && runIsFinished(visibleRun)) {
-				distance = visibleRun.distance_m;
-				elapsed = visibleRun.duration_s;
-				if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
+			const run = visibleRun;
+			if (!run) return;
+			void loadRouteCutoffs(run);
+			if (isFinishedStale(run.started_at, run.duration_s, Date.now())) {
+				freezeOnSavedTotals(run);
 				// Best-effort backlog hydrate so the map still gets the
-				// trace shape, but don't open realtime / demo — the run
-				// is over.
+				// trace shape, but don't open realtime — the run is over.
 				await hydrateBacklog();
 				status = 'finished';
 				return;
 			}
 			const hadBacklog = await hydrateBacklog();
-			subscribeLive();
-			if (hadBacklog) {
-				status = 'live';
-			} else {
-				setTimeout(() => {
-					if (status === 'connecting' && traceCoords.length === 0) {
-						startDemo();
-					}
-				}, 5000);
+			const next = statusAfterHydrate({
+				startedAtIso: run.started_at,
+				durationS: run.duration_s,
+				hadBacklog,
+				nowMs: Date.now(),
+			});
+			if (next === 'finished') {
+				// The recorder wipes live_run_pings on stop, so a reload in
+				// the first ~2 min after finishing lands here: the row
+				// carries the final duration but no pings survive. Freeze
+				// on the saved totals — this used to fall through to the
+				// synthesised demo loop (issue #603).
+				freezeOnSavedTotals(run);
+				status = 'finished';
+				return;
 			}
+			subscribeLive();
+			if (next === 'live') status = 'live';
+			// `waiting` keeps `connecting` — the honest state for a
+			// broadcast whose first ping hasn't arrived.
 		})();
 
 		if (mapConsented) initMap();
@@ -695,12 +649,6 @@
 	}
 
 	onDestroy(() => {
-		demoActive = false;
-		stopDemoTicker();
-		if (onVisibilityChange && typeof document !== 'undefined') {
-			document.removeEventListener('visibilitychange', onVisibilityChange);
-			onVisibilityChange = null;
-		}
 		if (freshnessTicker) clearInterval(freshnessTicker);
 		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 		liveHubHandle?.close();
@@ -729,7 +677,6 @@
 			class="live-badge"
 			class:active={status === 'live' && !isStale}
 			class:stale={status === 'live' && isStale}
-			class:demo={status === 'demo'}
 			class:finished={status === 'finished'}
 			class:not-found={status === 'not-found'}
 		>
@@ -742,8 +689,6 @@
 				{:else}
 					<span class="pulse-dot"></span> {m('live.badgeLive')}
 				{/if}
-			{:else if status === 'demo'}
-				{m('live.badgeDemo')}
 			{:else if status === 'finished'}
 				{m('live.badgeFinished')}
 			{:else if status === 'not-found'}
@@ -780,8 +725,6 @@
 					<span class="live-runner-sub">
 						{#if status === 'connecting'}
 							{m('live.subWaitingFirstPing')}
-						{:else if status === 'demo'}
-							{m('live.subSynthesisedDemo')}
 						{:else if status === 'live'}
 							{#if lastPingCoarse}
 								{m('live.approximateSub')}
@@ -995,7 +938,6 @@
 		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 	}
 
-	.live-badge.demo,
 	.live-badge.stale {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 		color: var(--color-warning-text);

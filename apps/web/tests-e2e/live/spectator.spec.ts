@@ -272,7 +272,7 @@ test.describe('/live/[id] — anon spectator', () => {
 	test('in-progress run with no pings yet keeps the badge in a pre-LIVE state', async ({
 		page
 	}) => {
-		// The page has six states: connecting / live / finished / demo /
+		// The page has five states: connecting / live / finished /
 		// error / not-found. The existing tests cover live, finished,
 		// not-found. This one pins the `connecting` branch: a public
 		// run that's started recently but for which the spectator
@@ -371,6 +371,70 @@ test.describe('/live/[id] — anon spectator', () => {
 			// fails this test and forces a deliberate update.
 			expect(distanceText).toMatch(/^0\s*m$/);
 			expect(elapsedText).toMatch(/^0:00$/);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('run finished moments ago (pings wiped on stop) renders Finished with saved totals — never a demo feed', async ({
+		page
+	}) => {
+		// Issue #603. Stopping a run calls endLiveBroadcast, which deletes
+		// every live_run_pings row, and the saved row's end is still inside
+		// the 2-minute finished slack when the share link is re-opened. The
+		// page used to fall through to a synthesised demo loop here —
+		// fabricated movement on a real person's tracking page.
+		const startedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 2_500,
+			// End ~30 s in the past — inside the slack window that used
+			// to dodge the finished fast path.
+			duration_s: 570,
+			is_public: true
+		});
+		try {
+			await page.goto(`/live/${runId}`);
+
+			const badge = page.locator('.live-badge');
+			await expect(badge).toHaveClass(/finished/, { timeout: 10_000 });
+			await expect(badge).toContainText(/Finished/i);
+			// Frozen saved totals, not demo-ticker fabrications.
+			await expect(page.locator('.live-stat-value').first()).toContainText('2.5');
+			await expect(page.locator('.live-stat-value').nth(1)).toContainText('9:30');
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('broadcast stub (duration 0) with no pings stays honestly waiting past the old 5 s demo window', async ({
+		page
+	}) => {
+		// The recorder pre-creates the live run row with duration_s = 0
+		// (beginLiveBroadcast) before the first ping lands. The page must
+		// hold the waiting state indefinitely — the old code started
+		// fabricating demo movement after 5 s in `connecting`.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date(Date.now() - 60 * 1000).toISOString(),
+			distance_m: 0,
+			duration_s: 0,
+			is_public: true,
+			metadata: { in_progress: true }
+		});
+		try {
+			await page.goto(`/live/${runId}`);
+
+			const badge = page.locator('.live-badge');
+			await expect(badge).toContainText(/Connecting/i, { timeout: 10_000 });
+			// Outwait the old demo timer, then re-assert nothing started
+			// synthesising: badge still connecting, elapsed still zero.
+			await page.waitForTimeout(7_000);
+			await expect(badge).toContainText(/Connecting/i);
+			await expect(badge).not.toHaveClass(/active|finished|not-found/);
+			await expect(page.locator('.live-stat-value').nth(1)).toHaveText('0:00');
+			await expect(page.locator('.live-runner-sub')).toContainText(/Waiting/i);
 		} finally {
 			await deleteRun(runId);
 		}
