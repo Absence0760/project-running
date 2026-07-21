@@ -100,10 +100,20 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # check runs. The function fails closed without the secret.
 #
 # The other functions (strava-import, parkrun-import, export-data,
-# delete-account, clip-public-track, events-connect-onboard,
-# events-checkout, events-cancel) all need a Supabase JWT (anon for
-# clip-public-track, user-scoped for the rest) and are correct on the
-# default verify_jwt = true.
+# delete-account, events-connect-onboard, events-checkout,
+# events-cancel) all need a user-scoped Supabase JWT and are correct on
+# the default verify_jwt = true.
+#
+# clip-public-track is the exception: it serves logged-out spectators
+# on public share pages, whose supabase-js sends the anon/publishable
+# API key as the Authorization bearer. The platform gate only accepts
+# JWTs — the legacy anon key happened to be one, a publishable
+# (sb_publishable_…) key is not — so the gate must be off or every
+# anonymous track fetch 401s the moment the web client migrates keys.
+# The function body is the trust boundary (same posture as
+# donations-checkout): RLS-gated read via the anon-key client,
+# fail-closed empty result on error, per-IP rate limit on the anon
+# branch (pinned by apps/web/src/lib/security_guards.test.ts).
 
 [functions.strava-webhook]
 verify_jwt = false
@@ -121,4 +131,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.refresh-tokens]
+verify_jwt = false
+
+[functions.clip-public-track]
 verify_jwt = false
