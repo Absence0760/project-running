@@ -5476,6 +5476,31 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountCurrentPassword => 'Senha atual';
+
+  @override
+  String get settingsAccountPasswordStepUpHint =>
+      'Para sua segurança, digite sua senha atual para alterá-la. Cadastrou-se com Google ou Apple? Envie um link de redefinição para você mesmo para definir uma.';
+
+  @override
+  String get settingsAccountCurrentPasswordRequired =>
+      'Digite sua senha atual para alterá-la.';
+
+  @override
+  String get settingsAccountCurrentPasswordIncorrect =>
+      'Essa senha atual está incorreta. Se você nunca definiu uma senha, envie um link de redefinição para você mesmo.';
+
+  @override
+  String get settingsAccountSendResetLink => 'Enviar link de redefinição';
+
+  @override
+  String get settingsAccountSendingResetLink => 'Enviando…';
+
+  @override
+  String get settingsAccountResetLinkSent =>
+      'Link de redefinição enviado. Verifique seu e-mail para definir uma nova senha.';
+
+  @override
   String get settingsAccountChangeEmail => 'Alterar e-mail';
 
   @override
@@ -16852,6 +16877,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String settingsAccountPasswordUpdateFailed(Object error) {
     return 'Não foi possível atualizar a senha: $error';
   }
+
+  @override
+  String get settingsAccountCurrentPassword => 'Senha atual';
+
+  @override
+  String get settingsAccountPasswordStepUpHint =>
+      'Para sua segurança, digite sua senha atual para alterá-la. Cadastrou-se com Google ou Apple? Envie um link de redefinição para você mesmo para definir uma.';
+
+  @override
+  String get settingsAccountCurrentPasswordRequired =>
+      'Digite sua senha atual para alterá-la.';
+
+  @override
+  String get settingsAccountCurrentPasswordIncorrect =>
+      'Essa senha atual está incorreta. Se você nunca definiu uma senha, envie um link de redefinição para você mesmo.';
+
+  @override
+  String get settingsAccountSendResetLink => 'Enviar link de redefinição';
+
+  @override
+  String get settingsAccountSendingResetLink => 'Enviando…';
+
+  @override
+  String get settingsAccountResetLinkSent =>
+      'Link de redefinição enviado. Verifique seu e-mail para definir uma nova senha.';
 
   @override
   String get settingsAccountChangeEmail => 'Alterar e-mail';

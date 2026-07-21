@@ -7348,6 +7348,34 @@
       }
     }
   },
+  "settingsAccountCurrentPassword": "Current password",
+  "@settingsAccountCurrentPassword": {
+    "description": "Label for the current-password field in the change-password dialog"
+  },
+  "settingsAccountPasswordStepUpHint": "For your security, enter your current password to change it. Signed up with Google or Apple? Email yourself a reset link to set one.",
+  "@settingsAccountPasswordStepUpHint": {
+    "description": "Explains why the current password is required and the reset-link alternative for OAuth-only accounts"
+  },
+  "settingsAccountCurrentPasswordRequired": "Enter your current password to change it.",
+  "@settingsAccountCurrentPasswordRequired": {
+    "description": "Validation error when the current-password field is empty"
+  },
+  "settingsAccountCurrentPasswordIncorrect": "That current password is incorrect. If you have never set a password, email yourself a reset link instead.",
+  "@settingsAccountCurrentPasswordIncorrect": {
+    "description": "Error when the current password fails to verify"
+  },
+  "settingsAccountSendResetLink": "Email me a reset link",
+  "@settingsAccountSendResetLink": {
+    "description": "Button that mails a password-reset link, for OAuth-only accounts with no password to prove"
+  },
+  "settingsAccountSendingResetLink": "Sending…",
+  "@settingsAccountSendingResetLink": {
+    "description": "In-flight label on the reset-link button"
+  },
+  "settingsAccountResetLinkSent": "Reset link sent. Check your email to set a new password.",
+  "@settingsAccountResetLinkSent": {
+    "description": "Banner shown after a password-reset link is mailed"
+  },
   "settingsAccountChangeEmail": "Change email",
   "@settingsAccountChangeEmail": {
     "description": "Tile title and dialog title for changing the account email"

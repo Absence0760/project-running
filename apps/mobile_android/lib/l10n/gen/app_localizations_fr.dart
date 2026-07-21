@@ -5494,6 +5494,32 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountCurrentPassword => 'Mot de passe actuel';
+
+  @override
+  String get settingsAccountPasswordStepUpHint =>
+      'Pour votre sécurité, saisissez votre mot de passe actuel pour le modifier. Inscrit avec Google ou Apple ? Envoyez-vous un lien de réinitialisation pour en définir un.';
+
+  @override
+  String get settingsAccountCurrentPasswordRequired =>
+      'Saisissez votre mot de passe actuel pour le modifier.';
+
+  @override
+  String get settingsAccountCurrentPasswordIncorrect =>
+      'Ce mot de passe actuel est incorrect. Si vous n\'avez jamais défini de mot de passe, envoyez-vous plutôt un lien de réinitialisation.';
+
+  @override
+  String get settingsAccountSendResetLink =>
+      'M\'envoyer un lien de réinitialisation';
+
+  @override
+  String get settingsAccountSendingResetLink => 'Envoi…';
+
+  @override
+  String get settingsAccountResetLinkSent =>
+      'Lien de réinitialisation envoyé. Consultez vos e-mails pour définir un nouveau mot de passe.';
+
+  @override
   String get settingsAccountChangeEmail => 'Changer d\'e-mail';
 
   @override

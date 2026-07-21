@@ -5154,6 +5154,31 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountCurrentPassword => '現在のパスワード';
+
+  @override
+  String get settingsAccountPasswordStepUpHint =>
+      '安全のため、変更するには現在のパスワードを入力してください。Google または Apple で登録した場合は、リセットリンクを自分宛てに送信してパスワードを設定してください。';
+
+  @override
+  String get settingsAccountCurrentPasswordRequired =>
+      '変更するには現在のパスワードを入力してください。';
+
+  @override
+  String get settingsAccountCurrentPasswordIncorrect =>
+      '現在のパスワードが正しくありません。パスワードを設定したことがない場合は、代わりにリセットリンクを自分宛てに送信してください。';
+
+  @override
+  String get settingsAccountSendResetLink => 'リセットリンクを送信';
+
+  @override
+  String get settingsAccountSendingResetLink => '送信中…';
+
+  @override
+  String get settingsAccountResetLinkSent =>
+      'リセットリンクを送信しました。メールを確認して新しいパスワードを設定してください。';
+
+  @override
   String get settingsAccountChangeEmail => 'メールアドレスを変更';
 
   @override
