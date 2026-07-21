@@ -10,10 +10,12 @@
 /// already gated by a single-use recovery token mailed to the address on
 /// file, which is the proof this function is asking for by another route.
 ///
-/// Web-only for now. Mobile's `settings_account_screen.dart` dialog has
-/// the same hole and wants the same rule ported, tracked in
-/// `docs/product/followups.md § Mobile`; until then this is not a parity
-/// pair (`auth_gates` remains the shared half).
+/// TS↔Dart parity pair: mobile's `apps/mobile_android/lib/password_change.dart`
+/// is the faithful Dart twin driving `settings_account_screen.dart`'s
+/// change-password dialog — keep the algorithm, edge cases, outputs, and
+/// result-reason set in lockstep (`auth_gates` remains the shared pair-check
+/// half). Web models the failure as this `{ok, reason, detail?}` union;
+/// Dart carries the same information as a small result class.
 
 import { checkPasswordPair, type PasswordPairReason } from './auth_gates';
 
