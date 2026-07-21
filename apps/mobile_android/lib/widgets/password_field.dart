@@ -15,6 +15,7 @@ class PasswordField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
   final FocusNode? focusNode;
 
   const PasswordField({
@@ -26,6 +27,7 @@ class PasswordField extends StatefulWidget {
     this.autofillHints,
     this.textInputAction,
     this.onSubmitted,
+    this.onChanged,
     this.focusNode,
   });
 
@@ -48,6 +50,7 @@ class _PasswordFieldState extends State<PasswordField> {
       autofillHints: widget.autofillHints,
       textInputAction: widget.textInputAction,
       onSubmitted: widget.onSubmitted,
+      onChanged: widget.onChanged,
       decoration: InputDecoration(
         labelText: widget.labelText,
         border: widget.border,

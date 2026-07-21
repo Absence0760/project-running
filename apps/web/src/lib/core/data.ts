@@ -5474,11 +5474,12 @@ export type ActivityFeedEntry = RunFeedEntry | LiftFeedEntry;
 ///
 /// Runs go through the redacted `public_runs` view (decisions §33) — they are
 /// deliberately invisible through the `activities` view to non-owners, so the
-/// feed reads them on the same path `fetchFollowingFeed` does. Lifts read
-/// `gym_workouts` directly: that table's "owner or public read" RLS already
-/// scopes a non-owner to public rows, and the feed projects only the
-/// headline columns (title / set_count / volume_kg) — never notes or per-set
-/// data. `set_count` + `volume_kg` are the trigger-maintained derived columns
+/// feed reads them on the same path `fetchFollowingFeed` does. Lifts go
+/// through the redacted `public_gym_workouts` view for the same reason: the
+/// base table is owner-only since migration 20270313_001, and the view
+/// projects only the headline columns (title / set_count / volume_kg) — never
+/// notes / metadata / per-set data. `set_count` + `volume_kg` are the
+/// trigger-maintained derived columns
 /// (migration 20261214_001), so a lift card is a flat per-branch read.
 ///
 /// `activityType`: 'all' (default) merges both; 'lift' / 'gym' returns lifts

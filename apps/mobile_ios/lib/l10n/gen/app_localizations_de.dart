@@ -5489,6 +5489,31 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountCurrentPassword => 'Aktuelles Passwort';
+
+  @override
+  String get settingsAccountPasswordStepUpHint =>
+      'Aus Sicherheitsgründen musst du zum Ändern dein aktuelles Passwort eingeben. Mit Google oder Apple angemeldet? Schicke dir einen Link zum Zurücksetzen, um eines festzulegen.';
+
+  @override
+  String get settingsAccountCurrentPasswordRequired =>
+      'Gib dein aktuelles Passwort ein, um es zu ändern.';
+
+  @override
+  String get settingsAccountCurrentPasswordIncorrect =>
+      'Das aktuelle Passwort ist falsch. Wenn du nie ein Passwort festgelegt hast, schicke dir stattdessen einen Link zum Zurücksetzen.';
+
+  @override
+  String get settingsAccountSendResetLink => 'Link zum Zurücksetzen senden';
+
+  @override
+  String get settingsAccountSendingResetLink => 'Wird gesendet …';
+
+  @override
+  String get settingsAccountResetLinkSent =>
+      'Link zum Zurücksetzen gesendet. Prüfe deine E-Mails, um ein neues Passwort festzulegen.';
+
+  @override
   String get settingsAccountChangeEmail => 'E-Mail ändern';
 
   @override

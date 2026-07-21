@@ -19,6 +19,7 @@ import '../backup_server_client.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../password_change.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../widgets/password_field.dart';
@@ -346,29 +347,100 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     }
   }
 
+  /// Change-password step-up (issue #381, decisions §278). A live access
+  /// token alone must never be enough to rotate the password — the dialog
+  /// proves possession of the CURRENT password before writing the new one.
+  /// An OAuth-only account has no password to prove, so the dialog also
+  /// offers the mailed reset link on web's `/auth/reset` as the equivalent
+  /// proof. The pure decision lives in `password_change.dart`.
   Future<void> _changePassword() async {
     final l10n = AppLocalizations.of(context);
+    final api = widget.apiClient;
+    if (api == null) {
+      showTopBanner(context, l10n.settingsAccountSignInToSync);
+      return;
+    }
+    final currentCtl = TextEditingController();
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
+    final pwdFocus = FocusNode();
     final confirmFocus = FocusNode();
-    final ok = await showDialog<bool>(
+
+    final result = await showDialog<PasswordChangeResult>(
       context: context,
       builder: (ctx) {
         String? error;
+        bool saving = false;
+        bool sendingReset = false;
         return StatefulBuilder(
           builder: (ctx, setInner) {
-            void submit() {
-              if (pwdCtl.text.length < kPasswordMinLength) {
-                setInner(() => error =
-                    l10n.authErrorPasswordTooShort(kPasswordMinLength));
+            final allFilled = currentCtl.text.isNotEmpty &&
+                pwdCtl.text.isNotEmpty &&
+                confirmCtl.text.isNotEmpty;
+
+            Future<void> submit() async {
+              if (saving || !allFilled) return;
+              setInner(() {
+                saving = true;
+                error = null;
+              });
+              final res = await changePassword(
+                PasswordChangeInput(
+                  currentPassword: currentCtl.text,
+                  newPassword: pwdCtl.text,
+                  confirmPassword: confirmCtl.text,
+                ),
+                verifyCurrentPassword: api.verifyCurrentPassword,
+                updatePassword: (password) async {
+                  try {
+                    await api.updatePassword(password);
+                    return null;
+                  } catch (e) {
+                    return friendlyError(l10n, e);
+                  }
+                },
+              );
+              if (!ctx.mounted) return;
+              if (res.ok) {
+                Navigator.pop(ctx, res);
                 return;
               }
-              if (pwdCtl.text != confirmCtl.text) {
-                setInner(
-                    () => error = l10n.settingsAccountPasswordsMismatch);
-                return;
+              setInner(() {
+                saving = false;
+                error = _passwordChangeMessage(l10n, res.reason!, res.detail);
+              });
+            }
+
+            Future<void> sendReset() async {
+              if (sendingReset) return;
+              final email = api.userEmail ?? '';
+              if (email.isEmpty) return;
+              setInner(() {
+                sendingReset = true;
+                error = null;
+              });
+              try {
+                await api.sendPasswordResetEmail(
+                  email: email,
+                  redirectTo: _resetRedirect(),
+                );
+                if (ctx.mounted) Navigator.pop(ctx, null);
+                if (mounted) {
+                  showTopBanner(
+                    context,
+                    l10n.settingsAccountResetLinkSent,
+                    duration: const Duration(seconds: 5),
+                  );
+                }
+              } catch (e) {
+                debugPrint('SettingsAccountScreen reset link failed: $e');
+                if (ctx.mounted) {
+                  setInner(() {
+                    sendingReset = false;
+                    error = friendlyError(l10n, e);
+                  });
+                }
               }
-              Navigator.pop(ctx, true);
             }
 
             return AlertDialog(
@@ -376,12 +448,29 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
               content: AutofillGroup(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      l10n.settingsAccountPasswordStepUpHint,
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    PasswordField(
+                      controller: currentCtl,
+                      labelText: l10n.settingsAccountCurrentPassword,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.next,
+                      onChanged: (_) => setInner(() {}),
+                      onSubmitted: (_) => pwdFocus.requestFocus(),
+                    ),
+                    const SizedBox(height: 8),
                     PasswordField(
                       controller: pwdCtl,
+                      focusNode: pwdFocus,
                       labelText: l10n.settingsAccountNewPassword,
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.next,
+                      onChanged: (_) => setInner(() {}),
                       onSubmitted: (_) => confirmFocus.requestFocus(),
                     ),
                     const SizedBox(height: 8),
@@ -391,24 +480,41 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                       labelText: l10n.settingsAccountConfirm,
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.done,
+                      onChanged: (_) => setInner(() {}),
                       onSubmitted: (_) => submit(),
                     ),
                     if (error != null) ...[
                       const SizedBox(height: 8),
-                      Text(error!,
-                          style: const TextStyle(color: Colors.red)),
+                      Text(error!, style: const TextStyle(color: Colors.red)),
                     ],
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton(
+                        onPressed: sendingReset ? null : sendReset,
+                        child: Text(
+                          sendingReset
+                              ? l10n.settingsAccountSendingResetLink
+                              : l10n.settingsAccountSendResetLink,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
+                  onPressed: saving ? null : () => Navigator.pop(ctx, null),
                   child: Text(l10n.settingsAccountCancel),
                 ),
                 FilledButton(
-                  onPressed: submit,
-                  child: Text(l10n.settingsAccountSave),
+                  onPressed: (saving || !allFilled) ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(l10n.settingsAccountSave),
                 ),
               ],
             );
@@ -416,23 +522,46 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         );
       },
     );
-    if (ok != true) return;
+    if (result == null || !result.ok) return;
+    // Commits the autofill session so the platform password manager offers
+    // to update the stored credential.
+    TextInput.finishAutofillContext();
     if (!mounted) return;
-    try {
-      final api = widget.apiClient;
-      if (api == null) throw Exception('Not authenticated');
-      await api.updatePassword(pwdCtl.text);
-      // Commits the autofill session so the platform password manager
-      // offers to update the stored credential.
-      TextInput.finishAutofillContext();
-      if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountPasswordUpdated);
-    } catch (e) {
-      debugPrint('SettingsAccountScreen password update failed: $e');
-      if (!mounted) return;
-      showTopBanner(context,
-          l10n.settingsAccountPasswordUpdateFailed(friendlyError(l10n, e)));
+    showTopBanner(context, l10n.settingsAccountPasswordUpdated);
+  }
+
+  String _passwordChangeMessage(
+    AppLocalizations l10n,
+    PasswordChangeReason reason,
+    String? detail,
+  ) {
+    switch (reason) {
+      case PasswordChangeReason.tooShort:
+        return l10n.authErrorPasswordTooShort(kPasswordMinLength);
+      case PasswordChangeReason.mismatch:
+        return l10n.settingsAccountPasswordsMismatch;
+      case PasswordChangeReason.currentMissing:
+        return l10n.settingsAccountCurrentPasswordRequired;
+      case PasswordChangeReason.currentInvalid:
+        return l10n.settingsAccountCurrentPasswordIncorrect;
+      case PasswordChangeReason.updateFailed:
+        return l10n.settingsAccountPasswordUpdateFailed(detail ?? '');
     }
+  }
+
+  /// The web `/auth/reset` URL a mailed reset link should land on — mobile
+  /// doesn't host the password-edit form. Mirrors the sign-in screen's
+  /// reset flow: `WEB_BASE_URL` with the prod host as the fallback.
+  String _resetRedirect() {
+    var webBase =
+        (dotenv.isInitialized ? dotenv.maybeGet('WEB_BASE_URL') : null)
+                ?.trim() ??
+            '';
+    if (webBase.isEmpty) webBase = 'https://threkir.com';
+    if (webBase.endsWith('/')) {
+      webBase = webBase.substring(0, webBase.length - 1);
+    }
+    return '$webBase/auth/reset';
   }
 
   Future<void> _changeEmail() async {

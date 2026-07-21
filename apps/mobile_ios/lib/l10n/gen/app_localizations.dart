@@ -9074,6 +9074,48 @@ abstract class AppLocalizations {
   /// **'Could not update password: {error}'**
   String settingsAccountPasswordUpdateFailed(Object error);
 
+  /// Label for the current-password field in the change-password dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get settingsAccountCurrentPassword;
+
+  /// Explains why the current password is required and the reset-link alternative for OAuth-only accounts
+  ///
+  /// In en, this message translates to:
+  /// **'For your security, enter your current password to change it. Signed up with Google or Apple? Email yourself a reset link to set one.'**
+  String get settingsAccountPasswordStepUpHint;
+
+  /// Validation error when the current-password field is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password to change it.'**
+  String get settingsAccountCurrentPasswordRequired;
+
+  /// Error when the current password fails to verify
+  ///
+  /// In en, this message translates to:
+  /// **'That current password is incorrect. If you have never set a password, email yourself a reset link instead.'**
+  String get settingsAccountCurrentPasswordIncorrect;
+
+  /// Button that mails a password-reset link, for OAuth-only accounts with no password to prove
+  ///
+  /// In en, this message translates to:
+  /// **'Email me a reset link'**
+  String get settingsAccountSendResetLink;
+
+  /// In-flight label on the reset-link button
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get settingsAccountSendingResetLink;
+
+  /// Banner shown after a password-reset link is mailed
+  ///
+  /// In en, this message translates to:
+  /// **'Reset link sent. Check your email to set a new password.'**
+  String get settingsAccountResetLinkSent;
+
   /// Tile title and dialog title for changing the account email
   ///
   /// In en, this message translates to:

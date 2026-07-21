@@ -668,8 +668,8 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 - **Social feed** extends to **lift** cards gated on `is_public`, reusing
   the existing follower/feed plumbing. **Shipped (2026-06-12) on web +
   mobile.** Web `SocialFeed.svelte` reads `fetchFollowingActivityFeed` (runs
-  via the redacted `public_runs` view + public `gym_workouts` via their
-  owner-or-public RLS, merged into one cursor-paged window) and renders a
+  via the redacted `public_runs` view + lifts via the redacted
+  `public_gym_workouts` view, merged into one cursor-paged window) and renders a
   distinct lift card (title + set count + total volume + handle + date) with a
   `Lift` filter chip; the public lift links to the new read-only
   `/share/workout/[id]` page, and a public/private toggle + copy-share-link
@@ -685,16 +685,22 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   schema (cheap) but no UI surfaces meal sharing until there's a clear reason.
   Defaults are private regardless.
   > **Redaction boundary (decisions §33).** The `activities` view is
-  > `security_invoker`, so base-table RLS decides cross-user visibility.
-  > `gym_workouts` / `food_log` keep an "owner or public" read policy, so a
-  > non-owner (and anon) sees their public rows *through the view*. `runs`
-  > deliberately has **no** public-read policy — non-owner run reads must go
-  > through the redacted `public_runs` view, so a public **run** is invisible
-  > through `activities` to anyone but its owner. Lift feed cards may read the
-  > view (or `gym_workouts` directly); **run** cards stay on `public_runs`.
-  > Re-adding a runs public-read policy to "symmetrise" the view would leak
-  > unredacted run columns — `activities_view_windowed_test.sql` pins the
-  > asymmetry so that can't happen by accident.
+  > `security_invoker`, so base-table RLS decides cross-user visibility — and
+  > since `20270313_001` **all three** base tables are owner-only. `runs` lost
+  > its public-read policy in `20260701_001`; `gym_workouts` / `food_log` lost
+  > theirs in `20270313_001` (the `or is_public` branch wire-leaked
+  > `external_id` / `last_modified_at` / `notes` / `metadata`). So `activities`
+  > is an **owner-only timeline**: a non-owner sees nothing of another user
+  > through it, public rows included. Every non-owner read goes through the
+  > matching redacted view — runs on `public_runs`, lifts on
+  > `public_gym_workouts` (+ `public_gym_sets` for a public workout's sets).
+  > A lift card must **not** read `gym_workouts` directly: the base table is
+  > owner-only, so the query returns `[]` rather than erroring and the feed
+  > under-reports silently — exactly the #527 regression on mobile.
+  > `activities_view_windowed_test.sql` pins the owner-only view,
+  > `following_lifts_visibility_test.sql` pins the follower's lift-feed
+  > contract, and the mobile `architecture_guards_test.dart` pins that
+  > `_fetchFollowingLifts` reads the view.
 
 ### Lift training-load spec (the Tier-1 mechanic — get this right or it pollutes run readiness)
 

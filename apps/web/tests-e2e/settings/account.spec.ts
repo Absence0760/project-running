@@ -141,17 +141,95 @@ test.describe('/settings/account', () => {
 	//
 	// Only the REJECTION branches are exercised: a successful save would
 	// rotate USER_A's password out from under storageStatePath and every
-	// other spec that signs in as them. Both cases below return before
+	// other spec that signs in as them. Every case below returns before
 	// updateUser is called, which is exactly why they're safe to run
 	// against the shared fixture user.
-	test.describe('change password — validation', () => {
-		test('mismatched entries are rejected', async ({ page }) => {
+	test.describe('change password — step-up + validation', () => {
+		// A live access token must not be enough to rotate the password
+		// (issue #381, OWASP ASVS V2.1.14). Belt-and-braces for the shared
+		// fixture: PUT /auth/v1/user is aborted, so even a regression that
+		// skipped the current-password proof can't change USER_A's password.
+		const guardUpdateUser = async (page: import('@playwright/test').Page) => {
+			const seen = { put: 0 };
+			await page.route('**/auth/v1/user', async (route) => {
+				if (route.request().method() !== 'PUT') {
+					await route.continue();
+					return;
+				}
+				seen.put += 1;
+				await route.abort();
+			});
+			return seen;
+		};
+
+		test('a wrong current password is rejected and never reaches updateUser', async ({
+			page
+		}) => {
+			const seen = await guardUpdateUser(page);
+			// Only the password grant is stubbed — the refresh_token grant
+			// on the same endpoint has to keep working or the session dies
+			// mid-test.
+			await page.route('**/auth/v1/token**', async (route) => {
+				if (!route.request().url().includes('grant_type=password')) {
+					await route.continue();
+					return;
+				}
+				await route.fulfill({
+					status: 400,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						error: 'invalid_grant',
+						error_description: 'Invalid login credentials'
+					})
+				});
+			});
+
 			await page.goto('/settings/account');
+			await page.getByLabel('Current Password').fill('not-my-password');
+			await page.getByLabel('New Password').fill('longenough1');
+			await page.getByLabel('Confirm Password').fill('longenough1');
+			await page.getByRole('button', { name: 'Save Password' }).click();
+
+			await expect(
+				page.getByText('That current password is incorrect.', { exact: false })
+			).toBeVisible();
+			expect(seen.put).toBe(0);
+		});
+
+		test('Save Password stays disabled until the current password is entered', async ({
+			page
+		}) => {
+			await page.goto('/settings/account');
+			const save = page.getByRole('button', { name: 'Save Password' });
+			await page.getByLabel('New Password').fill('longenough1');
+			await page.getByLabel('Confirm Password').fill('longenough1');
+			await expect(save).toBeDisabled();
+
+			await page.getByLabel('Current Password').fill('anything');
+			await expect(save).toBeEnabled();
+		});
+
+		test('mismatched entries are rejected before the current password is sent', async ({
+			page
+		}) => {
+			const seen = await guardUpdateUser(page);
+			let sawGrant = false;
+			await page.route('**/auth/v1/token**', async (route) => {
+				if (route.request().url().includes('grant_type=password')) sawGrant = true;
+				await route.continue();
+			});
+
+			await page.goto('/settings/account');
+			await page.getByLabel('Current Password').fill('irrelevant');
 			await page.getByLabel('New Password').fill('longenough1');
 			await page.getByLabel('Confirm Password').fill('longenough2');
 			await page.getByRole('button', { name: 'Save Password' }).click();
 
 			await expect(page.getByText('Passwords do not match.')).toBeVisible();
+			// The local check runs first, so a typo in the new field never
+			// burns a sign-in attempt against GoTrue's rate limit.
+			expect(sawGrant).toBe(false);
+			expect(seen.put).toBe(0);
 		});
 
 		test('a too-short entry reports length, not mismatch', async ({ page }) => {
@@ -159,6 +237,7 @@ test.describe('/settings/account', () => {
 			// Short AND mismatched: length is the user's real problem, so
 			// reporting a mismatch would send them round the loop fixing
 			// the wrong thing. Pins the precedence through the UI.
+			await page.getByLabel('Current Password').fill('irrelevant');
 			await page.getByLabel('New Password').fill('abc');
 			await page.getByLabel('Confirm Password').fill('xyz');
 			await page.getByRole('button', { name: 'Save Password' }).click();

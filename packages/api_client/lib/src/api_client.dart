@@ -494,6 +494,29 @@ class ApiClient {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  /// Positive proof that [currentPassword] is the signed-in account's
+  /// password today — the change-password step-up (`password_change.dart`).
+  /// A live access token alone must never be enough to rotate the password
+  /// (OWASP ASVS V2.1.14 / CWE-620): the caller re-authenticates the
+  /// current credential before the new one is written.
+  ///
+  /// Returns true ONLY on a successful re-authentication. A rejected
+  /// credential, a thrown error (offline, rate-limit), or a session with no
+  /// email all return false — fail closed. Re-signing in as the SAME user
+  /// refreshes the session in place; a rejected attempt leaves the existing
+  /// session untouched. Reuses [signIn] rather than calling the auth client
+  /// directly.
+  Future<bool> verifyCurrentPassword(String currentPassword) async {
+    final email = userEmail;
+    if (email == null || email.isEmpty) return false;
+    try {
+      await signIn(email: email, password: currentPassword);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Start a change of the signed-in user's email. GoTrue's secure email
   /// change sends a confirmation link to BOTH the current and the new
   /// address; the account email only flips once both are followed, so
@@ -4719,12 +4742,13 @@ class ApiClient {
   /// runs AND public gym workouts from people the caller follows, merged into
   /// one reverse-chronological window.
   ///
-  /// Runs go through the redacted `public_runs` view (decisions §33). Lifts
-  /// read `gym_workouts` directly — that table's "owner or public read" RLS
-  /// scopes a non-owner to public rows, and only the headline columns
-  /// (title / set_count / volume_kg) are projected, never notes / per-set
-  /// data. `activityType`: 'all' merges both; 'lift' / 'gym' returns lifts
-  /// only; any run activity_type returns runs only.
+  /// Runs go through the redacted `public_runs` view, lifts through the
+  /// redacted `public_gym_workouts` view (decisions §33). Both base tables are
+  /// owner-only, so a non-owner read has to come off a view; the lift view
+  /// projects only the headline columns (title / set_count / volume_kg), never
+  /// notes / metadata / per-set data. `activityType`: 'all' merges both;
+  /// 'lift' / 'gym' returns lifts only; any run activity_type returns runs
+  /// only.
   Future<List<ActivityFeedEntry>> fetchFollowingActivityFeed({
     int limit = 20,
     ({DateTime startedAt, String id})? cursor,
@@ -4793,10 +4817,13 @@ class ApiClient {
         .subtract(Duration(days: feedWindowDays))
         .toIso8601String();
 
+    // Lift feed reads go through the public_gym_workouts view (migration
+    // 20270313_001) — the base table is owner-only, so a non-owner query
+    // against it returns nothing. The view filters on is_public = true so
+    // the explicit eq filter would be redundant.
     var q = _client
-        .from(GymWorkoutRow.table)
+        .from('public_gym_workouts')
         .select('id, user_id, started_at, title, set_count, volume_kg')
-        .eq(GymWorkoutRow.colIsPublic, true)
         .inFilter(GymWorkoutRow.colUserId, filtered)
         .gte(GymWorkoutRow.colStartedAt, cutoff);
     if (cursor != null) {

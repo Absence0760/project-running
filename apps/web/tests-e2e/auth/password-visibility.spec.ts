@@ -65,15 +65,14 @@ test.describe('/settings/account change-password visibility toggle', () => {
 		await pw.fill('longenough1');
 		await expect(pw).toHaveAttribute('type', 'password');
 
-		// The New Password field is the first of the two change-password
-		// fields, so its toggle is the first "Show password" button.
-		const show = page.getByRole('button', { name: 'Show password' }).first();
-		await show.click();
+		// Scoped to its own label rather than an index — the section grew a
+		// Current Password field ahead of this one (issue #381).
+		const field = page.locator('label').filter({ hasText: 'New Password' });
+		await field.getByRole('button', { name: 'Show password' }).click();
 		await expect(pw).toHaveAttribute('type', 'text');
 		await expect(pw).toHaveValue('longenough1');
 
-		const hide = page.getByRole('button', { name: 'Hide password' }).first();
-		await hide.click();
+		await field.getByRole('button', { name: 'Hide password' }).click();
 		await expect(pw).toHaveAttribute('type', 'password');
 	});
 });

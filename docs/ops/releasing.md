@@ -277,5 +277,21 @@ latest GitHub Release and `adb install` that.
   new schema should tag after (or at least not ahead of) `backend@X`.
 - No uncommitted secrets. `grep -r SUPABASE_SERVICE_ROLE_KEY apps/` and
   friends should return only `.env.example` hits.
+- **Supabase Auth URL configuration (every release, web or mobile).**
+  In the hosted project's dashboard, confirm **Authentication → URL
+  Configuration**: **Site URL** is the prod origin (`https://threkir.com`,
+  never the `http://localhost:3000` default), and **Redirect URLs**
+  contains `https://threkir.com/auth/callback`,
+  `https://threkir.com/auth/reset`, `com.threkir.app://login-callback`,
+  and the preview origin. A wrong Site URL or a missing allow-list entry
+  lands a signup confirmation on `/?code=…` instead of `/auth/callback`,
+  which used to mint a live session with an unstamped GDPR Art 8 consent
+  record. The app fails closed in code (issue #363), but this is a
+  privacy-boundary config gate — verify it, don't assume the guard.
+  Details: [web_app_auth.md § Production setup](../features/web_app_auth.md).
+- **Supabase Auth email confirmations.** **Authentication → Providers →
+  Email → Confirm email** is **ON** in prod (`enable_confirmations =
+  true`). Local config keeps it off on purpose; prod must not. Closes the
+  sign-up account-existence oracle (issue #399).
 - If this is a first release on a new device, the test plan section in
   `apps/<app>/local_testing.md` has been smoke-run.

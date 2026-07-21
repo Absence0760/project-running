@@ -2017,6 +2017,44 @@ void main() {
       }
     });
 
+    test('public-lift readers go through the public_gym_workouts view', () {
+      // Reason: migration 20270313_001 dropped the "owner or public read"
+      // branch on gym_workouts (it wire-leaked external_id /
+      // last_modified_at / notes / metadata) and moved non-owner reads to
+      // the redacted public_gym_workouts view. A base-table query as a
+      // non-owner now returns [] rather than erroring, so the cross-modal
+      // following feed silently lost every followee's public lift
+      // (issue #527). The view is the only non-owner lift read path.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      const fn = '_fetchFollowingLifts';
+      // Anchored on the declaration, not a bare ` $fn(` — the call site in
+      // fetchFollowingActivityFeed comes first in the file and would scope
+      // the assertion to the wrong body.
+      final start =
+          source.indexOf('Future<List<LiftFeedEntry>> $fn(');
+      expect(start >= 0, isTrue, reason: 'Could not locate $fn — rename?');
+      final end = source.indexOf('\n  }\n', start);
+      expect(end > start, isTrue, reason: 'Could not locate end of $fn body');
+      final body = source.substring(start, end);
+      expect(
+        body.contains("from('public_gym_workouts')"),
+        isTrue,
+        reason:
+            '$fn must read from the public_gym_workouts view rather than the '
+            'gym_workouts table — the base table is owner-only since '
+            'migration 20270313_001, so a non-owner read returns nothing.',
+      );
+      expect(
+        RegExp(r"from\(\s*GymWorkoutRow\.table\s*\)").hasMatch(body),
+        isFalse,
+        reason:
+            '$fn must NOT read from the bare GymWorkoutRow.table — that path '
+            'is owner-only and silently yields an empty lift feed.',
+      );
+    });
+
     test('clipTrackForUser fails closed on RPC error', () {
       // Reason: returning the unclipped input on RPC error was the
       // privacy leak this helper exists to prevent. Fail-closed

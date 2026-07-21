@@ -5,6 +5,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
+	import { verifyConsentStamped } from '$lib/core/auth_confirmation';
 
 	let error = $state('');
 
@@ -55,24 +56,11 @@
 
 		// Profile-level gate: if either consent timestamp is null
 		// post-callback, force the confirm-age page before any feature
-		// surface renders.
-		try {
-			const { data: prof } = await supabase.rpc('get_my_profile').maybeSingle();
-			const row = prof as
-				| { age_confirmed_at: string | null; terms_accepted_at: string | null }
-				| null;
-			if (!row?.age_confirmed_at || !row?.terms_accepted_at) {
-				goto('/auth/confirm-age');
-				return;
-			}
-		} catch (_) {
-			// Profile read failed — fail closed to /auth/confirm-age
-			// rather than /dashboard. The next session refresh does
-			// NOT repeat the consent check, so a transient DB error
-			// here would otherwise grant access to the app without
-			// consent. confirm_age_and_terms() is idempotent, so an
-			// already-confirmed user incurs at most one extra click.
-			// /audit/owasp May 2026 Medium #5.
+		// surface renders. /audit/owasp May 2026 Medium #5.
+		const consent = await verifyConsentStamped(() =>
+			supabase.rpc('get_my_profile').maybeSingle(),
+		);
+		if (consent === 'needs-consent') {
 			goto('/auth/confirm-age');
 			return;
 		}
