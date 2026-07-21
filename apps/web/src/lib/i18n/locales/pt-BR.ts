@@ -2206,6 +2206,7 @@ export const messages = {
 	"live.statElapsed": "Decorrido",
 	"live.statPace": "Ritmo",
 	"live.waitingToStartBroadcasting": "Aguardando o corredor começar a transmitir…",
+	"live.recentre": "Centralizar no corredor",
 	"live.consentTitle": "Mapa desativado até você carregá-lo",
 	"live.consentBodyPrefix": "Carregar o mapa envia seu endereço IP para o ",
 	"live.consentBodyMid": ", nosso provedor de tiles na Suíça. Toque em ",

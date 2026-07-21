@@ -139,6 +139,11 @@
 	// so the view snaps to the runner regardless of geography.
 	let centred = false;
 
+	// Latched on a user drag (or the viewer tracking their own location)
+	// so the per-ping follow-cam stops yanking the view back while the
+	// viewer explores the course. The re-center button clears it.
+	let userPanned = $state(false);
+
 	// Default centre before the first ping arrives so the map isn't
 	// blank while `connecting`.
 	const fallbackLat = -37.8136;
@@ -220,7 +225,7 @@
 		if (!centred) {
 			map.jumpTo({ center: [ping.lng, ping.lat], zoom: 15 });
 			centred = true;
-		} else {
+		} else if (!userPanned) {
 			map.panTo([ping.lng, ping.lat], { animate: true });
 		}
 		const source = map.getSource('live-trace') as maplibregl.GeoJSONSource | undefined;
@@ -595,6 +600,13 @@
 		if (mapConsented) initMap();
 	});
 
+	function recentreOnRunner() {
+		userPanned = false;
+		if (map && latestPosition) {
+			map.easeTo({ center: [latestPosition.lng, latestPosition.lat] });
+		}
+	}
+
 	function loadMapNow() {
 		mapConsented = true;
 		// $effect below would normally pick this up, but the map
@@ -621,6 +633,20 @@
 			zoom: 15,
 		});
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		const geolocate = new maplibregl.GeolocateControl({
+			positionOptions: { enableHighAccuracy: true },
+			trackUserLocation: true,
+		});
+		// Tracking the viewer's own position must win over the runner
+		// follow-cam, or the two camera drivers fight on every ping.
+		geolocate.on('trackuserlocationstart', () => {
+			userPanned = true;
+		});
+		map.addControl(geolocate, 'top-right');
+		// dragstart fires on user gestures only, never on panTo/jumpTo.
+		map.on('dragstart', () => {
+			userPanned = true;
+		});
 		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		map.on('load', () => {
@@ -856,6 +882,17 @@
 							<p>{m('live.waitingToStartBroadcasting')}</p>
 						</div>
 					</div>
+				{/if}
+				{#if userPanned && latestPosition}
+					<button
+						type="button"
+						class="recentre-btn"
+						onclick={recentreOnRunner}
+						title={m('live.recentre')}
+						aria-label={m('live.recentre')}
+					>
+						<span class="material-symbols" aria-hidden="true">my_location</span>
+					</button>
 				{/if}
 			{:else}
 				<!--
@@ -1327,6 +1364,29 @@
 	}
 	.map-veil-card p {
 		margin: 0;
+	}
+	.recentre-btn {
+		position: absolute;
+		inset-inline-end: var(--space-md);
+		inset-block-end: var(--space-2xl);
+		z-index: 5;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: 1px solid var(--color-border);
+		border-radius: 50%;
+		background: var(--color-surface);
+		box-shadow: var(--shadow-md);
+		cursor: pointer;
+		color: var(--color-text);
+	}
+	.recentre-btn:hover {
+		color: var(--color-primary);
+	}
+	.recentre-btn .material-symbols {
+		font-size: 1.3rem;
 	}
 	.map-consent-veil {
 		position: absolute;

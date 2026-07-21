@@ -2207,6 +2207,7 @@ export const messages = {
 	"live.statElapsed": "Transcurrido",
 	"live.statPace": "Ritmo",
 	"live.waitingToStartBroadcasting": "Esperando a que el corredor empiece a transmitir…",
+	"live.recentre": "Centrar en el corredor",
 	"live.consentTitle": "Mapa desactivado hasta que lo cargues",
 	"live.consentBodyPrefix": "Cargar el mapa envía tu dirección IP a ",
 	"live.consentBodyMid": ", nuestro proveedor de mapas en Suiza. Toca ",

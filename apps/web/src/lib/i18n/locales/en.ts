@@ -2215,6 +2215,7 @@ export const en = {
 	"live.statElapsed": "Elapsed",
 	"live.statPace": "Pace",
 	"live.waitingToStartBroadcasting": "Waiting for the runner to start broadcasting…",
+	"live.recentre": "Re-center on runner",
 	"live.consentTitle": "Map disabled until you load it",
 	"live.consentBodyPrefix": "Loading the map sends your IP address to ",
 	"live.consentBodyMid": ", our tile provider in Switzerland. Tap ",

@@ -2207,6 +2207,7 @@ export const messages = {
 	"live.statElapsed": "Écoulé",
 	"live.statPace": "Allure",
 	"live.waitingToStartBroadcasting": "En attente que le coureur commence à diffuser…",
+	"live.recentre": "Recentrer sur le coureur",
 	"live.consentTitle": "Carte désactivée jusqu'à son chargement",
 	"live.consentBodyPrefix": "Charger la carte envoie ton adresse IP à ",
 	"live.consentBodyMid": ", notre fournisseur de tuiles en Suisse. Appuie sur ",

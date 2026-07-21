@@ -2207,6 +2207,7 @@ export const messages = {
 	"live.statElapsed": "Verstrichen",
 	"live.statPace": "Tempo",
 	"live.waitingToStartBroadcasting": "Warte darauf, dass der Läufer mit dem Senden beginnt…",
+	"live.recentre": "Auf den Läufer zentrieren",
 	"live.consentTitle": "Karte deaktiviert, bis du sie lädst",
 	"live.consentBodyPrefix": "Beim Laden der Karte wird deine IP-Adresse an ",
 	"live.consentBodyMid": " gesendet, unseren Kachelanbieter in der Schweiz. Tippe auf ",

@@ -2202,6 +2202,7 @@ export const messages = {
 	"live.statElapsed": "経過時間",
 	"live.statPace": "ペース",
 	"live.waitingToStartBroadcasting": "ランナーが配信を始めるのを待っています…",
+	"live.recentre": "ランナーの位置に戻る",
 	"live.consentTitle": "読み込むまで地図は無効です",
 	"live.consentBodyPrefix": "地図を読み込むと、あなたの IP アドレスが ",
 	"live.consentBodyMid": " に送信されます。これはスイスにあるタイルプロバイダーです。続けるには ",
