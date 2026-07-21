@@ -31,6 +31,7 @@ use crate::hr_zones::{
 };
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
+use crate::page::Page;
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
@@ -489,6 +490,10 @@ pub struct Snapshot {
     /// Lets the face surface the truncation on the wrist instead of it being a
     /// cable-only `warn!`.
     pub track_full: bool,
+    /// The effective BTN3 page cycle for this snapshot (bit = [`Page::bit`]):
+    /// data-present pages ∩ the curated set, Dashboard always included. The
+    /// button task walks it and the page indicator counts it.
+    pub pages_mask: u32,
 }
 
 impl Snapshot {
@@ -697,6 +702,21 @@ pub struct Recorder {
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
     race_day: Option<RaceDayView>,
+    /// Whether the nav task holds a loaded course — the Nav page's data
+    /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
+    /// (the recorder stays course-agnostic; this is a presence bit, not the
+    /// course).
+    course_loaded: bool,
+    /// The runner's curated page set, from settings sync
+    /// ([`set_pages_enabled`](Recorder::set_pages_enabled)); bit =
+    /// [`Page::bit`]. Default all-enabled.
+    pages_enabled: u32,
+    /// Whether the BTN3 cycle skips pages whose backing data is absent
+    /// ([`set_hide_empty_pages`](Recorder::set_hide_empty_pages)). Default on:
+    /// an unsynced watch cycles ~10 live pages instead of 32, and a page
+    /// appears the moment its data does. Off restores the full fixed cycle
+    /// (every empty state stays visitable).
+    hide_empty_pages: bool,
 }
 
 impl Default for Recorder {
@@ -753,7 +773,27 @@ impl Recorder {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            course_loaded: false,
+            pages_enabled: u32::MAX,
+            hide_empty_pages: true,
         }
+    }
+
+    /// Presence bit for the Nav page: the nav task holds a loaded course.
+    pub fn set_course_loaded(&mut self, loaded: bool) {
+        self.course_loaded = loaded;
+    }
+
+    /// The curated page set from settings sync (bit = [`Page::bit`]). Any
+    /// mask is accepted — [`Page::next_in`] force-includes the Dashboard, so
+    /// even an all-zero push can't empty the cycle.
+    pub fn set_pages_enabled(&mut self, mask: u32) {
+        self.pages_enabled = mask;
+    }
+
+    /// Whether the cycle skips data-less pages (see the field doc).
+    pub fn set_hide_empty_pages(&mut self, hide: bool) {
+        self.hide_empty_pages = hide;
     }
 
     /// Expected seconds between incoming fixes, from the selected GNSS mode
@@ -1264,7 +1304,7 @@ impl Recorder {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        Snapshot {
+        let mut snap = Snapshot {
             state: self.state,
             distance_m: self.distance_m,
             elapsed_s: self.elapsed_s(),
@@ -1313,7 +1353,73 @@ impl Recorder {
             route_elev: self.route_elev,
             race_day: self.race_day,
             track_full: self.stored_points >= crate::flash_store::MAX_POINTS_PER_RUN,
-        }
+            pages_mask: 0,
+        };
+        snap.pages_mask = self.pages_mask(&snap);
+        snap
+    }
+
+    /// The effective BTN3 cycle for this snapshot: the pages whose data is
+    /// present (unless [`hide_empty_pages`](Recorder::set_hide_empty_pages)
+    /// is off), intersected with the runner's curated set, Dashboard always
+    /// included. [`Page::next_in`] / [`Page::prev_in`] walk exactly this
+    /// mask, and the page-position indicator counts it — so the dot row says
+    /// how many pages the cycle actually has right now.
+    fn pages_mask(&self, s: &Snapshot) -> u32 {
+        let available = if self.hide_empty_pages {
+            self.available_pages(s)
+        } else {
+            u32::MAX
+        };
+        (available & self.pages_enabled) | Page::Dashboard.bit()
+    }
+
+    /// Which pages have something real to show for this snapshot. The core
+    /// run pages (Dashboard / Distance / Pace / Lap / Splits) and the
+    /// Back-to-start safety page are always available; every other page is
+    /// available exactly when the data behind its honest empty state exists —
+    /// the same conditions the `face` renderers key their inactive states on.
+    fn available_pages(&self, s: &Snapshot) -> u32 {
+        let mut m = Page::Dashboard.bit()
+            | Page::Distance.bit()
+            | Page::Pace.bit()
+            | Page::Lap.bit()
+            | Page::Splits.bit()
+            | Page::BackToStart.bit();
+        let mut set = |page: Page, on: bool| {
+            if on {
+                m |= page.bit();
+            }
+        };
+        // Zone time banks only while an HR reading is live, so any banked
+        // second means the sensor is (or was) on this run.
+        set(Page::Zones, s.zone_time_s.iter().any(|&t| t > 0));
+        set(Page::Pacer, s.pacer.is_some());
+        set(Page::RacePredictor, s.race_prediction.is_some());
+        set(Page::TrainingLoad, s.training_stress.is_some());
+        set(Page::DistanceBand, s.band.is_some());
+        set(Page::CutoffEta, s.cutoff.is_some());
+        set(Page::Roadbook, s.roadbook.is_some());
+        set(Page::Fuel, s.fuel.is_some());
+        set(Page::Nav, self.course_loaded);
+        set(Page::GearWear, s.gear.is_some());
+        set(Page::TrainingPaces, s.training_paces.is_some());
+        set(Page::Fitness, s.fitness.is_some());
+        set(Page::ElevationProfile, s.elev_profile.len > 0);
+        set(Page::Recap, s.recap.is_some());
+        set(Page::Streaks, s.streaks.is_some());
+        set(Page::RunStats, s.run_stats.is_some());
+        set(Page::PrRecency, s.pr_recency.is_some());
+        set(Page::PlanReplan, s.plan_replan.is_some());
+        set(Page::PlanAdaptive, s.plan_adaptive.is_some());
+        set(Page::Readiness, s.readiness.is_some());
+        set(Page::Goals, s.goals.is_some());
+        set(Page::TurnCue, s.turn_cue.is_some());
+        set(Page::RouteSimplify, s.route_simplify.is_some());
+        set(Page::AutoEffort, s.auto_effort.is_some());
+        set(Page::RouteElev, s.route_elev.is_some());
+        set(Page::RaceDay, s.race_day.is_some());
+        m
     }
 
     /// The training-pace zones derived from the synced goal-race pace, or `None`
@@ -2594,6 +2700,88 @@ mod tests {
         // Clearing the roadbook drops the terrain partner with it.
         r.set_roadbook(&[]);
         assert!(!r.snapshot().pacer.unwrap().terrain_aware);
+    }
+
+    #[test]
+    fn pages_mask_hides_empty_pages_by_default() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        let mask = r.snapshot().pages_mask;
+        // The core run pages + Back-to-start are always in.
+        for p in [
+            Page::Dashboard,
+            Page::Distance,
+            Page::Pace,
+            Page::Lap,
+            Page::Splits,
+            Page::BackToStart,
+        ] {
+            assert_ne!(mask & p.bit(), 0, "{p:?} must always be in the cycle");
+        }
+        // Nothing synced, no course, no HR: the sync-fed glances are out.
+        for p in [
+            Page::Zones,
+            Page::Roadbook,
+            Page::Fuel,
+            Page::Nav,
+            Page::GearWear,
+            Page::Fitness,
+            Page::Recap,
+            Page::RaceDay,
+        ] {
+            assert_eq!(mask & p.bit(), 0, "{p:?} has no data and must be hidden");
+        }
+    }
+
+    #[test]
+    fn pages_appear_the_moment_their_data_does() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert_eq!(r.snapshot().pages_mask & Page::Pacer.bit(), 0);
+        r.set_pacer_goal(10_000, 3_000);
+        assert_ne!(r.snapshot().pages_mask & Page::Pacer.bit(), 0);
+        assert_eq!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+        r.set_course_loaded(true);
+        assert_ne!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+        r.set_course_loaded(false);
+        assert_eq!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+    }
+
+    #[test]
+    fn hide_empty_off_restores_the_full_fixed_cycle() {
+        let mut r = Recorder::new();
+        r.set_hide_empty_pages(false);
+        r.start(0);
+        assert_eq!(
+            r.snapshot().pages_mask,
+            u32::MAX,
+            "every page visitable, empty states and all"
+        );
+    }
+
+    #[test]
+    fn curated_pages_intersect_and_dashboard_is_forced() {
+        let mut r = Recorder::new();
+        r.set_hide_empty_pages(false);
+        r.set_pages_enabled(Page::Pace.bit() | Page::Splits.bit());
+        r.start(0);
+        let mask = r.snapshot().pages_mask;
+        assert_eq!(
+            mask,
+            Page::Dashboard.bit() | Page::Pace.bit() | Page::Splits.bit()
+        );
+        // Even an all-zero push keeps the Dashboard reachable.
+        r.set_pages_enabled(0);
+        assert_eq!(r.snapshot().pages_mask, Page::Dashboard.bit());
+        // With hide-empty back on, curation still can't resurrect a dataless
+        // page: enabled ∩ available.
+        r.set_hide_empty_pages(true);
+        r.set_pages_enabled(Page::Fuel.bit() | Page::Distance.bit());
+        let mask = r.snapshot().pages_mask;
+        assert_eq!(mask & Page::Fuel.bit(), 0, "no roadbook, no Fuel page");
+        assert_ne!(mask & Page::Distance.bit(), 0);
     }
 
     #[test]

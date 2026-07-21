@@ -205,7 +205,7 @@ pub fn face_rows(
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, false),
     }
 }
 
@@ -283,7 +283,7 @@ pub fn page_rows(
     mode: GnssMode,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
             Page::Distance => glance(
@@ -2104,16 +2104,27 @@ fn dashboard(
 /// the mode tag with its battery figure. The `~` marks the hours as the
 /// projection they are (tier-2 estimates derived in [`crate::gnss_mode`]; the
 /// tier-1 bench can't measure power at all).
+///
+/// While `animate` is on (the post-press interaction window — exactly when
+/// someone is working the buttons), the title row alternates between the
+/// brand and a BTN3 hint (`B3 MODE / HOLD REZERO`), because nothing on the
+/// hardware says what the un-labelled DK buttons do. Outside the window the
+/// brand holds steady, keeping the idle face free of per-second redraws.
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
     mode: GnssMode,
+    animate: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let _ = write!(rows[0], "THREKIR");
+    if animate && uptime_s % 4 >= 2 {
+        let _ = write!(rows[0], "B3 MODE / HOLD REZERO");
+    } else {
+        let _ = write!(rows[0], "THREKIR");
+    }
     // "EST" marks the battery figure as an unmeasured estimate, not a
     // guaranteed runtime — the tier-1 bench can't measure power at all, so the
     // number is a tier-2 projection derived in `gnss_mode`. Reading it as a spec
@@ -2372,6 +2383,7 @@ mod tests {
             route_elev: None,
             race_day: None,
             track_full: false,
+            pages_mask: u32::MAX,
         }
     }
 
@@ -2699,6 +2711,54 @@ mod tests {
         assert_eq!(rows[6].as_str(), "ALT  1624 M");
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
         assert_eq!(rows[7].as_str(), "");
+    }
+
+    #[test]
+    fn idle_title_alternates_a_btn3_hint_inside_the_interaction_window() {
+        // Post-press (animate on): the brand and the button hint share row 0
+        // on a 2 s / 2 s cadence — the hint shows exactly while someone is
+        // working the un-labelled buttons.
+        let rows = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            None,
+            None,
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str(), "B3 MODE / HOLD REZERO");
+        assert!(rows[0].len() <= COLS);
+        let rows = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            None,
+            None,
+            None,
+            NavView::NoCourse,
+            None,
+            44,
+            true,
+        );
+        assert_eq!(rows[0].as_str(), "THREKIR");
+        // Window closed: the brand holds steady whatever the second, so an
+        // unattended idle face never redraws row 0.
+        for uptime in [42, 43, 44, 45] {
+            let rows = page_rows(
+                Page::Dashboard,
+                Some(&fix()),
+                None,
+                None,
+                None,
+                NavView::NoCourse,
+                None,
+                uptime,
+                false,
+            );
+            assert_eq!(rows[0].as_str(), "THREKIR");
+        }
     }
 
     #[test]

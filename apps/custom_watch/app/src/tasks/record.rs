@@ -381,6 +381,9 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => Some(s.along_m),
                 NavView::NoCourse | NavView::NoFix => None,
             });
+            // Presence bit for the page filter: NoFix still means a course is
+            // loaded — only NoCourse hides the Nav page from the cycle.
+            recorder.set_course_loaded(!matches!(nav, NavView::NoCourse));
             // The nav task owns the course, so it also carries the next turn
             // ahead; feed it to the recorder's TurnCue page (course-agnostic
             // recorder, same seam as the along-course distance above).
@@ -584,6 +587,12 @@ fn apply_settings(
     }
     if let Some(f) = s.fuel {
         alerts.set_fuel_intervals(f.drink_interval_s, f.eat_interval_s);
+    }
+    if let Some(mask) = s.pages {
+        recorder.set_pages_enabled(mask);
+    }
+    if let Some(hide) = s.hide_empty_pages {
+        recorder.set_hide_empty_pages(hide);
     }
 }
 

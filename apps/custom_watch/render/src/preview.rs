@@ -82,6 +82,7 @@ fn base_snapshot() -> Snapshot {
         route_elev: None,
         race_day: None,
         track_full: false,
+        pages_mask: u32::MAX,
     }
 }
 
@@ -156,7 +157,10 @@ fn preview_pacer_page() {
     });
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Pacer, Some(&snap), Some(150));
-    widgets::draw_page_indicator(&mut fb, watch_core::statusbar::page_indicator(Page::Pacer));
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Pacer, u32::MAX),
+    );
     widgets::draw_pacer_overlay(&mut fb, &snap);
     show("pacer: +75s ahead centre-bar", &fb);
 }
@@ -167,7 +171,10 @@ fn preview_zones_page() {
     snap.zone_time_s = [1800, 2400, 1500, 600, 120];
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Zones, Some(&snap), Some(150));
-    widgets::draw_page_indicator(&mut fb, watch_core::statusbar::page_indicator(Page::Zones));
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Zones, u32::MAX),
+    );
     widgets::draw_zones_overlay(&mut fb, &snap, Some(150));
     show("zones: per-zone bars + live-zone frame", &fb);
 }
@@ -178,7 +185,10 @@ fn preview_splits_page() {
     snap.pace_bucket_m = [800.0, 3200.0, 6400.0, 4100.0, 1500.0, 300.0];
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Splits, Some(&snap), None);
-    widgets::draw_page_indicator(&mut fb, watch_core::statusbar::page_indicator(Page::Splits));
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Splits, u32::MAX),
+    );
     widgets::draw_splits_overlay(&mut fb, &snap);
     show("splits: pace-distribution histogram", &fb);
 }

@@ -9,8 +9,10 @@ import 'dart:typed_data';
 ///
 /// `flags` is a bitfield of which optional fields follow, in bit order:
 /// bit0 max_hr, bit1 pacer, bit2 gear, bit3 zone_ceiling, bit4 sea_level_pa,
-/// bit5 fuel. Only the present fields are written, so a partial update is a
-/// shorter frame; a fully populated frame is 37 bytes.
+/// bit5 fuel, bit6 pages, bit7 hide_empty_pages. Only the present fields are
+/// written, so a partial update is a shorter frame; a fully populated frame is
+/// 42 bytes. The flag byte is now full — the NEXT field is a version bump on
+/// both sides.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.
@@ -24,6 +26,8 @@ const int _flagGear = 0x04;
 const int _flagZoneCeiling = 0x08;
 const int _flagSeaLevel = 0x10;
 const int _flagFuel = 0x20;
+const int _flagPages = 0x40;
+const int _flagHideEmpty = 0x80;
 
 class WatchSettings {
   final int? maxHr;
@@ -44,6 +48,15 @@ class WatchSettings {
   /// temperate fuel_plan defaults — the desert/hot-weather case.
   final ({int drinkIntervalS, int eatIntervalS})? fuel;
 
+  /// The curated run-view page set: bit i enables the page with firmware
+  /// discriminant i (the watch's `Page::bit` order). The watch force-includes
+  /// its Dashboard so an all-zero mask can't empty the cycle.
+  final int? pages;
+
+  /// Whether the watch's BTN3 cycle skips pages whose backing data is absent
+  /// (the on-watch default is on).
+  final bool? hideEmptyPages;
+
   const WatchSettings({
     this.maxHr,
     this.pacer,
@@ -51,6 +64,8 @@ class WatchSettings {
     this.zoneCeiling,
     this.seaLevelPa,
     this.fuel,
+    this.pages,
+    this.hideEmptyPages,
   });
 
   Uint8List encode() {
@@ -61,6 +76,8 @@ class WatchSettings {
     if (zoneCeiling != null) len += 1;
     if (seaLevelPa != null) len += 4;
     if (fuel != null) len += 8;
+    if (pages != null) len += 4;
+    if (hideEmptyPages != null) len += 1;
 
     final out = ByteData(len);
     out.setUint8(0, 0x53); // S
@@ -76,6 +93,8 @@ class WatchSettings {
     if (zoneCeiling != null) flags |= _flagZoneCeiling;
     if (seaLevelPa != null) flags |= _flagSeaLevel;
     if (fuel != null) flags |= _flagFuel;
+    if (pages != null) flags |= _flagPages;
+    if (hideEmptyPages != null) flags |= _flagHideEmpty;
     out.setUint8(5, flags);
 
     var off = 6;
@@ -105,6 +124,14 @@ class WatchSettings {
       out.setUint32(off, fuel!.drinkIntervalS, Endian.little);
       out.setUint32(off + 4, fuel!.eatIntervalS, Endian.little);
       off += 8;
+    }
+    if (pages != null) {
+      out.setUint32(off, pages!, Endian.little);
+      off += 4;
+    }
+    if (hideEmptyPages != null) {
+      out.setUint8(off, hideEmptyPages! ? 1 : 0);
+      off += 1;
     }
 
     return out.buffer.asUint8List();

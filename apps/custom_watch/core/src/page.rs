@@ -119,6 +119,47 @@ pub enum Page {
 }
 
 impl Page {
+    /// This page's bit in a pages bitmask (`1 << discriminant`). The 32
+    /// variants exactly fill a `u32`; a 33rd page needs a wider mask — the
+    /// `all_pages_fit_in_the_mask` test pins that.
+    pub fn bit(self) -> u32 {
+        1 << self as u8
+    }
+
+    /// The next page whose bit is set in `mask`, walking the cycle order —
+    /// the filtered BTN3 press. [`Page::Dashboard`] is always treated as
+    /// enabled (a mask can never empty the cycle), and a page the runner is
+    /// parked on stays reachable as the walk's origin even when its own bit
+    /// has since cleared (its data vanished mid-run) — the press moves off it
+    /// and the cycle simply no longer returns.
+    pub fn next_in(self, mask: u32) -> Self {
+        let mask = mask | Page::Dashboard.bit();
+        let mut p = self.next();
+        while p != self && p.bit() & mask == 0 {
+            p = p.next();
+        }
+        if p.bit() & mask == 0 {
+            Page::Dashboard
+        } else {
+            p
+        }
+    }
+
+    /// The previous enabled page — [`Page::next_in`]'s exact inverse over the
+    /// same mask (the BTN3 long-press).
+    pub fn prev_in(self, mask: u32) -> Self {
+        let mask = mask | Page::Dashboard.bit();
+        let mut p = self.prev();
+        while p != self && p.bit() & mask == 0 {
+            p = p.prev();
+        }
+        if p.bit() & mask == 0 {
+            Page::Dashboard
+        } else {
+            p
+        }
+    }
+
     /// The next page in the button's cycle order, wrapping back to the start.
     pub fn next(self) -> Self {
         match self {
@@ -262,6 +303,61 @@ mod tests {
         for &p in ALL.iter() {
             assert_eq!(p.next().prev(), p, "next then prev should return to {p:?}");
             assert_eq!(p.prev().next(), p, "prev then next should return to {p:?}");
+        }
+    }
+
+    #[test]
+    fn all_pages_fit_in_the_mask() {
+        // 32 variants, one u32 bit each — bit() must stay collision-free.
+        let mut seen = 0u32;
+        for &p in ALL.iter() {
+            assert_eq!(seen & p.bit(), 0, "duplicate bit for {p:?}");
+            seen |= p.bit();
+        }
+        assert_eq!(seen, u32::MAX, "exactly 32 pages fill the mask");
+    }
+
+    #[test]
+    fn next_in_skips_disabled_pages() {
+        let mask = Page::Dashboard.bit() | Page::Pace.bit() | Page::Nav.bit();
+        assert_eq!(Page::Dashboard.next_in(mask), Page::Pace);
+        assert_eq!(Page::Pace.next_in(mask), Page::Nav);
+        assert_eq!(Page::Nav.next_in(mask), Page::Dashboard, "wraps the subset");
+    }
+
+    #[test]
+    fn prev_in_is_the_inverse_of_next_in() {
+        let mask = Page::Dashboard.bit() | Page::Zones.bit() | Page::Fuel.bit() | Page::Recap.bit();
+        let mut p = Page::Dashboard;
+        for _ in 0..8 {
+            let n = p.next_in(mask);
+            assert_eq!(n.prev_in(mask), p);
+            p = n;
+        }
+    }
+
+    #[test]
+    fn dashboard_is_always_reachable_even_from_an_empty_mask() {
+        assert_eq!(Page::Splits.next_in(0), Page::Dashboard);
+        assert_eq!(Page::Splits.prev_in(0), Page::Dashboard);
+        assert_eq!(Page::Dashboard.next_in(0), Page::Dashboard);
+    }
+
+    #[test]
+    fn a_parked_on_disabled_page_moves_off_and_does_not_return() {
+        // The runner is on Roadbook when its data vanishes from the mask.
+        let mask = Page::Dashboard.bit() | Page::Distance.bit();
+        assert_eq!(Page::Roadbook.next_in(mask), Page::Dashboard);
+        assert_eq!(Page::Roadbook.prev_in(mask), Page::Distance);
+    }
+
+    #[test]
+    fn full_mask_matches_the_plain_cycle() {
+        let mut p = Page::default();
+        for _ in 0..ALL.len() {
+            assert_eq!(p.next_in(u32::MAX), p.next());
+            assert_eq!(p.prev_in(u32::MAX), p.prev());
+            p = p.next();
         }
     }
 

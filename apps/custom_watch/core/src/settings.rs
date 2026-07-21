@@ -1,9 +1,10 @@
 //! Phone→watch settings frame: the wire the phone uses to push user config
 //! (max HR, pacer goal, gear baseline/target, HR-zone ceiling, QNH sea-level
-//! reference, fuel-reminder cadences) into the recorder's + baro task's +
-//! alert engine's existing settings-sync hooks (`Recorder::set_max_hr` /
-//! `set_pacer_goal` / `set_gear`, `AlertEngine::set_zone_ceiling` /
-//! `set_fuel_intervals`, and `state::SEA_LEVEL_PA` for the baro altitude
+//! reference, fuel-reminder cadences, run-view page curation) into the
+//! recorder's + baro task's + alert engine's existing settings-sync hooks
+//! (`Recorder::set_max_hr` / `set_pacer_goal` / `set_gear` /
+//! `set_pages_enabled` / `set_hide_empty_pages`, `AlertEngine::set_zone_ceiling`
+//! / `set_fuel_intervals`, and `state::SEA_LEVEL_PA` for the baro altitude
 //! reference).
 //!
 //! Binary, not JSON — the watch is `no_std` with no allocator and no JSON
@@ -25,21 +26,32 @@ pub const FLAG_GEAR: u8 = 1 << 2;
 pub const FLAG_ZONE_CEILING: u8 = 1 << 3;
 pub const FLAG_SEA_LEVEL: u8 = 1 << 4;
 pub const FLAG_FUEL: u8 = 1 << 5;
+pub const FLAG_PAGES: u8 = 1 << 6;
+pub const FLAG_HIDE_EMPTY: u8 = 1 << 7;
 
 /// Every presence bit version 1 defines. A set bit outside this mask can't be a
 /// forward-compatible field — a new field rides a version bump, which `decode`
 /// rejects on the version byte — so an unknown bit means a corrupt or misframed
 /// push, and `decode` rejects the frame rather than silently dropping whatever
-/// the sender meant by it.
-const KNOWN_FLAGS: u8 =
-    FLAG_MAX_HR | FLAG_PACER | FLAG_GEAR | FLAG_ZONE_CEILING | FLAG_SEA_LEVEL | FLAG_FUEL;
+/// the sender meant by it. `pages` + `hide_empty` (2026-07-21) consumed the
+/// last two bits: version 1's flag byte is now full, and the NEXT field is the
+/// version bump.
+const KNOWN_FLAGS: u8 = FLAG_MAX_HR
+    | FLAG_PACER
+    | FLAG_GEAR
+    | FLAG_ZONE_CEILING
+    | FLAG_SEA_LEVEL
+    | FLAG_FUEL
+    | FLAG_PAGES
+    | FLAG_HIDE_EMPTY;
 
 /// Header: magic (4) + version (1) + flags (1).
 const HEADER_LEN: usize = 6;
 
 /// Largest a fully-populated frame can be — every field present: header +
-/// max_hr(2) + pacer(8) + gear(8) + zone_ceiling(1) + sea_level_pa(4) + fuel(8).
-pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8;
+/// max_hr(2) + pacer(8) + gear(8) + zone_ceiling(1) + sea_level_pa(4) + fuel(8)
+/// + pages(4) + hide_empty(1).
+pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8 + 4 + 1;
 
 /// A pacer goal to arm the virtual partner with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,6 +107,13 @@ pub struct WatchSettings {
     /// Fuel-reminder cadences override. Present = re-set the drink/eat moving-
     /// time intervals; absent = keep the current cadences.
     pub fuel: Option<FuelCfg>,
+    /// The curated run-view page set: bit `i` enables the page with
+    /// discriminant `i` (`Page::bit`). The apply side force-includes the
+    /// Dashboard so an all-zero mask can't empty the cycle.
+    pub pages: Option<u32>,
+    /// Whether the BTN3 cycle skips pages whose backing data is absent
+    /// (`Recorder::set_hide_empty_pages`); the on-watch default is on.
+    pub hide_empty_pages: Option<bool>,
 }
 
 impl WatchSettings {
@@ -107,9 +126,12 @@ impl WatchSettings {
             return None;
         }
         let flags = b[5];
-        if flags & !KNOWN_FLAGS != 0 {
-            return None;
-        }
+        // Version 1's flag byte is saturated (every bit is a known field), so
+        // the historical unknown-bit rejection has nothing left to reject —
+        // forward growth rides the version gate above. This assert turns the
+        // first over-saturating flag into a compile error instead of a
+        // silently-accepted frame.
+        const _: () = assert!(KNOWN_FLAGS == u8::MAX);
         let mut off = HEADER_LEN;
         let mut out = WatchSettings::default();
 
@@ -160,6 +182,16 @@ impl WatchSettings {
             });
             off = end;
         }
+        if flags & FLAG_PAGES != 0 {
+            let end = off + 4;
+            let raw = b.get(off..end)?;
+            out.pages = Some(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]));
+            off = end;
+        }
+        if flags & FLAG_HIDE_EMPTY != 0 {
+            out.hide_empty_pages = Some(*b.get(off)? != 0);
+            off += 1;
+        }
         // Bytes left over past the fields the flags claim mean a corrupt or
         // misframed push (data present for a bit that wasn't set); reject it
         // rather than silently apply a frame the phone didn't mean to send.
@@ -192,6 +224,12 @@ impl WatchSettings {
         if self.fuel.is_some() {
             flags |= FLAG_FUEL;
         }
+        if self.pages.is_some() {
+            flags |= FLAG_PAGES;
+        }
+        if self.hide_empty_pages.is_some() {
+            flags |= FLAG_HIDE_EMPTY;
+        }
 
         let len = HEADER_LEN
             + self.max_hr.map_or(0, |_| 2)
@@ -199,7 +237,9 @@ impl WatchSettings {
             + self.gear.map_or(0, |_| 8)
             + self.zone_ceiling.map_or(0, |_| 1)
             + self.sea_level_pa.map_or(0, |_| 4)
-            + self.fuel.map_or(0, |_| 8);
+            + self.fuel.map_or(0, |_| 8)
+            + self.pages.map_or(0, |_| 4)
+            + self.hide_empty_pages.map_or(0, |_| 1);
         if out.len() < len {
             return None;
         }
@@ -237,6 +277,14 @@ impl WatchSettings {
             out[off..off + 4].copy_from_slice(&f.drink_interval_s.to_le_bytes());
             out[off + 4..off + 8].copy_from_slice(&f.eat_interval_s.to_le_bytes());
             off += 8;
+        }
+        if let Some(p) = self.pages {
+            out[off..off + 4].copy_from_slice(&p.to_le_bytes());
+            off += 4;
+        }
+        if let Some(h) = self.hide_empty_pages {
+            out[off] = h as u8;
+            off += 1;
         }
         Some(off)
     }
@@ -280,6 +328,8 @@ mod tests {
                 drink_interval_s: 600,
                 eat_interval_s: 1_200,
             }),
+            pages: Some(0x0000_00ff),
+            hide_empty_pages: Some(false),
         };
         assert_eq!(roundtrip(&s), s);
     }
@@ -322,6 +372,22 @@ mod tests {
                     drink_interval_s: 450,
                     eat_interval_s: 1_000,
                 }),
+                ..Default::default()
+            },
+            WatchSettings {
+                pages: Some(0),
+                ..Default::default()
+            },
+            WatchSettings {
+                pages: Some(u32::MAX),
+                ..Default::default()
+            },
+            WatchSettings {
+                hide_empty_pages: Some(true),
+                ..Default::default()
+            },
+            WatchSettings {
+                hide_empty_pages: Some(false),
                 ..Default::default()
             },
         ];
@@ -424,21 +490,19 @@ mod tests {
     }
 
     #[test]
-    fn unknown_presence_bit_is_rejected() {
-        let mut frame = [0u8; HEADER_LEN + 1];
+    fn flag_byte_is_saturated_so_the_next_field_is_a_version_bump() {
+        // pages + hide_empty consumed bits 6 + 7: every u8 bit is now a known
+        // field, so the unknown-bit rejection can never fire on version 1 and
+        // forward growth is carried entirely by the version gate (which
+        // `bad_magic_or_version_is_rejected` pins). This test exists to make
+        // whoever adds a ninth field read this sentence.
+        assert_eq!(KNOWN_FLAGS, u8::MAX);
+        // A full flag byte with too few bytes for what it claims still rejects.
+        let mut frame = [0u8; HEADER_LEN + 2];
         frame[0..4].copy_from_slice(&SETTINGS_MAGIC);
         frame[4] = SETTINGS_VERSION;
-        frame[5] = 1 << 6; // a bit outside KNOWN_FLAGS
-        assert_eq!(WatchSettings::decode(&frame[..HEADER_LEN]), None);
+        frame[5] = u8::MAX;
         assert_eq!(WatchSettings::decode(&frame), None);
-
-        let mut with_known = [0u8; HEADER_LEN + 2];
-        with_known[0..4].copy_from_slice(&SETTINGS_MAGIC);
-        with_known[4] = SETTINGS_VERSION;
-        with_known[5] = FLAG_MAX_HR | (1 << 6);
-        with_known[6] = 0xbe;
-        with_known[7] = 0x00;
-        assert_eq!(WatchSettings::decode(&with_known), None);
     }
 
     #[test]
@@ -477,6 +541,14 @@ mod tests {
                 }),
                 ..Default::default()
             },
+            WatchSettings {
+                pages: Some(0x1234_5678),
+                ..Default::default()
+            },
+            WatchSettings {
+                hide_empty_pages: Some(true),
+                ..Default::default()
+            },
         ];
         for s in cases {
             let mut buf = [0u8; MAX_SETTINGS_LEN];
@@ -492,7 +564,7 @@ mod tests {
 
     #[test]
     fn all_presence_combinations_roundtrip() {
-        for mask in 0u8..64 {
+        for mask in 0u8..=u8::MAX {
             let s = WatchSettings {
                 max_hr: (mask & FLAG_MAX_HR != 0).then_some(190),
                 pacer: (mask & FLAG_PACER != 0).then_some(PacerGoalCfg {
@@ -509,6 +581,8 @@ mod tests {
                     drink_interval_s: 500,
                     eat_interval_s: 1_100,
                 }),
+                pages: (mask & FLAG_PAGES != 0).then_some(0x0f0f_0f0f),
+                hide_empty_pages: (mask & FLAG_HIDE_EMPTY != 0).then_some(false),
             };
             let back = roundtrip(&s);
             assert_eq!(back, s, "roundtrip drift at mask {mask:#08b}");
@@ -518,6 +592,8 @@ mod tests {
             assert_eq!(back.zone_ceiling.is_some(), mask & FLAG_ZONE_CEILING != 0);
             assert_eq!(back.sea_level_pa.is_some(), mask & FLAG_SEA_LEVEL != 0);
             assert_eq!(back.fuel.is_some(), mask & FLAG_FUEL != 0);
+            assert_eq!(back.pages.is_some(), mask & FLAG_PAGES != 0);
+            assert_eq!(back.hide_empty_pages.is_some(), mask & FLAG_HIDE_EMPTY != 0);
         }
     }
 
@@ -552,13 +628,15 @@ mod tests {
                 drink_interval_s: 900,
                 eat_interval_s: 1_500,
             }),
+            pages: Some(0x0000_c0ff),
+            hide_empty_pages: Some(true),
         };
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
             0x01, // version
-            0x3f, // flags: max_hr | pacer | gear | zone_ceiling | sea_level | fuel
+            0xff, // flags: every version-1 field
             0xbe, 0x00, // max_hr = 190
             0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
             0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
@@ -568,6 +646,8 @@ mod tests {
             0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
             0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
             0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
+            0x01, // hide_empty_pages = true
         ];
         assert_eq!(n, MAX_SETTINGS_LEN);
         assert_eq!(buf, expected);

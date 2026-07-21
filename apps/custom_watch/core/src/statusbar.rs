@@ -86,26 +86,30 @@ pub struct PageIndicator {
     pub total: usize,
 }
 
-/// Total pages, counted by walking [`Page::next`] once around its cycle rather
-/// than hardcoding a count — so adding a page (in the cycle) grows the dot row
-/// automatically and can't silently desync from the enum.
-fn page_count() -> usize {
-    let mut count = 1;
+/// Build the dot indicator for the current page over the effective cycle
+/// (`Snapshot::pages_mask` — data-present ∩ curated). `active` is the page's
+/// rank among the enabled pages in cycle order, `total` their count, so the
+/// dot row says how many pages BTN3 actually walks right now rather than the
+/// full enum size. The current page and the Dashboard are always counted even
+/// when their bits are clear (the runner can be parked on a page whose data
+/// just vanished), mirroring [`Page::next_in`]'s reachability rule. Walked
+/// off [`Page::next`] rather than a hardcoded count, so a new page can't
+/// silently desync the row from the enum.
+pub fn page_indicator(page: Page, pages_mask: u32) -> PageIndicator {
+    let mask = pages_mask | Page::Dashboard.bit() | page.bit();
+    let mut active = 0;
+    let mut total = 1;
     let mut p = Page::Dashboard.next();
     while p != Page::Dashboard {
-        count += 1;
+        if p.bit() & mask != 0 {
+            if p as u8 <= page as u8 {
+                active += 1;
+            }
+            total += 1;
+        }
         p = p.next();
     }
-    count
-}
-
-/// Build the dot indicator for the current page. `active` is the page's
-/// discriminant (its cycle position); `total` is the live variant count.
-pub fn page_indicator(page: Page) -> PageIndicator {
-    PageIndicator {
-        active: page as usize,
-        total: page_count(),
-    }
+    PageIndicator { active, total }
 }
 
 #[cfg(test)]
@@ -229,9 +233,9 @@ mod tests {
 
     #[test]
     fn indicator_first_and_last_pages() {
-        let first = page_indicator(Page::Dashboard);
+        let first = page_indicator(Page::Dashboard, u32::MAX);
         assert_eq!(first.active, 0);
-        let last = page_indicator(Page::RaceDay);
+        let last = page_indicator(Page::RaceDay, u32::MAX);
         // RaceDay is the final variant, so its index is total - 1.
         assert_eq!(last.active, last.total - 1);
     }
@@ -239,16 +243,16 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard).total, 32);
+        assert_eq!(page_indicator(Page::Dashboard, u32::MAX).total, 32);
     }
 
     #[test]
     fn walking_next_visits_every_active_index_once() {
-        let total = page_indicator(Page::Dashboard).total;
+        let total = page_indicator(Page::Dashboard, u32::MAX).total;
         let mut seen = [false; 64];
         let mut p = Page::default();
         for _ in 0..total {
-            let ind = page_indicator(p);
+            let ind = page_indicator(p, u32::MAX);
             assert_eq!(ind.total, total);
             assert!(ind.active < total);
             assert!(!seen[ind.active], "index {} seen twice", ind.active);
@@ -260,5 +264,48 @@ mod tests {
         }
         // A full walk returns to the default page.
         assert_eq!(p, Page::default());
+    }
+
+    #[test]
+    fn indicator_counts_only_the_filtered_cycle() {
+        let mask = Page::Dashboard.bit() | Page::Pace.bit() | Page::Nav.bit();
+        assert_eq!(
+            page_indicator(Page::Dashboard, mask),
+            PageIndicator {
+                active: 0,
+                total: 3
+            }
+        );
+        assert_eq!(
+            page_indicator(Page::Pace, mask),
+            PageIndicator {
+                active: 1,
+                total: 3
+            }
+        );
+        assert_eq!(
+            page_indicator(Page::Nav, mask),
+            PageIndicator {
+                active: 2,
+                total: 3
+            }
+        );
+        // Walking the filtered cycle hits exactly the filtered indices.
+        let mut p = Page::Dashboard;
+        for expect in [1, 2, 0] {
+            p = p.next_in(mask);
+            assert_eq!(page_indicator(p, mask).active, expect);
+        }
+    }
+
+    #[test]
+    fn a_parked_on_disabled_page_still_counts_itself() {
+        // Data vanished under the runner mid-run: Roadbook's bit is clear but
+        // the page is on screen — it ranks and counts as a member so the row
+        // never shows an out-of-range thumb.
+        let mask = Page::Dashboard.bit() | Page::Distance.bit();
+        let ind = page_indicator(Page::Roadbook, mask);
+        assert_eq!(ind.total, 3);
+        assert_eq!(ind.active, 2, "after Dashboard + Distance in cycle order");
     }
 }

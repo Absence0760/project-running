@@ -371,6 +371,7 @@ mod tests {
             route_elev: None,
             race_day: None,
             track_full: false,
+            pages_mask: u32::MAX,
         }
     }
 
