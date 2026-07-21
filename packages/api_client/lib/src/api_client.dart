@@ -494,6 +494,29 @@ class ApiClient {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  /// Positive proof that [currentPassword] is the signed-in account's
+  /// password today — the change-password step-up (`password_change.dart`).
+  /// A live access token alone must never be enough to rotate the password
+  /// (OWASP ASVS V2.1.14 / CWE-620): the caller re-authenticates the
+  /// current credential before the new one is written.
+  ///
+  /// Returns true ONLY on a successful re-authentication. A rejected
+  /// credential, a thrown error (offline, rate-limit), or a session with no
+  /// email all return false — fail closed. Re-signing in as the SAME user
+  /// refreshes the session in place; a rejected attempt leaves the existing
+  /// session untouched. Reuses [signIn] rather than calling the auth client
+  /// directly.
+  Future<bool> verifyCurrentPassword(String currentPassword) async {
+    final email = userEmail;
+    if (email == null || email.isEmpty) return false;
+    try {
+      await signIn(email: email, password: currentPassword);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Start a change of the signed-in user's email. GoTrue's secure email
   /// change sends a confirmation link to BOTH the current and the new
   /// address; the account email only flips once both are followed, so
