@@ -197,7 +197,7 @@ Never commit a production secret. Three storage layers, in order of preference:
 
 1. **Provider-native secret store** — Supabase Vault (already set up for OAuth tokens via `get_integration_tokens` / `set_integration_tokens` per [decisions.md § 41](../architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns)), AWS Secrets Manager (the coach Lambda's `ANTHROPIC_API_KEY` and server-side `SENTRY_DSN`), Fly.io secrets, GitHub Actions secrets. Scoped to the service that needs them.
 2. **`.env.local` files** — gitignored, present on developer laptops and CI runners that need them. Templates committed as `.env.example`.
-3. **1Password (or similar) vault** — single source of truth for the keys themselves; CI runners read via the 1Password CLI rather than stuffing them into provider-native stores when possible. Keeps rotation a one-place change.
+3. **The private estate secrets repo** (`Absence0760/infra-secrets`, sops + per-project AWS KMS — see the repo-root CLAUDE.md § Production secrets) — durable source of truth for long-lived key material that must survive a lost workstation (e.g. the Android upload keystore at `running/android-upload-keystore.sops.yaml`). Access is IAM (`kms:Decrypt`); Bitwarden holds the owner's interactive credentials. There is no 1Password anywhere in this estate.
 
 The matrix of "what lives where":
 
