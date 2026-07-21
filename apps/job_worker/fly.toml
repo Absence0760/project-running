@@ -27,10 +27,11 @@ primary_region = "ord"
 dockerfile = "Dockerfile"
 
 [env]
-# WORKER_ID is read by main.go and stamped on jobs.locked_by for
-# stuck-job debugging. ${FLY_MACHINE_ID} expands per-machine so
-# multiple replicas have distinct IDs.
-WORKER_ID = "fly-${FLY_MACHINE_ID}"
+# WORKER_ID is deliberately NOT set here. Fly does not interpolate
+# variables in [env] (a `${FLY_MACHINE_ID}` value ships as that
+# literal string), and main.go's fallback — os.Hostname() — already
+# yields the machine ID on Fly, so each machine stamps a distinct
+# jobs.locked_by without any config.
 
 # OSRM_URL is deliberately unset: the live spectator hub is deploying
 # ahead of the sibling osrm app, and pointing at an osrm.internal that
