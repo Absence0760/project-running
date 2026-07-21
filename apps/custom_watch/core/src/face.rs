@@ -826,6 +826,9 @@ fn pacer_glance(
                 PaceVerdict::Behind => "BEHIND",
             };
             let _ = write!(rows[2], "{:<14}{}", "PACER", verdict);
+            if status.terrain_aware {
+                let _ = write!(rows[3], "TERRAIN SPLITS");
+            }
 
             let goal_km = (status.goal.distance_m as f64 / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<5}{:.2} KM", "GOAL", goal_km);
@@ -3335,6 +3338,7 @@ mod tests {
             projected_finish_s: Some(u32::MAX),
             verdict: PaceVerdict::OnPace,
             finished: false,
+            terrain_aware: false,
         });
         for page in [
             Page::Distance,
@@ -3470,6 +3474,7 @@ mod tests {
             projected_finish_s,
             verdict,
             finished: false,
+            terrain_aware: false,
         }
     }
 
@@ -3507,6 +3512,41 @@ mod tests {
                 .iter()
                 .all(Option::is_none)
         );
+    }
+
+    #[test]
+    fn pacer_glance_tags_a_terrain_allocated_partner() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        let mut status = pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000));
+        status.terrain_aware = true;
+        rec.pacer = Some(status);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "TERRAIN SPLITS");
+        // The flat partner leaves the row blank.
+        let mut flat = rec;
+        flat.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000)));
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&flat),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "");
     }
 
     #[test]

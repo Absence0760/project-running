@@ -848,12 +848,19 @@ impl Recorder {
     /// Load the roadbook checkpoints for the current course (pushed pre-built,
     /// see [`RoadbookCheckpoint`]). Replaces any existing set and caps at
     /// [`MAX_PUSHED_LEGS`] rather than growing. Empty legs leave the Roadbook +
-    /// Fuel pages inactive.
+    /// Fuel pages inactive. The checkpoint curve doubles as the virtual
+    /// partner's terrain schedule ([`crate::pacer::Pacer::set_schedule`]) —
+    /// the phone allocated `projected_elapsed_s` by grade-adjusted effort, so
+    /// the pacer grades a climb honestly; an empty or shapeless roadbook
+    /// degrades the partner back to even pace.
     pub fn set_roadbook(&mut self, legs: &[RoadbookCheckpoint]) {
         self.roadbook_legs.clear();
+        let mut schedule: heapless::Vec<(f64, u32), MAX_PUSHED_LEGS> = heapless::Vec::new();
         for leg in legs.iter().take(MAX_PUSHED_LEGS) {
             let _ = self.roadbook_legs.push(*leg);
+            let _ = schedule.push((leg.cum_dist_m, leg.projected_elapsed_s));
         }
+        self.pacer.set_schedule(&schedule);
     }
 
     /// Load the synced goal-race pace (seconds per km) the TrainingPaces page
@@ -2544,6 +2551,49 @@ mod tests {
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
         assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
         assert!(f.carry.is_some());
+    }
+
+    #[test]
+    fn roadbook_arms_the_terrain_pacer_and_an_empty_one_disarms_it() {
+        let mut r = Recorder::new();
+        r.set_pacer_goal(10_000, 3_600);
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert!(
+            !r.snapshot().pacer.expect("goal armed").terrain_aware,
+            "no roadbook yet: even-pace partner"
+        );
+        // A climb-first roadbook (start + aid + finish, phone-allocated).
+        r.set_roadbook(&[
+            RoadbookCheckpoint {
+                cum_dist_m: 0.0,
+                leg_dist_m: 0.0,
+                projected_elapsed_s: 0,
+                cutoff: None,
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 5_000.0,
+                leg_dist_m: 5_000.0,
+                projected_elapsed_s: 2_400,
+                cutoff: None,
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 10_000.0,
+                leg_dist_m: 5_000.0,
+                projected_elapsed_s: 3_600,
+                cutoff: None,
+                is_refill: false,
+            },
+        ]);
+        assert!(
+            r.snapshot().pacer.unwrap().terrain_aware,
+            "the pushed checkpoint curve doubles as the partner schedule"
+        );
+        // Clearing the roadbook drops the terrain partner with it.
+        r.set_roadbook(&[]);
+        assert!(!r.snapshot().pacer.unwrap().terrain_aware);
     }
 
     #[test]

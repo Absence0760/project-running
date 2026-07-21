@@ -152,6 +152,7 @@ fn preview_pacer_page() {
         projected_finish_s: Some(3 * 3600 + 55 * 60),
         verdict: PaceVerdict::Ahead,
         finished: false,
+        terrain_aware: false,
     });
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Pacer, Some(&snap), Some(150));
