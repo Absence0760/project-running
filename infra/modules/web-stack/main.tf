@@ -235,6 +235,33 @@ data "aws_iam_policy_document" "kms_secrets" {
       values   = ["arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.resource_prefix}-*"]
     }
   }
+  # The decrypt statement below assumes sops ENCRYPTION "is a LOCAL
+  # operator action run under the operator's own admin/SSO principal" —
+  # but KMS only honours an IAM identity policy when the KEY policy
+  # delegates the action to the account, and the root statement above
+  # deliberately enumerates admin actions only (no Encrypt/DataKey).
+  # Net effect before this statement: NO principal in the account could
+  # ever sops-encrypt against the key, breaking bin/sops-init.sh's and
+  # bin/secret-set.sh's documented flows (found 2026-07-21 while
+  # backing up the Android upload keystore). Root-principal delegation
+  # means "whatever this account's own IAM policies allow" — it grants
+  # nothing by itself and nothing outside the account.
+  statement {
+    sid    = "AllowOperatorSopsUseViaIamPolicies"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey",
+    ]
+    resources = ["*"]
+  }
   statement {
     sid    = "AllowLambdaAndDeployRolesToDecrypt"
     effect = "Allow"
