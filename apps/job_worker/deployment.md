@@ -4,7 +4,7 @@ How the Go worker at `apps/job_worker/` and the OSRM map-matching engine at `app
 
 Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker contract, scope, error classification) and [`apps/job_worker/README.md`](README.md) (local dev recipe). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md).
 
-**Status: worker live, OSRM plan.** The worker deployed 2026-07-21 as Fly app `threkir-worker` (org `project-running`, region `ord`, single machine): the queue backlog drained with SMTP unset, and the live hub passed the full smoke matrix (JWKS auth boundaries, privacy-zone clip, WS fan-out + snapshot replay, origin allow-list, rate limit). Client cutover has NOT happened — `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` stay unset until the log-redaction task below is done. OSRM remains undeployed (`OSRM_URL` unset → passthrough).
+**Status: worker live, OSRM plan.** The worker deployed 2026-07-21 as Fly app `threkir-worker` (org `project-running`, region `ord`, single machine): the queue backlog drained with SMTP unset, and the live hub passed the full smoke matrix (JWKS auth boundaries, privacy-zone clip, WS fan-out + snapshot replay, origin allow-list, rate limit). Client cutover has NOT happened — `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` stay unset pending the owner's go. (The former pre-cutover log-redaction gate is closed: subscriber JWTs ride the `Sec-WebSocket-Protocol` header instead of the URL — decisions §281 — and Fly surfaces no per-request access logs anyway.) OSRM remains undeployed (`OSRM_URL` unset → passthrough).
 
 **Deploy with `--ha=false`.** On a first deploy (or scale-from-zero) Fly auto-creates a second machine "for high availability" — wrong for this app: the in-process hub shares no state across machines, so a publisher on one and a subscriber on the other silently never connect. Single machine until `REDIS_URL` lands (which is what makes multi-replica fan-out correct).
 
@@ -79,7 +79,9 @@ primary_region = "ord"
 dockerfile = "Dockerfile"
 
 [env]
-WORKER_ID = "fly-${FLY_MACHINE_ID}"
+# WORKER_ID deliberately absent: Fly does not interpolate variables in
+# [env], and main.go's hostname fallback already yields the per-machine
+# ID on Fly.
 # OSRM_URL deliberately unset while the hub deploys ahead of osrm —
 # restore it when the osrm app exists. See "Deploying the hub before
 # OSRM" below.

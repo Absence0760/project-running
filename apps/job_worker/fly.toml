@@ -59,15 +59,17 @@ LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://p
 LIVEHUB_REQUIRE_AUTH = "1"
 
 # SECURITY — live-hub WebSocket subscribers carry their Supabase JWT
-# in the `?token=…` query string because the browser WebSocket API
-# can't set headers on the upgrade. Fly's edge access logs include
-# the full request URL by default — the JWT is therefore log-bearing
-# until the log pipeline strips it. Operator task before public
-# launch: configure the Fly log shipper (or Fly Postgres / Honeycomb
-# / etc.) with a redaction rule masking `[?&]token=[^&]*` on URLs
-# matching `/v1/live/.+/(subscribe|snapshot)`. Until then, treat the
-# `fly logs` stream for this app as secret-bearing — no public
-# screen-shares of the log tail. /audit/owasp May 2026 High #2b.
+# in the `Sec-WebSocket-Protocol: livehub-bearer, <jwt>` offer (the
+# one header a browser WebSocket client can set); URLs are token-free
+# by contract, pinned in auth.go + live_hub_helpers.ts tests. The
+# earlier `?token=…` querystring channel is deleted — do not
+# reintroduce it: a token in a URL leaks into anything that ever
+# logs URLs. (The 2026-07-21 Phase F research also established Fly
+# surfaces NO per-request access logs — app stdout only — so nothing
+# at the edge records URLs or upgrade headers either way; empirical
+# canary test + Fly docs, see reviews/live-hub-and-api-keys.md.)
+# Never log r.URL or the Sec-WebSocket-Protocol header in the hub.
+# /audit/owasp May 2026 High #2b, closed by decisions §281.
 
 # Public HTTPS + WebSocket service (live spectator hub).
 # Fly.io's "http" handler transparently upgrades WS frames; the
