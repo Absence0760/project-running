@@ -73,7 +73,7 @@ matchers automatically:
 cd ../  # apps/job_worker
 OSRM_URL=http://127.0.0.1:5000 \
   SUPABASE_URL=$API_URL \
-  SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY \
+  SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY \
   go run .
 ```
 
@@ -93,7 +93,7 @@ cd apps/job_worker/osrm && docker compose up -d
 # Terminal 2: worker
 cd apps/job_worker
 eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
-SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="$SERVICE_ROLE_KEY" \
   OSRM_URL=http://127.0.0.1:5000 go run .
 
 # Terminal 3: smoke test
@@ -105,7 +105,7 @@ What `make smoke` does, in order:
 
 1. Probes OSRM `/health` and a Melbourne-region `/match` call to
    confirm the right PBF is loaded.
-2. Pulls `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from
+2. Pulls `SUPABASE_URL` + `SUPABASE_SECRET_KEY` from
    `supabase status -o env` if they aren't in the environment.
 3. Uploads a 6-point Royal Botanic Gardens track to Storage as
    `runs/<seed user>/<new run id>.json.gz`.

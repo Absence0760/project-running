@@ -30,18 +30,18 @@ PG_CONTAINER="${PG_CONTAINER:-supabase_db_backend}"
 # Pull SUPABASE_URL + SERVICE_ROLE_KEY from the local CLI if not in env.
 # The CLI keeps emitting the modern `Publishable` / `Secret` names, so
 # we filter on the env-output form which still uses *_KEY suffixes.
-if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SECRET_KEY:-}" ]]; then
   echo "→ Pulling creds from supabase status (apps/backend)…" >&2
   cd_back=$(pwd)
   cd "$(dirname "$0")/../../backend"
   eval "$(supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
   cd "$cd_back"
   : "${SUPABASE_URL:=$API_URL}"
-  : "${SUPABASE_SERVICE_ROLE_KEY:=$SERVICE_ROLE_KEY}"
+  : "${SUPABASE_SECRET_KEY:=$SERVICE_ROLE_KEY}"
 fi
 
-if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
-  echo "✗ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY not set and the local stack isn't running." >&2
+if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SECRET_KEY:-}" ]]; then
+  echo "✗ SUPABASE_URL and SUPABASE_SECRET_KEY not set and the local stack isn't running." >&2
   exit 2
 fi
 
@@ -72,8 +72,8 @@ TRACK='[
 
 echo "→ Uploading raw track for run $RUN_ID …"
 echo "$TRACK" | gzip | curl -sf -X POST \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" \
   -H "Content-Type: application/json" \
   -H "Content-Encoding: gzip" \
   -H "x-upsert: true" \
@@ -119,13 +119,13 @@ echo "✓ status=matched, algorithm=$(docker exec "$PG_CONTAINER" psql -U postgr
 # fallback, they'll be identical.
 echo
 echo "── Raw track (first 3 points) ──────────────────────────────────"
-curl -sf -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+curl -sf -H "apikey: $SUPABASE_SECRET_KEY" \
   "$SUPABASE_URL/storage/v1/object/runs/$SEED_USER_ID/$RUN_ID.json.gz" \
   | gunzip | jq '.[0:3]'
 
 echo
 echo "── Matched track (first 3 points) ──────────────────────────────"
-curl -sf -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+curl -sf -H "apikey: $SUPABASE_SECRET_KEY" \
   "$SUPABASE_URL/storage/v1/object/runs/$SEED_USER_ID/$RUN_ID.matched.json.gz" \
   | gunzip | jq '.[0:3]'
 

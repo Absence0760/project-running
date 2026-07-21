@@ -10,7 +10,7 @@ into `internal/worker.go`'s dispatch switch.
 | Variable | Purpose |
 |---|---|
 | `SUPABASE_URL` | Base URL, e.g. `http://127.0.0.1:54321` for local dev or your project URL in prod. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role JWT. The worker uses this for every call so it bypasses RLS on `jobs` + `run_matched_tracks`. **Never put this on a client.** |
+| `SUPABASE_SECRET_KEY` | Server API key — an `sb_secret_…` key in prod, or the local stack's legacy service-role JWT; `internal/supakey` derives the right header shape from the format. The worker uses it for every call so it bypasses RLS on `jobs` + `run_matched_tracks`. **Never put this on a client.** |
 | `WORKER_ID` | Optional. Stamped on the `jobs.locked_by` column for stuck-job debugging. Defaults to the hostname. |
 | `OSRM_URL` | Optional. When set (e.g. `http://127.0.0.1:5000`), the worker uses the OSRM `/match` endpoint instead of the passthrough shim. Local OSRM stack lives at [`./osrm/`](osrm/). |
 | `HEALTH_PORT` | Optional. Port for the embedded `/health` HTTP endpoint. Defaults to `8080` (matches `fly.toml`). Health flips to 503 if the worker poll loop hasn't ticked within 10 s — Fly.io's auto-restart catches wedged machines. |
@@ -28,7 +28,7 @@ go test ./...
 
 # Live drain against the local stack
 eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
-SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="$SERVICE_ROLE_KEY" \
   WORKER_ID=dev \
   go run .
 ```
@@ -69,7 +69,7 @@ VALUES ('$RUN_ID', '$USER_ID', now(), 60, 100, 'app',
 "
 
 # 3. Run the worker for a few seconds.
-SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="$SERVICE_ROLE_KEY" \
   timeout --signal=TERM 5s go run .
 
 # 4. Confirm the matched track + row landed.
@@ -87,7 +87,7 @@ For the full deployment plan (Fly.io app shape, Volume sizing, weekly OSRM rebui
 docker build -t job_worker:latest .
 docker run --rm \
   -e SUPABASE_URL=https://<project>.supabase.co \
-  -e SUPABASE_SERVICE_ROLE_KEY=<key> \
+  -e SUPABASE_SECRET_KEY=<key> \
   -e OSRM_URL=http://osrm.internal:5000 \
   job_worker:latest
 ```
@@ -111,7 +111,7 @@ make download && make build && docker compose up -d
 # Terminal 2: run the worker with OSRM_URL set.
 cd ..
 eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
-SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="$SERVICE_ROLE_KEY" \
   OSRM_URL=http://127.0.0.1:5000 \
   go run .
 ```

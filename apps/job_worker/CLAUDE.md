@@ -320,7 +320,7 @@ go build .                      # produce a binary in cwd
 
 # Against a running supabase stack at apps/backend:
 SUPABASE_URL=http://127.0.0.1:54321 \
-  SUPABASE_SERVICE_ROLE_KEY=$(cd ../backend && supabase status -o env | \
+  SUPABASE_SECRET_KEY=$(cd ../backend && supabase status -o env | \
     awk -F= '/^SERVICE_ROLE_KEY=/ {gsub(/"/,"",$2); print $2}') \
   WORKER_ID=dev \
   go run .

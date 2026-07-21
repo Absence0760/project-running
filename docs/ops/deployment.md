@@ -202,7 +202,7 @@ The matrix of "what lives where":
 
 | Secret | Origin | Stored in |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings | Fly.io secrets (worker) |
+| `SUPABASE_SECRET_KEY` (`sb_secret_…`; legacy `service_role` JWT also accepted) | Supabase project settings | Fly.io secrets (worker) |
 | `SUPABASE_ANON_KEY` (publishable) | Supabase | GitHub Secrets (injected into web build at CI build-time as `PUBLIC_SUPABASE_ANON_KEY`); Mobile build configs |
 | `STRAVA_CLIENT_SECRET` | Strava developer dashboard | Supabase Vault |
 | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET` | We invent | Supabase EF env |
