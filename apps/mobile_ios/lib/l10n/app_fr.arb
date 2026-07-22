@@ -3324,5 +3324,6 @@
   "phaseIntentRace": "Course",
   "phaseIntentEven": "Régulier",
   "routeMarkerTargetChip": "Objectif {time}",
-  "routeMarkerTargetLabel": "Temps visé"
+  "routeMarkerTargetLabel": "Temps visé",
+  "routeMarkerTargetInvalid": "Saisis le temps visé au format h:mm:ss"
 }

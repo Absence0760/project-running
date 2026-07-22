@@ -11594,4 +11594,8 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Tiempo objetivo';
+
+  @override
+  String get routeMarkerTargetInvalid =>
+      'Introduce el tiempo objetivo como h:mm:ss';
 }

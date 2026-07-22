@@ -15,7 +15,8 @@
 		AID_SERVICES,
 		kindSpec,
 		sortMarkers,
-		parseCutoff
+		parseCutoff,
+		parseTarget
 	} from '$lib/routes/route_markers';
 	import { formatDistance } from '$lib/format/units.svelte';
 
@@ -65,6 +66,7 @@
 	let draftLabel = $state('');
 	let draftServices = $state<string[]>([]);
 	let draftCutoffClock = $state('');
+	let draftTargetText = $state('');
 	let draftNote = $state('');
 	let draftLat = $state<number | null>(null);
 	let draftLng = $state<number | null>(null);
@@ -191,6 +193,7 @@
 		draftLabel = '';
 		draftServices = [];
 		draftCutoffClock = '';
+		draftTargetText = '';
 		draftNote = '';
 		draftLat = null;
 		draftLng = null;
@@ -211,6 +214,8 @@
 		draftServices = Array.isArray(mk.meta?.services) ? [...(mk.meta.services as string[])] : [];
 		const cutoff = parseCutoff(mk.meta);
 		draftCutoffClock = cutoff?.clock ?? '';
+		const target = parseTarget(mk.meta);
+		draftTargetText = target?.elapsedS != null ? formatElapsed(target.elapsedS) : '';
 		draftNote = typeof mk.meta?.note === 'string' ? (mk.meta.note as string) : '';
 		draftLat = mk.lat;
 		draftLng = mk.lng;
@@ -232,11 +237,41 @@
 			: [...draftServices, s];
 	}
 
+	function formatElapsed(s: number): string {
+		const h = Math.floor(s / 3600);
+		const min = Math.floor((s % 3600) / 60);
+		const sec = s % 60;
+		const two = (v: number) => String(v).padStart(2, '0');
+		return h > 0 ? `${h}:${two(min)}:${two(sec)}` : `${min}:${two(sec)}`;
+	}
+
+	/** "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid. */
+	function parseElapsedText(raw: string): number | null {
+		const parts = raw.trim().split(':');
+		if (parts.length === 0 || parts.length > 3) return null;
+		const nums: number[] = [];
+		for (const p of parts) {
+			if (!/^\d+$/.test(p.trim())) return null;
+			nums.push(Number(p.trim()));
+		}
+		const s =
+			nums.length === 1
+				? nums[0] * 60
+				: nums.length === 2
+					? nums[0] * 60 + nums[1]
+					: nums[0] * 3600 + nums[1] * 60 + nums[2];
+		return s > 0 ? s : null;
+	}
+
 	function buildMeta(): Record<string, unknown> {
 		const meta: Record<string, unknown> = {};
 		const spec = kindSpec(draftKind);
 		if (spec.hasServices && draftServices.length > 0) meta.services = draftServices;
 		if (spec.hasCutoff && draftCutoffClock.trim()) meta.cutoff_clock = draftCutoffClock.trim();
+		if (draftTargetText.trim()) {
+			const targetS = parseElapsedText(draftTargetText);
+			if (targetS != null) meta.target_elapsed_s = targetS;
+		}
 		if ((draftKind === 'note' || draftKind === 'hazard') && draftNote.trim()) {
 			meta.note = draftNote.trim();
 		}
@@ -260,6 +295,10 @@
 		}
 		if (draftLat == null || draftLng == null) {
 			showToast(m('routeMarker.placeRequired'), 'info');
+			return;
+		}
+		if (draftTargetText.trim() && parseElapsedText(draftTargetText) == null) {
+			showToast(m('routeMarker.targetInvalid'), 'error');
 			return;
 		}
 		saving = true;
@@ -315,17 +354,24 @@
 
 	function detailLine(mk: RouteMarker): string {
 		const spec = kindSpec(mk.kind);
+		const parts: string[] = [];
 		if (spec.hasServices && Array.isArray(mk.meta?.services) && mk.meta.services.length > 0) {
-			return (mk.meta.services as string[])
-				.map((s) => m(`routeMarker.service.${s}` as 'routeMarker.service.water'))
-				.join(' · ');
-		}
-		if (spec.hasCutoff) {
+			parts.push(
+				(mk.meta.services as string[])
+					.map((s) => m(`routeMarker.service.${s}` as 'routeMarker.service.water'))
+					.join(' · ')
+			);
+		} else if (spec.hasCutoff) {
 			const cutoff = parseCutoff(mk.meta);
-			if (cutoff?.clock) return m('routeMarker.cutoffAt', { time: cutoff.clock });
+			if (cutoff?.clock) parts.push(m('routeMarker.cutoffAt', { time: cutoff.clock }));
+		} else if (typeof mk.meta?.note === 'string') {
+			parts.push(mk.meta.note as string);
 		}
-		if (typeof mk.meta?.note === 'string') return mk.meta.note as string;
-		return '';
+		const target = parseTarget(mk.meta);
+		if (target?.elapsedS != null) {
+			parts.push(m('routeMarker.targetAt', { time: formatElapsed(target.elapsedS) }));
+		}
+		return parts.join(' · ');
 	}
 </script>
 
@@ -463,6 +509,16 @@
 					<input type="time" bind:value={draftCutoffClock} />
 				</label>
 			{/if}
+
+			<label>
+				{m('routeMarker.targetLabel')}
+				<input
+					type="text"
+					bind:value={draftTargetText}
+					placeholder="h:mm:ss"
+					inputmode="numeric"
+				/>
+			</label>
 
 			{#if draftKind === 'note' || draftKind === 'hazard'}
 				<label>

@@ -3324,5 +3324,6 @@
   "phaseIntentRace": "Competir",
   "phaseIntentEven": "Uniforme",
   "routeMarkerTargetChip": "Objetivo {time}",
-  "routeMarkerTargetLabel": "Tiempo objetivo"
+  "routeMarkerTargetLabel": "Tiempo objetivo",
+  "routeMarkerTargetInvalid": "Introduce el tiempo objetivo como h:mm:ss"
 }

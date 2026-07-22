@@ -19415,6 +19415,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Target time'**
   String get routeMarkerTargetLabel;
+
+  /// Course marker target-time validation (issue #608)
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the target time as h:mm:ss'**
+  String get routeMarkerTargetInvalid;
 }
 
 class _AppLocalizationsDelegate

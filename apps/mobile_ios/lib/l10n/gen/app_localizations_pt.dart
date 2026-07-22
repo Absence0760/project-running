@@ -11591,6 +11591,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo objetivo';
+
+  @override
+  String get routeMarkerTargetInvalid =>
+      'Introduz o tempo objetivo como h:mm:ss';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -23177,4 +23181,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo alvo';
+
+  @override
+  String get routeMarkerTargetInvalid => 'Informe o tempo alvo como h:mm:ss';
 }

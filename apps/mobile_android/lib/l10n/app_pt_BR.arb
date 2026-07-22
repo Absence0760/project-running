@@ -3324,5 +3324,6 @@
   "phaseIntentRace": "Correr",
   "phaseIntentEven": "Constante",
   "routeMarkerTargetChip": "Alvo {time}",
-  "routeMarkerTargetLabel": "Tempo alvo"
+  "routeMarkerTargetLabel": "Tempo alvo",
+  "routeMarkerTargetInvalid": "Informe o tempo alvo como h:mm:ss"
 }

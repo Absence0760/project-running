@@ -3324,5 +3324,6 @@
   "phaseIntentRace": "Rennen",
   "phaseIntentEven": "Gleichmäßig",
   "routeMarkerTargetChip": "Ziel {time}",
-  "routeMarkerTargetLabel": "Zielzeit"
+  "routeMarkerTargetLabel": "Zielzeit",
+  "routeMarkerTargetInvalid": "Zielzeit als h:mm:ss eingeben"
 }

@@ -11624,4 +11624,8 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Temps visé';
+
+  @override
+  String get routeMarkerTargetInvalid =>
+      'Saisis le temps visé au format h:mm:ss';
 }

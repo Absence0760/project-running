@@ -3324,5 +3324,6 @@
   "phaseIntentRace": "勝負",
   "phaseIntentEven": "イーブン",
   "routeMarkerTargetChip": "目標 {time}",
-  "routeMarkerTargetLabel": "目標タイム"
+  "routeMarkerTargetLabel": "目標タイム",
+  "routeMarkerTargetInvalid": "目標タイムは h:mm:ss 形式で入力してください"
 }

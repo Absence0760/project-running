@@ -351,4 +351,27 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
   });
+
+  group('parseMarkerElapsed / formatMarkerElapsed (#608)', () {
+    test('accepts h:mm:ss, mm:ss, and bare minutes', () {
+      expect(parseMarkerElapsed('1:45:00'), 6300);
+      expect(parseMarkerElapsed('25:00'), 1500);
+      expect(parseMarkerElapsed('90'), 5400);
+    });
+
+    test('rejects junk, negatives, and zero', () {
+      expect(parseMarkerElapsed(''), isNull);
+      expect(parseMarkerElapsed('abc'), isNull);
+      expect(parseMarkerElapsed('1:2:3:4'), isNull);
+      expect(parseMarkerElapsed('0'), isNull);
+      expect(parseMarkerElapsed('-5'), isNull);
+    });
+
+    test('format round-trips through parse', () {
+      expect(formatMarkerElapsed(6300), '1:45:00');
+      expect(formatMarkerElapsed(1500), '25:00');
+      expect(parseMarkerElapsed(formatMarkerElapsed(6300)), 6300);
+      expect(parseMarkerElapsed(formatMarkerElapsed(1500)), 1500);
+    });
+  });
 }

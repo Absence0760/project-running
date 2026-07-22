@@ -11474,4 +11474,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Target time';
+
+  @override
+  String get routeMarkerTargetInvalid => 'Enter the target time as h:mm:ss';
 }

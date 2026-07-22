@@ -14966,5 +14966,7 @@
   "routeMarkerTargetChip": "Target {time}",
   "@routeMarkerTargetChip": {"description": "Voice cues / race strategy (issues #607-#609)", "placeholders": {"time": {"type": "String"}}},
   "routeMarkerTargetLabel": "Target time",
-  "@routeMarkerTargetLabel": {"description": "Voice cues / race strategy (issues #607-#609)"}
+  "@routeMarkerTargetLabel": {"description": "Voice cues / race strategy (issues #607-#609)"},
+  "routeMarkerTargetInvalid": "Enter the target time as h:mm:ss",
+  "@routeMarkerTargetInvalid": {"description": "Course marker target-time validation (issue #608)"}
 }
