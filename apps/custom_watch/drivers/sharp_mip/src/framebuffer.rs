@@ -7,6 +7,7 @@
 //!
 //! [`display`]: crate::display
 
+use crate::bignum;
 use crate::font;
 use crate::icons::{Icon, ICON_SIZE};
 
@@ -502,6 +503,47 @@ impl Framebuffer {
                     if cell + 2 < TEXT_COLS {
                         self.put_cell_byte(cell + 2, y, b2);
                     }
+                }
+            }
+        }
+    }
+
+    /// Draw `text` in the generated 32x48 numeral face ([`bignum`]), centred
+    /// in the full-width band whose top pixel row is `y0`. Each affected line
+    /// is composed off-screen (background included) and compare-written, so a
+    /// redraw of an unchanged clock dirties nothing — the same at-rest
+    /// zero-flush property as [`Self::draw_text_row`] — and stale pixels
+    /// anywhere in the band are erased without a separate clear pass.
+    /// Characters outside the glyph set advance blank; clips at the bottom.
+    pub fn draw_bignum_band(&mut self, y0: usize, text: &str) {
+        let n = text.len().min(WIDTH / bignum::BIGNUM_WIDTH);
+        let x0 = (WIDTH - n * bignum::BIGNUM_WIDTH) / 2;
+        for dy in 0..bignum::BIGNUM_HEIGHT {
+            let y = y0 + dy;
+            if y >= HEIGHT {
+                return;
+            }
+            let mut line = [0u8; LINE_BYTES];
+            for (i, ch) in text.bytes().take(n).enumerate() {
+                let Some(g) = bignum::BIGNUM_GLYPHS.iter().position(|&c| c == ch) else {
+                    continue;
+                };
+                for (bx, &byte) in bignum::BIGNUM[g][dy].iter().enumerate() {
+                    if byte == 0 {
+                        continue;
+                    }
+                    for bit in 0..8 {
+                        if byte >> bit & 1 == 1 {
+                            let x = x0 + i * bignum::BIGNUM_WIDTH + bx * 8 + bit;
+                            line[x / 8] |= 1 << (x % 8);
+                        }
+                    }
+                }
+            }
+            for (bx, &b) in line.iter().enumerate() {
+                if self.lines[y][bx] != b {
+                    self.lines[y][bx] = b;
+                    self.dirty[y] = true;
                 }
             }
         }
