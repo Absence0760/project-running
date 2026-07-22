@@ -1030,6 +1030,42 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_blob_still_verifies_after_thinning() {
+        // The mid-run checkpoint path reuses the writer's running CRC, and
+        // thinning REBUILDS that CRC over the compacted buffer — this pins
+        // that a checkpoint taken after one or more thins reads back as a
+        // valid blob (the exact sequence app record's checkpoint cadence
+        // produces on a long run).
+        const N: usize = 1024;
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 6, 0).expect("start");
+        for i in 0..200u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        assert!(w.thinning() > 1, "the slot must have thinned");
+        let ckpt = w.checkpoint_blob(900, 190, 200).expect("checkpoint");
+        assert!(verify_blob(&ckpt), "post-thin checkpoint verifies");
+        // And the writer keeps recording + finalises cleanly afterwards.
+        for i in 200..220u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        let fin = w.finalize(1_000, 210, 220).expect("finalize");
+        assert!(verify_blob(&fin));
+    }
+
+    #[test]
     fn bounded_push_keeps_laps_across_thinning() {
         const N: usize = 1024;
         let sink: heapless::Vec<u8, N> = heapless::Vec::new();

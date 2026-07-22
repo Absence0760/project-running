@@ -232,5 +232,8 @@ async fn main(spawner: Spawner) {
         static BONDER: StaticCell<tasks::ble::Bonder> = StaticCell::new();
         let bonder = BONDER.init(tasks::ble::Bonder::default());
         spawner.spawn(unwrap!(tasks::ble::run(sd, server, store, bonder)));
+        // Separate from the serve loop so a disconnect racing a fresh bond
+        // can't cancel the flash persist mid-write (see bond_persist's doc).
+        spawner.spawn(unwrap!(tasks::ble::bond_persist(store, bonder)));
     }
 }

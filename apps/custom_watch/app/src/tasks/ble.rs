@@ -58,7 +58,7 @@ pub async fn run() {
 }
 
 #[cfg(feature = "ble")]
-pub use imp::{config, run, softdevice_task, Bonder, Server};
+pub use imp::{bond_persist, config, run, softdevice_task, Bonder, Server};
 
 #[cfg(feature = "ble")]
 mod imp {
@@ -70,7 +70,7 @@ mod imp {
     use core::cell::{Cell, RefCell};
 
     use defmt::*;
-    use embassy_futures::select::{select, select3, Either, Either3};
+    use embassy_futures::select::{select, Either};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
     use embassy_time::{Duration, Instant, Ticker, Timer};
@@ -239,8 +239,28 @@ mod imp {
         }
     }
 
-    /// Signals the serve loop that `on_bonded` staged fresh keys to persist.
+    /// Signals [`bond_persist`] that `on_bonded` staged fresh keys to persist.
     static BOND_SAVED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
+    /// Persist freshly-staged bond keys to the flash config page. A DEDICATED
+    /// task, not a branch of the connection's serve loop: many centrals
+    /// disconnect immediately after pairing completes, and a disconnect
+    /// resolves the `select(gatt, stream)` in [`run`] and DROPS the stream
+    /// future — which would cancel an in-flight `persist_bond` mid-erase and
+    /// (fail-closed but silently) lose both the bond and the stored GNSS mode
+    /// on exactly the connection where bonding just happened. This task is
+    /// never cancelled, so the erase+write transaction always runs to
+    /// completion. L4 best-effort — a failed write only means re-pairing
+    /// after reboot, never a broken link now.
+    #[embassy_executor::task]
+    pub async fn bond_persist(store: &'static SharedStore, bonder: &'static Bonder) -> ! {
+        loop {
+            BOND_SAVED.wait().await;
+            if let Some(rec) = bonder.peer.get().map(Peer::to_record) {
+                store.lock().await.persist_bond(rec).await;
+            }
+        }
+    }
 
     impl SecurityHandler for Bonder {
         fn io_capabilities(&self) -> IoCapabilities {
@@ -394,9 +414,10 @@ mod imp {
     /// Advertise → serve → re-advertise on disconnect, forever. While
     /// connected, push one status frame per second (only once the phone has
     /// subscribed, tracked via the CCCD write event); keep the run manifest
-    /// characteristic fresh; answer each `run_chunk` write with the requested
-    /// slice of the run blob (README step 7); and persist a fresh bond the
-    /// moment [`SecurityHandler::on_bonded`] signals one (issue #598).
+    /// characteristic fresh; and answer each `run_chunk` write with the
+    /// requested slice of the run blob (README step 7). Bond persistence
+    /// lives in [`bond_persist`], deliberately outside this task's
+    /// connection-scoped select (issue #598).
     #[embassy_executor::task]
     pub async fn run(
         sd: &'static Softdevice,
@@ -538,18 +559,8 @@ mod imp {
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
                 loop {
-                    match select3(ticker.next(), chunk_req.wait(), BOND_SAVED.wait()).await {
-                        Either3::Third(()) => {
-                            // `on_bonded` staged fresh keys (SoftDevice event
-                            // context, can't await); persist them here so the
-                            // pairing survives a power cycle. L4 best-effort —
-                            // a failed write only means re-pairing after
-                            // reboot, never a broken link now.
-                            if let Some(rec) = bonder.peer.get().map(Peer::to_record) {
-                                store.lock().await.persist_bond(rec).await;
-                            }
-                        }
-                        Either3::First(()) => {
+                    match select(ticker.next(), chunk_req.wait()).await {
+                        Either::First(()) => {
                             let now_s = Instant::now().as_secs() as u32;
                             if let Some(fix) = fix_rx.try_changed() {
                                 latest = Some(fix);
@@ -585,7 +596,7 @@ mod imp {
                                 }
                             }
                         }
-                        Either3::Second(req) => {
+                        Either::Second(req) => {
                             // Clamp to the notify MTU; read_chunk further clamps
                             // to the blob end. An empty reply means unknown run
                             // or past-the-end, so the phone isn't left waiting.
