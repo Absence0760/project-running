@@ -118,6 +118,17 @@ trap cleanup INT TERM EXIT
 # emulator. To script one command without ending the run, hold stdin open
 # (e.g. `{ echo "<cmd>"; sleep 2; } | ncat localhost <port>`).
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
+
+# The phone-link socket binds a FIXED port (the mobile Sim Watch screen dials
+# 7788), and watch.resc creates it BEFORE the GPS pty — so a stale sim
+# instance still holding the port aborts the include mid-script and the only
+# visible symptom is the pty never appearing. Name the real cause up front.
+PHONE_PORT_HOLDER="$(ss -tlnpH "sport = :$PHONE_PORT" 2>/dev/null || true)"
+if [[ -n "$PHONE_PORT_HOLDER" ]]; then
+	HOLDER_PID="$(grep -oP 'pid=\K[0-9]+' <<<"$PHONE_PORT_HOLDER" | head -1)"
+	fatal "phone-link port $PHONE_PORT is already in use${HOLDER_PID:+ by pid $HOLDER_PID} — a previous watch sim is probably still running. Close its Renode window${HOLDER_PID:+ or 'kill $HOLDER_PID'}, or run this one with --phone-port $(( PHONE_PORT + 1 ))."
+fi
+
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
 echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
 ln -sfn "$RUN_DIR" "$LATEST_LINK"
@@ -143,7 +154,7 @@ for _ in $(seq 1 150); do
 	fi
 	sleep 0.2
 done
-[[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them)"
+[[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them). If ss -tlnp 'sport = :$PHONE_PORT' shows a holder, a stale sim instance grabbed the phone port after the preflight check."
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
