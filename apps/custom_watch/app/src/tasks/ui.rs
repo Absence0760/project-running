@@ -391,31 +391,31 @@ pub async fn screen_task(
                 fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
                 fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
             }
-            // The off-course treatment: a steady 2x banner centred over the
-            // breadcrumb, drawn last so it wins the panel pixels.
+            // The off-course treatment: a steady inverse-video banner across
+            // the breadcrumb, drawn last so it wins the panel pixels.
             if let Some(text) = &nav_alert {
-                let col = sharp_mip::TEXT_COLS.saturating_sub(text.chars().count() * 2) / 2;
-                fb.draw_text_2x(col, face::NAV_ALERT_ROW, text);
+                fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
             }
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
         // row 0 sits top-right, clear of the digits. An active on-run alert
-        // takes the hero band over for its TTL — the banner ("! DRINK") is the
-        // most unmissable treatment a 1-bit panel gives, and the alert engine
-        // only emits during a run, so the idle face never loses its title.
-        // The manual QNH re-zero's transient feedback: a 2x banner over the
-        // idle face's title band for its TTL, mirroring the on-run alert
-        // treatment. Idle-only — the gesture only exists on the idle face, and
-        // a run view's hero band belongs to the run's own alerts.
+        // takes the hero band over for its TTL — an inverse-video banner
+        // ("! DRINK" light on a dark band) is the most unmissable treatment
+        // the panel gives, and the alert engine only emits during a run, so
+        // the idle face never loses its title. The manual QNH re-zero's
+        // transient feedback: the same inverse banner over the idle face's
+        // title band for its TTL. Idle-only — the gesture only exists on the
+        // idle face, and a run view's hero band belongs to the run's own
+        // alerts.
         let rezero_banner = rezero
             .filter(|(_, at)| uptime_s.saturating_sub(*at) < elevation::REZERO_BANNER_TTL_S)
             .filter(|_| !face::run_view(rec.as_ref()))
             .map(|(status, _)| elevation::rezero_banner(status));
         if let Some(a) = alert {
-            fb.draw_text_2x(0, 0, &alerts::banner(a));
+            fb.draw_banner_2x(0, &alerts::banner(a));
         } else if let Some(banner) = &rezero_banner {
-            fb.draw_text_2x(0, 0, banner);
+            fb.draw_banner_2x(0, banner);
         } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
             // The single-metric glance pages headline their number in the
             // generated numeral faces (their face reserves rows 0-2 + puts the
@@ -492,7 +492,7 @@ pub async fn screen_task(
         if face::run_view(rec.as_ref()) {
             if let Some(armed_at) = stop_armed {
                 if button::stop_arm_pending(armed_at, uptime_s) {
-                    fb.draw_text_2x(0, 0, button::STOP_ARMED_BANNER);
+                    fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
                 }
             }
         }

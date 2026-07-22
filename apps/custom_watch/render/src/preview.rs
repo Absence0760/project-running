@@ -221,6 +221,19 @@ fn preview_run_dashboard() {
 }
 
 #[test]
+fn preview_inverse_alert_banner() {
+    // An on-run alert takes the hero band over as an inverse-video banner —
+    // light text knocked out of a solid band, the loudest treatment the 1-bit
+    // panel gives (fg/bg swap at draw time; the panel has no polarity of its
+    // own).
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Dashboard, Some(&snap), Some(150));
+    fb.draw_banner_2x(0, "! DRINK");
+    show("alert banner: inverse video over the hero band", &fb);
+}
+
+#[test]
 fn preview_distance_and_pace_bignum_heroes() {
     // The single-metric glances: big integers / minutes with the medium face
     // carrying the decimals / seconds on the shared baseline.

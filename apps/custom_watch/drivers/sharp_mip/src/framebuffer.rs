@@ -473,6 +473,43 @@ impl Framebuffer {
         }
     }
 
+    /// Full-width inverse-video banner: the two text rows from `row` fill
+    /// solid ink with `text` knocked out in background pixels, pixel-doubled
+    /// from the 8x16 font and centred — dark band, light text. On a 1-bit
+    /// framebuffer inverse video is just fg and bg swapped at draw time, so
+    /// this is the visually-loudest treatment the panel gives (the reflective
+    /// glass has no backlight or grey to spend). Lines are composed whole and
+    /// compare-written, so a standing banner redraws for free. Truncates at
+    /// the panel width; clips at the bottom; non-ASCII renders as '?'.
+    pub fn draw_banner_2x(&mut self, row: usize, text: &str) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let n = text.chars().count().min(TEXT_COLS / 2);
+        let col0 = (TEXT_COLS - n * 2) / 2;
+        let y0 = row * font::GLYPH_HEIGHT;
+        for dy in 0..font::GLYPH_HEIGHT {
+            for half in 0..2 {
+                let y = y0 + dy * 2 + half;
+                if y >= HEIGHT {
+                    return;
+                }
+                let mut line = [0xFF_u8; LINE_BYTES];
+                for (i, ch) in text.chars().take(n).enumerate() {
+                    let (lo, hi) = double_bits(glyph_for(ch)[dy]);
+                    line[col0 + i * 2] = !lo;
+                    line[col0 + i * 2 + 1] = !hi;
+                }
+                for (bx, &b) in line.iter().enumerate() {
+                    if self.lines[y][bx] != b {
+                        self.lines[y][bx] = b;
+                        self.dirty[y] = true;
+                    }
+                }
+            }
+        }
+    }
+
     /// Draw `text` in the generated 32x48 numeral face ([`bignum`]), centred
     /// in the full-width band whose top pixel row is `y0`. Each affected line
     /// is composed off-screen (background included) and compare-written, so a

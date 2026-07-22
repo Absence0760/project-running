@@ -249,6 +249,57 @@ fn draw_text_2x_clips_at_the_edges_without_panicking() {
 }
 
 #[test]
+fn draw_banner_2x_is_exactly_2x_text_with_fg_bg_swapped() {
+    // Inverse video on a 1-bit framebuffer is nothing more than swapping ink
+    // and background at draw time: inside the text span the banner must be
+    // the pixel-inverse of the same string drawn by draw_text_2x.
+    let mut banner = Framebuffer::new();
+    banner.draw_banner_2x(0, "STOP? BTN2");
+    let mut plain = Framebuffer::new();
+    let col0 = (TEXT_COLS - 20) / 2;
+    plain.draw_text_2x(col0, 0, "STOP? BTN2");
+    for y in 0..32 {
+        for x in col0 * 8..(col0 + 20) * 8 {
+            assert_eq!(banner.pixel(x, y), !plain.pixel(x, y), "at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn draw_banner_2x_fills_the_whole_band_and_stays_inside_it() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(0, "! DRINK");
+    // The band's margins are solid ink out to both panel edges...
+    assert!(fb.pixel(0, 0) && fb.pixel(WIDTH - 1, 0));
+    assert!(fb.pixel(0, 31) && fb.pixel(WIDTH - 1, 31));
+    // ...the centred text is knocked out light inside it...
+    let knocked_out = (0..32)
+        .flat_map(|y| (0..WIDTH).map(move |x| (x, y)))
+        .filter(|&(x, y)| !fb.pixel(x, y))
+        .count();
+    assert!(knocked_out > 0, "no light text inside the banner");
+    // ...and nothing below the two banner rows is touched.
+    assert!((32..HEIGHT).all(|y| (0..WIDTH).all(|x| !fb.pixel(x, y))));
+}
+
+#[test]
+fn draw_banner_2x_redraw_is_stable() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(3, "OFF COURSE");
+    fb.clear_dirty();
+    fb.draw_banner_2x(3, "OFF COURSE");
+    assert_eq!(fb.dirty_count(), 0, "a standing banner must flush no lines");
+}
+
+#[test]
+fn draw_banner_2x_truncates_and_clips_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(0, &"X".repeat(TEXT_COLS)); // wider than fits
+    fb.draw_banner_2x(sharp_mip::TEXT_ROWS - 1, "X"); // lower half clips off-panel
+    fb.draw_banner_2x(99, "X"); // past the bottom text row
+}
+
+#[test]
 fn draw_icon_blits_the_bitmap_cell_aligned() {
     let mut fb = Framebuffer::new();
     fb.clear_dirty();

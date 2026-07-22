@@ -547,10 +547,11 @@ mod tests {
         // The ui task draws the grid AFTER the composed page, relying on
         // draw_text_row overwriting each full 16-px band — this pins that an
         // alert banner drawn first leaves no residue, so the deferred-banner
-        // rule in the ui task can't ghost.
+        // rule in the ui task can't ghost. The inverse-video band makes this
+        // the worst case: every pixel of rows 0-1 starts inked.
         use watch_core::alerts::{banner, Alert};
         let mut with_banner = Framebuffer::new();
-        with_banner.draw_text_2x(0, 0, &banner(Alert::Drink));
+        with_banner.draw_banner_2x(0, &banner(Alert::Drink));
         let mut clean = Framebuffer::new();
         for (row, text) in page_grid::grid_rows(u32::MAX).iter().enumerate() {
             with_banner.draw_text_row(row, text);
