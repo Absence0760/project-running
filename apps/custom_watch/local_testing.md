@@ -166,10 +166,13 @@ runMacro $btn3    # mid-run: cycle the run view (Dashboard -> Distance -> Pace -
                   # Lap -> Zones -> Pacer -> Nav -> BackToStart); on the idle
                   # face: cycle the GNSS recording mode (Performance ->
                   # Balanced -> Expedition)
+runMacro $btn3l   # hold BTN3 ~0.7 s — mid-run: page back; idle face: QNH re-zero
+runMacro $btn3h   # hold BTN3 ~1.7 s — mid-run: open the page-grid overview
+                  # (still the QNH re-zero on the idle face)
 runMacro $btn4    # take a manual lap
 ```
 
-Each macro pulls the button's input pin low for ~0.3 s via `gpio0 OnGPIO`, then releases it — a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN3 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. These two features plus `sim-course` (below) are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3l` / `$btn3h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN3 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` opens it, each `runMacro $btn3` steps the cursor, and `runMacro $btn4` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-course` (below) are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
 
 **The `sim-course` feature — the canned breadcrumb course.** The Nav run-view page follows a course (`watch_core::course`), but no course-push path exists yet — so the default-OFF `sim-course` feature bakes in a canned one: the west + south edges of the `bench_jog.nmea` rectangle. The fixture's east + north legs deliberately leave it, so every ~2-minute lap exercises the whole surface — on-course following, `nav: OFF COURSE (41 m off, 179 m along)` (WARN, fires whatever page is up), and `nav: back on course` as the loop closes. Cycle BTN3 to the Nav page to watch the breadcrumb panel, the position marker, and the 2x OFF COURSE banner on the emulated screen. A hardware flash (default features) carries no course and the Nav page reports `NO COURSE LOADED`.
 

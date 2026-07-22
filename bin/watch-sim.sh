@@ -158,7 +158,7 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
-dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn4 (lap)"
+dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn3l (page back), \$btn3h (page grid), \$btn4 (lap)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
