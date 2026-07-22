@@ -9,7 +9,7 @@
 # without a button), `sim-buttons` (poll the button pins so BTN1-4 presses
 # work — clicked on the --gui window's bezel, or injected via the watch.resc
 # btn1..btn4 monitor macros: BTN1 start/pause/resume, dismiss-home from FIN, BTN2 stop (press twice), BTN3 page / idle
-# GNSS mode, BTN4 lap), and `sim-course` (the canned breadcrumb course the Nav
+# GNSS mode, BTN4 lap / page back from FIN), and `sim-course` (the canned breadcrumb course the Nav
 # page follows; the bench_jog fixture leaves it on two legs so the off-course
 # alert fires each lap). What you can't simulate: BLE (nrf-softdevice needs
 # the real radio), power draw, GPS/HR analog behaviour. See
@@ -170,7 +170,7 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
-dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn3l (page back), \$btn3h (page grid), \$btn4 (lap)"
+dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn3l (page back), \$btn3h (page grid), \$btn4 (lap / FIN page back)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the

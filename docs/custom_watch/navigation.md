@@ -28,7 +28,7 @@ stateDiagram-v2
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
     Run --> Run: BTN2 — arm stop ("STOP? BTN2" banner, 4 s)
     Run --> Run: BTN2 x2 — stop (FIN)
-    Run --> Run: BTN4 — lap
+    Run --> Run: BTN4 — lap (REC / PAU), page prev (FIN)
     Run --> Run: BTN3 tap / long — page next / prev
     Run --> Grid: BTN3 hold (1.5 s)
     Grid --> Grid: BTN3 tap / hold — cursor +1 / +4
@@ -45,7 +45,9 @@ recording (steady through the min-move sampling artifact on slow climbs),
 steady only for a manual pause (owes a BTN1 press), `FIN` once stopped
 (decisions §287). `BTN1` from `FIN` returns home and the next run opens on
 the Dashboard (§289) — before §289, `Finished` was a dead end that held the
-run view until reboot.
+run view until reboot. In `FIN` the dead lap key becomes a tap page-back
+(§290): the post-run review pages both ways on taps, BTN3 forward and BTN4
+backward, with the long-press back still available everywhere.
 
 ## The page cycle (§286 order, §284 filter)
 
@@ -137,4 +139,4 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
 `bin/watch-monitor.sh`: `runMacro $btn1` start / pause / dismiss-home,
 `$btn2` twice stop (watch the `STOP? BTN2` banner), `$btn3` page, `$btn3l`
 page back, `$btn3h` page grid, then `$btn3`/`$btn3l`/`$btn1` to move the
-cursor and `$btn4` to jump.
+cursor and `$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back.

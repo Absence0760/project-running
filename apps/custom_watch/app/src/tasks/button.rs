@@ -14,7 +14,10 @@
 //!          cycle the GNSS recording mode (Performance / Balanced /
 //!          Expedition) on the idle face; long-press = page back in a run,
 //!          manual QNH re-zero on the idle face
-//!   BTN4 — manual lap (the Fenix layout's lower-right Lap, decisions §81)
+//!   BTN4 — manual lap (the Fenix layout's lower-right Lap, decisions §81);
+//!          once a run is finished the lap is dead and a tap pages the
+//!          review backward instead (`watch_core::button::btn4_action`), so
+//!          the post-run pages move both ways on taps
 //! The buttons are active-LOW (idle high, press pulls low), so a press is a
 //! falling edge and a held press reads `is_low()`. BTN3 carries no recording
 //! command — what a press does is the host-tested
@@ -31,8 +34,9 @@ use embassy_time::{Duration, Instant, Timer};
 #[cfg(feature = "sim-buttons")]
 use watch_core::button::classify_btn3_hold;
 use watch_core::button::{
-    btn3_action, command_for, grid_press, Btn3Action, Btn3Press, Button, GridPress, RecordCommand,
-    StopGuard, StopPress, BTN3_GRID_HOLD_MS, BTN3_LONG_PRESS_MS, STOP_CONFIRM_WINDOW_S,
+    btn3_action, btn4_action, command_for, grid_press, Btn3Action, Btn3Press, Btn4Action, Button,
+    GridPress, RecordCommand, StopGuard, StopPress, BTN3_GRID_HOLD_MS, BTN3_LONG_PRESS_MS,
+    STOP_CONFIRM_WINDOW_S,
 };
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
@@ -97,7 +101,7 @@ pub async fn run(
     // auto-select deadline; the ui task only renders the published cursor.
     let mut grid: Option<PageGrid> = None;
     let mut grid_deadline: Option<Instant> = None;
-    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap");
+    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap/back");
     loop {
         // Wait for whichever button is pressed first (falling edge = press) —
         // or, while the grid is open, for its auto-select deadline: the
@@ -322,10 +326,18 @@ pub async fn run(
 
         // The toggle keys off the latest published run state. `try_get` never
         // waits: before the first snapshot the run is idle, which is correct.
-        let state = record_rx
-            .try_get()
-            .map(|snap| snap.state)
-            .unwrap_or(RecordState::Idle);
+        let snap = record_rx.try_get();
+        let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
+        // A finished run turns the dead lap key into a tap page-back (the
+        // host-tested btn4_action): the post-run review pages both ways on
+        // taps — BTN3 forward, BTN4 back.
+        if button == Button::Lap && btn4_action(state) == Some(Btn4Action::PageBack) {
+            let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+            page = page.prev_in(mask);
+            info!("button: BTN4 -> page {} (back)", page);
+            page_tx.send(page);
+            continue;
+        }
         if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
             // Dismissed home: the next run opens on the Dashboard, not on
             // whatever page the last one was parked on.
@@ -390,7 +402,7 @@ async fn dispatch(
 /// software, so the `btn1`/`btn2`/`btn3`/`btn4` monitor macros in
 /// `sim/watch.resc` drive the SAME `command_for` / page logic the real task
 /// uses. The mapping is identical (BTN1 start/pause/resume, BTN2 stop, BTN3
-/// page / idle GNSS mode, BTN4 lap). Renode has no contact bounce, so a clean
+/// page / idle GNSS mode, BTN4 lap / finished-run page back). Renode has no contact bounce, so a clean
 /// edge needs no debounce confirm.
 ///
 /// Feature-gated to the sim build; the hardware task keeps the low-power SENSE
@@ -440,7 +452,7 @@ pub async fn run(
     let mut btn1_down_at: Option<Instant> = None;
     let mut btn1_handled = false;
     info!(
-        "button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap"
+        "button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap/back"
     );
 
     loop {
@@ -648,10 +660,16 @@ pub async fn run(
                 grid_tx.send(None);
                 continue;
             }
-            let state = record_rx
-                .try_get()
-                .map(|snap| snap.state)
-                .unwrap_or(RecordState::Idle);
+            let snap = record_rx.try_get();
+            let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
+            // Same finished-run page-back as the hardware task above.
+            if button == Button::Lap && btn4_action(state) == Some(Btn4Action::PageBack) {
+                let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                page = page.prev_in(mask);
+                info!("button: BTN4 -> page {} (back)", page);
+                page_tx.send(page);
+                continue;
+            }
             if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
                 // Dismissed home: the next run opens on the Dashboard, not on
                 // whatever page the last one was parked on.
