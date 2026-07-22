@@ -93,13 +93,22 @@ RENODE_LOG="$RUN_DIR/renode.log"
 
 RENODE_PID=""
 cleanup() {
-	trap - INT TERM EXIT
+	# Ignore further signals rather than resetting to default: pnpm forwards
+	# its own SIGINT right behind the tty's group-wide one (a second Ctrl-C
+	# does the same), and with the trap reset that second INT kills the
+	# script on this very line — before the Renode kill below — orphaning
+	# the emulator on the phone port.
+	trap '' INT TERM HUP
+	trap - EXIT
 	# /usr/bin/renode is a shell wrapper around dotnet — killing the wrapper
 	# alone leaves Renode.dll running (and holding its monitor port), so also
 	# kill the real PID that Renode wrote to the pid-file.
 	[[ -f "$RUN_DIR/renode.pid" ]] && kill "$(cat "$RUN_DIR/renode.pid")" 2>/dev/null
 	[[ -n "$RENODE_PID" ]] && kill "$RENODE_PID" 2>/dev/null
-	kill $(jobs -p) 2>/dev/null
+	# Not `kill $(jobs -p)`: that names only each job's leader, so the tail
+	# half of the `tail | defmt-print` pipeline survived every run. Sweep all
+	# remaining direct children instead.
+	pkill -P $$ 2>/dev/null
 	wait 2>/dev/null
 	[[ "$(readlink -f "$LATEST_LINK" 2>/dev/null)" == "$(readlink -f "$RUN_DIR")" ]] && rm -f "$LATEST_LINK"
 	dim "sim artifacts kept in $RUN_DIR (renode.log, defmt.raw)"
