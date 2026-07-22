@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { fetchRouteById, fetchRouteMarkers } from '$lib/core/data';
+	import { fetchRouteById, fetchRouteMarkers, updateRouteMarker } from '$lib/core/data';
 	import type { Route, RouteMarker } from '$lib/types';
 	import {
 		buildRoadbook,
@@ -40,6 +40,8 @@
 	// Open-Meteo elevations fetched on demand when the route lacks stored ele.
 	let fetchedEle = $state<number[] | null>(null);
 	let fetchingEle = $state(false);
+	let savingTargets = $state(false);
+	let isOwner = $derived(route !== null && auth.user?.id === route.user_id);
 
 	// Sensible starting goal until the user sets one: route distance at a
 	// moderate trail pace. Editable; the URL is the source of truth.
@@ -146,6 +148,41 @@
 			heatFactor: heatOn ? HEAT_FLUID_FACTOR : 1
 		})
 	);
+
+	/** Write the roadbook's projected arrival at each marker into that
+	 * marker's meta.target_elapsed_s — the one-click seed for the #608
+	 * marker-target voice cues, hand-tunable afterwards in the editor. */
+	async function saveTargets() {
+		savingTargets = true;
+		try {
+			const used = new Set<string>();
+			let saved = 0;
+			for (const leg of roadbook.legs) {
+				if (typeof leg.checkpoint !== 'object') continue;
+				const mk = markers.find(
+					(m) =>
+						!used.has(m.id) &&
+						m.position_m != null &&
+						Math.abs(m.position_m - leg.cumDistM) < 1
+				);
+				if (!mk) continue;
+				used.add(mk.id);
+				await updateRouteMarker(mk.id, {
+					meta: {
+						...((mk.meta as Record<string, unknown>) ?? {}),
+						target_elapsed_s: Math.round(leg.projectedElapsedS)
+					}
+				});
+				saved++;
+			}
+			markers = await fetchRouteMarkers(data.id);
+			showToast(m('roadbook.saveTargetsDone', { count: String(saved) }), 'success');
+		} catch (e) {
+			showToast(m('roadbook.saveTargetsFailed', { error: `${e}` }), 'error');
+		} finally {
+			savingTargets = false;
+		}
+	}
 
 	async function addElevation() {
 		if (!route || fetchingEle) return;
@@ -324,6 +361,16 @@
 					{m('roadbook.modelEven')}
 				</button>
 			</div>
+			{#if isOwner && markers.some((mk) => mk.position_m != null)}
+				<button
+					type="button"
+					class="btn btn-sm btn-outline"
+					disabled={savingTargets}
+					onclick={saveTargets}
+				>
+					{savingTargets ? m('roadbook.saveTargetsSaving') : m('roadbook.saveTargets')}
+				</button>
+			{/if}
 			<div class="model-toggle" role="group" aria-label={m('roadbook.fuel')}>
 				<button
 					class:active={fuelOn}
