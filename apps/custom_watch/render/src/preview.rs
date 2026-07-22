@@ -116,6 +116,7 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         false,
         GnssMode::default(),
         IdleView::Home,
+        None,
     );
     let field_grid = page == Page::Dashboard && snap.is_some();
     for (r, row) in rows.iter().enumerate() {
@@ -149,7 +150,7 @@ fn preview_idle_home_face_with_clock_hero() {
     widgets::draw_idle_signal(&mut fb, Some(&sample_fix()), 100, face::STALE_AFTER_S);
     // The ui task draws the generated numeral clock into the band the home
     // face leaves blank — replicate it so the preview shows the real layout.
-    let clock = face::home_clock_text(Some(&sample_fix()), 100);
+    let clock = face::home_clock_text(Some(&sample_fix()), 100, None);
     fb.draw_bignum_band(
         face::CLOCK_HERO_TOP_ROW * (HEIGHT / sharp_mip::TEXT_ROWS),
         &clock,
@@ -172,6 +173,7 @@ fn preview_idle_diagnostics_face() {
         false,
         GnssMode::default(),
         IdleView::Diagnostics,
+        None,
     );
     for (r, row) in rows.iter().enumerate() {
         fb.draw_text_row(r, row);

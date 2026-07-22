@@ -87,15 +87,18 @@ pub const CLOCK_HERO_ROWS: usize = 3;
 /// in Expedition mode, and a clock frozen at the fix's minute reads as a hung
 /// watch), or the honest `--:--` before any fix carries a clock. Minute
 /// resolution on purpose: the hero must never owe the panel a redraw per
-/// second. UTC — tier 1 has no timezone source; the summary row's label says
-/// so.
+/// second. Local time when a settings push has carried the phone's timezone
+/// offset (`tz_offset_min`, minutes east of UTC — wraps across midnight in
+/// both directions), UTC until then; the summary row's label says which.
 pub type ClockText = heapless::String<5>;
 
-pub fn home_clock_text(fix: Option<&Fix>, uptime_s: u32) -> ClockText {
+pub fn home_clock_text(fix: Option<&Fix>, uptime_s: u32, tz_offset_min: Option<i16>) -> ClockText {
     let mut t = ClockText::new();
     match fix.and_then(|f| f.time_of_day.map(|tod| (tod, f.uptime_s))) {
         Some((tod, at)) => {
-            let s = (tod + uptime_s.saturating_sub(at)) % 86_400;
+            let utc = (tod + uptime_s.saturating_sub(at)) % 86_400;
+            let s =
+                (utc as i32 + i32::from(tz_offset_min.unwrap_or(0)) * 60).rem_euclid(86_400) as u32;
             let _ = write!(t, "{:02}:{:02}", s / 3600, s / 60 % 60);
         }
         None => {
@@ -265,6 +268,7 @@ fn rec_tag(snap: &Snapshot) -> Option<&'static str> {
 /// VERT shows a placeholder); `mode` is the selected GNSS mode (it labels the
 /// GPS rows, sets the idle face's MODE row, and stretches the staleness
 /// budget to the mode's fix cadence while recording).
+#[allow(clippy::too_many_arguments)]
 pub fn face_rows(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -273,10 +277,20 @@ pub fn face_rows(
     uptime_s: u32,
     mode: GnssMode,
     view: IdleView,
+    tz_offset_min: Option<i16>,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode, false, view),
+        None => status_face(
+            fix,
+            hr_bpm,
+            elev,
+            uptime_s,
+            mode,
+            false,
+            view,
+            tz_offset_min,
+        ),
     }
 }
 
@@ -353,9 +367,19 @@ pub fn page_rows(
     animate: bool,
     mode: GnssMode,
     view: IdleView,
+    tz_offset_min: Option<i16>,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate, view),
+        None => status_face(
+            fix,
+            hr_bpm,
+            elev,
+            uptime_s,
+            mode,
+            animate,
+            view,
+            tz_offset_min,
+        ),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
             Page::Distance => glance(
@@ -2207,7 +2231,10 @@ fn write_idle_title(row: &mut Row, animate: bool) {
 }
 
 /// The idle face: the home view unless BTN4 has toggled the diagnostics view
-/// (see [`IdleView`]).
+/// (see [`IdleView`]). Only the home view takes the timezone offset — the
+/// diagnostics view is the bench view, and raw receiver (UTC) time is a
+/// feature there.
+#[allow(clippy::too_many_arguments)]
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -2216,9 +2243,10 @@ fn status_face(
     mode: GnssMode,
     animate: bool,
     view: IdleView,
+    tz_offset_min: Option<i16>,
 ) -> [Row; ROWS] {
     match view {
-        IdleView::Home => home_face(fix, hr_bpm, elev, uptime_s, mode, animate),
+        IdleView::Home => home_face(fix, hr_bpm, elev, uptime_s, mode, animate, tz_offset_min),
         IdleView::Diagnostics => diagnostics_face(fix, hr_bpm, elev, uptime_s, mode, animate),
     }
 }
@@ -2227,9 +2255,13 @@ fn status_face(
 /// clock hero band (rows 2-4, drawn by the app from the generated numeral
 /// face — this function leaves them blank per the widget-overlay contract),
 /// then one summary row (HR + baro-preferred altitude), the GPS glance with
-/// the hero's UTC label, and the mode picker's read-out. Everything here is
-/// minute-or-slower: the home face at rest owes the panel zero redraws, where
-/// the old bench view's seconds row redrew every fix.
+/// the hero's honesty label (LOCAL once a settings push has carried the
+/// phone's timezone offset, UTC until then — the label must match what the
+/// hero actually shows, so both derive from the same input), and the mode
+/// picker's read-out. Everything here is minute-or-slower: the home face at
+/// rest owes the panel zero redraws, where the old bench view's seconds row
+/// redrew every fix.
+#[allow(clippy::too_many_arguments)]
 fn home_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -2237,6 +2269,7 @@ fn home_face(
     uptime_s: u32,
     mode: GnssMode,
     animate: bool,
+    tz_offset_min: Option<i16>,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     write_idle_title(&mut rows[0], animate);
@@ -2265,7 +2298,12 @@ fn home_face(
 
     let mut gps: heapless::String<14> = heapless::String::new();
     let _ = write!(gps, "GPS {}", gps_value(fix, uptime_s, STALE_AFTER_S));
-    let _ = write!(rows[7], "{:<14}{:>7}", gps, "UTC");
+    let zone = if tz_offset_min.is_some() {
+        "LOCAL"
+    } else {
+        "UTC"
+    };
+    let _ = write!(rows[7], "{:<14}{:>7}", gps, zone);
 
     write_mode_row(&mut rows[8], mode);
     rows
@@ -2328,12 +2366,13 @@ fn diagnostics_face(
         let _ = write!(rows[7], "HR   {} BPM", bpm);
     }
 
-    // Bottom row: the GPS wall clock whenever the fix carries it — the idle
-    // face is the home screen and a home screen tells the time (UTC-labelled:
-    // tier 1 has no timezone source) — else cumulative vert while the baro
-    // streams (the bench case: baro without GPS). Vert used to displace the
-    // clock here, which left a baro-equipped watch with no time of day at all.
-    // Metres clamped to five digits so the row can't overflow COLS.
+    // Bottom row: the GPS wall clock whenever the fix carries it — else
+    // cumulative vert while the baro streams (the bench case: baro without
+    // GPS). Vert used to displace the clock here, which left a baro-equipped
+    // watch with no time of day at all. Deliberately UTC and unshifted even
+    // when a pushed timezone offset is live: this is the bench view, and the
+    // raw receiver time is a feature here. Metres clamped to five digits so
+    // the row can't overflow COLS.
     match fix.and_then(|f| f.time_of_day) {
         Some(tod) => {
             let (th, tm, ts) = hms(tod);
@@ -2459,6 +2498,7 @@ mod tests {
             uptime_s,
             GnssMode::Performance,
             IdleView::Home,
+            None,
         )
     }
 
@@ -2478,6 +2518,7 @@ mod tests {
             uptime_s,
             GnssMode::Performance,
             IdleView::Diagnostics,
+            None,
         )
     }
 
@@ -2514,6 +2555,7 @@ mod tests {
             animate,
             GnssMode::Performance,
             IdleView::Home,
+            None,
         )
     }
 
@@ -3024,17 +3066,108 @@ mod tests {
         // clock reads the fix minute; 105 s later it must have advanced —
         // Expedition-mode fixes arrive minutes apart, and a hero frozen at
         // the fix's minute reads as a hung watch.
-        assert_eq!(home_clock_text(Some(&fix()), 41).as_str(), "07:30");
-        assert_eq!(home_clock_text(Some(&fix()), 41 + 105).as_str(), "07:32");
+        assert_eq!(home_clock_text(Some(&fix()), 41, None).as_str(), "07:30");
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41 + 105, None).as_str(),
+            "07:32"
+        );
         // Wraps across midnight rather than showing 24:xx.
         let mut late = fix();
         late.time_of_day = Some(23 * 3600 + 59 * 60 + 50);
-        assert_eq!(home_clock_text(Some(&late), 41 + 20).as_str(), "00:00");
+        assert_eq!(
+            home_clock_text(Some(&late), 41 + 20, None).as_str(),
+            "00:00"
+        );
         // Honest placeholder before any fix carries a clock.
-        assert_eq!(home_clock_text(None, 9).as_str(), "--:--");
+        assert_eq!(home_clock_text(None, 9, None).as_str(), "--:--");
         let mut clockless = fix();
         clockless.time_of_day = None;
-        assert_eq!(home_clock_text(Some(&clockless), 9).as_str(), "--:--");
+        assert_eq!(home_clock_text(Some(&clockless), 9, None).as_str(), "--:--");
+    }
+
+    #[test]
+    fn home_clock_shifts_to_local_when_an_offset_is_pushed() {
+        // fix(): 07:30:15 UTC stamped at uptime 41.
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41, Some(120)).as_str(),
+            "09:30"
+        );
+        // Negative offsets shift back.
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41, Some(-420)).as_str(),
+            "00:30"
+        );
+        // Half- and quarter-hour zones land off the hour grid (+5:45).
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41, Some(345)).as_str(),
+            "13:15"
+        );
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41, Some(-330)).as_str(),
+            "02:00"
+        );
+        // The extrapolated minute shifts with the same offset.
+        assert_eq!(
+            home_clock_text(Some(&fix()), 41 + 105, Some(345)).as_str(),
+            "13:17"
+        );
+        // The placeholder ignores the offset — no clock is no clock.
+        assert_eq!(home_clock_text(None, 9, Some(345)).as_str(), "--:--");
+    }
+
+    #[test]
+    fn home_clock_offset_wraps_midnight_both_directions() {
+        // 23:10 UTC + 2 h => 01:10 the next day, never 25:10.
+        let mut late = fix();
+        late.time_of_day = Some(23 * 3600 + 10 * 60);
+        assert_eq!(
+            home_clock_text(Some(&late), 41, Some(120)).as_str(),
+            "01:10"
+        );
+        // 00:10 UTC - 1 h => 23:10 the previous day, never -0:50.
+        let mut early = fix();
+        early.time_of_day = Some(10 * 60);
+        assert_eq!(
+            home_clock_text(Some(&early), 41, Some(-60)).as_str(),
+            "23:10"
+        );
+    }
+
+    #[test]
+    fn home_face_label_matches_the_clock_zone() {
+        // The row-7 label and the hero derive from the same offset input, so
+        // LOCAL can only show when the hero is actually shifted — and UTC
+        // stays until a push carries an offset.
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            None,
+            None,
+            42,
+            GnssMode::Performance,
+            IdleView::Home,
+            Some(345),
+        );
+        assert_eq!(rows[7].as_str(), "GPS 8 SATS      LOCAL");
+        let rows = face_rows(Some(&fix()), None, None, None, 42);
+        assert_eq!(rows[7].as_str(), "GPS 8 SATS        UTC");
+    }
+
+    #[test]
+    fn diagnostics_seconds_row_stays_utc_with_an_offset_live() {
+        // The bench view keeps raw receiver time on purpose: same offset that
+        // shifts the home hero must leave the diagnostics clock untouched.
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            None,
+            None,
+            42,
+            GnssMode::Performance,
+            IdleView::Diagnostics,
+            Some(345),
+        );
+        assert_eq!(rows[8].as_str(), "UTC  07:30:15");
     }
 
     #[test]
@@ -4043,6 +4176,7 @@ mod tests {
             42,
             GnssMode::Performance,
             IdleView::Diagnostics,
+            None,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
@@ -4066,10 +4200,20 @@ mod tests {
                 42,
                 mode,
                 IdleView::Diagnostics,
+                None,
             );
             assert_eq!(rows[1].as_str(), expected);
             assert!(rows[1].len() <= COLS);
-            let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode, IdleView::Home);
+            let rows = super::face_rows(
+                Some(&fix()),
+                None,
+                None,
+                None,
+                42,
+                mode,
+                IdleView::Home,
+                None,
+            );
             assert_eq!(rows[8].as_str(), expected);
         }
     }
@@ -4085,6 +4229,7 @@ mod tests {
             42,
             GnssMode::Expedition,
             IdleView::Home,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
         let rows = super::page_rows(
@@ -4099,6 +4244,7 @@ mod tests {
             true,
             GnssMode::Balanced,
             IdleView::Home,
+            None,
         );
         assert_eq!(rows[8].as_str(), "GPS  8 SATS BAL");
     }
@@ -4118,6 +4264,7 @@ mod tests {
             aged,
             GnssMode::Performance,
             IdleView::Home,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     STALE 40S PERF");
         let rows = super::face_rows(
@@ -4128,6 +4275,7 @@ mod tests {
             aged,
             GnssMode::Expedition,
             IdleView::Home,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
         let icons = super::face_icons(Some(&fix()), None, Some(&rec), aged, GnssMode::Expedition);
@@ -4143,6 +4291,7 @@ mod tests {
             lost,
             GnssMode::Expedition,
             IdleView::Home,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     STALE 65S EXP");
     }
@@ -4164,6 +4313,7 @@ mod tests {
             41 + 40,
             GnssMode::Expedition,
             IdleView::Diagnostics,
+            None,
         );
         assert_eq!(rows[2].as_str(), "GPS  STALE 40S");
     }
@@ -4195,6 +4345,7 @@ mod tests {
                     true,
                     mode,
                     IdleView::Home,
+                    None,
                 );
                 for row in rows {
                     assert!(row.len() <= COLS, "row too wide in {:?}: {:?}", mode, row);
@@ -4209,6 +4360,7 @@ mod tests {
                     999_999,
                     mode,
                     view,
+                    None,
                 );
                 for row in idle {
                     assert!(

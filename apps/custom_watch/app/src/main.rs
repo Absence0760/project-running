@@ -219,8 +219,9 @@ async fn main(spawner: Spawner) {
             Irqs,
             uarte::Config::default(),
         );
-        let (phone_tx, _phone_rx) = phone_uart.split();
+        let (phone_tx, phone_rx) = phone_uart.split();
         spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
+        spawner.spawn(unwrap!(tasks::phone::settings_rx(phone_rx)));
         spawner.spawn(unwrap!(tasks::ble::run()));
     }
 

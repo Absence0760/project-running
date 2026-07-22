@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -182,6 +182,7 @@ pub async fn screen_task(
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
+    let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
@@ -199,6 +200,8 @@ pub async fn screen_task(
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
     let mut stop_armed: Option<u32> = None;
+    // No published offset yet = the home clock stays UTC (and says so).
+    let mut tz_offset_min: Option<i16> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -274,6 +277,9 @@ pub async fn screen_task(
         if let Some(v) = stop_armed_rx.try_changed() {
             stop_armed = v;
         }
+        if let Some(m) = tz_offset_rx.try_changed() {
+            tz_offset_min = Some(m);
+        }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
@@ -294,6 +300,7 @@ pub async fn screen_task(
             animate,
             mode,
             idle_view,
+            tz_offset_min,
         );
         // Persist the fuel reminder past its transient banner: latch the standing
         // overdue state off the same `alert` value and paint a compact marker.
@@ -482,7 +489,7 @@ pub async fn screen_task(
             let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
             if idle_view == IdleView::Home {
-                let clock = face::home_clock_text(latest.as_ref(), uptime_s);
+                let clock = face::home_clock_text(latest.as_ref(), uptime_s, tz_offset_min);
                 fb.draw_bignum_band(face::CLOCK_HERO_TOP_ROW * CELL_H, &clock);
             }
         }
@@ -590,7 +597,11 @@ pub async fn screen_task(
                     fix_quality_rx.changed(),
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
-                    select(stop_armed_rx.changed(), Timer::after(tick)),
+                    select3(
+                        stop_armed_rx.changed(),
+                        tz_offset_rx.changed(),
+                        Timer::after(tick),
+                    ),
                 ),
             ),
         )
@@ -610,8 +621,11 @@ pub async fn screen_task(
             Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
             Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
             Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either::First(v)))) => stop_armed = v,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either::Second(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::First(v)))) => stop_armed = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Second(m)))) => {
+                tz_offset_min = Some(m)
+            }
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Third(())))) => {}
         }
     }
 }

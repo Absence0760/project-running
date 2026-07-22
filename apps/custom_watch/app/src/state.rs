@@ -126,11 +126,13 @@ pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// value published means "unknown" (0). One receiver (the `ui` face's meter).
 pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
-/// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the
-/// `ble` task decodes a phone characteristic write (and the sim seeds a demo
-/// frame) and publishes; the `record` task applies each present field to the
-/// recorder + alert engine through their settings-sync setters. `None` means
-/// nothing pushed yet. One receiver (the `record` task).
+/// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling / QNH /
+/// fuel cadences / page curation / timezone offset): the `ble` task decodes a
+/// phone characteristic write (the sim decodes the same frames off the
+/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and
+/// publishes; the `record` task applies each present field to the recorder +
+/// alert engine through their settings-sync setters. `None` means nothing
+/// pushed yet. One receiver (the `record` task).
 pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
 
 /// QNH sea-level reference pressure (Pa) for the barometric-altitude
@@ -140,6 +142,15 @@ pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = 
 /// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
 /// baro task keeps its default reference. One receiver (the `baro` task).
 pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
+
+/// Local-time offset (minutes east of UTC) for the home clock: the `record`
+/// task publishes the plausibility-guarded value when a pushed settings frame
+/// carries `tz_offset_min` (the phone auto-sources it from its own zone —
+/// same dedicated-watch seam as `SEA_LEVEL_PA`, so the `ui` task never
+/// re-derives partial-frame apply semantics); the `ui` task shifts the home
+/// clock hero and flips its row-7 label UTC → LOCAL. No value published means
+/// the clock stays honestly UTC-labelled. One receiver (the `ui` task).
+pub static TZ_OFFSET_MIN: Watch<CriticalSectionRawMutex, i16, 1> = Watch::new();
 
 /// Manual QNH re-zero request: the `button` task sends one on an idle-face
 /// BTN3 long-press; the `baro` task (which owns the vert accumulator the snap
