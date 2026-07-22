@@ -332,6 +332,7 @@ mod tests {
     fn snap(state: RecordState, moving_s: u32) -> Snapshot {
         Snapshot {
             state,
+            manual_paused: false,
             distance_m: 0.0,
             elapsed_s: moving_s,
             moving_s,

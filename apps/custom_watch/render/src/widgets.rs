@@ -385,6 +385,7 @@ mod tests {
     fn snapshot() -> Snapshot {
         Snapshot {
             state: RecordState::Recording,
+            manual_paused: false,
             distance_m: 0.0,
             elapsed_s: 0,
             moving_s: 0,

@@ -9,9 +9,10 @@
 //! Two layouts, chosen by whether a run is under way:
 //!
 //! - **Run dashboard** (recording / paused / finished) — the metrics a runner
-//!   actually reads on the move: elapsed run time, distance, average + current
-//!   pace, heart rate, altitude, and cumulative vert — the ultra headline
-//!   pair — with a one-line GPS glance at the bottom. Raw position is
+//!   actually reads on the move: elapsed run time, distance, average pace,
+//!   current pace beside its grade-adjusted twin, heart rate, altitude, and
+//!   cumulative vert — the ultra headline pair — with a one-line GPS glance
+//!   at the bottom. Raw position is
 //!   deliberately absent: nobody reads lat/lon mid-ultra, and the fix still
 //!   feeds the track, the flash store, and the phone link. Rows keep a fixed
 //!   position with a `--` placeholder when a metric is not yet available, so a
@@ -173,14 +174,31 @@ pub fn apply_fuel_marker(rows: &mut [Row; ROWS], overdue: FuelOverdue, page: Pag
 /// rather than the idle status face. The app keys page-specific drawing (the
 /// Nav page's map panel) off the same predicate the layout selection uses.
 pub fn run_view(rec: Option<&Snapshot>) -> bool {
-    rec.and_then(|snap| rec_tag(snap.state)).is_some()
+    rec.and_then(rec_tag).is_some()
 }
 
-fn rec_tag(state: RecordState) -> Option<&'static str> {
-    match state {
+/// The run-state tag, from the whole snapshot rather than the raw
+/// [`RecordState`]: `Paused` means three different things in the recorder (a
+/// manual pause, a speed-derived auto-pause, and the min-move filter's
+/// sampling artifact on a slow climb — see [`Snapshot::manual_paused`] and
+/// `Recorder::is_moving`), and only the first is a pause the runner must
+/// resume by hand. Rendering them all as `PAU` made a power-hiked climb read
+/// as "the watch keeps pausing my run" — the tag flickered REC/PAU fix by fix
+/// while distance accrued normally. So: `PAU` is manual-only, a genuinely
+/// stationary stretch reads `AUTO` (steady — it resumes itself), and the
+/// artifact keeps the plain `REC` the run is actually in.
+fn rec_tag(snap: &Snapshot) -> Option<&'static str> {
+    match snap.state {
         RecordState::Idle => None,
         RecordState::Recording => Some("REC"),
-        RecordState::Paused => Some("PAU"),
+        RecordState::Paused if snap.manual_paused => Some("PAU"),
+        RecordState::Paused => {
+            if snap.is_moving() {
+                Some("REC")
+            } else {
+                Some("AUTO")
+            }
+        }
         RecordState::Finished => Some("FIN"),
     }
 }
@@ -203,7 +221,7 @@ pub fn face_rows(
     uptime_s: u32,
     mode: GnssMode,
 ) -> [Row; ROWS] {
-    match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
+    match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
         None => status_face(fix, hr_bpm, elev, uptime_s, mode, false),
     }
@@ -237,7 +255,7 @@ fn dashboard_icons(
     mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
     let mut icons = [None; ROWS];
-    if rec.and_then(|snap| rec_tag(snap.state)).is_some() {
+    if rec.and_then(rec_tag).is_some() {
         // Rows 0-1 are the 2x time hero (no gutter icon). Row 2 down carry them.
         icons[2] = Some(FaceIcon::Footsteps);
         icons[5] = Some(heart_icon(hr_bpm, uptime_s, animate));
@@ -253,7 +271,7 @@ fn dashboard_icons(
 /// this with the `sharp_mip` framebuffer's `draw_text_2x`; keeping the string
 /// here keeps the hero's content host-tested alongside the rest of the face.
 pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
-    let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
+    let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
     let (h, m, s) = hms(snap.elapsed_s);
     let mut row = Row::new();
     let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
@@ -282,7 +300,7 @@ pub fn page_rows(
     animate: bool,
     mode: GnssMode,
 ) -> [Row; ROWS] {
-    match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
+    match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
@@ -399,7 +417,7 @@ pub fn page_hero(
     rec: Option<&Snapshot>,
     tb: Option<&TrackbackView>,
 ) -> Option<Row> {
-    let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
+    let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
     Some(match page {
         Page::Nav => return None,
         Page::Dashboard => {
@@ -2065,7 +2083,19 @@ fn dashboard(
     let _ = write!(rows[2], "{}{:.2} KM", GUTTER, km);
 
     write_pace(&mut rows[3], "PACE", snap.avg_pace_s_per_km);
-    write_pace(&mut rows[4], "NOW", snap.current_pace_s_per_km);
+
+    // Current pace pairs with its grade-adjusted twin — the same raw-vs-effort
+    // pairing the Pace glance makes, on the page a runner actually lives on
+    // mid-climb. Fixed columns (GAP label at cell 11), and the /KM the PACE
+    // row above carries speaks for all three paces. Worst case fits:
+    // "NOW  99:59 GAP 99:59" is 20 cells.
+    let _ = write!(rows[4], "{:<5}", "NOW");
+    write_pace_value(&mut rows[4], snap.current_pace_s_per_km);
+    while rows[4].len() < 11 {
+        let _ = rows[4].push(' ');
+    }
+    let _ = write!(rows[4], "GAP ");
+    write_pace_value(&mut rows[4], snap.gap_s_per_km);
 
     write_hr(&mut rows[5], "", hr_bpm, &snap.zone_cutoffs);
 
@@ -2196,6 +2226,19 @@ fn write_pace(row: &mut Row, label: &str, pace_s_per_km: Option<u32>) {
         }
         None => {
             let _ = write!(row, "{:<5}--", label);
+        }
+    }
+}
+
+/// Append a bare `M:SS` pace value (or the `--` placeholder) to a row — the
+/// unit-less half the dashboard's NOW / GAP pairing writes twice per row.
+fn write_pace_value(row: &mut Row, pace_s_per_km: Option<u32>) {
+    match pace_s_per_km {
+        Some(p) => {
+            let _ = write!(row, "{}:{:02}", (p / 60).min(99), p % 60);
+        }
+        None => {
+            let _ = write!(row, "--");
         }
     }
 }
@@ -2345,6 +2388,7 @@ mod tests {
     fn snapshot(state: RecordState, distance_m: f64) -> Snapshot {
         Snapshot {
             state,
+            manual_paused: false,
             distance_m,
             elapsed_s: 0,
             moving_s: 0,
@@ -2403,6 +2447,7 @@ mod tests {
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
         rec.current_pace_s_per_km = Some(99 * 60 + 59);
+        rec.gap_s_per_km = Some(99 * 60 + 59);
         let e = elev(99_999.0, 99_999.0, 99_999.0);
         for row in face_rows(Some(&fix()), Some(220), Some(&rec), Some(&e), 42) {
             assert!(row.len() <= COLS, "dashboard row too wide: {:?}", row);
@@ -2782,6 +2827,7 @@ mod tests {
         rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
         rec.current_pace_s_per_km = Some(4 * 60 + 58);
+        rec.gap_s_per_km = Some(4 * 60 + 41);
         let e = elev(1600.0, 540.0, 120.0);
         let rows = face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42);
         // Rows 0-1 are the hero band: only the tag (top-right), hero drawn 2x.
@@ -2791,7 +2837,7 @@ mod tests {
         assert_eq!(hero_line(Some(&rec)).unwrap().as_str(), "3:24:07");
         assert_eq!(rows[2].as_str(), "     12.34 KM");
         assert_eq!(rows[3].as_str(), "PACE 5:12 /KM");
-        assert_eq!(rows[4].as_str(), "NOW  4:58 /KM");
+        assert_eq!(rows[4].as_str(), "NOW  4:58  GAP 4:41");
         assert_eq!(rows[5].as_str(), "     152 BPM Z3");
         assert_eq!(rows[6].as_str(), "     1600 M");
         assert_eq!(rows[7].as_str(), "     +540 -120 M");
@@ -2894,12 +2940,53 @@ mod tests {
         );
         assert_eq!(face_rows(None, None, Some(&rec), None, 11)[0].as_str(), "");
         // Paused / finished tags never blink.
-        let paused = snapshot(RecordState::Paused, 100.0);
+        let mut paused = snapshot(RecordState::Paused, 100.0);
+        paused.manual_paused = true;
         assert_eq!(
             face_rows(None, None, Some(&paused), None, 11)[0]
                 .as_str()
                 .trim(),
             "PAU"
+        );
+    }
+
+    #[test]
+    fn pause_tag_distinguishes_manual_auto_and_the_min_move_artifact() {
+        // Manual pause: the runner pressed the button — PAU, steady.
+        let mut manual = snapshot(RecordState::Paused, 100.0);
+        manual.manual_paused = true;
+        assert_eq!(
+            face_rows(None, None, Some(&manual), None, 11)[0]
+                .as_str()
+                .trim(),
+            "PAU"
+        );
+
+        // Speed-derived auto-pause (stationary at an aid station): AUTO,
+        // steady on odd seconds too — it resumes itself, no button owed.
+        let auto = snapshot(RecordState::Paused, 100.0);
+        assert_eq!(auto.current_speed_mps, 0.0);
+        assert_eq!(
+            face_rows(None, None, Some(&auto), None, 11)[0]
+                .as_str()
+                .trim(),
+            "AUTO"
+        );
+
+        // Min-move sampling artifact (power-hiking a climb at ~1 m/s covers
+        // under the 3 m gate per 1 Hz fix): the run is recording — REC, with
+        // the normal blink, never a flicker through PAU.
+        let mut artifact = snapshot(RecordState::Paused, 100.0);
+        artifact.current_speed_mps = 1.0;
+        assert_eq!(
+            face_rows(None, None, Some(&artifact), None, 10)[0]
+                .as_str()
+                .trim(),
+            "REC"
+        );
+        assert_eq!(
+            face_rows(None, None, Some(&artifact), None, 11)[0].as_str(),
+            ""
         );
     }
 
@@ -2937,7 +3024,7 @@ mod tests {
         assert_eq!(hero_line(Some(&rec)).unwrap().as_str(), "0:00:00");
         assert_eq!(rows[2].as_str(), "     0.00 KM");
         assert_eq!(rows[3].as_str(), "PACE --");
-        assert_eq!(rows[4].as_str(), "NOW  --");
+        assert_eq!(rows[4].as_str(), "NOW  --    GAP --");
         assert_eq!(rows[5].as_str(), "     --");
         assert_eq!(rows[6].as_str(), "     --");
         assert_eq!(rows[7].as_str(), "     --");
@@ -2961,13 +3048,9 @@ mod tests {
 
     #[test]
     fn paused_and_finished_runs_keep_the_dashboard() {
-        let rows = face_rows(
-            None,
-            None,
-            Some(&snapshot(RecordState::Paused, 5_000.0)),
-            None,
-            3,
-        );
+        let mut paused = snapshot(RecordState::Paused, 5_000.0);
+        paused.manual_paused = true;
+        let rows = face_rows(None, None, Some(&paused), None, 3);
         assert_eq!(rows[0].as_str().trim(), "PAU");
         assert_eq!(rows[2].as_str(), "     5.00 KM");
 

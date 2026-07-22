@@ -382,6 +382,13 @@ pub struct Lap {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Snapshot {
     pub state: RecordState,
+    /// Whether a `Paused` state came from an explicit [`Recorder::pause`]
+    /// (cleared only by [`Recorder::resume`]) rather than the speed-derived
+    /// auto-pause or the min-move filter's sampling artifact. Always `false`
+    /// outside `Paused`, so the face can label a pause honestly: a manual
+    /// pause demands a button press, everything else resumes itself on the
+    /// next moving fix.
+    pub manual_paused: bool,
     pub distance_m: f64,
     /// Wall-clock seconds since start — includes paused stretches.
     pub elapsed_s: u32,
@@ -1332,6 +1339,9 @@ impl Recorder {
     pub fn snapshot(&self) -> Snapshot {
         let mut snap = Snapshot {
             state: self.state,
+            // Gated on Paused because `stop()` doesn't clear the flag — a
+            // Finished snapshot must not carry a stale manual-pause marker.
+            manual_paused: self.state == RecordState::Paused && self.manual_paused,
             distance_m: self.distance_m,
             elapsed_s: self.elapsed_s(),
             moving_s: self.moving_s,
@@ -1955,6 +1965,34 @@ mod tests {
         assert_eq!(s.state, RecordState::Recording);
         assert!(s.moving_s > 3);
         assert!(s.distance_m > dist_before);
+    }
+
+    #[test]
+    fn snapshot_marks_only_a_manual_pause_as_manual() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r.on_fix(&fix(40.00005, -105.0, 5.0, 1));
+        assert!(!r.snapshot().manual_paused);
+
+        // A stationary stretch auto-pauses: Paused, but not manual.
+        r.on_fix(&fix(40.00005, -105.0, 0.0, 2));
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused);
+        assert!(!s.manual_paused);
+
+        // An explicit pause is the one the runner must resume by hand.
+        r.pause(3);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused);
+        assert!(s.manual_paused);
+
+        // Stopping out of a manual pause must not leak the stale flag into
+        // the Finished snapshot.
+        r.stop(4);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Finished);
+        assert!(!s.manual_paused);
     }
 
     #[test]
