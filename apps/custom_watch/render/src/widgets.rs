@@ -567,11 +567,23 @@ mod tests {
         let y = (page_grid::GRID_TOP_ROW + 2) * CELL_H;
         // Frame ink on all four edges of the cell's own band.
         assert!(ink_in(&fb, x - 2, y, 4 * CELL_W + 3, 1) > 0, "top edge");
-        assert!(ink_in(&fb, x - 2, y + CELL_H - 1, 4 * CELL_W + 3, 1) > 0, "bottom edge");
+        assert!(
+            ink_in(&fb, x - 2, y + CELL_H - 1, 4 * CELL_W + 3, 1) > 0,
+            "bottom edge"
+        );
         assert!(ink_in(&fb, x - 2, y, 1, CELL_H) > 0, "left edge");
         assert!(ink_in(&fb, x + 4 * CELL_W, y, 1, CELL_H) > 0, "right edge");
         // Nothing bleeds into the neighbouring column or adjacent rows.
-        assert_eq!(ink_in(&fb, x + page_grid::GRID_CELL_CHARS * CELL_W, y, CELL_W, CELL_H), 0);
+        assert_eq!(
+            ink_in(
+                &fb,
+                x + page_grid::GRID_CELL_CHARS * CELL_W,
+                y,
+                CELL_W,
+                CELL_H
+            ),
+            0
+        );
         assert_eq!(ink_in(&fb, x - 2, y - CELL_H, 4 * CELL_W + 3, CELL_H), 0);
         assert_eq!(ink_in(&fb, x - 2, y + CELL_H, 4 * CELL_W + 3, CELL_H), 0);
         // Column 0 clamps its left overhang instead of underflowing.

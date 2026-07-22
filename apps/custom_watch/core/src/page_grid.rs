@@ -5,11 +5,11 @@
 //! says what pages even exist. The grid is the fix: hold BTN3 (past the
 //! page-back long-press) and every enabled page appears at once as a grid of
 //! four-glyph codes in cycle order, with a cursor box on the current page.
-//! Tap BTN3 to step the cursor, hold to drop a whole row, BTN4 to jump —
-//! or just stop pressing: after [`GRID_AUTOSELECT_S`] with no input the grid
-//! jumps to the cursor on its own, so the entire flow needs one finger and no
-//! confirm press. BTN1 / BTN2 close the grid and are swallowed — a press
-//! inside a navigation modal must never pause or stop the recording.
+//! Tap BTN3 to step the cursor (BTN1 taps backward; holds jump a row either
+//! way), BTN4 to jump — or just stop pressing: after [`GRID_AUTOSELECT_S`]
+//! with no input the grid jumps to the cursor on its own, so the entire flow
+//! needs one finger and no confirm press. BTN2 cancels; every in-grid press
+//! is swallowed — a navigation modal must never pause or stop the recording.
 //!
 //! Pure state + layout, like the rest of `core`: the app's button task owns
 //! the press timing and the deadline timer, the ui task draws the rows this
@@ -222,7 +222,9 @@ mod tests {
             assert!(!row.is_empty());
             assert!(row.len() <= COLS, "grid row too wide: {row:?}");
         }
-        assert!(rows[GRID_TOP_ROW].as_str().starts_with("DASH DIST PACE LAP"));
+        assert!(rows[GRID_TOP_ROW]
+            .as_str()
+            .starts_with("DASH DIST PACE LAP"));
         assert_eq!(
             grid_cell(u32::MAX, Page::BackToStart),
             Some((3, 7)),

@@ -439,7 +439,9 @@ pub async fn run(
     // edge so pause stays instant.
     let mut btn1_down_at: Option<Instant> = None;
     let mut btn1_handled = false;
-    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap");
+    info!(
+        "button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap"
+    );
 
     loop {
         Timer::after(POLL).await;
@@ -474,8 +476,7 @@ pub async fn run(
                         let held_for = Instant::now().saturating_duration_since(t);
                         if let Some(g) = grid.as_mut() {
                             if held_for >= BTN3_LONG_PRESS {
-                                let mask =
-                                    record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                                let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
                                 g.row_down(mask);
                                 info!("button: grid cursor -> {}", g.cursor());
                                 grid_tx.send(Some(g.cursor()));
@@ -651,9 +652,7 @@ pub async fn run(
                 .try_get()
                 .map(|snap| snap.state)
                 .unwrap_or(RecordState::Idle);
-            if dispatch(button, state, now_s, &mut stop_guard).await
-                == Some(RecordCommand::Reset)
-            {
+            if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
                 // Dismissed home: the next run opens on the Dashboard, not on
                 // whatever page the last one was parked on.
                 page = Page::default();
