@@ -222,6 +222,7 @@ pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
 pub mod page;
+pub mod page_grid;
 pub mod plan_adaptive_replan;
 pub mod plan_adherence;
 pub mod plan_progress;

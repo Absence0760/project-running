@@ -23,6 +23,7 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::page::Page;
+use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
 use watch_core::trackback::{self, TrackbackView};
@@ -168,6 +169,7 @@ pub async fn screen_task(
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut page_rx = unwrap!(state::PAGE.receiver());
+    let mut page_grid_rx = unwrap!(state::PAGE_GRID.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
@@ -185,6 +187,9 @@ pub async fn screen_task(
     let mut sats: Option<u8> = None;
     let mut fix_quality: Option<u8> = None;
     let mut page = Page::default();
+    // The page-grid overview's cursor while open (None = closed) — published
+    // by the button task, which owns the grid state machine.
+    let mut grid: Option<Page> = None;
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
@@ -225,6 +230,9 @@ pub async fn screen_task(
         }
         if let Some(p) = page_rx.try_changed() {
             page = p;
+        }
+        if let Some(g) = page_grid_rx.try_changed() {
+            grid = g;
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -449,6 +457,30 @@ pub async fn screen_task(
                 draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
+        // The page-grid overview takes the panel over while open: its rows
+        // rewrite every band (erasing the composed page underneath — each
+        // draw_text_row overwrites its full 16-px band) and the cursor box +
+        // a cursor-tracking page indicator ride on top. Drawn last rather
+        // than branching the whole composer: the handful of frames a grid
+        // stays open don't justify a second render path. Unlike the hero
+        // band, an on-run alert banner does NOT win here — under the full
+        // mask the banner's two rows would cover the title AND the first row
+        // of cells mid-choice. Deferring costs nothing: the grid closes
+        // within ~GRID_AUTOSELECT_S, well inside the alert's TTL, so the
+        // banner re-asserts on the landing page, and a fuel reminder
+        // additionally latches into the persistent row-1 marker.
+        if let Some(cursor) = grid.filter(|_| face::run_view(rec.as_ref())) {
+            let pages_mask = rec.as_ref().map_or(u32::MAX, |s| s.pages_mask);
+            for (row, text) in page_grid::grid_rows(pages_mask).iter().enumerate() {
+                fb.draw_text_row(row, text);
+            }
+            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor) {
+                widgets::draw_grid_cursor(&mut fb, cell);
+            }
+            widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(cursor, pages_mask));
+            // The Nav map's skip-cache is stale once the grid painted over it.
+            last_panel = None;
+        }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
         }
@@ -504,9 +536,10 @@ pub async fn screen_task(
                 tb_rx.changed(),
                 mode_rx.changed(),
                 sats_rx.changed(),
-                select3(
+                select4(
                     fix_quality_rx.changed(),
                     rezero_rx.changed(),
+                    page_grid_rx.changed(),
                     Timer::after(tick),
                 ),
             ),
@@ -524,9 +557,10 @@ pub async fn screen_task(
             Either3::Third(Either4::First(v)) => tb = Some(v),
             Either3::Third(Either4::Second(m)) => mode = m,
             Either3::Third(Either4::Third(s)) => sats = Some(s),
-            Either3::Third(Either4::Fourth(Either3::First(q))) => fix_quality = Some(q),
-            Either3::Third(Either4::Fourth(Either3::Second(r))) => rezero = Some(r),
-            Either3::Third(Either4::Fourth(Either3::Third(()))) => {}
+            Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
+            Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
+            Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
+            Either3::Third(Either4::Fourth(Either4::Fourth(()))) => {}
         }
     }
 }

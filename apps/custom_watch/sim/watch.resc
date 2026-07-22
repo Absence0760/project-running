@@ -155,9 +155,16 @@ python
 import time
 
 def click(pin, hold=0.3):
+    # Hold for `hold` seconds of VIRTUAL time, not wall time: the firmware
+    # classifies BTN3 presses by its own clock (tap / long / grid hold), and
+    # under host load Renode's virtual time lags wall time enough that a
+    # wall-clock hold lands in the wrong class.
     gpio = monitor.Machine["sysbus.gpio0"]
+    m = monitor.Machine
+    start = m.ElapsedVirtualTime.TimeElapsed.TotalSeconds
     gpio.OnGPIO(pin, False)  # press: pull the active-low input down
-    time.sleep(hold)
+    while m.ElapsedVirtualTime.TimeElapsed.TotalSeconds - start < hold:
+        time.sleep(0.02)
     gpio.OnGPIO(pin, True)   # release: back to idle high
 """
 
@@ -175,6 +182,19 @@ macro btn2
 macro btn3
 """
     python "click(24)"
+"""
+# BTN3 long-press (~0.8 s virtual) — page back in a run view; QNH re-zero
+# while idle.
+macro btn3l
+"""
+    python "click(24, 0.8)"
+"""
+# BTN3 grid hold (~1.7 s) — open the page-grid overview in a run view (tap
+# btn3 to step the cursor, btn3l to drop a row, btn4 to jump; ~3 s idle
+# auto-selects). Still the QNH re-zero while idle.
+macro btn3h
+"""
+    python "click(24, 1.7)"
 """
 # BTN4 (P0.25) — take a manual lap.
 macro btn4

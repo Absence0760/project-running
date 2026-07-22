@@ -57,32 +57,91 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
     }
 }
 
-/// What a BTN3 press does, given the run state and whether the press was held
-/// to a long-press. The run-view pages only exist once a run is under way (the
-/// idle status face ignores the page entirely — see [`crate::face`]), so while
-/// idle the otherwise-dead page button doubles as the GNSS-mode selector and
-/// its long-press as the manual QNH re-zero, keeping both surfaces inside
-/// decisions §81's five-button, no-chord budget. Any non-idle state (recording,
-/// paused, finished — all of which show a run view) keeps BTN3 on pages (short
-/// forward, long backward), which also freezes the GNSS mode — and parks the
-/// re-zero — for the duration of a run: mid-run the elevation complementary
-/// filter auto-corrects drift, so the manual snap is an idle (trailhead)
-/// affordance and a run's recording controls stay untouched.
+/// How long BTN3 was held, classified by the app's button task: a tap
+/// released before the long-press threshold, a long press released between
+/// the two thresholds, or a hold carried past the grid threshold (which fires
+/// while still held — the page grid opening IS the feedback that the hold
+/// registered).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Btn3Press {
+    Short,
+    Long,
+    GridHold,
+}
+
+/// The BTN3 press-class thresholds, in milliseconds of hold. The app's button
+/// task owns the timing mechanics (hardware: nested selects; sim: level
+/// polling) but the boundaries live here, host-tested, so the two task
+/// variants and the tests can't drift.
+pub const BTN3_LONG_PRESS_MS: u32 = 500;
+pub const BTN3_GRID_HOLD_MS: u32 = 1500;
+// The hardware task times the grid tier as a second select leg of
+// (GRID_HOLD - LONG_PRESS); reordering the constants would underflow it.
+const _: () = assert!(BTN3_GRID_HOLD_MS > BTN3_LONG_PRESS_MS);
+
+/// Classify a completed BTN3 hold by its duration — the release-path
+/// classification the sim button task applies verbatim (the hardware task
+/// reproduces the same boundaries with select timers).
+pub fn classify_btn3_hold(held_ms: u32) -> Btn3Press {
+    if held_ms >= BTN3_GRID_HOLD_MS {
+        Btn3Press::GridHold
+    } else if held_ms >= BTN3_LONG_PRESS_MS {
+        Btn3Press::Long
+    } else {
+        Btn3Press::Short
+    }
+}
+
+/// What a BTN3 press does, given the run state and how long it was held. The
+/// run-view pages only exist once a run is under way (the idle status face
+/// ignores the page entirely — see [`crate::face`]), so while idle the
+/// otherwise-dead page button doubles as the GNSS-mode selector and its
+/// long-press as the manual QNH re-zero, keeping both surfaces inside
+/// decisions §81's five-button, no-chord budget. Any non-idle state
+/// (recording, paused, finished — all of which show a run view) keeps BTN3 on
+/// pages — short forward, long backward, and a hold past the long-press opens
+/// the [`crate::page_grid`] overview — which also freezes the GNSS mode (and
+/// parks the re-zero) for the duration of a run: mid-run the elevation
+/// complementary filter auto-corrects drift, so the manual snap is an idle
+/// (trailhead) affordance and a run's recording controls stay untouched. The
+/// idle face has no pages and therefore no grid: a hold there stays the
+/// re-zero, so the trailhead gesture is one motion regardless of duration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Btn3Action {
     PageNext,
     PagePrev,
+    OpenGrid,
     CycleGnssMode,
     QnhRezero,
 }
 
-pub fn btn3_action(state: RecordState, long: bool) -> Btn3Action {
-    match (state, long) {
-        (RecordState::Idle, false) => Btn3Action::CycleGnssMode,
-        (RecordState::Idle, true) => Btn3Action::QnhRezero,
-        (_, false) => Btn3Action::PageNext,
-        (_, true) => Btn3Action::PagePrev,
+pub fn btn3_action(state: RecordState, press: Btn3Press) -> Btn3Action {
+    match (state, press) {
+        (RecordState::Idle, Btn3Press::Short) => Btn3Action::CycleGnssMode,
+        (RecordState::Idle, _) => Btn3Action::QnhRezero,
+        (_, Btn3Press::Short) => Btn3Action::PageNext,
+        (_, Btn3Press::Long) => Btn3Action::PagePrev,
+        (_, Btn3Press::GridHold) => Btn3Action::OpenGrid,
+    }
+}
+
+/// What a non-BTN3 press does while the page grid is open: BTN4 confirms the
+/// jump, BTN1 / BTN2 cancel. Every one of them is swallowed — a press inside
+/// a navigation modal must never reach the recorder, so the picker can't
+/// pause, stop-arm, or lap a run by accident.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum GridPress {
+    Select,
+    Cancel,
+}
+
+pub fn grid_press(button: Button) -> GridPress {
+    match button {
+        Button::Lap => GridPress::Select,
+        Button::Primary | Button::Stop => GridPress::Cancel,
     }
 }
 
@@ -203,40 +262,87 @@ mod tests {
     #[test]
     fn btn3_cycles_gnss_mode_only_while_idle() {
         assert_eq!(
-            btn3_action(RecordState::Idle, false),
+            btn3_action(RecordState::Idle, Btn3Press::Short),
             Btn3Action::CycleGnssMode
         );
         // Every run-view state keeps BTN3 on pages — a mid-run (or post-run)
         // press must never silently change the GNSS mode.
         assert_eq!(
-            btn3_action(RecordState::Recording, false),
+            btn3_action(RecordState::Recording, Btn3Press::Short),
             Btn3Action::PageNext
         );
         assert_eq!(
-            btn3_action(RecordState::Paused, false),
+            btn3_action(RecordState::Paused, Btn3Press::Short),
             Btn3Action::PageNext
         );
         assert_eq!(
-            btn3_action(RecordState::Finished, false),
+            btn3_action(RecordState::Finished, Btn3Press::Short),
             Btn3Action::PageNext
         );
     }
 
     #[test]
     fn btn3_long_press_is_rezero_while_idle_and_page_back_in_a_run() {
-        assert_eq!(btn3_action(RecordState::Idle, true), Btn3Action::QnhRezero);
+        assert_eq!(
+            btn3_action(RecordState::Idle, Btn3Press::Long),
+            Btn3Action::QnhRezero
+        );
         // Every run-view state keeps the long-press on the reverse page walk —
         // a mid-run hold must never re-zero the altitude reference out from
-        // under a recording.
+        // under a recording. §286's safety contract stands: Back-to-start
+        // stays exactly one long-press from home.
         assert_eq!(
-            btn3_action(RecordState::Recording, true),
+            btn3_action(RecordState::Recording, Btn3Press::Long),
             Btn3Action::PagePrev
         );
-        assert_eq!(btn3_action(RecordState::Paused, true), Btn3Action::PagePrev);
         assert_eq!(
-            btn3_action(RecordState::Finished, true),
+            btn3_action(RecordState::Paused, Btn3Press::Long),
             Btn3Action::PagePrev
         );
+        assert_eq!(
+            btn3_action(RecordState::Finished, Btn3Press::Long),
+            Btn3Action::PagePrev
+        );
+    }
+
+    #[test]
+    fn btn3_grid_hold_opens_the_grid_in_a_run_and_stays_rezero_while_idle() {
+        // The idle face has no pages, so a hold of any length stays the
+        // trailhead re-zero — duration must never change what an idle hold
+        // does mid-gesture.
+        assert_eq!(
+            btn3_action(RecordState::Idle, Btn3Press::GridHold),
+            Btn3Action::QnhRezero
+        );
+        assert_eq!(
+            btn3_action(RecordState::Recording, Btn3Press::GridHold),
+            Btn3Action::OpenGrid
+        );
+        assert_eq!(
+            btn3_action(RecordState::Paused, Btn3Press::GridHold),
+            Btn3Action::OpenGrid
+        );
+        assert_eq!(
+            btn3_action(RecordState::Finished, Btn3Press::GridHold),
+            Btn3Action::OpenGrid
+        );
+    }
+
+    #[test]
+    fn grid_swallows_every_button_btn4_selects_the_rest_cancel() {
+        assert_eq!(grid_press(Button::Lap), GridPress::Select);
+        assert_eq!(grid_press(Button::Primary), GridPress::Cancel);
+        assert_eq!(grid_press(Button::Stop), GridPress::Cancel);
+    }
+
+    #[test]
+    fn hold_classification_boundaries_are_inclusive_at_each_threshold() {
+        assert_eq!(classify_btn3_hold(0), Btn3Press::Short);
+        assert_eq!(classify_btn3_hold(BTN3_LONG_PRESS_MS - 1), Btn3Press::Short);
+        assert_eq!(classify_btn3_hold(BTN3_LONG_PRESS_MS), Btn3Press::Long);
+        assert_eq!(classify_btn3_hold(BTN3_GRID_HOLD_MS - 1), Btn3Press::Long);
+        assert_eq!(classify_btn3_hold(BTN3_GRID_HOLD_MS), Btn3Press::GridHold);
+        assert_eq!(classify_btn3_hold(u32::MAX), Btn3Press::GridHold);
     }
 
     #[test]

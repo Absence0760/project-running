@@ -267,6 +267,48 @@ fn preview_gear_and_fuel_pages() {
 }
 
 #[test]
+fn preview_page_grid() {
+    use watch_core::page_grid;
+
+    // The full 32-page grid with the cursor a row-down + a tap from home.
+    let mut fb = Framebuffer::new();
+    let mask = u32::MAX;
+    let mut grid = page_grid::PageGrid::open(Page::Dashboard, mask);
+    grid.row_down(mask);
+    grid.tap(mask);
+    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+        fb.draw_text_row(row, text);
+    }
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+        widgets::draw_grid_cursor(&mut fb, cell);
+    }
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(grid.cursor(), mask),
+    );
+    show("page grid: full mask, cursor on row 2", &fb);
+
+    // A realistically filtered mask — the grid packs to two rows.
+    let mask = Page::Dashboard.bit()
+        | Page::Pace.bit()
+        | Page::Zones.bit()
+        | Page::Nav.bit()
+        | Page::CutoffEta.bit()
+        | Page::Roadbook.bit()
+        | Page::Fuel.bit()
+        | Page::BackToStart.bit();
+    let mut fb2 = Framebuffer::new();
+    let grid = page_grid::PageGrid::open(Page::Roadbook, mask);
+    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+        fb2.draw_text_row(row, text);
+    }
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+        widgets::draw_grid_cursor(&mut fb2, cell);
+    }
+    show("page grid: filtered mask, cursor on ROAD", &fb2);
+}
+
+#[test]
 fn preview_mini_profile() {
     // A synthetic climb-then-descend altitude series — the shape a future glance
     // page would show for a route's elevation profile, auto-scaled to the cell.

@@ -17,6 +17,7 @@ use sharp_mip::{Framebuffer, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
 use watch_core::fix::Fix;
 use watch_core::gauge;
+use watch_core::page_grid;
 use watch_core::record::Snapshot;
 use watch_core::statusbar::{self, PageIndicator};
 
@@ -100,6 +101,23 @@ pub fn draw_page_indicator(fb: &mut Framebuffer, indicator: PageIndicator) {
     let thumb_w = seg.max(2);
     let x = (indicator.active * WIDTH / indicator.total).min(WIDTH - thumb_w);
     fb.fill_rect(x, 0, thumb_w, 3, true);
+}
+
+// ---------------------------------------------------------------------------
+// Page-grid cursor (the navigation-grid overview)
+// ---------------------------------------------------------------------------
+
+/// The page grid's cursor: a one-pixel frame around the selected cell's
+/// four-glyph code. Geometry only — which cell comes from the host-tested
+/// `page_grid::grid_cell`, and the codes themselves are text rows the ui task
+/// draws from `page_grid::grid_rows`. The frame hugs the 32-px code inside
+/// its own 16-px row band, so it never touches a neighbouring cell (columns
+/// are 40 px apart) or the rows above/below.
+pub fn draw_grid_cursor(fb: &mut Framebuffer, cell: (usize, usize)) {
+    let (col, row) = cell;
+    let x = col * page_grid::GRID_CELL_CHARS * CELL_W;
+    let y = (page_grid::GRID_TOP_ROW + row) * CELL_H;
+    fb.stroke_rect(x.saturating_sub(2), y, 4 * CELL_W + 3, CELL_H, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +531,53 @@ mod tests {
             },
         );
         assert_eq!(ink_in(&fb, 0, 0, WIDTH, CELL_H), 0);
+    }
+
+    #[test]
+    fn grid_rows_fully_erase_an_alert_banner_underneath() {
+        // The ui task draws the grid AFTER the composed page, relying on
+        // draw_text_row overwriting each full 16-px band — this pins that an
+        // alert banner drawn first leaves no residue, so the deferred-banner
+        // rule in the ui task can't ghost.
+        use watch_core::alerts::{banner, Alert};
+        let mut with_banner = Framebuffer::new();
+        with_banner.draw_text_2x(0, 0, &banner(Alert::Drink));
+        let mut clean = Framebuffer::new();
+        for (row, text) in page_grid::grid_rows(u32::MAX).iter().enumerate() {
+            with_banner.draw_text_row(row, text);
+            clean.draw_text_row(row, text);
+        }
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                assert_eq!(
+                    with_banner.pixel(x, y),
+                    clean.pixel(x, y),
+                    "banner residue at ({x},{y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn grid_cursor_frames_its_cell_and_stays_clear_of_neighbours() {
+        let mut fb = Framebuffer::new();
+        // Cell (1, 2): third body row, second column.
+        draw_grid_cursor(&mut fb, (1, 2));
+        let x = page_grid::GRID_CELL_CHARS * CELL_W; // col 1
+        let y = (page_grid::GRID_TOP_ROW + 2) * CELL_H;
+        // Frame ink on all four edges of the cell's own band.
+        assert!(ink_in(&fb, x - 2, y, 4 * CELL_W + 3, 1) > 0, "top edge");
+        assert!(ink_in(&fb, x - 2, y + CELL_H - 1, 4 * CELL_W + 3, 1) > 0, "bottom edge");
+        assert!(ink_in(&fb, x - 2, y, 1, CELL_H) > 0, "left edge");
+        assert!(ink_in(&fb, x + 4 * CELL_W, y, 1, CELL_H) > 0, "right edge");
+        // Nothing bleeds into the neighbouring column or adjacent rows.
+        assert_eq!(ink_in(&fb, x + page_grid::GRID_CELL_CHARS * CELL_W, y, CELL_W, CELL_H), 0);
+        assert_eq!(ink_in(&fb, x - 2, y - CELL_H, 4 * CELL_W + 3, CELL_H), 0);
+        assert_eq!(ink_in(&fb, x - 2, y + CELL_H, 4 * CELL_W + 3, CELL_H), 0);
+        // Column 0 clamps its left overhang instead of underflowing.
+        let mut fb0 = Framebuffer::new();
+        draw_grid_cursor(&mut fb0, (0, 0));
+        assert!(ink_in(&fb0, 0, page_grid::GRID_TOP_ROW * CELL_H, 1, CELL_H) > 0);
     }
 
     fn pacer(ahead_s: i32) -> PacerStatus {

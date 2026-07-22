@@ -59,6 +59,12 @@ pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new(
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 
+/// The page-grid overview's cursor while the grid is open, `None` when closed.
+/// The `button` task owns the grid state machine (`watch_core::page_grid`) and
+/// its auto-select deadline; the `ui` task only renders whatever cursor this
+/// carries. One receiver (the `ui` task).
+pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the

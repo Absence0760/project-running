@@ -28,12 +28,15 @@ use embassy_futures::select::{select, Either};
 use embassy_futures::select::{select4, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
+#[cfg(feature = "sim-buttons")]
+use watch_core::button::classify_btn3_hold;
 use watch_core::button::{
-    btn3_action, command_for, Btn3Action, Button, RecordCommand, StopGuard, StopPress,
-    STOP_CONFIRM_WINDOW_S,
+    btn3_action, command_for, grid_press, Btn3Action, Btn3Press, Button, GridPress, RecordCommand,
+    StopGuard, StopPress, BTN3_GRID_HOLD_MS, BTN3_LONG_PRESS_MS, STOP_CONFIRM_WINDOW_S,
 };
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
+use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
 use watch_core::record::RecordState;
 
 use crate::run_flash::SharedStore;
@@ -52,8 +55,23 @@ const DEBOUNCE: Duration = Duration::from_millis(20);
 /// hold, not a chord — inside decisions §81's five-button, no-chord budget.
 /// Both directions walk the snapshot's `pages_mask` (data-present ∩ curated),
 /// so BTN3 never lands on an empty glance unless the runner turned the
-/// hide-empty filter off.
-const BTN3_LONG_PRESS: Duration = Duration::from_millis(500);
+/// hide-empty filter off. The threshold itself lives host-tested in
+/// `watch_core::button`.
+const BTN3_LONG_PRESS: Duration = Duration::from_millis(BTN3_LONG_PRESS_MS as u64);
+
+/// Holding BTN3 past this in a run view opens the page-grid overview
+/// (`watch_core::page_grid`) — the third press tier. It fires while the button
+/// is still held (the grid appearing IS the feedback), which moves the
+/// page-back long-press from fire-at-threshold to fire-on-release: releasing
+/// anywhere in the second between the two thresholds is a page back, a full
+/// deliberate hold is the grid. The idle face keeps its two tiers — a hold of
+/// any length stays the QNH re-zero, so duration never changes an idle
+/// gesture mid-press.
+const BTN3_GRID_HOLD: Duration = Duration::from_millis(BTN3_GRID_HOLD_MS as u64);
+
+/// The grid's auto-select window as a `Duration` (see
+/// `page_grid::GRID_AUTOSELECT_S` — the pure module owns the number).
+const GRID_AUTOSELECT: Duration = Duration::from_secs(GRID_AUTOSELECT_S as u64);
 
 #[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
@@ -67,6 +85,7 @@ pub async fn run(
 ) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
+    let grid_tx = state::PAGE_GRID.sender();
     let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
@@ -74,47 +93,143 @@ pub async fn run(
     // continues from the persisted choice rather than the default.
     let mut mode = initial_mode;
     let mut stop_guard = StopGuard::new();
-    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
+    // The page-grid overview: this task owns the state machine and its
+    // auto-select deadline; the ui task only renders the published cursor.
+    let mut grid: Option<PageGrid> = None;
+    let mut grid_deadline: Option<Instant> = None;
+    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap");
     loop {
-        // Wait for whichever button is pressed first (falling edge = press).
-        let button = match select4(
+        // Wait for whichever button is pressed first (falling edge = press) —
+        // or, while the grid is open, for its auto-select deadline: the
+        // no-confirm-press close (hold to open, tap to the target, lower the
+        // wrist).
+        let edges = select4(
             btn1.wait_for_falling_edge(),
             btn2.wait_for_falling_edge(),
             btn3.wait_for_falling_edge(),
             btn4.wait_for_falling_edge(),
-        )
-        .await
-        {
+        );
+        let pressed = if let Some(deadline) = grid_deadline {
+            match select(edges, Timer::at(deadline)).await {
+                Either::First(e) => e,
+                Either::Second(()) => {
+                    if let Some(g) = grid.take() {
+                        page = g.cursor();
+                        info!("button: grid auto-select -> page {}", page);
+                        page_tx.send(page);
+                    }
+                    grid_deadline = None;
+                    grid_tx.send(None);
+                    continue;
+                }
+            }
+        } else {
+            edges.await
+        };
+        let button = match pressed {
             Either4::First(()) => Button::Primary,
             Either4::Second(()) => Button::Stop,
             Either4::Third(()) => {
                 // BTN3 is its own concern — no recording command. Debounce,
-                // confirm the press held, then cycle whichever surface the run
-                // state puts it on (idle = GNSS mode, run view = pages).
+                // confirm the press held, then act on whichever surface the
+                // state puts it on (grid open = cursor, run view = pages,
+                // idle = GNSS mode / re-zero).
                 Timer::after(DEBOUNCE).await;
                 if btn3.is_low() {
-                    // Time the hold: a long-press cycles pages backward so a
-                    // late page is one press away, not ~30; on the idle face it
-                    // requests the manual QNH re-zero instead.
-                    let long = matches!(
-                        select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge()).await,
-                        Either::First(()),
-                    );
                     interaction_tx.send(Instant::now().as_secs() as u32);
+                    if let Some(g) = grid.as_mut() {
+                        // In-grid: tap steps the cursor, a hold drops a whole
+                        // grid row — the long jump.
+                        let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                        match select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge())
+                            .await
+                        {
+                            Either::Second(()) => g.tap(mask),
+                            Either::First(()) => {
+                                g.row_down(mask);
+                                // The timer arm dropped the edge future (and
+                                // its SENSE arm), so a release landing in the
+                                // re-arm gap would make a fresh
+                                // wait_for_rising_edge wait for a whole NEW
+                                // press — hanging every button. Only wait out
+                                // the release while the pin is still held.
+                                if btn3.is_low() {
+                                    btn3.wait_for_rising_edge().await;
+                                }
+                            }
+                        }
+                        info!("button: grid cursor -> {}", g.cursor());
+                        grid_tx.send(Some(g.cursor()));
+                        // Deadline runs from the release, so a held button
+                        // can't burn the window before the runner lets go.
+                        grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                        continue;
+                    }
                     let snap = record_rx.try_get();
                     let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
-                    match btn3_action(state, long) {
+                    // Idle keeps its two-tier timing (the re-zero fires at the
+                    // long threshold, as always); a run view times three tiers:
+                    // release before the long threshold = page next, release
+                    // between the thresholds = page back, still held at the
+                    // grid threshold = the grid opens (while held — the grid
+                    // appearing is the feedback that the hold registered).
+                    // Each timer-won select drops its losing edge future, so a
+                    // release landing in the gap before the next select arms
+                    // would go unseen and stretch the classification a full
+                    // tier (or hang the release swallow). A level check after
+                    // every timer win keeps a lost edge classified by what the
+                    // pin actually says.
+                    let press = if state == RecordState::Idle {
+                        match select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge())
+                            .await
+                        {
+                            Either::Second(()) => Btn3Press::Short,
+                            Either::First(()) => Btn3Press::Long,
+                        }
+                    } else {
+                        match select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge())
+                            .await
+                        {
+                            Either::Second(()) => Btn3Press::Short,
+                            Either::First(()) if !btn3.is_low() => Btn3Press::Long,
+                            Either::First(()) => match select(
+                                Timer::after(BTN3_GRID_HOLD - BTN3_LONG_PRESS),
+                                btn3.wait_for_rising_edge(),
+                            )
+                            .await
+                            {
+                                Either::Second(()) => Btn3Press::Long,
+                                Either::First(()) if !btn3.is_low() => Btn3Press::Long,
+                                Either::First(()) => Btn3Press::GridHold,
+                            },
+                        }
+                    };
+                    match btn3_action(state, press) {
                         Btn3Action::PageNext | Btn3Action::PagePrev => {
                             // Walk the filtered cycle (data-present ∩ curated,
                             // from the snapshot); no snapshot means no filter.
                             let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
-                            page = if long {
+                            page = if press == Btn3Press::Long {
                                 page.prev_in(mask)
                             } else {
                                 page.next_in(mask)
                             };
                             info!("button: BTN3 -> page {}", page);
                             page_tx.send(page);
+                        }
+                        Btn3Action::OpenGrid => {
+                            let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                            let g = PageGrid::open(page, mask);
+                            info!("button: BTN3 hold -> page grid at {}", g.cursor());
+                            grid_tx.send(Some(g.cursor()));
+                            grid = Some(g);
+                            // Swallow the release of the opening hold (only
+                            // while actually still held — see the level-check
+                            // note above), then start the auto-select clock.
+                            if btn3.is_low() {
+                                btn3.wait_for_rising_edge().await;
+                            }
+                            grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
                         }
                         Btn3Action::CycleGnssMode => {
                             mode = mode.next();
@@ -158,6 +273,28 @@ pub async fn run(
         // command in the current state — it wakes the face's animation window.
         let now_s = Instant::now().as_secs() as u32;
         interaction_tx.send(now_s);
+
+        // While the grid is open every button belongs to it: BTN4 confirms the
+        // jump, BTN1 / BTN2 cancel, and none of them reaches the recorder — a
+        // navigation modal must never pause, stop-arm, or lap a run.
+        if grid.is_some() {
+            match grid_press(button) {
+                GridPress::Select => {
+                    if let Some(g) = grid.take() {
+                        page = g.cursor();
+                        info!("button: grid select -> page {}", page);
+                        page_tx.send(page);
+                    }
+                }
+                GridPress::Cancel => {
+                    info!("button: grid cancelled");
+                    grid = None;
+                }
+            }
+            grid_deadline = None;
+            grid_tx.send(None);
+            continue;
+        }
 
         // The toggle keys off the latest published run state. `try_get` never
         // waits: before the first snapshot the run is idle, which is correct.
@@ -227,11 +364,14 @@ pub async fn run(
 
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
+    let grid_tx = state::PAGE_GRID.sender();
     let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
     let mut mode = initial_mode;
     let mut stop_guard = StopGuard::new();
+    let mut grid: Option<PageGrid> = None;
+    let mut grid_deadline: Option<Instant> = None;
 
     // Active-low: pressed pulls the line low. Track the previous level per
     // button so a release→press transition (high→low) fires exactly once.
@@ -242,13 +382,25 @@ pub async fn run(
         btns[2].is_low(),
         btns[3].is_low(),
     ];
-    // BTN3 acts on release so its hold duration can pick short (forward) vs
-    // long (backward); this remembers when the current BTN3 press began.
+    // BTN3 times its hold from the press; threshold-crossing actions (the
+    // in-grid row jump, the grid open) fire while still held — mirroring the
+    // hardware task — and mark the press handled so its release is inert.
     let mut btn3_down_at: Option<Instant> = None;
-    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
+    let mut btn3_handled = false;
+    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap");
 
     loop {
         Timer::after(POLL).await;
+        // The grid's auto-select deadline — the no-confirm-press close.
+        if grid.is_some() && grid_deadline.is_some_and(|dl| Instant::now() >= dl) {
+            if let Some(g) = grid.take() {
+                page = g.cursor();
+                info!("button: grid auto-select -> page {}", page);
+                page_tx.send(page);
+            }
+            grid_deadline = None;
+            grid_tx.send(None);
+        }
         for (i, b) in btns.iter().enumerate() {
             let pressed = b.is_low();
             let was = prev[i];
@@ -257,28 +409,82 @@ pub async fn run(
             let rising = !pressed && was;
 
             if i == 2 {
-                // BTN3 times its hold: press starts the clock, release decides
-                // short (forward) vs long (backward) and acts — the same
-                // short/long split the hardware task makes with a select.
                 if falling {
                     btn3_down_at = Some(Instant::now());
+                    btn3_handled = false;
+                    continue;
+                }
+                // Threshold-fired holds, checked while the button is down: an
+                // in-grid hold drops a grid row at the long threshold; a
+                // run-view hold opens the grid at the grid threshold.
+                if pressed && !btn3_handled {
+                    if let Some(t) = btn3_down_at {
+                        let held_for = Instant::now().saturating_duration_since(t);
+                        if let Some(g) = grid.as_mut() {
+                            if held_for >= BTN3_LONG_PRESS {
+                                let mask =
+                                    record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                                g.row_down(mask);
+                                info!("button: grid cursor -> {}", g.cursor());
+                                grid_tx.send(Some(g.cursor()));
+                                interaction_tx.send(Instant::now().as_secs() as u32);
+                                btn3_handled = true;
+                            }
+                        } else if held_for >= BTN3_GRID_HOLD {
+                            let snap = record_rx.try_get();
+                            let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
+                            if btn3_action(state, Btn3Press::GridHold) == Btn3Action::OpenGrid {
+                                let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                                let g = PageGrid::open(page, mask);
+                                info!("button: BTN3 hold -> page grid at {}", g.cursor());
+                                grid_tx.send(Some(g.cursor()));
+                                grid = Some(g);
+                                interaction_tx.send(Instant::now().as_secs() as u32);
+                                btn3_handled = true;
+                            }
+                        }
+                    }
                     continue;
                 }
                 if !rising {
                     continue;
                 }
-                let long = btn3_down_at.take().is_some_and(|t| {
-                    Instant::now().saturating_duration_since(t) >= BTN3_LONG_PRESS
-                });
+                let held_for = btn3_down_at
+                    .take()
+                    .map(|t| Instant::now().saturating_duration_since(t))
+                    .unwrap_or(Duration::from_ticks(0));
+                if btn3_handled {
+                    btn3_handled = false;
+                    // The hold already acted; its release only starts the
+                    // grid's auto-select clock.
+                    if grid.is_some() {
+                        grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                    }
+                    continue;
+                }
                 let now_s = Instant::now().as_secs() as u32;
                 interaction_tx.send(now_s);
+                if let Some(g) = grid.as_mut() {
+                    // Any unhandled release while the grid is open is a tap —
+                    // a longer hold would have row-jumped at its threshold.
+                    let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                    g.tap(mask);
+                    info!("button: grid cursor -> {}", g.cursor());
+                    grid_tx.send(Some(g.cursor()));
+                    grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                    continue;
+                }
                 let snap = record_rx.try_get();
                 let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
-                match btn3_action(state, long) {
+                // The host-tested boundaries. A run-view GridHold never
+                // reaches here (it threshold-fires above); an idle one does
+                // and maps to the re-zero like any idle hold.
+                let press = classify_btn3_hold(held_for.as_millis().min(u32::MAX as u64) as u32);
+                match btn3_action(state, press) {
                     Btn3Action::PageNext | Btn3Action::PagePrev => {
                         // Same filtered walk as the hardware task above.
                         let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
-                        page = if long {
+                        page = if press == Btn3Press::Long {
                             page.prev_in(mask)
                         } else {
                             page.next_in(mask)
@@ -286,6 +492,7 @@ pub async fn run(
                         info!("button: BTN3 -> page {}", page);
                         page_tx.send(page);
                     }
+                    Btn3Action::OpenGrid => {}
                     Btn3Action::CycleGnssMode => {
                         mode = mode.next();
                         info!(
@@ -314,15 +521,35 @@ pub async fn run(
             // it wakes the face's animation window, same as the hardware task.
             let now_s = Instant::now().as_secs() as u32;
             interaction_tx.send(now_s);
-            let state = record_rx
-                .try_get()
-                .map(|snap| snap.state)
-                .unwrap_or(RecordState::Idle);
             let button = match i {
                 0 => Button::Primary,
                 1 => Button::Stop,
                 _ => Button::Lap,
             };
+            // Grid open: BTN4 confirms the jump, BTN1 / BTN2 cancel — all
+            // swallowed, none reaches the recorder.
+            if grid.is_some() {
+                match grid_press(button) {
+                    GridPress::Select => {
+                        if let Some(g) = grid.take() {
+                            page = g.cursor();
+                            info!("button: grid select -> page {}", page);
+                            page_tx.send(page);
+                        }
+                    }
+                    GridPress::Cancel => {
+                        info!("button: grid cancelled");
+                        grid = None;
+                    }
+                }
+                grid_deadline = None;
+                grid_tx.send(None);
+                continue;
+            }
+            let state = record_rx
+                .try_get()
+                .map(|snap| snap.state)
+                .unwrap_or(RecordState::Idle);
             dispatch(button, state, now_s, &mut stop_guard).await;
         }
     }
