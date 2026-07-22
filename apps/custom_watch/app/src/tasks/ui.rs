@@ -420,6 +420,11 @@ pub async fn screen_task(
             .filter(|(_, at)| uptime_s.saturating_sub(*at) < elevation::REZERO_BANNER_TTL_S)
             .filter(|_| !face::run_view(rec.as_ref()))
             .map(|(status, _)| elevation::rezero_banner(status));
+        // Computed ahead of the hero: the armed-stop banner spans two rows,
+        // and the glance pages' three-row numeral hero would otherwise peek
+        // out under it (a two-row 2x hero is covered outright).
+        let stop_pending = face::run_view(rec.as_ref())
+            && stop_armed.is_some_and(|armed_at| button::stop_arm_pending(armed_at, uptime_s));
         if let Some(a) = alert {
             fb.draw_banner_2x(0, &alerts::banner(a));
         } else if let Some(banner) = &rezero_banner {
@@ -430,7 +435,9 @@ pub async fn screen_task(
             // label and state tag on row 3); every other hero stays 2x over
             // rows 0-1.
             if matches!(page, Page::Distance | Page::Pace) {
-                fb.draw_bignum_hero(0, &hero);
+                if !stop_pending {
+                    fb.draw_bignum_hero(0, &hero);
+                }
             } else {
                 fb.draw_text_2x(0, 0, &hero);
             }
@@ -497,12 +504,8 @@ pub async fn screen_task(
         // 4 s confirm window it outranks an alert banner on the hero band. The
         // grid (drawn after) still wins over it — BTN2 inside the grid cancels
         // and disarms, never arms.
-        if face::run_view(rec.as_ref()) {
-            if let Some(armed_at) = stop_armed {
-                if button::stop_arm_pending(armed_at, uptime_s) {
-                    fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
-                }
-            }
+        if stop_pending {
+            fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
         }
         // The page-grid overview takes the panel over while open: its rows
         // rewrite every band (erasing the composed page underneath — each
