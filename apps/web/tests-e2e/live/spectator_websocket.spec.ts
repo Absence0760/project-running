@@ -93,8 +93,8 @@ test.describe('/live/[id] — Go-hub WebSocket path', () => {
 		// page's hydrateBacklog() calls fetchLiveSnapshot() (real HTTP GET
 		// to the hub's /snapshot) to decide the room is non-empty, and the
 		// WS replay then renders it. The badge must flip to LIVE off that
-		// one buffered point — never falling through to the 5 s demo
-		// animation, which would mean the snapshot/WS path is dead.
+		// one buffered point — never stalling in the waiting state,
+		// which would mean the snapshot/WS path is dead.
 		const startedAt = new Date(Date.now() - 3 * 60 * 1000).toISOString();
 		const runId = await insertRun({
 			user_id: USER_A.id,
@@ -112,9 +112,8 @@ test.describe('/live/[id] — Go-hub WebSocket path', () => {
 				timeout: 15_000
 			});
 			await expect(page.locator('.live-badge')).toContainText('LIVE');
-			// Real source, not the demo: the demo ticker fabricates
-			// monotonically climbing distance from a different origin and
-			// would never settle on this exact 800 m / 4:00 readout.
+			// Pin the exact readout so the numbers provably came from the
+			// pushed ping, not any client-side fabrication.
 			// (Sub-kilometre distance renders in metres, not "0.80 km".)
 			await expect(page.locator('.live-stat-value').first()).toContainText('800 m');
 			await expect(page.locator('.live-stat-value').nth(1)).toContainText('4:00');

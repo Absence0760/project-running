@@ -15,13 +15,13 @@ import { USER_A } from '../fixtures/users';
  * → stale-spectator → finished → /runs row, exercising the SEAMS
  * between those surfaces (the same row's `started_at` + `duration_s`
  * being mutated by the recorder's final post is what flips
- * `runIsFinished`, the same pings that read LIVE age into DELAYED, the
+ * `isFinishedStale` (live_spectator_status.ts), the same pings that read LIVE age into DELAYED, the
  * same row that the owner then sees on /runs).
  *
  *   1. USER_A "starts" a live run — insertRun seeds the in-progress row
  *      the way the mobile recorder's first sync does (web can't record,
  *      decisions §24). started_at ~5 min ago + a long duration so the
- *      page does NOT treat it as already-finished (runIsFinished needs
+ *      page does NOT treat it as already-finished (isFinishedStale needs
  *      end > 2 min in the past). Backend cross-check: the row is public
  *      and owned by USER_A.
  *   2. A position update lands — insertLivePings plants the recorder's
@@ -99,7 +99,7 @@ test.describe('live-tracking journey', () => {
 			// ── 1. USER_A starts a live broadcast ───────────────────────
 			await test.step('USER_A starts a public live run', async () => {
 				// started_at 5 min ago, duration 60 min → end is ~55 min in
-				// the FUTURE, so runIsFinished() is false and the page treats
+				// the FUTURE, so isFinishedStale() is false and the page treats
 				// the run as in-progress, not a stale finished link.
 				runId = await insertRun({
 					user_id: USER_A.id,
@@ -258,7 +258,7 @@ test.describe('live-tracking journey', () => {
 				// The recorder's final sync posts the completed run's saved
 				// totals. Model it as the SAME row's started_at + duration_s
 				// moving its computed end to > 2 min in the past, which is
-				// exactly what flips runIsFinished(). started 35 min ago,
+				// exactly what flips isFinishedStale(). started 35 min ago,
 				// duration 30 min → ended 5 min ago (> the 2 min slack).
 				const { error: updErr } = await admin
 					.from('runs')
@@ -275,7 +275,7 @@ test.describe('live-tracking journey', () => {
 				// stale 5 km ping (planted in step 5) with a final 7.5 km /
 				// 30:00 ping so the trace's last point agrees with the saved
 				// totals. This matters because the finished-state path
-				// (`runIsFinished` branch in +page.svelte) seeds the stat strip
+				// (the `isFinishedStale` branch in +page.svelte) seeds the stat strip
 				// from the saved row's distance_m/duration_s but then replays
 				// the live_run_pings backlog through pushPing() to rebuild the
 				// map trace — and pushPing() overwrites distance/elapsed from

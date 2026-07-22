@@ -229,7 +229,12 @@ impl RunStore {
     /// Persist the BLE bond so a paired phone survives reboot / brown-out
     /// (issue #598). Best-effort / L4 like every flash path; erased at most
     /// once per (re-)pairing, so wear is negligible. Carries the stored GNSS
-    /// mode forward — the two records share the config page.
+    /// mode forward — the two records share the config page. Only the `ble`
+    /// task writes bonds, so this is feature-gated to keep the default
+    /// build's clippy dead-code gate honest ([`read_bond`](Self::read_bond)
+    /// stays unconditional — the GNSS-mode rewrite carries the record
+    /// forward on every build).
+    #[cfg(feature = "ble")]
     pub async fn persist_bond(&mut self, bond: flash_store::BondRecord) {
         let mode = self.read_gnss_mode().map(|m| m.to_byte());
         if self.rewrite_config_page(mode, Some(bond)).await {

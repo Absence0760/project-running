@@ -159,7 +159,7 @@ test.describe('privacy-zone clipping — every viewer surface', () => {
 				// `started_at` must be recent: /live/[id] reads the run as
 				// "finished" (badge "Finished", never "LIVE") when
 				// started_at + duration_s is >2 min in the past
-				// (runIsFinished, +page.svelte:486). A near-now start keeps
+				// (isFinishedStale, live_spectator_status.ts). A near-now start keeps
 				// the saga's live leg in the broadcasting state.
 				runId = await insertRun({
 					user_id: owner.id,
