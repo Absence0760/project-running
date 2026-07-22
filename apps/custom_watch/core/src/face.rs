@@ -641,11 +641,12 @@ fn glance(
         GlanceMetric::Distance => {
             write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km);
             // Row 7 is otherwise free on the Distance page (the Pace page uses it
-            // for GAP): surface an honest warning when the tier-1 flash slot is
-            // full, so the runner knows the STORED GPS track has stopped even
-            // though the distance/time above keep accruing.
-            if snap.track_full {
-                let _ = write!(rows[7], "! TRACK FULL");
+            // for GAP): surface an honest notice once the tier-1 flash slot has
+            // forced the stored track down to a coarser resolution — the whole
+            // run is still kept (decimated, not truncated), and the distance /
+            // time above are unaffected.
+            if snap.track_thinning > 1 {
+                let _ = write!(rows[7], "! TRACK 1/{} RES", snap.track_thinning);
             }
         }
         GlanceMetric::Pace => {
@@ -2382,7 +2383,7 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
-            track_full: false,
+            track_thinning: 1,
             pages_mask: u32::MAX,
         }
     }
@@ -3062,9 +3063,9 @@ mod tests {
     }
 
     #[test]
-    fn distance_page_warns_when_the_flash_track_is_full() {
+    fn distance_page_warns_when_the_flash_track_is_thinned() {
         let mut rec = snapshot(RecordState::Recording, 42_195.0);
-        rec.track_full = true;
+        rec.track_thinning = 4;
         let rows = page_rows(
             Page::Distance,
             Some(&fix()),
@@ -3076,15 +3077,11 @@ mod tests {
             42,
             true,
         );
-        // Row 7 (otherwise free on the Distance page) carries the honest warning.
-        assert!(
-            rows[7].as_str().contains("TRACK FULL"),
-            "row7 = {:?}",
-            rows[7].as_str()
-        );
+        // Row 7 (otherwise free on the Distance page) carries the honest notice.
+        assert_eq!(rows[7].as_str(), "! TRACK 1/4 RES");
 
-        // Absent when the track isn't full.
-        rec.track_full = false;
+        // Absent at full resolution.
+        rec.track_thinning = 1;
         let rows = page_rows(
             Page::Distance,
             Some(&fix()),

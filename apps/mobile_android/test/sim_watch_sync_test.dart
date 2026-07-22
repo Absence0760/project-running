@@ -7,15 +7,28 @@ import '../lib/sim_watch_sync.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_settings.dart';
 
-/// The frozen golden vector — one 3-point run blob. Kept byte-identical to
-/// the firmware's `run_store` test vector so a wire-format drift on either
-/// side is caught here.
+/// The frozen v1 golden vector — one 3-point run blob as the pre-lap
+/// firmware wrote it (version byte 1, untagged records). Kept as the
+/// backward-compat pin: a v1 blob already on a watch's flash must keep
+/// decoding after the v2 upgrade.
 const _goldenHex =
     '54524b31010000000700000029000000'
     'b8ced91718ff40c100000000703f7800'
     'e4cfd9170c0141c101000000723f7a00'
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c02000077fdfebd';
+
+/// The frozen v2 golden vector — the same 3 points with a closed lap
+/// (index 1, 1 km, 5:00 split, 290 s moving) interleaved after point 2.
+/// Kept byte-identical to the firmware's `golden_v2_blob_with_a_lap_is_stable`
+/// test vector so a v2 wire-format drift on either side is caught here.
+const _goldenV2Hex =
+    '54524b31020000000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    'e4cfd9170c0141c101000000723f7a00'
+    '0100102700002c010000220100000001'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c020000406197f1';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -26,6 +39,7 @@ Uint8List _hex(String s) {
 }
 
 Uint8List _goldenBlob() => _hex(_goldenHex);
+Uint8List _goldenV2Blob() => _hex(_goldenV2Hex);
 
 /// MAN1 manifest describing exactly the golden run: watch uptime 700 s,
 /// one entry run_seq=7 size=84 start_uptime=41 — a same-boot run whose
@@ -229,6 +243,99 @@ void main() {
       expect(track[2]['ts'], DateTime.utc(2026, 7, 8, 11, 49, 3).toIso8601String());
       expect(track[2]['ele'], isNull);
       expect(track[2]['bpm'], isNull);
+    });
+
+    test('a v2 blob with a lap yields the registered metadata.laps shape', () {
+      final blob = _goldenV2Blob();
+      expect(verifyBlob(blob), isTrue, reason: 'v2 golden must verify');
+      // The manifest advertises the blob's real size (4 records = 100 B).
+      final m = decodeManifest(_goldenManifest());
+      final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
+      final payload = payloadFromBlob(blob, m.entries.single, m.header, phoneNow);
+
+      // Points decode exactly as in v1 — the lap record is not a point.
+      final track = (payload['track'] as List).cast<Map<String, dynamic>>();
+      expect(track, hasLength(3));
+      expect(track[0]['lat'], closeTo(40.0150200, 1e-9));
+      expect(track[2]['ele'], isNull);
+
+      // The lap lands in the registered shape (metadata.md § laps):
+      // per-lap deltas + a reconstructed start_offset_s.
+      final laps = (payload['laps'] as List).cast<Map<String, dynamic>>();
+      expect(laps, hasLength(1));
+      expect(laps[0]['index'], 1);
+      expect(laps[0]['start_offset_s'], 0);
+      expect(laps[0]['distance_m'], closeTo(1000.0, 1e-9));
+      expect(laps[0]['duration_s'], 300);
+
+      // And runFromWatchPayload forwards them into Run.metadata.
+      final run = runFromWatchPayload(payload);
+      final metaLaps = (run.metadata?['laps'] as List?)?.cast<Map>();
+      expect(metaLaps, isNotNull);
+      expect(metaLaps, hasLength(1));
+      expect(metaLaps![0]['duration_s'], 300);
+    });
+
+    test('consecutive laps accumulate start_offset_s from prior splits', () {
+      // Hand-build a v2 blob: two laps back to back (no points needed for
+      // the offset math).
+      final body = BytesBuilder();
+      final header = ByteData(16);
+      header.setUint8(0, 0x54); // T
+      header.setUint8(1, 0x52); // R
+      header.setUint8(2, 0x4b); // K
+      header.setUint8(3, 0x31); // 1
+      header.setUint8(4, 2); // version 2
+      header.setUint32(8, 9, Endian.little);
+      header.setUint32(12, 0, Endian.little);
+      body.add(header.buffer.asUint8List());
+      for (final (i, split) in [(1, 300), (2, 420)]) {
+        final lap = ByteData(16);
+        lap.setUint16(0, i, Endian.little);
+        lap.setUint32(2, 10000, Endian.little);
+        lap.setUint32(6, split, Endian.little);
+        lap.setUint32(10, split - 10, Endian.little);
+        lap.setUint8(15, 1); // lap tag
+        body.add(lap.buffer.asUint8List());
+      }
+      final prefix = body.toBytes();
+      final footer = ByteData(20);
+      footer.setUint8(0, 0x45); // E
+      footer.setUint8(1, 0x4e); // N
+      footer.setUint8(2, 0x44); // D
+      footer.setUint8(3, 0x31); // 1
+      footer.setUint32(4, 2000, Endian.little);
+      footer.setUint32(8, 700, Endian.little);
+      footer.setUint32(12, 720, Endian.little);
+      footer.setUint32(16, crc32(prefix), Endian.little);
+      final blob = Uint8List.fromList([...prefix, ...footer.buffer.asUint8List()]);
+      expect(verifyBlob(blob), isTrue);
+
+      final m = decodeManifest(_goldenManifest(watchUptimeS: 800, startUptimeS: 0));
+      final payload = payloadFromBlob(
+          blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8));
+      final laps = (payload['laps'] as List).cast<Map<String, dynamic>>();
+      expect(laps[0]['start_offset_s'], 0);
+      expect(laps[1]['start_offset_s'], 300, reason: 'sum of prior splits');
+      expect(laps[1]['duration_s'], 420);
+    });
+
+    test('a blob newer than the supported format is rejected, never misread',
+        () {
+      final blob = Uint8List.fromList(_goldenV2Blob());
+      blob[4] = 3; // future version
+      // Re-stamp the CRC so ONLY the version gate can reject it.
+      final n = (blob.length - 16 - 20) ~/ 16;
+      final d = ByteData.sublistView(blob);
+      d.setUint32(blob.length - 4, crc32(blob.sublist(0, 16 + n * 16)),
+          Endian.little);
+      expect(verifyBlob(blob), isTrue, reason: 'structurally valid');
+      final m = decodeManifest(_goldenManifest());
+      expect(
+        () => payloadFromBlob(
+            blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8)),
+        throwsFormatException,
+      );
     });
 
     test('a recovered prior-boot run dates from the footer elapsed fallback',

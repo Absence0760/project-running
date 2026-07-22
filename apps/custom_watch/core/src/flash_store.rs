@@ -16,7 +16,8 @@
 use heapless::Vec;
 
 use crate::run_store::{
-    crc32, ManifestEntry, RunFooter, RunHeader, FOOTER_LEN, FORMAT_VERSION, HEADER_LEN, POINT_LEN,
+    crc32, ManifestEntry, RunFooter, RunHeader, FOOTER_LEN, FORMAT_VERSION, HEADER_LEN,
+    MIN_FORMAT_VERSION, POINT_LEN,
 };
 
 /// One nRF52840 erase page (4 KiB) per run slot, so evicting a run is a single
@@ -131,7 +132,9 @@ pub struct RecoveredRun {
 /// stop would need a genuine CRC32 collision at a point boundary.)
 pub fn recover_slot(bytes: &[u8]) -> Option<RecoveredRun> {
     let header = RunHeader::decode(bytes)?;
-    if header.version != FORMAT_VERSION {
+    // v1 blobs already on flash (all-point, untagged) still recover; anything
+    // NEWER than the current writer is a format we can't parse — fail closed.
+    if !(MIN_FORMAT_VERSION..=FORMAT_VERSION).contains(&header.version) {
         return None;
     }
     for n in 0..=MAX_POINTS_PER_RUN {
@@ -783,6 +786,23 @@ mod tests {
                 run_seq: 7,
                 size: blob_len(2),
                 start_uptime_s: 41,
+            })
+        );
+    }
+
+    #[test]
+    fn recover_slot_still_reads_a_v1_blob_from_a_prior_firmware() {
+        // A run committed by the v1 (pre-lap, pre-decimation) firmware sits on
+        // flash across the upgrade: an all-point untagged blob at version 1.
+        // The version range gate must keep recovering it.
+        let pts = [a_point(0), a_point(1), a_point(2)];
+        let v1 = slot_image_version(MIN_FORMAT_VERSION, 9, 17, &pts);
+        assert_eq!(
+            recover_slot(&v1),
+            Some(RecoveredRun {
+                run_seq: 9,
+                size: blob_len(3),
+                start_uptime_s: 17,
             })
         );
     }

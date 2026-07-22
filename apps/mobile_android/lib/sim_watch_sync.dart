@@ -10,12 +10,21 @@ import 'watch_settings.dart';
 ///
 /// The watch records a run as a self-describing little-endian blob:
 ///
-///   header(16) | point[N](16) | footer(20)
+///   header(16) | record[N](16) | footer(20)
 ///
-/// and exposes the set of runs over BLE as a manifest (a header + one
-/// entry per stored run). The phone pulls each blob in chunks, verifies
-/// its CRC, and reshapes it into the canonical watch-run payload that
-/// [runFromWatchPayload] (watch_ingest_queue.dart) already consumes.
+/// Version 1 records are all track points. Version 2 makes each record's
+/// byte 15 a tag — 0 = track point (v1's reserved zero byte, so a v1 blob
+/// is also a valid tagged stream), 1 = a closed lap — and lap records
+/// interleave with points in recording order. Versions above
+/// [_maxSupportedVersion] are rejected outright: decoding an unknown
+/// record layout as GPS points would corrupt a track.
+///
+/// The watch exposes the set of runs over BLE as a manifest (a header +
+/// one entry per stored run). The phone pulls each blob in chunks,
+/// verifies its CRC, and reshapes it into the canonical watch-run payload
+/// that [runFromWatchPayload] (watch_ingest_queue.dart) already consumes
+/// — laps land in the registered `metadata.laps` shape
+/// (docs/backend/metadata.md § laps).
 ///
 /// This module is deliberately pure — no BLE, no disk, no platform
 /// channels — so the whole decode/verify/reshape path is unit-testable
@@ -23,6 +32,13 @@ import 'watch_settings.dart';
 const int _headerLen = 16;
 const int _pointLen = 16;
 const int _footerLen = 20;
+
+/// Record tags at byte 15 of every 16-byte record (version 2).
+const int _recordTagPoint = 0;
+const int _recordTagLap = 1;
+
+/// The newest `run_store` format this decoder understands.
+const int _maxSupportedVersion = 2;
 
 /// Sentinel written by the watch when a point has no barometric/GPS
 /// elevation fix. Decoded to a null `ele`.
@@ -169,6 +185,37 @@ TrackPoint decodePoint(List<int> blob, int offset) {
   );
 }
 
+/// One closed lap persisted in the version-2 stream (tag 1 at byte 15):
+/// 1-based index, the lap's own distance in decimetres, and the lap's
+/// elapsed + moving seconds.
+class LapRecord {
+  final int index;
+  final int lapDistanceDm;
+  final int splitS;
+  final int movingS;
+
+  const LapRecord({
+    required this.index,
+    required this.lapDistanceDm,
+    required this.splitS,
+    required this.movingS,
+  });
+}
+
+/// Decode the lap record that starts at byte [offset].
+LapRecord decodeLap(List<int> blob, int offset) {
+  if (offset + _pointLen > blob.length) {
+    throw const FormatException('lap record out of range');
+  }
+  final d = _view(blob);
+  return LapRecord(
+    index: d.getUint16(offset, Endian.little),
+    lapDistanceDm: d.getUint32(offset + 2, Endian.little),
+    splitS: d.getUint32(offset + 6, Endian.little),
+    movingS: d.getUint32(offset + 10, Endian.little),
+  );
+}
+
 TrackFooter decodeFooter(List<int> blob) {
   if (blob.length < _footerLen) {
     throw const FormatException('blob shorter than footer');
@@ -277,6 +324,13 @@ Map<String, dynamic> payloadFromBlob(
   ManifestHeader manifestHeader,
   DateTime phoneNow,
 ) {
+  final header = decodeHeader(blob);
+  if (header.version < 1 || header.version > _maxSupportedVersion) {
+    // Fail closed: an unknown record layout decoded as points would
+    // corrupt a track. A newer watch needs a newer app.
+    throw FormatException(
+        'unsupported run_store blob version ${header.version}');
+  }
   final footer = decodeFooter(blob);
   final n = _pointCount(blob.length);
   if (n < 0) {
@@ -289,15 +343,37 @@ Map<String, dynamic> payloadFromBlob(
       ));
 
   final track = <Map<String, dynamic>>[];
+  final laps = <Map<String, dynamic>>[];
+  // Cumulative duration up to the start of the next lap — the registered
+  // `start_offset_s` (metadata.md § laps: per-lap deltas on the wire, the
+  // offset reconstructed by summing prior splits).
+  var lapStartOffsetS = 0;
   for (var i = 0; i < n; i++) {
-    final p = decodePoint(blob, _headerLen + i * _pointLen);
-    track.add(<String, dynamic>{
-      'lat': p.latE7 / 1e7,
-      'lng': p.lonE7 / 1e7,
-      'ele': p.eleDm == null ? null : p.eleDm! / 10.0,
-      'ts': startedAt.add(Duration(seconds: p.tOffsetS)).toIso8601String(),
-      'bpm': p.bpm,
-    });
+    final at = _headerLen + i * _pointLen;
+    switch (blob[at + 15]) {
+      case _recordTagPoint:
+        final p = decodePoint(blob, at);
+        track.add(<String, dynamic>{
+          'lat': p.latE7 / 1e7,
+          'lng': p.lonE7 / 1e7,
+          'ele': p.eleDm == null ? null : p.eleDm! / 10.0,
+          'ts': startedAt.add(Duration(seconds: p.tOffsetS)).toIso8601String(),
+          'bpm': p.bpm,
+        });
+      case _recordTagLap:
+        final lap = decodeLap(blob, at);
+        laps.add(<String, dynamic>{
+          'index': lap.index,
+          'start_offset_s': lapStartOffsetS,
+          'distance_m': lap.lapDistanceDm / 10.0,
+          'duration_s': lap.splitS,
+        });
+        lapStartOffsetS += lap.splitS;
+      default:
+        // The CRC passed, so this is a record kind this decoder does not
+        // know within a version it claims to support — a bug, not noise.
+        throw FormatException('unknown record tag ${blob[at + 15]} at $at');
+    }
   }
 
   return <String, dynamic>{
@@ -308,6 +384,7 @@ Map<String, dynamic> payloadFromBlob(
     'source': 'watch',
     'track': track,
     'activity_type': 'run',
+    if (laps.isNotEmpty) 'laps': laps,
   };
 }
 
