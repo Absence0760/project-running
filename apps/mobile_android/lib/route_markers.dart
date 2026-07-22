@@ -4,7 +4,7 @@
 /// Pure, locale- and unit-agnostic logic shared by the map layer and the
 /// course-schedule list: the kind catalogue (one source of truth for pin
 /// colour + which detail fields a kind carries), schedule ordering, the
-/// aid-service vocabulary, and cutoff parse/validation.
+/// aid-service vocabulary, and cutoff + target-time parse/validation.
 ///
 /// Distance formatting is deliberately NOT here — the render layer formats
 /// `positionM` through the viewer's km/mi preference. The per-platform icon
@@ -13,8 +13,8 @@
 /// platforms.
 ///
 /// Twin of `apps/web/src/lib/routes/route_markers.ts` — keep the kind set,
-/// colours, service vocabulary, ordering, cutoff rules, edge cases, and test
-/// count in lockstep.
+/// colours, service vocabulary, ordering, cutoff/target rules, edge cases,
+/// and test count in lockstep.
 
 /// Which optional detail fields a kind's `meta` bag carries.
 class RouteMarkerKindSpec {
@@ -124,4 +124,42 @@ CutoffParts? parseCutoff(dynamic meta) {
 
   if (clock == null && elapsedS == null) return null;
   return CutoffParts(clock: clock, elapsedS: elapsedS);
+}
+
+/// Parsed target time: a wall-clock "HH:MM" and/or an elapsed-from-start
+/// seconds.
+class TargetParts {
+  final String? clock;
+  final int? elapsedS;
+  const TargetParts({this.clock, this.elapsedS});
+
+  @override
+  bool operator ==(Object other) =>
+      other is TargetParts && other.clock == clock && other.elapsedS == elapsedS;
+
+  @override
+  int get hashCode => Object.hash(clock, elapsedS);
+}
+
+/// Validate + normalise a marker's target-time `meta` into [TargetParts] —
+/// the pacing goal a runner aims to reach the marker by, mirroring
+/// [parseCutoff]. Any kind may carry a target. Returns null when neither a
+/// valid clock nor a valid elapsed is present.
+TargetParts? parseTarget(dynamic meta) {
+  if (meta is! Map) return null;
+
+  String? clock;
+  final rawClock = meta['target_clock'];
+  if (rawClock is String && _clockRe.hasMatch(rawClock)) {
+    clock = rawClock;
+  }
+
+  int? elapsedS;
+  final rawElapsed = meta['target_elapsed_s'];
+  if (rawElapsed is num && rawElapsed.isFinite && rawElapsed >= 0) {
+    elapsedS = rawElapsed.floor();
+  }
+
+  if (clock == null && elapsedS == null) return null;
+  return TargetParts(clock: clock, elapsedS: elapsedS);
 }

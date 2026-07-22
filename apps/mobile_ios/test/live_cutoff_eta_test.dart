@@ -119,4 +119,43 @@ void main() {
     expect(eta.checkpoint?.label, 'Finish gate');
     expect((eta.distanceToM - 15000).abs() < 100, isTrue);
   });
+
+  test('required pace is the remaining budget spread over the remaining distance', () {
+    // 7200 limit - 3600 elapsed = 3600 s left over 10 km → 360 s/km.
+    final eta = call();
+    expect(eta.requiredPaceSecPerKm, 360);
+  });
+
+  test('no checkpoint means no required pace', () {
+    final eta = call(distAlongRouteM: 40000);
+    expect(eta.checkpoint, isNull);
+    expect(eta.requiredPaceSecPerKm, isNull);
+  });
+
+  test('a cutoff under 50 m away has no meaningful required pace', () {
+    // 20000 - 19960 = 40 m out; status is still graded from recent pace.
+    final eta = call(distAlongRouteM: 19960);
+    expect(eta.distanceToM, 40);
+    expect(eta.requiredPaceSecPerKm, isNull);
+    expect(eta.status, LiveCutoffStatus.on);
+  });
+
+  test('a limit already passed cannot be made at any pace', () {
+    for (final elapsedS in [7200.0, 8000.0]) {
+      final eta = call(elapsedS: elapsedS);
+      expect(eta.requiredPaceSecPerKm, isNull);
+      expect(eta.status, LiveCutoffStatus.behind);
+    }
+  });
+
+  test('a stale fix or unknown pace still reports the required pace', () {
+    final staleEta = call(stale: true);
+    expect(staleEta.status, LiveCutoffStatus.unknown);
+    expect(staleEta.projectedArrivalElapsedS, isNull);
+    expect(staleEta.requiredPaceSecPerKm, 360);
+
+    final noPaceEta = call(recentPaceSecPerKm: null);
+    expect(noPaceEta.status, LiveCutoffStatus.unknown);
+    expect(noPaceEta.requiredPaceSecPerKm, 360);
+  });
 }

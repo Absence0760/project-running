@@ -15,7 +15,16 @@
 ///
 /// The projection is deliberately FLAT pace (no grade adjustment) — the same
 /// honest simplification `checkpoint_projection.dart` makes; a future refinement
-/// can fold in `gradeFactor`. Twin of
+/// can fold in `gradeFactor`.
+///
+/// [LiveCutoffEta.requiredPaceSecPerKm] is the flip side of the projection: the
+/// flat pace the runner must average over the remaining distance to arrive
+/// exactly at the limit. Unlike the ETA it does NOT depend on recent pace, so
+/// it is still computed when the fix is stale or pace is unknown — a runner
+/// with no recent pace still deserves "you need 6:30s to make it". It is null
+/// when there is no checkpoint, when the cutoff is < 50 m away (too close for
+/// a meaningful pace), or when the limit has already passed (no pace can make
+/// it). Twin of
 /// `apps/web/src/lib/runs/live_cutoff_eta.ts` — keep logic, edge cases, and
 /// test count in lockstep.
 import 'roadbook.dart' show RoadbookLeg, cutoffTightS;
@@ -42,6 +51,11 @@ class LiveCutoffEta {
 
   /// limitElapsedS - projectedArrival; null when unknown.
   final double? marginS;
+
+  /// Flat pace (s/km) needed over the remaining distance to hit the limit
+  /// exactly; independent of recent pace, so present even when status is
+  /// unknown. Null when no checkpoint, < 50 m out, or the limit has passed.
+  final double? requiredPaceSecPerKm;
   final LiveCutoffStatus status;
 
   const LiveCutoffEta({
@@ -49,6 +63,7 @@ class LiveCutoffEta {
     required this.distanceToM,
     required this.projectedArrivalElapsedS,
     required this.marginS,
+    required this.requiredPaceSecPerKm,
     required this.status,
   });
 }
@@ -71,6 +86,7 @@ LiveCutoffEta nextCutoffEta({
       distanceToM: 0,
       projectedArrivalElapsedS: null,
       marginS: null,
+      requiredPaceSecPerKm: null,
       status: LiveCutoffStatus.unknown,
     );
   }
@@ -80,6 +96,10 @@ LiveCutoffEta nextCutoffEta({
       ? LiveCutoffCheckpoint(kind: leg.kind!, label: leg.label)
       : const LiveCutoffCheckpoint(kind: 'cutoff', label: '');
   final distanceToM = leg.cumDistM - distAlongRouteM;
+  final remainingS = leg.cutoff!.limitElapsedS - elapsedS;
+  final requiredPaceSecPerKm = distanceToM >= 50 && remainingS > 0
+      ? remainingS / (distanceToM / 1000)
+      : null;
 
   if (stale ||
       recentPaceSecPerKm == null ||
@@ -90,6 +110,7 @@ LiveCutoffEta nextCutoffEta({
       distanceToM: distanceToM,
       projectedArrivalElapsedS: null,
       marginS: null,
+      requiredPaceSecPerKm: requiredPaceSecPerKm,
       status: LiveCutoffStatus.unknown,
     );
   }
@@ -108,6 +129,7 @@ LiveCutoffEta nextCutoffEta({
     distanceToM: distanceToM,
     projectedArrivalElapsedS: projectedArrivalElapsedS,
     marginS: marginS,
+    requiredPaceSecPerKm: requiredPaceSecPerKm,
     status: status,
   );
 }

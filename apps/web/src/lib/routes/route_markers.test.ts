@@ -5,7 +5,8 @@ import {
 	AID_SERVICES,
 	kindSpec,
 	sortMarkers,
-	parseCutoff
+	parseCutoff,
+	parseTarget
 } from './route_markers';
 
 test('every kind has a unique key, label key, and hex colour', () => {
@@ -84,4 +85,32 @@ test('parseCutoff merges clock + elapsed and returns null for neither', () => {
 	assert.equal(parseCutoff({}), null);
 	assert.equal(parseCutoff(null), null);
 	assert.equal(parseCutoff('14:30'), null);
+});
+
+test('parseTarget accepts a valid 24h clock', () => {
+	assert.deepEqual(parseTarget({ target_clock: '14:30' }), { clock: '14:30' });
+	assert.deepEqual(parseTarget({ target_clock: '00:00' }), { clock: '00:00' });
+	assert.deepEqual(parseTarget({ target_clock: '23:59' }), { clock: '23:59' });
+});
+
+test('parseTarget rejects an invalid clock', () => {
+	assert.equal(parseTarget({ target_clock: '24:00' }), null);
+	assert.equal(parseTarget({ target_clock: '9:5' }), null);
+	assert.equal(parseTarget({ target_clock: 'noon' }), null);
+});
+
+test('parseTarget accepts a non-negative elapsed and floors it', () => {
+	assert.deepEqual(parseTarget({ target_elapsed_s: 3600 }), { elapsedS: 3600 });
+	assert.deepEqual(parseTarget({ target_elapsed_s: 90.7 }), { elapsedS: 90 });
+	assert.equal(parseTarget({ target_elapsed_s: -5 }), null);
+});
+
+test('parseTarget merges clock + elapsed and returns null for neither', () => {
+	assert.deepEqual(parseTarget({ target_clock: '06:00', target_elapsed_s: 1800 }), {
+		clock: '06:00',
+		elapsedS: 1800
+	});
+	assert.equal(parseTarget({}), null);
+	assert.equal(parseTarget(null), null);
+	assert.equal(parseTarget('14:30'), null);
 });
