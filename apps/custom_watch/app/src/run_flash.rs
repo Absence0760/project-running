@@ -195,29 +195,83 @@ impl RunStore {
         GnssMode::from_byte(byte)
     }
 
+    /// Read the persisted BLE bond ([`persist_bond`](Self::persist_bond)), or
+    /// `None` when flash is unavailable, unreadable, or the record is
+    /// erased / corrupt — the watch then simply re-pairs (fail-closed, same
+    /// rule as [`read_gnss_mode`](Self::read_gnss_mode)).
+    pub fn read_bond(&mut self) -> Option<flash_store::BondRecord> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; flash_store::BOND_RECORD_LEN];
+        let at = CONFIG_OFFSET + flash_store::BOND_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: bond read failed {:?}", e);
+            return None;
+        }
+        flash_store::BondRecord::decode(&buf)
+    }
+
     /// Persist the selected GNSS recording mode so it survives reboot / brown-out
     /// instead of silently reverting to the Performance default. Best-effort /
-    /// L4: erases the dedicated config page and writes the CRC-checked record;
-    /// any flash error only `warn!`s and returns, never blocking the caller. The
+    /// L4: rewrites the config page (carrying any stored bond forward); any
+    /// flash error only `warn!`s and returns, never blocking the caller. The
     /// button task calls this only when the mode actually changes, so the page is
     /// erased at most once per user mode switch — trivially within flash
     /// endurance and off the per-tick path.
     pub async fn persist_gnss_mode(&mut self, mode: GnssMode) {
+        let bond = self.read_bond();
+        if self.rewrite_config_page(Some(mode.to_byte()), bond).await {
+            info!("run_flash: persisted GNSS mode {}", mode);
+        }
+    }
+
+    /// Persist the BLE bond so a paired phone survives reboot / brown-out
+    /// (issue #598). Best-effort / L4 like every flash path; erased at most
+    /// once per (re-)pairing, so wear is negligible. Carries the stored GNSS
+    /// mode forward — the two records share the config page.
+    pub async fn persist_bond(&mut self, bond: flash_store::BondRecord) {
+        let mode = self.read_gnss_mode().map(|m| m.to_byte());
+        if self.rewrite_config_page(mode, Some(bond)).await {
+            info!("run_flash: persisted BLE bond");
+        }
+    }
+
+    /// Erase + rewrite the config page with whichever records are present.
+    /// The page holds BOTH the CFG record (base) and the bond record
+    /// ([`flash_store::BOND_RECORD_OFFSET`]); an erase clears both, so every
+    /// caller reads the record it is NOT changing first and passes it through.
+    /// Returns whether the rewrite fully succeeded.
+    async fn rewrite_config_page(
+        &mut self,
+        gnss_mode_byte: Option<u8>,
+        bond: Option<flash_store::BondRecord>,
+    ) -> bool {
         if !self.available {
-            return;
+            return false;
         }
         let start = CONFIG_OFFSET;
         let end = start + flash_store::CONFIG_LEN as u32;
         if let Err(e) = self.flash_erase(start, end).await {
             warn!("run_flash: config erase failed {:?}", e);
-            return;
+            return false;
         }
-        let rec = flash_store::encode_config(mode.to_byte());
-        if let Err(e) = self.flash_write(start, &rec).await {
-            warn!("run_flash: config write failed {:?}", e);
-            return;
+        if let Some(mode) = gnss_mode_byte {
+            let rec = flash_store::encode_config(mode);
+            if let Err(e) = self.flash_write(start, &rec).await {
+                warn!("run_flash: config write failed {:?}", e);
+                return false;
+            }
         }
-        info!("run_flash: persisted GNSS mode {}", mode);
+        if let Some(b) = bond {
+            let rec = b.encode();
+            let at = start + flash_store::BOND_RECORD_OFFSET as u32;
+            if let Err(e) = self.flash_write(at, &rec).await {
+                warn!("run_flash: bond write failed {:?}", e);
+                return false;
+            }
+        }
+        true
     }
 
     /// Persist a finished run's staged blob. Best-effort: any failure warns,

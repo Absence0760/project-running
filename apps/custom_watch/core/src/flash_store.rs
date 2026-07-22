@@ -99,6 +99,98 @@ pub fn decode_config(bytes: &[u8]) -> Option<u8> {
     Some(bytes[5])
 }
 
+/// Offset of the persisted BLE bond record within the config page — clear of
+/// the [`CONFIG_RECORD_LEN`] config record at the base, word-aligned. The two
+/// records share the page (one erase covers both), so a rewrite of either
+/// must carry the other forward (`run_flash::rewrite_config_page`).
+pub const BOND_RECORD_OFFSET: usize = 64;
+
+/// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
+/// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a
+/// multiple of the 4-byte NVMC write word.
+pub const BOND_RECORD_LEN: usize = 60;
+
+pub const BOND_VERSION: u8 = 1;
+
+const BOND_MAGIC: [u8; 4] = *b"BND1";
+
+/// The one persisted BLE bond (issue #598): everything the peripheral needs
+/// to re-encrypt with a previously-paired phone across a power cycle. Plain
+/// bytes — the `ble` task maps to/from the SoftDevice's key types, keeping
+/// this crate hardware-free and the codec host-testable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BondRecord {
+    /// The peer's encrypted diversifier + random number — the lookup key the
+    /// central presents when re-establishing encryption.
+    pub master_ediv: u16,
+    pub master_rand: [u8; 8],
+    /// The long-term key plus the SoftDevice's `ble_gap_enc_info_t` flag
+    /// byte (lesc / auth / ltk_len bitfield), carried opaquely.
+    pub ltk: [u8; 16],
+    pub enc_flags: u8,
+    /// The peer's identity address (`Address` flags byte + 6 address bytes)
+    /// and identity-resolution key, for matching a resolvable private
+    /// address on reconnect.
+    pub addr_flags: u8,
+    pub addr: [u8; 6],
+    pub irk: [u8; 16],
+}
+
+impl BondRecord {
+    pub fn encode(&self) -> [u8; BOND_RECORD_LEN] {
+        let mut b = [0u8; BOND_RECORD_LEN];
+        b[0..4].copy_from_slice(&BOND_MAGIC);
+        b[4] = BOND_VERSION;
+        b[5] = self.enc_flags;
+        b[6..8].copy_from_slice(&self.master_ediv.to_le_bytes());
+        b[8..16].copy_from_slice(&self.master_rand);
+        b[16..32].copy_from_slice(&self.ltk);
+        b[32] = self.addr_flags;
+        b[33..39].copy_from_slice(&self.addr);
+        b[39..55].copy_from_slice(&self.irk);
+        // b[55] pad, zero, CRC-covered.
+        let crc = crc32(&b[0..BOND_RECORD_LEN - 4]);
+        b[BOND_RECORD_LEN - 4..].copy_from_slice(&crc.to_le_bytes());
+        b
+    }
+
+    /// Fail-closed like [`decode_config`]: an erased page, wrong magic /
+    /// version, or a torn write reads as "no bond" — the watch simply
+    /// re-pairs, it never encrypts against a corrupt key.
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < BOND_RECORD_LEN || bytes[0..4] != BOND_MAGIC || bytes[4] != BOND_VERSION {
+            return None;
+        }
+        let stored = u32::from_le_bytes([
+            bytes[BOND_RECORD_LEN - 4],
+            bytes[BOND_RECORD_LEN - 3],
+            bytes[BOND_RECORD_LEN - 2],
+            bytes[BOND_RECORD_LEN - 1],
+        ]);
+        if crc32(&bytes[0..BOND_RECORD_LEN - 4]) != stored {
+            return None;
+        }
+        let mut rec = BondRecord {
+            master_ediv: u16::from_le_bytes([bytes[6], bytes[7]]),
+            master_rand: [0; 8],
+            ltk: [0; 16],
+            enc_flags: bytes[5],
+            addr_flags: bytes[32],
+            addr: [0; 6],
+            irk: [0; 16],
+        };
+        rec.master_rand.copy_from_slice(&bytes[8..16]);
+        rec.ltk.copy_from_slice(&bytes[16..32]);
+        rec.addr.copy_from_slice(&bytes[33..39]);
+        rec.irk.copy_from_slice(&bytes[39..55]);
+        Some(rec)
+    }
+}
+
+const _: () = assert!(BOND_RECORD_OFFSET >= CONFIG_RECORD_LEN);
+const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= CONFIG_LEN);
+const _: () = assert!(BOND_RECORD_LEN.is_multiple_of(4));
+
 /// Bytes to return for a phone chunk request: the smallest of what is left in
 /// the blob from `offset`, the phone's `requested` length, and the notify
 /// `mtu`. Zero once `offset` reaches (or passes) the blob end, so a request off
@@ -787,6 +879,57 @@ mod tests {
                 size: blob_len(2),
                 start_uptime_s: 41,
             })
+        );
+    }
+
+    fn a_bond() -> BondRecord {
+        BondRecord {
+            master_ediv: 0xBEEF,
+            master_rand: [1, 2, 3, 4, 5, 6, 7, 8],
+            ltk: [0xAA; 16],
+            enc_flags: 0b0000_0101,
+            addr_flags: 0x02,
+            addr: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            irk: [0xCC; 16],
+        }
+    }
+
+    #[test]
+    fn bond_record_round_trips() {
+        let rec = a_bond();
+        assert_eq!(BondRecord::decode(&rec.encode()), Some(rec));
+    }
+
+    #[test]
+    fn bond_record_rejects_erased_corrupt_and_wrong_version() {
+        assert_eq!(BondRecord::decode(&[0xFF; BOND_RECORD_LEN]), None, "erased");
+        assert_eq!(BondRecord::decode(&[0x00; BOND_RECORD_LEN]), None, "zeroed");
+        let enc = a_bond().encode();
+        assert_eq!(
+            BondRecord::decode(&enc[..BOND_RECORD_LEN - 1]),
+            None,
+            "short"
+        );
+        let mut flipped = enc;
+        flipped[20] ^= 0x01; // inside the LTK: a corrupt key must never load
+        assert_eq!(BondRecord::decode(&flipped), None, "CRC catches a torn key");
+        let mut newer = enc;
+        newer[4] = BOND_VERSION + 1;
+        assert_eq!(BondRecord::decode(&newer), None, "unknown version");
+    }
+
+    #[test]
+    fn bond_and_config_records_share_the_page_without_overlap() {
+        // Both records written into one config page image read back
+        // independently — the layout invariant rewrite_config_page relies on.
+        let mut page = [0xFFu8; CONFIG_LEN];
+        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(2));
+        page[BOND_RECORD_OFFSET..BOND_RECORD_OFFSET + BOND_RECORD_LEN]
+            .copy_from_slice(&a_bond().encode());
+        assert_eq!(decode_config(&page), Some(2));
+        assert_eq!(
+            BondRecord::decode(&page[BOND_RECORD_OFFSET..]),
+            Some(a_bond())
         );
     }
 

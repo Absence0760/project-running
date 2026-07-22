@@ -225,5 +225,12 @@ async fn main(spawner: Spawner) {
     }
 
     #[cfg(feature = "ble")]
-    spawner.spawn(unwrap!(tasks::ble::run(sd, server, store)));
+    {
+        // The bonding security handler outlives every connection (the
+        // SoftDevice holds a &'static): one remembered phone, keys persisted
+        // to the flash config page by the ble task (issue #598).
+        static BONDER: StaticCell<tasks::ble::Bonder> = StaticCell::new();
+        let bonder = BONDER.init(tasks::ble::Bonder::default());
+        spawner.spawn(unwrap!(tasks::ble::run(sd, server, store, bonder)));
+    }
 }
