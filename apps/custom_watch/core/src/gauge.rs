@@ -92,6 +92,7 @@ mod tests {
             projected_finish_s: None,
             verdict: PaceVerdict::OnPace,
             finished: false,
+            terrain_aware: false,
         }
     }
 

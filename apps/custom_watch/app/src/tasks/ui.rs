@@ -401,7 +401,11 @@ pub async fn screen_task(
         // idle status face gets the GPS signal meter instead. Unchanged pixels
         // dirty nothing, so a resting page still flushes zero lines.
         if face::run_view(rec.as_ref()) {
-            widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(page));
+            // The dot row counts the FILTERED cycle (data-present ∩ curated),
+            // so it matches what BTN3 actually walks; no snapshot means no
+            // filter yet.
+            let pages_mask = rec.as_ref().map_or(u32::MAX, |s| s.pages_mask);
+            widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(page, pages_mask));
             if let Some(snap) = rec.as_ref() {
                 match page {
                     Page::Pacer => widgets::draw_pacer_overlay(&mut fb, snap),

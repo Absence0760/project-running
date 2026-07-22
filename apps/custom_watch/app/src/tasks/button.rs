@@ -8,8 +8,9 @@
 //! Mapping (see `watch_core::button::command_for`):
 //!   BTN1 — start / pause / resume toggle
 //!   BTN2 — stop
-//!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap /
-//!          zones / pacer / nav / back-to-start) while a run is under way;
+//!   BTN3 — cycle the run-view page (dashboard / distance / pace / ... —
+//!          `watch_core::page` owns the frequency-ordered cycle) while a run
+//!          is under way;
 //!          cycle the GNSS recording mode (Performance / Balanced /
 //!          Expedition) on the idle face; long-press = page back in a run,
 //!          manual QNH re-zero on the idle face
@@ -46,10 +47,12 @@ const DEBOUNCE: Duration = Duration::from_millis(20);
 
 /// How long BTN3 must be held to count as a long-press. A short BTN3 press
 /// still cycles forward (page next / GNSS mode); a long-press cycles the run
-/// pages *backward*, so a late page in the 32-page cycle is one press away
-/// instead of ~31, and on the idle face requests the manual QNH re-zero. A
-/// deliberate hold, not a chord — inside decisions §81's five-button,
-/// no-chord budget.
+/// pages *backward*, so a late page in the cycle is one press away instead of
+/// many, and on the idle face requests the manual QNH re-zero. A deliberate
+/// hold, not a chord — inside decisions §81's five-button, no-chord budget.
+/// Both directions walk the snapshot's `pages_mask` (data-present ∩ curated),
+/// so BTN3 never lands on an empty glance unless the runner turned the
+/// hide-empty filter off.
 const BTN3_LONG_PRESS: Duration = Duration::from_millis(500);
 
 #[cfg(not(feature = "sim-buttons"))]
@@ -98,13 +101,18 @@ pub async fn run(
                         Either::First(()),
                     );
                     interaction_tx.send(Instant::now().as_secs() as u32);
-                    let state = record_rx
-                        .try_get()
-                        .map(|snap| snap.state)
-                        .unwrap_or(RecordState::Idle);
+                    let snap = record_rx.try_get();
+                    let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
                     match btn3_action(state, long) {
                         Btn3Action::PageNext | Btn3Action::PagePrev => {
-                            page = if long { page.prev() } else { page.next() };
+                            // Walk the filtered cycle (data-present ∩ curated,
+                            // from the snapshot); no snapshot means no filter.
+                            let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                            page = if long {
+                                page.prev_in(mask)
+                            } else {
+                                page.next_in(mask)
+                            };
                             info!("button: BTN3 -> page {}", page);
                             page_tx.send(page);
                         }
@@ -264,13 +272,17 @@ pub async fn run(
                 });
                 let now_s = Instant::now().as_secs() as u32;
                 interaction_tx.send(now_s);
-                let state = record_rx
-                    .try_get()
-                    .map(|snap| snap.state)
-                    .unwrap_or(RecordState::Idle);
+                let snap = record_rx.try_get();
+                let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
                 match btn3_action(state, long) {
                     Btn3Action::PageNext | Btn3Action::PagePrev => {
-                        page = if long { page.prev() } else { page.next() };
+                        // Same filtered walk as the hardware task above.
+                        let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                        page = if long {
+                            page.prev_in(mask)
+                        } else {
+                            page.next_in(mask)
+                        };
                         info!("button: BTN3 -> page {}", page);
                         page_tx.send(page);
                     }

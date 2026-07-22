@@ -31,6 +31,7 @@ use crate::hr_zones::{
 };
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
+use crate::page::Page;
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
@@ -483,12 +484,16 @@ pub struct Snapshot {
     pub route_elev: Option<RouteElevView>,
     /// The race-day countdown + feasibility, or `None` until pushed.
     pub race_day: Option<RaceDayView>,
-    /// The tier-1 flash slot's per-run point cap
-    /// ([`crate::flash_store::MAX_POINTS_PER_RUN`]) has been reached: further GPS
-    /// points are dropped from the stored track while the totals keep accruing.
-    /// Lets the face surface the truncation on the wrist instead of it being a
-    /// cable-only `warn!`.
-    pub track_full: bool,
+    /// The flash track's decimation factor: 1 = full resolution, `k` = one
+    /// stored point per `k` accepted fixes after slot-full thinning
+    /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
+    /// surface the reduced stored resolution on the wrist instead of it being
+    /// a cable-only `warn!`; the WHOLE run is still represented.
+    pub track_thinning: u8,
+    /// The effective BTN3 page cycle for this snapshot (bit = [`Page::bit`]):
+    /// data-present pages ∩ the curated set, Dashboard always included. The
+    /// button task walks it and the page indicator counts it.
+    pub pages_mask: u32,
 }
 
 impl Snapshot {
@@ -607,12 +612,12 @@ pub struct Recorder {
     /// post-gap re-anchor — see [`GPS_REANCHOR_AFTER_S`]). Read-only
     /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
     last_fix_stored: bool,
-    /// Count of anchor-adopting fixes this run — the points the app's flash
-    /// run-store writes. Once it reaches [`crate::flash_store::MAX_POINTS_PER_RUN`]
-    /// the tier-1 slot is full and further points are silently dropped, so the
-    /// `Snapshot`'s `track_full` flag surfaces the truncation on the wrist rather
-    /// than leaving it a cable-only `warn!`.
-    stored_points: u32,
+    /// The flash writer's decimation factor, fed back by the app's record task
+    /// after a slot-full thinning ([`run_store::RunWriter::push_point_bounded`]):
+    /// 1 = full resolution, `k` = one stored point per `k` accepted fixes. The
+    /// `Snapshot`'s `track_thinning` surfaces the reduced resolution on the
+    /// wrist rather than leaving it a cable-only `warn!`.
+    track_thinning: u8,
     /// 1-based number of the lap in progress; 0 while idle.
     lap_index: u16,
     /// Run totals at the current lap's start — the anchors lap-relative
@@ -621,6 +626,12 @@ pub struct Recorder {
     lap_start_elapsed_s: u32,
     lap_start_moving_s: u32,
     last_lap: Option<Lap>,
+    /// Closed laps awaiting flash persistence, drained by the app's record
+    /// task via [`pop_closed_lap`](Recorder::pop_closed_lap). A queue rather
+    /// than `last_lap` alone because one throttled-mode fix can close several
+    /// laps at once and each must reach the stored blob. Sized for the worst
+    /// realistic multi-close (a long dropout in Expedition mode).
+    pending_laps: heapless::Deque<Lap, 16>,
     /// Streaming grade estimate for live GAP, fed each accepted fix with the
     /// baro-preferred altitude.
     gap: GapEstimator,
@@ -697,6 +708,21 @@ pub struct Recorder {
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
     race_day: Option<RaceDayView>,
+    /// Whether the nav task holds a loaded course — the Nav page's data
+    /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
+    /// (the recorder stays course-agnostic; this is a presence bit, not the
+    /// course).
+    course_loaded: bool,
+    /// The runner's curated page set, from settings sync
+    /// ([`set_pages_enabled`](Recorder::set_pages_enabled)); bit =
+    /// [`Page::bit`]. Default all-enabled.
+    pages_enabled: u32,
+    /// Whether the BTN3 cycle skips pages whose backing data is absent
+    /// ([`set_hide_empty_pages`](Recorder::set_hide_empty_pages)). Default on:
+    /// an unsynced watch cycles ~10 live pages instead of 32, and a page
+    /// appears the moment its data does. Off restores the full fixed cycle
+    /// (every empty state stays visitable).
+    hide_empty_pages: bool,
 }
 
 impl Default for Recorder {
@@ -717,12 +743,13 @@ impl Recorder {
             current_speed_mps: 0.0,
             last: None,
             last_fix_stored: false,
-            stored_points: 0,
+            track_thinning: 1,
             lap_index: 0,
             lap_start_distance_m: 0.0,
             lap_start_elapsed_s: 0,
             lap_start_moving_s: 0,
             last_lap: None,
+            pending_laps: heapless::Deque::new(),
             gap: GapEstimator::new(),
             baro_alt_m: None,
             hr_bpm: None,
@@ -753,7 +780,36 @@ impl Recorder {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            course_loaded: false,
+            pages_enabled: u32::MAX,
+            hide_empty_pages: true,
         }
+    }
+
+    /// Presence bit for the Nav page: the nav task holds a loaded course.
+    pub fn set_course_loaded(&mut self, loaded: bool) {
+        self.course_loaded = loaded;
+    }
+
+    /// The flash writer's decimation factor, fed back by the app's record
+    /// task after a slot-full thinning; clamps to the display's `u8` (a
+    /// factor past 255 is indistinguishable on a glance row). Reset to full
+    /// resolution on [`start`](Recorder::start) with the rest of the run
+    /// state.
+    pub fn set_track_thinning(&mut self, factor: u32) {
+        self.track_thinning = factor.clamp(1, u8::MAX as u32) as u8;
+    }
+
+    /// The curated page set from settings sync (bit = [`Page::bit`]). Any
+    /// mask is accepted — [`Page::next_in`] force-includes the Dashboard, so
+    /// even an all-zero push can't empty the cycle.
+    pub fn set_pages_enabled(&mut self, mask: u32) {
+        self.pages_enabled = mask;
+    }
+
+    /// Whether the cycle skips data-less pages (see the field doc).
+    pub fn set_hide_empty_pages(&mut self, hide: bool) {
+        self.hide_empty_pages = hide;
     }
 
     /// Expected seconds between incoming fixes, from the selected GNSS mode
@@ -848,12 +904,19 @@ impl Recorder {
     /// Load the roadbook checkpoints for the current course (pushed pre-built,
     /// see [`RoadbookCheckpoint`]). Replaces any existing set and caps at
     /// [`MAX_PUSHED_LEGS`] rather than growing. Empty legs leave the Roadbook +
-    /// Fuel pages inactive.
+    /// Fuel pages inactive. The checkpoint curve doubles as the virtual
+    /// partner's terrain schedule ([`crate::pacer::Pacer::set_schedule`]) —
+    /// the phone allocated `projected_elapsed_s` by grade-adjusted effort, so
+    /// the pacer grades a climb honestly; an empty or shapeless roadbook
+    /// degrades the partner back to even pace.
     pub fn set_roadbook(&mut self, legs: &[RoadbookCheckpoint]) {
         self.roadbook_legs.clear();
+        let mut schedule: heapless::Vec<(f64, u32), MAX_PUSHED_LEGS> = heapless::Vec::new();
         for leg in legs.iter().take(MAX_PUSHED_LEGS) {
             let _ = self.roadbook_legs.push(*leg);
+            let _ = schedule.push((leg.cum_dist_m, leg.projected_elapsed_s));
         }
+        self.pacer.set_schedule(&schedule);
     }
 
     /// Load the synced goal-race pace (seconds per km) the TrainingPaces page
@@ -992,6 +1055,13 @@ impl Recorder {
         self.last_fix_stored
     }
 
+    /// Drain one closed lap awaiting flash persistence (oldest first). The
+    /// app's record task pops after every event and writes each as a v2 lap
+    /// record, so laps land in the stored blob in close order exactly once.
+    pub fn pop_closed_lap(&mut self) -> Option<Lap> {
+        self.pending_laps.pop_front()
+    }
+
     /// Begin a run. Only valid from `Idle`; a second call is inert so a
     /// re-issued start can't reset a run in progress.
     pub fn start(&mut self, now_s: u32) {
@@ -1006,12 +1076,13 @@ impl Recorder {
         self.distance_m = 0.0;
         self.current_speed_mps = 0.0;
         self.last = None;
-        self.stored_points = 0;
+        self.track_thinning = 1;
         self.lap_index = 1;
         self.lap_start_distance_m = 0.0;
         self.lap_start_elapsed_s = 0;
         self.lap_start_moving_s = 0;
         self.last_lap = None;
+        self.pending_laps.clear();
         self.zone_time_s = [0; ZONE_COUNT];
         self.pace_bucket_m = [0.0; PACE_BUCKET_COUNT];
         // Fresh grade anchors for the new run; the sticky baro altitude and HR
@@ -1102,7 +1173,6 @@ impl Recorder {
                 self.last = Some(*fix);
                 self.current_speed_mps = fix.speed_mps.max(0.0);
                 self.last_fix_stored = true;
-                self.stored_points = self.stored_points.saturating_add(1);
                 self.feed_gap(fix);
                 return;
             }
@@ -1140,7 +1210,6 @@ impl Recorder {
                 self.current_speed_mps = fix.speed_mps.max(0.0);
                 self.last = Some(*fix);
                 self.last_fix_stored = true;
-                self.stored_points = self.stored_points.saturating_add(1);
                 self.feed_gap(fix);
             }
             return;
@@ -1175,7 +1244,6 @@ impl Recorder {
         }
         self.last = Some(*fix);
         self.last_fix_stored = true;
-        self.stored_points = self.stored_points.saturating_add(1);
         self.feed_gap(fix);
         // Distance only moves here, so this is the one place the partner's
         // finish crossing can happen.
@@ -1240,12 +1308,17 @@ impl Recorder {
         let open_moving = self.moving_s - self.lap_start_moving_s;
         let lap_elapsed = libm::round(open_elapsed as f64 * frac) as u32;
         let lap_moving = libm::round(open_moving as f64 * frac) as u32;
-        self.last_lap = Some(Lap {
+        let closed = Lap {
             index: self.lap_index,
             distance_m: lap_distance,
             elapsed_s: lap_elapsed,
             moving_s: lap_moving,
-        });
+        };
+        self.last_lap = Some(closed);
+        // Queue for flash persistence (v2 lap records). A full queue drops
+        // the NEW close from storage only — display state above is already
+        // set — and can only happen if the app stops draining between events.
+        let _ = self.pending_laps.push_back(closed);
         self.lap_index = self.lap_index.saturating_add(1);
         self.lap_start_distance_m = close_distance_m;
         self.lap_start_elapsed_s = self.lap_start_elapsed_s.saturating_add(lap_elapsed);
@@ -1257,7 +1330,7 @@ impl Recorder {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        Snapshot {
+        let mut snap = Snapshot {
             state: self.state,
             distance_m: self.distance_m,
             elapsed_s: self.elapsed_s(),
@@ -1305,8 +1378,74 @@ impl Recorder {
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
             race_day: self.race_day,
-            track_full: self.stored_points >= crate::flash_store::MAX_POINTS_PER_RUN,
-        }
+            track_thinning: self.track_thinning,
+            pages_mask: 0,
+        };
+        snap.pages_mask = self.pages_mask(&snap);
+        snap
+    }
+
+    /// The effective BTN3 cycle for this snapshot: the pages whose data is
+    /// present (unless [`hide_empty_pages`](Recorder::set_hide_empty_pages)
+    /// is off), intersected with the runner's curated set, Dashboard always
+    /// included. [`Page::next_in`] / [`Page::prev_in`] walk exactly this
+    /// mask, and the page-position indicator counts it — so the dot row says
+    /// how many pages the cycle actually has right now.
+    fn pages_mask(&self, s: &Snapshot) -> u32 {
+        let available = if self.hide_empty_pages {
+            self.available_pages(s)
+        } else {
+            u32::MAX
+        };
+        (available & self.pages_enabled) | Page::Dashboard.bit()
+    }
+
+    /// Which pages have something real to show for this snapshot. The core
+    /// run pages (Dashboard / Distance / Pace / Lap / Splits) and the
+    /// Back-to-start safety page are always available; every other page is
+    /// available exactly when the data behind its honest empty state exists —
+    /// the same conditions the `face` renderers key their inactive states on.
+    fn available_pages(&self, s: &Snapshot) -> u32 {
+        let mut m = Page::Dashboard.bit()
+            | Page::Distance.bit()
+            | Page::Pace.bit()
+            | Page::Lap.bit()
+            | Page::Splits.bit()
+            | Page::BackToStart.bit();
+        let mut set = |page: Page, on: bool| {
+            if on {
+                m |= page.bit();
+            }
+        };
+        // Zone time banks only while an HR reading is live, so any banked
+        // second means the sensor is (or was) on this run.
+        set(Page::Zones, s.zone_time_s.iter().any(|&t| t > 0));
+        set(Page::Pacer, s.pacer.is_some());
+        set(Page::RacePredictor, s.race_prediction.is_some());
+        set(Page::TrainingLoad, s.training_stress.is_some());
+        set(Page::DistanceBand, s.band.is_some());
+        set(Page::CutoffEta, s.cutoff.is_some());
+        set(Page::Roadbook, s.roadbook.is_some());
+        set(Page::Fuel, s.fuel.is_some());
+        set(Page::Nav, self.course_loaded);
+        set(Page::GearWear, s.gear.is_some());
+        set(Page::TrainingPaces, s.training_paces.is_some());
+        set(Page::Fitness, s.fitness.is_some());
+        set(Page::ElevationProfile, s.elev_profile.len > 0);
+        set(Page::Recap, s.recap.is_some());
+        set(Page::Streaks, s.streaks.is_some());
+        set(Page::RunStats, s.run_stats.is_some());
+        set(Page::PrRecency, s.pr_recency.is_some());
+        set(Page::PlanReplan, s.plan_replan.is_some());
+        set(Page::PlanAdaptive, s.plan_adaptive.is_some());
+        set(Page::Readiness, s.readiness.is_some());
+        set(Page::Goals, s.goals.is_some());
+        set(Page::TurnCue, s.turn_cue.is_some());
+        set(Page::RouteSimplify, s.route_simplify.is_some());
+        set(Page::AutoEffort, s.auto_effort.is_some());
+        set(Page::RouteElev, s.route_elev.is_some());
+        set(Page::RaceDay, s.race_day.is_some());
+        m
     }
 
     /// The training-pace zones derived from the synced goal-race pace, or `None`
@@ -1937,34 +2076,25 @@ mod tests {
     }
 
     #[test]
-    fn track_full_flips_when_the_flash_point_cap_is_reached() {
-        use crate::flash_store::MAX_POINTS_PER_RUN;
+    fn track_thinning_is_fed_back_clamped_and_reset_on_start() {
         let mut r = Recorder::new();
         r.start(0);
-        assert!(!r.snapshot().track_full, "empty run is not full");
+        assert_eq!(r.snapshot().track_thinning, 1, "full resolution by default");
 
-        // The first fix seeds the anchor (1 stored point); each subsequent
-        // accepted move (~5.5 m at 1 s → 5.5 m/s, over the 3 m threshold and
-        // under the 10 m/s ceiling) adds one. Feed exactly the cap.
-        let mut lat = 40.0;
-        for i in 0..MAX_POINTS_PER_RUN {
-            r.on_fix(&fix(lat, -105.0, 5.0, i));
-            assert!(r.last_fix_stored(), "fix {i} should be an accepted anchor");
-            if i + 1 < MAX_POINTS_PER_RUN {
-                assert!(!r.snapshot().track_full, "not full yet at {}", i + 1);
-            }
-            lat += 0.00005;
-        }
-        assert!(
-            r.snapshot().track_full,
-            "the {MAX_POINTS_PER_RUN}-point tier-1 slot is now full"
-        );
+        // The app's record task feeds the writer's factor back after a thin.
+        r.set_track_thinning(4);
+        assert_eq!(r.snapshot().track_thinning, 4);
+        // Clamped into the display's u8; zero can't fake full resolution off.
+        r.set_track_thinning(0);
+        assert_eq!(r.snapshot().track_thinning, 1);
+        r.set_track_thinning(1_024);
+        assert_eq!(r.snapshot().track_thinning, u8::MAX);
 
-        // A fresh run clears it — the flag is per-run, not sticky across starts.
+        // A fresh run resets it — per-run state, not sticky across starts.
         let mut r2 = Recorder::new();
+        r2.set_track_thinning(8);
         r2.start(0);
-        r2.on_fix(&fix(40.0, -105.0, 5.0, 0));
-        assert!(!r2.snapshot().track_full);
+        assert_eq!(r2.snapshot().track_thinning, 1);
     }
 
     #[test]
@@ -2544,6 +2674,131 @@ mod tests {
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
         assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
         assert!(f.carry.is_some());
+    }
+
+    #[test]
+    fn roadbook_arms_the_terrain_pacer_and_an_empty_one_disarms_it() {
+        let mut r = Recorder::new();
+        r.set_pacer_goal(10_000, 3_600);
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert!(
+            !r.snapshot().pacer.expect("goal armed").terrain_aware,
+            "no roadbook yet: even-pace partner"
+        );
+        // A climb-first roadbook (start + aid + finish, phone-allocated).
+        r.set_roadbook(&[
+            RoadbookCheckpoint {
+                cum_dist_m: 0.0,
+                leg_dist_m: 0.0,
+                projected_elapsed_s: 0,
+                cutoff: None,
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 5_000.0,
+                leg_dist_m: 5_000.0,
+                projected_elapsed_s: 2_400,
+                cutoff: None,
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 10_000.0,
+                leg_dist_m: 5_000.0,
+                projected_elapsed_s: 3_600,
+                cutoff: None,
+                is_refill: false,
+            },
+        ]);
+        assert!(
+            r.snapshot().pacer.unwrap().terrain_aware,
+            "the pushed checkpoint curve doubles as the partner schedule"
+        );
+        // Clearing the roadbook drops the terrain partner with it.
+        r.set_roadbook(&[]);
+        assert!(!r.snapshot().pacer.unwrap().terrain_aware);
+    }
+
+    #[test]
+    fn pages_mask_hides_empty_pages_by_default() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        let mask = r.snapshot().pages_mask;
+        // The core run pages + Back-to-start are always in.
+        for p in [
+            Page::Dashboard,
+            Page::Distance,
+            Page::Pace,
+            Page::Lap,
+            Page::Splits,
+            Page::BackToStart,
+        ] {
+            assert_ne!(mask & p.bit(), 0, "{p:?} must always be in the cycle");
+        }
+        // Nothing synced, no course, no HR: the sync-fed glances are out.
+        for p in [
+            Page::Zones,
+            Page::Roadbook,
+            Page::Fuel,
+            Page::Nav,
+            Page::GearWear,
+            Page::Fitness,
+            Page::Recap,
+            Page::RaceDay,
+        ] {
+            assert_eq!(mask & p.bit(), 0, "{p:?} has no data and must be hidden");
+        }
+    }
+
+    #[test]
+    fn pages_appear_the_moment_their_data_does() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert_eq!(r.snapshot().pages_mask & Page::Pacer.bit(), 0);
+        r.set_pacer_goal(10_000, 3_000);
+        assert_ne!(r.snapshot().pages_mask & Page::Pacer.bit(), 0);
+        assert_eq!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+        r.set_course_loaded(true);
+        assert_ne!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+        r.set_course_loaded(false);
+        assert_eq!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+    }
+
+    #[test]
+    fn hide_empty_off_restores_the_full_fixed_cycle() {
+        let mut r = Recorder::new();
+        r.set_hide_empty_pages(false);
+        r.start(0);
+        assert_eq!(
+            r.snapshot().pages_mask,
+            u32::MAX,
+            "every page visitable, empty states and all"
+        );
+    }
+
+    #[test]
+    fn curated_pages_intersect_and_dashboard_is_forced() {
+        let mut r = Recorder::new();
+        r.set_hide_empty_pages(false);
+        r.set_pages_enabled(Page::Pace.bit() | Page::Splits.bit());
+        r.start(0);
+        let mask = r.snapshot().pages_mask;
+        assert_eq!(
+            mask,
+            Page::Dashboard.bit() | Page::Pace.bit() | Page::Splits.bit()
+        );
+        // Even an all-zero push keeps the Dashboard reachable.
+        r.set_pages_enabled(0);
+        assert_eq!(r.snapshot().pages_mask, Page::Dashboard.bit());
+        // With hide-empty back on, curation still can't resurrect a dataless
+        // page: enabled ∩ available.
+        r.set_hide_empty_pages(true);
+        r.set_pages_enabled(Page::Fuel.bit() | Page::Distance.bit());
+        let mask = r.snapshot().pages_mask;
+        assert_eq!(mask & Page::Fuel.bit(), 0, "no roadbook, no Fuel page");
+        assert_ne!(mask & Page::Distance.bit(), 0);
     }
 
     #[test]

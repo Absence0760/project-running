@@ -36,6 +36,20 @@
 //! on this build `run_flash`'s backend is `nrf_softdevice::Flash`, so every
 //! erase/write is arbitrated by the S140 (see the `run_flash` module doc's
 //! backend-split note).
+//!
+//! Security (issue #598): the service is **fail-closed against unpaired
+//! peers**. Every characteristic requires an encrypted link
+//! (`security = "justworks"` — Security Mode 1 Level 2), advertising is
+//! pairable ([`peripheral::advertise_pairable`]) with a bonding
+//! [`SecurityHandler`], and the one bond persists to the flash config page
+//! (`run_flash::persist_bond`) so a paired phone survives a power cycle. An
+//! unbonded central can connect and see the service structure, but every
+//! read / write / CCCD subscription on it is rejected by the SoftDevice until
+//! pairing completes — run tracks (location history), settings pushes, and
+//! course pushes never cross an unencrypted link. Just-works pairing carries
+//! no MITM protection: the watch has no keyboard and its display code has no
+//! passkey UI at tier 1, so an active in-range attacker during the one-time
+//! pairing itself is accepted as out of scope (documented, not hidden).
 
 #[cfg(not(feature = "ble"))]
 #[embassy_executor::task]
@@ -44,7 +58,7 @@ pub async fn run() {
 }
 
 #[cfg(feature = "ble")]
-pub use imp::{config, run, softdevice_task, Server};
+pub use imp::{bond_persist, config, run, softdevice_task, Bonder, Server};
 
 #[cfg(feature = "ble")]
 mod imp {
@@ -64,9 +78,15 @@ mod imp {
     use nrf_softdevice::ble::advertisement_builder::{
         Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList,
     };
-    use nrf_softdevice::ble::{gatt_server, peripheral};
+    use nrf_softdevice::ble::gatt_server::{get_sys_attrs, set_sys_attrs};
+    use nrf_softdevice::ble::security::{IoCapabilities, SecurityHandler};
+    use nrf_softdevice::ble::{
+        gatt_server, peripheral, Address, Connection, EncryptionInfo, IdentityKey,
+        IdentityResolutionKey, MasterId, SecurityMode,
+    };
     use nrf_softdevice::{raw, Softdevice};
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
+    use watch_core::flash_store::BondRecord;
     use watch_core::run_store::{
         ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
     };
@@ -94,35 +114,227 @@ mod imp {
     /// per slot. `flash_store::SLOT_COUNT` runs fit in one read/notify.
     const MANIFEST_CAP: usize = MANIFEST_HEADER_LEN + flash_store::SLOT_COUNT * MANIFEST_ENTRY_LEN;
 
+    // Every characteristic requires an encrypted (paired) link — issue #598.
+    // `justworks` = Security Mode 1 Level 2: the SoftDevice rejects any read,
+    // write, or CCCD subscription from an unencrypted connection, so the data
+    // plane is fail-closed while the service remains discoverable for pairing.
     #[nrf_softdevice::gatt_service(uuid = "d1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f")]
     pub struct LinkService {
-        #[characteristic(uuid = "d1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f", read, notify)]
+        #[characteristic(
+            uuid = "d1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            read,
+            notify,
+            security = "justworks"
+        )]
         frame: Vec<u8, FRAME_CAP>,
         /// Finished-run manifest (README step 7). Read for the list; notified
         /// each second so a connected phone sees a run appear live.
-        #[characteristic(uuid = "d1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f", read, notify)]
+        #[characteristic(
+            uuid = "d1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            read,
+            notify,
+            security = "justworks"
+        )]
         run_manifest: Vec<u8, MANIFEST_CAP>,
         /// Run-chunk pull (README step 7). The phone WRITES a `ChunkRequest`;
         /// the watch notifies back that byte slice of the run blob.
-        #[characteristic(uuid = "d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write, notify)]
+        #[characteristic(
+            uuid = "d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            notify,
+            security = "justworks"
+        )]
         run_chunk: Vec<u8, FRAME_CAP>,
         /// Settings push. The phone WRITES a `settings::WatchSettings` frame; the
         /// watch decodes it and publishes to `state::SETTINGS`, which the record
         /// task applies to the recorder + alert engine. Write-only — no readback.
-        #[characteristic(uuid = "d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write)]
+        #[characteristic(
+            uuid = "d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
         settings: Vec<u8, MAX_SETTINGS_LEN>,
         /// Course push (README course-push path). The phone WRITES chunked
         /// `course_store` frame bytes (`offset(2, u16 LE) | payload`); the watch
         /// reassembles them, decodes the `Course`, and publishes it to the nav
         /// task via `state::COURSE`. Write-only — a fire-and-forget push like
         /// `settings`; a whole course exceeds one notification, so it is chunked.
-        #[characteristic(uuid = "d1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write)]
+        #[characteristic(
+            uuid = "d1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
         course: Vec<u8, COURSE_CHUNK_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
     pub struct Server {
         link: LinkService,
+    }
+
+    /// One remembered peer: the SoftDevice key set a bond produces.
+    #[derive(Clone, Copy)]
+    struct Peer {
+        master_id: MasterId,
+        key: EncryptionInfo,
+        peer_id: IdentityKey,
+    }
+
+    impl Peer {
+        /// The flash-persistable form (`watch_core::flash_store::BondRecord` —
+        /// plain bytes, no SoftDevice types, so the codec stays host-tested).
+        fn to_record(self) -> BondRecord {
+            BondRecord {
+                master_ediv: self.master_id.ediv,
+                master_rand: self.master_id.rand,
+                ltk: self.key.ltk,
+                enc_flags: self.key.flags,
+                addr_flags: self.peer_id.addr.flags,
+                addr: self.peer_id.addr.bytes,
+                irk: self.peer_id.irk.as_raw().irk,
+            }
+        }
+
+        fn from_record(rec: &BondRecord) -> Self {
+            Peer {
+                master_id: MasterId {
+                    ediv: rec.master_ediv,
+                    rand: rec.master_rand,
+                },
+                key: EncryptionInfo {
+                    ltk: rec.ltk,
+                    flags: rec.enc_flags,
+                },
+                peer_id: IdentityKey {
+                    irk: IdentityResolutionKey::from_raw(raw::ble_gap_irk_t { irk: rec.irk }),
+                    addr: Address {
+                        flags: rec.addr_flags,
+                        bytes: rec.addr,
+                    },
+                },
+            }
+        }
+    }
+
+    /// Just-works LESC bonding handler (issue #598). Holds the ONE remembered
+    /// phone (a watch pairs with its owner's phone, not a fleet) plus that
+    /// peer's GATT system attributes (CCCD state). `on_bonded` runs in the
+    /// SoftDevice event context and cannot await, so it stages the keys and
+    /// signals [`BOND_SAVED`]; the `run` loop persists them to the flash
+    /// config page. A NEW pairing replaces the old bond — losing a phone must
+    /// not brick the watch — which is the standard single-bond wearable
+    /// trade-off: possession of the watch (re-pair) beats possession of old
+    /// radio captures.
+    pub struct Bonder {
+        peer: Cell<Option<Peer>>,
+        sys_attrs: RefCell<heapless::Vec<u8, 64>>,
+    }
+
+    impl Default for Bonder {
+        fn default() -> Self {
+            Bonder {
+                peer: Cell::new(None),
+                sys_attrs: RefCell::new(heapless::Vec::new()),
+            }
+        }
+    }
+
+    /// Signals [`bond_persist`] that `on_bonded` staged fresh keys to persist.
+    static BOND_SAVED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
+    /// Persist freshly-staged bond keys to the flash config page. A DEDICATED
+    /// task, not a branch of the connection's serve loop: many centrals
+    /// disconnect immediately after pairing completes, and a disconnect
+    /// resolves the `select(gatt, stream)` in [`run`] and DROPS the stream
+    /// future — which would cancel an in-flight `persist_bond` mid-erase and
+    /// (fail-closed but silently) lose both the bond and the stored GNSS mode
+    /// on exactly the connection where bonding just happened. This task is
+    /// never cancelled, so the erase+write transaction always runs to
+    /// completion. L4 best-effort — a failed write only means re-pairing
+    /// after reboot, never a broken link now.
+    #[embassy_executor::task]
+    pub async fn bond_persist(store: &'static SharedStore, bonder: &'static Bonder) -> ! {
+        loop {
+            BOND_SAVED.wait().await;
+            if let Some(rec) = bonder.peer.get().map(Peer::to_record) {
+                store.lock().await.persist_bond(rec).await;
+            }
+        }
+    }
+
+    impl SecurityHandler for Bonder {
+        fn io_capabilities(&self) -> IoCapabilities {
+            // No keyboard, and the tier-1 face has no passkey page: just-works
+            // (no MITM protection during the one-time pairing — see the module
+            // doc's threat note).
+            IoCapabilities::None
+        }
+
+        fn can_bond(&self, _conn: &Connection) -> bool {
+            true
+        }
+
+        fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
+            info!("ble: security update {:?}", security_mode);
+        }
+
+        fn on_bonded(
+            &self,
+            _conn: &Connection,
+            master_id: MasterId,
+            key: EncryptionInfo,
+            peer_id: IdentityKey,
+        ) {
+            info!("ble: bonded (ediv {=u16})", master_id.ediv);
+            // Fresh bond, fresh CCCD state.
+            self.sys_attrs.borrow_mut().clear();
+            self.peer.set(Some(Peer {
+                master_id,
+                key,
+                peer_id,
+            }));
+            BOND_SAVED.signal(());
+        }
+
+        fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+            self.peer
+                .get()
+                .and_then(|peer| (master_id == peer.master_id).then_some(peer.key))
+        }
+
+        fn save_sys_attrs(&self, conn: &Connection) {
+            if let Some(peer) = self.peer.get() {
+                if peer.peer_id.is_match(conn.peer_address()) {
+                    let mut sys_attrs = self.sys_attrs.borrow_mut();
+                    let capacity = sys_attrs.capacity();
+                    unwrap!(sys_attrs.resize(capacity, 0));
+                    match get_sys_attrs(conn, &mut sys_attrs) {
+                        Ok(len) => sys_attrs.truncate(len),
+                        Err(e) => {
+                            warn!("ble: get_sys_attrs failed {:?}", e);
+                            sys_attrs.clear();
+                        }
+                    }
+                }
+            }
+        }
+
+        fn load_sys_attrs(&self, conn: &Connection) {
+            let attrs = self.sys_attrs.borrow();
+            let attrs = if self
+                .peer
+                .get()
+                .map(|peer| peer.peer_id.is_match(conn.peer_address()))
+                .unwrap_or(false)
+            {
+                (!attrs.is_empty()).then_some(attrs.as_slice())
+            } else {
+                None
+            };
+            if let Err(e) = set_sys_attrs(conn, attrs) {
+                warn!("ble: set_sys_attrs failed {:?}", e);
+            }
+        }
     }
 
     /// The SoftDevice's own background task — must be spawned exactly once and
@@ -203,12 +415,15 @@ mod imp {
     /// connected, push one status frame per second (only once the phone has
     /// subscribed, tracked via the CCCD write event); keep the run manifest
     /// characteristic fresh; and answer each `run_chunk` write with the
-    /// requested slice of the run blob (README step 7).
+    /// requested slice of the run blob (README step 7). Bond persistence
+    /// lives in [`bond_persist`], deliberately outside this task's
+    /// connection-scoped select (issue #598).
     #[embassy_executor::task]
     pub async fn run(
         sd: &'static Softdevice,
         server: &'static Server,
         store: &'static SharedStore,
+        bonder: &'static Bonder,
     ) -> ! {
         // Receivers are acquired ONCE: a `Watch` hands out a fixed number and
         // re-subscribing on every reconnect would exhaust it. `latest`/`elev`
@@ -220,22 +435,40 @@ mod imp {
         let mut latest = None;
         let mut elev = None;
 
+        // Re-arm the bonder with the bond persisted across the power cycle
+        // (fail-closed: an erased/corrupt record just means re-pair).
+        if let Some(rec) = store.lock().await.read_bond() {
+            info!(
+                "ble: restored persisted bond (ediv {=u16})",
+                rec.master_ediv
+            );
+            bonder.peer.set(Some(Peer::from_record(&rec)));
+        }
+
         loop {
             let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
                 adv_data: &ADV_DATA,
                 scan_data: &SCAN_DATA,
             };
-            let conn =
-                match peripheral::advertise_connectable(sd, adv, &peripheral::Config::default())
-                    .await
-                {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        warn!("ble: advertise failed {:?}", e);
-                        Timer::after(Duration::from_secs(1)).await;
-                        continue;
-                    }
-                };
+            // Pairable: the connection carries the security handler, so a
+            // central's pairing request negotiates just-works LESC bonding
+            // instead of being rejected — and until it does, every
+            // characteristic's justworks gate keeps the data plane closed.
+            let conn = match peripheral::advertise_pairable(
+                sd,
+                adv,
+                &peripheral::Config::default(),
+                bonder,
+            )
+            .await
+            {
+                Ok(conn) => conn,
+                Err(e) => {
+                    warn!("ble: advertise failed {:?}", e);
+                    Timer::after(Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
             info!("ble: phone connected");
 
             // Request a long connection interval. The default is 7.5 ms (built

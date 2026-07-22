@@ -205,7 +205,7 @@ pub fn face_rows(
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, false),
     }
 }
 
@@ -283,7 +283,7 @@ pub fn page_rows(
     mode: GnssMode,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
             Page::Distance => glance(
@@ -641,11 +641,12 @@ fn glance(
         GlanceMetric::Distance => {
             write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km);
             // Row 7 is otherwise free on the Distance page (the Pace page uses it
-            // for GAP): surface an honest warning when the tier-1 flash slot is
-            // full, so the runner knows the STORED GPS track has stopped even
-            // though the distance/time above keep accruing.
-            if snap.track_full {
-                let _ = write!(rows[7], "! TRACK FULL");
+            // for GAP): surface an honest notice once the tier-1 flash slot has
+            // forced the stored track down to a coarser resolution — the whole
+            // run is still kept (decimated, not truncated), and the distance /
+            // time above are unaffected.
+            if snap.track_thinning > 1 {
+                let _ = write!(rows[7], "! TRACK 1/{} RES", snap.track_thinning);
             }
         }
         GlanceMetric::Pace => {
@@ -826,6 +827,9 @@ fn pacer_glance(
                 PaceVerdict::Behind => "BEHIND",
             };
             let _ = write!(rows[2], "{:<14}{}", "PACER", verdict);
+            if status.terrain_aware {
+                let _ = write!(rows[3], "TERRAIN SPLITS");
+            }
 
             let goal_km = (status.goal.distance_m as f64 / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<5}{:.2} KM", "GOAL", goal_km);
@@ -2101,16 +2105,27 @@ fn dashboard(
 /// the mode tag with its battery figure. The `~` marks the hours as the
 /// projection they are (tier-2 estimates derived in [`crate::gnss_mode`]; the
 /// tier-1 bench can't measure power at all).
+///
+/// While `animate` is on (the post-press interaction window — exactly when
+/// someone is working the buttons), the title row alternates between the
+/// brand and a BTN3 hint (`B3 MODE / HOLD REZERO`), because nothing on the
+/// hardware says what the un-labelled DK buttons do. Outside the window the
+/// brand holds steady, keeping the idle face free of per-second redraws.
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
     mode: GnssMode,
+    animate: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let _ = write!(rows[0], "THREKIR");
+    if animate && uptime_s % 4 >= 2 {
+        let _ = write!(rows[0], "B3 MODE / HOLD REZERO");
+    } else {
+        let _ = write!(rows[0], "THREKIR");
+    }
     // "EST" marks the battery figure as an unmeasured estimate, not a
     // guaranteed runtime — the tier-1 bench can't measure power at all, so the
     // number is a tier-2 projection derived in `gnss_mode`. Reading it as a spec
@@ -2368,7 +2383,8 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
-            track_full: false,
+            track_thinning: 1,
+            pages_mask: u32::MAX,
         }
     }
 
@@ -2699,6 +2715,54 @@ mod tests {
     }
 
     #[test]
+    fn idle_title_alternates_a_btn3_hint_inside_the_interaction_window() {
+        // Post-press (animate on): the brand and the button hint share row 0
+        // on a 2 s / 2 s cadence — the hint shows exactly while someone is
+        // working the un-labelled buttons.
+        let rows = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            None,
+            None,
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str(), "B3 MODE / HOLD REZERO");
+        assert!(rows[0].len() <= COLS);
+        let rows = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            None,
+            None,
+            None,
+            NavView::NoCourse,
+            None,
+            44,
+            true,
+        );
+        assert_eq!(rows[0].as_str(), "THREKIR");
+        // Window closed: the brand holds steady whatever the second, so an
+        // unattended idle face never redraws row 0.
+        for uptime in [42, 43, 44, 45] {
+            let rows = page_rows(
+                Page::Dashboard,
+                Some(&fix()),
+                None,
+                None,
+                None,
+                NavView::NoCourse,
+                None,
+                uptime,
+                false,
+            );
+            assert_eq!(rows[0].as_str(), "THREKIR");
+        }
+    }
+
+    #[test]
     fn idle_stale_fix_is_flagged_not_shown_as_fresh() {
         let rows = face_rows(Some(&fix()), None, None, None, 41 + STALE_AFTER_S + 3);
         assert_eq!(rows[2].as_str(), "GPS  STALE 8S");
@@ -2999,9 +3063,9 @@ mod tests {
     }
 
     #[test]
-    fn distance_page_warns_when_the_flash_track_is_full() {
+    fn distance_page_warns_when_the_flash_track_is_thinned() {
         let mut rec = snapshot(RecordState::Recording, 42_195.0);
-        rec.track_full = true;
+        rec.track_thinning = 4;
         let rows = page_rows(
             Page::Distance,
             Some(&fix()),
@@ -3013,15 +3077,11 @@ mod tests {
             42,
             true,
         );
-        // Row 7 (otherwise free on the Distance page) carries the honest warning.
-        assert!(
-            rows[7].as_str().contains("TRACK FULL"),
-            "row7 = {:?}",
-            rows[7].as_str()
-        );
+        // Row 7 (otherwise free on the Distance page) carries the honest notice.
+        assert_eq!(rows[7].as_str(), "! TRACK 1/4 RES");
 
-        // Absent when the track isn't full.
-        rec.track_full = false;
+        // Absent at full resolution.
+        rec.track_thinning = 1;
         let rows = page_rows(
             Page::Distance,
             Some(&fix()),
@@ -3335,6 +3395,7 @@ mod tests {
             projected_finish_s: Some(u32::MAX),
             verdict: PaceVerdict::OnPace,
             finished: false,
+            terrain_aware: false,
         });
         for page in [
             Page::Distance,
@@ -3470,6 +3531,7 @@ mod tests {
             projected_finish_s,
             verdict,
             finished: false,
+            terrain_aware: false,
         }
     }
 
@@ -3507,6 +3569,41 @@ mod tests {
                 .iter()
                 .all(Option::is_none)
         );
+    }
+
+    #[test]
+    fn pacer_glance_tags_a_terrain_allocated_partner() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        let mut status = pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000));
+        status.terrain_aware = true;
+        rec.pacer = Some(status);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "TERRAIN SPLITS");
+        // The flat partner leaves the row blank.
+        let mut flat = rec;
+        flat.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000)));
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&flat),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "");
     }
 
     #[test]

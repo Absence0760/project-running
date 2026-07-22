@@ -44,11 +44,11 @@ use watch_core::button::RecordCommand;
 use watch_core::cutoff_eta::CutoffLeg;
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
-use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
+use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::run_store::{verify_blob, RunWriter, TrackPoint};
+use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter, TrackPoint};
 use watch_core::settings::WatchSettings;
 use watch_core::trackback::Trackback;
 
@@ -70,7 +70,6 @@ struct OpenRun {
     writer: RunWriter<Vec<u8, SLOT_LEN>>,
     run_seq: u32,
     start_uptime_s: u32,
-    cap_warned: bool,
     /// Snapshot `elapsed_s` at the last mid-run flash checkpoint — the time-based
     /// checkpoint cadence measures against this.
     last_ckpt_elapsed_s: u32,
@@ -90,7 +89,6 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
             writer,
             run_seq,
             start_uptime_s,
-            cap_warned: false,
             last_ckpt_elapsed_s: 0,
             last_ckpt_points: 0,
         }),
@@ -102,19 +100,16 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
 }
 
 /// Append one accepted fix to the staged track, stamped with the latest HR +
-/// altitude. Silent no-op once the tier-1 per-run point cap is reached
-/// (recording totals keep accruing); warns once on the crossing.
-fn push_point(open: &mut OpenRun, fix: &Fix, bpm: Option<u8>, baro_alt_m: Option<f32>) {
-    if open.writer.point_count() >= MAX_POINTS_PER_RUN {
-        if !open.cap_warned {
-            warn!(
-                "record: run {=u32} hit tier-1 flash point cap ({=u32}); track truncated, recording continues",
-                open.run_seq, MAX_POINTS_PER_RUN
-            );
-            open.cap_warned = true;
-        }
-        return;
-    }
+/// altitude. The bounded push decimates instead of truncating when the tier-1
+/// slot fills (issue #599): the whole run stays represented at coarser
+/// resolution, and the new factor is returned so the recorder's snapshot can
+/// surface it on the wrist.
+fn push_point(
+    open: &mut OpenRun,
+    fix: &Fix,
+    bpm: Option<u8>,
+    baro_alt_m: Option<f32>,
+) -> Option<u32> {
     let point = TrackPoint {
         lat_e7: (fix.lat_deg * 1e7) as i32,
         lon_e7: (fix.lon_deg * 1e7) as i32,
@@ -122,9 +117,39 @@ fn push_point(open: &mut OpenRun, fix: &Fix, bpm: Option<u8>, baro_alt_m: Option
         ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
         bpm,
     };
-    if open.writer.push_point(&point).is_err() && !open.cap_warned {
-        warn!("record: staging buffer full for run {=u32}", open.run_seq);
-        open.cap_warned = true;
+    match open.writer.push_point_bounded(&point) {
+        PushOutcome::Thinned(k) => {
+            warn!(
+                "record: run {=u32} slot full — track thinned to 1/{=u32} resolution, whole run kept",
+                open.run_seq, k
+            );
+            Some(k)
+        }
+        PushOutcome::Stored | PushOutcome::Dropped => None,
+    }
+}
+
+/// Persist a just-closed lap into the staged blob (v2 lap record, stream
+/// order). Best-effort like the rest of the flash path: a full sink or the
+/// per-run stored-lap budget only warns — the RAM display state is what the
+/// runner reads mid-run.
+fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
+    let record = LapRecord {
+        index: lap.index,
+        lap_distance_dm: (lap.distance_m * 10.0).clamp(0.0, u32::MAX as f64) as u32,
+        split_s: lap.elapsed_s,
+        moving_s: lap.moving_s,
+    };
+    match open.writer.push_lap(&record) {
+        Ok(true) => {}
+        Ok(false) => warn!(
+            "record: run {=u32} lap {=u16} dropped from storage (stored-lap budget)",
+            open.run_seq, lap.index
+        ),
+        Err(_) => warn!(
+            "record: run {=u32} lap {=u16} dropped from storage (slot full)",
+            open.run_seq, lap.index
+        ),
     }
 }
 
@@ -381,6 +406,9 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => Some(s.along_m),
                 NavView::NoCourse | NavView::NoFix => None,
             });
+            // Presence bit for the page filter: NoFix still means a course is
+            // loaded — only NoCourse hides the Nav page from the cycle.
+            recorder.set_course_loaded(!matches!(nav, NavView::NoCourse));
             // The nav task owns the course, so it also carries the next turn
             // ahead; feed it to the recorder's TurnCue page (course-agnostic
             // recorder, same seam as the along-course distance above).
@@ -430,7 +458,9 @@ pub async fn run(store: &'static SharedStore) {
                 recorder.on_fix(&fix);
                 if recorder.last_fix_stored() {
                     if let Some(o) = open.as_mut() {
-                        push_point(o, &fix, bpm_u8(held), latest_baro_alt_m);
+                        if let Some(k) = push_point(o, &fix, bpm_u8(held), latest_baro_alt_m) {
+                            recorder.set_track_thinning(k);
+                        }
                     }
                     trackback.on_point(fix.lat_deg, fix.lon_deg, fix.uptime_s);
                     let view = trackback.view();
@@ -480,6 +510,15 @@ pub async fn run(store: &'static SharedStore) {
                     }
                 }
                 info!("record: command {} -> {}", cmd, state_str(now));
+            }
+        }
+
+        // Persist any laps this event closed (manual, auto, or a throttled
+        // fix that crossed several kilometre boundaries at once) — one v2 lap
+        // record each, in close order.
+        if let Some(o) = open.as_mut() {
+            while let Some(lap) = recorder.pop_closed_lap() {
+                push_lap(o, &lap);
             }
         }
 
@@ -584,6 +623,12 @@ fn apply_settings(
     }
     if let Some(f) = s.fuel {
         alerts.set_fuel_intervals(f.drink_interval_s, f.eat_interval_s);
+    }
+    if let Some(mask) = s.pages {
+        recorder.set_pages_enabled(mask);
+    }
+    if let Some(hide) = s.hide_empty_pages {
+        recorder.set_hide_empty_pages(hide);
     }
 }
 

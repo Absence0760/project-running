@@ -12,7 +12,21 @@
 //! vector the Dart decoder ([`sim_watch_sync.dart`]) asserts byte-for-byte, so
 //! a Rust-encode ↔ Dart-decode drift is caught at CI on both sides.
 //!
-//! Blob layout: `header (16) | point[N] (16 each) | footer (20)`.
+//! Blob layout: `header (16) | record[N] (16 each) | footer (20)`. Version 1
+//! records are all track points; version 2 (2026-07-21, issue #599) makes the
+//! point's reserved byte 15 a **record tag** — `0` = track point (so every v1
+//! blob is also a valid stream of tagged records), `1` = a closed lap — and
+//! lap records interleave with points in recording order. The header version
+//! byte is what keeps an old reader honest: a v1 decoder would misparse a lap
+//! record as a garbage GPS point, so v2 blobs carry version 2 and a v1-only
+//! reader rejects them outright instead of corrupting a track.
+//!
+//! Version 2 also lets the slot-bounded writer **decimate instead of
+//! truncate**: when the staging sink fills, every second stored point is
+//! dropped (laps are never dropped) and the incoming stream is thinned to
+//! match, so a full slot always holds the WHOLE run at coarser resolution
+//! rather than only its first minutes ([`RunWriter::push_point_bounded`]).
+//!
 //! Manifest + chunk-request wire formats live here too so both ends agree.
 
 /// Track blob magic — "TRK1".
@@ -22,11 +36,22 @@ pub const FOOTER_MAGIC: [u8; 4] = *b"END1";
 /// Manifest magic — "MAN1".
 pub const MANIFEST_MAGIC: [u8; 4] = *b"MAN1";
 
-pub const FORMAT_VERSION: u8 = 1;
+/// What the writer emits today.
+pub const FORMAT_VERSION: u8 = 2;
+/// The oldest version a reader still decodes (v1 = untagged all-point blobs
+/// already on flash; a v1 record's byte 15 is always zero = the point tag).
+pub const MIN_FORMAT_VERSION: u8 = 1;
 
 pub const HEADER_LEN: usize = 16;
 pub const POINT_LEN: usize = 16;
+/// Every record — point or lap — is one 16-byte cell, so the footer scan in
+/// [`crate::flash_store::recover_slot`] stays record-aligned across versions.
+pub const RECORD_LEN: usize = POINT_LEN;
 pub const FOOTER_LEN: usize = 20;
+
+/// Record tags, at byte 15 of every record.
+pub const RECORD_TAG_POINT: u8 = 0;
+pub const RECORD_TAG_LAP: u8 = 1;
 
 /// `flags` bit: the run reached `stop()` (a footer follows). Unfinished blobs
 /// are never listed in the manifest.
@@ -35,19 +60,28 @@ pub const FLAG_FINISHED: u8 = 0x01;
 /// Altitude sentinel meaning "no barometric/GPS altitude for this point".
 pub const ELE_NONE: i16 = i16::MIN;
 
-/// Total blob length for a run with `point_count` points.
-pub const fn blob_len(point_count: u32) -> u32 {
-    HEADER_LEN as u32 + point_count * POINT_LEN as u32 + FOOTER_LEN as u32
+/// The most closed laps a run persists — beyond it new lap records are
+/// dropped from STORAGE (the RAM display state is unaffected). 64 records =
+/// 1 KiB of the 4 KiB slot: enough for a 60 km run's 1 km auto-laps, bounded
+/// so a lap-heavy ultra can't crowd the track out of the slot. Real multi-day
+/// capacity is the tier-2 external-QSPI item, same as the point budget.
+pub const MAX_STORED_LAPS: u32 = 64;
+
+/// Total blob length for a run with `record_count` 16-byte records.
+pub const fn blob_len(record_count: u32) -> u32 {
+    HEADER_LEN as u32 + record_count * RECORD_LEN as u32 + FOOTER_LEN as u32
 }
 
-/// Point count implied by a full blob length, or `None` if the length can't be
-/// a valid blob (too short, or the body isn't a whole number of points).
+/// Record count implied by a full blob length, or `None` if the length can't
+/// be a valid blob (too short, or the body isn't a whole number of records).
+/// Counts every 16-byte record — points AND laps; split by tag to count one
+/// kind.
 pub fn point_count(blob_len: u32) -> Option<u32> {
     let body = blob_len.checked_sub((HEADER_LEN + FOOTER_LEN) as u32)?;
-    if body % POINT_LEN as u32 != 0 {
+    if body % RECORD_LEN as u32 != 0 {
         return None;
     }
-    Some(body / POINT_LEN as u32)
+    Some(body / RECORD_LEN as u32)
 }
 
 // ---- CRC32 (IEEE, reflected, poly 0xEDB88320) -----------------------------
@@ -118,12 +152,15 @@ impl TrackPoint {
         b[8..12].copy_from_slice(&self.t_offset_s.to_le_bytes());
         b[12..14].copy_from_slice(&self.ele_dm.unwrap_or(ELE_NONE).to_le_bytes());
         b[14] = self.bpm.unwrap_or(0);
-        b[15] = 0;
+        b[15] = RECORD_TAG_POINT;
         b
     }
 
+    /// Decode a point record. `None` when the record carries a different tag
+    /// (a lap) — callers walking a v2 blob dispatch on [`record_tag`] or just
+    /// try both decoders.
     pub fn decode(b: &[u8]) -> Option<Self> {
-        if b.len() < POINT_LEN {
+        if b.len() < POINT_LEN || b[15] != RECORD_TAG_POINT {
             return None;
         }
         let ele = i16::from_le_bytes([b[12], b[13]]);
@@ -134,6 +171,48 @@ impl TrackPoint {
             t_offset_s: u32::from_le_bytes([b[8], b[9], b[10], b[11]]),
             ele_dm: (ele != ELE_NONE).then_some(ele),
             bpm: (bpm != 0).then_some(bpm),
+        })
+    }
+}
+
+/// The tag of a 16-byte record ([`RECORD_TAG_POINT`] / [`RECORD_TAG_LAP`]).
+pub fn record_tag(b: &[u8]) -> Option<u8> {
+    (b.len() >= RECORD_LEN).then(|| b[15])
+}
+
+/// One closed lap, persisted in recording order between the points it closed
+/// over (version 2): its 1-based index, the lap's own distance (decimetres —
+/// the display shows hundredths of a km), and the run's elapsed + the lap's
+/// moving seconds at the close.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LapRecord {
+    pub index: u16,
+    pub lap_distance_dm: u32,
+    pub split_s: u32,
+    pub moving_s: u32,
+}
+
+impl LapRecord {
+    pub fn encode(&self) -> [u8; RECORD_LEN] {
+        let mut b = [0u8; RECORD_LEN];
+        b[0..2].copy_from_slice(&self.index.to_le_bytes());
+        b[2..6].copy_from_slice(&self.lap_distance_dm.to_le_bytes());
+        b[6..10].copy_from_slice(&self.split_s.to_le_bytes());
+        b[10..14].copy_from_slice(&self.moving_s.to_le_bytes());
+        // b[14] reserved
+        b[15] = RECORD_TAG_LAP;
+        b
+    }
+
+    pub fn decode(b: &[u8]) -> Option<Self> {
+        if b.len() < RECORD_LEN || b[15] != RECORD_TAG_LAP {
+            return None;
+        }
+        Some(Self {
+            index: u16::from_le_bytes([b[0], b[1]]),
+            lap_distance_dm: u32::from_le_bytes([b[2], b[3], b[4], b[5]]),
+            split_s: u32::from_le_bytes([b[6], b[7], b[8], b[9]]),
+            moving_s: u32::from_le_bytes([b[10], b[11], b[12], b[13]]),
         })
     }
 }
@@ -229,6 +308,14 @@ pub struct RunWriter<S> {
     sink: S,
     crc: Crc32,
     points: u32,
+    laps: u32,
+    /// Decimation state ([`push_point_bounded`](Self::push_point_bounded)):
+    /// only every `keep_every`-th incoming point is stored. 1 = full
+    /// resolution; doubles on each in-place thinning.
+    keep_every: u32,
+    /// Incoming accepted-point ordinal, counted whether or not stored — the
+    /// phase reference `keep_every` filters against.
+    point_ordinal: u32,
 }
 
 impl<S: ByteSink> RunWriter<S> {
@@ -247,6 +334,9 @@ impl<S: ByteSink> RunWriter<S> {
             sink,
             crc,
             points: 0,
+            laps: 0,
+            keep_every: 1,
+            point_ordinal: 0,
         })
     }
 
@@ -258,8 +348,33 @@ impl<S: ByteSink> RunWriter<S> {
         Ok(())
     }
 
+    /// Persist a closed lap in stream order. Laps past [`MAX_STORED_LAPS`]
+    /// are dropped from storage (never from the RAM display state) so a
+    /// lap-heavy ultra can't crowd the track out of the slot; returns whether
+    /// the lap was stored.
+    pub fn push_lap(&mut self, lap: &LapRecord) -> Result<bool, S::Error> {
+        if self.laps >= MAX_STORED_LAPS {
+            return Ok(false);
+        }
+        let bytes = lap.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.laps += 1;
+        Ok(true)
+    }
+
     pub fn point_count(&self) -> u32 {
         self.points
+    }
+
+    pub fn lap_count(&self) -> u32 {
+        self.laps
+    }
+
+    /// The current decimation factor: 1 = full resolution, `k` = one stored
+    /// point per `k` accepted fixes.
+    pub fn thinning(&self) -> u32 {
+        self.keep_every
     }
 
     /// Write the footer and return the sink. `elapsed_s`/`moving_s`/`distance_m`
@@ -282,7 +397,98 @@ impl<S: ByteSink> RunWriter<S> {
     }
 }
 
+/// What [`RunWriter::push_point_bounded`] did with an incoming point.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PushOutcome {
+    /// Stored at the current resolution.
+    Stored,
+    /// The sink was full: the staged track was thinned in place to this new
+    /// `keep_every` factor first, then the point stored (or dropped if it
+    /// fell out of the new phase). The whole run is still represented.
+    Thinned(u32),
+    /// Dropped — either pre-filtered by the current decimation phase, or the
+    /// sink is full of undroppable records (laps) and cannot thin further.
+    Dropped,
+}
+
 impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
+    /// [`push_point`](Self::push_point) for the slot-bounded RAM staging
+    /// buffer, decimating instead of truncating (issue #599): when the next
+    /// point + footer would no longer fit `N`, every second stored point is
+    /// dropped in place (laps are always kept), the incoming stream is
+    /// thinned to match (`keep_every` doubles), and recording continues — so
+    /// a full slot holds the WHOLE run at coarser resolution rather than only
+    /// its first minutes at full resolution. Totals are unaffected (they live
+    /// in the footer); the CRC is rebuilt over the compacted prefix.
+    pub fn push_point_bounded(&mut self, point: &TrackPoint) -> PushOutcome {
+        let ordinal = self.point_ordinal;
+        self.point_ordinal = self.point_ordinal.saturating_add(1);
+        if !ordinal.is_multiple_of(self.keep_every) {
+            return PushOutcome::Dropped;
+        }
+        let mut thinned = None;
+        while self.sink.len() + RECORD_LEN + FOOTER_LEN > N {
+            if !self.thin_in_place() {
+                return PushOutcome::Dropped;
+            }
+            thinned = Some(self.keep_every);
+        }
+        if let Some(k) = thinned {
+            if !ordinal.is_multiple_of(k) {
+                // The triggering point falls out of the new phase; the thin
+                // itself still happened and is worth reporting.
+                return PushOutcome::Thinned(k);
+            }
+        }
+        if self.push_point(point).is_err() {
+            return PushOutcome::Dropped;
+        }
+        match thinned {
+            Some(k) => PushOutcome::Thinned(k),
+            None => PushOutcome::Stored,
+        }
+    }
+
+    /// Drop every second stored point in place (first kept, laps untouched),
+    /// compact the staged buffer, rebuild the CRC, and double `keep_every`.
+    /// `false` when there is nothing left to gain (fewer than two stored
+    /// points — the slot is full of laps + header, which never happens within
+    /// [`MAX_STORED_LAPS`]).
+    fn thin_in_place(&mut self) -> bool {
+        if self.points < 2 {
+            return false;
+        }
+        let buf: &mut [u8] = &mut self.sink;
+        let mut write = HEADER_LEN;
+        let mut read = HEADER_LEN;
+        let mut point_pos = 0u32;
+        let mut kept_points = 0u32;
+        while read + RECORD_LEN <= buf.len() {
+            let keep = if buf[read + RECORD_LEN - 1] == RECORD_TAG_LAP {
+                true
+            } else {
+                let keep = point_pos.is_multiple_of(2);
+                point_pos += 1;
+                if keep {
+                    kept_points += 1;
+                }
+                keep
+            };
+            if keep {
+                buf.copy_within(read..read + RECORD_LEN, write);
+                write += RECORD_LEN;
+            }
+            read += RECORD_LEN;
+        }
+        self.sink.truncate(write);
+        self.points = kept_points;
+        self.keep_every = self.keep_every.saturating_mul(2);
+        let mut crc = Crc32::new();
+        crc.update(&self.sink);
+        self.crc = crc;
+        true
+    }
+
     /// Emit a recoverable checkpoint blob of the run staged so far WITHOUT
     /// consuming the writer: the staged `header|points` prefix plus a footer
     /// stamped with the totals-so-far. It reuses the running CRC, so the result
@@ -650,10 +856,256 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31010000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000077fdfebd",
+            "54524b31020000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c020000a768fb39",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/lib/sim_watch_sync.dart"
         );
+    }
+
+    /// Golden vector for a v2 blob carrying a lap record between its points —
+    /// pinned byte-for-byte in the Dart mirror's test so the two v2 codecs
+    /// can't drift, exactly like the point-only golden above.
+    #[test]
+    fn golden_v2_blob_with_a_lap_is_stable() {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 7, 41).expect("start");
+        let pts = sample_points();
+        w.push_point(&pts[0]).expect("push");
+        w.push_point(&pts[1]).expect("push");
+        w.push_lap(&LapRecord {
+            index: 1,
+            lap_distance_dm: 10_000,
+            split_s: 300,
+            moving_s: 290,
+        })
+        .expect("lap");
+        w.push_point(&pts[2]).expect("push");
+        let blob = w.finalize(1234, 600, 620).expect("finalize");
+        let hex = blob
+            .iter()
+            .fold(heapless::String::<512>::new(), |mut s, b| {
+                let _ = core::fmt::write(&mut s, format_args!("{:02x}", b));
+                s
+            });
+        assert_eq!(
+            hex.as_str(),
+            "54524b31020000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c020000406197f1",
+            "wire format changed — update BOTH this vector and the Dart mirror \
+             in apps/mobile_android/test/sim_watch_sync_test.dart"
+        );
+    }
+
+    /// A v1 blob (all-point, untagged, version byte 1) as a prior firmware
+    /// wrote it — the exact pre-v2 golden vector. Readers must keep decoding
+    /// it: verification is version-agnostic and every record carries the
+    /// point tag (v1's reserved zero byte).
+    #[test]
+    fn v1_golden_blob_still_verifies_and_decodes() {
+        const V1_HEX: &str = "54524b31010000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000077fdfebd";
+        let mut blob: heapless::Vec<u8, 256> = heapless::Vec::new();
+        let bytes = V1_HEX.as_bytes();
+        for i in (0..bytes.len()).step_by(2) {
+            let hi = (bytes[i] as char).to_digit(16).unwrap() as u8;
+            let lo = (bytes[i + 1] as char).to_digit(16).unwrap() as u8;
+            blob.push((hi << 4) | lo).unwrap();
+        }
+        assert!(verify_blob(&blob));
+        let header = RunHeader::decode(&blob).unwrap();
+        assert_eq!(header.version, MIN_FORMAT_VERSION);
+        for (i, expected) in sample_points().iter().enumerate() {
+            let at = HEADER_LEN + i * POINT_LEN;
+            assert_eq!(record_tag(&blob[at..]), Some(RECORD_TAG_POINT));
+            assert_eq!(&TrackPoint::decode(&blob[at..]).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn laps_interleave_round_trip_and_never_thin() {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 3, 0).expect("start");
+        let pts = sample_points();
+        w.push_point(&pts[0]).unwrap();
+        w.push_point(&pts[1]).unwrap();
+        let lap = LapRecord {
+            index: 1,
+            lap_distance_dm: 10_000,
+            split_s: 300,
+            moving_s: 290,
+        };
+        assert!(w.push_lap(&lap).unwrap());
+        w.push_point(&pts[2]).unwrap();
+        assert_eq!(w.point_count(), 3);
+        assert_eq!(w.lap_count(), 1);
+        let blob = w.finalize(2_000, 590, 600).expect("finalize");
+        assert!(verify_blob(&blob));
+        assert_eq!(point_count(blob.len() as u32), Some(4), "4 records");
+
+        // Records read back in stream order, dispatched by tag.
+        let tags: [u8; 4] =
+            core::array::from_fn(|i| record_tag(&blob[HEADER_LEN + i * RECORD_LEN..]).unwrap());
+        assert_eq!(
+            tags,
+            [
+                RECORD_TAG_POINT,
+                RECORD_TAG_POINT,
+                RECORD_TAG_LAP,
+                RECORD_TAG_POINT
+            ]
+        );
+        let at = HEADER_LEN + 2 * RECORD_LEN;
+        assert_eq!(LapRecord::decode(&blob[at..]), Some(lap));
+        assert_eq!(
+            TrackPoint::decode(&blob[at..]),
+            None,
+            "a lap record must not decode as a GPS point"
+        );
+    }
+
+    #[test]
+    fn stored_laps_are_budgeted() {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 3, 0).expect("start");
+        for i in 0..MAX_STORED_LAPS {
+            assert!(w
+                .push_lap(&LapRecord {
+                    index: (i + 1) as u16,
+                    lap_distance_dm: 10_000,
+                    split_s: 300 * (i + 1),
+                    moving_s: 290,
+                })
+                .unwrap());
+        }
+        // The budget-crossing lap is dropped from storage, not an error.
+        assert!(!w
+            .push_lap(&LapRecord {
+                index: (MAX_STORED_LAPS + 1) as u16,
+                lap_distance_dm: 10_000,
+                split_s: 300,
+                moving_s: 290,
+            })
+            .unwrap());
+        assert_eq!(w.lap_count(), MAX_STORED_LAPS);
+    }
+
+    #[test]
+    fn bounded_push_decimates_instead_of_truncating() {
+        // A tiny 1 KiB "slot": header(16) + footer(20) leaves room for 61
+        // records. Feed 200 points — far past capacity.
+        const N: usize = 1024;
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 5, 0).expect("start");
+        let mut thins = 0;
+        for i in 0..200u32 {
+            let outcome = w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+            if let PushOutcome::Thinned(_) = outcome {
+                thins += 1;
+            }
+        }
+        assert!(thins >= 1, "the slot must have thinned at least once");
+        let k = w.thinning();
+        assert!(k >= 4, "200 points into ~61 slots needs 1/4");
+        let blob = w.finalize(1_000, 200, 210).expect("finalize");
+        assert!(verify_blob(&blob), "CRC rebuilt correctly across thinning");
+
+        // The WHOLE run is represented: first stored point is ordinal 0 and
+        // the last stored point is from the final stretch, not minute one.
+        let n = point_count(blob.len() as u32).unwrap();
+        let first = TrackPoint::decode(&blob[HEADER_LEN..]).unwrap();
+        assert_eq!(first.t_offset_s, 0);
+        let last = TrackPoint::decode(&blob[HEADER_LEN + (n as usize - 1) * RECORD_LEN..]).unwrap();
+        assert!(
+            last.t_offset_s > 150,
+            "tail of the run survives: t={}",
+            last.t_offset_s
+        );
+        // Stored points are evenly strided at the final factor.
+        let second = TrackPoint::decode(&blob[HEADER_LEN + RECORD_LEN..]).unwrap();
+        assert_eq!(second.t_offset_s, k, "stride matches the reported factor");
+    }
+
+    #[test]
+    fn checkpoint_blob_still_verifies_after_thinning() {
+        // The mid-run checkpoint path reuses the writer's running CRC, and
+        // thinning REBUILDS that CRC over the compacted buffer — this pins
+        // that a checkpoint taken after one or more thins reads back as a
+        // valid blob (the exact sequence app record's checkpoint cadence
+        // produces on a long run).
+        const N: usize = 1024;
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 6, 0).expect("start");
+        for i in 0..200u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        assert!(w.thinning() > 1, "the slot must have thinned");
+        let ckpt = w.checkpoint_blob(900, 190, 200).expect("checkpoint");
+        assert!(verify_blob(&ckpt), "post-thin checkpoint verifies");
+        // And the writer keeps recording + finalises cleanly afterwards.
+        for i in 200..220u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        let fin = w.finalize(1_000, 210, 220).expect("finalize");
+        assert!(verify_blob(&fin));
+    }
+
+    #[test]
+    fn bounded_push_keeps_laps_across_thinning() {
+        const N: usize = 1024;
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 5, 0).expect("start");
+        // Two laps early, then flood with points to force thinning.
+        w.push_point_bounded(&TrackPoint {
+            lat_e7: 0,
+            lon_e7: 0,
+            t_offset_s: 0,
+            ele_dm: None,
+            bpm: None,
+        });
+        for i in 1..=2u16 {
+            assert!(w
+                .push_lap(&LapRecord {
+                    index: i,
+                    lap_distance_dm: 10_000,
+                    split_s: 300 * i as u32,
+                    moving_s: 290,
+                })
+                .unwrap());
+        }
+        for i in 1..300u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        assert!(w.thinning() > 1, "thinning happened");
+        assert_eq!(w.lap_count(), 2, "laps never thin");
+        let blob = w.finalize(3_000, 290, 300).expect("finalize");
+        assert!(verify_blob(&blob));
+        let n = point_count(blob.len() as u32).unwrap() as usize;
+        let laps: usize = (0..n)
+            .filter(|i| record_tag(&blob[HEADER_LEN + i * RECORD_LEN..]) == Some(RECORD_TAG_LAP))
+            .count();
+        assert_eq!(laps, 2, "both lap records survive every thinning pass");
     }
 
     /// A run staged into a slot-sized sink, as the on-device recorder does

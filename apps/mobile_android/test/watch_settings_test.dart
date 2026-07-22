@@ -8,7 +8,9 @@ import '../lib/watch_settings.dart';
 /// `watch_core::settings` test vector so a wire-format drift on either side
 /// is caught here.
 const _goldenHex =
-    '53455431013fbe00d3a40000403800000024f448005043490380e6c54784030000dc050000';
+    '5345543101ffbe00d3a40000403800000024f448005043490380e6c54784030000dc050000'
+    'ffc00000'
+    '01';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -28,10 +30,12 @@ void main() {
         zoneCeiling: 3,
         seaLevelPa: 101325.0,
         fuel: (drinkIntervalS: 900, eatIntervalS: 1500),
+        pages: 0x0000c0ff,
+        hideEmptyPages: true,
       );
       final frame = settings.encode();
       expect(frame, _hex(_goldenHex));
-      expect(frame, hasLength(37));
+      expect(frame, hasLength(42));
     });
 
     test('empty frame is header-only with zero flags', () {
@@ -102,6 +106,30 @@ void main() {
     test('sea-level and fuel keep bit order after the earlier fields', () {
       const settings = WatchSettings(maxHr: 190, seaLevelPa: 101325.0);
       expect(settings.encode(), _hex('53455431' '01' '11' 'be00' '80e6c547'));
+    });
+
+    test('pages-only frame sets bit6 and carries the u32 mask', () {
+      const settings = WatchSettings(pages: 0x0000c0ff);
+      expect(settings.encode(), _hex('53455431' '01' '40' 'ffc00000'));
+    });
+
+    test('hideEmptyPages sets bit7 and encodes as one byte', () {
+      const on = WatchSettings(hideEmptyPages: true);
+      expect(on.encode(), _hex('53455431' '01' '80' '01'));
+      const off = WatchSettings(hideEmptyPages: false);
+      expect(off.encode(), _hex('53455431' '01' '80' '00'));
+    });
+
+    test('pages and hideEmpty keep bit order after the earlier fields', () {
+      const settings = WatchSettings(
+        maxHr: 190,
+        pages: 0xffffffff,
+        hideEmptyPages: false,
+      );
+      expect(
+        settings.encode(),
+        _hex('53455431' '01' 'c1' 'be00' 'ffffffff' '00'),
+      );
     });
   });
 }

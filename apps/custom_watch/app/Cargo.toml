@@ -118,5 +118,5 @@ nrf52840_dk = { path = "../boards/nrf52840_dk" }
 # embassy-futures 0.1, which match this workspace's crates.io pins. Rev is
 # pinned so a future upstream break can't silently change our (unverifiable
 # without hardware) build.
-nrf-softdevice      = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true, features = ["nrf52840", "s140", "ble-peripheral", "ble-gatt-server", "critical-section-impl", "defmt"] }
+nrf-softdevice      = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true, features = ["nrf52840", "s140", "ble-peripheral", "ble-gatt-server", "ble-sec", "critical-section-impl", "defmt"] }
 nrf-softdevice-s140 = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true }
