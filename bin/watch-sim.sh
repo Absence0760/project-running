@@ -105,7 +105,10 @@ cleanup() {
 	dim "sim artifacts kept in $RUN_DIR (renode.log, defmt.raw)"
 	exit 0
 }
-trap cleanup INT TERM EXIT
+# HUP included: closing the terminal tab that ran the script would otherwise
+# kill it without the trap, orphaning Renode still holding the phone port —
+# the very stale instance the preflight above then refuses to start over.
+trap cleanup INT TERM HUP EXIT
 
 # Per-run monitor port: the default (1234) collides across concurrent or
 # stale sim instances and Renode aborts on AddressAlreadyInUse. The telnet
