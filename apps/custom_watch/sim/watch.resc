@@ -168,7 +168,7 @@ def click(pin, hold=0.3):
     gpio.OnGPIO(pin, True)   # release: back to idle high
 """
 
-# BTN1 (P0.11) — start / pause / resume the recording.
+# BTN1 (P0.11) — start / pause / resume; dismiss a finished run home; grid: cursor back.
 macro btn1
 """
     python "click(11)"

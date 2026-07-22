@@ -8,7 +8,7 @@
 # features: `sim-autostart` (start recording on the first fix so a run records
 # without a button), `sim-buttons` (poll the button pins so BTN1-4 presses
 # work — clicked on the --gui window's bezel, or injected via the watch.resc
-# btn1..btn4 monitor macros: BTN1 start/pause, BTN2 stop, BTN3 page / idle
+# btn1..btn4 monitor macros: BTN1 start/pause/resume, dismiss-home from FIN, BTN2 stop (press twice), BTN3 page / idle
 # GNSS mode, BTN4 lap), and `sim-course` (the canned breadcrumb course the Nav
 # page follows; the bench_jog fixture leaves it on two legs so the off-course
 # alert fires each lap). What you can't simulate: BLE (nrf-softdevice needs
