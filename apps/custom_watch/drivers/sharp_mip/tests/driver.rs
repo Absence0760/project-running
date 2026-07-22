@@ -249,6 +249,82 @@ fn draw_text_2x_clips_at_the_edges_without_panicking() {
 }
 
 #[test]
+fn draw_text_row_ruled_composes_rules_with_the_glyphs() {
+    use sharp_mip::RowRules;
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_ruled(
+        2,
+        "     9.87 KM",
+        RowRules {
+            top: true,
+            bottom: true,
+            vline_x: Some(84),
+            x0: 16,
+        },
+    );
+    // Top + bottom hairlines from x0 to the right edge, the gutter left of
+    // x0 clear of them...
+    assert!((16..WIDTH).all(|x| fb.pixel(x, 32)), "top rule incomplete");
+    assert!(
+        (16..WIDTH).all(|x| fb.pixel(x, 47)),
+        "bottom rule incomplete"
+    );
+    assert!(
+        !fb.pixel(0, 32) && !fb.pixel(15, 47),
+        "rule entered the gutter"
+    );
+    // ...the vline spans the whole band...
+    assert!((32..48).all(|y| fb.pixel(84, y)), "vline incomplete");
+    // ...and the glyphs still landed: the row matches a plain draw plus the
+    // rules, pixel for pixel.
+    let mut plain = Framebuffer::new();
+    plain.draw_text_row(2, "     9.87 KM");
+    for y in 32..48 {
+        for x in 0..WIDTH {
+            let ruled = ((y == 32 || y == 47) && x >= 16) || x == 84;
+            assert_eq!(fb.pixel(x, y), plain.pixel(x, y) || ruled, "at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn draw_text_row_ruled_redraw_is_stable() {
+    use sharp_mip::RowRules;
+    // The reason the rules compose into the row's own compare-write: a
+    // text-then-rule two-pass would flip the rule row's bytes back and forth
+    // and latch those lines dirty on every frame.
+    let rules = RowRules {
+        top: false,
+        bottom: true,
+        vline_x: None,
+        x0: 16,
+    };
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_ruled(3, "PACE 5:12 /KM", rules);
+    fb.clear_dirty();
+    fb.draw_text_row_ruled(3, "PACE 5:12 /KM", rules);
+    assert_eq!(fb.dirty_count(), 0, "an unchanged ruled row flushed");
+    fb.draw_text_row_ruled(3, "PACE 5:13 /KM", rules);
+    assert!(fb.dirty_count() > 0, "a changed ruled row must dirty");
+}
+
+#[test]
+fn draw_text_row_ruled_without_rules_matches_draw_text_row() {
+    use sharp_mip::RowRules;
+    let mut ruled = Framebuffer::new();
+    ruled.draw_text_row(1, "STALE WIDE CONTENT");
+    ruled.draw_text_row_ruled(1, "NEW", RowRules::default());
+    let mut plain = Framebuffer::new();
+    plain.draw_text_row(1, "NEW");
+    for y in 16..32 {
+        for x in 0..WIDTH {
+            assert_eq!(ruled.pixel(x, y), plain.pixel(x, y), "at ({x},{y})");
+        }
+    }
+    ruled.draw_text_row_ruled(99, "X", RowRules::default());
+}
+
+#[test]
 fn draw_banner_2x_is_exactly_2x_text_with_fg_bg_swapped() {
     // Inverse video on a 1-bit framebuffer is nothing more than swapping ink
     // and background at draw time: inside the text span the banner must be

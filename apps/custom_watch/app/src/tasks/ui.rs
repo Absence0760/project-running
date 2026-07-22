@@ -361,6 +361,10 @@ pub async fn screen_task(
         let panel_repaint = panel_state.is_some() && panel_state != last_panel;
         last_panel = panel_state;
         let clock_band = !face::run_view(rec.as_ref()) && idle_view == IdleView::Home;
+        // The run dashboard's rows compose the field grid's hairline dividers
+        // into their own compare-write (widgets::ruled_dashboard_row) — a
+        // separate rule pass would re-dirty the rules' lines every frame.
+        let field_grid = page == Page::Dashboard && face::run_view(rec.as_ref());
         for (row, text) in rows.iter().enumerate() {
             if PANEL_ROWS.contains(&row) && panel_state.is_some() && !panel_repaint {
                 continue;
@@ -375,7 +379,11 @@ pub async fn screen_task(
             {
                 continue;
             }
-            fb.draw_text_row(row, text);
+            if field_grid {
+                widgets::ruled_dashboard_row(&mut fb, row, text);
+            } else {
+                fb.draw_text_row(row, text);
+            }
             if let Some(icon) = icons[row] {
                 fb.draw_icon(0, row, driver_icon(icon));
             }

@@ -13,8 +13,9 @@
 //! split rows, the split page's rows 3..8). Change one side and the other must
 //! follow — the tests here pin the columns each overlay owns.
 
-use sharp_mip::{Framebuffer, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
+use sharp_mip::{Framebuffer, RowRules, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
+use watch_core::face;
 use watch_core::fix::Fix;
 use watch_core::gauge;
 use watch_core::page_grid;
@@ -118,6 +119,32 @@ pub fn draw_grid_cursor(fb: &mut Framebuffer, cell: (usize, usize)) {
     let x = col * page_grid::GRID_CELL_CHARS * CELL_W;
     let y = (page_grid::GRID_TOP_ROW + row) * CELL_H;
     fb.stroke_rect(x.saturating_sub(2), y, 4 * CELL_W + 3, CELL_H, true);
+}
+
+// ---------------------------------------------------------------------------
+// Run-dashboard field grid (hairline dividers)
+// ---------------------------------------------------------------------------
+
+/// Horizontal rules start past the two icon-gutter cells: `draw_icon` blits
+/// its full 16-px band after the row is drawn, so a rule crossing those
+/// cells would be re-cleared — and its lines re-dirtied — every frame.
+const RULE_X0: usize = 2 * CELL_W;
+
+/// Draw one run-dashboard text row with its share of the Garmin-style field
+/// grid composed in: a hairline over the first field row (closing the hero
+/// band), one under every field but the last (the panel edge closes it), and
+/// a vertical rule splitting the NOW | GAP pace pair. The rules ride
+/// [`Framebuffer::draw_text_row_ruled`]'s single compare-write, so a resting
+/// dashboard still flushes zero lines.
+pub fn ruled_dashboard_row(fb: &mut Framebuffer, row: usize, text: &str) {
+    let rules = RowRules {
+        top: row == face::DASH_FIELD_TOP_ROW,
+        bottom: (face::DASH_FIELD_TOP_ROW..TEXT_ROWS - 1).contains(&row),
+        vline_x: (row == face::DASH_SPLIT_ROW)
+            .then_some(face::DASH_SPLIT_COL * CELL_W + CELL_W / 2),
+        x0: RULE_X0,
+    };
+    fb.draw_text_row_ruled(row, text, rules);
 }
 
 // ---------------------------------------------------------------------------
@@ -600,6 +627,72 @@ mod tests {
         let mut fb0 = Framebuffer::new();
         draw_grid_cursor(&mut fb0, (0, 0));
         assert!(ink_in(&fb0, 0, page_grid::GRID_TOP_ROW * CELL_H, 1, CELL_H) > 0);
+    }
+
+    #[test]
+    fn dashboard_grid_rules_the_field_boundaries() {
+        let mut fb = Framebuffer::new();
+        for row in 0..TEXT_ROWS {
+            ruled_dashboard_row(&mut fb, row, "");
+        }
+        // The hero band (rows 0-1) carries no rules; the grid opens with a
+        // hairline over the first field row and closes every field but the
+        // last — the panel edge finishes the grid.
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, 2 * CELL_H), 0);
+        let mut rule_ys = vec![face::DASH_FIELD_TOP_ROW * CELL_H];
+        for row in face::DASH_FIELD_TOP_ROW..TEXT_ROWS - 1 {
+            rule_ys.push((row + 1) * CELL_H - 1);
+        }
+        for y in rule_ys {
+            assert_eq!(
+                ink_in(&fb, RULE_X0, y, WIDTH - RULE_X0, 1),
+                WIDTH - RULE_X0,
+                "missing hairline at y={y}"
+            );
+        }
+        assert_eq!(ink_in(&fb, 0, HEIGHT - 1, WIDTH, 1), 0, "panel edge ruled");
+        // The icon gutter stays clear of every rule...
+        assert_eq!(ink_in(&fb, 0, 0, RULE_X0, HEIGHT), 0);
+        // ...and the NOW | GAP splitter spans exactly its own row band.
+        let vx = face::DASH_SPLIT_COL * CELL_W + CELL_W / 2;
+        assert_eq!(
+            ink_in(&fb, vx, face::DASH_SPLIT_ROW * CELL_H, 1, CELL_H),
+            CELL_H
+        );
+        assert_eq!(
+            ink_in(&fb, vx, (face::DASH_SPLIT_ROW + 1) * CELL_H, 1, CELL_H - 1),
+            0
+        );
+    }
+
+    #[test]
+    fn dashboard_grid_redraw_flushes_nothing_and_spares_the_icons() {
+        // The zero-flush-at-rest contract, grid included: the rules compose
+        // into each row's own compare-write, so an unchanged ruled frame
+        // dirties no line...
+        let rows = [
+            "",
+            "",
+            "     9.87 KM",
+            "PACE 5:12 /KM",
+            "NOW  5:55 GAP 5:41",
+        ];
+        let mut fb = Framebuffer::new();
+        for (row, text) in rows.iter().enumerate() {
+            ruled_dashboard_row(&mut fb, row, text);
+        }
+        fb.clear_dirty();
+        for (row, text) in rows.iter().enumerate() {
+            ruled_dashboard_row(&mut fb, row, text);
+        }
+        assert_eq!(fb.dirty_count(), 0, "an unchanged ruled frame flushed");
+        // ...and because the rules stop short of the icon gutter, an icon
+        // blitted over its two cells leaves every rule pixel standing (a
+        // full-width rule would be re-cleared by the blit each frame).
+        use sharp_mip::Icon;
+        fb.draw_icon(0, 2, Icon::Footsteps);
+        let y = 3 * CELL_H - 1;
+        assert_eq!(ink_in(&fb, RULE_X0, y, WIDTH - RULE_X0, 1), WIDTH - RULE_X0);
     }
 
     fn pacer(ahead_s: i32) -> PacerStatus {

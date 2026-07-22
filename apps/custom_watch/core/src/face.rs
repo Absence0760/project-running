@@ -212,6 +212,16 @@ pub fn apply_fuel_marker(rows: &mut [Row; ROWS], overdue: FuelOverdue, page: Pag
     let _ = write!(row, "{:>width$}", tag, width = COLS);
 }
 
+/// The run dashboard's field grid, for the hairline dividers `watch_render`
+/// rules between its rows: fields start at [`DASH_FIELD_TOP_ROW`] (the rows
+/// above are the hero band), the NOW / GAP pace pair shares
+/// [`DASH_SPLIT_ROW`], and [`DASH_SPLIT_COL`] is the blank spacer cell
+/// between the pair that the vertical rule crosses — kept in lockstep with
+/// the row layout in `dashboard()`.
+pub const DASH_FIELD_TOP_ROW: usize = 2;
+pub const DASH_SPLIT_ROW: usize = 4;
+pub const DASH_SPLIT_COL: usize = 10;
+
 /// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
 /// rather than the idle status face. The app keys page-specific drawing (the
 /// Nav page's map panel) off the same predicate the layout selection uses.
@@ -2141,16 +2151,17 @@ fn dashboard(
 
     // Current pace pairs with its grade-adjusted twin — the same raw-vs-effort
     // pairing the Pace glance makes, on the page a runner actually lives on
-    // mid-climb. Fixed columns (GAP label at cell 11), and the /KM the PACE
+    // mid-climb. Fixed columns (the DASH_SPLIT_COL spacer stays blank for the
+    // field grid's vertical rule, GAP right after it), and the /KM the PACE
     // row above carries speaks for all three paces. Worst case fits:
     // "NOW  99:59 GAP 99:59" is 20 cells.
-    let _ = write!(rows[4], "{:<5}", "NOW");
-    write_pace_value(&mut rows[4], snap.current_pace_s_per_km);
-    while rows[4].len() < 11 {
-        let _ = rows[4].push(' ');
+    let _ = write!(rows[DASH_SPLIT_ROW], "{:<5}", "NOW");
+    write_pace_value(&mut rows[DASH_SPLIT_ROW], snap.current_pace_s_per_km);
+    while rows[DASH_SPLIT_ROW].len() < DASH_SPLIT_COL + 1 {
+        let _ = rows[DASH_SPLIT_ROW].push(' ');
     }
-    let _ = write!(rows[4], "GAP ");
-    write_pace_value(&mut rows[4], snap.gap_s_per_km);
+    let _ = write!(rows[DASH_SPLIT_ROW], "GAP ");
+    write_pace_value(&mut rows[DASH_SPLIT_ROW], snap.gap_s_per_km);
 
     write_hr(&mut rows[5], "", hr_bpm, &snap.zone_cutoffs);
 

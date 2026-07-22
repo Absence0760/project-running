@@ -28,6 +28,17 @@ pub struct Framebuffer {
     dirty: [bool; HEIGHT],
 }
 
+/// Hairlines for [`Framebuffer::draw_text_row_ruled`]: 1-px rules along the
+/// band's top and/or bottom pixel row (from pixel column `x0` to the right
+/// edge) plus an optional full-height vertical rule at `vline_x`.
+#[derive(Clone, Copy, Default)]
+pub struct RowRules {
+    pub top: bool,
+    pub bottom: bool,
+    pub vline_x: Option<usize>,
+    pub x0: usize,
+}
+
 impl Default for Framebuffer {
     fn default() -> Self {
         Self::new()
@@ -434,6 +445,40 @@ impl Framebuffer {
                 let y = y0 + dy;
                 if y < HEIGHT && self.lines[y][cell] != 0 {
                     self.lines[y][cell] = 0;
+                    self.dirty[y] = true;
+                }
+            }
+        }
+    }
+
+    /// Like [`Self::draw_text_row`], but with 1-px hairline [`RowRules`]
+    /// composed into the band alongside the glyphs, in the same
+    /// compare-write. Composition is the point: drawing the text first and a
+    /// rule second would leave the rule's pixel row byte-different between
+    /// the two passes, latching those lines dirty on every frame — a ruled
+    /// row that hasn't changed must still flush zero lines.
+    pub fn draw_text_row_ruled(&mut self, row: usize, text: &str, rules: RowRules) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let y0 = row * font::GLYPH_HEIGHT;
+        for dy in 0..font::GLYPH_HEIGHT {
+            let mut line = [0u8; LINE_BYTES];
+            for (i, ch) in text.chars().take(TEXT_COLS).enumerate() {
+                line[i] = glyph_for(ch)[dy];
+            }
+            if (rules.top && dy == 0) || (rules.bottom && dy == font::GLYPH_HEIGHT - 1) {
+                for x in rules.x0..WIDTH {
+                    line[x / 8] |= 1 << (x % 8);
+                }
+            }
+            if let Some(vx) = rules.vline_x.filter(|&vx| vx < WIDTH) {
+                line[vx / 8] |= 1 << (vx % 8);
+            }
+            let y = y0 + dy;
+            for (bx, &b) in line.iter().enumerate() {
+                if self.lines[y][bx] != b {
+                    self.lines[y][bx] = b;
                     self.dirty[y] = true;
                 }
             }

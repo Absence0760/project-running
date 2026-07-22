@@ -117,8 +117,13 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         GnssMode::default(),
         IdleView::Home,
     );
+    let field_grid = page == Page::Dashboard && snap.is_some();
     for (r, row) in rows.iter().enumerate() {
-        fb.draw_text_row(r, row);
+        if field_grid {
+            widgets::ruled_dashboard_row(fb, r, row);
+        } else {
+            fb.draw_text_row(r, row);
+        }
     }
     if let Some(hero) = face::page_hero(page, hr, snap, None) {
         if matches!(page, Page::Distance | Page::Pace) {
@@ -217,7 +222,7 @@ fn preview_run_dashboard() {
         &mut fb,
         watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
     );
-    show("run dashboard: hero + NOW/GAP pairing", &fb);
+    show("run dashboard: hero + field grid + NOW/GAP pairing", &fb);
 }
 
 #[test]
