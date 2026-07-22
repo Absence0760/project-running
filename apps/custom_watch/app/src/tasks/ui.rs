@@ -180,6 +180,7 @@ pub async fn screen_task(
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
+    let mut battery_rx = unwrap!(state::BATTERY.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
@@ -190,6 +191,7 @@ pub async fn screen_task(
     let mut tb: Option<TrackbackView> = None;
     let mut sats: Option<u8> = None;
     let mut fix_quality: Option<u8> = None;
+    let mut battery: Option<u8> = None;
     let mut page = Page::default();
     let mut idle_view = IdleView::Home;
     // The page-grid overview's cursor while open (None = closed) — published
@@ -271,6 +273,9 @@ pub async fn screen_task(
         if let Some(q) = fix_quality_rx.try_changed() {
             fix_quality = Some(q);
         }
+        if let Some(b) = battery_rx.try_changed() {
+            battery = b;
+        }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
         }
@@ -311,6 +316,11 @@ pub async fn screen_task(
             .is_some_and(|s| matches!(s.state, RecordState::Recording | RecordState::Paused));
         let overdue = fuel_overdue.observe(alert, alerts_run_active, page == Page::Fuel);
         face::apply_fuel_marker(&mut rows, overdue, page);
+        // The diagnostics face's numeric battery read-out; the idle-face icon
+        // is a widget below, and run views carry neither.
+        if !face::run_view(rec.as_ref()) {
+            face::apply_battery_row(&mut rows, idle_view, battery);
+        }
         let icons = face::page_icons(
             page,
             latest.as_ref(),
@@ -488,6 +498,10 @@ pub async fn screen_task(
         } else {
             let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
+            // The battery icon shares the title row's mid-band with the
+            // post-press BTN3 hint AND the transient re-zero 2x banner, so it
+            // yields to both — it only draws while the row shows the brand.
+            widgets::draw_idle_battery(&mut fb, battery, animate || rezero_banner.is_some());
             if idle_view == IdleView::Home {
                 let clock = face::home_clock_text(latest.as_ref(), uptime_s, tz_offset_min);
                 fb.draw_bignum_band(face::CLOCK_HERO_TOP_ROW * CELL_H, &clock);
@@ -597,9 +611,10 @@ pub async fn screen_task(
                     fix_quality_rx.changed(),
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
-                    select3(
+                    select4(
                         stop_armed_rx.changed(),
                         tz_offset_rx.changed(),
+                        battery_rx.changed(),
                         Timer::after(tick),
                     ),
                 ),
@@ -621,11 +636,12 @@ pub async fn screen_task(
             Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
             Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
             Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::First(v)))) => stop_armed = v,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Second(m)))) => {
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::First(v)))) => stop_armed = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(m)))) => {
                 tz_offset_min = Some(m)
             }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Third(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(b)))) => battery = b,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
         }
     }
 }

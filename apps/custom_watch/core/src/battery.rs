@@ -41,6 +41,23 @@ pub fn plausible_mv(mv: u16) -> bool {
     (PLAUSIBLE_MIN_MV..=PLAUSIBLE_MAX_MV).contains(&mv)
 }
 
+/// At or below this percent the gauge icon renders its low state. 20 % is the
+/// knee of [`CURVE_MV_PCT`]: below the 3.74 V anchor the discharge plateau is
+/// over and the remaining runtime cliffs, so this is where a glance must turn
+/// into a warning.
+pub const LOW_PCT: u8 = 20;
+
+/// Whether the gauge should render its low state for `percent`.
+pub fn is_low(percent: u8) -> bool {
+    percent <= LOW_PCT
+}
+
+/// Fill for the battery icon's body, in `0.0..=1.0` — the `gauge` convention:
+/// the decision here, the pixel scaling in the render layer.
+pub fn fill_fraction(percent: u8) -> f32 {
+    f32::from(percent.min(100)) / 100.0
+}
+
 /// Map a supply reading onto 0..=100 percent via [`CURVE_MV_PCT`], clamping
 /// below the empty cutoff and above the full charge. Linear between adjacent
 /// anchors, rounded to the nearest percent.
@@ -121,6 +138,32 @@ mod tests {
         assert!(!plausible_mv(5000));
         assert!(!plausible_mv(PLAUSIBLE_MIN_MV - 1));
         assert!(!plausible_mv(PLAUSIBLE_MAX_MV + 1));
+    }
+
+    #[test]
+    fn low_state_starts_at_the_curve_knee() {
+        assert!(is_low(0));
+        assert!(is_low(LOW_PCT));
+        assert!(!is_low(LOW_PCT + 1));
+        assert!(!is_low(100));
+        // LOW_PCT is the plateau-knee anchor, not an arbitrary number: the
+        // 3.74 V anchor maps exactly onto it.
+        assert_eq!(percent_from_mv(3740), LOW_PCT);
+    }
+
+    #[test]
+    fn fill_fraction_scales_and_clamps() {
+        assert_eq!(fill_fraction(0), 0.0);
+        assert_eq!(fill_fraction(50), 0.5);
+        assert_eq!(fill_fraction(100), 1.0);
+        assert_eq!(fill_fraction(255), 1.0);
+        let mut prev = 0.0;
+        for pct in 0..=100u8 {
+            let f = fill_fraction(pct);
+            assert!((0.0..=1.0).contains(&f));
+            assert!(f >= prev);
+            prev = f;
+        }
     }
 
     #[test]

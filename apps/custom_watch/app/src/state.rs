@@ -135,6 +135,14 @@ pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// pushed yet. One receiver (the `record` task).
 pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
 
+/// Latest battery percent estimate. `None` means no plausible reading — an
+/// absent battery, a bench/USB regulator rail, or a mid-stream reading that
+/// left the LiPo band — and consumers show their honest absent state (no
+/// icon, no BAT row). The `battery` task publishes on change only (a steady
+/// percent wakes nobody); the `ui` task draws the idle-face gauge and the
+/// diagnostics BAT row from it. One receiver (the `ui` task).
+pub static BATTERY: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
+
 /// QNH sea-level reference pressure (Pa) for the barometric-altitude
 /// calculation: the `record` task publishes a plausibility-guarded value when a
 /// pushed settings frame carries `sea_level_pa` (the mountain/desert weather-

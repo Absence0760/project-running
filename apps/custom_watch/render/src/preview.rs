@@ -148,6 +148,7 @@ fn preview_idle_home_face_with_clock_hero() {
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Dashboard, None, Some(132));
     widgets::draw_idle_signal(&mut fb, Some(&sample_fix()), 100, face::STALE_AFTER_S);
+    widgets::draw_idle_battery(&mut fb, Some(87), false);
     // The ui task draws the generated numeral clock into the band the home
     // face leaves blank — replicate it so the preview shows the real layout.
     let clock = face::home_clock_text(Some(&sample_fix()), 100, None);
@@ -155,13 +156,13 @@ fn preview_idle_home_face_with_clock_hero() {
         face::CLOCK_HERO_TOP_ROW * (HEIGHT / sharp_mip::TEXT_ROWS),
         &clock,
     );
-    show("idle home: clock hero + summary + GPS signal meter", &fb);
+    show("idle home: clock hero + battery + GPS signal meter", &fb);
 }
 
 #[test]
 fn preview_idle_diagnostics_face() {
     let mut fb = Framebuffer::new();
-    let rows = face::page_rows(
+    let mut rows = face::page_rows(
         Page::Dashboard,
         Some(&sample_fix()),
         Some(132),
@@ -175,11 +176,18 @@ fn preview_idle_diagnostics_face() {
         IdleView::Diagnostics,
         None,
     );
+    face::apply_battery_row(&mut rows, IdleView::Diagnostics, Some(12));
     for (r, row) in rows.iter().enumerate() {
         fb.draw_text_row(r, row);
     }
     widgets::draw_idle_signal(&mut fb, Some(&sample_fix()), 100, face::STALE_AFTER_S);
-    show("idle diagnostics: bench acquisition view", &fb);
+    // A low cell, so the preview shows the icon's exclamation frame beside
+    // the numeric BAT row.
+    widgets::draw_idle_battery(&mut fb, Some(12), false);
+    show(
+        "idle diagnostics: bench acquisition view + low battery",
+        &fb,
+    );
 }
 
 #[test]

@@ -15,7 +15,7 @@
 
 use embassy_nrf::gpio::AnyPin;
 use embassy_nrf::peripherals::{
-    NVMC, P0_14, P0_15, P0_16, PWM0, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1,
+    NVMC, P0_14, P0_15, P0_16, PWM0, SAADC, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1,
 };
 use embassy_nrf::{Peri, Peripherals};
 
@@ -71,6 +71,14 @@ pub struct BaroPort {
     pub scl: Peri<'static, AnyPin>,
 }
 
+/// Battery monitor: the SAADC sampling the supply through its internal VDD
+/// channel — no external pin, the rail itself is the input. On the DK that
+/// rail is the USB regulator (the battery task parks on implausibility); the
+/// tier-1 enclosure's 1S LiPo is what the percent curve reads.
+pub struct BatteryPort {
+    pub saadc: Peri<'static, SAADC>,
+}
+
 /// Internal-flash controller (NVMC) for the on-device run store. The store's
 /// reserved region is the top of flash (see `app/memory.x` / `memory-ble.x`);
 /// the NVMC addresses the whole 1 MB, the linker keeps code out of the region.
@@ -109,6 +117,7 @@ pub struct Board {
     pub phone: PhonePort,
     pub hr: HrPort,
     pub baro: BaroPort,
+    pub battery: BatteryPort,
     pub flash: FlashPort,
 }
 
@@ -156,6 +165,7 @@ impl Board {
                 sda: p.P1_10.into(),
                 scl: p.P1_11.into(),
             },
+            battery: BatteryPort { saadc: p.SAADC },
             flash: FlashPort { nvmc: p.NVMC },
         }
     }

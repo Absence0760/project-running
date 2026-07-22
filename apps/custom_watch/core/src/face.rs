@@ -225,6 +225,36 @@ pub const DASH_FIELD_TOP_ROW: usize = 2;
 pub const DASH_SPLIT_ROW: usize = 4;
 pub const DASH_SPLIT_COL: usize = 10;
 
+/// The diagnostics row carrying the numeric battery read-out: the HR row —
+/// every diagnostics row is claimed, and this is the one with slack
+/// (`HR   152 BPM` is 12 cells, the widest `BAT 100%` tag needs 8, COLS is
+/// 21).
+pub const BATTERY_ROW: usize = 7;
+
+/// Overlay the diagnostics face's `BAT n%` read-out right-anchored onto
+/// [`BATTERY_ROW`] — a post-pass like [`apply_fuel_marker`], so the battery
+/// doesn't thread a parameter through every layout that ignores it. Only the
+/// diagnostics view carries the number; the home face (and the run views,
+/// which the app gates before calling) get the icon widget the render layer
+/// draws instead. No-op when `percent` is `None` (no plausible battery — the
+/// honest absent state) or when the row's text would leave no gap before the
+/// tag, so it can only ever add a glance, never clobber the HR value.
+pub fn apply_battery_row(rows: &mut [Row; ROWS], view: IdleView, percent: Option<u8>) {
+    if view != IdleView::Diagnostics {
+        return;
+    }
+    let Some(pct) = percent else {
+        return;
+    };
+    let mut tag: heapless::String<8> = heapless::String::new();
+    let _ = write!(tag, "BAT {}%", pct.min(100));
+    let row = &mut rows[BATTERY_ROW];
+    if !row.is_empty() && row.len() + tag.len() >= COLS {
+        return;
+    }
+    let _ = write!(row, "{:>width$}", tag, width = COLS - row.len());
+}
+
 /// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
 /// rather than the idle status face. The app keys page-specific drawing (the
 /// Nav page's map panel) off the same predicate the layout selection uses.
@@ -2963,6 +2993,51 @@ mod tests {
         assert_eq!(rows[6].as_str(), "ALT  1624 M");
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
         assert_eq!(rows[7].as_str(), "");
+    }
+
+    #[test]
+    fn diagnostics_battery_rides_the_hr_row_right_anchored() {
+        let mut rows = diag_rows(Some(&fix()), Some(152), None, 42);
+        apply_battery_row(&mut rows, IdleView::Diagnostics, Some(87));
+        assert_eq!(rows[BATTERY_ROW].as_str(), "HR   152 BPM  BAT 87%");
+        assert!(rows[BATTERY_ROW].len() <= COLS);
+    }
+
+    #[test]
+    fn diagnostics_battery_stands_alone_when_no_pulse() {
+        let mut rows = diag_rows(Some(&fix()), None, None, 42);
+        apply_battery_row(&mut rows, IdleView::Diagnostics, Some(5));
+        assert_eq!(rows[BATTERY_ROW].len(), COLS);
+        assert_eq!(rows[BATTERY_ROW].trim_start(), "BAT 5%");
+    }
+
+    #[test]
+    fn diagnostics_battery_absent_leaves_the_row_untouched() {
+        let mut rows = diag_rows(Some(&fix()), Some(152), None, 42);
+        apply_battery_row(&mut rows, IdleView::Diagnostics, None);
+        assert_eq!(rows[BATTERY_ROW].as_str(), "HR   152 BPM");
+    }
+
+    #[test]
+    fn battery_row_is_diagnostics_only() {
+        // The home face carries the icon widget instead; its rows must come
+        // through the post-pass byte-identical.
+        let before = face_rows(Some(&fix()), Some(152), None, None, 42);
+        let mut after = before.clone();
+        apply_battery_row(&mut after, IdleView::Home, Some(87));
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn diagnostics_battery_clamps_and_never_overflows_cols() {
+        let mut rows = diag_rows(Some(&fix()), Some(999), None, 42);
+        apply_battery_row(&mut rows, IdleView::Diagnostics, Some(255));
+        assert_eq!(rows[BATTERY_ROW].as_str(), "HR   999 BPM BAT 100%");
+        // A row without room for a gap before the tag refuses rather than
+        // truncating the HR value.
+        let mut wide = diag_rows(Some(&fix()), Some(65535), None, 42);
+        apply_battery_row(&mut wide, IdleView::Diagnostics, Some(50));
+        assert_eq!(wide[BATTERY_ROW].as_str(), "HR   65535 BPM");
     }
 
     #[test]

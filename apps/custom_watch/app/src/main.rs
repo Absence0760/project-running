@@ -20,7 +20,7 @@ use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 #[cfg(not(feature = "ble"))]
 use embassy_nrf::nvmc::Nvmc;
-use embassy_nrf::{bind_interrupts, peripherals, spim, twim, uarte};
+use embassy_nrf::{bind_interrupts, peripherals, saadc, spim, twim, uarte};
 use embassy_sync::mutex::Mutex;
 use nrf52840_dk::Board;
 use static_cell::StaticCell;
@@ -39,6 +39,7 @@ bind_interrupts!(struct Irqs {
     SPIM3 => spim::InterruptHandler<peripherals::SPI3>;
     TWISPI0 => twim::InterruptHandler<peripherals::TWISPI0>;
     TWISPI1 => twim::InterruptHandler<peripherals::TWISPI1>;
+    SAADC => saadc::InterruptHandler;
 });
 
 #[embassy_executor::main]
@@ -59,6 +60,7 @@ async fn main(spawner: Spawner) {
         interrupt::SPIM3.set_priority(Priority::P2);
         interrupt::TWISPI0.set_priority(Priority::P2);
         interrupt::TWISPI1.set_priority(Priority::P2);
+        interrupt::SAADC.set_priority(Priority::P2);
         p
     };
     #[cfg(not(feature = "ble"))]
@@ -123,6 +125,17 @@ async fn main(spawner: Spawner) {
         board.baro.scl,
         baro_i2c_config,
         unsafe { &mut *core::ptr::addr_of_mut!(BARO_TWIM_RAM) },
+    );
+
+    // Battery gauge: the SAADC's internal VDD channel — the rail itself is the
+    // input, no pin to route. Driver defaults (12-bit, 0.6 V internal
+    // reference, gain 1/6 -> 3.6 V full scale) suit a supply read; the task
+    // owns the conversion maths and the plausibility park.
+    let battery_adc = saadc::Saadc::new(
+        board.battery.saadc,
+        Irqs,
+        saadc::Config::default(),
+        [saadc::ChannelConfig::single_ended(saadc::VddInput)],
     );
 
     // Buttons are active-LOW with the line idle-high, so pull up and treat a
@@ -205,6 +218,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
+    spawner.spawn(unwrap!(tasks::battery::run(battery_adc)));
     spawner.spawn(unwrap!(tasks::record::run(store)));
 
     // Phone link. Default build: UARTE1 → Renode TCP bridge, plus the BLE

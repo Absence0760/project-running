@@ -6,6 +6,7 @@
 //! integrated by `record.rs`.
 
 pub mod baro;
+pub mod battery;
 pub mod ble;
 pub mod button;
 pub mod gps;

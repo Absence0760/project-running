@@ -55,7 +55,8 @@
 //! - [`bar_chart`] — scale a distribution (zone times, pace buckets) into
 //!   bottom-aligned bar rectangles for a mini chart
 //! - [`battery`] — 1S LiPo supply millivolts → percent (piecewise-linear
-//!   discharge curve + the plausibility band the battery task parks on)
+//!   discharge curve + the plausibility band the battery task parks on), plus
+//!   the gauge icon's fill fraction and low-state threshold
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
