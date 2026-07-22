@@ -490,6 +490,7 @@ pub async fn run(store: &'static SharedStore) {
                     RecordCommand::Resume => recorder.resume(now_s),
                     RecordCommand::Stop => recorder.stop(now_s),
                     RecordCommand::Lap => recorder.lap(now_s),
+                    RecordCommand::Reset => recorder.reset(now_s),
                 }
                 let now = recorder.state();
                 if prev == RecordState::Idle && now == RecordState::Recording {

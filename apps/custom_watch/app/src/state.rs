@@ -65,6 +65,13 @@ pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 /// carries. One receiver (the `ui` task).
 pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::new();
 
+/// When the stop guard armed (uptime seconds), `None` once confirmed or
+/// disarmed. The `button` task's dispatch publishes it; the `ui` task shows
+/// the "press again" banner while the arm is inside its confirm window (the
+/// window expiry itself is time-based, so a stale stamp simply stops
+/// rendering). One receiver (the `ui` task).
+pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the

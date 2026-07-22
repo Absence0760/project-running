@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -16,6 +16,7 @@ use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::alerts::{self, Alert};
+use watch_core::button;
 use watch_core::course::{Course, CoursePoint, PanelFit};
 use watch_core::elevation::{self, Reading as ElevationReading, RezeroStatus};
 use watch_core::face::{self, FaceIcon, NavView};
@@ -179,6 +180,7 @@ pub async fn screen_task(
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
+    let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
@@ -194,6 +196,7 @@ pub async fn screen_task(
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
+    let mut stop_armed: Option<u32> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -262,6 +265,9 @@ pub async fn screen_task(
         }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
+        }
+        if let Some(v) = stop_armed_rx.try_changed() {
+            stop_armed = v;
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -457,6 +463,17 @@ pub async fn screen_task(
                 draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
+        // The armed-stop prompt: the direct answer to a BTN2 press, so for its
+        // 4 s confirm window it outranks an alert banner on the hero band. The
+        // grid (drawn after) still wins over it — BTN2 inside the grid cancels
+        // and disarms, never arms.
+        if face::run_view(rec.as_ref()) {
+            if let Some(armed_at) = stop_armed {
+                if button::stop_arm_pending(armed_at, uptime_s) {
+                    fb.draw_text_2x(0, 0, button::STOP_ARMED_BANNER);
+                }
+            }
+        }
         // The page-grid overview takes the panel over while open: its rows
         // rewrite every band (erasing the composed page underneath — each
         // draw_text_row overwrites its full 16-px band) and the cursor box +
@@ -540,7 +557,7 @@ pub async fn screen_task(
                     fix_quality_rx.changed(),
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
-                    Timer::after(tick),
+                    select(stop_armed_rx.changed(), Timer::after(tick)),
                 ),
             ),
         )
@@ -560,7 +577,8 @@ pub async fn screen_task(
             Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
             Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
             Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
-            Either3::Third(Either4::Fourth(Either4::Fourth(()))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either::First(v)))) => stop_armed = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either::Second(())))) => {}
         }
     }
 }

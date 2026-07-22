@@ -2196,18 +2196,22 @@ fn status_face(
         let _ = write!(rows[7], "HR   {} BPM", bpm);
     }
 
-    // Bottom row: cumulative vert while the baro streams, else the GPS wall
-    // clock. Metres clamped to five digits so the row can't overflow COLS.
-    match elev {
-        Some(e) => {
-            let gain = (e.gain_m as u32).min(99_999);
-            let loss = (e.loss_m as u32).min(99_999);
-            let _ = write!(rows[8], "VERT +{} -{} M", gain, loss);
+    // Bottom row: the GPS wall clock whenever the fix carries it — the idle
+    // face is the home screen and a home screen tells the time (UTC-labelled:
+    // tier 1 has no timezone source) — else cumulative vert while the baro
+    // streams (the bench case: baro without GPS). Vert used to displace the
+    // clock here, which left a baro-equipped watch with no time of day at all.
+    // Metres clamped to five digits so the row can't overflow COLS.
+    match fix.and_then(|f| f.time_of_day) {
+        Some(tod) => {
+            let (th, tm, ts) = hms(tod);
+            let _ = write!(rows[8], "UTC  {:02}:{:02}:{:02}", th, tm, ts);
         }
         None => {
-            if let Some(tod) = fix.and_then(|f| f.time_of_day) {
-                let (th, tm, ts) = hms(tod);
-                let _ = write!(rows[8], "UTC  {:02}:{:02}:{:02}", th, tm, ts);
+            if let Some(e) = elev {
+                let gain = (e.gain_m as u32).min(99_999);
+                let loss = (e.loss_m as u32).min(99_999);
+                let _ = write!(rows[8], "VERT +{} -{} M", gain, loss);
             }
         }
     }
@@ -2757,6 +2761,18 @@ mod tests {
         assert_eq!(rows[6].as_str(), "ALT  1624 M");
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
         assert_eq!(rows[7].as_str(), "");
+    }
+
+    #[test]
+    fn idle_clock_wins_the_bottom_row_over_vert() {
+        // A baro-equipped watch used to lose the time of day entirely — vert
+        // displaced the clock. Home tells the time; vert keeps the row only
+        // when no fix carries a clock (the bench case: baro without GPS).
+        let e = elev(1600.0, 120.0, 40.0);
+        let rows = face_rows(Some(&fix()), None, None, Some(&e), 42);
+        assert_eq!(rows[8].as_str(), "UTC  07:30:15");
+        let rows = face_rows(None, None, None, Some(&e), 42);
+        assert_eq!(rows[8].as_str(), "VERT +120 -40 M");
     }
 
     #[test]

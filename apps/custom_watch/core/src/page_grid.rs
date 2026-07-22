@@ -85,6 +85,22 @@ impl PageGrid {
             self.cursor = self.cursor.next_in(mask);
         }
     }
+
+    /// A BTN1 tap: cursor one cell back — [`Self::tap`]'s exact inverse.
+    /// Forward-only movement made the cells just behind the cursor the most
+    /// expensive on the whole grid (a near-full lap); the symmetric grammar
+    /// (BTN3 forward, BTN1 back, hold = a row either way) caps any cell under
+    /// the full mask at six actions.
+    pub fn back(&mut self, mask: u32) {
+        self.cursor = self.cursor.prev_in(mask);
+    }
+
+    /// A BTN1 hold: cursor one grid row up — [`Self::row_down`]'s inverse.
+    pub fn row_up(&mut self, mask: u32) {
+        for _ in 0..GRID_COLS {
+            self.cursor = self.cursor.prev_in(mask);
+        }
+    }
 }
 
 fn enabled(page: Page, mask: u32) -> bool {
@@ -271,6 +287,33 @@ mod tests {
         assert_eq!(grid_cell(shrunk, g.cursor()), None);
         g.tap(shrunk);
         assert_eq!(g.cursor(), Page::Dashboard);
+    }
+
+    #[test]
+    fn back_and_row_up_are_the_exact_inverses_of_tap_and_row_down() {
+        let mask = Page::Dashboard.bit()
+            | Page::Pace.bit()
+            | Page::Nav.bit()
+            | Page::Fuel.bit()
+            | Page::BackToStart.bit();
+        let mut g = PageGrid::open(Page::Dashboard, mask);
+        g.tap(mask);
+        g.back(mask);
+        assert_eq!(g.cursor(), Page::Dashboard);
+        g.row_down(mask);
+        g.row_up(mask);
+        assert_eq!(g.cursor(), Page::Dashboard);
+        // Backward wraps to the tail — the last page is one back-tap away,
+        // mirroring the cycle's own reverse walk.
+        g.back(mask);
+        assert_eq!(g.cursor(), Page::BackToStart);
+        let mut full = PageGrid::open(Page::Dashboard, u32::MAX);
+        full.row_up(u32::MAX);
+        assert_eq!(
+            grid_cell(u32::MAX, full.cursor()),
+            Some((0, 7)),
+            "one row up from home wraps to the last row"
+        );
     }
 
     #[test]

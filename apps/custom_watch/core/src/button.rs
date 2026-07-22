@@ -9,7 +9,7 @@ use crate::record::RecordState;
 
 /// A control command for the recording state machine, produced by a button
 /// press and consumed by the record task. One variant per [`crate::record`]
-/// method: `start` / `pause` / `resume` / `stop` / `lap`.
+/// method: `start` / `pause` / `resume` / `stop` / `lap` / `reset`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum RecordCommand {
@@ -18,6 +18,7 @@ pub enum RecordCommand {
     Resume,
     Stop,
     Lap,
+    Reset,
 }
 
 /// The physical buttons wired to recording control on the nRF52840 DK.
@@ -37,9 +38,11 @@ pub enum Button {
 /// should issue — or `None` when the press is a no-op in that state.
 ///
 /// BTN1 is a single context toggle: it starts an idle run, pauses a running
-/// one, and resumes a paused one. BTN2 stops whenever a run is in progress.
-/// BTN4 closes the current lap whenever a run is in progress. All are inert
-/// once the run is finished (a new run needs a fresh recorder).
+/// one, resumes a paused one, and dismisses a finished one back to the idle
+/// face (the stored run was committed at stop, so the dismissal is view-only
+/// — without it `Finished` was a dead end that held the run view until
+/// reboot). BTN2 stops whenever a run is in progress. BTN4 closes the current
+/// lap whenever a run is in progress; both stay inert once finished.
 ///
 /// The state comes from the published [`crate::record::Snapshot`], which does
 /// not distinguish a manual pause from a speed-derived auto-pause — so a
@@ -51,6 +54,7 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
         (Button::Primary, RecordState::Idle) => Some(RecordCommand::Start),
         (Button::Primary, RecordState::Recording) => Some(RecordCommand::Pause),
         (Button::Primary, RecordState::Paused) => Some(RecordCommand::Resume),
+        (Button::Primary, RecordState::Finished) => Some(RecordCommand::Reset),
         (Button::Stop, RecordState::Recording | RecordState::Paused) => Some(RecordCommand::Stop),
         (Button::Lap, RecordState::Recording | RecordState::Paused) => Some(RecordCommand::Lap),
         _ => None,
@@ -128,20 +132,24 @@ pub fn btn3_action(state: RecordState, press: Btn3Press) -> Btn3Action {
 }
 
 /// What a non-BTN3 press does while the page grid is open: BTN4 confirms the
-/// jump, BTN1 / BTN2 cancel. Every one of them is swallowed — a press inside
-/// a navigation modal must never reach the recorder, so the picker can't
-/// pause, stop-arm, or lap a run by accident.
+/// jump, BTN1 drives the cursor backward (tap = one cell, hold = one row up —
+/// the symmetric mirror of BTN3, Garmin's up/down idiom), BTN2 cancels. Every
+/// one of them is swallowed — a press inside a navigation modal must never
+/// reach the recorder, so the picker can't pause, stop-arm, or lap a run by
+/// accident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GridPress {
     Select,
     Cancel,
+    CursorBack,
 }
 
 pub fn grid_press(button: Button) -> GridPress {
     match button {
         Button::Lap => GridPress::Select,
-        Button::Primary | Button::Stop => GridPress::Cancel,
+        Button::Primary => GridPress::CursorBack,
+        Button::Stop => GridPress::Cancel,
     }
 }
 
@@ -149,6 +157,19 @@ pub fn grid_press(button: Button) -> GridPress {
 /// a second press within this window confirms it. A single stray press expires
 /// harmlessly after this many seconds.
 pub const STOP_CONFIRM_WINDOW_S: u32 = 4;
+
+/// The 2x banner the face shows while a stop is armed. Without it the first
+/// BTN2 press is invisible — a runner meaning to stop reads the silence as a
+/// dead button, and a runner who brushed BTN2 never learns the next brush
+/// would end the run.
+pub const STOP_ARMED_BANNER: &str = "STOP? BTN2";
+
+/// Whether an arm stamped at `armed_at_s` still awaits its confirm — the
+/// face's banner window, sharing [`STOP_CONFIRM_WINDOW_S`] with the guard so
+/// the prompt can never outlive (or undercut) the press that would confirm.
+pub fn stop_arm_pending(armed_at_s: u32, now_s: u32) -> bool {
+    now_s.saturating_sub(armed_at_s) <= STOP_CONFIRM_WINDOW_S
+}
 
 /// The outcome of feeding a BTN2 press to the [`StopGuard`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,7 +237,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn primary_is_a_start_pause_resume_toggle() {
+    fn primary_is_a_start_pause_resume_dismiss_toggle() {
         assert_eq!(
             command_for(Button::Primary, RecordState::Idle),
             Some(RecordCommand::Start)
@@ -228,6 +249,10 @@ mod tests {
         assert_eq!(
             command_for(Button::Primary, RecordState::Paused),
             Some(RecordCommand::Resume)
+        );
+        assert_eq!(
+            command_for(Button::Primary, RecordState::Finished),
+            Some(RecordCommand::Reset)
         );
     }
 
@@ -329,10 +354,22 @@ mod tests {
     }
 
     #[test]
-    fn grid_swallows_every_button_btn4_selects_the_rest_cancel() {
+    fn grid_swallows_every_button_select_back_and_cancel() {
         assert_eq!(grid_press(Button::Lap), GridPress::Select);
-        assert_eq!(grid_press(Button::Primary), GridPress::Cancel);
+        assert_eq!(grid_press(Button::Primary), GridPress::CursorBack);
         assert_eq!(grid_press(Button::Stop), GridPress::Cancel);
+    }
+
+    #[test]
+    fn stop_armed_banner_fits_the_hero_band_and_tracks_the_guard_window() {
+        // 2x glyphs are two cells wide; the banner must fit the 21-cell grid.
+        assert!(STOP_ARMED_BANNER.chars().count() * 2 <= crate::face::COLS);
+        assert!(stop_arm_pending(10, 10));
+        assert!(stop_arm_pending(10, 10 + STOP_CONFIRM_WINDOW_S));
+        assert!(!stop_arm_pending(10, 11 + STOP_CONFIRM_WINDOW_S));
+        // Clock skew (a stamp from the future) reads as pending, not as a
+        // wrapped-around expiry.
+        assert!(stop_arm_pending(10, 9));
     }
 
     #[test]
@@ -346,8 +383,12 @@ mod tests {
     }
 
     #[test]
-    fn everything_is_inert_once_finished() {
-        assert_eq!(command_for(Button::Primary, RecordState::Finished), None);
+    fn only_the_dismiss_survives_a_finished_run() {
+        // Stop and lap park once finished; BTN1 stays live as the way home.
+        assert_eq!(
+            command_for(Button::Primary, RecordState::Finished),
+            Some(RecordCommand::Reset)
+        );
         assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
         assert_eq!(command_for(Button::Lap, RecordState::Finished), None);
     }
@@ -417,6 +458,7 @@ mod tests {
                     RecordCommand::Resume => r.resume(now),
                     RecordCommand::Stop => r.stop(now),
                     RecordCommand::Lap => r.lap(now),
+                    RecordCommand::Reset => r.reset(now),
                 }
             }
         };
@@ -434,9 +476,16 @@ mod tests {
         assert_eq!(r.snapshot().last_lap.unwrap().index, 1);
         apply(Button::Stop, 3, &mut r);
         assert_eq!(r.state(), RecordState::Finished);
-        // Post-finish presses are inert.
-        apply(Button::Primary, 4, &mut r);
-        apply(Button::Stop, 5, &mut r);
+        // Stop / lap park once finished; BTN1 dismisses home and a fresh run
+        // can start with cleared totals.
+        apply(Button::Stop, 4, &mut r);
+        apply(Button::Lap, 4, &mut r);
         assert_eq!(r.state(), RecordState::Finished);
+        apply(Button::Primary, 5, &mut r);
+        assert_eq!(r.state(), RecordState::Idle);
+        apply(Button::Primary, 6, &mut r);
+        assert_eq!(r.state(), RecordState::Recording);
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        assert_eq!(r.snapshot().lap, 1);
     }
 }

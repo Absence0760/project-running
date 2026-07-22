@@ -1153,6 +1153,20 @@ impl Recorder {
         self.current_speed_mps = 0.0;
     }
 
+    /// Dismiss a finished run: back to `Idle`, so the idle face (the home
+    /// screen) shows and a fresh `start` can follow — without this, `Finished`
+    /// was a dead end and the watch stayed on the run view until reboot. Only
+    /// valid once `Finished`; the stored run was committed at `stop`, so this
+    /// changes view state only, never data (`start` clears the totals as
+    /// always).
+    pub fn reset(&mut self, now_s: u32) {
+        if self.state != RecordState::Finished {
+            return;
+        }
+        self.now_s = now_s.max(self.now_s);
+        self.state = RecordState::Idle;
+    }
+
     /// Advance the wall clock without a new fix (the mobile recorder's 1 Hz
     /// tick). Elapsed grows through paused states; idle and finished are inert.
     pub fn tick(&mut self, now_s: u32) {
@@ -1993,6 +2007,30 @@ mod tests {
         let s = r.snapshot();
         assert_eq!(s.state, RecordState::Finished);
         assert!(!s.manual_paused);
+    }
+
+    #[test]
+    fn reset_dismisses_a_finished_run_and_only_a_finished_run() {
+        let mut r = Recorder::new();
+        // Inert from idle and mid-run: a stray press can't wipe the view of a
+        // live recording.
+        r.reset(0);
+        assert_eq!(r.state(), RecordState::Idle);
+        r.start(1);
+        r.reset(2);
+        assert_eq!(r.state(), RecordState::Recording);
+        r.pause(3);
+        r.reset(4);
+        assert_eq!(r.state(), RecordState::Paused);
+        // From finished: back to idle, and a fresh start records from zero.
+        r.stop(5);
+        r.reset(6);
+        assert_eq!(r.state(), RecordState::Idle);
+        r.start(7);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Recording);
+        assert_eq!(s.distance_m, 0.0);
+        assert_eq!(s.elapsed_s, 0);
     }
 
     #[test]

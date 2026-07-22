@@ -275,10 +275,34 @@ pub async fn run(
         interaction_tx.send(now_s);
 
         // While the grid is open every button belongs to it: BTN4 confirms the
-        // jump, BTN1 / BTN2 cancel, and none of them reaches the recorder — a
-        // navigation modal must never pause, stop-arm, or lap a run.
+        // jump, BTN1 drives the cursor backward, BTN2 cancels — and none of
+        // them reaches the recorder: a navigation modal must never pause,
+        // stop-arm, or lap a run.
         if grid.is_some() {
             match grid_press(button) {
+                GridPress::CursorBack => {
+                    if let Some(g) = grid.as_mut() {
+                        // The backward mirror of the in-grid BTN3: tap = one
+                        // cell back, hold = one row up, with the same lost-
+                        // release level check.
+                        let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                        match select(Timer::after(BTN3_LONG_PRESS), btn1.wait_for_rising_edge())
+                            .await
+                        {
+                            Either::Second(()) => g.back(mask),
+                            Either::First(()) => {
+                                g.row_up(mask);
+                                if btn1.is_low() {
+                                    btn1.wait_for_rising_edge().await;
+                                }
+                            }
+                        }
+                        info!("button: grid cursor -> {}", g.cursor());
+                        grid_tx.send(Some(g.cursor()));
+                        grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                    }
+                    continue;
+                }
                 GridPress::Select => {
                     if let Some(g) = grid.take() {
                         page = g.cursor();
@@ -302,32 +326,55 @@ pub async fn run(
             .try_get()
             .map(|snap| snap.state)
             .unwrap_or(RecordState::Idle);
-        dispatch(button, state, now_s, &mut stop_guard).await;
+        if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
+            // Dismissed home: the next run opens on the Dashboard, not on
+            // whatever page the last one was parked on.
+            page = Page::default();
+            page_tx.send(page);
+        }
     }
 }
 
 /// Turn a confirmed press into a recording command, gating the terminal `Stop`
 /// behind the host-tested [`StopGuard`] double-press so a single cold/gloved
-/// mis-press can't end a multi-hour recording. Shared by the hardware and sim
-/// button tasks.
-async fn dispatch(button: Button, state: RecordState, now_s: u32, stop_guard: &mut StopGuard) {
+/// mis-press can't end a multi-hour recording. Publishes the guard's armed
+/// state so the face can show the "press again" prompt — an invisible arm
+/// reads as a dead button. Returns the command it sent, if any, so a caller
+/// can react (the page reset on a dismissed run). Shared by the hardware and
+/// sim button tasks.
+async fn dispatch(
+    button: Button,
+    state: RecordState,
+    now_s: u32,
+    stop_guard: &mut StopGuard,
+) -> Option<RecordCommand> {
     match button {
-        Button::Stop => match stop_guard.press(state, now_s) {
-            StopPress::Confirmed => {
-                info!("button: BTN2 -> stop (confirmed)");
-                state::RECORD_CMD.send(RecordCommand::Stop).await;
+        Button::Stop => {
+            match stop_guard.press(state, now_s) {
+                StopPress::Confirmed => {
+                    info!("button: BTN2 -> stop (confirmed)");
+                    state::STOP_ARMED.sender().send(None);
+                    state::RECORD_CMD.send(RecordCommand::Stop).await;
+                    return Some(RecordCommand::Stop);
+                }
+                StopPress::Armed => {
+                    info!(
+                        "button: BTN2 armed — press again within {=u32}s to stop",
+                        STOP_CONFIRM_WINDOW_S
+                    );
+                    state::STOP_ARMED.sender().send(Some(now_s));
+                }
+                StopPress::Inert => state::STOP_ARMED.sender().send(None),
             }
-            StopPress::Armed => info!(
-                "button: BTN2 armed — press again within {=u32}s to stop",
-                STOP_CONFIRM_WINDOW_S
-            ),
-            StopPress::Inert => {}
-        },
+            None
+        }
         _ => {
             if let Some(cmd) = command_for(button, state) {
                 info!("button: {} -> {}", button, cmd);
                 state::RECORD_CMD.send(cmd).await;
+                return Some(cmd);
             }
+            None
         }
     }
 }
@@ -387,6 +434,11 @@ pub async fn run(
     // hardware task — and mark the press handled so its release is inert.
     let mut btn3_down_at: Option<Instant> = None;
     let mut btn3_handled = false;
+    // BTN1 gets the same treatment, but only while the grid is open (its
+    // backward cursor role); a grid-closed BTN1 keeps acting on the falling
+    // edge so pause stays instant.
+    let mut btn1_down_at: Option<Instant> = None;
+    let mut btn1_handled = false;
     info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode (hold: grid), BTN4 lap");
 
     loop {
@@ -514,6 +566,53 @@ pub async fn run(
                 continue;
             }
 
+            // BTN1 while the grid is open mirrors BTN3's in-grid timing —
+            // backward cursor: tap = one cell back, hold = one row up — so it
+            // classifies on release / at the hold threshold instead of the
+            // falling edge its normal dispatch uses.
+            if i == 0 && (grid.is_some() || btn1_down_at.is_some()) {
+                if falling {
+                    btn1_down_at = Some(Instant::now());
+                    btn1_handled = false;
+                    continue;
+                }
+                if pressed && !btn1_handled {
+                    if let (Some(t), Some(g)) = (btn1_down_at, grid.as_mut()) {
+                        if Instant::now().saturating_duration_since(t) >= BTN3_LONG_PRESS {
+                            let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                            g.row_up(mask);
+                            info!("button: grid cursor -> {}", g.cursor());
+                            grid_tx.send(Some(g.cursor()));
+                            interaction_tx.send(Instant::now().as_secs() as u32);
+                            btn1_handled = true;
+                        }
+                    }
+                    continue;
+                }
+                if !rising {
+                    continue;
+                }
+                btn1_down_at = None;
+                let was_handled = btn1_handled;
+                btn1_handled = false;
+                if was_handled {
+                    if grid.is_some() {
+                        grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                    }
+                    continue;
+                }
+                if let Some(g) = grid.as_mut() {
+                    let now_s = Instant::now().as_secs() as u32;
+                    interaction_tx.send(now_s);
+                    let mask = record_rx.try_get().map_or(u32::MAX, |s| s.pages_mask);
+                    g.back(mask);
+                    info!("button: grid cursor -> {}", g.cursor());
+                    grid_tx.send(Some(g.cursor()));
+                    grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
+                }
+                continue;
+            }
+
             if !falling {
                 continue;
             }
@@ -526,10 +625,12 @@ pub async fn run(
                 1 => Button::Stop,
                 _ => Button::Lap,
             };
-            // Grid open: BTN4 confirms the jump, BTN1 / BTN2 cancel — all
-            // swallowed, none reaches the recorder.
+            // Grid open: BTN4 confirms the jump, BTN2 cancels — all swallowed,
+            // none reaches the recorder. BTN1 never lands here while the grid
+            // is open (the backward-cursor block above owns it).
             if grid.is_some() {
                 match grid_press(button) {
+                    GridPress::CursorBack => {}
                     GridPress::Select => {
                         if let Some(g) = grid.take() {
                             page = g.cursor();
@@ -550,7 +651,14 @@ pub async fn run(
                 .try_get()
                 .map(|snap| snap.state)
                 .unwrap_or(RecordState::Idle);
-            dispatch(button, state, now_s, &mut stop_guard).await;
+            if dispatch(button, state, now_s, &mut stop_guard).await
+                == Some(RecordCommand::Reset)
+            {
+                // Dismissed home: the next run opens on the Dashboard, not on
+                // whatever page the last one was parked on.
+                page = Page::default();
+                page_tx.send(page);
+            }
         }
     }
 }
