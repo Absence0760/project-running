@@ -128,18 +128,22 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
   idle is the QNH re-zero — duration never changes an idle gesture
   mid-press.
 - **The home face always tells the time** — the 32x48 clock hero
-  extrapolates `HH:MM` from the last fix's wall clock plus uptime (UTC —
-  tier 1 has no timezone source), and shows an honest `--:--` before any
-  fix. The seconds clock and the GPS-less-bench vert row live on the
-  diagnostics view (§291).
+  extrapolates `HH:MM` from the last fix's wall clock plus uptime, and shows
+  an honest `--:--` before any fix. Local time once a settings push has
+  carried the phone's auto-sourced timezone offset (§293), UTC until then —
+  the row-7 label (`UTC` / `LOCAL`) derives from the same input as the hero,
+  so it always says which. The seconds clock and the GPS-less-bench vert row
+  live on the diagnostics view (§291), deliberately unshifted: raw receiver
+  UTC is a feature on the bench.
 - **The home clock is minute-resolution** so an idle watch owes the panel
   zero per-second redraws; `draw_bignum_band` compare-writes whole lines, so
   a resting clock flushes zero lines (pinned by a `sharp_mip` test).
 
 ## Known gaps (deliberate, tier-1)
 
-- No timezone: the home clock is UTC-labelled until a settings-sync field
-  carries an offset.
+- The timezone offset is static between pushes: a DST transition or a border
+  crossing shifts the home clock only after the phone's next settings push
+  (§293) — the watch has no zoneinfo of its own.
 - `FIN` retains the last run's stats until dismissed — there is no summary
   page beyond the frozen dashboard.
 - The home face carries no battery figure — tier 1 has no fuel gauge, so
