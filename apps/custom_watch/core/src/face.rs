@@ -662,11 +662,12 @@ enum GlanceMetric {
     Pace,
 }
 
-/// A single-metric glance page: the metric up large in the rows-0-2 3x hero
-/// (drawn by the app from [`page_hero`]), a unit label on row 3, then time /
-/// the other metric / HR / GPS as 1x context — the "one big number" view for a
-/// mid-run glance. The pace glance adds the live grade-adjusted pace under HR,
-/// so raw and effort-equivalent pace read together on a hill.
+/// A single-metric glance page: the metric up large in the rows-0-2 numeral
+/// hero band (drawn by the app from [`page_hero`] via the generated bignum
+/// faces), a unit label + the state tag on row 3, then time / the other
+/// metric / HR / GPS as 1x context — the "one big number" view for a mid-run
+/// glance. The pace glance adds the live grade-adjusted pace under HR, so raw
+/// and effort-equivalent pace read together on a hill.
 #[allow(clippy::too_many_arguments)]
 fn glance(
     metric: GlanceMetric,
@@ -680,20 +681,24 @@ fn glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-2 hold the 3x hero (the app draws the single-metric pages' headline
-    // number triple-size — the glance a runner takes at arm's length); only the
-    // state tag rides row 0's right cells, clear of the hero digits, blinking for
-    // REC while `animate` is on and steady-on otherwise.
+    // Rows 0-2 hold the numeral-face hero band (the app draws the single-metric
+    // pages' headline from the generated 32x48/16x32 bignum faces — the glance a
+    // runner takes at arm's length); the state tag rides the label row's right
+    // cells instead, clear of the digits, blinking for REC while `animate` is on
+    // and steady-on otherwise.
     let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
 
     let label = match metric {
         GlanceMetric::Distance => "DISTANCE  KM",
         GlanceMetric::Pace => "AVG PACE  /KM",
     };
     let _ = write!(rows[3], "{}", label);
+    if tag_shown {
+        while rows[3].len() < COLS - tag.len() {
+            let _ = rows[3].push(' ');
+        }
+        let _ = write!(rows[3], "{}", tag);
+    }
 
     let (h, m, s) = hms(snap.elapsed_s);
     let _ = write!(rows[4], "{:<5}{}:{:02}:{:02}", "TIME", h.min(999), m, s);
@@ -730,13 +735,19 @@ fn glance(
 }
 
 /// The big headline value for a glance page's hero (no unit — the label row
-/// carries it): distance to two decimals, or `M:SS` average pace / `--:--`.
+/// carries it): distance to two decimals (one from 1000 km, so the numeral
+/// band rounds rather than truncates a four-digit ultra total), or `M:SS`
+/// average pace / `--:--`.
 fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
     let mut row = Row::new();
     match metric {
         GlanceMetric::Distance => {
-            let km = (snap.distance_m / 1000.0).min(9999.99);
-            let _ = write!(row, "{:.2}", km);
+            let km = (snap.distance_m / 1000.0).min(9999.9);
+            if km < 1000.0 {
+                let _ = write!(row, "{:.2}", km);
+            } else {
+                let _ = write!(row, "{:.1}", km);
+            }
         }
         GlanceMetric::Pace => match snap.avg_pace_s_per_km {
             Some(p) => {
@@ -3318,10 +3329,11 @@ mod tests {
                 .as_str(),
             "42.19"
         );
-        assert_eq!(rows[0].as_str().trim(), "REC");
-        // Rows 0-2 are the 3x hero (drawn by the app); the label rides row 3.
+        // Rows 0-2 are the numeral hero band (drawn by the app); the label and
+        // the right-anchored state tag share row 3.
+        assert_eq!(rows[0].as_str(), "");
         assert_eq!(rows[2].as_str(), "");
-        assert_eq!(rows[3].as_str(), "DISTANCE  KM");
+        assert_eq!(rows[3].as_str(), "DISTANCE  KM      REC");
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
@@ -3395,7 +3407,7 @@ mod tests {
                 .as_str(),
             "5:12"
         );
-        assert_eq!(rows[3].as_str(), "AVG PACE  /KM");
+        assert_eq!(rows[3].as_str(), "AVG PACE  /KM     REC");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(rows[7].as_str(), "GAP  4:52 /KM");

@@ -417,11 +417,12 @@ pub async fn screen_task(
         } else if let Some(banner) = &rezero_banner {
             fb.draw_text_2x(0, 0, banner);
         } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
-            // The single-metric glance pages headline their number triple-size
-            // (their face reserves rows 0-2 + puts the label on row 3); every
-            // other hero stays 2x over rows 0-1.
+            // The single-metric glance pages headline their number in the
+            // generated numeral faces (their face reserves rows 0-2 + puts the
+            // label and state tag on row 3); every other hero stays 2x over
+            // rows 0-1.
             if matches!(page, Page::Distance | Page::Pace) {
-                fb.draw_text_3x(0, 0, &hero);
+                fb.draw_bignum_hero(0, &hero);
             } else {
                 fb.draw_text_2x(0, 0, &hero);
             }

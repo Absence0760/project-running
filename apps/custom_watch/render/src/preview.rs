@@ -100,7 +100,7 @@ fn sample_fix() -> Fix {
     }
 }
 
-// Draw the face rows + 2x hero the way the ui task does, so the preview shows
+// Draw the face rows + hero the way the ui task does, so the preview shows
 // the widget over its real text underlay.
 fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Option<u16>) {
     let fix = sample_fix();
@@ -121,7 +121,11 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         fb.draw_text_row(r, row);
     }
     if let Some(hero) = face::page_hero(page, hr, snap, None) {
-        fb.draw_text_2x(0, 0, &hero);
+        if matches!(page, Page::Distance | Page::Pace) {
+            fb.draw_bignum_hero(0, &hero);
+        } else {
+            fb.draw_text_2x(0, 0, &hero);
+        }
     }
 }
 
@@ -214,6 +218,28 @@ fn preview_run_dashboard() {
         watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
     );
     show("run dashboard: hero + NOW/GAP pairing", &fb);
+}
+
+#[test]
+fn preview_distance_and_pace_bignum_heroes() {
+    // The single-metric glances: big integers / minutes with the medium face
+    // carrying the decimals / seconds on the shared baseline.
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Distance, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Distance, u32::MAX),
+    );
+    show("distance glance: 32.40 in the numeral faces", &fb);
+
+    let mut fb2 = Framebuffer::new();
+    draw_face(&mut fb2, Page::Pace, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb2,
+        watch_core::statusbar::page_indicator(Page::Pace, u32::MAX),
+    );
+    show("pace glance: 6:20 in the numeral faces", &fb2);
 }
 
 #[test]

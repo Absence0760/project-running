@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use embedded_hal::digital::{ErrorType as PinErrorType, OutputPin};
 use embedded_hal::spi::{ErrorType as SpiErrorType, SpiBus};
 use sharp_mip::{
-    font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH,
+    font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS, WIDTH,
 };
 
 #[derive(Default)]
@@ -674,78 +674,6 @@ fn sparkline_clamps_values_outside_the_range() {
         );
         assert!(!under.pixel(x, 0), "under-range leaked to the top at x={x}");
     }
-}
-
-#[test]
-fn draw_text_3x_triples_a_glyph() {
-    let mut fb = Framebuffer::new();
-    fb.clear_dirty();
-    fb.draw_text_3x(0, 0, "1");
-    let glyph = &font::FONT[(b'1' - font::FIRST_CHAR) as usize];
-    // Each source row maps to three dest rows; each source bit b lights dest
-    // bits 3b..3b+3 across the three-byte-wide tripled cell.
-    for (dy, &bits) in glyph.iter().enumerate() {
-        let mut wide: u32 = 0;
-        for b in 0..8 {
-            if bits >> b & 1 != 0 {
-                wide |= 0b111 << (b * 3);
-            }
-        }
-        let bytes = [
-            (wide & 0xff) as u8,
-            (wide >> 8 & 0xff) as u8,
-            (wide >> 16 & 0xff) as u8,
-        ];
-        for third in 0..3 {
-            let y = dy * 3 + third;
-            if y >= HEIGHT {
-                break;
-            }
-            for (c, &want) in bytes.iter().enumerate() {
-                assert_eq!(fb.line(y)[c], want, "row {y} cell {c}");
-            }
-        }
-    }
-    // A tripled glyph spans 48 rows and dirtied at least the non-empty ones.
-    assert!(fb.dirty_count() > 0);
-    assert!((0..HEIGHT)
-        .filter(|&y| fb.is_dirty(y))
-        .all(|y| y < 3 * font::GLYPH_HEIGHT));
-}
-
-#[test]
-fn draw_text_3x_block_is_24_wide_and_48_tall() {
-    let mut fb = Framebuffer::new();
-    fb.draw_text_3x(0, 0, "8"); // a dense glyph
-    let mut max_x = 0;
-    let mut max_y = 0;
-    let mut any = false;
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            if fb.pixel(x, y) {
-                any = true;
-                if x > max_x {
-                    max_x = x;
-                }
-                if y > max_y {
-                    max_y = y;
-                }
-            }
-        }
-    }
-    assert!(any, "glyph rendered nothing");
-    // 24 px wide (3 cells) and 48 px tall (3 rows) upper bounds.
-    assert!(max_x < 24, "wider than 24 px: {max_x}");
-    assert!(max_y < 48, "taller than 48 px: {max_y}");
-}
-
-#[test]
-fn draw_text_3x_truncates_and_clips_without_panicking() {
-    let mut fb = Framebuffer::new();
-    fb.draw_text_3x(0, 99, "X"); // past the bottom text row
-    fb.draw_text_3x(TEXT_COLS - 2, 0, "X"); // 2nd/3rd cells fall off the right
-    fb.draw_text_3x(0, TEXT_ROWS - 1, "X"); // bottom row: lower two-thirds clip off-panel
-    fb.draw_text_3x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
 }
 
 #[test]

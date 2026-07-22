@@ -473,41 +473,6 @@ impl Framebuffer {
         }
     }
 
-    /// Draw a string at 3x scale — each 8x16 glyph pixel-tripled into a 24x48
-    /// block spanning three grid cells wide and three text rows tall. The
-    /// biggest single-metric band, still authored from the one 8x16 font.
-    /// Cell-aligned at `(col, row)`; truncates at the right edge and clips at
-    /// the bottom. Overwrites the covered cells, so redrawing dirties nothing.
-    pub fn draw_text_3x(&mut self, col: usize, row: usize, text: &str) {
-        if row >= TEXT_ROWS {
-            return;
-        }
-        let y0 = row * font::GLYPH_HEIGHT;
-        for (i, ch) in text.chars().enumerate() {
-            let cell = col + i * 3;
-            if cell >= TEXT_COLS {
-                break;
-            }
-            let glyph = glyph_for(ch);
-            for (dy, &bits) in glyph.iter().enumerate() {
-                let (b0, b1, b2) = triple_bits(bits);
-                for third in 0..3 {
-                    let y = y0 + dy * 3 + third;
-                    if y >= HEIGHT {
-                        break;
-                    }
-                    self.put_cell_byte(cell, y, b0);
-                    if cell + 1 < TEXT_COLS {
-                        self.put_cell_byte(cell + 1, y, b1);
-                    }
-                    if cell + 2 < TEXT_COLS {
-                        self.put_cell_byte(cell + 2, y, b2);
-                    }
-                }
-            }
-        }
-    }
-
     /// Draw `text` in the generated 32x48 numeral face ([`bignum`]), centred
     /// in the full-width band whose top pixel row is `y0`. Each affected line
     /// is composed off-screen (background included) and compare-written, so a
@@ -525,7 +490,7 @@ impl Framebuffer {
             }
             let mut line = [0u8; LINE_BYTES];
             for (i, ch) in text.bytes().take(n).enumerate() {
-                let Some(g) = bignum::BIGNUM_GLYPHS.iter().position(|&c| c == ch) else {
+                let Some(g) = bignum_index(ch) else {
                     continue;
                 };
                 for (bx, &byte) in bignum::BIGNUM[g][dy].iter().enumerate() {
@@ -541,6 +506,73 @@ impl Framebuffer {
                 }
             }
             for (bx, &b) in line.iter().enumerate() {
+                if self.lines[y][bx] != b {
+                    self.lines[y][bx] = b;
+                    self.dirty[y] = true;
+                }
+            }
+        }
+    }
+
+    /// Draw `text` as a run-view hero from the generated numeral faces,
+    /// anchored at the left edge of the band whose top pixel row is `y0`:
+    /// glyphs before the first `.` or `:` render in the 32x48 face, the
+    /// separator and everything after in the 16x32 medium face sharing the
+    /// digits' baseline — big integers (or minutes) with smaller decimals
+    /// (or seconds), instead of pixel-scaling the 8x16 text font into ragged
+    /// strokes. Composes and compare-writes only the pixels the hero spans,
+    /// so pixels to its right (the fuel-overdue marker's cells) are never
+    /// touched and an unchanged hero dirties nothing; a previously wider
+    /// hero is erased by the text pass's row clearing. Characters outside
+    /// the glyph set advance blank at the current size; glyphs past the
+    /// right edge are dropped; clips at the bottom.
+    pub fn draw_bignum_hero(&mut self, y0: usize, text: &str) {
+        let med_from = text
+            .bytes()
+            .position(|b| b == b'.' || b == b':')
+            .unwrap_or(text.len());
+        let mut span_w = 0;
+        let mut n = 0;
+        for (i, _) in text.bytes().enumerate() {
+            let w = if i < med_from {
+                bignum::BIGNUM_WIDTH
+            } else {
+                bignum::BIGNUM_MED_WIDTH
+            };
+            if span_w + w > WIDTH {
+                break;
+            }
+            span_w += w;
+            n += 1;
+        }
+        for dy in 0..bignum::BIGNUM_HEIGHT {
+            let y = y0 + dy;
+            if y >= HEIGHT {
+                return;
+            }
+            let mut line = [0u8; LINE_BYTES];
+            let mut x = 0;
+            for (i, ch) in text.bytes().take(n).enumerate() {
+                if i < med_from {
+                    if let Some(g) = bignum_index(ch) {
+                        for (bx, &byte) in bignum::BIGNUM[g][dy].iter().enumerate() {
+                            line[x / 8 + bx] |= byte;
+                        }
+                    }
+                    x += bignum::BIGNUM_WIDTH;
+                } else {
+                    let med_dy = dy.wrapping_sub(MED_BASELINE_DROP);
+                    if med_dy < bignum::BIGNUM_MED_HEIGHT {
+                        if let Some(g) = bignum_index(ch) {
+                            for (bx, &byte) in bignum::BIGNUM_MED[g][med_dy].iter().enumerate() {
+                                line[x / 8 + bx] |= byte;
+                            }
+                        }
+                    }
+                    x += bignum::BIGNUM_MED_WIDTH;
+                }
+            }
+            for (bx, &b) in line.iter().enumerate().take(span_w.div_ceil(8)) {
                 if self.lines[y][bx] != b {
                     self.lines[y][bx] = b;
                     self.dirty[y] = true;
@@ -613,22 +645,32 @@ fn double_bits(src: u8) -> (u8, u8) {
     ((out & 0xff) as u8, (out >> 8) as u8)
 }
 
-/// Pixel-triple one 8-bit glyph row into 24 bits (three bytes): source bit `b`
-/// (bit 0 = leftmost) lights destination bits `3b`, `3b+1`, `3b+2`, keeping the
-/// framebuffer's LSB-first-is-leftmost convention.
-fn triple_bits(src: u8) -> (u8, u8, u8) {
-    let mut out: u32 = 0;
-    for b in 0..8 {
-        if src >> b & 1 != 0 {
-            out |= 0b111 << (b * 3);
+fn bignum_index(ch: u8) -> Option<usize> {
+    bignum::BIGNUM_GLYPHS.iter().position(|&c| c == ch)
+}
+
+/// Last row of a glyph carrying ink — the shared baseline both numeral faces
+/// centre their (descender-free) ink band around.
+const fn ink_bottom<const RB: usize, const H: usize>(glyph: &[[u8; RB]; H]) -> usize {
+    let mut y = H;
+    while y > 0 {
+        y -= 1;
+        let mut bx = 0;
+        while bx < RB {
+            if glyph[y][bx] != 0 {
+                return y;
+            }
+            bx += 1;
         }
     }
-    (
-        (out & 0xff) as u8,
-        (out >> 8 & 0xff) as u8,
-        (out >> 16 & 0xff) as u8,
-    )
+    0
 }
+
+/// Rows the medium face drops below the big face's cell top so a `0` in each
+/// lands on the same baseline. Derived from the tables, so a regeneration
+/// that re-centres the ink bands keeps the mixed hero aligned.
+const MED_BASELINE_DROP: usize =
+    ink_bottom(&bignum::BIGNUM[0]) - ink_bottom(&bignum::BIGNUM_MED[0]);
 
 /// Angle of the screen vector `(dx, dy)` in degrees `0..360`, 0 at +x and
 /// increasing toward +y (clockwise on-screen). Integer-only: the in-octant

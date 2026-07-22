@@ -191,16 +191,15 @@ fn rendered_extents(fb: &Framebuffer, x0: usize, y0: usize, w: usize, h: usize) 
 
 #[test]
 fn plus_reads_as_a_cross_at_every_scale() {
-    // draw_text/_2x/_3x pixel-replicate the same 8x16 glyph, so a correct
-    // glyph scales exactly — but check each renderer really consumes it, and
-    // that '+' stays distinct from '-' at every scale a page can use.
+    // draw_text/_2x pixel-replicate the same 8x16 glyph, so a correct glyph
+    // scales exactly — but check each renderer really consumes it, and that
+    // '+' stays distinct from '-' at every scale a page can use.
     for (scale, draw) in [
         (
             1usize,
             Framebuffer::draw_text as fn(&mut Framebuffer, usize, usize, &str),
         ),
         (2, Framebuffer::draw_text_2x),
-        (3, Framebuffer::draw_text_3x),
     ] {
         let (w, h) = (font::GLYPH_WIDTH * scale, font::GLYPH_HEIGHT * scale);
 
