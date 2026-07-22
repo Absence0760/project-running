@@ -235,8 +235,9 @@ mod tests {
     fn indicator_first_and_last_pages() {
         let first = page_indicator(Page::Dashboard, u32::MAX);
         assert_eq!(first.active, 0);
-        let last = page_indicator(Page::RaceDay, u32::MAX);
-        // RaceDay is the final variant, so its index is total - 1.
+        let last = page_indicator(Page::BackToStart, u32::MAX);
+        // BackToStart is the final variant (the safety page anchors the wrap),
+        // so its index is total - 1.
         assert_eq!(last.active, last.total - 1);
     }
 

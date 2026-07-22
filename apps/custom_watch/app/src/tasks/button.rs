@@ -8,8 +8,9 @@
 //! Mapping (see `watch_core::button::command_for`):
 //!   BTN1 — start / pause / resume toggle
 //!   BTN2 — stop
-//!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap /
-//!          zones / pacer / nav / back-to-start) while a run is under way;
+//!   BTN3 — cycle the run-view page (dashboard / distance / pace / ... —
+//!          `watch_core::page` owns the frequency-ordered cycle) while a run
+//!          is under way;
 //!          cycle the GNSS recording mode (Performance / Balanced /
 //!          Expedition) on the idle face; long-press = page back in a run,
 //!          manual QNH re-zero on the idle face
