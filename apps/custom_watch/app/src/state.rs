@@ -11,7 +11,7 @@ use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::course::Course;
 use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
-use watch_core::face::NavView;
+use watch_core::face::{IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::HrSample;
@@ -58,6 +58,11 @@ pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new(
 /// Current run-view page: the `button` task advances it on each BTN3 press, the
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
+
+/// Which idle face is showing: the `button` task toggles it on BTN4 while no
+/// run is under way (home clock <-> diagnostics, decisions §291), the `ui`
+/// face reads it to pick the idle layout. One receiver (the `ui` task).
+pub static IDLE_VIEW: Watch<CriticalSectionRawMutex, IdleView, 1> = Watch::new();
 
 /// The page-grid overview's cursor while the grid is open, `None` when closed.
 /// The `button` task owns the grid state machine (`watch_core::page_grid`) and

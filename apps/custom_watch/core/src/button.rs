@@ -70,22 +70,25 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
 /// meaningless, so the same key becomes a tap page-back: the post-run review
 /// pages both ways on taps (BTN3 forward, BTN4 back) instead of owing a
 /// BTN3 long-press for every leftward step — which also survives gloved or
-/// mouse-click presses that can't hold a threshold. Idle has no pages and no
-/// lap: the key is inert. The `Lap` arm must stay in lockstep with
-/// [`command_for`]'s — a state where this returns `Lap` is exactly a state
-/// where `command_for` issues `RecordCommand::Lap` (pinned by a test).
+/// mouse-click presses that can't hold a threshold. While idle it toggles the
+/// home face against the diagnostics face (decisions §291) — every state
+/// gives the otherwise-dead key one obvious meaning, and none of them can
+/// reach the recorder outside a live run. The `Lap` arm must stay in lockstep
+/// with [`command_for`]'s — a state where this returns `Lap` is exactly a
+/// state where `command_for` issues `RecordCommand::Lap` (pinned by a test).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Btn4Action {
     Lap,
     PageBack,
+    ToggleDiagnostics,
 }
 
 pub fn btn4_action(state: RecordState) -> Option<Btn4Action> {
     match state {
         RecordState::Recording | RecordState::Paused => Some(Btn4Action::Lap),
         RecordState::Finished => Some(Btn4Action::PageBack),
-        RecordState::Idle => None,
+        RecordState::Idle => Some(Btn4Action::ToggleDiagnostics),
     }
 }
 
@@ -313,17 +316,20 @@ mod tests {
     }
 
     #[test]
-    fn btn4_is_lap_in_a_run_and_page_back_once_finished() {
+    fn btn4_is_lap_in_a_run_page_back_finished_and_diag_toggle_idle() {
         assert_eq!(btn4_action(RecordState::Recording), Some(Btn4Action::Lap));
         assert_eq!(btn4_action(RecordState::Paused), Some(Btn4Action::Lap));
         assert_eq!(
             btn4_action(RecordState::Finished),
             Some(Btn4Action::PageBack)
         );
-        assert_eq!(btn4_action(RecordState::Idle), None);
+        assert_eq!(
+            btn4_action(RecordState::Idle),
+            Some(Btn4Action::ToggleDiagnostics)
+        );
         // Lockstep with the recorder-command reducer: BTN4 laps exactly where
-        // command_for issues the lap, and a PageBack state issues no recorder
-        // command at all.
+        // command_for issues the lap, and the view/page actions issue no
+        // recorder command at all.
         for state in [
             RecordState::Idle,
             RecordState::Recording,
@@ -334,7 +340,7 @@ mod tests {
                 btn4_action(state) == Some(Btn4Action::Lap),
                 command_for(Button::Lap, state) == Some(RecordCommand::Lap)
             );
-            if btn4_action(state) == Some(Btn4Action::PageBack) {
+            if btn4_action(state) != Some(Btn4Action::Lap) {
                 assert_eq!(command_for(Button::Lap, state), None);
             }
         }

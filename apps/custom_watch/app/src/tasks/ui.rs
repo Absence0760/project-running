@@ -19,7 +19,7 @@ use watch_core::alerts::{self, Alert};
 use watch_core::button;
 use watch_core::course::{Course, CoursePoint, PanelFit};
 use watch_core::elevation::{self, Reading as ElevationReading, RezeroStatus};
-use watch_core::face::{self, FaceIcon, NavView};
+use watch_core::face::{self, FaceIcon, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
@@ -171,6 +171,7 @@ pub async fn screen_task(
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut page_rx = unwrap!(state::PAGE.receiver());
     let mut page_grid_rx = unwrap!(state::PAGE_GRID.receiver());
+    let mut idle_view_rx = unwrap!(state::IDLE_VIEW.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
@@ -189,6 +190,7 @@ pub async fn screen_task(
     let mut sats: Option<u8> = None;
     let mut fix_quality: Option<u8> = None;
     let mut page = Page::default();
+    let mut idle_view = IdleView::Home;
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
     let mut grid: Option<Page> = None;
@@ -236,6 +238,9 @@ pub async fn screen_task(
         }
         if let Some(g) = page_grid_rx.try_changed() {
             grid = g;
+        }
+        if let Some(v) = idle_view_rx.try_changed() {
+            idle_view = v;
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -288,6 +293,7 @@ pub async fn screen_task(
             uptime_s,
             animate,
             mode,
+            idle_view,
         );
         // Persist the fuel reminder past its transient banner: latch the standing
         // overdue state off the same `alert` value and paint a compact marker.
@@ -354,8 +360,19 @@ pub async fn screen_task(
             .map(|(_, _, marker, track)| (*track, marker.is_some(), nav_alert.is_some()));
         let panel_repaint = panel_state.is_some() && panel_state != last_panel;
         last_panel = panel_state;
+        let clock_band = !face::run_view(rec.as_ref()) && idle_view == IdleView::Home;
         for (row, text) in rows.iter().enumerate() {
             if PANEL_ROWS.contains(&row) && panel_state.is_some() && !panel_repaint {
+                continue;
+            }
+            // The home clock band: draw_bignum_band composes these lines
+            // whole (background included), so the text pass skips them — a
+            // clear-and-redraw would dirty the band every frame even when
+            // the minute hasn't flipped.
+            if clock_band
+                && (face::CLOCK_HERO_TOP_ROW..face::CLOCK_HERO_TOP_ROW + face::CLOCK_HERO_ROWS)
+                    .contains(&row)
+            {
                 continue;
             }
             fb.draw_text_row(row, text);
@@ -448,6 +465,10 @@ pub async fn screen_task(
         } else {
             let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
+            if idle_view == IdleView::Home {
+                let clock = face::home_clock_text(latest.as_ref(), uptime_s);
+                fb.draw_bignum_band(face::CLOCK_HERO_TOP_ROW * CELL_H, &clock);
+            }
         }
 
         // The BackToStart page's pixel layer rides on top of the text rows

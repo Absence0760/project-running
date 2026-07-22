@@ -38,6 +38,7 @@ use watch_core::button::{
     GridPress, RecordCommand, StopGuard, StopPress, BTN3_GRID_HOLD_MS, BTN3_LONG_PRESS_MS,
     STOP_CONFIRM_WINDOW_S,
 };
+use watch_core::face::IdleView;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
@@ -91,8 +92,10 @@ pub async fn run(
     let page_tx = state::PAGE.sender();
     let grid_tx = state::PAGE_GRID.sender();
     let mode_tx = state::GNSS_MODE.sender();
+    let idle_view_tx = state::IDLE_VIEW.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
+    let mut idle_view = IdleView::Home;
     // Seed from the mode main restored from flash at boot so the BTN3 cycle
     // continues from the persisted choice rather than the default.
     let mut mode = initial_mode;
@@ -328,21 +331,41 @@ pub async fn run(
         // waits: before the first snapshot the run is idle, which is correct.
         let snap = record_rx.try_get();
         let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
-        // A finished run turns the dead lap key into a tap page-back (the
-        // host-tested btn4_action): the post-run review pages both ways on
-        // taps — BTN3 forward, BTN4 back.
-        if button == Button::Lap && btn4_action(state) == Some(Btn4Action::PageBack) {
-            let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
-            page = page.prev_in(mask);
-            info!("button: BTN4 -> page {} (back)", page);
-            page_tx.send(page);
-            continue;
+        // BTN4's non-lap meanings (the host-tested btn4_action): a finished
+        // run turns the dead lap key into a tap page-back — the post-run
+        // review pages both ways on taps, BTN3 forward, BTN4 back — and while
+        // idle it toggles the home face against the diagnostics face (§291).
+        if button == Button::Lap {
+            match btn4_action(state) {
+                Some(Btn4Action::PageBack) => {
+                    let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                    page = page.prev_in(mask);
+                    info!("button: BTN4 -> page {} (back)", page);
+                    page_tx.send(page);
+                    continue;
+                }
+                Some(Btn4Action::ToggleDiagnostics) => {
+                    idle_view = if idle_view == IdleView::Home {
+                        IdleView::Diagnostics
+                    } else {
+                        IdleView::Home
+                    };
+                    info!("button: BTN4 -> idle view {}", idle_view);
+                    idle_view_tx.send(idle_view);
+                    continue;
+                }
+                _ => {}
+            }
         }
         if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
-            // Dismissed home: the next run opens on the Dashboard, not on
-            // whatever page the last one was parked on.
+            // Dismissed home: the next run opens on the Dashboard — not on
+            // whatever page the last one was parked on — and on the home
+            // clock, not wherever a pre-run diagnostics toggle left the idle
+            // face.
             page = Page::default();
             page_tx.send(page);
+            idle_view = IdleView::Home;
+            idle_view_tx.send(idle_view);
         }
     }
 }
@@ -425,8 +448,10 @@ pub async fn run(
     let page_tx = state::PAGE.sender();
     let grid_tx = state::PAGE_GRID.sender();
     let mode_tx = state::GNSS_MODE.sender();
+    let idle_view_tx = state::IDLE_VIEW.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
+    let mut idle_view = IdleView::Home;
     let mut mode = initial_mode;
     let mut stop_guard = StopGuard::new();
     let mut grid: Option<PageGrid> = None;
@@ -662,19 +687,38 @@ pub async fn run(
             }
             let snap = record_rx.try_get();
             let state = snap.map(|s| s.state).unwrap_or(RecordState::Idle);
-            // Same finished-run page-back as the hardware task above.
-            if button == Button::Lap && btn4_action(state) == Some(Btn4Action::PageBack) {
-                let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
-                page = page.prev_in(mask);
-                info!("button: BTN4 -> page {} (back)", page);
-                page_tx.send(page);
-                continue;
+            // Same BTN4 non-lap meanings as the hardware task above.
+            if button == Button::Lap {
+                match btn4_action(state) {
+                    Some(Btn4Action::PageBack) => {
+                        let mask = snap.map_or(u32::MAX, |s| s.pages_mask);
+                        page = page.prev_in(mask);
+                        info!("button: BTN4 -> page {} (back)", page);
+                        page_tx.send(page);
+                        continue;
+                    }
+                    Some(Btn4Action::ToggleDiagnostics) => {
+                        idle_view = if idle_view == IdleView::Home {
+                            IdleView::Diagnostics
+                        } else {
+                            IdleView::Home
+                        };
+                        info!("button: BTN4 -> idle view {}", idle_view);
+                        idle_view_tx.send(idle_view);
+                        continue;
+                    }
+                    _ => {}
+                }
             }
             if dispatch(button, state, now_s, &mut stop_guard).await == Some(RecordCommand::Reset) {
-                // Dismissed home: the next run opens on the Dashboard, not on
-                // whatever page the last one was parked on.
+                // Dismissed home: the next run opens on the Dashboard — not
+                // on whatever page the last one was parked on — and on the
+                // home clock, not wherever a pre-run diagnostics toggle left
+                // the idle face.
                 page = Page::default();
                 page_tx.send(page);
+                idle_view = IdleView::Home;
+                idle_view_tx.send(idle_view);
             }
         }
     }

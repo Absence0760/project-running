@@ -14,8 +14,11 @@ sim-verified (see `apps/custom_watch/local_testing.md` for the macros).
 stateDiagram-v2
     direction LR
     Idle: Idle face (home)
-    Idle: brand + GNSS mode + GPS
-    Idle: ALT / HR / UTC clock
+    Idle: clock hero + HR / ALT
+    Idle: GPS glance + GNSS mode
+    Diag: Diagnostics face
+    Diag: LAT / LON / SPD
+    Diag: seconds clock / vert
     Run: Run view
     Run: 32 pages (filtered mask)
     Grid: Page grid (modal)
@@ -24,6 +27,9 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Idle: BTN3 tap — GNSS mode cycle
     Idle --> Idle: BTN3 hold — QNH re-zero
+    Idle --> Diag: BTN4 — diagnostics view (§291)
+    Diag --> Idle: BTN4 — back to home
+    Diag --> Run: BTN1 — start run
     Idle --> Run: BTN1 — start run
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
     Run --> Run: BTN2 — arm stop ("STOP? BTN2" banner, 4 s)
@@ -47,7 +53,9 @@ steady only for a manual pause (owes a BTN1 press), `FIN` once stopped
 the Dashboard (§289) — before §289, `Finished` was a dead end that held the
 run view until reboot. In `FIN` the dead lap key becomes a tap page-back
 (§290): the post-run review pages both ways on taps, BTN3 forward and BTN4
-backward, with the long-press back still available everywhere.
+backward, with the long-press back still available everywhere. Dismissing
+also resets the idle face to the home view, wherever a pre-run BTN4 toggle
+left it (§291).
 
 ## The page cycle (§286 order, §284 filter)
 
@@ -119,9 +127,14 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
 - **Idle gestures are duration-stable**: a BTN3 hold of any length while
   idle is the QNH re-zero — duration never changes an idle gesture
   mid-press.
-- **The home face always tells the time** once a fix carries it (UTC — tier
-  1 has no timezone source); cumulative vert keeps the row only on a
-  GPS-less bench.
+- **The home face always tells the time** — the 32x48 clock hero
+  extrapolates `HH:MM` from the last fix's wall clock plus uptime (UTC —
+  tier 1 has no timezone source), and shows an honest `--:--` before any
+  fix. The seconds clock and the GPS-less-bench vert row live on the
+  diagnostics view (§291).
+- **The home clock is minute-resolution** so an idle watch owes the panel
+  zero per-second redraws; `draw_bignum_band` compare-writes whole lines, so
+  a resting clock flushes zero lines (pinned by a `sharp_mip` test).
 
 ## Known gaps (deliberate, tier-1)
 
@@ -129,9 +142,9 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
   carries an offset.
 - `FIN` retains the last run's stats until dismissed — there is no summary
   page beyond the frozen dashboard.
-- The idle face is still the bench acquisition view (LAT/LON rows); a true
-  home face (big clock hero, HR, battery) is a candidate follow-up once
-  tier-2 hardware exists.
+- The home face carries no battery figure — tier 1 has no fuel gauge, so
+  the MODE row's projected hours are the only battery signal (§291 shipped
+  the clock-hero home face; the bench acquisition view moved behind BTN4).
 
 ## Driving it in the sim
 
@@ -139,4 +152,5 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
 `bin/watch-monitor.sh`: `runMacro $btn1` start / pause / dismiss-home,
 `$btn2` twice stop (watch the `STOP? BTN2` banner), `$btn3` page, `$btn3l`
 page back, `$btn3h` page grid, then `$btn3`/`$btn3l`/`$btn1` to move the
-cursor and `$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back.
+cursor and `$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back. While
+idle, `$btn4` toggles the home face against the diagnostics face.

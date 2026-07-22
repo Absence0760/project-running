@@ -63,6 +63,48 @@ pub fn stale_after_s(mode: GnssMode, run_active: bool) -> u32 {
 
 pub type Row = heapless::String<COLS>;
 
+/// Which idle-face layout is showing: the home face (clock hero + a summary
+/// band) or the diagnostics face (the bench acquisition view — LAT/LON/SPD
+/// and the seconds clock). BTN4 toggles them while no run is under way; the
+/// toggle state lives in the button task, this enum only names the layouts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum IdleView {
+    #[default]
+    Home,
+    Diagnostics,
+}
+
+/// The home face's clock hero band: these text rows stay blank in the face
+/// and the app draws the generated 32x48 numeral clock into their pixels —
+/// the same face-leaves-blank / widget-overlay contract as the Nav panel
+/// rows. Three 16 px rows = exactly the numeral height.
+pub const CLOCK_HERO_TOP_ROW: usize = 2;
+pub const CLOCK_HERO_ROWS: usize = 3;
+
+/// The clock hero text — `HH:MM`, extrapolated to the *current* minute from
+/// the last fix's wall clock plus elapsed uptime (fixes can be minutes apart
+/// in Expedition mode, and a clock frozen at the fix's minute reads as a hung
+/// watch), or the honest `--:--` before any fix carries a clock. Minute
+/// resolution on purpose: the hero must never owe the panel a redraw per
+/// second. UTC — tier 1 has no timezone source; the summary row's label says
+/// so.
+pub type ClockText = heapless::String<5>;
+
+pub fn home_clock_text(fix: Option<&Fix>, uptime_s: u32) -> ClockText {
+    let mut t = ClockText::new();
+    match fix.and_then(|f| f.time_of_day.map(|tod| (tod, f.uptime_s))) {
+        Some((tod, at)) => {
+            let s = (tod + uptime_s.saturating_sub(at)) % 86_400;
+            let _ = write!(t, "{:02}:{:02}", s / 3600, s / 60 % 60);
+        }
+        None => {
+            let _ = write!(t, "--:--");
+        }
+    }
+    t
+}
+
 /// A display-agnostic icon slot the dashboard places in a row's left gutter.
 /// `core` stays free of the `sharp_mip` crate (it must not know the panel), so
 /// the app maps each variant onto the driver's own `Icon` when it blits — an
@@ -220,10 +262,11 @@ pub fn face_rows(
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
     mode: GnssMode,
+    view: IdleView,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode, false),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, false, view),
     }
 }
 
@@ -299,9 +342,10 @@ pub fn page_rows(
     uptime_s: u32,
     animate: bool,
     mode: GnssMode,
+    view: IdleView,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
-        None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode, animate, view),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
             Page::Distance => glance(
@@ -2123,29 +2167,48 @@ fn dashboard(
     rows
 }
 
-/// The idle / bench layout — brand, the selected GNSS mode with its projected
-/// hours, GPS status, last-known position, speed, altitude, HR, and vert
-/// (falling back to the UTC clock with no baro). The title row is deliberately
-/// static (no ticking uptime): the screen task is event-driven, so a resting
-/// idle face with no per-second element lets the CPU sleep instead of waking
-/// every second to advance a cosmetic clock. Time of day still shows on the
-/// bottom row from the GPS fix, updating on each fix.
-///
-/// Row 1 is the mode picker's read-out — BTN3 cycles it while idle — pairing
-/// the mode tag with its battery figure. The `~` marks the hours as the
-/// projection they are (tier-2 estimates derived in [`crate::gnss_mode`]; the
-/// tier-1 bench can't measure power at all).
-///
-/// While `animate` is on (the post-press interaction window — exactly when
-/// someone is working the buttons), the title row shows a BTN3 hint
-/// (`B3 MODE/HLD REZERO`), because nothing on the hardware says what the
-/// un-labelled DK buttons do. Steady, not alternating with the brand: a 2 s
-/// dwell was too short to read. Capped at `COLS - 3` cells — the GPS meter
-/// is drawn over the row's last three columns (`SIGNAL_METER_W` in
-/// `watch_render::widgets`), and the face contract is to leave overlay cells
-/// blank. Outside the window the brand holds steady, keeping the idle face
-/// free of per-second redraws.
+/// The idle face's title row, shared by both idle views. While `animate` is
+/// on (the post-press interaction window — exactly when someone is working
+/// the buttons), it shows a BTN3 hint (`B3 MODE/HLD REZERO`), because nothing
+/// on the hardware says what the un-labelled DK buttons do. Steady, not
+/// alternating with the brand: a 2 s dwell was too short to read. Capped at
+/// `COLS - 3` cells — the GPS meter is drawn over the row's last three
+/// columns (`SIGNAL_METER_W` in `watch_render::widgets`), and the face
+/// contract is to leave overlay cells blank. Outside the window the brand
+/// holds steady, keeping the idle face free of per-second redraws.
+fn write_idle_title(row: &mut Row, animate: bool) {
+    if animate {
+        let _ = write!(row, "B3 MODE/HLD REZERO");
+    } else {
+        let _ = write!(row, "THREKIR");
+    }
+}
+
+/// The idle face: the home view unless BTN4 has toggled the diagnostics view
+/// (see [`IdleView`]).
 fn status_face(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    elev: Option<&elevation::Reading>,
+    uptime_s: u32,
+    mode: GnssMode,
+    animate: bool,
+    view: IdleView,
+) -> [Row; ROWS] {
+    match view {
+        IdleView::Home => home_face(fix, hr_bpm, elev, uptime_s, mode, animate),
+        IdleView::Diagnostics => diagnostics_face(fix, hr_bpm, elev, uptime_s, mode, animate),
+    }
+}
+
+/// The home layout — a watch face, not a debug readout (decisions §291): the
+/// clock hero band (rows 2-4, drawn by the app from the generated numeral
+/// face — this function leaves them blank per the widget-overlay contract),
+/// then one summary row (HR + baro-preferred altitude), the GPS glance with
+/// the hero's UTC label, and the mode picker's read-out. Everything here is
+/// minute-or-slower: the home face at rest owes the panel zero redraws, where
+/// the old bench view's seconds row redrew every fix.
+fn home_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     elev: Option<&elevation::Reading>,
@@ -2154,22 +2217,65 @@ fn status_face(
     animate: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
+    write_idle_title(&mut rows[0], animate);
 
-    if animate {
-        let _ = write!(rows[0], "B3 MODE/HLD REZERO");
-    } else {
-        let _ = write!(rows[0], "THREKIR");
+    // Rows 1..=5 stay blank: 2..=4 are the clock hero band, 1 and 5 its
+    // breathing room.
+    let mut hr: heapless::String<10> = heapless::String::new();
+    match hr_bpm {
+        Some(bpm) => {
+            let _ = write!(hr, "HR {} BPM", bpm.min(999));
+        }
+        None => {
+            let _ = write!(hr, "HR --");
+        }
     }
-    // "EST" marks the battery figure as an unmeasured estimate, not a
-    // guaranteed runtime — the tier-1 bench can't measure power at all, so the
-    // number is a tier-2 projection derived in `gnss_mode`. Reading it as a spec
-    // ("~220H") would over-promise; "EST 220H" is honest at a glance.
-    let _ = write!(
-        rows[1],
-        "MODE {:<5}EST {}H",
-        mode.label(),
-        mode.battery_est_h()
-    );
+    let mut alt: heapless::String<11> = heapless::String::new();
+    match elev.map(|e| e.alt_m).or_else(|| fix.and_then(|f| f.alt_m)) {
+        Some(alt_m) => {
+            let _ = write!(alt, "ALT {:.0} M", alt_m.clamp(-9_999.0, 99_999.0));
+        }
+        None => {
+            let _ = write!(alt, "ALT --");
+        }
+    }
+    let _ = write!(rows[6], "{:<10}{:>11}", hr, alt);
+
+    let mut gps: heapless::String<14> = heapless::String::new();
+    let _ = write!(gps, "GPS {}", gps_value(fix, uptime_s, STALE_AFTER_S));
+    let _ = write!(rows[7], "{:<14}{:>7}", gps, "UTC");
+
+    write_mode_row(&mut rows[8], mode);
+    rows
+}
+
+/// The mode picker's read-out — BTN3 cycles the GNSS mode while idle —
+/// pairing the mode tag with its battery figure. "EST" marks the figure as an
+/// unmeasured estimate, not a guaranteed runtime — the tier-1 bench can't
+/// measure power at all, so the number is a tier-2 projection derived in
+/// `gnss_mode`. Reading it as a spec ("~220H") would over-promise; "EST 220H"
+/// is honest at a glance.
+fn write_mode_row(row: &mut Row, mode: GnssMode) {
+    let _ = write!(row, "MODE {:<5}EST {}H", mode.label(), mode.battery_est_h());
+}
+
+/// The diagnostics layout — the bench acquisition view the idle face was
+/// before §291: the selected GNSS mode with its projected hours, GPS status,
+/// last-known position, speed, altitude, HR, and the seconds clock (falling
+/// back to cumulative vert with no fix). Kept verbatim behind BTN4: bench
+/// bring-up still needs raw LAT/LON and a per-fix clock, they just no longer
+/// masquerade as the home screen.
+fn diagnostics_face(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    elev: Option<&elevation::Reading>,
+    uptime_s: u32,
+    mode: GnssMode,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    write_idle_title(&mut rows[0], animate);
+    write_mode_row(&mut rows[1], mode);
 
     match fix {
         None => {
@@ -2323,7 +2429,34 @@ mod tests {
         elev: Option<&elevation::Reading>,
         uptime_s: u32,
     ) -> [Row; ROWS] {
-        super::face_rows(fix, hr_bpm, rec, elev, uptime_s, GnssMode::Performance)
+        super::face_rows(
+            fix,
+            hr_bpm,
+            rec,
+            elev,
+            uptime_s,
+            GnssMode::Performance,
+            IdleView::Home,
+        )
+    }
+
+    // The diagnostics idle view (§291) — the pre-§291 idle tests moved here
+    // verbatim, since BTN4 keeps that layout reachable unchanged.
+    fn diag_rows(
+        fix: Option<&Fix>,
+        hr_bpm: Option<u16>,
+        elev: Option<&elevation::Reading>,
+        uptime_s: u32,
+    ) -> [Row; ROWS] {
+        super::face_rows(
+            fix,
+            hr_bpm,
+            None,
+            elev,
+            uptime_s,
+            GnssMode::Performance,
+            IdleView::Diagnostics,
+        )
     }
 
     fn face_icons(
@@ -2358,6 +2491,7 @@ mod tests {
             uptime_s,
             animate,
             GnssMode::Performance,
+            IdleView::Home,
         )
     }
 
@@ -2752,8 +2886,8 @@ mod tests {
     }
 
     #[test]
-    fn idle_renders_the_status_face() {
-        let rows = face_rows(Some(&fix()), None, None, None, 42);
+    fn idle_diagnostics_keeps_the_bench_view() {
+        let rows = diag_rows(Some(&fix()), None, None, 42);
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
@@ -2773,9 +2907,9 @@ mod tests {
         // displaced the clock. Home tells the time; vert keeps the row only
         // when no fix carries a clock (the bench case: baro without GPS).
         let e = elev(1600.0, 120.0, 40.0);
-        let rows = face_rows(Some(&fix()), None, None, Some(&e), 42);
+        let rows = diag_rows(Some(&fix()), None, Some(&e), 42);
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
-        let rows = face_rows(None, None, None, Some(&e), 42);
+        let rows = diag_rows(None, None, Some(&e), 42);
         assert_eq!(rows[8].as_str(), "VERT +120 -40 M");
     }
 
@@ -2821,16 +2955,64 @@ mod tests {
 
     #[test]
     fn idle_stale_fix_is_flagged_not_shown_as_fresh() {
-        let rows = face_rows(Some(&fix()), None, None, None, 41 + STALE_AFTER_S + 3);
+        let rows = diag_rows(Some(&fix()), None, None, 41 + STALE_AFTER_S + 3);
         assert_eq!(rows[2].as_str(), "GPS  STALE 8S");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
+        // The home view flags the same staleness on its summary row.
+        let rows = face_rows(Some(&fix()), None, None, None, 41 + STALE_AFTER_S + 3);
+        assert_eq!(rows[7].as_str(), "GPS STALE 8S      UTC");
     }
 
     #[test]
     fn idle_no_fix_renders_acquiring() {
-        let rows = face_rows(None, None, None, None, 9);
+        let rows = diag_rows(None, None, None, 9);
         assert_eq!(rows[2].as_str(), "GPS  ACQUIRING");
         assert_eq!(rows[5].as_str(), "");
+    }
+
+    #[test]
+    fn home_face_reserves_the_clock_band_and_summarises() {
+        let e = elev(1600.0, 120.0, 40.0);
+        let rows = face_rows(Some(&fix()), Some(72), None, Some(&e), 42);
+        assert_eq!(rows[0].as_str(), "THREKIR");
+        // Rows 1..=5 stay blank: 2..=4 are the clock hero band the app draws
+        // the generated numerals into, 1 and 5 its breathing room.
+        for row in CLOCK_HERO_TOP_ROW - 1..=CLOCK_HERO_TOP_ROW + CLOCK_HERO_ROWS {
+            assert_eq!(rows[row].as_str(), "", "row {row} must stay blank");
+        }
+        // Baro-preferred altitude, same preference as the diagnostics ALT row.
+        assert_eq!(rows[6].as_str(), "HR 72 BPM  ALT 1600 M");
+        assert_eq!(rows[7].as_str(), "GPS 8 SATS        UTC");
+        assert_eq!(rows[8].as_str(), "MODE PERF EST 110H");
+        for row in &rows {
+            assert!(row.chars().count() <= COLS);
+        }
+    }
+
+    #[test]
+    fn home_face_holds_honest_placeholders_without_signals() {
+        let rows = face_rows(None, None, None, None, 9);
+        assert_eq!(rows[6].as_str(), "HR --          ALT --");
+        assert_eq!(rows[7].as_str(), "GPS ACQUIRING     UTC");
+    }
+
+    #[test]
+    fn home_clock_extrapolates_from_the_fix_to_the_current_minute() {
+        // fix(): time_of_day 07:30:15 stamped at uptime 41. At uptime 41 the
+        // clock reads the fix minute; 105 s later it must have advanced —
+        // Expedition-mode fixes arrive minutes apart, and a hero frozen at
+        // the fix's minute reads as a hung watch.
+        assert_eq!(home_clock_text(Some(&fix()), 41).as_str(), "07:30");
+        assert_eq!(home_clock_text(Some(&fix()), 41 + 105).as_str(), "07:32");
+        // Wraps across midnight rather than showing 24:xx.
+        let mut late = fix();
+        late.time_of_day = Some(23 * 3600 + 59 * 60 + 50);
+        assert_eq!(home_clock_text(Some(&late), 41 + 20).as_str(), "00:00");
+        // Honest placeholder before any fix carries a clock.
+        assert_eq!(home_clock_text(None, 9).as_str(), "--:--");
+        let mut clockless = fix();
+        clockless.time_of_day = None;
+        assert_eq!(home_clock_text(Some(&clockless), 9).as_str(), "--:--");
     }
 
     #[test]
@@ -3456,7 +3638,9 @@ mod tests {
                 42,
                 true,
             );
-            assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
+            // Home-face signature: blank clock band, GPS glance on row 7.
+            assert_eq!(rows[2].as_str(), "");
+            assert_eq!(rows[7].as_str(), "GPS 8 SATS        UTC");
             assert!(page_hero(page, None, None, None).is_none());
             assert!(page_icons(page, Some(&fix()), None, None, 42, true)
                 .iter()
@@ -3819,19 +4003,23 @@ mod tests {
             true,
         );
         assert_eq!(rows[6].as_str(), "HR   135 BPM Z2");
-        // The idle status face keeps its plain BPM — zones frame a recording.
+        // The idle faces keep their plain BPM — zones frame a recording.
         let rows = face_rows(Some(&fix()), Some(152), None, None, 42);
+        assert_eq!(rows[6].as_str(), "HR 152 BPM ALT 1624 M");
+        let rows = diag_rows(Some(&fix()), Some(152), None, 42);
         assert_eq!(rows[7].as_str(), "HR   152 BPM");
     }
 
     #[test]
     fn idle_recorder_shows_the_status_face_not_the_dashboard() {
-        let rows = face_rows(
+        let rows = super::face_rows(
             Some(&fix()),
             None,
             Some(&snapshot(RecordState::Idle, 0.0)),
             None,
             42,
+            GnssMode::Performance,
+            IdleView::Diagnostics,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
@@ -3840,15 +4028,26 @@ mod tests {
     #[test]
     fn idle_mode_row_pairs_each_mode_with_its_projected_hours() {
         // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
-        // battery figure, one per mode, in the fixed row-1 slot.
+        // battery figure, one per mode — row 1 on the diagnostics view, the
+        // bottom row on the home view.
         for (mode, expected) in [
             (GnssMode::Performance, "MODE PERF EST 110H"),
             (GnssMode::Balanced, "MODE BAL  EST 180H"),
             (GnssMode::Expedition, "MODE EXP  EST 220H"),
         ] {
-            let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode);
+            let rows = super::face_rows(
+                Some(&fix()),
+                None,
+                None,
+                None,
+                42,
+                mode,
+                IdleView::Diagnostics,
+            );
             assert_eq!(rows[1].as_str(), expected);
             assert!(rows[1].len() <= COLS);
+            let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode, IdleView::Home);
+            assert_eq!(rows[8].as_str(), expected);
         }
     }
 
@@ -3862,6 +4061,7 @@ mod tests {
             None,
             42,
             GnssMode::Expedition,
+            IdleView::Home,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
         let rows = super::page_rows(
@@ -3875,6 +4075,7 @@ mod tests {
             42,
             true,
             GnssMode::Balanced,
+            IdleView::Home,
         );
         assert_eq!(rows[8].as_str(), "GPS  8 SATS BAL");
     }
@@ -3893,6 +4094,7 @@ mod tests {
             None,
             aged,
             GnssMode::Performance,
+            IdleView::Home,
         );
         assert_eq!(rows[8].as_str(), "     STALE 40S PERF");
         let rows = super::face_rows(
@@ -3902,6 +4104,7 @@ mod tests {
             None,
             aged,
             GnssMode::Expedition,
+            IdleView::Home,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
         let icons = super::face_icons(Some(&fix()), None, Some(&rec), aged, GnssMode::Expedition);
@@ -3916,6 +4119,7 @@ mod tests {
             None,
             lost,
             GnssMode::Expedition,
+            IdleView::Home,
         );
         assert_eq!(rows[8].as_str(), "     STALE 65S EXP");
     }
@@ -3936,6 +4140,7 @@ mod tests {
             None,
             41 + 40,
             GnssMode::Expedition,
+            IdleView::Diagnostics,
         );
         assert_eq!(rows[2].as_str(), "GPS  STALE 40S");
     }
@@ -3966,19 +4171,31 @@ mod tests {
                     999_999,
                     true,
                     mode,
+                    IdleView::Home,
                 );
                 for row in rows {
                     assert!(row.len() <= COLS, "row too wide in {:?}: {:?}", mode, row);
                 }
             }
-            let idle = super::face_rows(Some(&fix()), Some(u16::MAX), None, None, 999_999, mode);
-            for row in idle {
-                assert!(
-                    row.len() <= COLS,
-                    "idle row too wide in {:?}: {:?}",
+            for view in [IdleView::Home, IdleView::Diagnostics] {
+                let idle = super::face_rows(
+                    Some(&fix()),
+                    Some(u16::MAX),
+                    None,
+                    None,
+                    999_999,
                     mode,
-                    row
+                    view,
                 );
+                for row in idle {
+                    assert!(
+                        row.len() <= COLS,
+                        "idle row too wide in {:?} {:?}: {:?}",
+                        mode,
+                        view,
+                        row
+                    );
+                }
             }
         }
     }
