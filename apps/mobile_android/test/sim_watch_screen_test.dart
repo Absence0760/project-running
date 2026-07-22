@@ -277,6 +277,7 @@ void main() {
           home: SimWatchScreen(
             transportFactory: () => transport,
             runSink: (_) async {},
+            tzOffset: () => const Duration(hours: 5, minutes: 45),
           ),
         ),
       );
@@ -288,9 +289,14 @@ void main() {
       await tester.pump();
 
       expect(transport.settingsWrites, hasLength(1));
-      expect(transport.settingsWrites.single, hasLength(25));
-      expect(transport.settingsWrites.single.sublist(0, 6),
-          [0x53, 0x45, 0x54, 0x31, 0x01, 0x0f]);
+      expect(transport.settingsWrites.single, hasLength(28));
+      expect(transport.settingsWrites.single.sublist(0, 7),
+          [0x53, 0x45, 0x54, 0x31, 0x02, 0x0f, 0x01]);
+      // The injected +5:45 phone zone rides the frame's tail as i16 LE 345.
+      expect(
+        transport.settingsWrites.single.sublist(26),
+        [0x59, 0x01],
+      );
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });
   });
