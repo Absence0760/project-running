@@ -54,6 +54,8 @@
 //!   bar-fill fractions the face draws as visual gauges
 //! - [`bar_chart`] — scale a distribution (zone times, pace buckets) into
 //!   bottom-aligned bar rectangles for a mini chart
+//! - [`battery`] — 1S LiPo supply millivolts → percent (piecewise-linear
+//!   discharge curve + the plausibility band the battery task parks on)
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
@@ -189,6 +191,7 @@ pub mod alerts;
 pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
+pub mod battery;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
