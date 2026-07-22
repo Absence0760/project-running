@@ -448,6 +448,15 @@ mod tests {
     }
 
     #[test]
+    fn signal_meter_stays_inside_the_rows_last_three_text_cells() {
+        // The idle face caps its title hint at TEXT_COLS - 3 cells on the
+        // promise that the meter owns the row's tail; if the meter ever grows
+        // left of that boundary the hint and the ticks collide again.
+        let left = (WIDTH - 2 + 1) - SIGNAL_METER_W;
+        assert!(left >= (TEXT_COLS - 3) * CELL_W);
+    }
+
+    #[test]
     fn signal_meter_fills_left_to_right() {
         let mut fb = Framebuffer::new();
         let (right_x, baseline_y) = (WIDTH - 2, CELL_H - 2);

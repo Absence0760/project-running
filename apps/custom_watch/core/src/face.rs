@@ -2137,10 +2137,14 @@ fn dashboard(
 /// tier-1 bench can't measure power at all).
 ///
 /// While `animate` is on (the post-press interaction window — exactly when
-/// someone is working the buttons), the title row alternates between the
-/// brand and a BTN3 hint (`B3 MODE / HOLD REZERO`), because nothing on the
-/// hardware says what the un-labelled DK buttons do. Outside the window the
-/// brand holds steady, keeping the idle face free of per-second redraws.
+/// someone is working the buttons), the title row shows a BTN3 hint
+/// (`B3 MODE/HLD REZERO`), because nothing on the hardware says what the
+/// un-labelled DK buttons do. Steady, not alternating with the brand: a 2 s
+/// dwell was too short to read. Capped at `COLS - 3` cells — the GPS meter
+/// is drawn over the row's last three columns (`SIGNAL_METER_W` in
+/// `watch_render::widgets`), and the face contract is to leave overlay cells
+/// blank. Outside the window the brand holds steady, keeping the idle face
+/// free of per-second redraws.
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -2151,8 +2155,8 @@ fn status_face(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    if animate && uptime_s % 4 >= 2 {
-        let _ = write!(rows[0], "B3 MODE / HOLD REZERO");
+    if animate {
+        let _ = write!(rows[0], "B3 MODE/HLD REZERO");
     } else {
         let _ = write!(rows[0], "THREKIR");
     }
@@ -2776,35 +2780,27 @@ mod tests {
     }
 
     #[test]
-    fn idle_title_alternates_a_btn3_hint_inside_the_interaction_window() {
-        // Post-press (animate on): the brand and the button hint share row 0
-        // on a 2 s / 2 s cadence — the hint shows exactly while someone is
-        // working the un-labelled buttons.
-        let rows = page_rows(
-            Page::Dashboard,
-            Some(&fix()),
-            None,
-            None,
-            None,
-            NavView::NoCourse,
-            None,
-            42,
-            true,
-        );
-        assert_eq!(rows[0].as_str(), "B3 MODE / HOLD REZERO");
-        assert!(rows[0].len() <= COLS);
-        let rows = page_rows(
-            Page::Dashboard,
-            Some(&fix()),
-            None,
-            None,
-            None,
-            NavView::NoCourse,
-            None,
-            44,
-            true,
-        );
-        assert_eq!(rows[0].as_str(), "THREKIR");
+    fn idle_title_shows_the_btn3_hint_steady_inside_the_interaction_window() {
+        // Post-press (animate on): the hint holds row 0 for the whole window
+        // whatever the second — the old 2 s / 2 s alternation with the brand
+        // gave a dwell too short to read — and stops short of the GPS meter,
+        // which is drawn over the row's last three columns (COLS - 3; the
+        // boundary is pinned from the pixel side in watch_render::widgets).
+        for uptime in [42, 43, 44, 45] {
+            let rows = page_rows(
+                Page::Dashboard,
+                Some(&fix()),
+                None,
+                None,
+                None,
+                NavView::NoCourse,
+                None,
+                uptime,
+                true,
+            );
+            assert_eq!(rows[0].as_str(), "B3 MODE/HLD REZERO");
+            assert!(rows[0].chars().count() <= COLS - 3);
+        }
         // Window closed: the brand holds steady whatever the second, so an
         // unattended idle face never redraws row 0.
         for uptime in [42, 43, 44, 45] {
