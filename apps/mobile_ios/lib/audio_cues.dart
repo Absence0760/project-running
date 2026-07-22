@@ -10,6 +10,7 @@ import 'package:run_recorder/run_recorder.dart' show
 
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
+import 'race_phases.dart' show RacePhaseIntent;
 import 'turn_cues.dart' show TurnDirection;
 import 'preferences.dart';
 
@@ -119,6 +120,25 @@ String formatSpokenDistance(double metres, DistanceUnit unit,
     return l10n.ttsDistanceKm(km.toStringAsFixed(1));
   }
   return l10n.ttsDistanceMetres(metres.round());
+}
+
+/// Bare pace utterance ("5 minutes 41 seconds per kilometre") without the
+/// "Pace," prefix of [formatPaceUtterance] — for embedding mid-sentence in
+/// the cutoff catch-up and phase-transition cues. Empty string on null /
+/// non-positive input, same degrade rule as the other formatters.
+String formatPaceTailUtterance(double? secondsPerKm, DistanceUnit unit,
+    [String? localeTag]) {
+  if (secondsPerKm == null || secondsPerKm <= 0) return '';
+  final l10n = ttsL10n(localeTag ?? activeLocaleTag);
+  const metresPerMile = 1609.344;
+  final secPerUnit = unit == DistanceUnit.mi
+      ? (secondsPerKm * (metresPerMile / 1000)).round()
+      : secondsPerKm.round();
+  final m = secPerUnit ~/ 60;
+  final s = secPerUnit % 60;
+  return unit == DistanceUnit.mi
+      ? (s == 0 ? l10n.ttsStepPaceMiWhole(m) : l10n.ttsStepPaceMi(m, s))
+      : (s == 0 ? l10n.ttsStepPaceKmWhole(m) : l10n.ttsStepPaceKm(m, s));
 }
 
 /// Compose the workout-step intro line ("Warmup", "Rep 3 of 5", etc.)
@@ -351,12 +371,109 @@ class AudioCues {
     await _tts.speak(phrase);
   }
 
-  /// Tell the runner they're outside the target pace window.
-  Future<void> announcePaceAlert({required bool tooSlow}) async {
+  /// Tell the runner they're outside the target pace window. With
+  /// [deltaSecPerUnit] (seconds per km or mile, matching [unit]) the cue
+  /// speaks the correction amount instead of a bare "speed up" — the
+  /// runner shouldn't have to do mid-race arithmetic (#607).
+  Future<void> announcePaceAlert({
+    required bool tooSlow,
+    int? deltaSecPerUnit,
+    DistanceUnit unit = DistanceUnit.km,
+  }) async {
     await _init();
     await _applyLanguage();
     final l10n = ttsL10n(activeLocaleTag);
-    await _tts.speak(tooSlow ? l10n.ttsPaceAlertFast : l10n.ttsPaceAlertSlow);
+    final String phrase;
+    if (deltaSecPerUnit == null || deltaSecPerUnit <= 0) {
+      phrase = tooSlow ? l10n.ttsPaceAlertFast : l10n.ttsPaceAlertSlow;
+    } else if (tooSlow) {
+      phrase = unit == DistanceUnit.mi
+          ? l10n.ttsPaceAlertSpeedUpByMi(deltaSecPerUnit)
+          : l10n.ttsPaceAlertSpeedUpByKm(deltaSecPerUnit);
+    } else {
+      phrase = unit == DistanceUnit.mi
+          ? l10n.ttsPaceAlertSlowDownByMi(deltaSecPerUnit)
+          : l10n.ttsPaceAlertSlowDownByKm(deltaSecPerUnit);
+    }
+    await _tts.speak(phrase);
+  }
+
+  /// Catch-up cue when the next cutoff is at risk: distance to the cutoff
+  /// plus the flat pace still sufficient to make it (#607).
+  Future<void> announceCutoffCatchUp({
+    required double distanceToM,
+    required double requiredPaceSecPerKm,
+    required DistanceUnit unit,
+  }) async {
+    await _init();
+    await _applyLanguage();
+    final tag = activeLocaleTag;
+    final l10n = ttsL10n(tag);
+    await _tts.speak(l10n.ttsCutoffCatchUp(
+      formatSpokenDistance(distanceToM, unit, tag),
+      formatPaceTailUtterance(requiredPaceSecPerKm, unit, tag),
+    ));
+  }
+
+  /// The next cutoff's limit has already passed — say so instead of
+  /// projecting an impossible pace.
+  Future<void> announceCutoffUnreachable() async {
+    await _init();
+    await _applyLanguage();
+    await _tts.speak(ttsL10n(activeLocaleTag).ttsCutoffUnreachable);
+  }
+
+  static const int markerOnPlanBandS = 15;
+
+  /// Ahead/behind-plan cue when crossing a course marker that carries a
+  /// target time (#608). [deltaS] is target minus actual elapsed at the
+  /// crossing — positive means ahead of plan. Within [markerOnPlanBandS]
+  /// either way the cue says "on plan" rather than a meaningless few
+  /// seconds.
+  Future<void> announceMarkerTarget({
+    required String label,
+    required int deltaS,
+  }) async {
+    await _init();
+    await _applyLanguage();
+    final l10n = ttsL10n(activeLocaleTag);
+    if (deltaS.abs() <= markerOnPlanBandS) {
+      await _tts.speak(l10n.ttsMarkerOnPlan(label));
+    } else if (deltaS > 0) {
+      await _tts
+          .speak(l10n.ttsMarkerAheadOfPlan(label, _spokenDuration(deltaS, l10n)));
+    } else {
+      await _tts.speak(
+          l10n.ttsMarkerBehindPlan(label, _spokenDuration(-deltaS, l10n)));
+    }
+  }
+
+  /// Announce entering a pacing-strategy phase (#609): "Phase 2 of 3.
+  /// Settle into your goal pace. Target 5 minutes 40 seconds per
+  /// kilometre." [index] is 1-based.
+  Future<void> announcePhaseTransition({
+    required int index,
+    required int total,
+    required RacePhaseIntent intent,
+    double? targetPaceSecPerKm,
+    DistanceUnit unit = DistanceUnit.km,
+  }) async {
+    await _init();
+    await _applyLanguage();
+    final tag = activeLocaleTag;
+    final l10n = ttsL10n(tag);
+    final phrase = switch (intent) {
+      RacePhaseIntent.holdBack => l10n.ttsPhaseHoldBack,
+      RacePhaseIntent.settle => l10n.ttsPhaseSettle,
+      RacePhaseIntent.race => l10n.ttsPhaseRace,
+      RacePhaseIntent.even => l10n.ttsPhaseEven,
+    };
+    var text = l10n.ttsPhaseStart(index, total, phrase);
+    if (targetPaceSecPerKm != null && targetPaceSecPerKm > 0) {
+      text =
+          '$text ${l10n.ttsPhaseTargetPace(formatPaceTailUtterance(targetPaceSecPerKm, unit, tag))}';
+    }
+    await _tts.speak(text);
   }
 
   /// Announce a structured-workout step transition. Reuses the same

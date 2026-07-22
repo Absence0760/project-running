@@ -15,6 +15,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/preferences.dart';
 
 void main() {
+  group('voiceCueTypes', () {
+    test('per-cue toggles persist across a cold start; absent ids are on',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final a = Preferences();
+      await a.init();
+      expect(a.voiceCueEnabled(VoiceCue.splits), isTrue);
+      await a.setVoiceCueEnabled(VoiceCue.splits, false);
+      await a.setVoiceCueEnabled(VoiceCue.markerTargets, false);
+      await a.setVoiceCueEnabled(VoiceCue.markerTargets, true);
+
+      final b = Preferences();
+      await b.init();
+      expect(b.voiceCueEnabled(VoiceCue.splits), isFalse);
+      expect(b.voiceCueEnabled(VoiceCue.markerTargets), isTrue);
+      expect(b.voiceCueEnabled(VoiceCue.phaseTransitions), isTrue);
+    });
+
+    test('corrupt stored JSON degrades to all-on, never throws', () async {
+      SharedPreferences.setMockInitialValues(
+          {'voice_cue_types': '{not json'});
+      final p = Preferences();
+      await p.init();
+      expect(p.voiceCueEnabled(VoiceCue.splits), isTrue);
+    });
+  });
+
   group('ActivityType.label', () {
     // Reason: the activity-type chip row on RunScreen, all dashboard
     // cards, the run-detail header, and every share-card binding read

@@ -131,6 +131,10 @@ class SettingsKeys {
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';
   static const voiceFeedbackVerbosity = 'voice_feedback_verbosity';
   static const voiceFeedbackIntervalKm = 'voice_feedback_interval_km';
+  /// Per-cue voice toggles as a map of cue id → bool (splits,
+  /// start_finish, off_route, pace_alerts, workout_steps, cutoff_catch_up,
+  /// marker_targets, phase_transitions). Absent id = on. See settings.md.
+  static const voiceCueTypes = 'voice_cue_types';
   static const hapticFeedbackEnabled = 'haptic_feedback_enabled';
   static const keepScreenOn = 'keep_screen_on';
   /// Dim the live map while recording (only when [keepScreenOn] is on) so

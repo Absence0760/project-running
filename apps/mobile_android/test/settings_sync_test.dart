@@ -273,6 +273,41 @@ void main() {
       expect(prefs.audioCues, isTrue);
     });
 
+    test('voice_cue_types map overlays per-cue toggles, absent ids stay on',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyDevice({
+        SettingsKeys.voiceCueTypes: {
+          VoiceCue.splits: false,
+          VoiceCue.cutoffCatchUp: false,
+          'future_unknown_cue': false,
+          'not_a_bool': 'nope',
+        },
+      });
+
+      expect(prefs.voiceCueEnabled(VoiceCue.splits), isFalse);
+      expect(prefs.voiceCueEnabled(VoiceCue.cutoffCatchUp), isFalse);
+      expect(prefs.voiceCueEnabled(VoiceCue.paceAlerts), isTrue);
+      expect(prefs.voiceCueEnabled('future_unknown_cue'), isFalse);
+      expect(prefs.voiceCueEnabled('not_a_bool'), isTrue);
+    });
+
+    test('voice_cue_types merge keeps locally-toggled ids the bag omits',
+        () async {
+      final prefs = await freshPrefs();
+      await prefs.setVoiceCueEnabled(VoiceCue.offRoute, false);
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyDevice({
+        SettingsKeys.voiceCueTypes: {VoiceCue.splits: false},
+      });
+
+      expect(prefs.voiceCueEnabled(VoiceCue.offRoute), isFalse);
+      expect(prefs.voiceCueEnabled(VoiceCue.splits), isFalse);
+    });
+
     test('voice_feedback_interval_km maps to splitIntervalMetres', () async {
       final prefs = await freshPrefs();
       final svc = SettingsSyncService(preferences: prefs);

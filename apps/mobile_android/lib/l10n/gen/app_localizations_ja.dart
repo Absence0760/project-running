@@ -10872,4 +10872,178 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get feedSignedOutMessage => 'フォローしている人のランを見るにはサインインしてください';
+
+  @override
+  String ttsPaceAlertSpeedUpByKm(int sec) {
+    return '1キロメートルあたり$sec秒ペースを上げてください';
+  }
+
+  @override
+  String ttsPaceAlertSpeedUpByMi(int sec) {
+    return '1マイルあたり$sec秒ペースを上げてください';
+  }
+
+  @override
+  String ttsPaceAlertSlowDownByKm(int sec) {
+    return '1キロメートルあたり$sec秒ペースを落としてください';
+  }
+
+  @override
+  String ttsPaceAlertSlowDownByMi(int sec) {
+    return '1マイルあたり$sec秒ペースを落としてください';
+  }
+
+  @override
+  String ttsCutoffCatchUp(String distance, String pace) {
+    return '次の関門まで$distance。間に合うには$paceが必要です。';
+  }
+
+  @override
+  String get ttsCutoffUnreachable => '次の関門: 制限時間を過ぎました。';
+
+  @override
+  String ttsMarkerAheadOfPlan(String label, String time) {
+    return '$label: 予定より$time早いです';
+  }
+
+  @override
+  String ttsMarkerBehindPlan(String label, String time) {
+    return '$label: 予定より$time遅れています';
+  }
+
+  @override
+  String ttsMarkerOnPlan(String label) {
+    return '$label: 予定どおりです';
+  }
+
+  @override
+  String ttsPhaseStart(int index, int total, String phrase) {
+    return 'フェーズ$index、全$total。$phrase';
+  }
+
+  @override
+  String get ttsPhaseHoldBack => '抑えて。コントロールを保って。';
+
+  @override
+  String get ttsPhaseSettle => '目標ペースに落ち着いて。';
+
+  @override
+  String get ttsPhaseRace => 'ここから勝負。残りの力を出し切って。';
+
+  @override
+  String get ttsPhaseEven => '一定のペースを保って。';
+
+  @override
+  String ttsPhaseTargetPace(String pace) {
+    return '目標は$paceです。';
+  }
+
+  @override
+  String get prefsVoiceCueTypesLabel => '音声アナウンス';
+
+  @override
+  String get prefsCueSplits => 'スプリット';
+
+  @override
+  String get prefsCueSplitsSubtitle => 'スプリットごとの距離とペース';
+
+  @override
+  String get prefsCueStartFinish => '開始と終了';
+
+  @override
+  String get prefsCueStartFinishSubtitle => 'ラン開始・完了のアナウンス';
+
+  @override
+  String get prefsCueOffRoute => 'ルート逸脱';
+
+  @override
+  String get prefsCueOffRouteSubtitle => '選択したルートから外れたときの警告';
+
+  @override
+  String get prefsCuePaceAlerts => 'ペース警告';
+
+  @override
+  String get prefsCuePaceAlertsSubtitle => '上げ下げの量つきアナウンス';
+
+  @override
+  String get prefsCueWorkoutSteps => 'ワークアウトステップ';
+
+  @override
+  String get prefsCueWorkoutStepsSubtitle => '構造化ワークアウトのステップ切り替え';
+
+  @override
+  String get prefsCueCutoffCatchUp => '関門ペース';
+
+  @override
+  String get prefsCueCutoffCatchUpSubtitle => '関門に間に合うための必要ペース';
+
+  @override
+  String get prefsCueMarkerTargets => 'コースマーカー';
+
+  @override
+  String get prefsCueMarkerTargetsSubtitle => '各マーカーでの予定との差';
+
+  @override
+  String get prefsCuePhaseTransitions => 'レースフェーズ';
+
+  @override
+  String get prefsCuePhaseTransitionsSubtitle => 'ペース戦略のフェーズ開始時';
+
+  @override
+  String get runRaceStrategy => 'レース戦略';
+
+  @override
+  String get runStrategyNone => '戦略なし';
+
+  @override
+  String get runStrategyTenTenTen => '10-10-10';
+
+  @override
+  String get runStrategyNegativeSplit => 'ネガティブスプリット';
+
+  @override
+  String get runStrategyEven => 'イーブンペース';
+
+  @override
+  String get runStrategyTenTenTenHint => '序盤は抑え、中盤は安定、終盤は勝負';
+
+  @override
+  String get runStrategyNegativeSplitHint => '前半は抑えて後半は速く';
+
+  @override
+  String get runStrategyEvenHint => '最初から最後まで一定ペース';
+
+  @override
+  String get runStrategyGoalTime => '目標タイム';
+
+  @override
+  String get runStrategyDistance => '距離';
+
+  @override
+  String get runStrategyNeedsDistance => 'フェーズを使うにはルートを選ぶか距離を入力してください';
+
+  @override
+  String runPhaseChip(int index, int total, String intent) {
+    return 'フェーズ $index/$total — $intent';
+  }
+
+  @override
+  String get phaseIntentHoldBack => '抑える';
+
+  @override
+  String get phaseIntentSettle => '安定';
+
+  @override
+  String get phaseIntentRace => '勝負';
+
+  @override
+  String get phaseIntentEven => 'イーブン';
+
+  @override
+  String routeMarkerTargetChip(String time) {
+    return '目標 $time';
+  }
+
+  @override
+  String get routeMarkerTargetLabel => '目標タイム';
 }

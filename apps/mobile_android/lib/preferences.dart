@@ -165,11 +165,43 @@ enum ActivityType {
   }
 }
 
+/// Wire ids for the per-cue voice toggles — the `voice_cue_types` map in
+/// both the local mirror and the device settings bag. A cue id absent from
+/// the map is ON, so new cue types default to audible without a migration.
+/// Turn-by-turn cues keep their own older `turn_by_turn_cues` pref and are
+/// deliberately NOT in this map.
+class VoiceCue {
+  VoiceCue._();
+
+  static const splits = 'splits';
+  static const startFinish = 'start_finish';
+  static const offRoute = 'off_route';
+  static const paceAlerts = 'pace_alerts';
+  static const workoutSteps = 'workout_steps';
+  static const cutoffCatchUp = 'cutoff_catch_up';
+  static const markerTargets = 'marker_targets';
+  static const phaseTransitions = 'phase_transitions';
+
+  static const all = [
+    splits,
+    startFinish,
+    offRoute,
+    paceAlerts,
+    workoutSteps,
+    cutoffCatchUp,
+    markerTargets,
+    phaseTransitions,
+  ];
+}
+
 /// App-wide user preferences (units, audio cues, etc.).
 class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
   static const _kAudioCues = 'audio_cues';
   static const _kTurnByTurnCues = 'turn_by_turn_cues';
+  // Per-cue voice toggles as a JSON map of cue id → bool (see [VoiceCue]).
+  // Mirrors the device-scoped `voice_cue_types` settings-bag key.
+  static const _kVoiceCueTypes = 'voice_cue_types';
   static const _kOnboarded = 'onboarded';
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
   static const _kGoalsJson = 'goals_json';
@@ -294,6 +326,7 @@ class Preferences extends ChangeNotifier {
   bool _useMiles = false;
   bool _audioCues = true;
   bool _turnByTurnCues = true;
+  Map<String, bool> _voiceCueTypes = {};
   bool _onboarded = false;
   int _targetPaceSecPerKm = 0;
   List<RunGoal> _goals = [];
@@ -600,6 +633,18 @@ class Preferences extends ChangeNotifier {
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
     _turnByTurnCues = _prefs.getBool(_kTurnByTurnCues) ?? true;
+    final rawCueTypes = _prefs.getString(_kVoiceCueTypes);
+    if (rawCueTypes != null && rawCueTypes.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawCueTypes) as Map<String, dynamic>;
+        _voiceCueTypes = {
+          for (final e in decoded.entries)
+            if (e.value is bool) e.key: e.value as bool,
+        };
+      } catch (e) {
+        debugPrint('Failed to parse voice_cue_types JSON: $e');
+      }
+    }
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
@@ -679,6 +724,30 @@ class Preferences extends ChangeNotifier {
   Future<void> setTurnByTurnCues(bool v) async {
     _turnByTurnCues = v;
     await _prefs.setBool(_kTurnByTurnCues, v);
+    notifyListeners();
+  }
+
+  /// Whether the per-cue voice toggle for [cueId] (a [VoiceCue] id) is on.
+  /// Absent ids are on — see [VoiceCue].
+  bool voiceCueEnabled(String cueId) => _voiceCueTypes[cueId] ?? true;
+
+  /// Snapshot of the per-cue map for the settings-bag push. Only ids the
+  /// user has explicitly toggled are present.
+  Map<String, bool> get voiceCueTypes => Map.unmodifiable(_voiceCueTypes);
+
+  Future<void> setVoiceCueEnabled(String cueId, bool v) async {
+    _voiceCueTypes = {..._voiceCueTypes, cueId: v};
+    await _prefs.setString(_kVoiceCueTypes, jsonEncode(_voiceCueTypes));
+    notifyListeners();
+  }
+
+  /// Overlay the device-bag `voice_cue_types` map onto the local mirror
+  /// (settings-sync pull path). Merges entry-by-entry so a bag written by
+  /// an older build doesn't erase toggles it didn't know about.
+  Future<void> applyVoiceCueTypes(Map<String, bool> incoming) async {
+    if (incoming.isEmpty) return;
+    _voiceCueTypes = {..._voiceCueTypes, ...incoming};
+    await _prefs.setString(_kVoiceCueTypes, jsonEncode(_voiceCueTypes));
     notifyListeners();
   }
 
