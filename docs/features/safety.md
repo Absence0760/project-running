@@ -102,9 +102,14 @@ safety contacts a "may be overdue" alert with the live link — once.
 `auto_live_share` is on and the user is signed in, run the same
 `beginLiveBroadcast` + `_liveBroadcaster.attach(runId)` block as
 `_shareLiveLink()` (minus the share sheet), wrapped in its own try/catch
-(L4 — a failed share must never block the recording), and surface a
-dismissible "Live sharing on — share link" affordance so the runner can send
-the URL to whoever should watch. No web change (web doesn't record).
+(L4 — a failed share must never block the recording). While any broadcast is
+active — auto or manually shared — the recording chrome carries the persistent
+**`LiveShareIndicator`** pill (issue #613): a standing "Live" chip in the
+top-left, driven by the `_liveShareActive` `ValueNotifier`. Tapping it opens
+`showLiveShareSheet` with "Share link again" and "Stop sharing" — stop
+concludes the broadcast mid-run (`concludeLiveBroadcast`) without ending the
+run, so the share persists until the run finishes. No web change (web doesn't
+record).
 
 ### Backend (overdue scan)
 
@@ -170,7 +175,7 @@ clipping; the email only carries times + the link.
 
 - **Broadcast fails on start** (offline start): L4 — logged, recording
   unaffected; no stub → no escalation for that run. The runner sees the
-  share affordance absent.
+  live indicator absent.
 - **False positive** (signal loss / long café stop with auto-pause): one
   calibrated email, finish email follows as all-clear when the run saves.
 - **Client crashes before save:** stub stays in-progress → escalation fires

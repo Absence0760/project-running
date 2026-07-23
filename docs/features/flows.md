@@ -264,6 +264,12 @@ Spectator client reads PUBLIC_LIVE_HUB_URL (same envs)
 
 Both runner + spectator must agree. Flip both envs (`PUBLIC_LIVE_HUB_URL` on web, `LIVE_HUB_URL` on mobile) in the same release. See `apps/job_worker/deployment.md § Live spectator hub` for the cutover walkthrough. The Realtime path is the rollback target — kept live until the hub deploy is stable.
 
+### Run conclusion
+
+When a live-broadcast run stops, the recorder stamps `runs.concluded_at` (`concludeLiveBroadcast` in `packages/api_client`, owner-scoped via RLS) rather than deleting the spectator's pings. The positive terminal marker replaces the old inference of "finished" from `started_at + duration_s` staleness plus ping-absence. The pings survive under the existing 48 h `cleanup-stale-live-run-pings` retention cron, so a spectator who reloads right after the runner stops sees the frozen trace instead of a blank / "connecting" page (issue #613, migration `20270427_001`; the column is exposed through `public_runs`).
+
+Both spectator surfaces — web `/live/[id]` and mobile `live_spectator_screen.dart` — read `concluded_at` from `public_runs`: on load it wins over the duration inference, and while live a ~15 s poll flips a mid-watch run to the conclusion view the moment the marker appears (transport-agnostic — same for Supabase Realtime and the Go hub). A concluded run renders a **conclusion card** ("Run complete" + a "view the full run" CTA → web `/share/run/[id]`, mobile `PublicRunScreen`); web also frames the whole trace on the map. While the run is still live, the page carries a **recent-pace** tile (distinct from the cumulative average) and, when the run follows a known route, a **course-progress** bar.
+
 ### Predictive next cut-off ("will they make it?")
 
 When the live run is linked to a **public route that carries cut-off markers** ([route_markers.md](route_markers.md)), the spectator page fuses the live feed with the roadbook cut-off math ([race_roadbook.md](race_roadbook.md)) and answers the spectator personas' real question — *"is my person going to make the next cut-off?"* — not just *"where is the dot?"*. Shipped web (`/live/[id]` next-cut-off card) + mobile (`live_spectator_screen.dart`), 2026-06-14.
