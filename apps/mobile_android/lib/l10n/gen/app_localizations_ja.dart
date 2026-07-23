@@ -5799,6 +5799,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get licensesOpenSourceSubtitle => 'このアプリに同梱されているサードパーティパッケージ';
 
   @override
+  String get licensesCheckingUpdate => 'アップデートを確認中…';
+
+  @override
+  String get licensesUpdateAvailable => 'アップデートがあります';
+
+  @override
+  String get licensesUpdateAvailableSubtitle => '新しいバージョンをインストールできます。';
+
+  @override
+  String get licensesUpdate => '更新';
+
+  @override
+  String get licensesUpToDate => '最新バージョンです';
+
+  @override
+  String get licensesUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
+
+  @override
   String get devicesTitle => 'デバイス';
 
   @override

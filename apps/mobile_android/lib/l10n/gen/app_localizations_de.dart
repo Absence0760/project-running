@@ -6164,6 +6164,26 @@ class AppLocalizationsDe extends AppLocalizations {
       'Drittanbieter-Pakete, die mit dieser App gebündelt sind';
 
   @override
+  String get licensesCheckingUpdate => 'Suche nach Updates…';
+
+  @override
+  String get licensesUpdateAvailable => 'Update verfügbar';
+
+  @override
+  String get licensesUpdateAvailableSubtitle =>
+      'Eine neuere Version kann installiert werden.';
+
+  @override
+  String get licensesUpdate => 'Aktualisieren';
+
+  @override
+  String get licensesUpToDate => 'Du hast die neueste Version';
+
+  @override
+  String get licensesUpdateFailed =>
+      'Update konnte nicht gestartet werden. Versuche es erneut über den Play Store.';
+
+  @override
   String get devicesTitle => 'Geräte';
 
   @override

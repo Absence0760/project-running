@@ -6150,6 +6150,26 @@ class AppLocalizationsPt extends AppLocalizations {
       'Pacotes de terceiros incluídos neste app';
 
   @override
+  String get licensesCheckingUpdate => 'A procurar atualizações…';
+
+  @override
+  String get licensesUpdateAvailable => 'Atualização disponível';
+
+  @override
+  String get licensesUpdateAvailableSubtitle =>
+      'Está disponível uma versão mais recente para instalar.';
+
+  @override
+  String get licensesUpdate => 'Atualizar';
+
+  @override
+  String get licensesUpToDate => 'Tem a versão mais recente';
+
+  @override
+  String get licensesUpdateFailed =>
+      'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
+
+  @override
   String get devicesTitle => 'Dispositivos';
 
   @override
@@ -17776,6 +17796,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get licensesOpenSourceSubtitle =>
       'Pacotes de terceiros incluídos neste app';
+
+  @override
+  String get licensesCheckingUpdate => 'Procurando atualizações…';
+
+  @override
+  String get licensesUpdateAvailable => 'Atualização disponível';
+
+  @override
+  String get licensesUpdateAvailableSubtitle =>
+      'Há uma versão mais recente pronta para instalar.';
+
+  @override
+  String get licensesUpdate => 'Atualizar';
+
+  @override
+  String get licensesUpToDate => 'Você está na versão mais recente';
+
+  @override
+  String get licensesUpdateFailed =>
+      'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
 
   @override
   String get devicesTitle => 'Dispositivos';

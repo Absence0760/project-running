@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -11,6 +13,24 @@ Future<void> _pump(WidgetTester tester) async {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: const SettingsLicensesScreen(),
+    ),
+  );
+  await tester.pump();
+}
+
+Future<void> _pumpUpdate(
+  WidgetTester tester, {
+  required Future<LicenseUpdateStatus> Function() checkUpdate,
+  Future<void> Function()? performUpdate,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SettingsLicensesScreen(
+        checkUpdate: checkUpdate,
+        performUpdate: performUpdate ?? () async {},
+      ),
     ),
   );
   await tester.pump();
@@ -40,5 +60,54 @@ void main() {
     );
     await _pump(tester);
     expect(find.text('1.2.3 (45)'), findsOneWidget);
+  });
+
+  testWidgets('update available renders the row + Update button',
+      (tester) async {
+    await _pumpUpdate(tester,
+        checkUpdate: () async => LicenseUpdateStatus.available);
+    expect(find.byKey(const Key('update-available')), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Update'), findsOneWidget);
+  });
+
+  testWidgets('tapping Update invokes performUpdate', (tester) async {
+    var performCalls = 0;
+    await _pumpUpdate(
+      tester,
+      checkUpdate: () async => LicenseUpdateStatus.available,
+      performUpdate: () async => performCalls++,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+    await tester.pump(); // setState(updating) → await perform
+    await tester.pump(); // await re-check → setState
+    expect(performCalls, 1);
+  });
+
+  testWidgets('up to date renders the reassurance row, no Update button',
+      (tester) async {
+    await _pumpUpdate(tester,
+        checkUpdate: () async => LicenseUpdateStatus.upToDate);
+    expect(find.byKey(const Key('update-uptodate')), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Update'), findsNothing);
+  });
+
+  testWidgets('unavailable (dev / sideload / iOS) shows no update row',
+      (tester) async {
+    await _pumpUpdate(tester,
+        checkUpdate: () async => LicenseUpdateStatus.unavailable);
+    expect(find.byKey(const Key('update-available')), findsNothing);
+    expect(find.byKey(const Key('update-uptodate')), findsNothing);
+    expect(find.byKey(const Key('update-checking')), findsNothing);
+  });
+
+  testWidgets('checking state shows while the update check is in flight',
+      (tester) async {
+    final gate = Completer<LicenseUpdateStatus>();
+    await _pumpUpdate(tester, checkUpdate: () => gate.future);
+    expect(find.byKey(const Key('update-checking')), findsOneWidget);
+    gate.complete(LicenseUpdateStatus.upToDate);
+    await tester.pump();
+    expect(find.byKey(const Key('update-checking')), findsNothing);
+    expect(find.byKey(const Key('update-uptodate')), findsOneWidget);
   });
 }
