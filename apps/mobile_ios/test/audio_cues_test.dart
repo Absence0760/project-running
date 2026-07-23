@@ -59,6 +59,30 @@ void main() {
     });
   });
 
+  group('formatPaceTailUtterance', () {
+    test('null / non-positive secondsPerKm returns empty string', () {
+      expect(formatPaceTailUtterance(null, DistanceUnit.km), '');
+      expect(formatPaceTailUtterance(0, DistanceUnit.km), '');
+      expect(formatPaceTailUtterance(-30, DistanceUnit.km), '');
+    });
+
+    test('km mode renders the bare pace with no "Pace," prefix', () {
+      expect(formatPaceTailUtterance(341, DistanceUnit.km),
+          '5 minutes 41 seconds per kilometre');
+    });
+
+    test('exact-minute pace drops the zero-seconds tail', () {
+      expect(formatPaceTailUtterance(300, DistanceUnit.km),
+          '5 minutes per kilometre');
+    });
+
+    test('mi mode converts sec/km to sec/mi before formatting', () {
+      // 300 sec/km * 1.609344 = 482.8 → 483 s = 8:03 per mile.
+      expect(formatPaceTailUtterance(300, DistanceUnit.mi),
+          '8 minutes 3 seconds per mile');
+    });
+  });
+
   group('formatPaceUtterance', () {
     test('null / non-positive secondsPerKm returns empty string', () {
       // Same suppression contract as formatSpeedUtterance — empty

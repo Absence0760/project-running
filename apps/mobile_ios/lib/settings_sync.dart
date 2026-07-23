@@ -132,6 +132,17 @@ class SettingsSyncService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Push the per-cue voice toggle map to the device bag. Only explicitly
+  /// toggled ids are present — absent means on (see [VoiceCue]).
+  Future<void> pushVoiceCueTypes() async {
+    final s = _settings;
+    if (s == null) return;
+    await s.updateDevice(<String, dynamic>{
+      SettingsKeys.voiceCueTypes: preferences.voiceCueTypes,
+    });
+    notifyListeners();
+  }
+
   /// Push the user's custom split interval to the device bag. The bag
   /// stores km as a double per settings.md; a local value of 0 ("use the
   /// activity-type default") clears the key so the default logic still
@@ -270,6 +281,13 @@ class SettingsSyncService extends ChangeNotifier {
       if (metres != preferences.splitIntervalMetres) {
         preferences.setSplitIntervalMetres(metres);
       }
+    }
+    final cues = prefs[SettingsKeys.voiceCueTypes];
+    if (cues is Map) {
+      preferences.applyVoiceCueTypes(<String, bool>{
+        for (final e in cues.entries)
+          if (e.value is bool) e.key.toString(): e.value as bool,
+      });
     }
     final keep = prefs[SettingsKeys.keepScreenOn];
     if (keep is bool && keep != preferences.keepScreenOn) {

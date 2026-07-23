@@ -113,7 +113,15 @@ The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally
     - _emitSnapshot publishes a RunSnapshot (elapsed from Stopwatch, total
       distance, track, current position, pace, off-route, remaining route)
     - _onSnapshot in the screen updates setState, checks movement for
-      auto-pause, fires off-route / pace / split TTS
+      auto-pause, fires off-route / pace / split TTS — plus, since #607–#609,
+      the cutoff catch-up cue (distance + still-sufficient pace when the
+      live_cutoff_eta projection turns tight/behind), the course-marker
+      target cue (ahead/behind plan when distance-along-route crosses a
+      marker carrying meta.target_elapsed_s), and the race-strategy phase
+      transition cue (race_phases plan built at _begin). Every cue type is
+      individually toggleable via the voice_cue_types map (settings.md);
+      the pace alert speaks the correction amount and, under an active
+      phase plan, re-anchors to the phase's target pace
     - Every 10s: _saveInProgress writes current state to runs/in_progress.json
     - Every 2s: _checkGpsHealth flips _gpsLost if _lastSnapshotAt is stale
     - Every 5s: _checkPermission polls Geolocator.checkPermission()

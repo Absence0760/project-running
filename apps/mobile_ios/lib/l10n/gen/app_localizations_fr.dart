@@ -11438,4 +11438,194 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get feedSignedOutMessage =>
       'Connectez-vous pour voir les courses des personnes que vous suivez.';
+
+  @override
+  String ttsPaceAlertSpeedUpByKm(int sec) {
+    return 'Accélère de $sec secondes par kilomètre';
+  }
+
+  @override
+  String ttsPaceAlertSpeedUpByMi(int sec) {
+    return 'Accélère de $sec secondes par mile';
+  }
+
+  @override
+  String ttsPaceAlertSlowDownByKm(int sec) {
+    return 'Ralentis de $sec secondes par kilomètre';
+  }
+
+  @override
+  String ttsPaceAlertSlowDownByMi(int sec) {
+    return 'Ralentis de $sec secondes par mile';
+  }
+
+  @override
+  String ttsCutoffCatchUp(String distance, String pace) {
+    return 'Prochaine barrière horaire dans $distance. Il te faut $pace pour y arriver.';
+  }
+
+  @override
+  String get ttsCutoffUnreachable =>
+      'Prochaine barrière horaire : le délai est dépassé.';
+
+  @override
+  String ttsMarkerAheadOfPlan(String label, String time) {
+    return '$label : $time d\'avance sur le plan';
+  }
+
+  @override
+  String ttsMarkerBehindPlan(String label, String time) {
+    return '$label : $time de retard sur le plan';
+  }
+
+  @override
+  String ttsMarkerOnPlan(String label) {
+    return '$label : dans les temps';
+  }
+
+  @override
+  String ttsPhaseStart(int index, int total, String phrase) {
+    return 'Phase $index sur $total. $phrase';
+  }
+
+  @override
+  String get ttsPhaseHoldBack => 'Retiens-toi. Reste maîtrisé.';
+
+  @override
+  String get ttsPhaseSettle => 'Installe-toi sur ton allure cible.';
+
+  @override
+  String get ttsPhaseRace =>
+      'C\'est le moment de courir. Donne ce qu\'il te reste.';
+
+  @override
+  String get ttsPhaseEven => 'Garde un effort régulier.';
+
+  @override
+  String ttsPhaseTargetPace(String pace) {
+    return 'Objectif : $pace.';
+  }
+
+  @override
+  String get prefsVoiceCueTypesLabel => 'Annonces vocales';
+
+  @override
+  String get prefsCueSplits => 'Intermédiaires';
+
+  @override
+  String get prefsCueSplitsSubtitle =>
+      'Distance et allure à chaque intermédiaire';
+
+  @override
+  String get prefsCueStartFinish => 'Départ et arrivée';
+
+  @override
+  String get prefsCueStartFinishSubtitle => 'Annonces au départ et à la fin';
+
+  @override
+  String get prefsCueOffRoute => 'Hors itinéraire';
+
+  @override
+  String get prefsCueOffRouteSubtitle =>
+      'Alerte en cas d\'écart de l\'itinéraire suivi';
+
+  @override
+  String get prefsCuePaceAlerts => 'Alertes d\'allure';
+
+  @override
+  String get prefsCuePaceAlertsSubtitle =>
+      'Accélérer ou ralentir, avec l\'écart';
+
+  @override
+  String get prefsCueWorkoutSteps => 'Étapes de séance';
+
+  @override
+  String get prefsCueWorkoutStepsSubtitle =>
+      'Changements d\'étape des séances structurées';
+
+  @override
+  String get prefsCueCutoffCatchUp => 'Rattrapage de barrière';
+
+  @override
+  String get prefsCueCutoffCatchUpSubtitle =>
+      'Allure requise pour la prochaine barrière horaire';
+
+  @override
+  String get prefsCueMarkerTargets => 'Repères du parcours';
+
+  @override
+  String get prefsCueMarkerTargetsSubtitle =>
+      'Avance ou retard sur le plan à chaque repère';
+
+  @override
+  String get prefsCuePhaseTransitions => 'Phases de course';
+
+  @override
+  String get prefsCuePhaseTransitionsSubtitle =>
+      'Quand une phase de la stratégie commence';
+
+  @override
+  String get runRaceStrategy => 'Stratégie de course';
+
+  @override
+  String get runStrategyNone => 'Aucune stratégie';
+
+  @override
+  String get runStrategyTenTenTen => '10-10-10';
+
+  @override
+  String get runStrategyNegativeSplit => 'Negative split';
+
+  @override
+  String get runStrategyEven => 'Allure régulière';
+
+  @override
+  String get runStrategyTenTenTenHint => 'Se retenir, se caler, finir fort';
+
+  @override
+  String get runStrategyNegativeSplitHint =>
+      'Première moitié contrôlée, seconde plus rapide';
+
+  @override
+  String get runStrategyEvenHint =>
+      'Une allure constante du départ à l\'arrivée';
+
+  @override
+  String get runStrategyGoalTime => 'Temps visé';
+
+  @override
+  String get runStrategyDistance => 'Distance';
+
+  @override
+  String get runStrategyNeedsDistance =>
+      'Choisis un itinéraire ou saisis une distance pour activer les phases';
+
+  @override
+  String runPhaseChip(int index, int total, String intent) {
+    return 'Phase $index/$total — $intent';
+  }
+
+  @override
+  String get phaseIntentHoldBack => 'Retenue';
+
+  @override
+  String get phaseIntentSettle => 'Calage';
+
+  @override
+  String get phaseIntentRace => 'Course';
+
+  @override
+  String get phaseIntentEven => 'Régulier';
+
+  @override
+  String routeMarkerTargetChip(String time) {
+    return 'Objectif $time';
+  }
+
+  @override
+  String get routeMarkerTargetLabel => 'Temps visé';
+
+  @override
+  String get routeMarkerTargetInvalid =>
+      'Saisis le temps visé au format h:mm:ss';
 }

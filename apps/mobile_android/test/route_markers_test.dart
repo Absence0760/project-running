@@ -84,4 +84,30 @@ void main() {
     expect(parseCutoff(null), isNull);
     expect(parseCutoff('14:30'), isNull);
   });
+
+  test('parseTarget accepts a valid 24h clock', () {
+    expect(parseTarget({'target_clock': '14:30'}), const TargetParts(clock: '14:30'));
+    expect(parseTarget({'target_clock': '00:00'}), const TargetParts(clock: '00:00'));
+    expect(parseTarget({'target_clock': '23:59'}), const TargetParts(clock: '23:59'));
+  });
+
+  test('parseTarget rejects an invalid clock', () {
+    expect(parseTarget({'target_clock': '24:00'}), isNull);
+    expect(parseTarget({'target_clock': '9:5'}), isNull);
+    expect(parseTarget({'target_clock': 'noon'}), isNull);
+  });
+
+  test('parseTarget accepts a non-negative elapsed and floors it', () {
+    expect(parseTarget({'target_elapsed_s': 3600}), const TargetParts(elapsedS: 3600));
+    expect(parseTarget({'target_elapsed_s': 90.7}), const TargetParts(elapsedS: 90));
+    expect(parseTarget({'target_elapsed_s': -5}), isNull);
+  });
+
+  test('parseTarget merges clock + elapsed and returns null for neither', () {
+    expect(parseTarget({'target_clock': '06:00', 'target_elapsed_s': 1800}),
+        const TargetParts(clock: '06:00', elapsedS: 1800));
+    expect(parseTarget({}), isNull);
+    expect(parseTarget(null), isNull);
+    expect(parseTarget('14:30'), isNull);
+  });
 }

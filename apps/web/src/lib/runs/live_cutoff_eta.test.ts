@@ -118,3 +118,55 @@ test('ignores cutoffs already behind the runner', () => {
 	assert.equal(eta.checkpoint?.label, 'Finish gate');
 	assert.ok(Math.abs(eta.distanceToM - 15_000) < 100); // ~40000 - 25000
 });
+
+test('required pace is the remaining budget spread over the remaining distance', () => {
+	// 7200 limit - 3600 elapsed = 3600 s left over 10 km → 360 s/km.
+	const eta = nextCutoffEta(input({}));
+	assert.equal(eta.requiredPaceSecPerKm, 360);
+});
+
+test('no checkpoint means no required pace', () => {
+	const eta = nextCutoffEta(input({ distAlongRouteM: 40_000 }));
+	assert.equal(eta.checkpoint, null);
+	assert.equal(eta.requiredPaceSecPerKm, null);
+});
+
+test('a cutoff under 50 m away has no meaningful required pace', () => {
+	// 20000 - 19960 = 40 m out; status is still graded from recent pace.
+	const eta = nextCutoffEta(input({ distAlongRouteM: 19_960 }));
+	assert.equal(eta.distanceToM, 40);
+	assert.equal(eta.requiredPaceSecPerKm, null);
+	assert.equal(eta.status, 'on');
+});
+
+test('a limit already passed cannot be made at any pace', () => {
+	for (const elapsedS of [7_200, 8_000]) {
+		const eta = nextCutoffEta(input({ elapsedS }));
+		assert.equal(eta.requiredPaceSecPerKm, null);
+		assert.equal(eta.status, 'behind');
+	}
+});
+
+test('limitPassed separates an expired limit from a too-close projection', () => {
+	// Past the limit, well before the cutoff point: no pace can make it.
+	const expired = nextCutoffEta(input({ elapsedS: 8_000 }));
+	assert.equal(expired.requiredPaceSecPerKm, null);
+	assert.equal(expired.limitPassed, true);
+
+	// 40 m out with time still on the clock: requiredPace is null only
+	// because the projection is meaningless — the limit has NOT passed.
+	const close = nextCutoffEta(input({ distAlongRouteM: 19_960 }));
+	assert.equal(close.requiredPaceSecPerKm, null);
+	assert.equal(close.limitPassed, false);
+});
+
+test('a stale fix or unknown pace still reports the required pace', () => {
+	const staleEta = nextCutoffEta(input({ stale: true }));
+	assert.equal(staleEta.status, 'unknown');
+	assert.equal(staleEta.projectedArrivalElapsedS, null);
+	assert.equal(staleEta.requiredPaceSecPerKm, 360);
+
+	const noPaceEta = nextCutoffEta(input({ recentPaceSecPerKm: null }));
+	assert.equal(noPaceEta.status, 'unknown');
+	assert.equal(noPaceEta.requiredPaceSecPerKm, 360);
+});

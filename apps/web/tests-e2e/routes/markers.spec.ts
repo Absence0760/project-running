@@ -213,6 +213,85 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(page.locator('.map-panel .course-pin')).toHaveCount(1);
 	});
 
+	test('schedule shows a Target chip for a marker carrying a target time', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 2', 51.5098, -0.1298, {
+			services: ['water'],
+			target_elapsed_s: 6300
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		const detail = page.locator('.markers-list .marker-row .marker-detail');
+		// Services and the target render side by side — the target must not
+		// displace the kind-specific detail.
+		await expect(detail).toContainText('Water');
+		await expect(detail).toContainText('Target 1:45:00');
+	});
+
+	test('owner sets a target time via the editor and it persists across reload', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'cutoff', 'Gate', 51.5005, -0.1205, {
+			cutoff_clock: '14:30'
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		await page.locator('.markers-list .marker-row').first().getByTitle('Edit marker').click();
+		await page.getByLabel('Target time (elapsed)').fill('1:45:00');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+		const detail = page.locator('.markers-list .marker-row .marker-detail');
+		await expect(detail).toContainText('Target 1:45:00');
+		// The pre-existing cutoff survives the meta round-trip.
+		await expect(detail).toContainText('14:30');
+
+		// Server-side persisted, not just optimistic.
+		await page.reload();
+		await expect(
+			page.locator('.markers-list .marker-row .marker-detail')
+		).toContainText('Target 1:45:00');
+	});
+
+	test('mm:ss and bare-minute target inputs normalise to elapsed time', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'note', 'Turn', 51.5005, -0.1205, {
+			note: 'Sharp left'
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		await page.locator('.markers-list .marker-row').first().getByTitle('Edit marker').click();
+		await page.getByLabel('Target time (elapsed)').fill('90');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(
+			page.locator('.markers-list .marker-row .marker-detail')
+		).toContainText('Target 1:30:00');
+
+		await page.locator('.markers-list .marker-row').first().getByTitle('Edit marker').click();
+		await page.getByLabel('Target time (elapsed)').fill('25:00');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(
+			page.locator('.markers-list .marker-row .marker-detail')
+		).toContainText('Target 25:00');
+	});
+
+	test('an invalid target blocks the save with a validation toast', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {});
+
+		await page.goto(`/routes/${routeId}`);
+
+		await page.locator('.markers-list .marker-row').first().getByTitle('Edit marker').click();
+		await page.getByLabel('Target time (elapsed)').fill('abc');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+		await expect(page.getByText('Enter the target time as h:mm:ss')).toBeVisible();
+		// The form stays open (save rejected) and the row gained no target.
+		await expect(page.getByLabel('Target time (elapsed)')).toBeVisible();
+		await expect(page.locator('.markers-list .marker-row').first()).not.toContainText('Target');
+	});
+
 	test('owner deletes a marker', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'note', 'Locked gate', 51.505, -0.125, {

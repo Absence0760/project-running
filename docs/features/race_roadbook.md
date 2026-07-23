@@ -77,6 +77,21 @@ prefs `carbs_per_hour` (60 g/hr default) + `fluid_per_hour` (500 ml/hr). Web
 encodes the fueling toggle in the URL like the pacing controls; mobile keeps it
 screen-local. In-run reminders are a deferred separate phase.
 
+## Marker target times (#608, 2026-07-22)
+
+Any marker may carry a **target time** — `meta.target_elapsed_s` (+ optional
+`target_clock`), parsed by the `route_markers` pair's `parseTarget`, the
+cutoff vocabulary's shape. Both editors (web `RouteMarkerEditor`, mobile
+markers panel) take h:mm:ss / mm:ss / bare-minutes input with matched
+validation — a two-part value reads as mm:ss unless the marker's position
+makes the h:mm reading the plausible pace (an 80 km aid station's "4:30"
+is 4 h 30) — and both course-schedule lists show a "Target h:mm:ss" chip.
+The roadbook page grows an owner-only **"Save as marker targets"** button
+that writes each positioned marker's projected arrival into its meta —
+the one-click seed, hand-tunable per marker afterwards. During a mobile
+recording that follows the route, crossing a targeted marker speaks
+ahead/behind-plan (run_recording.md, `voice_cue_types.marker_targets`).
+
 ## Deferred (follow-ups)
 
 - **Saved named race plans** — a `race_plans` table (route + goal + start +

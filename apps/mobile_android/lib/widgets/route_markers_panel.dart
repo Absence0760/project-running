@@ -266,18 +266,26 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
   String _detailLine(AppLocalizations l10n, RouteMarkerRow m) {
     final meta = m.meta;
     final spec = kindSpec(m.kind);
+    final parts = <String>[];
     if (spec.hasServices && meta is Map && meta['services'] is List) {
       final services = (meta['services'] as List).cast<String>();
       if (services.isNotEmpty) {
-        return services.map((s) => serviceLabel(l10n, s)).join(' · ');
+        parts.add(services.map((s) => serviceLabel(l10n, s)).join(' · '));
       }
-    }
-    if (spec.hasCutoff) {
+    } else if (spec.hasCutoff) {
       final cutoff = parseCutoff(meta);
-      if (cutoff?.clock != null) return l10n.routeMarkerCutoffAt(cutoff!.clock!);
+      if (cutoff?.clock != null) {
+        parts.add(l10n.routeMarkerCutoffAt(cutoff!.clock!));
+      }
+    } else if (meta is Map && meta['note'] is String) {
+      parts.add(meta['note'] as String);
     }
-    if (meta is Map && meta['note'] is String) return meta['note'] as String;
-    return '';
+    final target = parseTarget(meta);
+    if (target?.elapsedS != null) {
+      parts.add(
+          l10n.routeMarkerTargetChip(formatMarkerElapsed(target!.elapsedS!)));
+    }
+    return parts.join(' · ');
   }
 
   static String serviceLabel(AppLocalizations l10n, String s) {
@@ -450,6 +458,46 @@ String formatMarkerCoordinate(double v) {
       .replaceFirst(RegExp(r'\.$'), '');
 }
 
+/// "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid.
+/// Mirrors the web editor's parseElapsedText so the two editors accept
+/// the same inputs. A two-part value reads as mm:ss unless the marker's
+/// position along the route makes the h:mm reading the plausible one
+/// (150–1500 s/km implied pace) — an 80 km aid station's "4:30" is
+/// 4 h 30, not 4½ minutes.
+int? parseMarkerElapsed(String raw, {double? positionM}) {
+  final parts = raw.trim().split(':');
+  if (parts.isEmpty || parts.length > 3) return null;
+  final nums = <int>[];
+  for (final p in parts) {
+    final n = int.tryParse(p.trim());
+    if (n == null || n < 0) return null;
+    nums.add(n);
+  }
+  switch (nums.length) {
+    case 1:
+      return nums[0] > 0 ? nums[0] * 60 : null;
+    case 3:
+      final s = nums[0] * 3600 + nums[1] * 60 + nums[2];
+      return s > 0 ? s : null;
+    default:
+      final asHours = nums[0] * 3600 + nums[1] * 60;
+      final asMinutes = nums[0] * 60 + nums[1];
+      if (positionM != null && positionM > 0 && asHours > 0) {
+        final pace = asHours / (positionM / 1000);
+        if (pace >= 150 && pace <= 1500) return asHours;
+      }
+      return asMinutes > 0 ? asMinutes : null;
+  }
+}
+
+String formatMarkerElapsed(int s) {
+  final h = s ~/ 3600;
+  final m = (s % 3600) ~/ 60;
+  final sec = s % 60;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(sec)}' : '$m:${two(sec)}';
+}
+
 class _MarkerDraft {
   final String kind;
   final String label;
@@ -474,6 +522,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
   late TextEditingController _label;
   late TextEditingController _note;
   late TextEditingController _cutoff;
+  late TextEditingController _target;
   late TextEditingController _lat;
   late TextEditingController _lng;
   Set<String> _services = {};
@@ -493,6 +542,11 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     }
     final cutoff = parseCutoff(e?.meta);
     _cutoff = TextEditingController(text: cutoff?.clock ?? '');
+    final target = parseTarget(e?.meta);
+    _target = TextEditingController(
+        text: target?.elapsedS == null
+            ? ''
+            : formatMarkerElapsed(target!.elapsedS!));
     final lat = widget.lat ?? e?.lat;
     final lng = widget.lng ?? e?.lng;
     _lat = TextEditingController(
@@ -506,6 +560,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     _label.dispose();
     _note.dispose();
     _cutoff.dispose();
+    _target.dispose();
     _lat.dispose();
     _lng.dispose();
     super.dispose();
@@ -553,6 +608,15 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     }
     if (spec.hasCutoff && _cutoff.text.trim().isNotEmpty) {
       meta['cutoff_clock'] = _cutoff.text.trim();
+    }
+    if (_target.text.trim().isNotEmpty) {
+      final targetS = parseMarkerElapsed(_target.text,
+          positionM: widget.existing?.positionM);
+      if (targetS == null) {
+        showTopBanner(context, l10n.routeMarkerTargetInvalid);
+        return;
+      }
+      meta['target_elapsed_s'] = targetS;
     }
     if ((_kind == 'note' || _kind == 'hazard') && _note.text.trim().isNotEmpty) {
       meta['note'] = _note.text.trim();
@@ -658,6 +722,15 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
                 keyboardType: TextInputType.datetime,
               ),
             ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _target,
+              decoration: InputDecoration(
+                labelText: l10n.routeMarkerTargetLabel,
+                hintText: 'h:mm:ss',
+              ),
+              keyboardType: TextInputType.datetime,
+            ),
             if (_kind == 'note' || _kind == 'hazard') ...[
               const SizedBox(height: 12),
               TextField(

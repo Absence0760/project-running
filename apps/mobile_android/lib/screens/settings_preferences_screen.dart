@@ -951,6 +951,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  Widget _cueSwitch(String title, String subtitle, String cueId) {
+    final prefs = widget.preferences;
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: prefs.voiceCueEnabled(cueId),
+      onChanged: (v) async {
+        await prefs.setVoiceCueEnabled(cueId, v);
+        await widget.settingsSync?.pushVoiceCueTypes();
+      },
+    );
+  }
+
   Widget _sectionLabel(String text) {
     final theme = Theme.of(context);
     return Padding(
@@ -1111,6 +1124,26 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   await prefs.setTurnByTurnCues(v);
                 },
               ),
+            if (prefs.audioCues) ...[
+              _sectionLabel(l10n.prefsVoiceCueTypesLabel),
+              _cueSwitch(l10n.prefsCueSplits, l10n.prefsCueSplitsSubtitle,
+                  VoiceCue.splits),
+              _cueSwitch(l10n.prefsCueStartFinish,
+                  l10n.prefsCueStartFinishSubtitle, VoiceCue.startFinish),
+              _cueSwitch(l10n.prefsCueOffRoute, l10n.prefsCueOffRouteSubtitle,
+                  VoiceCue.offRoute),
+              _cueSwitch(l10n.prefsCuePaceAlerts,
+                  l10n.prefsCuePaceAlertsSubtitle, VoiceCue.paceAlerts),
+              _cueSwitch(l10n.prefsCueWorkoutSteps,
+                  l10n.prefsCueWorkoutStepsSubtitle, VoiceCue.workoutSteps),
+              _cueSwitch(l10n.prefsCueCutoffCatchUp,
+                  l10n.prefsCueCutoffCatchUpSubtitle, VoiceCue.cutoffCatchUp),
+              _cueSwitch(l10n.prefsCueMarkerTargets,
+                  l10n.prefsCueMarkerTargetsSubtitle, VoiceCue.markerTargets),
+              _cueSwitch(l10n.prefsCuePhaseTransitions,
+                  l10n.prefsCuePhaseTransitionsSubtitle,
+                  VoiceCue.phaseTransitions),
+            ],
             ListTile(
               title: Text(l10n.prefsSplitInterval),
               subtitle: Text(

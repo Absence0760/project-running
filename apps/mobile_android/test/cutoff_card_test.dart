@@ -32,6 +32,7 @@ LiveCutoffEta _eta({
       distanceToM: distanceToM,
       projectedArrivalElapsedS: projectedArrivalElapsedS,
       marginS: marginS,
+      requiredPaceSecPerKm: null,
       status: status,
     );
 

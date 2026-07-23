@@ -47,6 +47,7 @@ class MetadataKeys {
   static const String maxBpm = 'max_bpm';
   static const String notes = 'notes';
   static const String overallPlace = 'overall_place';
+  static const String pacingStrategy = 'pacing_strategy';
   static const String perceivedEffort = 'perceived_effort';
   static const String planWorkoutId = 'plan_workout_id';
   static const String position = 'position';

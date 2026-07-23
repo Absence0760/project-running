@@ -19115,6 +19115,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign in to see runs from people you follow.'**
   String get feedSignedOutMessage;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Speed up by {sec} seconds per kilometre'**
+  String ttsPaceAlertSpeedUpByKm(int sec);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Speed up by {sec} seconds per mile'**
+  String ttsPaceAlertSpeedUpByMi(int sec);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Slow down by {sec} seconds per kilometre'**
+  String ttsPaceAlertSlowDownByKm(int sec);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Slow down by {sec} seconds per mile'**
+  String ttsPaceAlertSlowDownByMi(int sec);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Next cutoff in {distance}. You need {pace} to make it.'**
+  String ttsCutoffCatchUp(String distance, String pace);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Next cutoff: the time limit has passed.'**
+  String get ttsCutoffUnreachable;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {time} ahead of plan'**
+  String ttsMarkerAheadOfPlan(String label, String time);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {time} behind plan'**
+  String ttsMarkerBehindPlan(String label, String time);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: on plan'**
+  String ttsMarkerOnPlan(String label);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Phase {index} of {total}. {phrase}'**
+  String ttsPhaseStart(int index, int total, String phrase);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Hold back. Stay controlled.'**
+  String get ttsPhaseHoldBack;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Settle into your goal pace.'**
+  String get ttsPhaseSettle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Time to race. Give what you have left.'**
+  String get ttsPhaseRace;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Hold an even effort.'**
+  String get ttsPhaseEven;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Target {pace}.'**
+  String ttsPhaseTargetPace(String pace);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Spoken cues'**
+  String get prefsVoiceCueTypesLabel;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Splits'**
+  String get prefsCueSplits;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Distance and pace at each split'**
+  String get prefsCueSplitsSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Start and finish'**
+  String get prefsCueStartFinish;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Run started and run complete announcements'**
+  String get prefsCueStartFinishSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Off-route warning'**
+  String get prefsCueOffRoute;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'When you drift off the followed route'**
+  String get prefsCueOffRouteSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Pace alerts'**
+  String get prefsCuePaceAlerts;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Speed up or slow down, with how much'**
+  String get prefsCuePaceAlertsSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Workout steps'**
+  String get prefsCueWorkoutSteps;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Step changes in structured workouts'**
+  String get prefsCueWorkoutStepsSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Cutoff catch-up'**
+  String get prefsCueCutoffCatchUp;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Pace needed for the next cutoff when you\'re at risk'**
+  String get prefsCueCutoffCatchUpSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Course marker targets'**
+  String get prefsCueMarkerTargets;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Ahead or behind plan at each course marker'**
+  String get prefsCueMarkerTargetsSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Race phases'**
+  String get prefsCuePhaseTransitions;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'When a pacing-strategy phase begins'**
+  String get prefsCuePhaseTransitionsSubtitle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Race strategy'**
+  String get runRaceStrategy;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'No strategy'**
+  String get runStrategyNone;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'10-10-10'**
+  String get runStrategyTenTenTen;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Negative split'**
+  String get runStrategyNegativeSplit;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Even pace'**
+  String get runStrategyEven;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Hold back, settle in, race the final stretch'**
+  String get runStrategyTenTenTenHint;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'First half controlled, second half faster'**
+  String get runStrategyNegativeSplitHint;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'One steady pace start to finish'**
+  String get runStrategyEvenHint;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Goal time'**
+  String get runStrategyGoalTime;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get runStrategyDistance;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a route or enter a distance to enable phases'**
+  String get runStrategyNeedsDistance;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Phase {index}/{total} — {intent}'**
+  String runPhaseChip(int index, int total, String intent);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Hold back'**
+  String get phaseIntentHoldBack;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Settle'**
+  String get phaseIntentSettle;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Race'**
+  String get phaseIntentRace;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Even'**
+  String get phaseIntentEven;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Target {time}'**
+  String routeMarkerTargetChip(String time);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Target time'**
+  String get routeMarkerTargetLabel;
+
+  /// Course marker target-time validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the target time as h:mm:ss'**
+  String get routeMarkerTargetInvalid;
 }
 
 class _AppLocalizationsDelegate

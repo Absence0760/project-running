@@ -15,6 +15,44 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/preferences.dart';
 
 void main() {
+  group('voiceCueTypes', () {
+    test('per-cue toggles persist across a cold start; absent ids are on',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final a = Preferences();
+      await a.init();
+      expect(a.voiceCueEnabled(VoiceCue.splits), isTrue);
+      await a.setVoiceCueEnabled(VoiceCue.splits, false);
+      await a.setVoiceCueEnabled(VoiceCue.markerTargets, false);
+      await a.setVoiceCueEnabled(VoiceCue.markerTargets, true);
+
+      final b = Preferences();
+      await b.init();
+      expect(b.voiceCueEnabled(VoiceCue.splits), isFalse);
+      expect(b.voiceCueEnabled(VoiceCue.markerTargets), isTrue);
+      expect(b.voiceCueEnabled(VoiceCue.phaseTransitions), isTrue);
+    });
+
+    test('corrupt stored JSON degrades to all-on, never throws', () async {
+      SharedPreferences.setMockInitialValues(
+          {'voice_cue_types': '{not json'});
+      final p = Preferences();
+      await p.init();
+      expect(p.voiceCueEnabled(VoiceCue.splits), isTrue);
+    });
+
+    test('resetAccountScopedPrefs clears the map — merge semantics would let '
+        'a prior account\'s toggles survive onto the next one', () async {
+      SharedPreferences.setMockInitialValues({});
+      final p = Preferences();
+      await p.init();
+      await p.setVoiceCueEnabled(VoiceCue.paceAlerts, false);
+      await p.resetAccountScopedPrefs();
+      expect(p.voiceCueEnabled(VoiceCue.paceAlerts), isTrue);
+      expect(p.voiceCueTypes, isEmpty);
+    });
+  });
+
   group('ActivityType.label', () {
     // Reason: the activity-type chip row on RunScreen, all dashboard
     // cards, the run-detail header, and every share-card binding read

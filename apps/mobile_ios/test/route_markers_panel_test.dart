@@ -351,4 +351,37 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
   });
+
+  group('parseMarkerElapsed / formatMarkerElapsed', () {
+    test('accepts h:mm:ss, mm:ss, and bare minutes', () {
+      expect(parseMarkerElapsed('1:45:00'), 6300);
+      expect(parseMarkerElapsed('25:00'), 1500);
+      expect(parseMarkerElapsed('90'), 5400);
+    });
+
+    test('two-part input prefers h:mm when the marker position makes it '
+        'the plausible pace', () {
+      // 4:30 at an 80 km aid station: 4 h 30 is ~202 s/km — plausible.
+      expect(parseMarkerElapsed('4:30', positionM: 80000), 16200);
+      // 25:00 at 4.6 km: 25 hours is absurd, 25 minutes is ~326 s/km.
+      expect(parseMarkerElapsed('25:00', positionM: 4600), 1500);
+      // No position (a marker not yet placed on the line): mm:ss.
+      expect(parseMarkerElapsed('4:30'), 270);
+    });
+
+    test('rejects junk, negatives, and zero', () {
+      expect(parseMarkerElapsed(''), isNull);
+      expect(parseMarkerElapsed('abc'), isNull);
+      expect(parseMarkerElapsed('1:2:3:4'), isNull);
+      expect(parseMarkerElapsed('0'), isNull);
+      expect(parseMarkerElapsed('-5'), isNull);
+    });
+
+    test('format round-trips through parse', () {
+      expect(formatMarkerElapsed(6300), '1:45:00');
+      expect(formatMarkerElapsed(1500), '25:00');
+      expect(parseMarkerElapsed(formatMarkerElapsed(6300)), 6300);
+      expect(parseMarkerElapsed(formatMarkerElapsed(1500)), 1500);
+    });
+  });
 }

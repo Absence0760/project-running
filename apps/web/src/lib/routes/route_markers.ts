@@ -5,7 +5,7 @@
  * Pure, locale- and unit-agnostic logic shared by the map layer and the
  * course-schedule list: the kind catalogue (one source of truth for pin
  * colour + which detail fields a kind carries), schedule ordering, the
- * aid-service vocabulary, and cutoff parse/validation.
+ * aid-service vocabulary, and cutoff + target-time parse/validation.
  *
  * Distance formatting is deliberately NOT here — the render layer formats
  * `position_m` through the viewer's km/mi preference (units.svelte.ts on
@@ -14,8 +14,8 @@
  * colour + i18n label key so a pin looks the same on both platforms.
  *
  * Twin of `apps/mobile_android/lib/route_markers.dart` — keep the kind
- * set, colours, service vocabulary, ordering, cutoff rules, edge cases,
- * and test count in lockstep.
+ * set, colours, service vocabulary, ordering, cutoff/target rules, edge
+ * cases, and test count in lockstep.
  */
 
 export type RouteMarkerKind =
@@ -113,6 +113,37 @@ export function parseCutoff(meta: unknown): CutoffParts | null {
 	}
 
 	const elapsed = bag.cutoff_elapsed_s;
+	if (typeof elapsed === 'number' && Number.isFinite(elapsed) && elapsed >= 0) {
+		out.elapsedS = Math.floor(elapsed);
+	}
+
+	return out.clock !== undefined || out.elapsedS !== undefined ? out : null;
+}
+
+export interface TargetParts {
+	/** Wall-clock target "HH:MM" (24h), when set. */
+	clock?: string;
+	/** Elapsed-time target in seconds from the start, when set. */
+	elapsedS?: number;
+}
+
+/**
+ * Validate + normalise a marker's target-time `meta` into `TargetParts` —
+ * the pacing goal a runner aims to reach the marker by, mirroring
+ * `parseCutoff`. Any kind may carry a target. Returns null when neither a
+ * valid clock nor a valid elapsed is present.
+ */
+export function parseTarget(meta: unknown): TargetParts | null {
+	if (meta == null || typeof meta !== 'object') return null;
+	const bag = meta as Record<string, unknown>;
+	const out: TargetParts = {};
+
+	const clock = bag.target_clock;
+	if (typeof clock === 'string' && CLOCK_RE.test(clock)) {
+		out.clock = clock;
+	}
+
+	const elapsed = bag.target_elapsed_s;
 	if (typeof elapsed === 'number' && Number.isFinite(elapsed) && elapsed >= 0) {
 		out.elapsedS = Math.floor(elapsed);
 	}

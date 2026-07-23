@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRoute } from '../fixtures/simulate';
-import { USER_A } from '../fixtures/users';
+import { USER_A, USER_B } from '../fixtures/users';
 
 /**
  * /routes/[id]/roadbook — the race crew sheet built from a route's course
@@ -11,7 +11,7 @@ import { USER_A } from '../fixtures/users';
  * URL carrying the goal (shareable), and that the effort/even toggle re-paces.
  */
 
-async function seedRoute(): Promise<string> {
+async function seedRoute(isPublic = false): Promise<string> {
 	const admin = getAdminClient();
 	const id = crypto.randomUUID();
 	// A climbing course: flat first half, steep second half, so the effort
@@ -26,7 +26,7 @@ async function seedRoute(): Promise<string> {
 		name: 'E2E Roadbook Course',
 		waypoints,
 		distance_m: 2000,
-		is_public: false
+		is_public: isPublic
 	});
 	if (error) throw new Error(`seedRoute failed: ${error.message}`);
 
@@ -181,5 +181,67 @@ test.describe('/routes/[id]/roadbook', () => {
 			const effortText = (await gateArrival.textContent())?.trim();
 			expect(effortText).not.toBe(evenText);
 		}).toPass();
+	});
+
+	test('owner saves projected arrivals as marker targets, preserving existing meta', async ({ page }) => {
+		routeId = await seedRoute();
+		await page.goto(`/routes/${routeId}/roadbook?goal=3600&model=even`);
+
+		await page.getByRole('button', { name: 'Save as marker targets' }).click();
+		await expect(page.getByText('Saved projected times to 2 markers')).toBeVisible({
+			timeout: 10_000
+		});
+
+		// Server truth: both markers gained target_elapsed_s and kept their
+		// pre-existing meta (services / cutoff).
+		const { data, error } = await getAdminClient()
+			.from('route_markers')
+			.select('label, meta')
+			.eq('route_id', routeId);
+		if (error) throw new Error(error.message);
+		const byLabel = new Map((data ?? []).map((r) => [r.label, r.meta as Record<string, unknown>]));
+		const aid = byLabel.get('Aid 1');
+		const gate = byLabel.get('Gate');
+		expect(typeof aid?.target_elapsed_s).toBe('number');
+		expect(typeof gate?.target_elapsed_s).toBe('number');
+		expect(aid?.services).toEqual(['water', 'food']);
+		expect(gate?.cutoff_elapsed_s).toBe(1800);
+		// Course order: the mid-course Gate's target is after Aid 1's, and
+		// both sit inside the 1h goal.
+		expect(gate!.target_elapsed_s as number).toBeGreaterThan(aid!.target_elapsed_s as number);
+		expect(gate!.target_elapsed_s as number).toBeLessThanOrEqual(3600);
+
+		// And the route detail's course schedule now shows the Target chips.
+		await page.goto(`/routes/${routeId}`);
+		const details = page.locator('.markers-list .marker-row .marker-detail');
+		await expect(details.nth(0)).toContainText('Target');
+		await expect(details.nth(1)).toContainText('Target');
+	});
+});
+
+test.describe('/routes/[id]/roadbook — non-owner', () => {
+	test.use({ storageState: USER_B.storageStatePath });
+
+	let routeId: string | null = null;
+
+	test.afterEach(async () => {
+		if (routeId) {
+			try {
+				await deleteRoute(routeId);
+			} catch (_) {
+				/* cascade clears markers */
+			}
+			routeId = null;
+		}
+	});
+
+	test('a viewer never sees the save-as-targets button', async ({ page }) => {
+		routeId = await seedRoute(true);
+		await page.goto(`/routes/${routeId}/roadbook?goal=3600&model=even`);
+
+		// The roadbook itself renders for a public route…
+		await expect(page.locator('.rb-table tbody tr')).toHaveCount(4);
+		// …but writing targets onto someone else's markers is owner-only.
+		await expect(page.getByRole('button', { name: 'Save as marker targets' })).toHaveCount(0);
 	});
 });
