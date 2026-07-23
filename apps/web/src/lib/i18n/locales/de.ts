@@ -1,6 +1,9 @@
 import type { Messages } from '../messages';
 
 export const messages = {
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Abbrechen',
+	'common.confirm': 'Bestätigen',
 	'nav.dashboard': 'Übersicht',
 	'nav.history': 'Verlauf',
 	'nav.runs': 'Läufe',

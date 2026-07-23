@@ -10,6 +10,9 @@
 
 export const en = {
 	// App shell / sidebar (+layout.svelte)
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Cancel',
+	'common.confirm': 'Confirm',
 	'nav.dashboard': 'Dashboard',
 	'nav.history': 'History',
 	'nav.runs': 'Runs',

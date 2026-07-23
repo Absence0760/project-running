@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		open: boolean;
@@ -29,8 +30,11 @@
 		open,
 		title,
 		message,
-		confirmLabel = 'Confirm',
-		cancelLabel = 'Cancel',
+		// Default through m() so a caller that omits a label still gets a
+		// localized button — a bare English 'Cancel'/'Confirm' leaked into
+		// every locale otherwise (route-marker + segment delete dialogs).
+		confirmLabel,
+		cancelLabel,
 		danger = false,
 		onconfirm,
 		oncancel,
@@ -96,7 +100,7 @@
 	{/if}
 	<div class="actions">
 		<button type="button" class="btn btn-secondary" onclick={oncancel} disabled={busy}>
-			{cancelLabel}
+			{cancelLabel ?? m('common.cancel')}
 		</button>
 		<button
 			type="button"
@@ -108,7 +112,7 @@
 			onclick={handleConfirm}
 		>
 			{#if busy}<span class="confirm-spinner" aria-hidden="true"></span>{/if}
-			{confirmLabel}
+			{confirmLabel ?? m('common.confirm')}
 		</button>
 	</div>
 </Modal>

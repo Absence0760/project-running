@@ -315,6 +315,44 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(page.locator('.markers-list .marker-row').first()).not.toContainText('Target');
 	});
 
+	test('delete-dialog cancel button is localized, not a hardcoded English label', async ({
+		browser
+	}) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {});
+
+		// A German browser negotiates the `de` catalogue on load.
+		const context = await browser.newContext({
+			storageState: USER_A.storageStatePath,
+			locale: 'de-DE'
+		});
+		const page = await context.newPage();
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+			// The seeded storageState may carry a stored locale that wins over
+			// the browser locale — force German so the fallback is exercised.
+			localStorage.setItem('locale', 'de');
+		});
+		await page.goto(`/routes/${routeId}`);
+
+		// Open the delete dialog via a locale-independent selector (the
+		// material-symbols "delete" ligature, not the localized tooltip).
+		await page
+			.locator('.markers-list .marker-row')
+			.first()
+			.locator('.marker-actions button', { hasText: 'delete' })
+			.click();
+
+		// Before the fix ConfirmDialog defaulted cancelLabel to a hardcoded
+		// English "Cancel"; now it falls back to m('common.cancel') → German.
+		await expect(page.locator('.modal .btn-secondary')).toHaveText('Abbrechen');
+
+		await context.close();
+	});
+
 	test('owner deletes a marker', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'note', 'Locked gate', 51.505, -0.125, {
