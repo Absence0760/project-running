@@ -69,6 +69,19 @@ class _FakePinStore extends LocalRouteStore {
   }
 }
 
+/// Owner ApiClient whose setRoutePublic blocks on a gate the test controls.
+class _GatedPublicApi extends ApiClient {
+  int publicCalls = 0;
+  final Completer<void> gate = Completer<void>();
+  @override
+  String? get userId => 'test-user';
+  @override
+  Future<void> setRoutePublic(String routeId, bool isPublic) async {
+    publicCalls++;
+    await gate.future;
+  }
+}
+
 ClubView _club({
   required String id,
   required String name,
@@ -152,6 +165,62 @@ void main() {
     testWidgets('delete button is hidden when isOwner is false', (tester) async {
       await _pump(tester, _route(), isOwner: false);
       expect(find.byIcon(Icons.delete_outline), findsNothing);
+    });
+
+    testWidgets(
+        'public toggle guards a double-tap so overlapping visibility writes '
+        'cannot race', (tester) async {
+      final api = _GatedPublicApi();
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(),
+          routeStore: store,
+          preferences: prefs,
+          apiClient: api,
+          isOwner: true,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final appBar = find.byType(AppBar);
+      // First tap flips private → public and blocks on the cloud write.
+      await tester.tap(find.descendant(
+          of: appBar, matching: find.byIcon(Icons.public_off)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(api.publicCalls, 1);
+
+      // Busy → the control is disabled; a second tap can't fire a second,
+      // out-of-order visibility write.
+      final btn = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
+      expect(btn.onPressed, isNull,
+          reason: 'visibility control must be disabled while a write is in flight');
+      await tester.tap(
+          find.descendant(of: appBar, matching: find.byIcon(Icons.public)),
+          warnIfMissed: false);
+      await tester.pump();
+      expect(api.publicCalls, 1, reason: 'second tap must not fire another write');
+
+      // Completing the write re-enables the control.
+      api.gate.complete();
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      final btnAfter = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
+      expect(btnAfter.onPressed, isNotNull);
+
+      // Drain the "made public" banner timer.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
     });
 
     testWidgets(

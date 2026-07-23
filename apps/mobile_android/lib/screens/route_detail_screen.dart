@@ -134,6 +134,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool? _bookmarked;
   bool _bookmarkBusy = false;
   bool _offlinePinBusy = false;
+  bool _publicBusy = false;
+  bool _starBusy = false;
 
   // Waypoints handed to the renderer. For the owner this mirrors
   // widget.route.waypoints from the row; for non-owners this is the
@@ -501,6 +503,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _togglePublic() async {
+    // Serialize taps: a rapid on→off→on would otherwise fire overlapping
+    // setRoutePublic calls that can land out of order, leaving the server on
+    // one value while the UI shows the other.
+    if (_publicBusy) return;
     final newValue = !_isPublic;
     final r = widget.route;
     cm.Route buildRoute(bool isPublic) => cm.Route(
@@ -526,39 +532,46 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     // back local state on any cloud error — locally-built routes
     // (which can't have a cloud row yet) could never be made
     // public until after the next sync, which wasn't obvious.
-    setState(() => _isPublic = newValue);
-    await widget.routeStore.save(buildRoute(newValue));
-    final api = widget.apiClient;
-    if (api == null || api.userId == null) {
-      // Signed-out / no api → local-only is the right answer; the
-      // route's `isPublic` flag rides through the next
-      // SyncService cycle's `saveRoute` push (the route's still in
-      // `unsyncedRoutes`).
-      if (mounted) {
-        showTopBanner(
-          context,
-          newValue
-              ? AppLocalizations.of(context).routeDetailPublicWillSync
-              : AppLocalizations.of(context).routeDetailPrivateWillSync,
-        );
-      }
-      return;
-    }
+    setState(() {
+      _publicBusy = true;
+      _isPublic = newValue;
+    });
     try {
-      await api.setRoutePublic(widget.route.id, newValue);
-    } catch (e) {
-      debugPrint('route detail visibility failed: $e');
-      // Roll back local state to match what cloud thinks. Surface
-      // the error so the user knows the toggle didn't persist
-      // cloud-side. The route stays in the unsynced queue if it
-      // was locally-built so the SyncService will retry the
-      // saveRoute push on the next cycle.
-      if (mounted) {
-        setState(() => _isPublic = !newValue);
-        await widget.routeStore.save(buildRoute(!newValue));
-        showTopBanner(context,
-            AppLocalizations.of(context).routeDetailVisibilityFailed(friendlyError(AppLocalizations.of(context), e)));
+      await widget.routeStore.save(buildRoute(newValue));
+      final api = widget.apiClient;
+      if (api == null || api.userId == null) {
+        // Signed-out / no api → local-only is the right answer; the
+        // route's `isPublic` flag rides through the next
+        // SyncService cycle's `saveRoute` push (the route's still in
+        // `unsyncedRoutes`).
+        if (mounted) {
+          showTopBanner(
+            context,
+            newValue
+                ? AppLocalizations.of(context).routeDetailPublicWillSync
+                : AppLocalizations.of(context).routeDetailPrivateWillSync,
+          );
+        }
+        return;
       }
+      try {
+        await api.setRoutePublic(widget.route.id, newValue);
+      } catch (e) {
+        debugPrint('route detail visibility failed: $e');
+        // Roll back local state to match what cloud thinks. Surface
+        // the error so the user knows the toggle didn't persist
+        // cloud-side. The route stays in the unsynced queue if it
+        // was locally-built so the SyncService will retry the
+        // saveRoute push on the next cycle.
+        if (mounted) {
+          setState(() => _isPublic = !newValue);
+          await widget.routeStore.save(buildRoute(!newValue));
+          showTopBanner(context,
+              AppLocalizations.of(context).routeDetailVisibilityFailed(friendlyError(AppLocalizations.of(context), e)));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _publicBusy = false);
     }
   }
 
@@ -628,6 +641,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _toggleStar() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
+    if (_starBusy) return;
     final newValue = !_isStarred;
     final r = widget.route;
     cm.Route buildRoute(bool starred) => cm.Route(
@@ -646,18 +660,25 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           isStarred: starred,
           description: r.description,
         );
-    setState(() => _isStarred = newValue);
-    await widget.routeStore.save(buildRoute(newValue));
+    setState(() {
+      _starBusy = true;
+      _isStarred = newValue;
+    });
     try {
-      await api.setRouteStar(r.id, newValue);
-    } catch (e) {
-      debugPrint('route detail star failed: $e');
-      if (mounted) setState(() => _isStarred = !newValue);
-      await widget.routeStore.save(buildRoute(!newValue));
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailStarFailed(friendlyError(AppLocalizations.of(context), e)));
+      await widget.routeStore.save(buildRoute(newValue));
+      try {
+        await api.setRouteStar(r.id, newValue);
+      } catch (e) {
+        debugPrint('route detail star failed: $e');
+        if (mounted) setState(() => _isStarred = !newValue);
+        await widget.routeStore.save(buildRoute(!newValue));
+        if (mounted) {
+          showTopBanner(
+              context, AppLocalizations.of(context).routeDetailStarFailed(friendlyError(AppLocalizations.of(context), e)));
+        }
       }
+    } finally {
+      if (mounted) setState(() => _starBusy = false);
     }
   }
 
@@ -838,7 +859,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               tooltip: _isStarred
                   ? l10n.routeDetailUnstarRoute
                   : l10n.routeDetailStarForWatch,
-              onPressed: _toggleStar,
+              onPressed: _starBusy ? null : _toggleStar,
             ),
           // Show the visibility toggle whenever the local store
           // considers the viewer to own this route — regardless of
@@ -852,7 +873,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               tooltip: _isPublic
                   ? l10n.routeDetailMakePrivate
                   : l10n.routeDetailMakePublic,
-              onPressed: _togglePublic,
+              onPressed: _publicBusy ? null : _togglePublic,
             ),
           if (!widget.isOwner &&
               widget.apiClient != null &&
@@ -1026,7 +1047,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         ),
                   ),
                   value: _isPublic,
-                  onChanged: (_) => _togglePublic(),
+                  onChanged: _publicBusy ? null : (_) => _togglePublic(),
                 ),
               ),
 
