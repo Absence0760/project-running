@@ -82,42 +82,64 @@ export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split
 
 	const hasEle = track.some((p) => p.ele != null);
 
-	// Accumulate cumulative distance and find the indices at each boundary.
 	// Seed the first split's start time from the first point that actually
 	// carries a parseable timestamp, not track[0]: a first GPS fix that lands
 	// before the clock is stamped (ts missing on point 0, present after) would
 	// otherwise seed NaN, fail the duration guard, and emit the first split at
 	// pace 0:00 even though the run was timed from point 1 on. `hasTs`
 	// guarantees at least one timed point exists.
-	let cumDist = 0;
 	const firstTimed = track.find((p) => p.ts != null && Number.isFinite(Date.parse(p.ts)));
 	const startMs = firstTimed ? Date.parse(firstTimed.ts as string) : NaN;
-	let splitStart = { idx: 0, dist: 0, timeMs: startMs, ele: track[0].ele };
+
+	let cumDist = 0;
+	let splitStart = { dist: 0, timeMs: startMs, ele: track[0].ele ?? null };
 	const splits: Split[] = [];
+
+	// Close the current split at cumulative distance `endDist`, using the
+	// (interpolated) crossing time + elevation, then re-seed the next split
+	// from there. Pace is normalised by the split's actual distance, so a
+	// split that isn't exactly `tickMetres` still reports a correct per-km pace.
+	const emit = (endDist: number, endTimeMs: number, endEle: number | null) => {
+		const durationS =
+			Number.isFinite(endTimeMs) && Number.isFinite(splitStart.timeMs)
+				? (endTimeMs - splitStart.timeMs) / 1000
+				: 0;
+		const splitDist = endDist - splitStart.dist;
+		const paceS = durationS > 0 && splitDist > 0 ? Math.round(durationS / (splitDist / 1000)) : 0;
+		const eleNet =
+			hasEle && endEle != null && splitStart.ele != null ? Math.round(endEle - splitStart.ele) : null;
+		splits.push({
+			km: splits.length + 1,
+			pace_s: paceS,
+			distance_m: Math.round(splitDist),
+			elevation_m: eleNet,
+		});
+		splitStart = { dist: endDist, timeMs: endTimeMs, ele: endEle };
+	};
 
 	for (let i = 1; i < track.length; i++) {
 		const a = track[i - 1];
 		const b = track[i];
-		cumDist += haversineMetres(a.lat, a.lng, b.lat, b.lng);
-		const boundary = splits.length + 1;
+		const segStart = cumDist;
+		const segDist = haversineMetres(a.lat, a.lng, b.lat, b.lng);
+		cumDist += segDist;
+		const aMs = a.ts ? Date.parse(a.ts) : NaN;
+		const bMs = b.ts ? Date.parse(b.ts) : NaN;
 
-		if (cumDist >= boundary * tickMetres) {
-			const endTimeMs = b.ts ? Date.parse(b.ts) : NaN;
-			const durationS = Number.isFinite(endTimeMs) ? (endTimeMs - splitStart.timeMs) / 1000 : 0;
-			const splitDist = cumDist - splitStart.dist;
-			const paceS = durationS > 0 && splitDist > 0 ? Math.round(durationS / (splitDist / 1000)) : 0;
-			const eleNet = hasEle && b.ele != null && splitStart.ele != null
-				? Math.round(b.ele - splitStart.ele)
-				: null;
-
-			splits.push({
-				km: boundary,
-				pace_s: paceS,
-				distance_m: Math.round(splitDist),
-				elevation_m: eleNet,
-			});
-
-			splitStart = { idx: i, dist: cumDist, timeMs: endTimeMs, ele: b.ele };
+		// A single segment can straddle several tick boundaries when there is a
+		// long gap between two fixes (a tunnel, a canyon/forest signal loss, or
+		// a downsampled Strava/Garmin import). Emit a split AT each boundary,
+		// interpolating the crossing time + elevation by the distance fraction
+		// along the segment — so the gap becomes one correctly-sized split per
+		// tick instead of one oversized split followed by zero-distance slivers.
+		let boundaryDist = (splits.length + 1) * tickMetres;
+		while (segDist > 0 && cumDist >= boundaryDist) {
+			const f = (boundaryDist - segStart) / segDist;
+			const crossMs = Number.isFinite(aMs) && Number.isFinite(bMs) ? aMs + f * (bMs - aMs) : bMs;
+			const crossEle =
+				hasEle && a.ele != null && b.ele != null ? a.ele + f * (b.ele - a.ele) : (b.ele ?? null);
+			emit(boundaryDist, crossMs, crossEle);
+			boundaryDist = (splits.length + 1) * tickMetres;
 		}
 	}
 
@@ -125,19 +147,8 @@ export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split
 	if (splits.length > 0 || cumDist > 0) {
 		const lastPoint = track[track.length - 1];
 		const endTimeMs = lastPoint.ts ? Date.parse(lastPoint.ts) : NaN;
-		const durationS = Number.isFinite(endTimeMs) ? (endTimeMs - splitStart.timeMs) / 1000 : 0;
-		const remainingDist = cumDist - splitStart.dist;
-		if (remainingDist > 50) {
-			const paceS = durationS > 0 && remainingDist > 0 ? Math.round(durationS / (remainingDist / 1000)) : 0;
-			const eleNet = hasEle && lastPoint.ele != null && splitStart.ele != null
-				? Math.round(lastPoint.ele - splitStart.ele)
-				: null;
-			splits.push({
-				km: splits.length + 1,
-				pace_s: paceS,
-				distance_m: Math.round(remainingDist),
-				elevation_m: eleNet,
-			});
+		if (cumDist - splitStart.dist > 50) {
+			emit(cumDist, endTimeMs, lastPoint.ele ?? null);
 		}
 	}
 

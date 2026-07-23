@@ -229,6 +229,38 @@ test('computeRealSplits — mile tick produces mile-long splits, pace stays sec/
 	assert.ok(Math.abs(miSplits[0].pace_s - 200) <= 2, `pace ${miSplits[0].pace_s}`);
 });
 
+test('computeRealSplits — a multi-boundary GPS gap yields correctly-sized splits, not slivers', () => {
+	// A sparse / imported track: dense to 500 m, then a single 2500 m
+	// fix-to-fix gap (a tunnel, a canyon/forest signal loss, or a downsampled
+	// Strava/Garmin import), then on to 4000 m. That one gap segment straddles
+	// the 1 km, 2 km and 3 km boundaries. Before the fix this emitted one
+	// oversized "km 1" (~3000 m) followed by zero-distance slivers for km 2 and
+	// km 3; now it must be four ~1 km splits, each timed by interpolation.
+	const deg = (m: number) => m / 111320;
+	const base = Date.parse('2026-04-01T07:00:00Z');
+	const at = (m: number, s: number): TrackPoint => ({
+		lat: deg(m),
+		lng: 0,
+		ts: new Date(base + s * 1000).toISOString(),
+	});
+	// Even 300 s/km throughout (including across the gap), so every correct
+	// split is ~1000 m at ~300 s/km.
+	const pts: TrackPoint[] = [at(0, 0), at(500, 150), at(3000, 900), at(4000, 1200)];
+	const splits = computeRealSplits(pts, 1000);
+	assert.equal(splits.length, 4, `expected 4 splits, got ${splits.length}`);
+	assert.deepEqual(
+		splits.map((s) => s.km),
+		[1, 2, 3, 4]
+	);
+	for (const s of splits) {
+		assert.ok(
+			s.distance_m >= 990 && s.distance_m <= 1010,
+			`split ${s.km} is a sliver / oversized: ${s.distance_m} m`
+		);
+		assert.ok(Math.abs(s.pace_s - 300) <= 2, `split ${s.km} pace ${s.pace_s} not ~300`);
+	}
+});
+
 test('computeRealSplits — track without elevation leaves elevation_m null', () => {
 	const pts = track(10, 2, 105);
 	const splits = computeRealSplits(pts);
