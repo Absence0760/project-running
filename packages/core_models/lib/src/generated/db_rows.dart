@@ -4117,6 +4117,7 @@ class RunRow {
   static const String colFastest10kS = 'fastest_10k_s';
   static const String colFastestHalfMarathonS = 'fastest_half_marathon_s';
   static const String colFastestMarathonS = 'fastest_marathon_s';
+  static const String colConcludedAt = 'concluded_at';
 
   final String id;
   final String userId;
@@ -4141,6 +4142,7 @@ class RunRow {
   final int? fastest10kS;
   final int? fastestHalfMarathonS;
   final int? fastestMarathonS;
+  final DateTime? concludedAt;
 
   const RunRow({
     required this.id,
@@ -4166,6 +4168,7 @@ class RunRow {
     this.fastest10kS,
     this.fastestHalfMarathonS,
     this.fastestMarathonS,
+    this.concludedAt,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -4192,6 +4195,7 @@ class RunRow {
     fastest10kS: (json['fastest_10k_s'] as num?)?.toInt(),
     fastestHalfMarathonS: (json['fastest_half_marathon_s'] as num?)?.toInt(),
     fastestMarathonS: (json['fastest_marathon_s'] as num?)?.toInt(),
+    concludedAt: json['concluded_at'] == null ? null : DateTime.parse(json['concluded_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4218,6 +4222,7 @@ class RunRow {
     colFastest10kS: fastest10kS,
     colFastestHalfMarathonS: fastestHalfMarathonS,
     colFastestMarathonS: fastestMarathonS,
+    colConcludedAt: concludedAt?.toIso8601String(),
   };
 }
 

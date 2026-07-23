@@ -3507,6 +3507,7 @@ export type Database = {
       runs: {
         Row: {
           activity_type: string
+          concluded_at: string | null
           created_at: string | null
           distance_m: number
           duration_s: number
@@ -3532,6 +3533,7 @@ export type Database = {
         }
         Insert: {
           activity_type?: string
+          concluded_at?: string | null
           created_at?: string | null
           distance_m: number
           duration_s: number
@@ -3557,6 +3559,7 @@ export type Database = {
         }
         Update: {
           activity_type?: string
+          concluded_at?: string | null
           created_at?: string | null
           distance_m?: number
           duration_s?: number
@@ -4590,6 +4593,7 @@ export type Database = {
       public_runs: {
         Row: {
           activity_type: string | null
+          concluded_at: string | null
           created_at: string | null
           distance_m: number | null
           duration_s: number | null
@@ -4612,6 +4616,7 @@ export type Database = {
         }
         Insert: {
           activity_type?: string | null
+          concluded_at?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
@@ -4634,6 +4639,7 @@ export type Database = {
         }
         Update: {
           activity_type?: string | null
+          concluded_at?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
