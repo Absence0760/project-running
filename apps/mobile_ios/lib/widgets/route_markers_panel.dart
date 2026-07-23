@@ -72,6 +72,9 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
   List<RouteMarkerRow> _markers = const [];
   bool _loaded = false;
   bool _placing = false;
+  // True while an add/update round-trip is in flight, so the panel shows a
+  // progress bar instead of no feedback until the list refreshes.
+  bool _saving = false;
   // Default on: course markers belong on the course (mirrors web's
   // `snapEnabled = true`).
   bool _snapEnabled = true;
@@ -217,6 +220,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       debugPrint('route marker save skipped: api null');
       return;
     }
+    if (mounted) setState(() => _saving = true);
     try {
       if (existing != null) {
         await api.updateRouteMarker(
@@ -246,6 +250,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
           AppLocalizations.of(context).routeMarkerSaveFailed(friendlyError(AppLocalizations.of(context), e)),
         );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -364,6 +370,11 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               ),
           ],
         ),
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
         if (_placing) ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),

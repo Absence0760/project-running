@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -83,6 +84,31 @@ class _MarkersApi extends ApiClient {
     updateCalls++;
     updatedLat = lat;
     updatedLng = lng;
+  }
+}
+
+/// Marker add blocks on a gate the test controls, to observe the save spinner.
+class _BlockingMarkersApi extends ApiClient {
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  String? get userId => 'owner-1';
+
+  @override
+  Future<List<RouteMarkerRow>> fetchRouteMarkers(String routeId) async =>
+      const [];
+
+  @override
+  Future<RouteMarkerRow> addRouteMarker({
+    required String routeId,
+    required String kind,
+    required String label,
+    required double lat,
+    required double lng,
+    Map<String, dynamic> meta = const {},
+  }) async {
+    await gate.future;
+    return _marker(id: 'new', kind: kind, label: label);
   }
 }
 
@@ -293,6 +319,45 @@ void main() {
     // Drain the "tap to place" banner timer.
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('marker save shows a progress bar while the add is in flight',
+      (tester) async {
+    final api = _BlockingMarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Latitude'), '51.502');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Longitude'), '-0.11');
+
+    await tester.tap(find.text('Save'));
+    // Let the sheet close; the add then starts and blocks on the gate.
+    // (No pumpAndSettle — the indeterminate progress bar never settles.)
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(LinearProgressIndicator), findsOneWidget,
+        reason: 'a save in flight must show progress');
+
+    // Completing the add clears the spinner.
+    api.gate.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    // Drain the "Tap to place" banner auto-dismiss timer from _startAdd.
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
   });
 
   testWidgets('typed coordinates create a marker without any map tap',
