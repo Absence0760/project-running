@@ -43,7 +43,17 @@ class _ThrowingLeaderboardApi extends ApiClient {
       throw StateError('leaderboard network down');
 }
 
-Widget _hostWithApi(ApiClient api) => MaterialApp(
+/// Segments list resolves empty (no network); used to reach the create form.
+class _EmptyListApi extends ApiClient {
+  @override
+  String? get userId => 'viewer-1';
+  @override
+  Future<List<SegmentRow>> fetchSegmentsForRoute(String routeId,
+          {int limit = 100}) async =>
+      [];
+}
+
+Widget _hostWithApi(ApiClient api, {bool canCreate = false}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -51,7 +61,7 @@ Widget _hostWithApi(ApiClient api) => MaterialApp(
           api: api,
           routeId: 'fake-route-id',
           routeDistanceM: 5000,
-          canCreate: false,
+          canCreate: canCreate,
         ),
       ),
     );
@@ -143,6 +153,27 @@ void main() {
 
       expect(find.text("Couldn't load the leaderboard"), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
+    });
+  });
+
+  group('SegmentsPanel — create validation', () {
+    testWidgets('creating a segment with an empty name shows a validation banner',
+        (tester) async {
+      await tester.pumpWidget(_hostWithApi(_EmptyListApi(), canCreate: true));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('New segment'));
+      await tester.pump();
+      // Tap Create with the name still empty — before the fix this silently
+      // did nothing.
+      await tester.tap(find.text('Create'));
+      await tester.pump();
+      expect(find.text('Enter a segment name'), findsOneWidget);
+
+      // Drain the top-banner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
     });
   });
 

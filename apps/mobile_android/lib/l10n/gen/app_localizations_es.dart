@@ -7757,6 +7757,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'El segmento debe medir al menos 100 m';
 
   @override
+  String get segmentsPanelErrNameRequired => 'Introduce un nombre de segmento';
+
+  @override
   String segmentsPanelCreateError(String error) {
     return 'No se pudo crear el segmento: $error';
   }

@@ -7767,6 +7767,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Segment muss mindestens 100 m lang sein';
 
   @override
+  String get segmentsPanelErrNameRequired => 'Segmentnamen eingeben';
+
+  @override
   String segmentsPanelCreateError(String error) {
     return 'Segment konnte nicht erstellt werden: $error';
   }

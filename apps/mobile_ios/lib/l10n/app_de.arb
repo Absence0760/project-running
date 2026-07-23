@@ -2100,6 +2100,7 @@
   "segmentsPanelDeleteConfirm": "Löschen",
   "segmentsPanelErrEndAfterStart": "Ende muss größer als Start sein",
   "segmentsPanelErrMinLength": "Segment muss mindestens 100 m lang sein",
+  "segmentsPanelErrNameRequired": "Segmentnamen eingeben",
   "segmentsPanelCreateError": "Segment konnte nicht erstellt werden: {error}",
   "segmentsPanelDeleteError": "Löschen fehlgeschlagen: {error}",
   "segmentsPanelAllGenders": "Alle Geschlechter",

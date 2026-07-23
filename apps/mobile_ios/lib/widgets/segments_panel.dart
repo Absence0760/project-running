@@ -157,7 +157,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
 
   Future<void> _submitCreate() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      _toast(AppLocalizations.of(context).segmentsPanelErrNameRequired);
+      return;
+    }
     final start = double.tryParse(_startCtrl.text) ?? 0;
     final end = double.tryParse(_endCtrl.text) ?? 0;
     final l10n = AppLocalizations.of(context);

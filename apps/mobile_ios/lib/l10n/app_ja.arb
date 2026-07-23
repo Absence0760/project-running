@@ -2100,6 +2100,7 @@
   "segmentsPanelDeleteConfirm": "削除",
   "segmentsPanelErrEndAfterStart": "終了は開始より大きくする必要があります",
   "segmentsPanelErrMinLength": "セグメントは少なくとも 100 m 必要です",
+  "segmentsPanelErrNameRequired": "セグメント名を入力してください",
   "segmentsPanelCreateError": "セグメントを作成できませんでした: {error}",
   "segmentsPanelDeleteError": "削除に失敗しました: {error}",
   "segmentsPanelAllGenders": "すべての性別",

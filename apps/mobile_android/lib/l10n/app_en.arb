@@ -10344,6 +10344,7 @@
     "description": "Validation error: end must be after start"
   },
   "segmentsPanelErrMinLength": "Segment must be at least 100 m",
+  "segmentsPanelErrNameRequired": "Enter a segment name",
   "@segmentsPanelErrMinLength": {
     "description": "Validation error: segment too short"
   },

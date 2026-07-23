@@ -2100,6 +2100,7 @@
   "segmentsPanelDeleteConfirm": "Eliminar",
   "segmentsPanelErrEndAfterStart": "El fin debe ser mayor que el inicio",
   "segmentsPanelErrMinLength": "El segmento debe medir al menos 100 m",
+  "segmentsPanelErrNameRequired": "Introduce un nombre de segmento",
   "segmentsPanelCreateError": "No se pudo crear el segmento: {error}",
   "segmentsPanelDeleteError": "Error al eliminar: {error}",
   "segmentsPanelAllGenders": "Todos los géneros",

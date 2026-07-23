@@ -12816,6 +12816,12 @@ abstract class AppLocalizations {
   /// **'Segment must be at least 100 m'**
   String get segmentsPanelErrMinLength;
 
+  /// No description provided for @segmentsPanelErrNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a segment name'**
+  String get segmentsPanelErrNameRequired;
+
   /// Banner when creating a segment fails
   ///
   /// In en, this message translates to:

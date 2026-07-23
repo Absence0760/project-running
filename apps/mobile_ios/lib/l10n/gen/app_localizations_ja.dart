@@ -7339,6 +7339,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get segmentsPanelErrMinLength => 'セグメントは少なくとも 100 m 必要です';
 
   @override
+  String get segmentsPanelErrNameRequired => 'セグメント名を入力してください';
+
+  @override
   String segmentsPanelCreateError(String error) {
     return 'セグメントを作成できませんでした: $error';
   }

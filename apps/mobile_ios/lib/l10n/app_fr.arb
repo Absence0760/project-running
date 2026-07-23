@@ -2100,6 +2100,7 @@
   "segmentsPanelDeleteConfirm": "Supprimer",
   "segmentsPanelErrEndAfterStart": "La fin doit être supérieure au début",
   "segmentsPanelErrMinLength": "Le segment doit faire au moins 100 m",
+  "segmentsPanelErrNameRequired": "Saisissez un nom de segment",
   "segmentsPanelCreateError": "Impossible de créer le segment : {error}",
   "segmentsPanelDeleteError": "Échec de la suppression : {error}",
   "segmentsPanelAllGenders": "Tous les genres",
