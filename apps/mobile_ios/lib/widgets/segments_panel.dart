@@ -11,11 +11,31 @@ import 'top_banner.dart';
 /// route, expands each row to a leaderboard on tap, and (for the
 /// route owner) hosts a "New segment" form. Mirrors the web
 /// `SegmentsPanel.svelte` component (decisions §37).
+/// Whether [viewerId] may delete a segment authored by [authorId]: the
+/// route owner may delete any (moderation), everyone else only their own.
+/// Mirrors the `segment author or route owner deletes` RLS policy, so the
+/// UI never offers a delete the backend would reject. A signed-out viewer
+/// (null [viewerId]) can delete nothing.
+bool canDeleteSegment(String? authorId, String? viewerId, bool isRouteOwner) {
+  if (isRouteOwner) return true;
+  return viewerId != null && authorId != null && authorId == viewerId;
+}
+
 class SegmentsPanel extends StatefulWidget {
   final ApiClient api;
   final String routeId;
   final double routeDistanceM;
+
+  /// Whether the viewer may CREATE a segment. Segments are Strava-style
+  /// community contributions, so any signed-in viewer can add one to a
+  /// route they can see (the RLS pins created_by = the caller).
   final bool canCreate;
+
+  /// Whether the viewer OWNS the route. Only the owner may delete segments
+  /// they didn't author (moderation); everyone else deletes only their own.
+  /// Distinct from [canCreate] so a non-owner viewer never sees a delete
+  /// button on the owner's segments that the backend would reject.
+  final bool isRouteOwner;
 
   const SegmentsPanel({
     super.key,
@@ -23,6 +43,7 @@ class SegmentsPanel extends StatefulWidget {
     required this.routeId,
     required this.routeDistanceM,
     required this.canCreate,
+    this.isRouteOwner = false,
   });
 
   @override
@@ -257,7 +278,8 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
                 expanded: _openSegmentId == seg.id,
                 leaderboard: _leaderboards[seg.id],
                 viewerId: widget.api.userId,
-                canDelete: widget.canCreate,
+                canDelete: canDeleteSegment(
+                    seg.authorId, widget.api.userId, widget.isRouteOwner),
                 onTap: () => _toggleLeaderboard(seg),
                 onDelete: () => _confirmDelete(seg),
                 genderFilter: _genderFilter,

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
+import '../lib/route_geometry.dart' show markerPointAtDistance;
 import '../lib/widgets/route_markers_panel.dart';
 
 RouteMarkerRow _marker({

@@ -110,4 +110,18 @@ void main() {
     expect(parseTarget(null), isNull);
     expect(parseTarget('14:30'), isNull);
   });
+
+  group('isOfficialMarker', () {
+    test("the route owner's marker is official", () {
+      expect(isOfficialMarker('owner-1', 'owner-1'), isTrue);
+    });
+    test('a viewer overlay marker is not official', () {
+      expect(isOfficialMarker('viewer-2', 'owner-1'), isFalse);
+    });
+    test('null / empty owner id fails closed', () {
+      expect(isOfficialMarker('owner-1', null), isFalse);
+      expect(isOfficialMarker('owner-1', ''), isFalse);
+      expect(isOfficialMarker(null, 'owner-1'), isFalse);
+    });
+  });
 }

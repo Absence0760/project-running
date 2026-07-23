@@ -709,6 +709,7 @@
 					routeId={route.id}
 					routeDistanceM={route.distance_m}
 					canCreate={auth.loggedIn}
+					{isOwner}
 					clubId={route.club_id ?? null}
 				/>
 			</section>

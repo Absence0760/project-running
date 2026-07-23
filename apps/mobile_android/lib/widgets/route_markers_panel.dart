@@ -176,10 +176,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
 
   /// A marker is OFFICIAL when it belongs to the route owner. Locally-built
   /// routes carry an empty owner id — treat those as having no official set.
-  bool _isOfficialMarker(RouteMarkerRow m) {
-    final owner = widget.routeOwnerId;
-    return owner != null && owner.isNotEmpty && m.userId == owner;
-  }
+  bool _isOfficialMarker(RouteMarkerRow m) =>
+      isOfficialMarker(m.userId, widget.routeOwnerId);
 
   /// Called by the host when a course-marker pin is tapped. Only the viewer's
   /// own markers open the editor; an owner's official marker is read-only.
@@ -551,17 +549,6 @@ double? parseDistanceAlong(String text, {required DistanceUnit unit}) {
   final v = double.tryParse(text.trim());
   if (v == null || !v.isFinite || v < 0) return null;
   return unit == DistanceUnit.mi ? v * kMetresPerMile : v * 1000;
-}
-
-/// Convert a distance-along-route in [metres] to a lat/lng on [routeLine].
-/// Out-of-range distances clamp to the route's start / end. Returns null when
-/// the line has no usable geometry (`< 2` points or zero length).
-Waypoint? markerPointAtDistance(List<Waypoint> routeLine, double metres) {
-  if (routeLine.length < 2) return null;
-  final total = polylineLengthMetres(routeLine);
-  if (total <= 0) return null;
-  final fraction = (metres / total).clamp(0.0, 1.0);
-  return interpolateAlongRoute(routeLine, fraction);
 }
 
 /// "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid.

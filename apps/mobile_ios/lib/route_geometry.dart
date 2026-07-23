@@ -119,6 +119,19 @@ double? distanceAlongRoute(
 double polylineLengthMetres(List<Waypoint> waypoints) =>
     _cumulativeLengthM(waypoints);
 
+/// Convert a distance-along-route in [distanceM] to a lat/lng on [waypoints].
+/// Out-of-range distances clamp to the route's start / end. Returns null when
+/// the line has no usable geometry (`< 2` points, zero length) or the distance
+/// isn't finite. Dart twin of web `route_geometry.ts#markerPointAtDistance`.
+Waypoint? markerPointAtDistance(List<Waypoint> waypoints, double distanceM) {
+  if (waypoints.length < 2) return null;
+  if (!distanceM.isFinite) return null;
+  final total = polylineLengthMetres(waypoints);
+  if (total <= 0) return null;
+  final clamped = distanceM.clamp(0.0, total);
+  return interpolateAlongRoute(waypoints, clamped / total);
+}
+
 double _cumulativeLengthM(List<Waypoint> waypoints) {
   var total = 0.0;
   for (var i = 1; i < waypoints.length; i++) {

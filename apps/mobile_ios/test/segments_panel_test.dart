@@ -55,8 +55,8 @@ void main() {
 
     testWidgets('hides the New segment button when canCreate is false',
         (tester) async {
-      // Reason: only route owners can create segments — the button
-      // must not appear for viewers.
+      // canCreate is now "signed-in viewer" (segments are community
+      // contributions), so false = signed-out → no add button.
       await _pump(tester, canCreate: false);
       expect(find.text('New segment'), findsNothing);
     });
@@ -65,6 +65,21 @@ void main() {
         (tester) async {
       await _pump(tester, canCreate: true);
       expect(find.text('New segment'), findsOneWidget);
+    });
+  });
+
+  group('canDeleteSegment', () {
+    test('route owner can delete any segment (moderation)', () {
+      expect(canDeleteSegment('someone-else', 'owner', true), isTrue);
+      expect(canDeleteSegment(null, 'owner', true), isTrue);
+    });
+    test('a non-owner can delete only their own segment', () {
+      expect(canDeleteSegment('me', 'me', false), isTrue);
+      expect(canDeleteSegment('someone-else', 'me', false), isFalse);
+    });
+    test('a signed-out viewer can delete nothing', () {
+      expect(canDeleteSegment('me', null, false), isFalse);
+      expect(canDeleteSegment(null, null, false), isFalse);
     });
   });
 }

@@ -163,3 +163,12 @@ TargetParts? parseTarget(dynamic meta) {
   if (clock == null && elapsedS == null) return null;
   return TargetParts(clock: clock, elapsedS: elapsedS);
 }
+
+/// Whether a marker with author [markerUserId] is the route owner's
+/// "official" marker (vs a viewer's personal overlay). Dart twin of web
+/// `route_markers.ts#isOfficialMarker`; an empty/absent owner id is treated
+/// as no-official-set (locally-built routes carry no owner uuid).
+bool isOfficialMarker(String? markerUserId, String? routeOwnerId) =>
+    routeOwnerId != null &&
+    routeOwnerId.isNotEmpty &&
+    markerUserId == routeOwnerId;

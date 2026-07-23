@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -15,6 +16,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_route_store.dart';
+import '../main.dart' show pendingStartRunWithRoute;
 import '../offline_tile_pack.dart';
 import '../preferences.dart';
 import '../route_describe_client.dart';
@@ -44,6 +46,20 @@ import '../widgets/top_banner.dart';
 @visibleForTesting
 List<ClubView> adminClubsForRouteTransfer(Iterable<ClubView> clubs) {
   return clubs.where((c) => c.isAdmin).toList();
+}
+
+/// Public share URL for a route — the `/share/route/{id}` page anyone with
+/// the link can open (and that deep-links back into the app). Host comes
+/// from `WEB_BASE_URL`, falling back to the prod site; trailing slashes are
+/// trimmed. Mirrors web's `${origin}/share/route/${id}` in
+/// `routes/[id]/+page.svelte`.
+String routeShareUrl(String routeId, {String? webBase}) {
+  final base = (webBase ??
+          (dotenv.isInitialized ? dotenv.maybeGet('WEB_BASE_URL') : null) ??
+          'https://threkir.com')
+      .trim()
+      .replaceAll(RegExp(r'/+$'), '');
+  return '$base/share/route/$routeId';
 }
 
 class RouteDetailScreen extends StatefulWidget {
@@ -741,7 +757,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       floatingActionButton: canStartRun
           ? FloatingActionButton.extended(
               heroTag: 'route_detail_start_run',
-              onPressed: () => Navigator.pop(context, route),
+              // Hand off through the global notifier (HomeScreen listens and
+              // routes into the recorder + pops back to the shell) instead of
+              // popping the route back to the caller. The old pop relied on
+              // whoever pushed this screen handling the returned route, so
+              // Start silently did nothing from any pusher that didn't — the
+              // shared-file import landing, a deep push, etc.
+              onPressed: () => pendingStartRunWithRoute.value = route,
               backgroundColor: const Color(0xFF22C55E),
               foregroundColor: Colors.white,
               icon: const Icon(Icons.play_arrow),
@@ -757,8 +779,17 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
             tooltip: l10n.routeDetailShare,
-            onSelected: (fmt) => _shareAs(context, fmt),
+            onSelected: (fmt) =>
+                fmt == 'link' ? _shareLink(context) : _shareAs(context, fmt),
             itemBuilder: (_) => [
+              // "Share link" is the intuitive send-to-someone path: it hands
+              // the public /share/route/[id] URL to the OS share sheet. Shown
+              // only when the route is already public or the viewer owns it
+              // (an owner's tap flips it public first) — otherwise the link
+              // would resolve to nothing for the recipient.
+              if (_isPublic || _isOwner)
+                PopupMenuItem(
+                    value: 'link', child: Text(l10n.routeDetailShareLink)),
               PopupMenuItem(
                   value: 'image', child: Text(l10n.routeDetailShareAsImage)),
               PopupMenuItem(value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
@@ -1146,7 +1177,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 api: widget.apiClient!,
                 routeId: route.id,
                 routeDistanceM: route.distanceMetres,
-                canCreate: _isOwner,
+                // Any signed-in viewer can add a segment (community
+                // contribution); only the owner moderates others' segments.
+                canCreate: widget.apiClient?.userId != null,
+                isRouteOwner: _isOwner,
               ),
 
             const Divider(),
@@ -1273,6 +1307,32 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// Share the route as a link — the intuitive "send this to a follower"
+  /// path. Hands the public `/share/route/[id]` URL to the OS share sheet
+  /// (pick WhatsApp / a DM / any app). An owner sharing a still-private
+  /// route flips it public first (mirrors web's `handleShare`); the menu
+  /// only offers this when the route is public or the viewer owns it, so a
+  /// non-owner never shares a dead link.
+  Future<void> _shareLink(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    if (_isOwner && !_isPublic) {
+      final api = widget.apiClient!;
+      try {
+        await api.setRoutePublic(widget.route.id, true);
+        if (!mounted) return;
+        setState(() => _isPublic = true);
+        showTopBanner(context, l10n.routeDetailMadePublicForLink);
+      } catch (e) {
+        if (!mounted) return;
+        showTopBanner(context,
+            l10n.routeDetailShareLinkFailed(friendlyError(l10n, e)));
+        return;
+      }
+    }
+    await Share.share(routeShareUrl(widget.route.id),
+        subject: widget.route.name);
   }
 
   Future<void> _shareAs(BuildContext context, String format) async {

@@ -23,12 +23,27 @@
 	interface Props {
 		routeId: string;
 		routeDistanceM: number;
+		/// Whether the viewer may CREATE a segment. Segments are Strava-style
+		/// community contributions, so any signed-in viewer can add one to a
+		/// route they can see; the RLS pins created_by = the caller.
 		canCreate: boolean;
+		/// Whether the viewer OWNS the route. Only the owner may delete
+		/// segments they didn't author (moderation); everyone else can delete
+		/// only their own. Distinct from canCreate so a non-owner viewer
+		/// doesn't see a delete button on the owner's segments that the
+		/// backend would reject.
+		isOwner?: boolean;
 		/// The route's owning club, if any. When set, a "Club only" leaderboard
 		/// toggle is offered that filters efforts to that club (persona #50).
 		clubId?: string | null;
 	}
-	let { routeId, routeDistanceM, canCreate, clubId = null }: Props = $props();
+	let {
+		routeId,
+		routeDistanceM,
+		canCreate,
+		isOwner = false,
+		clubId = null
+	}: Props = $props();
 	let clubOnly = $state(false);
 
 	let segments = $state<Segment[]>([]);
@@ -356,7 +371,7 @@
 									{/each}
 								</ol>
 							{/if}
-							{#if auth.user?.id === seg.author_id || canCreate}
+							{#if auth.user?.id === seg.author_id || isOwner}
 								<button
 									class="link-btn danger"
 									type="button"
