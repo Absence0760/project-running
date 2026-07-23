@@ -185,10 +185,19 @@ class _TopBannerWidget extends StatelessWidget {
                       child: IgnorePointer(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            message,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13),
+                          // liveRegion so TalkBack/VoiceOver announce the
+                          // message when the banner appears. This primitive
+                          // replaced Material's SnackBar, which auto-announced;
+                          // without this a blind user gets no feedback on the
+                          // failures (marker save failed, sync failed, …) that
+                          // flow through here.
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
                           ),
                         ),
                       ),

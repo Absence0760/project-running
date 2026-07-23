@@ -302,4 +302,37 @@ void main() {
       await tester.pump();
     });
   });
+
+  group('showTopBanner — accessibility', () {
+    testWidgets(
+      'the banner message is a live region so screen readers announce it',
+      (tester) async {
+        await tester.pumpWidget(_BannerHost(
+          onReady: (ctx) => showTopBanner(ctx, 'sync failed'),
+        ));
+        await tester.pump();
+
+        final liveRegion = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.liveRegion == true,
+        );
+        expect(
+          liveRegion,
+          findsOneWidget,
+          reason: 'The transient banner must be a live region — it replaced '
+              'Material SnackBar, which auto-announced to TalkBack/VoiceOver; '
+              'without it a blind user gets no feedback on the failures that '
+              'flow through here.',
+        );
+        // The announced node carries the message.
+        expect(
+          find.descendant(of: liveRegion, matching: find.text('sync failed')),
+          findsOneWidget,
+        );
+
+        // Drain the auto-dismiss timer so no pending timer trips the framework.
+        await tester.pump(const Duration(seconds: 3, milliseconds: 100));
+        await tester.pump();
+      },
+    );
+  });
 }
