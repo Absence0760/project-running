@@ -51,7 +51,7 @@ Full technical details in `backend_scaling.md`.
 
 ### GPX / KML import
 
-✓ **Shipped.** GPX / KML / KMZ / GeoJSON / TCX import across web + Android + iOS, with instant map render and distance/elevation summary. Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md).
+✓ **Shipped.** GPX / KML / KMZ / GeoJSON / TCX import across web + Android + iOS, with instant map render and distance/elevation summary. Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md). Mobile also registers as an OS handler for GPX/KML so a route shared in WhatsApp / Files / Drive can be opened straight into the library ("Open with" + share-target → route import; Android live, iOS document-open wired with the share-sheet Share Extension deferred; on-device verification pending). See [decisions.md § 297](../architecture/decisions.md#297-os-open-with--share-target-imports-a-gpxkml-as-a-route-device-led-octet-stream-is-required-for-whatsapp-ios-gets-document-open-now-and-the-share-sheet-later).
 
 ### Live GPS run recording (phone)
 
