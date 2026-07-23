@@ -446,14 +446,17 @@ test.describe('/live/[id] — anon spectator', () => {
 		}
 	});
 
-	test('run finished moments ago (pings wiped on stop) renders Finished with saved totals — never a demo feed', async ({
+	test('a public run with no surviving pings renders Finished with saved totals — never a demo feed', async ({
 		page
 	}) => {
-		// Issue #603. Stopping a run calls endLiveBroadcast, which deletes
-		// every live_run_pings row, and the saved row's end is still inside
-		// the 2-minute finished slack when the share link is re-opened. The
-		// page used to fall through to a synthesised demo loop here —
-		// fabricated movement on a real person's tracking page.
+		// Issue #603. A finished run whose pings have aged out of the 48h
+		// retention window (or an old run predating live sharing) has no
+		// backlog, and the saved row's end is still inside the 2-minute
+		// finished slack when the share link is re-opened. The page used to
+		// fall through to a synthesised demo loop here — fabricated movement
+		// on a real person's tracking page. (The recorder no longer wipes
+		// pings on stop — concludeLiveBroadcast keeps them — so the common
+		// just-finished case now carries a trace + concluded_at instead.)
 		const startedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 		const runId = await insertRun({
 			user_id: USER_A.id,

@@ -651,11 +651,14 @@
 				nowMs: Date.now(),
 			});
 			if (next === 'finished') {
-				// The recorder wipes live_run_pings on stop, so a reload in
-				// the first ~2 min after finishing lands here: the row
-				// carries the final duration but no pings survive. Freeze
-				// on the saved totals — this used to fall through to the
-				// synthesised demo loop (issue #603).
+				// Belt-and-braces no-backlog path: no concluded_at marker
+				// caught this above (an old run predating the marker, or one
+				// whose pings the 48h retention cron already cleaned) and the
+				// saved end has passed with no surviving pings. Freeze on the
+				// saved totals — this used to fall through to the synthesised
+				// demo loop (issue #603). The recorder no longer wipes pings
+				// on stop, so the common just-finished case is now caught by
+				// the concluded_at branch above with the trace intact.
 				freezeOnSavedTotals(run);
 				status = 'finished';
 				return;
