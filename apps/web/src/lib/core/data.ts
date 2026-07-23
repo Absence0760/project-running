@@ -7364,7 +7364,7 @@ export { SEGMENT_AGE_BANDS, type SegmentAgeBand, type SegmentGenderFilter } from
  * client-side from the returned order (1-based standard competition —
  * ties share a rank; next distinct time skips ordinal positions).
  */
-export async function fetchSegmentLeaderboardTiered(
+export async function fetchSegmentLeaderboardTieredWithError(
 	segmentId: string,
 	filter: {
 		gender?: SegmentGenderFilter | null;
@@ -7372,7 +7372,7 @@ export async function fetchSegmentLeaderboardTiered(
 		clubId?: string | null;
 	} = {},
 	limit = 50,
-): Promise<SegmentLeaderboardEntry[]> {
+): Promise<{ entries: SegmentLeaderboardEntry[]; error: string | null }> {
 	const { data, error } = await supabase.rpc('segment_leaderboard_tiered', {
 		p_segment_id: segmentId,
 		p_gender: filter.gender ?? null,
@@ -7380,11 +7380,11 @@ export async function fetchSegmentLeaderboardTiered(
 		p_limit: limit,
 		p_club_id: filter.clubId ?? null,
 	});
-	if (error || !data) {
+	if (error) {
 		console.warn('fetchSegmentLeaderboardTiered failed', error);
-		return [];
+		return { entries: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
-	const rows = data as Array<{
+	const rows = (data ?? []) as Array<{
 		effort_id: string;
 		user_id: string;
 		run_id: string;
@@ -7395,19 +7395,34 @@ export async function fetchSegmentLeaderboardTiered(
 		gender: string | null;
 		age: number | null;
 	}>;
-	return assignCompetitionRanks(rows).map(({ row, rank }) => ({
-		effort: {
-			id: row.effort_id,
-			segment_id: segmentId,
-			run_id: row.run_id,
-			user_id: row.user_id,
-			time_seconds: row.time_seconds,
-			started_at: row.started_at,
-			created_at: row.started_at,
-		} as SegmentEffort,
-		athlete: { id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url },
-		rank,
-	}));
+	return {
+		entries: assignCompetitionRanks(rows).map(({ row, rank }) => ({
+			effort: {
+				id: row.effort_id,
+				segment_id: segmentId,
+				run_id: row.run_id,
+				user_id: row.user_id,
+				time_seconds: row.time_seconds,
+				started_at: row.started_at,
+				created_at: row.started_at,
+			} as SegmentEffort,
+			athlete: { id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url },
+			rank,
+		})),
+		error: null,
+	};
+}
+
+export async function fetchSegmentLeaderboardTiered(
+	segmentId: string,
+	filter: {
+		gender?: SegmentGenderFilter | null;
+		ageBand?: SegmentAgeBand | null;
+		clubId?: string | null;
+	} = {},
+	limit = 50,
+): Promise<SegmentLeaderboardEntry[]> {
+	return (await fetchSegmentLeaderboardTieredWithError(segmentId, filter, limit)).entries;
 }
 
 /**

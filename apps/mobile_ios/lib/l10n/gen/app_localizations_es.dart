@@ -7708,6 +7708,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get segmentsPanelEmpty => 'Aún no hay segmentos en esta ruta.';
 
   @override
+  String get segmentsPanelLoadError => 'No se pudieron cargar los segmentos';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'No se pudo cargar la clasificación';
+
+  @override
   String get segmentsPanelNameLabel => 'Nombre';
 
   @override

@@ -1,10 +1,60 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/segments_panel.dart';
+
+/// Segments list fetch always fails.
+class _ThrowingListApi extends ApiClient {
+  @override
+  String? get userId => 'viewer-1';
+  @override
+  Future<List<SegmentRow>> fetchSegmentsForRoute(String routeId,
+          {int limit = 100}) async =>
+      throw StateError('segments network down');
+}
+
+/// Segments list succeeds with one segment; the leaderboard fetch fails.
+class _ThrowingLeaderboardApi extends ApiClient {
+  @override
+  String? get userId => 'viewer-1';
+  @override
+  Future<List<SegmentRow>> fetchSegmentsForRoute(String routeId,
+          {int limit = 100}) async =>
+      [
+        SegmentRow(
+          id: 'seg-1',
+          routeId: routeId,
+          name: 'Test Segment',
+          startDistanceM: 1000,
+          endDistanceM: 2000,
+          createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+        ),
+      ];
+  @override
+  Future<List<SegmentLeaderboardEntry>> fetchSegmentLeaderboardTiered(
+          String segmentId,
+          {String? gender,
+          String? ageBand,
+          int limit = 50}) async =>
+      throw StateError('leaderboard network down');
+}
+
+Widget _hostWithApi(ApiClient api) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SegmentsPanel(
+          api: api,
+          routeId: 'fake-route-id',
+          routeDistanceM: 5000,
+          canCreate: false,
+        ),
+      ),
+    );
 
 bool _supabaseReady = false;
 
@@ -65,6 +115,34 @@ void main() {
         (tester) async {
       await _pump(tester, canCreate: true);
       expect(find.text('New segment'), findsOneWidget);
+    });
+  });
+
+  group('SegmentsPanel — load failures surface (not silent-empty)', () {
+    testWidgets('a failed segments load shows an error + retry', (tester) async {
+      await tester.pumpWidget(_hostWithApi(_ThrowingListApi()));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("Couldn't load segments"), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      // Must NOT read as a genuinely empty route.
+      expect(find.text('No segments on this route yet.'), findsNothing);
+    });
+
+    testWidgets(
+        'a failed leaderboard load shows an error + retry, not "No efforts yet"',
+        (tester) async {
+      await tester.pumpWidget(_hostWithApi(_ThrowingLeaderboardApi()));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Test Segment'), findsOneWidget);
+
+      await tester.tap(find.text('Test Segment'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text("Couldn't load the leaderboard"), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
     });
   });
 

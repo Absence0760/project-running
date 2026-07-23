@@ -7719,6 +7719,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get segmentsPanelEmpty => 'Noch keine Segmente auf dieser Route.';
 
   @override
+  String get segmentsPanelLoadError => 'Segmente konnten nicht geladen werden';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'Bestenliste konnte nicht geladen werden';
+
+  @override
   String get segmentsPanelNameLabel => 'Name';
 
   @override

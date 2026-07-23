@@ -10284,6 +10284,8 @@
     "description": "Loading state for the segments list"
   },
   "segmentsPanelEmpty": "No segments on this route yet.",
+  "segmentsPanelLoadError": "Couldn't load segments",
+  "segmentsPanelLeaderboardError": "Couldn't load the leaderboard",
   "@segmentsPanelEmpty": {
     "description": "Empty state when a route has no segments"
   },

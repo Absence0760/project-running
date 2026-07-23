@@ -4,7 +4,7 @@
 	import { formatDuration } from '$lib/format/time';
 	import {
 		fetchSegmentsForRouteWithError,
-		fetchSegmentLeaderboardTiered,
+		fetchSegmentLeaderboardTieredWithError,
 		createSegment,
 		deleteSegment,
 		SEGMENT_AGE_BANDS,
@@ -50,6 +50,10 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let leaderboards = $state<Map<string, SegmentLeaderboardEntry[]>>(new Map());
+	// Per-segment leaderboard load error. Without this a failed leaderboard
+	// fetch swallowed to [] and read as "No efforts yet" — a runner offline or
+	// hitting an RPC error was told the board was empty, with no retry.
+	let leaderboardErrors = $state<Map<string, string | null>>(new Map());
 	let openSegmentId = $state<string | null>(null);
 	// v2: tier filter (gender + age band). Applies to whichever
 	// segment's leaderboard is currently expanded. Cleared whenever
@@ -111,12 +115,29 @@
 	}
 
 	async function refreshLeaderboard(segmentId: string) {
-		const entries = await fetchSegmentLeaderboardTiered(segmentId, {
-			gender: genderFilter,
-			ageBand: ageFilter,
-			clubId: clubOnly ? clubId : null,
-		});
-		leaderboards = new Map(leaderboards).set(segmentId, entries);
+		// Reset to the loading state (drop the key) and clear any prior error
+		// so a retry doesn't flash the stale board or a stale error.
+		const pending = new Map(leaderboards);
+		pending.delete(segmentId);
+		leaderboards = pending;
+		leaderboardErrors = new Map(leaderboardErrors).set(segmentId, null);
+		try {
+			const res = await fetchSegmentLeaderboardTieredWithError(segmentId, {
+				gender: genderFilter,
+				ageBand: ageFilter,
+				clubId: clubOnly ? clubId : null,
+			});
+			leaderboards = new Map(leaderboards).set(segmentId, res.error ? [] : res.entries);
+			leaderboardErrors = new Map(leaderboardErrors).set(segmentId, res.error);
+		} catch (e) {
+			// A thrown rejection would otherwise leave the board stuck on the
+			// loading spinner forever — surface it as the retryable error state.
+			leaderboards = new Map(leaderboards).set(segmentId, []);
+			leaderboardErrors = new Map(leaderboardErrors).set(
+				segmentId,
+				e instanceof Error ? e.message : String(e),
+			);
+		}
 	}
 
 	$effect(() => {
@@ -320,7 +341,21 @@
 									</button>
 								{/if}
 							</div>
-							{#if leaderboards.get(seg.id) == null}
+							{#if leaderboardErrors.get(seg.id)}
+								<div class="error-banner" role="alert">
+									<span class="material-symbols" aria-hidden="true">error</span>
+									<div>
+										<strong>{t('routesPage.loadError')}</strong>
+										<span class="error-detail">{leaderboardErrors.get(seg.id)}</span>
+									</div>
+									<button
+										class="btn btn-outline btn-sm"
+										onclick={() => refreshLeaderboard(seg.id)}
+									>
+										{t('routesPage.retry')}
+									</button>
+								</div>
+							{:else if leaderboards.get(seg.id) == null}
 								<p class="muted small">{t('segments.loading')}</p>
 							{:else if (leaderboards.get(seg.id) ?? []).length === 0}
 								<p class="muted small">

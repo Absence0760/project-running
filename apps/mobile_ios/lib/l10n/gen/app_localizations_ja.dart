@@ -7293,6 +7293,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get segmentsPanelEmpty => 'このルートにはまだセグメントがありません。';
 
   @override
+  String get segmentsPanelLoadError => 'セグメントを読み込めませんでした';
+
+  @override
+  String get segmentsPanelLeaderboardError => 'ランキングを読み込めませんでした';
+
+  @override
   String get segmentsPanelNameLabel => '名前';
 
   @override

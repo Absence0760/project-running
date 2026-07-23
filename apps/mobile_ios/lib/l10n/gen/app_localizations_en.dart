@@ -7625,6 +7625,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get segmentsPanelEmpty => 'No segments on this route yet.';
 
   @override
+  String get segmentsPanelLoadError => 'Couldn\'t load segments';
+
+  @override
+  String get segmentsPanelLeaderboardError => 'Couldn\'t load the leaderboard';
+
+  @override
   String get segmentsPanelNameLabel => 'Name';
 
   @override

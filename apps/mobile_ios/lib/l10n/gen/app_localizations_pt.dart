@@ -7702,6 +7702,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get segmentsPanelEmpty => 'Ainda não há segmentos nesta rota.';
 
   @override
+  String get segmentsPanelLoadError => 'Não foi possível carregar os segmentos';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'Não foi possível carregar o ranking';
+
+  @override
   String get segmentsPanelNameLabel => 'Nome';
 
   @override
@@ -19452,6 +19459,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get segmentsPanelEmpty => 'Ainda não há segmentos nesta rota.';
+
+  @override
+  String get segmentsPanelLoadError => 'Não foi possível carregar os segmentos';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'Não foi possível carregar o ranking';
 
   @override
   String get segmentsPanelNameLabel => 'Nome';

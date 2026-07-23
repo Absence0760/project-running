@@ -2086,6 +2086,8 @@
   "segmentsPanelCancel": "Cancelar",
   "segmentsPanelLoading": "Carregando segmentos…",
   "segmentsPanelEmpty": "Ainda não há segmentos nesta rota.",
+  "segmentsPanelLoadError": "Não foi possível carregar os segmentos",
+  "segmentsPanelLeaderboardError": "Não foi possível carregar o ranking",
   "segmentsPanelNameLabel": "Nome",
   "segmentsPanelNameHint": "Subida do terror",
   "segmentsPanelStartLabel": "Início (m)",

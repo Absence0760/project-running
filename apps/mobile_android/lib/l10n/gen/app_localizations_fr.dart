@@ -7728,6 +7728,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun segment sur cet itinéraire pour le moment.';
 
   @override
+  String get segmentsPanelLoadError => 'Impossible de charger les segments';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'Impossible de charger le classement';
+
+  @override
   String get segmentsPanelNameLabel => 'Nom';
 
   @override

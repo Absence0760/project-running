@@ -2086,6 +2086,8 @@
   "segmentsPanelCancel": "Annuler",
   "segmentsPanelLoading": "Chargement des segments…",
   "segmentsPanelEmpty": "Aucun segment sur cet itinéraire pour le moment.",
+  "segmentsPanelLoadError": "Impossible de charger les segments",
+  "segmentsPanelLeaderboardError": "Impossible de charger le classement",
   "segmentsPanelNameLabel": "Nom",
   "segmentsPanelNameHint": "Montée infernale",
   "segmentsPanelStartLabel": "Début (m)",

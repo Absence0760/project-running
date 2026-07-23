@@ -12732,6 +12732,18 @@ abstract class AppLocalizations {
   /// **'No segments on this route yet.'**
   String get segmentsPanelEmpty;
 
+  /// No description provided for @segmentsPanelLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load segments'**
+  String get segmentsPanelLoadError;
+
+  /// No description provided for @segmentsPanelLeaderboardError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the leaderboard'**
+  String get segmentsPanelLeaderboardError;
+
   /// Label for the segment name field
   ///
   /// In en, this message translates to:

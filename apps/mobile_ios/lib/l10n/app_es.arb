@@ -2086,6 +2086,8 @@
   "segmentsPanelCancel": "Cancelar",
   "segmentsPanelLoading": "Cargando segmentos…",
   "segmentsPanelEmpty": "Aún no hay segmentos en esta ruta.",
+  "segmentsPanelLoadError": "No se pudieron cargar los segmentos",
+  "segmentsPanelLeaderboardError": "No se pudo cargar la clasificación",
   "segmentsPanelNameLabel": "Nombre",
   "segmentsPanelNameHint": "Subida infernal",
   "segmentsPanelStartLabel": "Inicio (m)",

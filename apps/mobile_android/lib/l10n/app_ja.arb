@@ -2086,6 +2086,8 @@
   "segmentsPanelCancel": "キャンセル",
   "segmentsPanelLoading": "セグメントを読み込み中…",
   "segmentsPanelEmpty": "このルートにはまだセグメントがありません。",
+  "segmentsPanelLoadError": "セグメントを読み込めませんでした",
+  "segmentsPanelLeaderboardError": "ランキングを読み込めませんでした",
   "segmentsPanelNameLabel": "名前",
   "segmentsPanelNameHint": "悪夢の登り",
   "segmentsPanelStartLabel": "開始 (m)",

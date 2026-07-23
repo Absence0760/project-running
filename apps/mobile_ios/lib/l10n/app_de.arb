@@ -2086,6 +2086,8 @@
   "segmentsPanelCancel": "Abbrechen",
   "segmentsPanelLoading": "Segmente werden geladen…",
   "segmentsPanelEmpty": "Noch keine Segmente auf dieser Route.",
+  "segmentsPanelLoadError": "Segmente konnten nicht geladen werden",
+  "segmentsPanelLeaderboardError": "Bestenliste konnte nicht geladen werden",
   "segmentsPanelNameLabel": "Name",
   "segmentsPanelNameHint": "Höllenanstieg",
   "segmentsPanelStartLabel": "Start (m)",
