@@ -8234,6 +8234,30 @@
   "@licensesOpenSourceSubtitle": {
     "description": "Subtitle of the Open-source licenses tile"
   },
+  "licensesCheckingUpdate": "Checking for updates…",
+  "@licensesCheckingUpdate": {
+    "description": "Shown on the Licenses screen while an in-app update check is in flight"
+  },
+  "licensesUpdateAvailable": "Update available",
+  "@licensesUpdateAvailable": {
+    "description": "Title of the update-available row on the Licenses screen (Play In-App Updates)"
+  },
+  "licensesUpdateAvailableSubtitle": "A newer version is ready to install.",
+  "@licensesUpdateAvailableSubtitle": {
+    "description": "Subtitle of the update-available row on the Licenses screen"
+  },
+  "licensesUpdate": "Update",
+  "@licensesUpdate": {
+    "description": "Button that starts the in-app update to the latest version"
+  },
+  "licensesUpToDate": "You're on the latest version",
+  "@licensesUpToDate": {
+    "description": "Shown on the Licenses screen when no newer version is available"
+  },
+  "licensesUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
+  "@licensesUpdateFailed": {
+    "description": "Banner shown when the in-app update flow fails to start"
+  },
   "devicesTitle": "Devices",
   "@devicesTitle": {
     "description": "AppBar title for the Settings > Devices screen"

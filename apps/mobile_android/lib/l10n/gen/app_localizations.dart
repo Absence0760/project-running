@@ -10141,6 +10141,42 @@ abstract class AppLocalizations {
   /// **'Third-party packages bundled with this app'**
   String get licensesOpenSourceSubtitle;
 
+  /// Shown on the Licenses screen while an in-app update check is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get licensesCheckingUpdate;
+
+  /// Title of the update-available row on the Licenses screen (Play In-App Updates)
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get licensesUpdateAvailable;
+
+  /// Subtitle of the update-available row on the Licenses screen
+  ///
+  /// In en, this message translates to:
+  /// **'A newer version is ready to install.'**
+  String get licensesUpdateAvailableSubtitle;
+
+  /// Button that starts the in-app update to the latest version
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get licensesUpdate;
+
+  /// Shown on the Licenses screen when no newer version is available
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on the latest version'**
+  String get licensesUpToDate;
+
+  /// Banner shown when the in-app update flow fails to start
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start the update. Try again from the Play Store.'**
+  String get licensesUpdateFailed;
+
   /// AppBar title for the Settings > Devices screen
   ///
   /// In en, this message translates to:

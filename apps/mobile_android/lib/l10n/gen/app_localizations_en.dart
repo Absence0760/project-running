@@ -6086,6 +6086,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Third-party packages bundled with this app';
 
   @override
+  String get licensesCheckingUpdate => 'Checking for updates…';
+
+  @override
+  String get licensesUpdateAvailable => 'Update available';
+
+  @override
+  String get licensesUpdateAvailableSubtitle =>
+      'A newer version is ready to install.';
+
+  @override
+  String get licensesUpdate => 'Update';
+
+  @override
+  String get licensesUpToDate => 'You\'re on the latest version';
+
+  @override
+  String get licensesUpdateFailed =>
+      'Couldn\'t start the update. Try again from the Play Store.';
+
+  @override
   String get devicesTitle => 'Devices';
 
   @override

@@ -113,6 +113,7 @@ dependencies:
   # picks the exact intl the bundled Flutter wants (avoids a version
   # conflict and keeps both twin pubspecs' dep sets identical).
   intl: any
+  in_app_update: ^4.2.5
 
 dev_dependencies:
   flutter_test:

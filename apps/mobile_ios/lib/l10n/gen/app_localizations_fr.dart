@@ -6170,6 +6170,26 @@ class AppLocalizationsFr extends AppLocalizations {
   String get licensesOpenSourceSubtitle => 'Paquets tiers intégrés à cette app';
 
   @override
+  String get licensesCheckingUpdate => 'Recherche de mises à jour…';
+
+  @override
+  String get licensesUpdateAvailable => 'Mise à jour disponible';
+
+  @override
+  String get licensesUpdateAvailableSubtitle =>
+      'Une version plus récente est prête à être installée.';
+
+  @override
+  String get licensesUpdate => 'Mettre à jour';
+
+  @override
+  String get licensesUpToDate => 'Vous avez la dernière version';
+
+  @override
+  String get licensesUpdateFailed =>
+      'Impossible de lancer la mise à jour. Réessayez depuis le Play Store.';
+
+  @override
   String get devicesTitle => 'Appareils';
 
   @override
