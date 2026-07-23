@@ -3654,6 +3654,23 @@
   "@routeDetailShareAsKml": {
     "description": "Share-menu option to share the route as a KML file"
   },
+  "routeDetailShareLink": "Share link",
+  "@routeDetailShareLink": {
+    "description": "Share-menu option to share a link to the public route page (opens the OS share sheet)"
+  },
+  "routeDetailMadePublicForLink": "Made public so anyone with the link can view it",
+  "@routeDetailMadePublicForLink": {
+    "description": "Banner shown when tapping Share link auto-publishes a private route so its link resolves"
+  },
+  "routeDetailShareLinkFailed": "Couldn't share the link: {error}",
+  "@routeDetailShareLinkFailed": {
+    "description": "Banner shown when making the route public for a share link fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeDetailShareAsGpxMarkers": "Share as GPX + markers",
   "@routeDetailShareAsGpxMarkers": {
     "description": "Share-menu option to share the route as a GPX file including the course markers (aid stations, cutoffs) as waypoints"

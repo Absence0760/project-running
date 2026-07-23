@@ -2574,6 +2574,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailShareAsKml => 'KML として共有';
 
   @override
+  String get routeDetailShareLink => 'リンクを共有';
+
+  @override
+  String get routeDetailMadePublicForLink => 'リンクを知っている全員が閲覧できるように公開しました';
+
+  @override
+  String routeDetailShareLinkFailed(String error) {
+    return 'リンクを共有できませんでした: $error';
+  }
+
+  @override
   String get routeDetailShareAsGpxMarkers => 'GPX + マーカーとして共有';
 
   @override

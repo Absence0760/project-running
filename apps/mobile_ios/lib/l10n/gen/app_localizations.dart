@@ -4607,6 +4607,24 @@ abstract class AppLocalizations {
   /// **'Share as KML'**
   String get routeDetailShareAsKml;
 
+  /// Share-menu option to share a link to the public route page (opens the OS share sheet)
+  ///
+  /// In en, this message translates to:
+  /// **'Share link'**
+  String get routeDetailShareLink;
+
+  /// Banner shown when tapping Share link auto-publishes a private route so its link resolves
+  ///
+  /// In en, this message translates to:
+  /// **'Made public so anyone with the link can view it'**
+  String get routeDetailMadePublicForLink;
+
+  /// Banner shown when making the route public for a share link fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t share the link: {error}'**
+  String routeDetailShareLinkFailed(String error);
+
   /// Share-menu option to share the route as a GPX file including the course markers (aid stations, cutoffs) as waypoints
   ///
   /// In en, this message translates to:

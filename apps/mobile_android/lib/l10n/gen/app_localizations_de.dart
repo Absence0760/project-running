@@ -2744,6 +2744,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeDetailShareAsKml => 'Als KML teilen';
 
   @override
+  String get routeDetailShareLink => 'Link teilen';
+
+  @override
+  String get routeDetailMadePublicForLink =>
+      'Öffentlich gemacht, damit jeder mit dem Link sie ansehen kann';
+
+  @override
+  String routeDetailShareLinkFailed(String error) {
+    return 'Link konnte nicht geteilt werden: $error';
+  }
+
+  @override
   String get routeDetailShareAsGpxMarkers => 'Als GPX + Markierungen teilen';
 
   @override
