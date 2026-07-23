@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use embedded_hal::digital::{ErrorType as PinErrorType, OutputPin};
 use embedded_hal::spi::{ErrorType as SpiErrorType, SpiBus};
 use sharp_mip::{
-    font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH,
+    font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS, WIDTH,
 };
 
 #[derive(Default)]
@@ -246,6 +246,133 @@ fn draw_text_2x_clips_at_the_edges_without_panicking() {
     fb.draw_text_2x(0, 99, "X"); // past the bottom
     fb.draw_text_2x(TEXT_COLS - 1, 0, "X"); // second cell falls off the right
     fb.draw_text_2x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
+}
+
+#[test]
+fn draw_text_row_ruled_composes_rules_with_the_glyphs() {
+    use sharp_mip::RowRules;
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_ruled(
+        2,
+        "     9.87 KM",
+        RowRules {
+            top: true,
+            bottom: true,
+            vline_x: Some(84),
+            x0: 16,
+        },
+    );
+    // Top + bottom hairlines from x0 to the right edge, the gutter left of
+    // x0 clear of them...
+    assert!((16..WIDTH).all(|x| fb.pixel(x, 32)), "top rule incomplete");
+    assert!(
+        (16..WIDTH).all(|x| fb.pixel(x, 47)),
+        "bottom rule incomplete"
+    );
+    assert!(
+        !fb.pixel(0, 32) && !fb.pixel(15, 47),
+        "rule entered the gutter"
+    );
+    // ...the vline spans the whole band...
+    assert!((32..48).all(|y| fb.pixel(84, y)), "vline incomplete");
+    // ...and the glyphs still landed: the row matches a plain draw plus the
+    // rules, pixel for pixel.
+    let mut plain = Framebuffer::new();
+    plain.draw_text_row(2, "     9.87 KM");
+    for y in 32..48 {
+        for x in 0..WIDTH {
+            let ruled = ((y == 32 || y == 47) && x >= 16) || x == 84;
+            assert_eq!(fb.pixel(x, y), plain.pixel(x, y) || ruled, "at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn draw_text_row_ruled_redraw_is_stable() {
+    use sharp_mip::RowRules;
+    // The reason the rules compose into the row's own compare-write: a
+    // text-then-rule two-pass would flip the rule row's bytes back and forth
+    // and latch those lines dirty on every frame.
+    let rules = RowRules {
+        top: false,
+        bottom: true,
+        vline_x: None,
+        x0: 16,
+    };
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_ruled(3, "PACE 5:12 /KM", rules);
+    fb.clear_dirty();
+    fb.draw_text_row_ruled(3, "PACE 5:12 /KM", rules);
+    assert_eq!(fb.dirty_count(), 0, "an unchanged ruled row flushed");
+    fb.draw_text_row_ruled(3, "PACE 5:13 /KM", rules);
+    assert!(fb.dirty_count() > 0, "a changed ruled row must dirty");
+}
+
+#[test]
+fn draw_text_row_ruled_without_rules_matches_draw_text_row() {
+    use sharp_mip::RowRules;
+    let mut ruled = Framebuffer::new();
+    ruled.draw_text_row(1, "STALE WIDE CONTENT");
+    ruled.draw_text_row_ruled(1, "NEW", RowRules::default());
+    let mut plain = Framebuffer::new();
+    plain.draw_text_row(1, "NEW");
+    for y in 16..32 {
+        for x in 0..WIDTH {
+            assert_eq!(ruled.pixel(x, y), plain.pixel(x, y), "at ({x},{y})");
+        }
+    }
+    ruled.draw_text_row_ruled(99, "X", RowRules::default());
+}
+
+#[test]
+fn draw_banner_2x_is_exactly_2x_text_with_fg_bg_swapped() {
+    // Inverse video on a 1-bit framebuffer is nothing more than swapping ink
+    // and background at draw time: inside the text span the banner must be
+    // the pixel-inverse of the same string drawn by draw_text_2x.
+    let mut banner = Framebuffer::new();
+    banner.draw_banner_2x(0, "STOP? BTN2");
+    let mut plain = Framebuffer::new();
+    let col0 = (TEXT_COLS - 20) / 2;
+    plain.draw_text_2x(col0, 0, "STOP? BTN2");
+    for y in 0..32 {
+        for x in col0 * 8..(col0 + 20) * 8 {
+            assert_eq!(banner.pixel(x, y), !plain.pixel(x, y), "at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn draw_banner_2x_fills_the_whole_band_and_stays_inside_it() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(0, "! DRINK");
+    // The band's margins are solid ink out to both panel edges...
+    assert!(fb.pixel(0, 0) && fb.pixel(WIDTH - 1, 0));
+    assert!(fb.pixel(0, 31) && fb.pixel(WIDTH - 1, 31));
+    // ...the centred text is knocked out light inside it...
+    let knocked_out = (0..32)
+        .flat_map(|y| (0..WIDTH).map(move |x| (x, y)))
+        .filter(|&(x, y)| !fb.pixel(x, y))
+        .count();
+    assert!(knocked_out > 0, "no light text inside the banner");
+    // ...and nothing below the two banner rows is touched.
+    assert!((32..HEIGHT).all(|y| (0..WIDTH).all(|x| !fb.pixel(x, y))));
+}
+
+#[test]
+fn draw_banner_2x_redraw_is_stable() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(3, "OFF COURSE");
+    fb.clear_dirty();
+    fb.draw_banner_2x(3, "OFF COURSE");
+    assert_eq!(fb.dirty_count(), 0, "a standing banner must flush no lines");
+}
+
+#[test]
+fn draw_banner_2x_truncates_and_clips_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_banner_2x(0, &"X".repeat(TEXT_COLS)); // wider than fits
+    fb.draw_banner_2x(sharp_mip::TEXT_ROWS - 1, "X"); // lower half clips off-panel
+    fb.draw_banner_2x(99, "X"); // past the bottom text row
 }
 
 #[test]
@@ -674,78 +801,6 @@ fn sparkline_clamps_values_outside_the_range() {
         );
         assert!(!under.pixel(x, 0), "under-range leaked to the top at x={x}");
     }
-}
-
-#[test]
-fn draw_text_3x_triples_a_glyph() {
-    let mut fb = Framebuffer::new();
-    fb.clear_dirty();
-    fb.draw_text_3x(0, 0, "1");
-    let glyph = &font::FONT[(b'1' - font::FIRST_CHAR) as usize];
-    // Each source row maps to three dest rows; each source bit b lights dest
-    // bits 3b..3b+3 across the three-byte-wide tripled cell.
-    for (dy, &bits) in glyph.iter().enumerate() {
-        let mut wide: u32 = 0;
-        for b in 0..8 {
-            if bits >> b & 1 != 0 {
-                wide |= 0b111 << (b * 3);
-            }
-        }
-        let bytes = [
-            (wide & 0xff) as u8,
-            (wide >> 8 & 0xff) as u8,
-            (wide >> 16 & 0xff) as u8,
-        ];
-        for third in 0..3 {
-            let y = dy * 3 + third;
-            if y >= HEIGHT {
-                break;
-            }
-            for (c, &want) in bytes.iter().enumerate() {
-                assert_eq!(fb.line(y)[c], want, "row {y} cell {c}");
-            }
-        }
-    }
-    // A tripled glyph spans 48 rows and dirtied at least the non-empty ones.
-    assert!(fb.dirty_count() > 0);
-    assert!((0..HEIGHT)
-        .filter(|&y| fb.is_dirty(y))
-        .all(|y| y < 3 * font::GLYPH_HEIGHT));
-}
-
-#[test]
-fn draw_text_3x_block_is_24_wide_and_48_tall() {
-    let mut fb = Framebuffer::new();
-    fb.draw_text_3x(0, 0, "8"); // a dense glyph
-    let mut max_x = 0;
-    let mut max_y = 0;
-    let mut any = false;
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            if fb.pixel(x, y) {
-                any = true;
-                if x > max_x {
-                    max_x = x;
-                }
-                if y > max_y {
-                    max_y = y;
-                }
-            }
-        }
-    }
-    assert!(any, "glyph rendered nothing");
-    // 24 px wide (3 cells) and 48 px tall (3 rows) upper bounds.
-    assert!(max_x < 24, "wider than 24 px: {max_x}");
-    assert!(max_y < 48, "taller than 48 px: {max_y}");
-}
-
-#[test]
-fn draw_text_3x_truncates_and_clips_without_panicking() {
-    let mut fb = Framebuffer::new();
-    fb.draw_text_3x(0, 99, "X"); // past the bottom text row
-    fb.draw_text_3x(TEXT_COLS - 2, 0, "X"); // 2nd/3rd cells fall off the right
-    fb.draw_text_3x(0, TEXT_ROWS - 1, "X"); // bottom row: lower two-thirds clip off-panel
-    fb.draw_text_3x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
 }
 
 #[test]

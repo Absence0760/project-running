@@ -8,8 +8,8 @@
 # features: `sim-autostart` (start recording on the first fix so a run records
 # without a button), `sim-buttons` (poll the button pins so BTN1-4 presses
 # work — clicked on the --gui window's bezel, or injected via the watch.resc
-# btn1..btn4 monitor macros: BTN1 start/pause, BTN2 stop, BTN3 page / idle
-# GNSS mode, BTN4 lap), and `sim-course` (the canned breadcrumb course the Nav
+# btn1..btn4 monitor macros: BTN1 start/pause/resume, dismiss-home from FIN, BTN2 stop (press twice), BTN3 page / idle
+# GNSS mode, BTN4 lap / page back from FIN / home-diagnostics toggle while idle), and `sim-course` (the canned breadcrumb course the Nav
 # page follows; the bench_jog fixture leaves it on two legs so the off-course
 # alert fires each lap). What you can't simulate: BLE (nrf-softdevice needs
 # the real radio), power draw, GPS/HR analog behaviour. See
@@ -93,19 +93,31 @@ RENODE_LOG="$RUN_DIR/renode.log"
 
 RENODE_PID=""
 cleanup() {
-	trap - INT TERM EXIT
+	# Ignore further signals rather than resetting to default: pnpm forwards
+	# its own SIGINT right behind the tty's group-wide one (a second Ctrl-C
+	# does the same), and with the trap reset that second INT kills the
+	# script on this very line — before the Renode kill below — orphaning
+	# the emulator on the phone port.
+	trap '' INT TERM HUP
+	trap - EXIT
 	# /usr/bin/renode is a shell wrapper around dotnet — killing the wrapper
 	# alone leaves Renode.dll running (and holding its monitor port), so also
 	# kill the real PID that Renode wrote to the pid-file.
 	[[ -f "$RUN_DIR/renode.pid" ]] && kill "$(cat "$RUN_DIR/renode.pid")" 2>/dev/null
 	[[ -n "$RENODE_PID" ]] && kill "$RENODE_PID" 2>/dev/null
-	kill $(jobs -p) 2>/dev/null
+	# Not `kill $(jobs -p)`: that names only each job's leader, so the tail
+	# half of the `tail | defmt-print` pipeline survived every run. Sweep all
+	# remaining direct children instead.
+	pkill -P $$ 2>/dev/null
 	wait 2>/dev/null
 	[[ "$(readlink -f "$LATEST_LINK" 2>/dev/null)" == "$(readlink -f "$RUN_DIR")" ]] && rm -f "$LATEST_LINK"
 	dim "sim artifacts kept in $RUN_DIR (renode.log, defmt.raw)"
 	exit 0
 }
-trap cleanup INT TERM EXIT
+# HUP included: closing the terminal tab that ran the script would otherwise
+# kill it without the trap, orphaning Renode still holding the phone port —
+# the very stale instance the preflight above then refuses to start over.
+trap cleanup INT TERM HUP EXIT
 
 # Per-run monitor port: the default (1234) collides across concurrent or
 # stale sim instances and Renode aborts on AddressAlreadyInUse. The telnet
@@ -118,6 +130,17 @@ trap cleanup INT TERM EXIT
 # emulator. To script one command without ending the run, hold stdin open
 # (e.g. `{ echo "<cmd>"; sleep 2; } | ncat localhost <port>`).
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
+
+# The phone-link socket binds a FIXED port (the mobile Sim Watch screen dials
+# 7788), and watch.resc creates it BEFORE the GPS pty — so a stale sim
+# instance still holding the port aborts the include mid-script and the only
+# visible symptom is the pty never appearing. Name the real cause up front.
+PHONE_PORT_HOLDER="$(ss -tlnpH "sport = :$PHONE_PORT" 2>/dev/null || true)"
+if [[ -n "$PHONE_PORT_HOLDER" ]]; then
+	HOLDER_PID="$(grep -oP 'pid=\K[0-9]+' <<<"$PHONE_PORT_HOLDER" | head -1)"
+	fatal "phone-link port $PHONE_PORT is already in use${HOLDER_PID:+ by pid $HOLDER_PID} — a previous watch sim is probably still running. Close its Renode window${HOLDER_PID:+ or 'kill $HOLDER_PID'}, or run this one with --phone-port $(( PHONE_PORT + 1 ))."
+fi
+
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
 echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
 ln -sfn "$RUN_DIR" "$LATEST_LINK"
@@ -143,11 +166,11 @@ for _ in $(seq 1 150); do
 	fi
 	sleep 0.2
 done
-[[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them)"
+[[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them). If ss -tlnp 'sport = :$PHONE_PORT' shows a holder, a stale sim instance grabbed the phone port after the preflight check."
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
-dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn4 (lap)"
+dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn3l (page back), \$btn3h (page grid), \$btn4 (lap / FIN page back / idle diag toggle)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the

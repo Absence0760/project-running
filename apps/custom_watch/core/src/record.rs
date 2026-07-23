@@ -382,6 +382,13 @@ pub struct Lap {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Snapshot {
     pub state: RecordState,
+    /// Whether a `Paused` state came from an explicit [`Recorder::pause`]
+    /// (cleared only by [`Recorder::resume`]) rather than the speed-derived
+    /// auto-pause or the min-move filter's sampling artifact. Always `false`
+    /// outside `Paused`, so the face can label a pause honestly: a manual
+    /// pause demands a button press, everything else resumes itself on the
+    /// next moving fix.
+    pub manual_paused: bool,
     pub distance_m: f64,
     /// Wall-clock seconds since start — includes paused stretches.
     pub elapsed_s: u32,
@@ -1146,6 +1153,20 @@ impl Recorder {
         self.current_speed_mps = 0.0;
     }
 
+    /// Dismiss a finished run: back to `Idle`, so the idle face (the home
+    /// screen) shows and a fresh `start` can follow — without this, `Finished`
+    /// was a dead end and the watch stayed on the run view until reboot. Only
+    /// valid once `Finished`; the stored run was committed at `stop`, so this
+    /// changes view state only, never data (`start` clears the totals as
+    /// always).
+    pub fn reset(&mut self, now_s: u32) {
+        if self.state != RecordState::Finished {
+            return;
+        }
+        self.now_s = now_s.max(self.now_s);
+        self.state = RecordState::Idle;
+    }
+
     /// Advance the wall clock without a new fix (the mobile recorder's 1 Hz
     /// tick). Elapsed grows through paused states; idle and finished are inert.
     pub fn tick(&mut self, now_s: u32) {
@@ -1332,6 +1353,9 @@ impl Recorder {
     pub fn snapshot(&self) -> Snapshot {
         let mut snap = Snapshot {
             state: self.state,
+            // Gated on Paused because `stop()` doesn't clear the flag — a
+            // Finished snapshot must not carry a stale manual-pause marker.
+            manual_paused: self.state == RecordState::Paused && self.manual_paused,
             distance_m: self.distance_m,
             elapsed_s: self.elapsed_s(),
             moving_s: self.moving_s,
@@ -1955,6 +1979,58 @@ mod tests {
         assert_eq!(s.state, RecordState::Recording);
         assert!(s.moving_s > 3);
         assert!(s.distance_m > dist_before);
+    }
+
+    #[test]
+    fn snapshot_marks_only_a_manual_pause_as_manual() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r.on_fix(&fix(40.00005, -105.0, 5.0, 1));
+        assert!(!r.snapshot().manual_paused);
+
+        // A stationary stretch auto-pauses: Paused, but not manual.
+        r.on_fix(&fix(40.00005, -105.0, 0.0, 2));
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused);
+        assert!(!s.manual_paused);
+
+        // An explicit pause is the one the runner must resume by hand.
+        r.pause(3);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused);
+        assert!(s.manual_paused);
+
+        // Stopping out of a manual pause must not leak the stale flag into
+        // the Finished snapshot.
+        r.stop(4);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Finished);
+        assert!(!s.manual_paused);
+    }
+
+    #[test]
+    fn reset_dismisses_a_finished_run_and_only_a_finished_run() {
+        let mut r = Recorder::new();
+        // Inert from idle and mid-run: a stray press can't wipe the view of a
+        // live recording.
+        r.reset(0);
+        assert_eq!(r.state(), RecordState::Idle);
+        r.start(1);
+        r.reset(2);
+        assert_eq!(r.state(), RecordState::Recording);
+        r.pause(3);
+        r.reset(4);
+        assert_eq!(r.state(), RecordState::Paused);
+        // From finished: back to idle, and a fresh start records from zero.
+        r.stop(5);
+        r.reset(6);
+        assert_eq!(r.state(), RecordState::Idle);
+        r.start(7);
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Recording);
+        assert_eq!(s.distance_m, 0.0);
+        assert_eq!(s.elapsed_s, 0);
     }
 
     #[test]

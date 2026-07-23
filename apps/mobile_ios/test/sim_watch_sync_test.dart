@@ -502,7 +502,7 @@ void main() {
       final frame = Uint8List.fromList(transport.settingsWrites.single);
       expect(
         frame,
-        _hex('53455431010fbe00d3a40000403800000024f4480050434903'),
+        _hex('53455431020f00be00d3a40000403800000024f4480050434903'),
       );
     });
   });

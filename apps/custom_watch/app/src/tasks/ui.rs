@@ -16,13 +16,15 @@ use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::alerts::{self, Alert};
+use watch_core::button;
 use watch_core::course::{Course, CoursePoint, PanelFit};
 use watch_core::elevation::{self, Reading as ElevationReading, RezeroStatus};
-use watch_core::face::{self, FaceIcon, NavView};
+use watch_core::face::{self, FaceIcon, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::page::Page;
+use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
 use watch_core::trackback::{self, TrackbackView};
@@ -168,6 +170,8 @@ pub async fn screen_task(
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut page_rx = unwrap!(state::PAGE.receiver());
+    let mut page_grid_rx = unwrap!(state::PAGE_GRID.receiver());
+    let mut idle_view_rx = unwrap!(state::IDLE_VIEW.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
@@ -176,7 +180,10 @@ pub async fn screen_task(
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
+    let mut battery_rx = unwrap!(state::BATTERY.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
+    let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
+    let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
@@ -184,11 +191,19 @@ pub async fn screen_task(
     let mut tb: Option<TrackbackView> = None;
     let mut sats: Option<u8> = None;
     let mut fix_quality: Option<u8> = None;
+    let mut battery: Option<u8> = None;
     let mut page = Page::default();
+    let mut idle_view = IdleView::Home;
+    // The page-grid overview's cursor while open (None = closed) — published
+    // by the button task, which owns the grid state machine.
+    let mut grid: Option<Page> = None;
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
+    let mut stop_armed: Option<u32> = None;
+    // No published offset yet = the home clock stays UTC (and says so).
+    let mut tz_offset_min: Option<i16> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -226,6 +241,12 @@ pub async fn screen_task(
         if let Some(p) = page_rx.try_changed() {
             page = p;
         }
+        if let Some(g) = page_grid_rx.try_changed() {
+            grid = g;
+        }
+        if let Some(v) = idle_view_rx.try_changed() {
+            idle_view = v;
+        }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
         }
@@ -252,8 +273,17 @@ pub async fn screen_task(
         if let Some(q) = fix_quality_rx.try_changed() {
             fix_quality = Some(q);
         }
+        if let Some(b) = battery_rx.try_changed() {
+            battery = b;
+        }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
+        }
+        if let Some(v) = stop_armed_rx.try_changed() {
+            stop_armed = v;
+        }
+        if let Some(m) = tz_offset_rx.try_changed() {
+            tz_offset_min = Some(m);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -274,6 +304,8 @@ pub async fn screen_task(
             uptime_s,
             animate,
             mode,
+            idle_view,
+            tz_offset_min,
         );
         // Persist the fuel reminder past its transient banner: latch the standing
         // overdue state off the same `alert` value and paint a compact marker.
@@ -284,6 +316,11 @@ pub async fn screen_task(
             .is_some_and(|s| matches!(s.state, RecordState::Recording | RecordState::Paused));
         let overdue = fuel_overdue.observe(alert, alerts_run_active, page == Page::Fuel);
         face::apply_fuel_marker(&mut rows, overdue, page);
+        // The diagnostics face's numeric battery read-out; the idle-face icon
+        // is a widget below, and run views carry neither.
+        if !face::run_view(rec.as_ref()) {
+            face::apply_battery_row(&mut rows, idle_view, battery);
+        }
         let icons = face::page_icons(
             page,
             latest.as_ref(),
@@ -340,11 +377,30 @@ pub async fn screen_task(
             .map(|(_, _, marker, track)| (*track, marker.is_some(), nav_alert.is_some()));
         let panel_repaint = panel_state.is_some() && panel_state != last_panel;
         last_panel = panel_state;
+        let clock_band = !face::run_view(rec.as_ref()) && idle_view == IdleView::Home;
+        // The run dashboard's rows compose the field grid's hairline dividers
+        // into their own compare-write (widgets::ruled_dashboard_row) — a
+        // separate rule pass would re-dirty the rules' lines every frame.
+        let field_grid = page == Page::Dashboard && face::run_view(rec.as_ref());
         for (row, text) in rows.iter().enumerate() {
             if PANEL_ROWS.contains(&row) && panel_state.is_some() && !panel_repaint {
                 continue;
             }
-            fb.draw_text_row(row, text);
+            // The home clock band: draw_bignum_band composes these lines
+            // whole (background included), so the text pass skips them — a
+            // clear-and-redraw would dirty the band every frame even when
+            // the minute hasn't flipped.
+            if clock_band
+                && (face::CLOCK_HERO_TOP_ROW..face::CLOCK_HERO_TOP_ROW + face::CLOCK_HERO_ROWS)
+                    .contains(&row)
+            {
+                continue;
+            }
+            if field_grid {
+                widgets::ruled_dashboard_row(&mut fb, row, text);
+            } else {
+                fb.draw_text_row(row, text);
+            }
             if let Some(icon) = icons[row] {
                 fb.draw_icon(0, row, driver_icon(icon));
             }
@@ -360,37 +416,45 @@ pub async fn screen_task(
                 fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
                 fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
             }
-            // The off-course treatment: a steady 2x banner centred over the
-            // breadcrumb, drawn last so it wins the panel pixels.
+            // The off-course treatment: a steady inverse-video banner across
+            // the breadcrumb, drawn last so it wins the panel pixels.
             if let Some(text) = &nav_alert {
-                let col = sharp_mip::TEXT_COLS.saturating_sub(text.chars().count() * 2) / 2;
-                fb.draw_text_2x(col, face::NAV_ALERT_ROW, text);
+                fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
             }
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
         // row 0 sits top-right, clear of the digits. An active on-run alert
-        // takes the hero band over for its TTL — the banner ("! DRINK") is the
-        // most unmissable treatment a 1-bit panel gives, and the alert engine
-        // only emits during a run, so the idle face never loses its title.
-        // The manual QNH re-zero's transient feedback: a 2x banner over the
-        // idle face's title band for its TTL, mirroring the on-run alert
-        // treatment. Idle-only — the gesture only exists on the idle face, and
-        // a run view's hero band belongs to the run's own alerts.
+        // takes the hero band over for its TTL — an inverse-video banner
+        // ("! DRINK" light on a dark band) is the most unmissable treatment
+        // the panel gives, and the alert engine only emits during a run, so
+        // the idle face never loses its title. The manual QNH re-zero's
+        // transient feedback: the same inverse banner over the idle face's
+        // title band for its TTL. Idle-only — the gesture only exists on the
+        // idle face, and a run view's hero band belongs to the run's own
+        // alerts.
         let rezero_banner = rezero
             .filter(|(_, at)| uptime_s.saturating_sub(*at) < elevation::REZERO_BANNER_TTL_S)
             .filter(|_| !face::run_view(rec.as_ref()))
             .map(|(status, _)| elevation::rezero_banner(status));
+        // Computed ahead of the hero: the armed-stop banner spans two rows,
+        // and the glance pages' three-row numeral hero would otherwise peek
+        // out under it (a two-row 2x hero is covered outright).
+        let stop_pending = face::run_view(rec.as_ref())
+            && stop_armed.is_some_and(|armed_at| button::stop_arm_pending(armed_at, uptime_s));
         if let Some(a) = alert {
-            fb.draw_text_2x(0, 0, &alerts::banner(a));
+            fb.draw_banner_2x(0, &alerts::banner(a));
         } else if let Some(banner) = &rezero_banner {
-            fb.draw_text_2x(0, 0, banner);
+            fb.draw_banner_2x(0, banner);
         } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
-            // The single-metric glance pages headline their number triple-size
-            // (their face reserves rows 0-2 + puts the label on row 3); every
-            // other hero stays 2x over rows 0-1.
+            // The single-metric glance pages headline their number in the
+            // generated numeral faces (their face reserves rows 0-2 + puts the
+            // label and state tag on row 3); every other hero stays 2x over
+            // rows 0-1.
             if matches!(page, Page::Distance | Page::Pace) {
-                fb.draw_text_3x(0, 0, &hero);
+                if !stop_pending {
+                    fb.draw_bignum_hero(0, &hero);
+                }
             } else {
                 fb.draw_text_2x(0, 0, &hero);
             }
@@ -434,6 +498,14 @@ pub async fn screen_task(
         } else {
             let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
+            // The battery icon shares the title row's mid-band with the
+            // post-press BTN3 hint AND the transient re-zero 2x banner, so it
+            // yields to both — it only draws while the row shows the brand.
+            widgets::draw_idle_battery(&mut fb, battery, animate || rezero_banner.is_some());
+            if idle_view == IdleView::Home {
+                let clock = face::home_clock_text(latest.as_ref(), uptime_s, tz_offset_min);
+                fb.draw_bignum_band(face::CLOCK_HERO_TOP_ROW * CELL_H, &clock);
+            }
         }
 
         // The BackToStart page's pixel layer rides on top of the text rows
@@ -448,6 +520,37 @@ pub async fn screen_task(
             if let Some(view) = tb.as_ref() {
                 draw_trackback_overlay(&mut fb, view, uptime_s);
             }
+        }
+        // The armed-stop prompt: the direct answer to a BTN2 press, so for its
+        // 4 s confirm window it outranks an alert banner on the hero band. The
+        // grid (drawn after) still wins over it — BTN2 inside the grid cancels
+        // and disarms, never arms.
+        if stop_pending {
+            fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
+        }
+        // The page-grid overview takes the panel over while open: its rows
+        // rewrite every band (erasing the composed page underneath — each
+        // draw_text_row overwrites its full 16-px band) and the cursor box +
+        // a cursor-tracking page indicator ride on top. Drawn last rather
+        // than branching the whole composer: the handful of frames a grid
+        // stays open don't justify a second render path. Unlike the hero
+        // band, an on-run alert banner does NOT win here — under the full
+        // mask the banner's two rows would cover the title AND the first row
+        // of cells mid-choice. Deferring costs nothing: the grid closes
+        // within ~GRID_AUTOSELECT_S, well inside the alert's TTL, so the
+        // banner re-asserts on the landing page, and a fuel reminder
+        // additionally latches into the persistent row-1 marker.
+        if let Some(cursor) = grid.filter(|_| face::run_view(rec.as_ref())) {
+            let pages_mask = rec.as_ref().map_or(u32::MAX, |s| s.pages_mask);
+            for (row, text) in page_grid::grid_rows(pages_mask).iter().enumerate() {
+                fb.draw_text_row(row, text);
+            }
+            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor) {
+                widgets::draw_grid_cursor(&mut fb, cell);
+            }
+            widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(cursor, pages_mask));
+            // The Nav map's skip-cache is stale once the grid painted over it.
+            last_panel = None;
         }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
@@ -504,10 +607,16 @@ pub async fn screen_task(
                 tb_rx.changed(),
                 mode_rx.changed(),
                 sats_rx.changed(),
-                select3(
+                select4(
                     fix_quality_rx.changed(),
                     rezero_rx.changed(),
-                    Timer::after(tick),
+                    page_grid_rx.changed(),
+                    select4(
+                        stop_armed_rx.changed(),
+                        tz_offset_rx.changed(),
+                        battery_rx.changed(),
+                        Timer::after(tick),
+                    ),
                 ),
             ),
         )
@@ -524,9 +633,15 @@ pub async fn screen_task(
             Either3::Third(Either4::First(v)) => tb = Some(v),
             Either3::Third(Either4::Second(m)) => mode = m,
             Either3::Third(Either4::Third(s)) => sats = Some(s),
-            Either3::Third(Either4::Fourth(Either3::First(q))) => fix_quality = Some(q),
-            Either3::Third(Either4::Fourth(Either3::Second(r))) => rezero = Some(r),
-            Either3::Third(Either4::Fourth(Either3::Third(()))) => {}
+            Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
+            Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
+            Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::First(v)))) => stop_armed = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(m)))) => {
+                tz_offset_min = Some(m)
+            }
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(b)))) => battery = b,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
         }
     }
 }

@@ -140,6 +140,46 @@ impl Page {
         1 << self as u8
     }
 
+    /// The page's short code for the [`crate::page_grid`] overview — at most
+    /// four glyphs so four columns of codes fit the 21-cell text grid, unique
+    /// so no two cells read the same (both test-pinned).
+    pub fn code(self) -> &'static str {
+        match self {
+            Page::Dashboard => "DASH",
+            Page::Distance => "DIST",
+            Page::Pace => "PACE",
+            Page::Lap => "LAP",
+            Page::Zones => "ZONE",
+            Page::Splits => "SPLT",
+            Page::Pacer => "PACR",
+            Page::Nav => "NAV",
+            Page::TurnCue => "TURN",
+            Page::CutoffEta => "CUT",
+            Page::Roadbook => "ROAD",
+            Page::Fuel => "FUEL",
+            Page::ElevationProfile => "ELEV",
+            Page::RacePredictor => "PRED",
+            Page::TrainingLoad => "LOAD",
+            Page::DistanceBand => "BAND",
+            Page::GearWear => "GEAR",
+            Page::TrainingPaces => "TPCE",
+            Page::Fitness => "FITN",
+            Page::Readiness => "REDY",
+            Page::Goals => "GOAL",
+            Page::RaceDay => "RDAY",
+            Page::PlanReplan => "PLAN",
+            Page::PlanAdaptive => "ADPT",
+            Page::Recap => "RCAP",
+            Page::Streaks => "STRK",
+            Page::RunStats => "STAT",
+            Page::PrRecency => "PR",
+            Page::RouteSimplify => "SMPL",
+            Page::RouteElev => "RELV",
+            Page::AutoEffort => "AEFF",
+            Page::BackToStart => "BACK",
+        }
+    }
+
     /// The next page whose bit is set in `mask`, walking the cycle order —
     /// the filtered BTN3 press. [`Page::Dashboard`] is always treated as
     /// enabled (a mask can never empty the cycle), and a page the runner is
@@ -321,6 +361,23 @@ mod tests {
         for &p in ALL.iter() {
             assert_eq!(p.next().prev(), p, "next then prev should return to {p:?}");
             assert_eq!(p.prev().next(), p, "prev then next should return to {p:?}");
+        }
+    }
+
+    #[test]
+    fn codes_are_short_and_unique() {
+        for &p in ALL.iter() {
+            assert!(
+                p.code().len() <= 4,
+                "{p:?} code {:?} exceeds the four-glyph grid cell",
+                p.code()
+            );
+            assert!(!p.code().is_empty());
+        }
+        for (i, &a) in ALL.iter().enumerate() {
+            for &b in ALL.iter().skip(i + 1) {
+                assert_ne!(a.code(), b.code(), "{a:?} and {b:?} share a code");
+            }
         }
     }
 

@@ -5,20 +5,22 @@ import 'dart:typed_data';
 /// The phone pushes the user's config to the watch as a fixed little-endian
 /// frame the firmware decodes:
 ///
-///   magic("SET1", 4) | version(1) | flags(1) | present fields...
+///   magic("SET1", 4) | version(1) | flags(1) | flags2(1) | present fields...
 ///
 /// `flags` is a bitfield of which optional fields follow, in bit order:
 /// bit0 max_hr, bit1 pacer, bit2 gear, bit3 zone_ceiling, bit4 sea_level_pa,
-/// bit5 fuel, bit6 pages, bit7 hide_empty_pages. Only the present fields are
-/// written, so a partial update is a shorter frame; a fully populated frame is
-/// 42 bytes. The flag byte is now full — the NEXT field is a version bump on
-/// both sides.
+/// bit5 fuel, bit6 pages, bit7 hide_empty_pages. Version 2 (2026-07-22)
+/// saturated that byte, so it appends a second presence byte `flags2` —
+/// bit0 tz_offset_min — with its fields laid out after the first byte's.
+/// Only the present fields are written, so a partial update is a shorter
+/// frame; a fully populated frame is 45 bytes. The firmware still decodes
+/// v1 frames, but the phone always encodes the current version.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.
 /// The phone only ever encodes (the watch decodes), mirroring how the
 /// run-sync path (`sim_watch_sync.dart`) is the phone's decode side.
-const int _settingsVersion = 0x01;
+const int _settingsVersion = 0x02;
 
 const int _flagMaxHr = 0x01;
 const int _flagPacer = 0x02;
@@ -28,6 +30,8 @@ const int _flagSeaLevel = 0x10;
 const int _flagFuel = 0x20;
 const int _flagPages = 0x40;
 const int _flagHideEmpty = 0x80;
+
+const int _flag2TzOffset = 0x01;
 
 class WatchSettings {
   final int? maxHr;
@@ -57,6 +61,11 @@ class WatchSettings {
   /// (the on-watch default is on).
   final bool? hideEmptyPages;
 
+  /// Local-time offset for the watch's home clock, minutes east of UTC —
+  /// auto-sourced from the phone's own zone (`DateTime.now().timeZoneOffset`)
+  /// at push time, so the watch tells the time the runner's phone tells.
+  final int? tzOffsetMin;
+
   const WatchSettings({
     this.maxHr,
     this.pacer,
@@ -66,10 +75,11 @@ class WatchSettings {
     this.fuel,
     this.pages,
     this.hideEmptyPages,
+    this.tzOffsetMin,
   });
 
   Uint8List encode() {
-    var len = 6;
+    var len = 7;
     if (maxHr != null) len += 2;
     if (pacer != null) len += 8;
     if (gear != null) len += 8;
@@ -78,6 +88,7 @@ class WatchSettings {
     if (fuel != null) len += 8;
     if (pages != null) len += 4;
     if (hideEmptyPages != null) len += 1;
+    if (tzOffsetMin != null) len += 2;
 
     final out = ByteData(len);
     out.setUint8(0, 0x53); // S
@@ -97,7 +108,11 @@ class WatchSettings {
     if (hideEmptyPages != null) flags |= _flagHideEmpty;
     out.setUint8(5, flags);
 
-    var off = 6;
+    var flags2 = 0;
+    if (tzOffsetMin != null) flags2 |= _flag2TzOffset;
+    out.setUint8(6, flags2);
+
+    var off = 7;
     if (maxHr != null) {
       out.setUint16(off, maxHr!, Endian.little);
       off += 2;
@@ -132,6 +147,10 @@ class WatchSettings {
     if (hideEmptyPages != null) {
       out.setUint8(off, hideEmptyPages! ? 1 : 0);
       off += 1;
+    }
+    if (tzOffsetMin != null) {
+      out.setInt16(off, tzOffsetMin!, Endian.little);
+      off += 2;
     }
 
     return out.buffer.asUint8List();

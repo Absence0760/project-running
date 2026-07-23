@@ -3,6 +3,8 @@
 //! Layered so everything above the SPI bus is host-testable:
 //!
 //! - [`font`] — generated 8x16 ASCII bitmap table (see `scripts/gen_font.py`)
+//! - [`bignum`] — generated numeral faces (32x48 + 16x32) for the home clock
+//!   and the run glance heroes (see `scripts/gen_bignum.py`)
 //! - [`framebuffer`] — pixel + text-cell drawing with per-line dirty tracking
 //! - [`display`] — the wire protocol: encodes dirty lines into the panel's
 //!   line-update packets over an `embedded-hal` SPI bus
@@ -17,11 +19,13 @@
 
 #![no_std]
 
+pub mod bignum;
 pub mod display;
 pub mod font;
 pub mod framebuffer;
 pub mod icons;
 
+pub use bignum::{BIGNUM_HEIGHT, BIGNUM_WIDTH};
 pub use display::SharpMip;
-pub use framebuffer::{Framebuffer, HEIGHT, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH};
+pub use framebuffer::{Framebuffer, RowRules, HEIGHT, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH};
 pub use icons::{Icon, ICON_BYTES_PER_ROW, ICON_SIZE};

@@ -1,23 +1,30 @@
 //! Phone→watch settings frame: the wire the phone uses to push user config
 //! (max HR, pacer goal, gear baseline/target, HR-zone ceiling, QNH sea-level
-//! reference, fuel-reminder cadences, run-view page curation) into the
-//! recorder's + baro task's + alert engine's existing settings-sync hooks
-//! (`Recorder::set_max_hr` / `set_pacer_goal` / `set_gear` /
-//! `set_pages_enabled` / `set_hide_empty_pages`, `AlertEngine::set_zone_ceiling`
-//! / `set_fuel_intervals`, and `state::SEA_LEVEL_PA` for the baro altitude
-//! reference).
+//! reference, fuel-reminder cadences, run-view page curation, home-clock
+//! timezone offset) into the recorder's + baro task's + alert engine's
+//! existing settings-sync hooks (`Recorder::set_max_hr` / `set_pacer_goal` /
+//! `set_gear` / `set_pages_enabled` / `set_hide_empty_pages`,
+//! `AlertEngine::set_zone_ceiling` / `set_fuel_intervals`,
+//! `state::SEA_LEVEL_PA` for the baro altitude reference, and
+//! `state::TZ_OFFSET_MIN` for the home clock).
 //!
 //! Binary, not JSON — the watch is `no_std` with no allocator and no JSON
 //! parser, and the run-sync side already speaks fixed-layout little-endian
 //! frames (`run_store`), so this matches that discipline: a 4-byte magic, a
-//! version byte, a presence-bitfield, then only the present fields in bit
-//! order. Every field is optional so the phone can push a partial update (just
-//! a new max HR) without disturbing the rest. Decoding only *parses* — the
-//! plausibility guards stay in the setters it feeds, so a garbage value is
-//! rejected by the same rule whether it arrives over BLE or the sim link.
+//! version byte, a presence-bitfield (two of them from v2), then only the
+//! present fields in bit order. Every field is optional so the phone can push
+//! a partial update (just a new max HR) without disturbing the rest. Decoding
+//! only *parses* — the plausibility guards stay in the setters it feeds, so a
+//! garbage value is rejected by the same rule whether it arrives over BLE or
+//! the sim link.
 
 pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
-pub const SETTINGS_VERSION: u8 = 1;
+
+/// Version 2 (2026-07-22): v1's flag byte was saturated, so the ninth field
+/// (`tz_offset_min`) rode the promised version bump — a v2 frame carries a
+/// second presence byte (`flags2`) after the first. `decode` still accepts
+/// v1 frames (no `flags2`, no offset), so an old phone's push keeps working.
+pub const SETTINGS_VERSION: u8 = 2;
 
 /// Presence bits, in the order the fields are laid out after the header.
 pub const FLAG_MAX_HR: u8 = 1 << 0;
@@ -29,13 +36,10 @@ pub const FLAG_FUEL: u8 = 1 << 5;
 pub const FLAG_PAGES: u8 = 1 << 6;
 pub const FLAG_HIDE_EMPTY: u8 = 1 << 7;
 
-/// Every presence bit version 1 defines. A set bit outside this mask can't be a
-/// forward-compatible field — a new field rides a version bump, which `decode`
-/// rejects on the version byte — so an unknown bit means a corrupt or misframed
-/// push, and `decode` rejects the frame rather than silently dropping whatever
-/// the sender meant by it. `pages` + `hide_empty` (2026-07-21) consumed the
-/// last two bits: version 1's flag byte is now full, and the NEXT field is the
-/// version bump.
+/// Every presence bit the first flag byte defines. `pages` + `hide_empty`
+/// (2026-07-21) consumed its last two bits, so this mask is saturated — which
+/// is exactly why version 2 exists: the ninth field rode the version bump
+/// into a second presence byte rather than an unknowable bit.
 const KNOWN_FLAGS: u8 = FLAG_MAX_HR
     | FLAG_PACER
     | FLAG_GEAR
@@ -45,13 +49,28 @@ const KNOWN_FLAGS: u8 = FLAG_MAX_HR
     | FLAG_PAGES
     | FLAG_HIDE_EMPTY;
 
-/// Header: magic (4) + version (1) + flags (1).
-const HEADER_LEN: usize = 6;
+/// Presence bits in the v2 `flags2` byte, continuing the field order after
+/// [`FLAG_HIDE_EMPTY`].
+pub const FLAG2_TZ_OFFSET: u8 = 1 << 0;
 
-/// Largest a fully-populated frame can be — every field present: header +
+/// Every presence bit `flags2` defines. A set bit outside this mask can't be
+/// a forward-compatible field — a new field rides a version bump, which
+/// `decode` rejects on the version byte — so an unknown bit means a corrupt
+/// or misframed push, and `decode` rejects the frame rather than silently
+/// dropping whatever the sender meant by it.
+const KNOWN_FLAGS2: u8 = FLAG2_TZ_OFFSET;
+
+/// v1 header: magic (4) + version (1) + flags (1). v2 appends `flags2`.
+const V1_HEADER_LEN: usize = 6;
+const HEADER_LEN: usize = V1_HEADER_LEN + 1;
+
+/// Largest a fully-populated frame can be — every field present: v2 header +
 /// max_hr(2) + pacer(8) + gear(8) + zone_ceiling(1) + sea_level_pa(4) + fuel(8)
-/// + pages(4) + hide_empty(1).
-pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8 + 4 + 1;
+/// + pages(4) + hide_empty(1) + tz_offset(2).
+pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8 + 4 + 1 + 2;
+
+/// Widest plausible UTC offset (minutes): no real zone sits outside ±14 h.
+pub const TZ_OFFSET_LIMIT_MIN: i16 = 14 * 60;
 
 /// A pacer goal to arm the virtual partner with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,25 +133,47 @@ pub struct WatchSettings {
     /// Whether the BTN3 cycle skips pages whose backing data is absent
     /// (`Recorder::set_hide_empty_pages`); the on-watch default is on.
     pub hide_empty_pages: Option<bool>,
+    /// Local-time offset for the home clock, minutes east of UTC — the phone
+    /// auto-sources it from its own zone on every push. Present = the home
+    /// clock renders local time (its label flips UTC → LOCAL); absent = the
+    /// clock stays honestly UTC-labelled. Plausibility guard:
+    /// [`WatchSettings::plausible_tz_offset_min`].
+    pub tz_offset_min: Option<i16>,
 }
 
 impl WatchSettings {
+    /// The pushed timezone offset when it is a plausible UTC offset, `None`
+    /// when absent or out of range — ignored, never clamped, the same
+    /// reject-don't-repair discipline as the QNH guard: a clamped clock would
+    /// be confidently wrong, an unshifted one is honestly UTC-labelled.
+    pub fn plausible_tz_offset_min(&self) -> Option<i16> {
+        self.tz_offset_min
+            .filter(|m| (-TZ_OFFSET_LIMIT_MIN..=TZ_OFFSET_LIMIT_MIN).contains(m))
+    }
+
     /// Decode a settings frame. Returns `None` on a bad magic, an unknown
     /// version, an unknown presence bit, a buffer too short for the fields the
     /// flags claim, or trailing bytes past the declared fields — never a partial
-    /// or off-frame struct.
+    /// or off-frame struct. Accepts version 1 (no `flags2`, so no tz offset —
+    /// an old phone's push keeps working) alongside the current version 2.
     pub fn decode(b: &[u8]) -> Option<Self> {
-        if b.len() < HEADER_LEN || b[0..4] != SETTINGS_MAGIC || b[4] != SETTINGS_VERSION {
+        if b.len() < V1_HEADER_LEN || b[0..4] != SETTINGS_MAGIC {
             return None;
         }
         let flags = b[5];
         // Version 1's flag byte is saturated (every bit is a known field), so
-        // the historical unknown-bit rejection has nothing left to reject —
-        // forward growth rides the version gate above. This assert turns the
-        // first over-saturating flag into a compile error instead of a
-        // silently-accepted frame.
+        // the unknown-bit rejection only has `flags2` left to police. This
+        // assert turns the first over-saturating flag into a compile error
+        // instead of a silently-accepted frame.
         const _: () = assert!(KNOWN_FLAGS == u8::MAX);
-        let mut off = HEADER_LEN;
+        let (flags2, mut off) = match b[4] {
+            1 => (0u8, V1_HEADER_LEN),
+            SETTINGS_VERSION => (*b.get(6)?, HEADER_LEN),
+            _ => return None,
+        };
+        if flags2 & !KNOWN_FLAGS2 != 0 {
+            return None;
+        }
         let mut out = WatchSettings::default();
 
         if flags & FLAG_MAX_HR != 0 {
@@ -192,6 +233,12 @@ impl WatchSettings {
             out.hide_empty_pages = Some(*b.get(off)? != 0);
             off += 1;
         }
+        if flags2 & FLAG2_TZ_OFFSET != 0 {
+            let end = off + 2;
+            let raw = b.get(off..end)?;
+            out.tz_offset_min = Some(i16::from_le_bytes([raw[0], raw[1]]));
+            off = end;
+        }
         // Bytes left over past the fields the flags claim mean a corrupt or
         // misframed push (data present for a bit that wasn't set); reject it
         // rather than silently apply a frame the phone didn't mean to send.
@@ -230,6 +277,10 @@ impl WatchSettings {
         if self.hide_empty_pages.is_some() {
             flags |= FLAG_HIDE_EMPTY;
         }
+        let mut flags2 = 0u8;
+        if self.tz_offset_min.is_some() {
+            flags2 |= FLAG2_TZ_OFFSET;
+        }
 
         let len = HEADER_LEN
             + self.max_hr.map_or(0, |_| 2)
@@ -239,7 +290,8 @@ impl WatchSettings {
             + self.sea_level_pa.map_or(0, |_| 4)
             + self.fuel.map_or(0, |_| 8)
             + self.pages.map_or(0, |_| 4)
-            + self.hide_empty_pages.map_or(0, |_| 1);
+            + self.hide_empty_pages.map_or(0, |_| 1)
+            + self.tz_offset_min.map_or(0, |_| 2);
         if out.len() < len {
             return None;
         }
@@ -247,6 +299,7 @@ impl WatchSettings {
         out[0..4].copy_from_slice(&SETTINGS_MAGIC);
         out[4] = SETTINGS_VERSION;
         out[5] = flags;
+        out[6] = flags2;
         let mut off = HEADER_LEN;
 
         if let Some(hr) = self.max_hr {
@@ -286,6 +339,10 @@ impl WatchSettings {
             out[off] = h as u8;
             off += 1;
         }
+        if let Some(m) = self.tz_offset_min {
+            out[off..off + 2].copy_from_slice(&m.to_le_bytes());
+            off += 2;
+        }
         Some(off)
     }
 }
@@ -306,7 +363,9 @@ mod tests {
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(n, HEADER_LEN, "no fields => header only");
+        assert_eq!(buf[4], SETTINGS_VERSION);
         assert_eq!(buf[5], 0, "no flags set");
+        assert_eq!(buf[6], 0, "no flags2 set");
         assert_eq!(roundtrip(&s), s);
     }
 
@@ -330,6 +389,7 @@ mod tests {
             }),
             pages: Some(0x0000_00ff),
             hide_empty_pages: Some(false),
+            tz_offset_min: Some(345),
         };
         assert_eq!(roundtrip(&s), s);
     }
@@ -388,6 +448,22 @@ mod tests {
             },
             WatchSettings {
                 hide_empty_pages: Some(false),
+                ..Default::default()
+            },
+            WatchSettings {
+                tz_offset_min: Some(345), // Kathmandu, +5:45
+                ..Default::default()
+            },
+            WatchSettings {
+                tz_offset_min: Some(-570), // Marquesas, -9:30
+                ..Default::default()
+            },
+            WatchSettings {
+                tz_offset_min: Some(TZ_OFFSET_LIMIT_MIN),
+                ..Default::default()
+            },
+            WatchSettings {
+                tz_offset_min: Some(-TZ_OFFSET_LIMIT_MIN),
                 ..Default::default()
             },
         ];
@@ -454,10 +530,23 @@ mod tests {
         bad_magic[0] = b'X';
         assert_eq!(WatchSettings::decode(&bad_magic), None);
         let mut bad_ver = buf;
-        bad_ver[4] = 2;
+        bad_ver[4] = 3;
         assert_eq!(WatchSettings::decode(&bad_ver), None);
         assert_eq!(WatchSettings::decode(&[]), None);
         assert_eq!(WatchSettings::decode(b"SE"), None);
+    }
+
+    #[test]
+    fn unknown_flags2_bit_is_rejected() {
+        let mut frame = [0u8; HEADER_LEN];
+        frame[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        frame[4] = SETTINGS_VERSION;
+        frame[5] = 0;
+        frame[6] = 0x02; // bit 1: no v2 field defines it
+        assert_eq!(WatchSettings::decode(&frame), None);
+        // A v2 header cut short of its flags2 byte is a short buffer, not a
+        // zero flags2.
+        assert_eq!(WatchSettings::decode(&frame[..V1_HEADER_LEN]), None);
     }
 
     #[test]
@@ -491,11 +580,11 @@ mod tests {
 
     #[test]
     fn flag_byte_is_saturated_so_the_next_field_is_a_version_bump() {
-        // pages + hide_empty consumed bits 6 + 7: every u8 bit is now a known
-        // field, so the unknown-bit rejection can never fire on version 1 and
-        // forward growth is carried entirely by the version gate (which
-        // `bad_magic_or_version_is_rejected` pins). This test exists to make
-        // whoever adds a ninth field read this sentence.
+        // pages + hide_empty consumed bits 6 + 7: every bit of the first flag
+        // byte is a known field, so the unknown-bit rejection only polices
+        // flags2. The promised version bump happened — tz_offset (v2) rode it
+        // into flags2 — and the next saturation repeats the drill: whoever
+        // fills flags2's bit 7 bumps to v3.
         assert_eq!(KNOWN_FLAGS, u8::MAX);
         // A full flag byte with too few bytes for what it claims still rejects.
         let mut frame = [0u8; HEADER_LEN + 2];
@@ -549,6 +638,10 @@ mod tests {
                 hide_empty_pages: Some(true),
                 ..Default::default()
             },
+            WatchSettings {
+                tz_offset_min: Some(-570),
+                ..Default::default()
+            },
         ];
         for s in cases {
             let mut buf = [0u8; MAX_SETTINGS_LEN];
@@ -564,36 +657,40 @@ mod tests {
 
     #[test]
     fn all_presence_combinations_roundtrip() {
-        for mask in 0u8..=u8::MAX {
-            let s = WatchSettings {
-                max_hr: (mask & FLAG_MAX_HR != 0).then_some(190),
-                pacer: (mask & FLAG_PACER != 0).then_some(PacerGoalCfg {
-                    distance_m: 21_097,
-                    time_s: 7_200,
-                }),
-                gear: (mask & FLAG_GEAR != 0).then_some(GearCfg {
-                    baseline_m: 300_000.0,
-                    target_m: Some(600_000.0),
-                }),
-                zone_ceiling: (mask & FLAG_ZONE_CEILING != 0).then_some(Some(2)),
-                sea_level_pa: (mask & FLAG_SEA_LEVEL != 0).then_some(99_000.0),
-                fuel: (mask & FLAG_FUEL != 0).then_some(FuelCfg {
-                    drink_interval_s: 500,
-                    eat_interval_s: 1_100,
-                }),
-                pages: (mask & FLAG_PAGES != 0).then_some(0x0f0f_0f0f),
-                hide_empty_pages: (mask & FLAG_HIDE_EMPTY != 0).then_some(false),
-            };
-            let back = roundtrip(&s);
-            assert_eq!(back, s, "roundtrip drift at mask {mask:#08b}");
-            assert_eq!(back.max_hr.is_some(), mask & FLAG_MAX_HR != 0);
-            assert_eq!(back.pacer.is_some(), mask & FLAG_PACER != 0);
-            assert_eq!(back.gear.is_some(), mask & FLAG_GEAR != 0);
-            assert_eq!(back.zone_ceiling.is_some(), mask & FLAG_ZONE_CEILING != 0);
-            assert_eq!(back.sea_level_pa.is_some(), mask & FLAG_SEA_LEVEL != 0);
-            assert_eq!(back.fuel.is_some(), mask & FLAG_FUEL != 0);
-            assert_eq!(back.pages.is_some(), mask & FLAG_PAGES != 0);
-            assert_eq!(back.hide_empty_pages.is_some(), mask & FLAG_HIDE_EMPTY != 0);
+        for tz in [None, Some(-345i16)] {
+            for mask in 0u8..=u8::MAX {
+                let s = WatchSettings {
+                    max_hr: (mask & FLAG_MAX_HR != 0).then_some(190),
+                    pacer: (mask & FLAG_PACER != 0).then_some(PacerGoalCfg {
+                        distance_m: 21_097,
+                        time_s: 7_200,
+                    }),
+                    gear: (mask & FLAG_GEAR != 0).then_some(GearCfg {
+                        baseline_m: 300_000.0,
+                        target_m: Some(600_000.0),
+                    }),
+                    zone_ceiling: (mask & FLAG_ZONE_CEILING != 0).then_some(Some(2)),
+                    sea_level_pa: (mask & FLAG_SEA_LEVEL != 0).then_some(99_000.0),
+                    fuel: (mask & FLAG_FUEL != 0).then_some(FuelCfg {
+                        drink_interval_s: 500,
+                        eat_interval_s: 1_100,
+                    }),
+                    pages: (mask & FLAG_PAGES != 0).then_some(0x0f0f_0f0f),
+                    hide_empty_pages: (mask & FLAG_HIDE_EMPTY != 0).then_some(false),
+                    tz_offset_min: tz,
+                };
+                let back = roundtrip(&s);
+                assert_eq!(back, s, "roundtrip drift at mask {mask:#08b} tz {tz:?}");
+                assert_eq!(back.max_hr.is_some(), mask & FLAG_MAX_HR != 0);
+                assert_eq!(back.pacer.is_some(), mask & FLAG_PACER != 0);
+                assert_eq!(back.gear.is_some(), mask & FLAG_GEAR != 0);
+                assert_eq!(back.zone_ceiling.is_some(), mask & FLAG_ZONE_CEILING != 0);
+                assert_eq!(back.sea_level_pa.is_some(), mask & FLAG_SEA_LEVEL != 0);
+                assert_eq!(back.fuel.is_some(), mask & FLAG_FUEL != 0);
+                assert_eq!(back.pages.is_some(), mask & FLAG_PAGES != 0);
+                assert_eq!(back.hide_empty_pages.is_some(), mask & FLAG_HIDE_EMPTY != 0);
+                assert_eq!(back.tz_offset_min, tz);
+            }
         }
     }
 
@@ -630,12 +727,57 @@ mod tests {
             }),
             pages: Some(0x0000_c0ff),
             hide_empty_pages: Some(true),
+            tz_offset_min: Some(345),
         };
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
-            0x01, // version
+            0x02, // version
+            0xff, // flags: every version-1 field
+            0x01, // flags2: tz_offset
+            0xbe, 0x00, // max_hr = 190
+            0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
+            0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
+            0x00, 0x24, 0xf4, 0x48, // gear baseline_m = 500000.0 (f32 LE)
+            0x00, 0x50, 0x43, 0x49, // gear target_m = 800000.0 (f32 LE)
+            0x03, // zone_ceiling = 3
+            0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
+            0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
+            0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
+            0x01, // hide_empty_pages = true
+            0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+        ];
+        assert_eq!(n, MAX_SETTINGS_LEN);
+        assert_eq!(buf, expected);
+    }
+
+    /// The tz-only frame, pinned byte-for-byte on both sides too — it is the
+    /// only field that exercises the flags2 half of the header alone, and a
+    /// negative offset pins the two's-complement encoding.
+    #[test]
+    fn golden_vector_tz_only() {
+        let s = WatchSettings {
+            tz_offset_min: Some(-570),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(
+            &buf[..n],
+            &[0x53, 0x45, 0x54, 0x31, 0x02, 0x00, 0x01, 0xc6, 0xfd]
+        );
+    }
+
+    /// The frozen v1 golden vector (every v1 field, version byte 0x01, no
+    /// flags2) must keep decoding: an old phone's push still applies, it just
+    /// carries no timezone offset — the clock stays UTC.
+    #[test]
+    fn v1_golden_vector_still_decodes_with_no_tz_offset() {
+        let v1: [u8; 42] = [
+            0x53, 0x45, 0x54, 0x31, // "SET1"
+            0x01, // version 1
             0xff, // flags: every version-1 field
             0xbe, 0x00, // max_hr = 190
             0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
@@ -649,7 +791,73 @@ mod tests {
             0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
             0x01, // hide_empty_pages = true
         ];
-        assert_eq!(n, MAX_SETTINGS_LEN);
-        assert_eq!(buf, expected);
+        let s = WatchSettings::decode(&v1).expect("v1 frame decodes");
+        assert_eq!(
+            s,
+            WatchSettings {
+                max_hr: Some(190),
+                pacer: Some(PacerGoalCfg {
+                    distance_m: 42_195,
+                    time_s: 14_400,
+                }),
+                gear: Some(GearCfg {
+                    baseline_m: 500_000.0,
+                    target_m: Some(800_000.0),
+                }),
+                zone_ceiling: Some(Some(3)),
+                sea_level_pa: Some(101_325.0),
+                fuel: Some(FuelCfg {
+                    drink_interval_s: 900,
+                    eat_interval_s: 1_500,
+                }),
+                pages: Some(0x0000_c0ff),
+                hide_empty_pages: Some(true),
+                tz_offset_min: None,
+            }
+        );
+        // Chopped to its header, the flags still claim every field: reject.
+        assert_eq!(WatchSettings::decode(&v1[..6]), None);
+    }
+
+    #[test]
+    fn v1_framing_discipline_survives_the_version_bump() {
+        let header_only: [u8; 6] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x00];
+        assert_eq!(
+            WatchSettings::decode(&header_only),
+            Some(WatchSettings::default())
+        );
+        let max_hr: [u8; 8] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x01, 0xbe, 0x00];
+        assert_eq!(
+            WatchSettings::decode(&max_hr).and_then(|s| s.max_hr),
+            Some(190)
+        );
+        // Truncated field and trailing byte both still reject on v1.
+        assert_eq!(WatchSettings::decode(&max_hr[..7]), None);
+        let trailing: [u8; 7] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x00, 0x00];
+        assert_eq!(WatchSettings::decode(&trailing), None);
+    }
+
+    #[test]
+    fn out_of_range_tz_offset_is_ignored_not_clamped() {
+        for ok in [0i16, 345, -570, TZ_OFFSET_LIMIT_MIN, -TZ_OFFSET_LIMIT_MIN] {
+            let s = WatchSettings {
+                tz_offset_min: Some(ok),
+                ..Default::default()
+            };
+            assert_eq!(s.plausible_tz_offset_min(), Some(ok));
+        }
+        for bad in [
+            TZ_OFFSET_LIMIT_MIN + 1,
+            -(TZ_OFFSET_LIMIT_MIN + 1),
+            i16::MAX,
+            i16::MIN,
+        ] {
+            let s = WatchSettings {
+                tz_offset_min: Some(bad),
+                ..Default::default()
+            };
+            assert_eq!(s.plausible_tz_offset_min(), None, "must ignore {bad}");
+        }
+        assert_eq!(WatchSettings::default().plausible_tz_offset_min(), None);
     }
 }

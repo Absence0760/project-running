@@ -29,11 +29,18 @@ class SimWatchScreen extends StatefulWidget {
   /// dev screen needs no `ApiClient` of its own.
   final WatchRunSink runSink;
 
+  /// The device timezone offset pushed to the watch as `tzOffsetMin` so its
+  /// home clock can tell local time. Injectable so a widget test can pin the
+  /// encoded frame's offset bytes without depending on the host machine's
+  /// zone.
+  final Duration Function() tzOffset;
+
   const SimWatchScreen({
     super.key,
     this.linkFactory = _defaultLinkFactory,
     this.transportFactory = _defaultTransportFactory,
     this.runSink = _defaultRunSink,
+    this.tzOffset = _defaultTzOffset,
   });
 
   static SimWatchLink _defaultLinkFactory(String host, int port) =>
@@ -41,6 +48,8 @@ class SimWatchScreen extends StatefulWidget {
 
   static WatchBleTransport _defaultTransportFactory() =>
       ReactiveBleWatchTransport();
+
+  static Duration _defaultTzOffset() => DateTime.now().timeZoneOffset;
 
   static Future<void> _defaultRunSink(Map<String, dynamic> payload) async {
     final queue = WatchIngestQueue();
@@ -65,13 +74,6 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   bool _syncing = false;
   bool _pushingSettings = false;
   String? _syncMessage;
-
-  static const _demoSettings = WatchSettings(
-    maxHr: 190,
-    pacer: (distanceM: 42195, timeS: 14400),
-    gear: (baselineM: 500000.0, targetM: 800000.0),
-    zoneCeiling: 3,
-  );
 
   @override
   void initState() {
@@ -181,7 +183,15 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
         transport: widget.transportFactory(),
         onRun: widget.runSink,
       );
-      await client.pushSettings(_demoSettings);
+      // Demo config values; the tz offset is real — auto-sourced from the
+      // phone's own zone so the watch's home clock tells local time.
+      await client.pushSettings(WatchSettings(
+        maxHr: 190,
+        pacer: (distanceM: 42195, timeS: 14400),
+        gear: (baselineM: 500000.0, targetM: 800000.0),
+        zoneCeiling: 3,
+        tzOffsetMin: widget.tzOffset().inMinutes,
+      ));
       if (!mounted) return;
       setState(() => _syncMessage = l10n.simWatchSettingsPushed);
     } catch (e) {

@@ -13,10 +13,13 @@
 //! split rows, the split page's rows 3..8). Change one side and the other must
 //! follow — the tests here pin the columns each overlay owns.
 
-use sharp_mip::{Framebuffer, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
+use sharp_mip::{Framebuffer, RowRules, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
+use watch_core::battery;
+use watch_core::face;
 use watch_core::fix::Fix;
 use watch_core::gauge;
+use watch_core::page_grid;
 use watch_core::record::Snapshot;
 use watch_core::statusbar::{self, PageIndicator};
 
@@ -84,6 +87,75 @@ pub fn draw_idle_signal(
 }
 
 // ---------------------------------------------------------------------------
+// Battery gauge (idle faces, title row)
+// ---------------------------------------------------------------------------
+
+const BATT_BODY_W: usize = 15;
+const BATT_BODY_H: usize = 9;
+const BATT_NUB_W: usize = 2;
+const BATT_NUB_H: usize = 3;
+const BATT_INNER_W: usize = BATT_BODY_W - 4; // 1-px frame + 1-px gap each side
+
+/// Total pixel width the [`draw_battery`] icon occupies (body + terminal nub).
+pub const BATTERY_W: usize = BATT_BODY_W + BATT_NUB_W;
+
+const BATTERY_METER_GAP: usize = 6;
+
+/// Right edge (x) of the idle battery icon: immediately left of the GPS
+/// meter's leftmost tick with [`BATTERY_METER_GAP`] clear pixels between, so
+/// the two widgets read as separate glyphs.
+pub const BATTERY_RIGHT_X: usize = WIDTH - 1 - SIGNAL_METER_W - BATTERY_METER_GAP;
+
+const BATTERY_TOP_Y: usize = 3;
+
+/// Draw a battery outline (terminal nub on the right) with a proportional
+/// left-anchored fill, its rightmost pixel at `right_x`. The fill fraction and
+/// the low threshold come from `watch_core::battery` (the `gauge` split:
+/// decision in core, pixels here). 0 draws the empty outline — like the
+/// signal meter's zero-bar frames, an empty battery must never read as "no
+/// widget" — and at/below `battery::LOW_PCT` an exclamation joins the empty
+/// body: blinking is off the table (animations are gated to the post-press
+/// window, where this icon yields the row), so low must read from a steady
+/// frame.
+pub fn draw_battery(fb: &mut Framebuffer, right_x: usize, top_y: usize, percent: u8) {
+    let left = (right_x + 1).saturating_sub(BATTERY_W);
+    fb.stroke_rect(left, top_y, BATT_BODY_W, BATT_BODY_H, true);
+    fb.fill_rect(
+        left + BATT_BODY_W,
+        top_y + (BATT_BODY_H - BATT_NUB_H) / 2,
+        BATT_NUB_W,
+        BATT_NUB_H,
+        true,
+    );
+    let fill_w = (BATT_INNER_W as f32 * battery::fill_fraction(percent) + 0.5) as usize;
+    if fill_w > 0 {
+        fb.fill_rect(left + 2, top_y + 2, fill_w, BATT_BODY_H - 4, true);
+    }
+    if battery::is_low(percent) {
+        let ex = left + 2 + BATT_INNER_W / 2;
+        fb.fill_rect(ex, top_y + 2, 2, 3, true);
+        fb.fill_rect(ex, top_y + 6, 2, 1, true);
+    }
+}
+
+/// Idle-face battery gauge on the title row, left of the GPS meter. Drawn
+/// only while the title shows the short brand: `title_busy` is true inside
+/// the post-press window (the BTN3 hint runs to within three cells of the
+/// meter, straight through these columns) and while a transient 2x banner
+/// owns the title band. `None` — no plausible battery stream (the sim, a
+/// USB-powered DK) — draws nothing, the honest absent state every other
+/// missing signal shows.
+pub fn draw_idle_battery(fb: &mut Framebuffer, percent: Option<u8>, title_busy: bool) {
+    if title_busy {
+        return;
+    }
+    let Some(pct) = percent else {
+        return;
+    };
+    draw_battery(fb, BATTERY_RIGHT_X, BATTERY_TOP_Y, pct);
+}
+
+// ---------------------------------------------------------------------------
 // Page-position indicator (run view, top edge)
 // ---------------------------------------------------------------------------
 
@@ -100,6 +172,49 @@ pub fn draw_page_indicator(fb: &mut Framebuffer, indicator: PageIndicator) {
     let thumb_w = seg.max(2);
     let x = (indicator.active * WIDTH / indicator.total).min(WIDTH - thumb_w);
     fb.fill_rect(x, 0, thumb_w, 3, true);
+}
+
+// ---------------------------------------------------------------------------
+// Page-grid cursor (the navigation-grid overview)
+// ---------------------------------------------------------------------------
+
+/// The page grid's cursor: a one-pixel frame around the selected cell's
+/// four-glyph code. Geometry only — which cell comes from the host-tested
+/// `page_grid::grid_cell`, and the codes themselves are text rows the ui task
+/// draws from `page_grid::grid_rows`. The frame hugs the 32-px code inside
+/// its own 16-px row band, so it never touches a neighbouring cell (columns
+/// are 40 px apart) or the rows above/below.
+pub fn draw_grid_cursor(fb: &mut Framebuffer, cell: (usize, usize)) {
+    let (col, row) = cell;
+    let x = col * page_grid::GRID_CELL_CHARS * CELL_W;
+    let y = (page_grid::GRID_TOP_ROW + row) * CELL_H;
+    fb.stroke_rect(x.saturating_sub(2), y, 4 * CELL_W + 3, CELL_H, true);
+}
+
+// ---------------------------------------------------------------------------
+// Run-dashboard field grid (hairline dividers)
+// ---------------------------------------------------------------------------
+
+/// Horizontal rules start past the two icon-gutter cells: `draw_icon` blits
+/// its full 16-px band after the row is drawn, so a rule crossing those
+/// cells would be re-cleared — and its lines re-dirtied — every frame.
+const RULE_X0: usize = 2 * CELL_W;
+
+/// Draw one run-dashboard text row with its share of the Garmin-style field
+/// grid composed in: a hairline over the first field row (closing the hero
+/// band), one under every field but the last (the panel edge closes it), and
+/// a vertical rule splitting the NOW | GAP pace pair. The rules ride
+/// [`Framebuffer::draw_text_row_ruled`]'s single compare-write, so a resting
+/// dashboard still flushes zero lines.
+pub fn ruled_dashboard_row(fb: &mut Framebuffer, row: usize, text: &str) {
+    let rules = RowRules {
+        top: row == face::DASH_FIELD_TOP_ROW,
+        bottom: (face::DASH_FIELD_TOP_ROW..TEXT_ROWS - 1).contains(&row),
+        vline_x: (row == face::DASH_SPLIT_ROW)
+            .then_some(face::DASH_SPLIT_COL * CELL_W + CELL_W / 2),
+        x0: RULE_X0,
+    };
+    fb.draw_text_row_ruled(row, text, rules);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +500,7 @@ mod tests {
     fn snapshot() -> Snapshot {
         Snapshot {
             state: RecordState::Recording,
+            manual_paused: false,
             distance_m: 0.0,
             elapsed_s: 0,
             moving_s: 0,
@@ -426,6 +542,15 @@ mod tests {
             track_thinning: 1,
             pages_mask: u32::MAX,
         }
+    }
+
+    #[test]
+    fn signal_meter_stays_inside_the_rows_last_three_text_cells() {
+        // The idle face caps its title hint at TEXT_COLS - 3 cells on the
+        // promise that the meter owns the row's tail; if the meter ever grows
+        // left of that boundary the hint and the ticks collide again.
+        let left = (WIDTH - 2 + 1) - SIGNAL_METER_W;
+        assert!(left >= (TEXT_COLS - 3) * CELL_W);
     }
 
     #[test]
@@ -475,6 +600,106 @@ mod tests {
     }
 
     #[test]
+    fn battery_icon_stays_left_of_the_gps_meter_and_inside_row_0() {
+        // The meter owns the row's last three text cells; the battery must end
+        // short of its leftmost tick and start clear of the 7-cell brand.
+        let meter_left = (WIDTH - 2 + 1) - SIGNAL_METER_W;
+        assert!(BATTERY_RIGHT_X < meter_left);
+        let left = BATTERY_RIGHT_X + 1 - BATTERY_W;
+        assert!(left >= 7 * CELL_W, "clear of the THREKIR brand cells");
+        let mut fb = Framebuffer::new();
+        draw_idle_battery(&mut fb, Some(100), false);
+        // Every inked pixel sits inside the icon's own box in row 0.
+        assert!(ink_in(&fb, left, 0, BATTERY_W, CELL_H) > 0);
+        assert_eq!(
+            ink_in(&fb, 0, 0, left, HEIGHT),
+            0,
+            "nothing left of the icon"
+        );
+        assert_eq!(
+            ink_in(
+                &fb,
+                BATTERY_RIGHT_X + 1,
+                0,
+                WIDTH - BATTERY_RIGHT_X - 1,
+                HEIGHT
+            ),
+            0,
+            "nothing bleeds toward the meter"
+        );
+        assert_eq!(
+            ink_in(&fb, 0, CELL_H, WIDTH, HEIGHT - CELL_H),
+            0,
+            "row 0 only"
+        );
+    }
+
+    #[test]
+    fn battery_fill_grows_with_percent_and_empty_keeps_its_frame() {
+        let (mut empty, mut half, mut full) =
+            (Framebuffer::new(), Framebuffer::new(), Framebuffer::new());
+        draw_idle_battery(&mut empty, Some(0), false);
+        draw_idle_battery(&mut half, Some(50), false);
+        draw_idle_battery(&mut full, Some(100), false);
+        let left = BATTERY_RIGHT_X + 1 - BATTERY_W;
+        let e = ink_in(&empty, left, 0, BATTERY_W, CELL_H);
+        let h = ink_in(&half, left, 0, BATTERY_W, CELL_H);
+        let f = ink_in(&full, left, 0, BATTERY_W, CELL_H);
+        assert!(e > 0, "0% still draws the outline + nub (+ low mark)");
+        assert!(h > e && f > h, "fill is proportional");
+    }
+
+    #[test]
+    fn battery_low_state_adds_the_exclamation_inside_the_body() {
+        // LOW_PCT and LOW_PCT + 1 round to the same fill width, so the only
+        // ink difference between the two frames is the low mark itself.
+        let (mut low, mut ok) = (Framebuffer::new(), Framebuffer::new());
+        draw_idle_battery(&mut low, Some(battery::LOW_PCT), false);
+        draw_idle_battery(&mut ok, Some(battery::LOW_PCT + 1), false);
+        let left = BATTERY_RIGHT_X + 1 - BATTERY_W;
+        let ex = left + 2 + (BATT_BODY_W - 4) / 2;
+        assert!(
+            ink_in(&low, ex, 0, 2, CELL_H) > ink_in(&ok, ex, 0, 2, CELL_H),
+            "low frame carries the mark"
+        );
+        assert!(ink_in(&low, left, 0, BATTERY_W, CELL_H) > ink_in(&ok, left, 0, BATTERY_W, CELL_H));
+        // The mark stays inside the body's inner region: strip the two frames
+        // down to their difference and it must all sit within the inner box.
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                if low.pixel(x, y) && !ok.pixel(x, y) {
+                    assert!(
+                        (left + 2..left + BATT_BODY_W - 2).contains(&x),
+                        "mark ink at x={x} outside the body interior"
+                    );
+                    assert!(
+                        (BATTERY_TOP_Y + 2..BATTERY_TOP_Y + BATT_BODY_H - 2).contains(&y),
+                        "mark ink at y={y} outside the body interior"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn battery_overfull_clamps_to_full() {
+        let (mut over, mut full) = (Framebuffer::new(), Framebuffer::new());
+        draw_idle_battery(&mut over, Some(255), false);
+        draw_idle_battery(&mut full, Some(100), false);
+        assert!(fb_eq(&over, &full));
+    }
+
+    #[test]
+    fn battery_absent_or_busy_title_draws_nothing() {
+        let mut none = Framebuffer::new();
+        draw_idle_battery(&mut none, None, false);
+        assert_eq!(ink_in(&none, 0, 0, WIDTH, HEIGHT), 0);
+        let mut busy = Framebuffer::new();
+        draw_idle_battery(&mut busy, Some(80), true);
+        assert_eq!(ink_in(&busy, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
     fn page_indicator_thumb_moves_with_the_active_page() {
         let mut early = Framebuffer::new();
         let mut late = Framebuffer::new();
@@ -512,6 +737,132 @@ mod tests {
             },
         );
         assert_eq!(ink_in(&fb, 0, 0, WIDTH, CELL_H), 0);
+    }
+
+    #[test]
+    fn grid_rows_fully_erase_an_alert_banner_underneath() {
+        // The ui task draws the grid AFTER the composed page, relying on
+        // draw_text_row overwriting each full 16-px band — this pins that an
+        // alert banner drawn first leaves no residue, so the deferred-banner
+        // rule in the ui task can't ghost. The inverse-video band makes this
+        // the worst case: every pixel of rows 0-1 starts inked.
+        use watch_core::alerts::{banner, Alert};
+        let mut with_banner = Framebuffer::new();
+        with_banner.draw_banner_2x(0, &banner(Alert::Drink));
+        let mut clean = Framebuffer::new();
+        for (row, text) in page_grid::grid_rows(u32::MAX).iter().enumerate() {
+            with_banner.draw_text_row(row, text);
+            clean.draw_text_row(row, text);
+        }
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                assert_eq!(
+                    with_banner.pixel(x, y),
+                    clean.pixel(x, y),
+                    "banner residue at ({x},{y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn grid_cursor_frames_its_cell_and_stays_clear_of_neighbours() {
+        let mut fb = Framebuffer::new();
+        // Cell (1, 2): third body row, second column.
+        draw_grid_cursor(&mut fb, (1, 2));
+        let x = page_grid::GRID_CELL_CHARS * CELL_W; // col 1
+        let y = (page_grid::GRID_TOP_ROW + 2) * CELL_H;
+        // Frame ink on all four edges of the cell's own band.
+        assert!(ink_in(&fb, x - 2, y, 4 * CELL_W + 3, 1) > 0, "top edge");
+        assert!(
+            ink_in(&fb, x - 2, y + CELL_H - 1, 4 * CELL_W + 3, 1) > 0,
+            "bottom edge"
+        );
+        assert!(ink_in(&fb, x - 2, y, 1, CELL_H) > 0, "left edge");
+        assert!(ink_in(&fb, x + 4 * CELL_W, y, 1, CELL_H) > 0, "right edge");
+        // Nothing bleeds into the neighbouring column or adjacent rows.
+        assert_eq!(
+            ink_in(
+                &fb,
+                x + page_grid::GRID_CELL_CHARS * CELL_W,
+                y,
+                CELL_W,
+                CELL_H
+            ),
+            0
+        );
+        assert_eq!(ink_in(&fb, x - 2, y - CELL_H, 4 * CELL_W + 3, CELL_H), 0);
+        assert_eq!(ink_in(&fb, x - 2, y + CELL_H, 4 * CELL_W + 3, CELL_H), 0);
+        // Column 0 clamps its left overhang instead of underflowing.
+        let mut fb0 = Framebuffer::new();
+        draw_grid_cursor(&mut fb0, (0, 0));
+        assert!(ink_in(&fb0, 0, page_grid::GRID_TOP_ROW * CELL_H, 1, CELL_H) > 0);
+    }
+
+    #[test]
+    fn dashboard_grid_rules_the_field_boundaries() {
+        let mut fb = Framebuffer::new();
+        for row in 0..TEXT_ROWS {
+            ruled_dashboard_row(&mut fb, row, "");
+        }
+        // The hero band (rows 0-1) carries no rules; the grid opens with a
+        // hairline over the first field row and closes every field but the
+        // last — the panel edge finishes the grid.
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, 2 * CELL_H), 0);
+        let mut rule_ys = vec![face::DASH_FIELD_TOP_ROW * CELL_H];
+        for row in face::DASH_FIELD_TOP_ROW..TEXT_ROWS - 1 {
+            rule_ys.push((row + 1) * CELL_H - 1);
+        }
+        for y in rule_ys {
+            assert_eq!(
+                ink_in(&fb, RULE_X0, y, WIDTH - RULE_X0, 1),
+                WIDTH - RULE_X0,
+                "missing hairline at y={y}"
+            );
+        }
+        assert_eq!(ink_in(&fb, 0, HEIGHT - 1, WIDTH, 1), 0, "panel edge ruled");
+        // The icon gutter stays clear of every rule...
+        assert_eq!(ink_in(&fb, 0, 0, RULE_X0, HEIGHT), 0);
+        // ...and the NOW | GAP splitter spans exactly its own row band.
+        let vx = face::DASH_SPLIT_COL * CELL_W + CELL_W / 2;
+        assert_eq!(
+            ink_in(&fb, vx, face::DASH_SPLIT_ROW * CELL_H, 1, CELL_H),
+            CELL_H
+        );
+        assert_eq!(
+            ink_in(&fb, vx, (face::DASH_SPLIT_ROW + 1) * CELL_H, 1, CELL_H - 1),
+            0
+        );
+    }
+
+    #[test]
+    fn dashboard_grid_redraw_flushes_nothing_and_spares_the_icons() {
+        // The zero-flush-at-rest contract, grid included: the rules compose
+        // into each row's own compare-write, so an unchanged ruled frame
+        // dirties no line...
+        let rows = [
+            "",
+            "",
+            "     9.87 KM",
+            "PACE 5:12 /KM",
+            "NOW  5:55 GAP 5:41",
+        ];
+        let mut fb = Framebuffer::new();
+        for (row, text) in rows.iter().enumerate() {
+            ruled_dashboard_row(&mut fb, row, text);
+        }
+        fb.clear_dirty();
+        for (row, text) in rows.iter().enumerate() {
+            ruled_dashboard_row(&mut fb, row, text);
+        }
+        assert_eq!(fb.dirty_count(), 0, "an unchanged ruled frame flushed");
+        // ...and because the rules stop short of the icon gutter, an icon
+        // blitted over its two cells leaves every rule pixel standing (a
+        // full-width rule would be re-cleared by the blit each frame).
+        use sharp_mip::Icon;
+        fb.draw_icon(0, 2, Icon::Footsteps);
+        let y = 3 * CELL_H - 1;
+        assert_eq!(ink_in(&fb, RULE_X0, y, WIDTH - RULE_X0, 1), WIDTH - RULE_X0);
     }
 
     fn pacer(ahead_s: i32) -> PacerStatus {

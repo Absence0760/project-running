@@ -8,9 +8,11 @@
 # watch_sim_latest_link in lib/common.sh). Button macros, one clean press
 # each:
 #
-#   runMacro $btn1    start / pause / resume the recording
+#   runMacro $btn1    start / pause / resume; dismiss a finished run home; grid: cursor back
 #   runMacro $btn2    stop the recording
 #   runMacro $btn3    cycle the run-view page (dashboard/distance/pace/lap/zones/pacer)
+#   runMacro $btn3l   page back (long press); QNH re-zero on the idle face
+#   runMacro $btn3h   open the page grid (tap $btn3 to step, $btn4 to jump, ~3 s auto-selects)
 #   runMacro $btn4    manual lap
 #
 # Any other monitor command works too, e.g.:

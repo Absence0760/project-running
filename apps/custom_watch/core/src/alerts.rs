@@ -70,9 +70,12 @@ pub enum Alert {
     ZoneAbove(u8),
 }
 
-/// The banner the face draws at 2x over the hero band while an alert is
-/// active — `!` plus an all-caps label, the visually-distinct treatment a
-/// 1-bit panel with no inverse text can give.
+/// The banner the face draws over the hero band while an alert is active —
+/// `!` plus an all-caps label, rendered by the app as an inverse-video band
+/// (light 2x text knocked out of solid ink). Inverse video is free on a
+/// 1-bit framebuffer — fg and bg simply swap at draw time — making the band
+/// the panel's loudest treatment; an earlier claim here that the panel had
+/// no inverse text to spend was wrong.
 pub type Banner = heapless::String<10>;
 
 pub fn banner(alert: Alert) -> Banner {
@@ -332,6 +335,7 @@ mod tests {
     fn snap(state: RecordState, moving_s: u32) -> Snapshot {
         Snapshot {
             state,
+            manual_paused: false,
             distance_m: 0.0,
             elapsed_s: moving_s,
             moving_s,
