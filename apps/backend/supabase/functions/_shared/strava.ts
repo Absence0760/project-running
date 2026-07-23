@@ -335,13 +335,23 @@ export function buildTrackFromStreams(
 			if (Number.isFinite(ele) && ele >= -500 && ele <= 9000) point.ele = ele;
 		}
 		if (time?.[i] != null && Number.isFinite(startMs)) {
-			const ts = startMs + time[i] * 1000;
-			// Reject a sample whose ms-since-epoch goes backwards
-			// more than 1s from the prior accepted sample. Tolerate
-			// 1s wobble for upstream clock jitter.
-			if (lastTs >= 0 && ts < lastTs - 1000) continue;
-			lastTs = ts;
-			point.ts = new Date(ts).toISOString();
+			const sec = time[i];
+			// A present-but-non-finite time entry (NaN / Infinity / a value
+			// that coerces to NaN) would make `ts` NaN, slip past the
+			// backward-time guard (`NaN < x` is false), then throw in
+			// `new Date(NaN).toISOString()` — which ingestActivity's catch
+			// swallows, silently dropping the ENTIRE track. Skip the timestamp
+			// for that one sample (keep the point, untimed) instead, matching
+			// the Go twin whose int64 unmarshal fails and retains the point.
+			if (typeof sec === 'number' && Number.isFinite(sec)) {
+				const ts = startMs + sec * 1000;
+				// Reject a sample whose ms-since-epoch goes backwards
+				// more than 1s from the prior accepted sample. Tolerate
+				// 1s wobble for upstream clock jitter.
+				if (lastTs >= 0 && ts < lastTs - 1000) continue;
+				lastTs = ts;
+				point.ts = new Date(ts).toISOString();
+			}
 		}
 		if (hr?.[i] != null && hr[i] >= 30 && hr[i] <= 230) point.bpm = hr[i];
 		out.push(point);
