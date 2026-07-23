@@ -156,6 +156,41 @@ void main() {
   });
 
   testWidgets(
+      'long label and note-detail line are truncated so the row cannot grow '
+      'into a wall of text', (tester) async {
+    const longLabel =
+        'Aid Station 7 — Emigrant Pass Ridge Crest Water and Electrolyte '
+        'Refill with Medical Tent and Drop Bags';
+    const longNote =
+        'A very long free-text note that a viewer typed which, without a '
+        'maxLines cap, would wrap into a wall of text and shove the edit and '
+        'delete buttons off the visible row on a phone.';
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'note',
+          label: longLabel,
+          positionM: 500,
+          meta: {'note': longNote},
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    final label = tester.widget<Text>(find.text(longLabel));
+    expect(label.maxLines, 1,
+        reason: 'A long marker label must clip to one line, not wrap.');
+    expect(label.overflow, TextOverflow.ellipsis);
+
+    final detail = tester.widget<Text>(find.textContaining(longNote));
+    expect(detail.maxLines, 2,
+        reason: 'A long note detail line must cap at two lines.');
+    expect(detail.overflow, TextOverflow.ellipsis);
+  });
+
+  testWidgets(
       'non-owner viewer: owner markers are read-only + badged, own markers '
       'editable, and they can add their own', (tester) async {
     await tester.pumpWidget(_host(

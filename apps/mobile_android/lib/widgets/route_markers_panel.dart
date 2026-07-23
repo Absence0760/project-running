@@ -433,6 +433,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                               children: [
                                 Flexible(
                                   child: Text(m.label,
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w600)),
@@ -458,6 +459,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                           if (_detailLine(l10n, m).isNotEmpty)
                             _detailLine(l10n, m)
                         ].join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
