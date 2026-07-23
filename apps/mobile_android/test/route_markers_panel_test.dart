@@ -352,7 +352,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  group('parseMarkerElapsed / formatMarkerElapsed (#608)', () {
+  group('parseMarkerElapsed / formatMarkerElapsed', () {
     test('accepts h:mm:ss, mm:ss, and bare minutes', () {
       expect(parseMarkerElapsed('1:45:00'), 6300);
       expect(parseMarkerElapsed('25:00'), 1500);

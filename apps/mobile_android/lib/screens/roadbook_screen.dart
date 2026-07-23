@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../elevation.dart';
 import '../fuel_plan.dart';
+import '../goal_time.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../roadbook.dart';
@@ -119,7 +120,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
       );
 
   void _onGoalSubmit(String v) {
-    final secs = _parseElapsed(v.trim());
+    final secs =
+        parseGoalTimeS(v, distanceM: widget.route.distanceMetres);
     if (secs != null && secs > 0) {
       setState(() => _goalSeconds = secs);
     }
@@ -445,12 +447,4 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     return '$sign${_fmtElapsed(seconds.abs())}';
   }
 
-  static int? _parseElapsed(String raw) {
-    final parts = raw.split(':');
-    if (parts.any((p) => int.tryParse(p) == null)) return null;
-    final nums = parts.map(int.parse).toList();
-    if (nums.length == 3) return nums[0] * 3600 + nums[1] * 60 + nums[2];
-    if (nums.length == 2) return nums[0] * 3600 + nums[1] * 60;
-    return null;
-  }
 }

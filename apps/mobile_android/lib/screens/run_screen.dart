@@ -24,6 +24,7 @@ import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
 import '../embedded_bests.dart';
+import '../goal_time.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -233,7 +234,7 @@ class _RunScreenState extends State<RunScreen> {
   List<RoadbookLeg> _cutoffLegs = const [];
 
   // Course markers on the followed route that carry a target time
-  // (meta.target_elapsed_s), sorted by position — the #608 marker-cue set.
+  // (meta.target_elapsed_s), sorted by position — the marker-cue set.
   List<_TargetMarker> _targetMarkers = const [];
   // Distance-along-route at the previous fix; a marker between this and the
   // current along-value has just been crossed.
@@ -244,7 +245,7 @@ class _RunScreenState extends State<RunScreen> {
   DateTime? _lastCutoffCueAt;
   LiveCutoffStatus? _lastCutoffCueStatus;
 
-  // Race pacing strategy (#609): chosen pre-run, built into distance-
+  // Race pacing strategy: chosen pre-run, built into distance-
   // bounded phases at start. Empty plan = no strategy.
   RacePhasePreset? _strategyPreset;
   int? _strategyGoalTimeS;
@@ -1460,8 +1461,8 @@ class _RunScreenState extends State<RunScreen> {
 
     _attachRecordingSideEffects();
 
-    // Build the race-strategy phase plan for this recording (#609) and
-    // reset the per-recording cue trackers (#607/#608).
+    // Build the race-strategy phase plan for this recording and
+    // reset the per-recording cue trackers.
     final strategyDist = _resolvedStrategyDistanceM;
     _phasePlan = _strategyPreset != null && strategyDist != null
         ? buildPhasePlan(strategyDist, _strategyPreset!)
@@ -2163,8 +2164,8 @@ class _RunScreenState extends State<RunScreen> {
 
       // L4 — Pace alert (skip for cycling — pace target doesn't apply).
       // With an active race-strategy phase the phase's derived target pace
-      // takes over from the static preference (#609), and the cue speaks
-      // the correction amount instead of a bare "speed up" (#607).
+      // takes over from the static preference, and the cue speaks
+      // the correction amount instead of a bare "speed up".
       try {
         final phaseTarget = _phasePlan.isNotEmpty && _phaseIndex >= 0
             ? phaseTargetPaceSecPerKm(
@@ -2221,7 +2222,7 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('pace-alert cue failed: $e');
       }
 
-      // L4 — Race-strategy phase transition (#609). Phase membership is by
+      // L4 — Race-strategy phase transition. Phase membership is by
       // recorded distance, not distance-along-route, so it works with or
       // without a followed route. The first announcement waits for 50 m of
       // movement so it doesn't cancel the start cue (a new speak() call
@@ -2251,7 +2252,7 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('phase transition cue failed: $e');
       }
 
-      // L4 — Cutoff catch-up voice cue (#607). When the live projection
+      // L4 — Cutoff catch-up voice cue. When the live projection
       // says the next cutoff is tight or slipping away, speak the distance
       // and the flat pace still sufficient to make it. Announces
       // immediately on a status change and at most every two minutes
@@ -2296,7 +2297,7 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('cutoff catch-up cue failed: $e');
       }
 
-      // L4 — Course-marker target cue (#608). Crossing a marker that
+      // L4 — Course-marker target cue. Crossing a marker that
       // carries a target time announces ahead/behind-plan. A crossing is
       // the along-route distance moving past position_m between
       // consecutive fixes; announced indices are remembered because GPS
@@ -2676,7 +2677,7 @@ class _RunScreenState extends State<RunScreen> {
     metadata[cm.MetadataKeys.activityType] = _activityType.name;
     if (_steps > 0) metadata[cm.MetadataKeys.steps] = _steps;
 
-    // The race-strategy plan this run was executed against (#609), so the
+    // The race-strategy plan this run was executed against, so the
     // detail views can grade the phases later. Registered in
     // docs/backend/metadata.md.
     if (_strategyPreset != null && _phasePlan.isNotEmpty) {
@@ -3049,54 +3050,7 @@ class _RunScreenState extends State<RunScreen> {
         RacePhasePreset.even => l10n.runStrategyEven,
       };
 
-  static String _fmtGoalTime(int s) {
-    final h = s ~/ 3600;
-    final m = (s % 3600) ~/ 60;
-    final sec = s % 60;
-    String two(int v) => v.toString().padLeft(2, '0');
-    return h > 0 ? '$h:${two(m)}:${two(sec)}' : '${two(m)}:${two(sec)}';
-  }
-
-  /// Parse a goal-time string. Accepts h:mm:ss, h:mm, mm:ss, or bare
-  /// minutes. A two-part value is ambiguous ("3:30" the marathon vs
-  /// "25:00" the 5K); when the distance is known the reading whose
-  /// implied pace is plausible for running (2:30–25:00 min/km) wins,
-  /// preferring the hours reading when both fit.
-  static int? _parseGoalTimeS(String raw, double? distanceM) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-    final parts = trimmed.split(':');
-    if (parts.length > 3) return null;
-    final nums = <int>[];
-    for (final p in parts) {
-      final n = int.tryParse(p.trim());
-      if (n == null || n < 0) return null;
-      nums.add(n);
-    }
-    switch (nums.length) {
-      case 1:
-        return nums[0] > 0 ? nums[0] * 60 : null;
-      case 3:
-        final s = nums[0] * 3600 + nums[1] * 60 + nums[2];
-        return s > 0 ? s : null;
-      default:
-        final asHours = nums[0] * 3600 + nums[1] * 60;
-        final asMinutes = nums[0] * 60 + nums[1];
-        if (distanceM != null && distanceM > 0) {
-          bool plausible(int t) {
-            if (t <= 0) return false;
-            final pace = t / (distanceM / 1000);
-            return pace >= 150 && pace <= 1500;
-          }
-
-          if (plausible(asHours)) return asHours;
-          if (plausible(asMinutes)) return asMinutes;
-        }
-        return asHours > 0 ? asHours : null;
-    }
-  }
-
-  /// Pre-run race-strategy sheet (#609): pick a phase preset, confirm the
+  /// Pre-run race-strategy sheet: pick a phase preset, confirm the
   /// race distance (prefilled from the selected route), optionally set a
   /// goal time so the phases carry target paces.
   Future<void> _editRaceStrategy() async {
@@ -3110,7 +3064,8 @@ class _RunScreenState extends State<RunScreen> {
           : (resolved / (isMi ? 1609.344 : 1000)).toStringAsFixed(2),
     );
     final goalCtrl = TextEditingController(
-      text: _strategyGoalTimeS == null ? '' : _fmtGoalTime(_strategyGoalTimeS!),
+      text:
+          _strategyGoalTimeS == null ? '' : formatGoalTimeS(_strategyGoalTimeS!),
     );
     var preset = _strategyPreset;
     final result = await showModalBottomSheet<bool>(
@@ -3199,8 +3154,8 @@ class _RunScreenState extends State<RunScreen> {
       setState(() {
         _strategyPreset = preset;
         _strategyDistanceM = manualM;
-        _strategyGoalTimeS = _parseGoalTimeS(
-            goalCtrl.text, manualM ?? _resolvedStrategyDistanceM);
+        _strategyGoalTimeS = parseGoalTimeS(goalCtrl.text,
+            distanceM: manualM ?? _resolvedStrategyDistanceM);
       });
       if (preset != null && _resolvedStrategyDistanceM == null) {
         _showTopBanner(l10n.runStrategyNeedsDistance);
@@ -4069,7 +4024,7 @@ class _RunScreenState extends State<RunScreen> {
             },
           ),
 
-        // Race-strategy phase chip (#609) — current phase + intent (+ the
+        // Race-strategy phase chip — current phase + intent (+ the
         // phase's target pace when a goal time was set). Stacks above the
         // cutoff-card slot so an ultra with both still shows both.
         if (_phasePlan.isNotEmpty)

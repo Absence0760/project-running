@@ -150,7 +150,7 @@
 	);
 
 	/** Write the roadbook's projected arrival at each marker into that
-	 * marker's meta.target_elapsed_s — the one-click seed for the #608
+	 * marker's meta.target_elapsed_s — the one-click seed for the
 	 * marker-target voice cues, hand-tunable afterwards in the editor. */
 	async function saveTargets() {
 		savingTargets = true;

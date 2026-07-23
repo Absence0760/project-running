@@ -374,7 +374,7 @@ class AudioCues {
   /// Tell the runner they're outside the target pace window. With
   /// [deltaSecPerUnit] (seconds per km or mile, matching [unit]) the cue
   /// speaks the correction amount instead of a bare "speed up" — the
-  /// runner shouldn't have to do mid-race arithmetic (#607).
+  /// runner shouldn't have to do mid-race arithmetic.
   Future<void> announcePaceAlert({
     required bool tooSlow,
     int? deltaSecPerUnit,
@@ -399,7 +399,7 @@ class AudioCues {
   }
 
   /// Catch-up cue when the next cutoff is at risk: distance to the cutoff
-  /// plus the flat pace still sufficient to make it (#607).
+  /// plus the flat pace still sufficient to make it.
   Future<void> announceCutoffCatchUp({
     required double distanceToM,
     required double requiredPaceSecPerKm,
@@ -426,7 +426,7 @@ class AudioCues {
   static const int markerOnPlanBandS = 15;
 
   /// Ahead/behind-plan cue when crossing a course marker that carries a
-  /// target time (#608). [deltaS] is target minus actual elapsed at the
+  /// target time. [deltaS] is target minus actual elapsed at the
   /// crossing — positive means ahead of plan. Within [markerOnPlanBandS]
   /// either way the cue says "on plan" rather than a meaningless few
   /// seconds.
@@ -448,7 +448,7 @@ class AudioCues {
     }
   }
 
-  /// Announce entering a pacing-strategy phase (#609): "Phase 2 of 3.
+  /// Announce entering a pacing-strategy phase: "Phase 2 of 3.
   /// Settle into your goal pace. Target 5 minutes 40 seconds per
   /// kilometre." [index] is 1-based.
   Future<void> announcePhaseTransition({
