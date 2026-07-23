@@ -740,6 +740,14 @@
 	}
 	.marker-label {
 		font-weight: 600;
+		/* A marker label accepts up to 120 chars; without this it overflows the
+		   row or crushes the along-route distance chip beside it. Shrink-and-clip
+		   to one line (mobile clips the same label to maxLines: 1). */
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.marker-dist {
 		color: var(--color-text-secondary);

@@ -107,6 +107,29 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(rows.nth(1).locator('.marker-detail')).toContainText('Food');
 	});
 
+	test('a long marker label is clipped to one line, not overflowed', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		// Exactly the 120-char DB max (route_markers_label_check) — the longest
+		// label a user can save, which must still clip rather than overflow.
+		const longLabel = 'Aid Station Emigrant Pass Ridge Crest Water Refill '.repeat(3).slice(0, 120);
+		await insertMarker(routeId, 'aid_station', longLabel, 51.505, -0.125, {
+			services: ['water']
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		const label = page.locator('.markers-list .marker-row .marker-label').first();
+		await expect(label).toBeVisible();
+		// The fix: shrink-and-clip to one line so a long name can't overflow
+		// the row or crush the along-route distance chip beside it.
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(label).toHaveCSS('white-space', 'nowrap');
+		// The label genuinely exceeds its box here, so the clip is doing real
+		// work — guards against a future change that widens the row instead.
+		const clipped = await label.evaluate((el) => el.scrollWidth > el.clientWidth);
+		expect(clipped).toBe(true);
+	});
+
 	test('owner adds a marker by clicking the map', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await page.goto(`/routes/${routeId}`);
