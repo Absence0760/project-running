@@ -86,13 +86,21 @@ keytool -genkey -v -keystore upload-keystore.jks -alias upload \
 # Encode for GitHub Secret:
 base64 -w0 -i upload-keystore.jks | xclip -selection clipboard
 
-# Keep the original .jks in 1Password — losing it means losing the
+# Back the original .jks up (see below) — losing it means losing the
 # ability to push updates. The Play Console's "Reset upload key"
 # flow exists but it's a multi-day process; treat the .jks as
 # irreplaceable.
 ```
 
-Keep the keystore in 1Password under `runonward / android-upload-keystore`. CI never reads it from there directly — it reads from the GitHub Secret, which is just a copy.
+**Canonical backup: the private estate secrets repo** (`Absence0760/infra-secrets`, cloned as a sibling at `../infra-secrets`) at `running/android-upload-keystore.sops.yaml` — the `.jks` (base64), the key alias, and both passwords, sops-encrypted under the running prod web-stack KMS key (access = IAM `kms:Decrypt`, backed up 2026-07-21 and verified byte-identical). The GitHub Secret is a **signing copy, not a backup**: GitHub secrets are write-only, so CI can sign with it forever but nobody can ever read the keystore back out. The release operator's workstation holds a working copy of the `.jks`.
+
+Restore after a lost workstation:
+
+```bash
+AWS_PROFILE=running sops --decrypt --extract '["keystore_jks_base64"]' ../infra-secrets/running/android-upload-keystore.sops.yaml | base64 -d > upload-keystore.jks
+```
+
+The passwords live in the same file (`sops ../infra-secrets/running/android-upload-keystore.sops.yaml` to view), and in the owner's Bitwarden.
 
 ### GitHub Secrets required
 
@@ -299,7 +307,7 @@ The single failure mode that's actually scary. The Play Store has a recovery flo
 3. Google generates a new upload key; you swap it into GitHub Secrets.
 4. Deploys resume.
 
-This takes 2–7 days. **Keep the keystore in 1Password and in cold storage** (a printed QR code in a fireproof safe, an encrypted backup at a friend's house, etc.). The cost of redundancy is zero; the cost of losing the only copy is a week of zero releases.
+This takes 2–7 days. **Keep the keystore in the estate secrets repo (sops, § Signing setup) and consider cold storage too** (a printed QR code in a fireproof safe, an encrypted backup at a friend's house, etc.). The cost of redundancy is zero; the cost of losing the only copy is a week of zero releases.
 
 ### Lost Play Console access
 
@@ -325,7 +333,7 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [ ] Content rating done
 - [ ] App access test creds provided (staging, not prod seed)
 - [ ] Internal testing track has ≥1 tester email
-- [ ] Upload keystore generated, in 1Password and GitHub Secrets
+- [x] Upload keystore generated, set as GitHub Secrets, and sops-backed-up in the estate secrets repo (2026-07-21)
 - [ ] Keystore backup stored cold (off-machine)
 - [ ] Play service account created, JSON in GitHub Secrets, granted Release manager on this app
 - [ ] Shared `PUBLIC_*` secrets present (Supabase URL/anon, MapTiler — already set for web) and `MOBILE_OSRM_URL` set (required); optional `MOBILE_*` keys left unset stay fail-closed
