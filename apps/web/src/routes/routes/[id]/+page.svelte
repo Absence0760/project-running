@@ -686,6 +686,8 @@
 				<RouteMarkerEditor
 					routeId={route.id}
 					{isOwner}
+					routeOwnerId={route.user_id}
+					routeWaypoints={displayWaypoints}
 					bind:pins={markerPins}
 					bind:placing={markerEditing}
 					bind:pendingPlacement={markerPendingPlacement}

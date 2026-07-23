@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import type { MapMarkerPin } from './RunMap.svelte';
 	import type { RouteMarker, RouteMarkerKind } from '$lib/types';
@@ -16,13 +17,23 @@
 		kindSpec,
 		sortMarkers,
 		parseCutoff,
-		parseTarget
+		parseTarget,
+		isOfficialMarker
 	} from '$lib/routes/route_markers';
-	import { formatDistance } from '$lib/format/units.svelte';
+	import { markerPointAtDistance, polylineLengthMetres } from '$lib/routes/route_geometry';
+	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 
 	interface Props {
 		routeId: string;
 		isOwner: boolean;
+		/// The route owner's user id — a marker is OFFICIAL (the owner's,
+		/// read-only to everyone else) when `marker.user_id === routeOwnerId`.
+		/// Any signed-in viewer may still add their OWN personal markers.
+		routeOwnerId: string;
+		/// The route polyline, used to place a marker by distance-along-route
+		/// ("mile 5") as an alternative to a map tap / typed lat-lng. Empty
+		/// when the route has no geometry — the distance field then hides.
+		routeWaypoints?: { lat: number; lng: number }[];
 		/// Pins published for RunMap to render (sorted, coloured). Out-bound.
 		pins?: MapMarkerPin[];
 		/// Whether the map should be in click-to-place mode. Out-bound.
@@ -48,6 +59,8 @@
 	let {
 		routeId,
 		isOwner,
+		routeOwnerId,
+		routeWaypoints = [],
 		pins = $bindable([]),
 		placing = $bindable(false),
 		pendingPlacement = $bindable(null),
@@ -72,11 +85,43 @@
 	let draftLng = $state<number | null>(null);
 	let draftLatText = $state('');
 	let draftLngText = $state('');
+	// Alternative "place by distance along the route" entry (part of the
+	// add-by-mile path). Held in the viewer's display unit; converted to
+	// metres and resolved to a lat/lng via the route polyline on input.
+	let draftDistanceText = $state('');
+	let distanceClamped = $state(false);
 	let formOpen = $state(false);
 	let saving = $state(false);
 	let confirmDeleteId = $state<string | null>(null);
 
 	let sorted = $derived(sortMarkers(markers));
+
+	const METRES_PER_MILE = 1609.344;
+
+	// Total length of the route line — the ceiling the distance input
+	// clamps to, and the denominator for the display-unit hint.
+	let routeLengthM = $derived(
+		routeWaypoints.length >= 2 ? polylineLengthMetres(routeWaypoints) : 0
+	);
+	let canPlaceByDistance = $derived(routeLengthM > 0);
+
+	// A marker is the current viewer's own iff they authored it — the RLS
+	// edit/delete boundary. An OFFICIAL marker (the route owner's) is
+	// read-only to everyone else; a signed-in viewer's own markers are a
+	// private personal overlay they fully control.
+	function isMine(mk: { user_id: string }): boolean {
+		return auth.user?.id != null && mk.user_id === auth.user.id;
+	}
+	function official(mk: { user_id: string }): boolean {
+		return isOfficialMarker(mk, routeOwnerId);
+	}
+
+	function distanceUnitToMetres(v: number): number {
+		return getUnit() === 'mi' ? v * METRES_PER_MILE : v * 1000;
+	}
+	function metresToDistanceUnit(mVal: number): number {
+		return getUnit() === 'mi' ? mVal / METRES_PER_MILE : mVal / 1000;
+	}
 
 	async function reload() {
 		markers = await fetchRouteMarkers(routeId);
@@ -125,6 +170,11 @@
 			draftLng = pendingPlacement.lng;
 			draftLatText = formatCoord(pendingPlacement.lat);
 			draftLngText = formatCoord(pendingPlacement.lng);
+			// A map tap wins over any stale distance the user typed — the
+			// distance field is only a shortcut to a lat/lng, not the source
+			// of truth once the pin has been dropped somewhere else.
+			draftDistanceText = '';
+			distanceClamped = false;
 			pendingPlacement = null;
 		}
 	});
@@ -154,7 +204,31 @@
 		if (lat != null && lng != null) {
 			draftLat = lat;
 			draftLng = lng;
+			draftDistanceText = '';
+			distanceClamped = false;
 		}
+	}
+
+	// The "place by distance along the route" path: convert the entered
+	// distance (in the viewer's unit) to metres, resolve it to a point on
+	// the route polyline, and move the draft pin there. Out-of-range
+	// distances clamp to the finish (flagged via `distanceClamped` so the
+	// UI can say so). No-ops on empty / non-numeric / no-geometry input.
+	function applyDistanceInput() {
+		distanceClamped = false;
+		const t = draftDistanceText.trim();
+		if (!t) return;
+		const v = Number(t);
+		if (!Number.isFinite(v) || v < 0) return;
+		if (routeWaypoints.length < 2) return;
+		const metres = distanceUnitToMetres(v);
+		const pt = markerPointAtDistance(routeWaypoints, metres);
+		if (!pt) return;
+		if (metres > routeLengthM + 0.5) distanceClamped = true;
+		draftLat = pt.lat;
+		draftLng = pt.lng;
+		draftLatText = formatCoord(pt.lat);
+		draftLngText = formatCoord(pt.lng);
 	}
 
 	// A drag of an already-saved pin persists immediately (a quick reposition
@@ -183,7 +257,9 @@
 		if (selectId) {
 			const target = markers.find((mk) => mk.id === selectId);
 			selectId = null;
-			if (target && isOwner) openEdit(target);
+			// Only the author can open a marker for editing — an official
+			// marker is read-only to a non-owner viewer.
+			if (target && isMine(target)) openEdit(target);
 		}
 	});
 
@@ -199,6 +275,8 @@
 		draftLng = null;
 		draftLatText = '';
 		draftLngText = '';
+		draftDistanceText = '';
+		distanceClamped = false;
 	}
 
 	function openAdd() {
@@ -221,6 +299,13 @@
 		draftLng = mk.lng;
 		draftLatText = formatCoord(mk.lat);
 		draftLngText = formatCoord(mk.lng);
+		// Prefill the distance field with the marker's along-route position
+		// so "mile 5" round-trips when editing an existing marker.
+		draftDistanceText =
+			mk.position_m != null
+				? String(Number(metresToDistanceUnit(mk.position_m).toFixed(2)))
+				: '';
+		distanceClamped = false;
 		formOpen = true;
 		placing = true;
 	}
@@ -394,13 +479,20 @@
 <section class="markers-panel" aria-labelledby="markers-heading">
 	<div class="markers-head">
 		<h3 id="markers-heading">{m('routeMarker.heading')}</h3>
-		{#if isOwner && !formOpen}
+		{#if auth.loggedIn && !formOpen}
 			<button type="button" class="btn btn-sm btn-outline" onclick={openAdd}>
 				<span class="material-symbols">add_location_alt</span>
 				{m('routeMarker.add')}
 			</button>
 		{/if}
 	</div>
+
+	{#if !isOwner && auth.loggedIn && !formOpen}
+		<p class="markers-personal-hint">
+			<span class="material-symbols" aria-hidden="true">visibility_off</span>
+			{m('routeMarker.personalOverlayHint')}
+		</p>
+	{/if}
 
 	{#if loaded && sorted.length === 0 && !formOpen}
 		<p class="markers-empty">{m('routeMarker.empty')}</p>
@@ -424,11 +516,19 @@
 							{#if distanceLabel(mk)}<span class="marker-dist">{distanceLabel(mk)}</span>{/if}
 						</div>
 						<div class="marker-line2">
+							{#if !isOwner && official(mk)}
+								<span class="marker-badge official">
+									<span class="material-symbols" aria-hidden="true">verified</span>
+									{m('routeMarker.officialBadge')}
+								</span>
+							{:else if !isOwner && isMine(mk)}
+								<span class="marker-badge yours">{m('routeMarker.yoursBadge')}</span>
+							{/if}
 							<span class="marker-kind">{kindLabel(mk.kind)}</span>
 							{#if detailLine(mk)}<span class="marker-detail">{detailLine(mk)}</span>{/if}
 						</div>
 					</div>
-					{#if isOwner && !formOpen}
+					{#if isMine(mk) && !formOpen}
 						<div class="marker-actions">
 							<button
 								type="button"
@@ -489,6 +589,26 @@
 			</div>
 			{#if coordInvalid}
 				<p class="error" role="alert">{m('routeMarker.coordInvalid')}</p>
+			{/if}
+			{#if canPlaceByDistance}
+				<label class="distance-along">
+					{m('routeMarker.distanceAlongLabel', { unit: getUnit() })}
+					<input
+						type="text"
+						inputmode="decimal"
+						bind:value={draftDistanceText}
+						oninput={applyDistanceInput}
+						placeholder={String(Number(metresToDistanceUnit(routeLengthM).toFixed(2)))}
+					/>
+					<span class="field-hint">{m('routeMarker.distanceAlongHint')}</span>
+				</label>
+				{#if distanceClamped}
+					<p class="field-hint clamped" role="status">
+						{m('routeMarker.distanceAlongClamped', {
+							distance: formatDistance(routeLengthM)
+						})}
+					</p>
+				{/if}
 			{/if}
 			<label>
 				{m('routeMarker.kindLabel')}
@@ -628,6 +748,7 @@
 	}
 	.marker-line2 {
 		display: flex;
+		align-items: center;
 		gap: var(--space-xs);
 		flex-wrap: wrap;
 		font-size: 0.85rem;
@@ -635,6 +756,29 @@
 	}
 	.marker-kind {
 		text-transform: capitalize;
+	}
+	.marker-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1;
+		padding: 0.15rem 0.45rem;
+		border-radius: 9999px;
+		text-transform: none;
+		letter-spacing: 0.01em;
+	}
+	.marker-badge .material-symbols {
+		font-size: 0.85rem;
+	}
+	.marker-badge.official {
+		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+		color: var(--color-primary);
+	}
+	.marker-badge.yours {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
 	}
 	.marker-detail::before {
 		content: '· ';
@@ -689,6 +833,28 @@
 	}
 	.markers-drag-hint .material-symbols {
 		font-size: 1rem;
+	}
+	.markers-personal-hint {
+		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+	}
+	.markers-personal-hint .material-symbols {
+		font-size: 1rem;
+	}
+	.distance-along .field-hint {
+		display: block;
+		margin-top: 0.15rem;
+		font-size: 0.75rem;
+		font-weight: 400;
+		color: var(--color-text-tertiary);
+	}
+	.field-hint.clamped {
+		margin: 0.15rem 0 0;
+		color: var(--color-text-secondary);
 	}
 	.services {
 		display: flex;

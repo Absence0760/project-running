@@ -122,6 +122,30 @@ export function polylineLengthMetres(waypoints: RouteWaypoint[]): number {
 	return cumulativeLengthM(waypoints);
 }
 
+/**
+ * The point `distanceM` metres along the polyline — the "place this
+ * course marker at mile 5" input path, an alternative to a map tap or a
+ * typed lat/lng. `distanceM` is CLAMPED to [0, routeLength] so a value
+ * past the finish snaps to the last waypoint rather than returning null.
+ * Returns null only when there is no line to place on: `< 2` waypoints,
+ * a zero-length (all-coincident) polyline, or a non-finite `distanceM`.
+ *
+ * Thin wrapper over polylineLengthMetres + the fraction-based
+ * interpolateAlongRoute — fraction = clampedMetres / totalLength — so
+ * the along-route position math stays in one place.
+ */
+export function markerPointAtDistance(
+	waypoints: RouteWaypoint[],
+	distanceM: number,
+): RouteWaypoint | null {
+	if (waypoints.length < 2) return null;
+	if (!Number.isFinite(distanceM)) return null;
+	const totalLen = polylineLengthMetres(waypoints);
+	if (totalLen <= 0) return null;
+	const clamped = Math.min(totalLen, Math.max(0, distanceM));
+	return interpolateAlongRoute(waypoints, clamped / totalLen);
+}
+
 function cumulativeLengthM(waypoints: RouteWaypoint[]): number {
 	let total = 0;
 	for (let i = 1; i < waypoints.length; i++) {

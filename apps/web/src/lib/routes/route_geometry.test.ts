@@ -12,6 +12,7 @@ import {
 	interpolateAlongRoute,
 	distanceAlongRoute,
 	polylineLengthMetres,
+	markerPointAtDistance,
 	type RouteWaypoint,
 } from './route_geometry';
 
@@ -276,4 +277,60 @@ test('distanceAlongRoute — null on a non-finite point (not 0)', () => {
 	// A NaN or Infinity fix is "unknown position", not "at the start".
 	assert.equal(distanceAlongRoute({ lat: NaN, lng: 0 }, wps), null);
 	assert.equal(distanceAlongRoute({ lat: 0, lng: Infinity }, wps), null);
+});
+
+// ── markerPointAtDistance — the "place a marker at mile 5" input path ──
+
+test('markerPointAtDistance — null on < 2 waypoints', () => {
+	assert.equal(markerPointAtDistance([], 100), null);
+	assert.equal(markerPointAtDistance([distWp(0)], 100), null);
+});
+
+test('markerPointAtDistance — null on a zero-length (all-coincident) line', () => {
+	assert.equal(markerPointAtDistance([wp(1, 1), wp(1, 1)], 100), null);
+});
+
+test('markerPointAtDistance — null on a non-finite distance', () => {
+	const wps = [distWp(0), distWp(200)];
+	assert.equal(markerPointAtDistance(wps, NaN), null);
+	assert.equal(markerPointAtDistance(wps, Infinity), null);
+});
+
+test('markerPointAtDistance — distance 0 returns the start', () => {
+	const wps = [distWp(0), distWp(100), distWp(200)];
+	const out = markerPointAtDistance(wps, 0);
+	assert.ok(out);
+	assert.ok(Math.abs(out!.lng - 0) < 1e-9);
+});
+
+test('markerPointAtDistance — a mid-route distance lands at that along-distance', () => {
+	// Three 100-m legs on the equator → 300 m total. 150 m is the
+	// midpoint of the second leg.
+	const wps = [distWp(0), distWp(100), distWp(200), distWp(300)];
+	const out = markerPointAtDistance(wps, 150);
+	assert.ok(out);
+	// Round-trip through the inverse: the point should sit ~150 m along.
+	const back = distanceAlongRoute(out!, wps);
+	assert.ok(back !== null);
+	assert.ok(Math.abs(back! - 150) < 1, `got ${back}`);
+});
+
+test('markerPointAtDistance — a distance past the end clamps to the finish', () => {
+	const wps = [distWp(0), distWp(100), distWp(200)];
+	const total = polylineLengthMetres(wps);
+	const out = markerPointAtDistance(wps, total + 10_000);
+	assert.ok(out);
+	// Same point as the true end waypoint.
+	assert.ok(Math.abs(out!.lng - wps[wps.length - 1].lng) < 1e-9);
+	// And its along-distance is the full length, not beyond it.
+	const back = distanceAlongRoute(out!, wps);
+	assert.ok(back !== null);
+	assert.ok(Math.abs(back! - total) < 1, `got ${back} (total ${total})`);
+});
+
+test('markerPointAtDistance — a negative distance clamps to the start', () => {
+	const wps = [distWp(0), distWp(100), distWp(200)];
+	const out = markerPointAtDistance(wps, -500);
+	assert.ok(out);
+	assert.ok(Math.abs(out!.lng - 0) < 1e-9);
 });
