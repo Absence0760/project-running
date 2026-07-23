@@ -143,6 +143,54 @@
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
+            <!-- OS "Open with" / share-target for GPX/KML route files
+                 (decisions §24 device-led). receive_sharing_intent delivers
+                 the handed-over file to lib/shared_file_import.dart, which
+                 validates it by parsing and imports it as a route.
+
+                 ACTION_VIEW is the "Open with" chooser. Neither .gpx nor
+                 .kml is in Android's built-in MIME map, so WhatsApp (and
+                 most apps that don't type the file themselves) hand the
+                 document over as application/octet-stream — that generic
+                 type has to be listed for Threkir to appear in their
+                 chooser at all. The trade-off is that Threkir also shows up
+                 for other unknown-binary files; a non-route file falls to
+                 the "couldn't import" banner. The specific gpx/kml types
+                 cover sources that DO type the file (Files, Drive). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/gpx+xml" />
+                <data android:mimeType="application/vnd.google-earth.kml+xml" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!-- file:// fallback matched by extension, for a provider that
+                 hands over a real path with no (or a wrong) MIME. Modern
+                 shares are content:// (covered above); this is belt-and-
+                 suspenders for older file:// senders. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.gpx" />
+                <data android:pathPattern=".*\\.kml" />
+                <data android:pathPattern=".*\\.GPX" />
+                <data android:pathPattern=".*\\.KML" />
+            </intent-filter>
+            <!-- ACTION_SEND is the share sheet ("Share" → Threkir). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/gpx+xml" />
+                <data android:mimeType="application/vnd.google-earth.kml+xml" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

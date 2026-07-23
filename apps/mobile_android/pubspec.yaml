@@ -107,6 +107,15 @@ dependencies:
   # firebase_core transitively but we depend on it explicitly for the init call.
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.3
+  # OS "Open with" / share-target for GPX/KML → route import (device-led,
+  # decisions §24). Delivers the file the OS hands the app via the Android
+  # ACTION_VIEW / ACTION_SEND intent-filters (AndroidManifest) and the iOS
+  # document open (Info.plist CFBundleDocumentTypes). Android + iOS only —
+  # no win32/desktop transitive, so it's clear of the file_picker/share_plus
+  # win32 pin above. See lib/shared_file_import.dart. The iOS *system share
+  # sheet* additionally needs a Share Extension target (deferred); document
+  # "Open with" needs only the Info.plist declaration.
+  receive_sharing_intent: ^1.9.0
   flutter_localizations:
     sdk: flutter
   # Pinned by flutter_localizations; kept unconstrained so the resolver

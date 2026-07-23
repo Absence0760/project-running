@@ -6,7 +6,6 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:gpx_parser/gpx_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../auth_error.dart';
@@ -14,6 +13,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../shared_file_import.dart' show routeFromImportedFile;
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -1250,10 +1250,10 @@ class _RouteParseRequest {
   const _RouteParseRequest(this.ext, this.content);
 }
 
-cm.Route _parseRouteFile(_RouteParseRequest req) {
-  if (req.ext == 'kml') return RouteParser.fromKml(req.content);
-  return RouteParser.fromGpx(req.content);
-}
+cm.Route _parseRouteFile(_RouteParseRequest req) => routeFromImportedFile(
+      format: req.ext == 'kml' ? 'kml' : 'gpx',
+      content: req.content,
+    );
 
 /// Filter toolbar for the routes list. Stateless — every change goes
 /// through callbacks back to the screen so persistence + paging reset
