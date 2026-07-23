@@ -13,8 +13,8 @@
  * actually standing.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from '../core/env_flag';
 
 export function routeGenEnabled(): boolean {
-	const raw = (env.PUBLIC_ROUTE_GEN_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_ROUTE_GEN_ENABLED);
 }

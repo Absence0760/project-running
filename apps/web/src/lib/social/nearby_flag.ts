@@ -8,6 +8,8 @@
  * unset / unrecognised value reads as OFF. Mirrors the paid-events + adaptive-
  * fitness pre-prod gates (decisions §139 / §144).
  */
-export const NEARBY_RUNNERS_ENABLED =
-	import.meta.env.PUBLIC_ENABLE_NEARBY_RUNNERS === '1' ||
-	import.meta.env.PUBLIC_ENABLE_NEARBY_RUNNERS === 'true';
+import { isTruthyFlagValue } from '../core/env_flag';
+
+export const NEARBY_RUNNERS_ENABLED = isTruthyFlagValue(
+	import.meta.env.PUBLIC_ENABLE_NEARBY_RUNNERS,
+);
