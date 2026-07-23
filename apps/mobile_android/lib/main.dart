@@ -34,6 +34,7 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'settings_cache.dart';
 import 'settings_sync.dart';
+import 'shared_file_import.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
 import 'ble_heart_rate.dart';
@@ -601,6 +602,20 @@ void main() async {
   } else {
     await startApp();
   }
+
+  // OS "Open with" / share-sheet GPX/KML → route import (Android
+  // ACTION_VIEW / ACTION_SEND intent-filters, iOS document open). Listen
+  // for files shared while running, then drain any file that cold-launched
+  // the app; HomeScreen consumes incomingRouteImport once it mounts. See
+  // shared_file_import.dart + the AndroidManifest / iOS Info.plist
+  // registration. Guarded so a plugin/platform failure never blocks launch.
+  try {
+    final sharedFileImport =
+        SharedFileImportService(routeStore: routeStore)..start();
+    unawaited(sharedFileImport.processInitial());
+  } catch (e) {
+    debugPrint('shared-file import init failed: $e');
+  }
 }
 
 class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
@@ -629,6 +644,16 @@ final ValueNotifier<Locale?> localeNotifier = ValueNotifier<Locale?>(null);
 /// HomeScreen, so a single notifier centralises the handoff.
 final ValueNotifier<cm.PlanWorkoutRow?> pendingStartWorkout =
     ValueNotifier<cm.PlanWorkoutRow?>(null);
+
+/// Cross-screen handoff for "start a run following this route now". Set by
+/// any route surface that isn't hosted under HomeScreen's route-list flow —
+/// the route-detail Start FAB (so it works regardless of who pushed the
+/// screen) and the public / shared-route screen (a route the viewer doesn't
+/// own). HomeScreen listens, switches to the recorder page, and preselects
+/// the route. Sibling of [pendingStartWorkout] — one notifier instead of
+/// threading an `onStartRun` callback down every push path.
+final ValueNotifier<cm.Route?> pendingStartRunWithRoute =
+    ValueNotifier<cm.Route?>(null);
 
 class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
