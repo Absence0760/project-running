@@ -9,7 +9,7 @@
 //! ```
 
 use sharp_mip::{Framebuffer, HEIGHT, WIDTH};
-use watch_core::face::{self, NavView};
+use watch_core::face::{self, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM};
@@ -100,7 +100,7 @@ fn sample_fix() -> Fix {
     }
 }
 
-// Draw the face rows + 2x hero the way the ui task does, so the preview shows
+// Draw the face rows + hero the way the ui task does, so the preview shows
 // the widget over its real text underlay.
 fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Option<u16>) {
     let fix = sample_fix();
@@ -115,12 +115,23 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         100,
         false,
         GnssMode::default(),
+        IdleView::Home,
+        None,
     );
+    let field_grid = page == Page::Dashboard && snap.is_some();
     for (r, row) in rows.iter().enumerate() {
-        fb.draw_text_row(r, row);
+        if field_grid {
+            widgets::ruled_dashboard_row(fb, r, row);
+        } else {
+            fb.draw_text_row(r, row);
+        }
     }
     if let Some(hero) = face::page_hero(page, hr, snap, None) {
-        fb.draw_text_2x(0, 0, &hero);
+        if matches!(page, Page::Distance | Page::Pace) {
+            fb.draw_bignum_hero(0, &hero);
+        } else {
+            fb.draw_text_2x(0, 0, &hero);
+        }
     }
 }
 
@@ -133,11 +144,130 @@ fn show(name: &str, fb: &Framebuffer) {
 }
 
 #[test]
-fn preview_idle_face_with_signal_meter() {
+fn preview_idle_home_face_with_clock_hero() {
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Dashboard, None, Some(132));
     widgets::draw_idle_signal(&mut fb, Some(&sample_fix()), 100, face::STALE_AFTER_S);
-    show("idle: brand + GPS signal meter", &fb);
+    widgets::draw_idle_battery(&mut fb, Some(87), false);
+    // The ui task draws the generated numeral clock into the band the home
+    // face leaves blank — replicate it so the preview shows the real layout.
+    let clock = face::home_clock_text(Some(&sample_fix()), 100, None);
+    fb.draw_bignum_band(
+        face::CLOCK_HERO_TOP_ROW * (HEIGHT / sharp_mip::TEXT_ROWS),
+        &clock,
+    );
+    show("idle home: clock hero + battery + GPS signal meter", &fb);
+}
+
+#[test]
+fn preview_idle_diagnostics_face() {
+    let mut fb = Framebuffer::new();
+    let mut rows = face::page_rows(
+        Page::Dashboard,
+        Some(&sample_fix()),
+        Some(132),
+        None,
+        None,
+        NavView::NoCourse,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Diagnostics,
+        None,
+    );
+    face::apply_battery_row(&mut rows, IdleView::Diagnostics, Some(12));
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    widgets::draw_idle_signal(&mut fb, Some(&sample_fix()), 100, face::STALE_AFTER_S);
+    // A low cell, so the preview shows the icon's exclamation frame beside
+    // the numeric BAT row.
+    widgets::draw_idle_battery(&mut fb, Some(12), false);
+    show(
+        "idle diagnostics: bench acquisition view + low battery",
+        &fb,
+    );
+}
+
+#[test]
+fn preview_run_dashboard() {
+    use sharp_mip::Icon;
+    use watch_core::face::FaceIcon;
+
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Dashboard, Some(&snap), Some(150));
+    // The gutter icons, mapped the way the ui task's driver_icon does.
+    let fix = sample_fix();
+    let icons = face::page_icons(
+        Page::Dashboard,
+        Some(&fix),
+        Some(150),
+        Some(&snap),
+        100,
+        false,
+        GnssMode::default(),
+    );
+    for (row, icon) in icons.iter().enumerate() {
+        if let Some(icon) = icon {
+            fb.draw_icon(
+                0,
+                row,
+                match icon {
+                    FaceIcon::Stopwatch => Icon::Stopwatch,
+                    FaceIcon::Footsteps => Icon::Footsteps,
+                    FaceIcon::Heart => Icon::Heart,
+                    FaceIcon::HeartSmall => Icon::HeartSmall,
+                    FaceIcon::Mountain => Icon::Mountain,
+                    FaceIcon::Vert => Icon::Vert,
+                    FaceIcon::Satellite => Icon::Satellite,
+                    FaceIcon::SatSearch0 => Icon::SatSearch0,
+                    FaceIcon::SatSearch1 => Icon::SatSearch1,
+                },
+            );
+        }
+    }
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
+    );
+    show("run dashboard: hero + field grid + NOW/GAP pairing", &fb);
+}
+
+#[test]
+fn preview_inverse_alert_banner() {
+    // An on-run alert takes the hero band over as an inverse-video banner —
+    // light text knocked out of a solid band, the loudest treatment the 1-bit
+    // panel gives (fg/bg swap at draw time; the panel has no polarity of its
+    // own).
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Dashboard, Some(&snap), Some(150));
+    fb.draw_banner_2x(0, "! DRINK");
+    show("alert banner: inverse video over the hero band", &fb);
+}
+
+#[test]
+fn preview_distance_and_pace_bignum_heroes() {
+    // The single-metric glances: big integers / minutes with the medium face
+    // carrying the decimals / seconds on the shared baseline.
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Distance, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Distance, u32::MAX),
+    );
+    show("distance glance: 32.40 in the numeral faces", &fb);
+
+    let mut fb2 = Framebuffer::new();
+    draw_face(&mut fb2, Page::Pace, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb2,
+        watch_core::statusbar::page_indicator(Page::Pace, u32::MAX),
+    );
+    show("pace glance: 6:20 in the numeral faces", &fb2);
 }
 
 #[test]

@@ -11,7 +11,7 @@ use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::course::Course;
 use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
-use watch_core::face::NavView;
+use watch_core::face::{IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::HrSample;
@@ -58,6 +58,11 @@ pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new(
 /// Current run-view page: the `button` task advances it on each BTN3 press, the
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
+
+/// Which idle face is showing: the `button` task toggles it on BTN4 while no
+/// run is under way (home clock <-> diagnostics, decisions §291), the `ui`
+/// face reads it to pick the idle layout. One receiver (the `ui` task).
+pub static IDLE_VIEW: Watch<CriticalSectionRawMutex, IdleView, 1> = Watch::new();
 
 /// The page-grid overview's cursor while the grid is open, `None` when closed.
 /// The `button` task owns the grid state machine (`watch_core::page_grid`) and
@@ -121,12 +126,22 @@ pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// value published means "unknown" (0). One receiver (the `ui` face's meter).
 pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
-/// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the
-/// `ble` task decodes a phone characteristic write (and the sim seeds a demo
-/// frame) and publishes; the `record` task applies each present field to the
-/// recorder + alert engine through their settings-sync setters. `None` means
-/// nothing pushed yet. One receiver (the `record` task).
+/// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling / QNH /
+/// fuel cadences / page curation / timezone offset): the `ble` task decodes a
+/// phone characteristic write (the sim decodes the same frames off the
+/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and
+/// publishes; the `record` task applies each present field to the recorder +
+/// alert engine through their settings-sync setters. `None` means nothing
+/// pushed yet. One receiver (the `record` task).
 pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
+
+/// Latest battery percent estimate. `None` means no plausible reading — an
+/// absent battery, a bench/USB regulator rail, or a mid-stream reading that
+/// left the LiPo band — and consumers show their honest absent state (no
+/// icon, no BAT row). The `battery` task publishes on change only (a steady
+/// percent wakes nobody); the `ui` task draws the idle-face gauge and the
+/// diagnostics BAT row from it. One receiver (the `ui` task).
+pub static BATTERY: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
 
 /// QNH sea-level reference pressure (Pa) for the barometric-altitude
 /// calculation: the `record` task publishes a plausibility-guarded value when a
@@ -135,6 +150,15 @@ pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = 
 /// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
 /// baro task keeps its default reference. One receiver (the `baro` task).
 pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
+
+/// Local-time offset (minutes east of UTC) for the home clock: the `record`
+/// task publishes the plausibility-guarded value when a pushed settings frame
+/// carries `tz_offset_min` (the phone auto-sources it from its own zone —
+/// same dedicated-watch seam as `SEA_LEVEL_PA`, so the `ui` task never
+/// re-derives partial-frame apply semantics); the `ui` task shifts the home
+/// clock hero and flips its row-7 label UTC → LOCAL. No value published means
+/// the clock stays honestly UTC-labelled. One receiver (the `ui` task).
+pub static TZ_OFFSET_MIN: Watch<CriticalSectionRawMutex, i16, 1> = Watch::new();
 
 /// Manual QNH re-zero request: the `button` task sends one on an idle-face
 /// BTN3 long-press; the `baro` task (which owns the vert accumulator the snap

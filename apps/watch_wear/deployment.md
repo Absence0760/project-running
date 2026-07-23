@@ -62,7 +62,7 @@ keytool -genkey -v -keystore wear-upload-keystore.jks -alias upload \
 base64 -w0 -i wear-upload-keystore.jks | xclip -selection clipboard
 ```
 
-Same 1Password + GitHub Secret discipline as the phone-app keystore (`apps/mobile_android/deployment.md` § Signing setup) — losing the keystore is a 2–7 day Play support recovery flow.
+Same estate-secrets-repo (sops backup) + GitHub Secret discipline as the phone-app keystore (`apps/mobile_android/deployment.md` § Signing setup) — losing the keystore is a 2–7 day Play support recovery flow.
 
 ### GitHub Secrets required
 
@@ -184,7 +184,7 @@ A Wear OS-specific rollback consideration: when the phone app + watch app deploy
 
 ### Lost upload keystore
 
-Same Play support recovery flow as the phone app. Keep `wear-upload-keystore.jks` in 1Password + cold storage.
+Same Play support recovery flow as the phone app. Keep `wear-upload-keystore.jks` sops-encrypted in the estate secrets repo (`../infra-secrets`, same pattern as the phone keystore) + cold storage.
 
 ### Lost Play Console access
 
@@ -204,7 +204,7 @@ A Wear OS-specific edge: Google occasionally tightens Wear OS-specific guideline
 - [ ] Store listing complete (description, screenshots — round + square watch faces, feature graphic)
 - [ ] Privacy policy URL set (same one as the phone app — both apps are governed by the same policy)
 - [ ] Data safety questionnaire submitted
-- [ ] Upload keystore generated, in 1Password + cold storage + GitHub Secrets
+- [ ] Upload keystore generated, sops-backed-up in the estate secrets repo + cold storage + GitHub Secrets
 - [ ] Play service account granted Release manager on this app
 - [ ] Production Gradle properties verified (Supabase URL, anon key, MapTiler)
 - [ ] Manifest reviewed against the permissions list

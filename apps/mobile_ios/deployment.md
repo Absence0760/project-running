@@ -70,7 +70,7 @@ In Keychain Access on a Mac:
 This is what lets CI upload to TestFlight without a maintainer's Apple ID password.
 
 1. App Store Connect → Users and Access → Keys → "+" → name "GitHub Actions", access "App Manager".
-2. Download the `.p8` file. **You can only download it once** — save to 1Password.
+2. Download the `.p8` file. **You can only download it once** — save it sops-encrypted into the estate secrets repo (`../infra-secrets`, same pattern as the Android upload keystore).
 3. Note the **Key ID** and **Issuer ID** shown on the same page.
 
 ### GitHub Secrets required
@@ -294,7 +294,7 @@ Apple's appeal process is faster than Google's but still painful. Mitigations:
 - [ ] App Store Connect listing created (description, keywords, support URL, screenshots — required at iPhone 6.7", iPhone 5.5", iPad 12.9", Apple Watch screen sizes)
 - [ ] Privacy policy live at `threkir.com/privacy`
 - [ ] App Privacy nutrition label completed, matches policy
-- [ ] Distribution certificate generated, in 1Password and GitHub Secrets
+- [ ] Distribution certificate generated, sops-backed-up in the estate secrets repo, and set as GitHub Secrets
 - [ ] Provisioning profiles for both bundle IDs in GitHub Secrets
 - [ ] App Store Connect API key created, in GitHub Secrets
 - [ ] Production `dart_defines.json` values verified

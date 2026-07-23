@@ -308,6 +308,7 @@ pub async fn run(store: &'static SharedStore) {
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
     let sea_level_tx = state::SEA_LEVEL_PA.sender();
+    let tz_offset_tx = state::TZ_OFFSET_MIN.sender();
     let mut recorder = Recorder::new();
     // On-run alerts ride this task because it already owns the recorder's
     // event cadence; the engine is pure and fed after the recorder updates,
@@ -357,7 +358,13 @@ pub async fn run(store: &'static SharedStore) {
             }),
             ..WatchSettings::default()
         };
-        apply_settings(&demo, &mut recorder, &mut alerts, &sea_level_tx);
+        apply_settings(
+            &demo,
+            &mut recorder,
+            &mut alerts,
+            &sea_level_tx,
+            &tz_offset_tx,
+        );
         info!("record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km)");
     }
     #[cfg(not(feature = "sim-autostart"))]
@@ -422,7 +429,7 @@ pub async fn run(store: &'static SharedStore) {
         // applies each present field to the recorder + alert engine. Config, not
         // run data — L4, applied before the event mutates run totals.
         if let Some(Some(s)) = settings_rx.try_changed() {
-            apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx);
+            apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
         }
 
         match event {
@@ -597,13 +604,15 @@ const MAX_SEA_LEVEL_PA: f32 = 108_000.0;
 /// plausibility guard, so a bad value is rejected the same way regardless of
 /// transport. The QNH sea-level reference has no setter (it is a `state` watch
 /// the baro task consumes), so its plausibility guard lives here — range-check,
-/// then publish. Absent fields are left untouched — a partial push is a partial
-/// update, never a reset of the rest.
+/// then publish; the timezone offset rides the same seam toward the ui task,
+/// its guard host-tested in `watch_core::settings`. Absent fields are left
+/// untouched — a partial push is a partial update, never a reset of the rest.
 fn apply_settings(
     s: &WatchSettings,
     recorder: &mut Recorder,
     alerts: &mut AlertEngine,
     sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
+    tz_offset_tx: &Sender<'static, CriticalSectionRawMutex, i16, 1>,
 ) {
     if let Some(hr) = s.max_hr {
         recorder.set_max_hr(hr);
@@ -630,6 +639,9 @@ fn apply_settings(
     }
     if let Some(hide) = s.hide_empty_pages {
         recorder.set_hide_empty_pages(hide);
+    }
+    if let Some(m) = s.plausible_tz_offset_min() {
+        tz_offset_tx.send(m);
     }
 }
 

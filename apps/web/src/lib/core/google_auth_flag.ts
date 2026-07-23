@@ -13,8 +13,8 @@
  * `PUBLIC_GOOGLE_AUTH_ENABLED=true` in .env.development.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from './env_flag';
 
 export function googleAuthEnabled(): boolean {
-	const raw = (env.PUBLIC_GOOGLE_AUTH_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_GOOGLE_AUTH_ENABLED);
 }
