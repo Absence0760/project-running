@@ -614,6 +614,59 @@ mod tests {
     }
 
     #[test]
+    fn over_length_schedule_is_dropped_whole_but_the_max_size_is_accepted() {
+        // A push longer than MAX_SCHEDULE_POINTS must drop the WHOLE schedule.
+        // Silently truncating it would misread an interior checkpoint as the
+        // finish and rescale every split against it — so this degrades to the
+        // even partner, dropping the previously-armed terrain rather than
+        // keeping a stale course.
+        let mut over = [(0.0_f64, 0_u32); MAX_SCHEDULE_POINTS + 1];
+        for i in 0..over.len() {
+            over[i] = (((i + 1) as f64) * 500.0, ((i + 1) as u32) * 100);
+        }
+        let mut p = goal_10k_climb_first();
+        p.set_schedule(&over);
+        assert!(
+            !p.status(2_500.0, 1_000).unwrap().terrain_aware,
+            "an over-length push must drop terrain entirely, not truncate"
+        );
+
+        // The boundary the other side: exactly MAX_SCHEDULE_POINTS strictly
+        // increasing points must still arm the terrain partner.
+        let mut exact = [(0.0_f64, 0_u32); MAX_SCHEDULE_POINTS];
+        for i in 0..exact.len() {
+            exact[i] = (((i + 1) as f64) * 500.0, ((i + 1) as u32) * 100);
+        }
+        let mut q = goal_10k_50min();
+        q.set_schedule(&exact);
+        assert!(
+            q.status(2_500.0, 1_000).unwrap().terrain_aware,
+            "a push at exactly MAX_SCHEDULE_POINTS must be accepted"
+        );
+    }
+
+    #[test]
+    fn equal_consecutive_points_are_rejected() {
+        // Both axes must be STRICTLY increasing (the guard is `<=`, not `<`).
+        // A repeated time is a zero-duration leg and a repeated distance a
+        // zero-length one; either would make partner_at's slope divide by
+        // zero. Both must drop the whole schedule to the even partner.
+        for garbage in [
+            // repeated time
+            &[(5_000.0, 1_000), (6_000.0, 1_000), (10_000.0, 3_000)][..],
+            // repeated distance
+            &[(5_000.0, 1_000), (5_000.0, 2_000), (10_000.0, 3_000)][..],
+        ] {
+            let mut p = goal_10k_climb_first();
+            p.set_schedule(garbage);
+            assert!(
+                !p.status(2_500.0, 1_000).unwrap().terrain_aware,
+                "equal consecutive points (a zero-length leg) must be rejected: {garbage:?}"
+            );
+        }
+    }
+
+    #[test]
     fn clear_schedule_returns_to_the_even_partner() {
         let mut p = goal_10k_climb_first();
         p.clear_schedule();
