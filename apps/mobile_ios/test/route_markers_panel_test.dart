@@ -359,6 +359,16 @@ void main() {
       expect(parseMarkerElapsed('90'), 5400);
     });
 
+    test('two-part input prefers h:mm when the marker position makes it '
+        'the plausible pace', () {
+      // 4:30 at an 80 km aid station: 4 h 30 is ~202 s/km — plausible.
+      expect(parseMarkerElapsed('4:30', positionM: 80000), 16200);
+      // 25:00 at 4.6 km: 25 hours is absurd, 25 minutes is ~326 s/km.
+      expect(parseMarkerElapsed('25:00', positionM: 4600), 1500);
+      // No position (a marker not yet placed on the line): mm:ss.
+      expect(parseMarkerElapsed('4:30'), 270);
+    });
+
     test('rejects junk, negatives, and zero', () {
       expect(parseMarkerElapsed(''), isNull);
       expect(parseMarkerElapsed('abc'), isNull);

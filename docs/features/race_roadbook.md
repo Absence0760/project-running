@@ -83,7 +83,9 @@ Any marker may carry a **target time** — `meta.target_elapsed_s` (+ optional
 `target_clock`), parsed by the `route_markers` pair's `parseTarget`, the
 cutoff vocabulary's shape. Both editors (web `RouteMarkerEditor`, mobile
 markers panel) take h:mm:ss / mm:ss / bare-minutes input with matched
-validation, and both course-schedule lists show a "Target h:mm:ss" chip.
+validation — a two-part value reads as mm:ss unless the marker's position
+makes the h:mm reading the plausible pace (an 80 km aid station's "4:30"
+is 4 h 30) — and both course-schedule lists show a "Target h:mm:ss" chip.
 The roadbook page grows an owner-only **"Save as marker targets"** button
 that writes each positioned marker's projected arrival into its meta —
 the one-click seed, hand-tunable per marker afterwards. During a mobile

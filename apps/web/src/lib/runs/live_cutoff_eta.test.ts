@@ -147,6 +147,19 @@ test('a limit already passed cannot be made at any pace', () => {
 	}
 });
 
+test('limitPassed separates an expired limit from a too-close projection', () => {
+	// Past the limit, well before the cutoff point: no pace can make it.
+	const expired = nextCutoffEta(input({ elapsedS: 8_000 }));
+	assert.equal(expired.requiredPaceSecPerKm, null);
+	assert.equal(expired.limitPassed, true);
+
+	// 40 m out with time still on the clock: requiredPace is null only
+	// because the projection is meaningless — the limit has NOT passed.
+	const close = nextCutoffEta(input({ distAlongRouteM: 19_960 }));
+	assert.equal(close.requiredPaceSecPerKm, null);
+	assert.equal(close.limitPassed, false);
+});
+
 test('a stale fix or unknown pace still reports the required pace', () => {
 	const staleEta = nextCutoffEta(input({ stale: true }));
 	assert.equal(staleEta.status, 'unknown');

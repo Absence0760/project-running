@@ -584,6 +584,7 @@ class Preferences extends ChangeNotifier {
     await setSplitIntervalMetres(0);
     await setKeepScreenOn(true);
     await setDimScreenWhileRecording(false);
+    await clearVoiceCueTypes();
   }
 
   /// Whether the one-time OEM battery-optimisation hint has been shown. Many
@@ -748,6 +749,15 @@ class Preferences extends ChangeNotifier {
     if (incoming.isEmpty) return;
     _voiceCueTypes = {..._voiceCueTypes, ...incoming};
     await _prefs.setString(_kVoiceCueTypes, jsonEncode(_voiceCueTypes));
+    notifyListeners();
+  }
+
+  /// Sign-out reset. Because [applyVoiceCueTypes] merges without erasing,
+  /// a prior account's toggles would otherwise survive onto the next
+  /// account on a shared device forever (the issue-#231 bug class).
+  Future<void> clearVoiceCueTypes() async {
+    _voiceCueTypes = {};
+    await _prefs.remove(_kVoiceCueTypes);
     notifyListeners();
   }
 

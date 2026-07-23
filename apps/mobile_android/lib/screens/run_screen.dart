@@ -246,12 +246,20 @@ class _RunScreenState extends State<RunScreen> {
   LiveCutoffStatus? _lastCutoffCueStatus;
 
   // Race pacing strategy: chosen pre-run, built into distance-
-  // bounded phases at start. Empty plan = no strategy.
+  // bounded phases at start. Empty plan = no strategy. The goal is kept
+  // as the RAW text and re-parsed against the currently-resolved
+  // distance — parsing once at sheet-OK time would freeze the "3:30 vs
+  // 25:00" disambiguation against whatever route happened to be selected
+  // then. _strategyDistanceM is a manual override only (null = follow
+  // the selected route).
   RacePhasePreset? _strategyPreset;
-  int? _strategyGoalTimeS;
+  String _strategyGoalText = '';
   double? _strategyDistanceM;
   List<RacePhase> _phasePlan = const [];
   int _phaseIndex = -1;
+
+  int? get _strategyGoalTimeS =>
+      parseGoalTimeS(_strategyGoalText, distanceM: _resolvedStrategyDistanceM);
 
   double? get _strategyGoalPaceSecPerKm {
     final t = _strategyGoalTimeS;
@@ -1744,6 +1752,23 @@ class _RunScreenState extends State<RunScreen> {
         partial.metadata?[cm.MetadataKeys.activityType] as String? ??
             _activityType.name);
 
+    final strategy = partial.metadata?[cm.MetadataKeys.pacingStrategy];
+    if (strategy is Map) {
+      RacePhasePreset? preset;
+      for (final p in RacePhasePreset.values) {
+        if (p.wire == strategy['preset']) preset = p;
+      }
+      final dist = (strategy['distance_m'] as num?)?.toDouble();
+      final goal = (strategy['goal_time_s'] as num?)?.toInt();
+      if (preset != null && dist != null && dist > 0) {
+        _strategyPreset = preset;
+        _strategyDistanceM = dist;
+        _strategyGoalText = goal == null ? '' : formatGoalTimeS(goal);
+        _phasePlan = buildPhasePlan(dist, preset);
+        _phaseIndex = -1;
+      }
+    }
+
     final restoredLaps = lapsFromCanonicalJson(
       (partial.metadata?[cm.MetadataKeys.laps] as List<dynamic>?) ??
           const <dynamic>[],
@@ -2254,12 +2279,18 @@ class _RunScreenState extends State<RunScreen> {
 
       // L4 — Cutoff catch-up voice cue. When the live projection
       // says the next cutoff is tight or slipping away, speak the distance
-      // and the flat pace still sufficient to make it. Announces
-      // immediately on a status change and at most every two minutes
-      // otherwise; a cutoff whose limit has already passed is announced
-      // once as unreachable rather than given an impossible pace.
+      // and the flat pace still sufficient to make it. Only a WORSENING
+      // status bypasses the two-minute throttle — margin noise flapping
+      // tight↔behind must not re-announce on every flip — and nothing
+      // fires while manually paused (the frozen snapshot would repeat the
+      // identical warning at an aid-station stop forever). A cutoff whose
+      // limit has truly passed (eta.limitPassed, never inferred from a
+      // null pace — that also means merely "too close to project") is
+      // announced once as unreachable rather than given an impossible
+      // pace.
       try {
         if (_cutoffLegs.isNotEmpty &&
+            !_manualPaused &&
             widget.preferences.audioCues &&
             widget.preferences.voiceCueEnabled(VoiceCue.cutoffCatchUp)) {
           final stale = _gpsLost || _weakGpsLatest;
@@ -2268,15 +2299,20 @@ class _RunScreenState extends State<RunScreen> {
           if (eta != null &&
               (status == LiveCutoffStatus.tight ||
                   status == LiveCutoffStatus.behind)) {
-            final escalated = status != _lastCutoffCueStatus;
+            int rank(LiveCutoffStatus? s) => switch (s) {
+                  LiveCutoffStatus.behind => 2,
+                  LiveCutoffStatus.tight => 1,
+                  _ => 0,
+                };
+            final escalated = rank(status) > rank(_lastCutoffCueStatus);
             final lastCue = _lastCutoffCueAt;
             final canCue = lastCue == null ||
                 DateTime.now().difference(lastCue).inSeconds > 120;
             if (escalated || canCue) {
-              _lastCutoffCueAt = DateTime.now();
-              _lastCutoffCueStatus = status;
               final rp = eta.requiredPaceSecPerKm;
               if (rp != null) {
+                _lastCutoffCueAt = DateTime.now();
+                _lastCutoffCueStatus = status;
                 _ttsCue(
                     'announceCutoffCatchUp',
                     () => widget.audioCues.announceCutoffCatchUp(
@@ -2284,7 +2320,9 @@ class _RunScreenState extends State<RunScreen> {
                           requiredPaceSecPerKm: rp,
                           unit: unit,
                         ));
-              } else if (escalated) {
+              } else if (escalated && eta.limitPassed) {
+                _lastCutoffCueAt = DateTime.now();
+                _lastCutoffCueStatus = status;
                 _ttsCue('announceCutoffUnreachable',
                     () => widget.audioCues.announceCutoffUnreachable());
               }
@@ -2302,15 +2340,14 @@ class _RunScreenState extends State<RunScreen> {
       // the along-route distance moving past position_m between
       // consecutive fixes; announced indices are remembered because GPS
       // jitter can walk the along-value backwards over a marker and would
-      // otherwise re-announce it.
+      // otherwise re-announce it. The baseline advances OUTSIDE the cue
+      // toggles: only the announcement is preference-gated, so flipping
+      // the cue on mid-run (locally or via a settings-sync pull) can't
+      // burst-announce every marker passed while it was off.
       try {
         final route = _selectedRoute;
         final pos = snapshot.currentPosition;
-        if (_targetMarkers.isNotEmpty &&
-            route != null &&
-            pos != null &&
-            widget.preferences.audioCues &&
-            widget.preferences.voiceCueEnabled(VoiceCue.markerTargets)) {
+        if (_targetMarkers.isNotEmpty && route != null && pos != null) {
           final along = distanceAlongRoute(
             (lat: pos.lat, lng: pos.lng),
             route.waypoints,
@@ -2318,7 +2355,10 @@ class _RunScreenState extends State<RunScreen> {
           if (along != null) {
             final last = _lastAlongM;
             _lastAlongM = along;
-            if (last != null && along > last) {
+            if (last != null &&
+                along > last &&
+                widget.preferences.audioCues &&
+                widget.preferences.voiceCueEnabled(VoiceCue.markerTargets)) {
               for (var i = 0; i < _targetMarkers.length; i++) {
                 final m = _targetMarkers[i];
                 if (m.positionM > last &&
@@ -2465,6 +2505,15 @@ class _RunScreenState extends State<RunScreen> {
       if (indoorEstimate) cm.MetadataKeys.indoorEstimated: true,
       if (indoorEstimate) cm.MetadataKeys.distanceSource: 'pedometer',
       if (_steps > 0) cm.MetadataKeys.steps: _steps,
+      // The active race strategy, so a crash-recovered run resumes its
+      // phases (and the final save keeps the metadata the runner actually
+      // executed against).
+      if (_strategyPreset != null && _phasePlan.isNotEmpty)
+        cm.MetadataKeys.pacingStrategy: <String, dynamic>{
+          'preset': _strategyPreset!.wire,
+          'distance_m': _resolvedStrategyDistanceM,
+          if (_strategyGoalTimeS != null) 'goal_time_s': _strategyGoalTimeS,
+        },
     };
     // Persist lap / aid-station marks so a process-kill mid-run can restore
     // them on resume (numbering + cumulative totals continue unbroken). The
@@ -3058,15 +3107,11 @@ class _RunScreenState extends State<RunScreen> {
     final unit = widget.preferences.unit;
     final isMi = unit == DistanceUnit.mi;
     final resolved = _resolvedStrategyDistanceM;
-    final distCtrl = TextEditingController(
-      text: resolved == null
-          ? ''
-          : (resolved / (isMi ? 1609.344 : 1000)).toStringAsFixed(2),
-    );
-    final goalCtrl = TextEditingController(
-      text:
-          _strategyGoalTimeS == null ? '' : formatGoalTimeS(_strategyGoalTimeS!),
-    );
+    final distPrefill = resolved == null
+        ? ''
+        : (resolved / (isMi ? 1609.344 : 1000)).toStringAsFixed(2);
+    final distCtrl = TextEditingController(text: distPrefill);
+    final goalCtrl = TextEditingController(text: _strategyGoalText);
     var preset = _strategyPreset;
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -3153,9 +3198,13 @@ class _RunScreenState extends State<RunScreen> {
           : null;
       setState(() {
         _strategyPreset = preset;
-        _strategyDistanceM = manualM;
-        _strategyGoalTimeS = parseGoalTimeS(goalCtrl.text,
-            distanceM: manualM ?? _resolvedStrategyDistanceM);
+        // An untouched prefill is NOT a manual override — the plan must
+        // keep following the selected route, or switching routes after
+        // setting the strategy would build phases from the old route's
+        // length.
+        _strategyDistanceM =
+            distCtrl.text.trim() == distPrefill ? null : manualM;
+        _strategyGoalText = goalCtrl.text.trim();
       });
       if (preset != null && _resolvedStrategyDistanceM == null) {
         _showTopBanner(l10n.runStrategyNeedsDistance);
@@ -4004,82 +4053,82 @@ class _RunScreenState extends State<RunScreen> {
               ),
             ),
           ),
-        // Next cut-off card (L4) — only when the followed route carries
-        // cutoff markers and there's a next cutoff ahead. Listens to the
-        // snapshot notifier so the ETA refreshes at GPS rate. Sits above the
-        // stats overlay, stacked over the treadmill toggle when both show.
-        if (_cutoffLegs.isNotEmpty)
-          ValueListenableBuilder<_LiveStats>(
-            valueListenable: _statsNotifier,
-            builder: (context, stats, _) {
-              final stale = _gpsLost || _weakGpsLatest;
-              final eta = _cutoffEta(stats, stale);
-              if (eta == null) return const SizedBox.shrink();
-              return Positioned(
-                left: 12,
-                right: 12,
-                bottom: _statsOverlayHeight + 12 + (_treadmillPaired ? 68 : 0),
-                child: CutoffCard(eta: eta, stale: stale),
-              );
-            },
-          ),
-
-        // Race-strategy phase chip — current phase + intent (+ the
-        // phase's target pace when a goal time was set). Stacks above the
-        // cutoff-card slot so an ultra with both still shows both.
-        if (_phasePlan.isNotEmpty)
-          ValueListenableBuilder<_LiveStats>(
-            valueListenable: _statsNotifier,
-            builder: (context, stats, _) {
-              final idx = phaseAt(_phasePlan, stats.distanceMetres);
-              if (idx < 0) return const SizedBox.shrink();
-              final phase = _phasePlan[idx];
-              final target = phaseTargetPaceSecPerKm(
-                  phase, _strategyGoalPaceSecPerKm);
-              final prefUnit = widget.preferences.unit;
-              final intent = switch (phase.intent) {
-                RacePhaseIntent.holdBack => l10n.phaseIntentHoldBack,
-                RacePhaseIntent.settle => l10n.phaseIntentSettle,
-                RacePhaseIntent.race => l10n.phaseIntentRace,
-                RacePhaseIntent.even => l10n.phaseIntentEven,
-              };
-              var text =
-                  l10n.runPhaseChip(idx + 1, _phasePlan.length, intent);
-              if (target != null) {
-                text =
-                    '$text · ${UnitFormat.pace(target, prefUnit)} ${UnitFormat.paceLabel(prefUnit)}';
-              }
-              return Positioned(
-                left: 12,
-                right: 12,
-                bottom: _statsOverlayHeight +
-                    12 +
-                    (_treadmillPaired ? 68 : 0) +
-                    (_cutoffLegs.isNotEmpty ? 84 : 0),
-                child: Center(
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      child: Text(text,
-                          style: Theme.of(context).textTheme.labelLarge),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-
-        // Treadmill live-mode toggle — only when a belt is paired (otherwise
-        // it would do nothing; the user is pointed at Settings instead). Sits
-        // just above the stats overlay so it's reachable without leaving the
-        // recording screen. An L4 opt-in distance-source override.
-        if (_treadmillPaired)
+        // Bottom-anchored utility stack above the stats overlay: the
+        // race-strategy phase chip, the next-cutoff card (L4), and the
+        // treadmill live-mode toggle compose in one Column so their real
+        // heights stack — fixed per-widget offsets overlapped the moment a
+        // card grew (a11y text scaling, long labels).
+        if (_phasePlan.isNotEmpty || _cutoffLegs.isNotEmpty || _treadmillPaired)
           Positioned(
             left: 12,
             right: 12,
             bottom: _statsOverlayHeight + 12,
-            child: _buildTreadmillToggle(context, l10n),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Current phase + intent (+ the phase's target pace when a
+                // goal time was set).
+                if (_phasePlan.isNotEmpty)
+                  ValueListenableBuilder<_LiveStats>(
+                    valueListenable: _statsNotifier,
+                    builder: (context, stats, _) {
+                      final idx = phaseAt(_phasePlan, stats.distanceMetres);
+                      if (idx < 0) return const SizedBox.shrink();
+                      final phase = _phasePlan[idx];
+                      final target = phaseTargetPaceSecPerKm(
+                          phase, _strategyGoalPaceSecPerKm);
+                      final prefUnit = widget.preferences.unit;
+                      final intent = switch (phase.intent) {
+                        RacePhaseIntent.holdBack => l10n.phaseIntentHoldBack,
+                        RacePhaseIntent.settle => l10n.phaseIntentSettle,
+                        RacePhaseIntent.race => l10n.phaseIntentRace,
+                        RacePhaseIntent.even => l10n.phaseIntentEven,
+                      };
+                      var text =
+                          l10n.runPhaseChip(idx + 1, _phasePlan.length, intent);
+                      if (target != null) {
+                        text =
+                            '$text · ${UnitFormat.pace(target, prefUnit)} ${UnitFormat.paceLabel(prefUnit)}';
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Center(
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              child: Text(text,
+                                  style:
+                                      Theme.of(context).textTheme.labelLarge),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                // Only when the followed route carries cutoff markers and
+                // there's a next cutoff ahead; the ETA refreshes at GPS rate.
+                if (_cutoffLegs.isNotEmpty)
+                  ValueListenableBuilder<_LiveStats>(
+                    valueListenable: _statsNotifier,
+                    builder: (context, stats, _) {
+                      final stale = _gpsLost || _weakGpsLatest;
+                      final eta = _cutoffEta(stats, stale);
+                      if (eta == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: EdgeInsets.only(
+                            bottom: _treadmillPaired ? 8 : 0),
+                        child: CutoffCard(eta: eta, stale: stale),
+                      );
+                    },
+                  ),
+                // Only when a belt is paired (otherwise it would do nothing;
+                // the user is pointed at Settings instead). An L4 opt-in
+                // distance-source override.
+                if (_treadmillPaired) _buildTreadmillToggle(context, l10n),
+              ],
+            ),
           ),
 
         // Top banner is rendered via the Overlay-based `showTopBanner`

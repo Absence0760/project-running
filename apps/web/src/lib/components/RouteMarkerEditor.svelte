@@ -245,8 +245,14 @@
 		return h > 0 ? `${h}:${two(min)}:${two(sec)}` : `${min}:${two(sec)}`;
 	}
 
-	/** "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid. */
-	function parseElapsedText(raw: string): number | null {
+	/**
+	 * "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid.
+	 * A two-part value reads as mm:ss unless the marker's position along the
+	 * route makes the h:mm reading the plausible one (150–1500 s/km implied
+	 * pace) — an 80 km aid station's "4:30" is 4 h 30, not 4½ minutes.
+	 * Mirrors the mobile panel's parseMarkerElapsed.
+	 */
+	function parseElapsedText(raw: string, positionM: number | null = null): number | null {
 		const parts = raw.trim().split(':');
 		if (parts.length === 0 || parts.length > 3) return null;
 		const nums: number[] = [];
@@ -254,13 +260,23 @@
 			if (!/^\d+$/.test(p.trim())) return null;
 			nums.push(Number(p.trim()));
 		}
-		const s =
-			nums.length === 1
-				? nums[0] * 60
-				: nums.length === 2
-					? nums[0] * 60 + nums[1]
-					: nums[0] * 3600 + nums[1] * 60 + nums[2];
-		return s > 0 ? s : null;
+		if (nums.length === 1) return nums[0] > 0 ? nums[0] * 60 : null;
+		if (nums.length === 3) {
+			const s = nums[0] * 3600 + nums[1] * 60 + nums[2];
+			return s > 0 ? s : null;
+		}
+		const asHours = nums[0] * 3600 + nums[1] * 60;
+		const asMinutes = nums[0] * 60 + nums[1];
+		if (positionM != null && positionM > 0 && asHours > 0) {
+			const pace = asHours / (positionM / 1000);
+			if (pace >= 150 && pace <= 1500) return asHours;
+		}
+		return asMinutes > 0 ? asMinutes : null;
+	}
+
+	function editingPositionM(): number | null {
+		if (!editingId) return null;
+		return markers.find((mk) => mk.id === editingId)?.position_m ?? null;
 	}
 
 	function buildMeta(): Record<string, unknown> {
@@ -269,7 +285,7 @@
 		if (spec.hasServices && draftServices.length > 0) meta.services = draftServices;
 		if (spec.hasCutoff && draftCutoffClock.trim()) meta.cutoff_clock = draftCutoffClock.trim();
 		if (draftTargetText.trim()) {
-			const targetS = parseElapsedText(draftTargetText);
+			const targetS = parseElapsedText(draftTargetText, editingPositionM());
 			if (targetS != null) meta.target_elapsed_s = targetS;
 		}
 		if ((draftKind === 'note' || draftKind === 'hazard') && draftNote.trim()) {
@@ -297,7 +313,7 @@
 			showToast(m('routeMarker.placeRequired'), 'info');
 			return;
 		}
-		if (draftTargetText.trim() && parseElapsedText(draftTargetText) == null) {
+		if (draftTargetText.trim() && parseElapsedText(draftTargetText, editingPositionM()) == null) {
 			showToast(m('routeMarker.targetInvalid'), 'error');
 			return;
 		}

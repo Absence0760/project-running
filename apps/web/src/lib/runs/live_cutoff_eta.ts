@@ -62,6 +62,13 @@ export interface LiveCutoffEta {
 	 * 'unknown'. Null when no checkpoint, < 50 m out, or the limit has passed.
 	 */
 	requiredPaceSecPerKm: number | null;
+	/**
+	 * The cutoff's limit is already in the past — no pace can make it. The
+	 * explicit flag exists because requiredPaceSecPerKm is null for TWO
+	 * reasons (limit passed / too close to project a meaningful pace) and a
+	 * "you cannot make it" surface must never fire from the second.
+	 */
+	limitPassed: boolean;
 	status: LiveCutoffStatus;
 }
 
@@ -78,6 +85,7 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 			projectedArrivalElapsedS: null,
 			marginS: null,
 			requiredPaceSecPerKm: null,
+			limitPassed: false,
 			status: 'unknown'
 		};
 	}
@@ -88,6 +96,7 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 			: { kind: 'cutoff', label: '' };
 	const distanceToM = leg.cumDistM - input.distAlongRouteM;
 	const remainingS = leg.cutoff!.limitElapsedS - input.elapsedS;
+	const limitPassed = remainingS <= 0;
 	const requiredPaceSecPerKm =
 		distanceToM >= 50 && remainingS > 0 ? remainingS / (distanceToM / 1000) : null;
 
@@ -103,6 +112,7 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 			projectedArrivalElapsedS: null,
 			marginS: null,
 			requiredPaceSecPerKm,
+			limitPassed,
 			status: 'unknown'
 		};
 	}
@@ -119,6 +129,7 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 		projectedArrivalElapsedS,
 		marginS,
 		requiredPaceSecPerKm,
+		limitPassed,
 		status
 	};
 }

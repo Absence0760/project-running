@@ -148,6 +148,17 @@ void main() {
     }
   });
 
+  test('limitPassed separates an expired limit from a too-close projection',
+      () {
+    final expired = call(elapsedS: 8000);
+    expect(expired.requiredPaceSecPerKm, isNull);
+    expect(expired.limitPassed, isTrue);
+
+    final close = call(distAlongRouteM: 19960);
+    expect(close.requiredPaceSecPerKm, isNull);
+    expect(close.limitPassed, isFalse);
+  });
+
   test('a stale fix or unknown pace still reports the required pace', () {
     final staleEta = call(stale: true);
     expect(staleEta.status, LiveCutoffStatus.unknown);

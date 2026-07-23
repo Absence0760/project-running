@@ -460,8 +460,11 @@ String formatMarkerCoordinate(double v) {
 
 /// "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid.
 /// Mirrors the web editor's parseElapsedText so the two editors accept
-/// the same inputs.
-int? parseMarkerElapsed(String raw) {
+/// the same inputs. A two-part value reads as mm:ss unless the marker's
+/// position along the route makes the h:mm reading the plausible one
+/// (150–1500 s/km implied pace) — an 80 km aid station's "4:30" is
+/// 4 h 30, not 4½ minutes.
+int? parseMarkerElapsed(String raw, {double? positionM}) {
   final parts = raw.trim().split(':');
   if (parts.isEmpty || parts.length > 3) return null;
   final nums = <int>[];
@@ -470,12 +473,21 @@ int? parseMarkerElapsed(String raw) {
     if (n == null || n < 0) return null;
     nums.add(n);
   }
-  final s = switch (nums.length) {
-    1 => nums[0] * 60,
-    2 => nums[0] * 60 + nums[1],
-    _ => nums[0] * 3600 + nums[1] * 60 + nums[2],
-  };
-  return s > 0 ? s : null;
+  switch (nums.length) {
+    case 1:
+      return nums[0] > 0 ? nums[0] * 60 : null;
+    case 3:
+      final s = nums[0] * 3600 + nums[1] * 60 + nums[2];
+      return s > 0 ? s : null;
+    default:
+      final asHours = nums[0] * 3600 + nums[1] * 60;
+      final asMinutes = nums[0] * 60 + nums[1];
+      if (positionM != null && positionM > 0 && asHours > 0) {
+        final pace = asHours / (positionM / 1000);
+        if (pace >= 150 && pace <= 1500) return asHours;
+      }
+      return asMinutes > 0 ? asMinutes : null;
+  }
 }
 
 String formatMarkerElapsed(int s) {
@@ -598,7 +610,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       meta['cutoff_clock'] = _cutoff.text.trim();
     }
     if (_target.text.trim().isNotEmpty) {
-      final targetS = parseMarkerElapsed(_target.text);
+      final targetS = parseMarkerElapsed(_target.text,
+          positionM: widget.existing?.positionM);
       if (targetS == null) {
         showTopBanner(context, l10n.routeMarkerTargetInvalid);
         return;

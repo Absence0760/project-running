@@ -40,6 +40,17 @@ void main() {
       await p.init();
       expect(p.voiceCueEnabled(VoiceCue.splits), isTrue);
     });
+
+    test('resetAccountScopedPrefs clears the map — merge semantics would let '
+        'a prior account\'s toggles survive onto the next one', () async {
+      SharedPreferences.setMockInitialValues({});
+      final p = Preferences();
+      await p.init();
+      await p.setVoiceCueEnabled(VoiceCue.paceAlerts, false);
+      await p.resetAccountScopedPrefs();
+      expect(p.voiceCueEnabled(VoiceCue.paceAlerts), isTrue);
+      expect(p.voiceCueTypes, isEmpty);
+    });
   });
 
   group('ActivityType.label', () {
