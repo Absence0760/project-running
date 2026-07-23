@@ -1443,10 +1443,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       );
     } catch (e) {
       if (context.mounted) {
+        final l10n = AppLocalizations.of(context);
         showTopBanner(
             context,
-            AppLocalizations.of(context)
-                .routeDetailShareFailed(format.toUpperCase(), '$e'));
+            l10n.routeDetailShareFailed(
+                format.toUpperCase(), friendlyError(l10n, e)));
       }
     }
   }
