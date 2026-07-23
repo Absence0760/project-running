@@ -133,6 +133,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   bool? _bookmarked;
   bool _bookmarkBusy = false;
+  bool _offlinePinBusy = false;
 
   // Waypoints handed to the renderer. For the owner this mirrors
   // widget.route.waypoints from the row; for non-owners this is the
@@ -562,30 +563,41 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _toggleOfflinePin() async {
+    // Serialize taps: without this, a rapid pin→unpin→pin races a tile-pack
+    // download (kicked on pin) against its own delete (kicked on unpin) for
+    // the same route id, which can leave a half-written or orphaned pack.
+    if (_offlinePinBusy) return;
     final id = widget.route.id;
     final next = !_isOfflinePinned;
-    setState(() => _isOfflinePinned = next);
-    if (next) {
-      // Make sure the JSON file is actually on disk — for a non-owner
-      // viewer who only ever saw the route via the Explore tab, the
-      // detail row may not yet be persisted locally. Mark synced so
-      // the SyncService doesn't try to push someone else's route up.
-      await widget.routeStore.save(widget.route, markSynced: true);
-      await widget.routeStore.pinOffline(id);
-      _downloadTilePack();
-    } else {
-      await widget.routeStore.unpinOffline(id);
-      // Best-effort — never block the pin toggle on a disk delete (L4).
-      unawaited(_tilePacks.deletePack(id).catchError(
-          (Object e) => debugPrint('tile-pack delete failed: $e')));
-    }
-    if (mounted) {
-      showTopBanner(
-        context,
-        next
-            ? AppLocalizations.of(context).routeDetailOfflineSaved
-            : AppLocalizations.of(context).routeDetailOfflineRemoved,
-      );
+    setState(() {
+      _offlinePinBusy = true;
+      _isOfflinePinned = next;
+    });
+    try {
+      if (next) {
+        // Make sure the JSON file is actually on disk — for a non-owner
+        // viewer who only ever saw the route via the Explore tab, the
+        // detail row may not yet be persisted locally. Mark synced so
+        // the SyncService doesn't try to push someone else's route up.
+        await widget.routeStore.save(widget.route, markSynced: true);
+        await widget.routeStore.pinOffline(id);
+        _downloadTilePack();
+      } else {
+        await widget.routeStore.unpinOffline(id);
+        // Best-effort — never block the pin toggle on a disk delete (L4).
+        unawaited(_tilePacks.deletePack(id).catchError(
+            (Object e) => debugPrint('tile-pack delete failed: $e')));
+      }
+      if (mounted) {
+        showTopBanner(
+          context,
+          next
+              ? AppLocalizations.of(context).routeDetailOfflineSaved
+              : AppLocalizations.of(context).routeDetailOfflineRemoved,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _offlinePinBusy = false);
     }
   }
 
@@ -813,7 +825,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             tooltip: _isOfflinePinned
                 ? l10n.routeDetailRemoveOfflineSave
                 : l10n.routeDetailSaveForOffline,
-            onPressed: _toggleOfflinePin,
+            onPressed: _offlinePinBusy ? null : _toggleOfflinePin,
           ),
           if (_isOwner)
             IconButton(
@@ -1048,7 +1060,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ),
                 ),
                 value: _isOfflinePinned,
-                onChanged: (_) => _toggleOfflinePin(),
+                onChanged: _offlinePinBusy ? null : (_) => _toggleOfflinePin(),
               ),
             ),
 

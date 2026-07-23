@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' show ClubRow;
@@ -36,6 +38,34 @@ class _ThrowingTagsApi extends ApiClient {
   @override
   Future<void> updateRouteTags(String routeId, List<String> tags) async {
     throw StateError('network down');
+  }
+}
+
+/// Route store whose `pinOffline` blocks on a gate the test controls, so the
+/// double-tap window for the offline-pin toggle can be held open on purpose.
+class _FakePinStore extends LocalRouteStore {
+  int pinCalls = 0;
+  int unpinCalls = 0;
+  final Completer<void> pinGate = Completer<void>();
+  bool _pinned = false;
+
+  @override
+  bool isOfflinePinned(String routeId) => _pinned;
+
+  @override
+  Future<void> save(cm.Route route, {bool markSynced = false}) async {}
+
+  @override
+  Future<void> pinOffline(String routeId) async {
+    pinCalls++;
+    await pinGate.future;
+    _pinned = true;
+  }
+
+  @override
+  Future<void> unpinOffline(String routeId) async {
+    unpinCalls++;
+    _pinned = false;
   }
 }
 
@@ -122,6 +152,70 @@ void main() {
     testWidgets('delete button is hidden when isOwner is false', (tester) async {
       await _pump(tester, _route(), isOwner: false);
       expect(find.byIcon(Icons.delete_outline), findsNothing);
+    });
+
+    testWidgets(
+        'offline-pin toggle guards a double-tap race — a second tap while the '
+        'pin is in flight is ignored, then the control re-enables',
+        (tester) async {
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(),
+          routeStore: store,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final appBar = find.byType(AppBar);
+      // First tap starts the pin, which blocks on the store gate.
+      await tester.tap(find.descendant(
+          of: appBar, matching: find.byIcon(Icons.download_outlined)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(store.pinCalls, 1);
+      expect(store.unpinCalls, 0);
+
+      // The control is now disabled (busy) — a second tap must not fire
+      // another pin/unpin, which is what would race the tile-pack download
+      // against its own delete.
+      final pinBtn = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.download_done),
+          matching: find.byType(IconButton)));
+      expect(pinBtn.onPressed, isNull,
+          reason: 'pin control must be disabled while a pin is in flight');
+      // Belt-and-suspenders: even a forced tap changes nothing.
+      await tester.tap(
+          find.descendant(
+              of: appBar, matching: find.byIcon(Icons.download_done)),
+          warnIfMissed: false);
+      await tester.pump();
+      expect(store.pinCalls, 1, reason: 'second tap must not fire another pin');
+      expect(store.unpinCalls, 0);
+
+      // Releasing the in-flight pin re-enables the control (a guard, not a
+      // permanent lock).
+      store.pinGate.complete();
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      final pinBtnAfter = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.download_done),
+          matching: find.byType(IconButton)));
+      expect(pinBtnAfter.onPressed, isNotNull,
+          reason: 'control re-enables once the pin completes');
+
+      // The completed pin fires a "Saved offline" top banner, which leaves a
+      // pending auto-dismiss timer — drain it so the framework doesn't trip.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
     });
 
     testWidgets('delete button is visible when isOwner is true and apiClient has userId',
