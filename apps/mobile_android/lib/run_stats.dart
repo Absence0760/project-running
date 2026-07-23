@@ -141,6 +141,61 @@ Duration? fastestWindowOf(List<Waypoint> track, double windowMetres) {
   return best;
 }
 
+/// One completed split: the 1-based tick index (km or mile) and the elapsed
+/// time across it. Each split spans exactly one tick length by construction.
+class RunSplit {
+  const RunSplit(this.tick, this.duration);
+  final int tick;
+  final Duration duration;
+}
+
+/// Per-tick splits from a track. [tickLengthM] is 1000 for km, 1609.344 for
+/// miles; [startedAt] seeds the clock when a boundary-crossing point carries no
+/// timestamp (imported runs may not stamp every point).
+///
+/// Emits one split per boundary the cumulative distance crosses, interpolating
+/// the crossing time by the distance fraction along the crossing segment. A
+/// single long inter-fix gap (a tunnel, a canyon/forest signal loss, or a
+/// downsampled Strava/Garmin import) can straddle several boundaries at once;
+/// the previous single-`tickEnd`-per-segment loop then re-used the segment's
+/// end time for every boundary it crossed, so the 2nd and later splits reported
+/// a 0:00 duration (which also poisoned the "fastest split" reduction). One
+/// interpolated split per tick fixes that.
+List<RunSplit> computeSplitDurations(
+  List<Waypoint> track,
+  double tickLengthM,
+  DateTime startedAt,
+) {
+  if (track.length < 2 || tickLengthM <= 0) return const [];
+  final splits = <RunSplit>[];
+  var cumulative = 0.0;
+  var nextTick = 1;
+  var tickStart = track.first.timestamp ?? startedAt;
+
+  for (var i = 1; i < track.length; i++) {
+    final a = track[i - 1];
+    final b = track[i];
+    final segStart = cumulative;
+    final segDist = haversineMetres(a.lat, a.lng, b.lat, b.lng);
+    cumulative += segDist;
+    final aTime = a.timestamp;
+    final bTime = b.timestamp ?? startedAt;
+
+    while (segDist > 0 && cumulative >= nextTick * tickLengthM) {
+      final boundaryDist = nextTick * tickLengthM;
+      final f = (boundaryDist - segStart) / segDist;
+      final crossTime = aTime != null
+          ? aTime.add(Duration(
+              milliseconds: (bTime.difference(aTime).inMilliseconds * f).round()))
+          : bTime;
+      splits.add(RunSplit(nextTick, crossTime.difference(tickStart)));
+      tickStart = crossTime;
+      nextTick++;
+    }
+  }
+  return splits;
+}
+
 /// Great-circle distance between two lat/lng points in metres.
 double haversineMetres(
   double lat1,

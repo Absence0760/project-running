@@ -1972,28 +1972,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   List<_Split> _computeSplits(DistanceUnit unit) {
-    if (run.track.length < 2) return const [];
     const metresPerMile = 1609.344;
     final tickLength = unit == DistanceUnit.mi ? metresPerMile : 1000.0;
-    final splits = <_Split>[];
-    double cumulative = 0;
-    int nextTick = 1;
-    DateTime tickStart = run.track.first.timestamp ?? run.startedAt;
-
-    for (int i = 1; i < run.track.length; i++) {
-      final a = run.track[i - 1];
-      final b = run.track[i];
-      cumulative += _haversine(a.lat, a.lng, b.lat, b.lng);
-
-      while (cumulative >= nextTick * tickLength) {
-        final tickEnd = b.timestamp ?? run.startedAt;
-        final splitTime = tickEnd.difference(tickStart);
-        splits.add(_Split(nextTick, splitTime));
-        tickStart = tickEnd;
-        nextTick++;
-      }
-    }
-    return splits;
+    // Split computation lives in run_stats.dart so it is unit-testable and can
+    // interpolate a boundary crossing inside a long inter-fix gap (see
+    // computeSplitDurations); the previous inline loop re-used a segment's end
+    // time for every boundary it crossed, emitting 0:00 phantom splits.
+    return computeSplitDurations(run.track, tickLength, run.startedAt)
+        .map((s) => _Split(s.tick, s.duration))
+        .toList();
   }
 
   List<Widget> _buildSplits(
@@ -2377,18 +2364,6 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final s = d.inSeconds % 60;
     if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371000.0;
-    final dLat = (lat2 - lat1) * math.pi / 180;
-    final dLng = (lng2 - lng1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) *
-            math.cos(lat2 * math.pi / 180) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
-    return 2 * r * math.asin(math.sqrt(a));
   }
 }
 
