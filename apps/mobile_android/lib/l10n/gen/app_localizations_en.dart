@@ -11610,6 +11610,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose a route or enter a distance to enable phases';
 
   @override
+  String get runStrategyInvalidGoal => 'Enter the goal time as h:mm:ss';
+
+  @override
   String runPhaseChip(int index, int total, String intent) {
     return 'Phase $index/$total — $intent';
   }

@@ -19638,6 +19638,12 @@ abstract class AppLocalizations {
   /// **'Choose a route or enter a distance to enable phases'**
   String get runStrategyNeedsDistance;
 
+  /// No description provided for @runStrategyInvalidGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the goal time as h:mm:ss'**
+  String get runStrategyInvalidGoal;
+
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:

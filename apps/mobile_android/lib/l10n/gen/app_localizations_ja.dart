@@ -11176,6 +11176,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runStrategyNeedsDistance => 'フェーズを使うにはルートを選ぶか距離を入力してください';
 
   @override
+  String get runStrategyInvalidGoal => '目標タイムを h:mm:ss 形式で入力してください';
+
+  @override
   String runPhaseChip(int index, int total, String intent) {
     return 'フェーズ $index/$total — $intent';
   }

@@ -3271,6 +3271,10 @@ class _RunScreenState extends State<RunScreen> {
       });
       if (preset != null && _resolvedStrategyDistanceM == null) {
         _showTopBanner(l10n.runStrategyNeedsDistance);
+      } else if (_strategyGoalText.isNotEmpty && _strategyGoalTimeS == null) {
+        // A non-empty but unparseable goal time was silently dropped —
+        // the phase target pace just went missing with no feedback.
+        _showTopBanner(l10n.runStrategyInvalidGoal);
       }
     }
     distCtrl.dispose();

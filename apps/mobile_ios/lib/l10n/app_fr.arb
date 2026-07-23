@@ -3362,6 +3362,7 @@
   "runStrategyGoalTime": "Temps visé",
   "runStrategyDistance": "Distance",
   "runStrategyNeedsDistance": "Choisis un itinéraire ou saisis une distance pour activer les phases",
+  "runStrategyInvalidGoal": "Saisissez le temps cible au format h:mm:ss",
   "runPhaseChip": "Phase {index}/{total} — {intent}",
   "phaseIntentHoldBack": "Retenue",
   "phaseIntentSettle": "Calage",

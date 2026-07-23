@@ -3362,6 +3362,7 @@
   "runStrategyGoalTime": "目標タイム",
   "runStrategyDistance": "距離",
   "runStrategyNeedsDistance": "フェーズを使うにはルートを選ぶか距離を入力してください",
+  "runStrategyInvalidGoal": "目標タイムを h:mm:ss 形式で入力してください",
   "runPhaseChip": "フェーズ {index}/{total} — {intent}",
   "phaseIntentHoldBack": "抑える",
   "phaseIntentSettle": "安定",

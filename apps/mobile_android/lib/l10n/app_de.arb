@@ -3362,6 +3362,7 @@
   "runStrategyGoalTime": "Zielzeit",
   "runStrategyDistance": "Distanz",
   "runStrategyNeedsDistance": "Route wählen oder Distanz eingeben, um Phasen zu aktivieren",
+  "runStrategyInvalidGoal": "Zielzeit als h:mm:ss eingeben",
   "runPhaseChip": "Phase {index}/{total} — {intent}",
   "phaseIntentHoldBack": "Zurückhalten",
   "phaseIntentSettle": "Einpendeln",

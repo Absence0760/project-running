@@ -11729,6 +11729,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Escolhe um percurso ou introduz uma distância para ativar fases';
 
   @override
+  String get runStrategyInvalidGoal => 'Insira o tempo alvo como h:mm:ss';
+
+  @override
   String runPhaseChip(int index, int total, String intent) {
     return 'Fase $index/$total — $intent';
   }
@@ -23489,6 +23492,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runStrategyNeedsDistance =>
       'Escolha um percurso ou informe uma distância para ativar fases';
+
+  @override
+  String get runStrategyInvalidGoal => 'Insira o tempo alvo como h:mm:ss';
 
   @override
   String runPhaseChip(int index, int total, String intent) {

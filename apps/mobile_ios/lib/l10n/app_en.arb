@@ -15122,6 +15122,7 @@
   "runStrategyDistance": "Distance",
   "@runStrategyDistance": {"description": "Voice cues / race strategy"},
   "runStrategyNeedsDistance": "Choose a route or enter a distance to enable phases",
+  "runStrategyInvalidGoal": "Enter the goal time as h:mm:ss",
   "@runStrategyNeedsDistance": {"description": "Voice cues / race strategy"},
   "runPhaseChip": "Phase {index}/{total} — {intent}",
   "@runPhaseChip": {"description": "Voice cues / race strategy", "placeholders": {"index": {"type": "int"}, "total": {"type": "int"}, "intent": {"type": "String"}}},

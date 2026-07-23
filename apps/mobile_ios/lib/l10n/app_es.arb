@@ -3362,6 +3362,7 @@
   "runStrategyGoalTime": "Tiempo objetivo",
   "runStrategyDistance": "Distancia",
   "runStrategyNeedsDistance": "Elige una ruta o introduce una distancia para activar fases",
+  "runStrategyInvalidGoal": "Introduce el tiempo objetivo como h:mm:ss",
   "runPhaseChip": "Fase {index}/{total} — {intent}",
   "phaseIntentHoldBack": "Contención",
   "phaseIntentSettle": "Asentarse",
