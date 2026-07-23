@@ -7418,6 +7418,36 @@ abstract class AppLocalizations {
   /// **'DNF'**
   String get liveSpectatorBadgeDnf;
 
+  /// Label for the recent-pace spectator stat tile (distinct from cumulative average pace)
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get liveSpectatorRecentPace;
+
+  /// Course-progress label — how far along a linked route the runner is
+  ///
+  /// In en, this message translates to:
+  /// **'{p}% of route'**
+  String liveSpectatorCourseProgress(int p);
+
+  /// Heading of the spectator conclusion card shown when the broadcast has concluded
+  ///
+  /// In en, this message translates to:
+  /// **'Run complete'**
+  String get liveSpectatorConcludedTitle;
+
+  /// Body of the spectator conclusion card
+  ///
+  /// In en, this message translates to:
+  /// **'See the full route, splits, and stats.'**
+  String get liveSpectatorConcludedBody;
+
+  /// CTA on the spectator conclusion card that opens the full public run
+  ///
+  /// In en, this message translates to:
+  /// **'View the full run'**
+  String get liveSpectatorViewFullRun;
+
   /// Spectator freshness — last ping under 10s ago
   ///
   /// In en, this message translates to:

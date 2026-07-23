@@ -5990,6 +5990,29 @@
   "@liveSpectatorBadgeDnf": {
     "description": "Status badge — the participant is race-marked Did Not Finish (terminal state)"
   },
+  "liveSpectatorRecentPace": "Recent",
+  "@liveSpectatorRecentPace": {
+    "description": "Label for the recent-pace spectator stat tile (distinct from cumulative average pace)"
+  },
+  "liveSpectatorCourseProgress": "{p}% of route",
+  "@liveSpectatorCourseProgress": {
+    "description": "Course-progress label — how far along a linked route the runner is",
+    "placeholders": {
+      "p": { "type": "int" }
+    }
+  },
+  "liveSpectatorConcludedTitle": "Run complete",
+  "@liveSpectatorConcludedTitle": {
+    "description": "Heading of the spectator conclusion card shown when the broadcast has concluded"
+  },
+  "liveSpectatorConcludedBody": "See the full route, splits, and stats.",
+  "@liveSpectatorConcludedBody": {
+    "description": "Body of the spectator conclusion card"
+  },
+  "liveSpectatorViewFullRun": "View the full run",
+  "@liveSpectatorViewFullRun": {
+    "description": "CTA on the spectator conclusion card that opens the full public run"
+  },
   "liveUpdatedNow": "Updated just now",
   "@liveUpdatedNow": {
     "description": "Spectator freshness — last ping under 10s ago"

@@ -4174,6 +4174,23 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
+  String get liveSpectatorRecentPace => '直近';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return 'コースの$p%';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'ランが完了しました';
+
+  @override
+  String get liveSpectatorConcludedBody => '全コース・スプリット・統計を確認しましょう。';
+
+  @override
+  String get liveSpectatorViewFullRun => 'ランの詳細を見る';
+
+  @override
   String get liveUpdatedNow => 'たった今更新';
 
   @override

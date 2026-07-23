@@ -4445,6 +4445,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
+  String get liveSpectatorRecentPace => 'Recente';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p% do percurso';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Corrida concluída';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'Veja o percurso completo, as parciais e as estatísticas.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'Ver a corrida completa';
+
+  @override
   String get liveUpdatedNow => 'Atualizado agora mesmo';
 
   @override
@@ -16054,6 +16072,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorRecentPace => 'Recente';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p% do percurso';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Corrida concluída';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'Veja o percurso completo, as parciais e as estatísticas.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'Ver a corrida completa';
 
   @override
   String get liveUpdatedNow => 'Atualizado agora mesmo';

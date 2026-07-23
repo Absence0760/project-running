@@ -32,6 +32,7 @@ RunRow _run({
   required DateTime startedAt,
   bool isDnf = false,
   double distanceM = 5000,
+  DateTime? concludedAt,
 }) => RunRow(
   id: 'r1',
   userId: 'u1',
@@ -41,6 +42,7 @@ RunRow _run({
   source: 'app',
   activityType: 'run',
   isDnf: isDnf,
+  concludedAt: concludedAt,
 );
 
 Map<String, dynamic> _ping(DateTime at, {bool coarse = false}) => {
@@ -334,6 +336,28 @@ void main() {
       expect(find.text('DNF'), findsOneWidget);
       expect(find.text('Finished'), findsNothing);
       expect(find.text('Live'), findsNothing);
+    });
+
+    testWidgets(
+        'a concluded_at run (recent start) shows the conclusion card + CTA',
+        (tester) async {
+      // Started 3 min ago with a projected 60-min duration, so the
+      // duration-staleness inference (runIsFinished) is false. Only the
+      // positive concluded_at marker makes it finished — proving the
+      // marker, not ping absence, drives the conclusion view. The card +
+      // its "view the full run" CTA render.
+      final api = _FakeApi(
+        run: _run(
+          durationS: 3600,
+          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 3)),
+          concludedAt: DateTime.now().toUtc(),
+        ),
+      );
+      await _pumpApi(tester, api);
+      await tester.pumpAndSettle();
+      expect(find.text('Finished'), findsOneWidget);
+      expect(find.byKey(const Key('conclusion-card')), findsOneWidget);
+      expect(find.text('View the full run'), findsOneWidget);
     });
 
     testWidgets('a still-running run with a fresh ping shows Live', (tester) async {

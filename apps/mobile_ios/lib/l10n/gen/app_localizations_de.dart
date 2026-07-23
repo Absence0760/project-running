@@ -4453,6 +4453,24 @@ class AppLocalizationsDe extends AppLocalizations {
   String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
+  String get liveSpectatorRecentPace => 'Aktuell';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p% der Strecke';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Lauf beendet';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'Sieh dir die vollständige Strecke, Splits und Statistiken an.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'Vollständigen Lauf ansehen';
+
+  @override
   String get liveUpdatedNow => 'Gerade aktualisiert';
 
   @override

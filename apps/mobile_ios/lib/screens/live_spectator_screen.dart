@@ -15,6 +15,7 @@ import '../route_geometry.dart';
 import '../widgets/cutoff_card.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
+import 'public_run_screen.dart';
 
 /// Live spectator screen — mirrors the web `/live/[run_id]` page.
 /// Hydrates the existing `live_run_pings` for a run, then subscribes
@@ -64,6 +65,9 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   int? _lastPingAtMs;
   int _nowMs = DateTime.now().millisecondsSinceEpoch;
   Timer? _freshnessTimer;
+  // Counts freshness ticks so the concluded_at re-check fires ~every 15s
+  // (not every second) while live.
+  int _concludedCheckTick = 0;
 
   // True once the latest ingested ping carries the privacy-zone `coarse`
   // flag (migration 20270121_001): a ~1 km-coarsened in-zone last-seen
@@ -92,8 +96,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     super.initState();
     _hydrate();
     _freshnessTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+      if (!mounted) return;
+      setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+      if (_status == 'live' && ++_concludedCheckTick % 15 == 0) {
+        _maybeCheckConcluded();
       }
     });
   }
@@ -134,7 +140,12 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
         });
         return;
       }
-      if (run != null && runIsFinished(run)) {
+      // A stamped concluded_at (migration 20270427_001) is the positive
+      // terminal signal and wins over the pings — the recorder now keeps
+      // them, so a concluded run still has a backlog and would otherwise
+      // read live. runIsFinished stays as the belt-and-braces inference
+      // for older runs saved before the marker existed.
+      if (run != null && (run.concludedAt != null || runIsFinished(run))) {
         setState(() {
           _loading = false;
           _status = 'finished';
@@ -285,6 +296,54 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     return eta.checkpoint == null ? null : eta;
   }
 
+  /// Course progress (0..1) along a linked route, or null when there's no
+  /// route with >=2 waypoints / no position yet. Backs the live progress
+  /// bar (mirror of the web spectator's `courseProgressPct`).
+  double? get _courseProgressPct {
+    if (_routeWaypoints.length < 2 || _latestPos == null) return null;
+    final along = distanceAlongRoute(_latestPos!, _routeWaypoints);
+    if (along == null) return null;
+    final total = polylineLengthMetres(_routeWaypoints);
+    if (total <= 0) return null;
+    return (along / total).clamp(0.0, 1.0);
+  }
+
+  /// While live, re-check the run's concluded_at marker. The recorder now
+  /// LEAVES the pings on stop (bounded by the 48h retention cron), so a
+  /// stopped runner just goes stale — "no pings" can't be the finish
+  /// signal. When concluded_at appears we freeze on the saved totals and
+  /// switch to the conclusion view. Best-effort: a transient fetch error
+  /// just defers to the next interval and never disturbs the live feed.
+  Future<void> _maybeCheckConcluded() async {
+    if (_status != 'live') return;
+    try {
+      final run = await widget.api.fetchPublicRunById(widget.runId);
+      if (!mounted || _status != 'live' || run == null) return;
+      if (run.concludedAt == null) return;
+      final ch = _channel;
+      if (ch != null) {
+        Supabase.instance.client.removeChannel(ch);
+        _channel = null;
+      }
+      setState(() {
+        _status = 'finished';
+        _distanceM = run.distanceM;
+        _elapsedS = run.durationS;
+      });
+    } catch (_) {
+      // Deferred to the next tick.
+    }
+  }
+
+  void _openFullRun() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            PublicRunScreen(api: widget.api, runId: widget.runId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -354,6 +413,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (_status == 'finished') ...[
+                            _ConclusionCard(onViewFullRun: _openFullRun),
+                            const SizedBox(height: 16),
+                          ],
                           if (coarse) ...[
                             Text(
                               l10n.liveSpectatorApproximateSub,
@@ -413,8 +476,26 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                                       : '—',
                                 ),
                               ),
+                              if (_status == 'live' &&
+                                  _recentPaceSecPerKm != null)
+                                Expanded(
+                                  child: _Metric(
+                                    key: const Key('recent-pace'),
+                                    label: l10n.liveSpectatorRecentPace,
+                                    value: formatLivePace(_recentPaceSecPerKm!),
+                                  ),
+                                ),
                             ],
                           ),
+                          if (_status == 'live' &&
+                              _courseProgressPct != null) ...[
+                            const SizedBox(height: 16),
+                            _CourseProgress(
+                              fraction: _courseProgressPct!,
+                              label: l10n.liveSpectatorCourseProgress(
+                                  (_courseProgressPct! * 100).round()),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -541,7 +622,7 @@ class _StatusBadge extends StatelessWidget {
 class _Metric extends StatelessWidget {
   final String label;
   final String value;
-  const _Metric({required this.label, required this.value});
+  const _Metric({super.key, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -568,6 +649,105 @@ class _Metric extends StatelessWidget {
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+/// End-of-run conclusion summary shown when a broadcast has concluded
+/// (mirror of the web spectator's conclusion card). The runner stopped, so
+/// instead of a stale feed the spectator sees a clear "complete" state and
+/// a CTA into the full run.
+class _ConclusionCard extends StatelessWidget {
+  final VoidCallback onViewFullRun;
+  const _ConclusionCard({required this.onViewFullRun});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    const green = Color(0xFF10B981);
+    return Container(
+      key: const Key('conclusion-card'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: const BorderDirectional(
+          start: BorderSide(color: green, width: 4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.flag_circle, color: green),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.liveSpectatorConcludedTitle,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.liveSpectatorConcludedBody,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onViewFullRun,
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(l10n.liveSpectatorViewFullRun),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A slim course-progress bar (fraction 0..1) + label, shown while live
+/// when the run follows a known route — the mobile twin of the web
+/// spectator's course-progress bar.
+class _CourseProgress extends StatelessWidget {
+  final double fraction;
+  final String label;
+  const _CourseProgress({required this.fraction, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      key: const Key('course-progress'),
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 6,
+              backgroundColor: theme.colorScheme.outlineVariant,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
