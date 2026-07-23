@@ -2336,6 +2336,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get routesImportSharedFailed =>
+      'Couldn\'t import that file — it isn\'t a valid GPX or KML route.';
+
+  @override
   String routesSaved(String name) {
     return 'Saved \"$name\"';
   }
@@ -2490,6 +2494,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get routeBuilderRouteFailedStraightLines =>
       'Couldn\'t route — showing straight lines through your pins.';
+
+  @override
+  String get routeBuilderSnapUnavailable =>
+      'Road snapping is unavailable — pins land where you tap, connected by straight lines.';
 
   @override
   String routeBuilderSegmentsFailed(int count) {
@@ -6547,7 +6555,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Default (1 km for running, 5 km for cycling)';
 
   @override
-  String get prefsLivePaceAlert => 'Live pace alert';
+  String get prefsSplitPaceMode => 'Splits announce';
+
+  @override
+  String get prefsSplitPaceModeSubtitle => 'Which pace each split reads out';
+
+  @override
+  String get prefsSplitPaceModeSplit => 'Split pace';
+
+  @override
+  String get prefsSplitPaceModeAverage => 'Average pace';
+
+  @override
+  String get prefsSplitPaceModeBoth => 'Both';
+
+  @override
+  String get prefsSplitPaceModeInfo =>
+      'At each split, choose what pace you hear: the pace for just that split, your average pace for the whole run so far, or both. Handy for holding an even effort. Example: “1 kilometre. Average pace, 5 minutes 45 seconds per kilometre.”';
+
+  @override
+  String get prefsTargetPace => 'Target pace';
+
+  @override
+  String get prefsTargetPaceInfo =>
+      'The pace you’re aiming to hold. On its own it stays silent — turn on the “Off-pace alerts” voice cue to hear “speed up” or “slow down” when you drift more than 30 seconds from it. Example: “Speed up by 8 seconds.”';
+
+  @override
+  String get prefsCueInfoTooltip => 'What is this?';
+
+  @override
+  String get prefsLivePaceAlert => 'Target pace';
 
   @override
   String get prefsLivePaceAlertMin => 'min';
@@ -6557,11 +6594,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get prefsLivePaceAlertOff =>
-      'Off — set a pace to get spoken alerts during a run';
+      'Not set — set a target, then turn on Off-pace alerts';
 
   @override
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
-    return '$pace $paceLabel — spoken alert during a run when 30s+ off';
+    return '$pace $paceLabel — Off-pace alerts speak when you drift 30s+';
   }
 
   @override
@@ -6767,7 +6804,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsAudioCues => 'Audio cues';
 
   @override
-  String get prefsAudioCuesSubtitle => 'Spoken split announcements';
+  String get prefsAudioCuesSubtitle =>
+      'Speak splits, pace and other cues while you run';
 
   @override
   String get prefsMinimalVoiceCues => 'Minimal voice cues';
@@ -8362,6 +8400,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String ttsSplit(String count, String unit, String tail) {
     return '$count $unit. $tail';
+  }
+
+  @override
+  String ttsSplitAverage(String count, String unit, String tail) {
+    return '$count $unit. Average $tail';
+  }
+
+  @override
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail) {
+    return '$count $unit. $tail. Average $avgTail';
   }
 
   @override
@@ -11420,56 +11468,89 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsCueSplits => 'Splits';
 
   @override
-  String get prefsCueSplitsSubtitle => 'Distance and pace at each split';
+  String get prefsCueSplitsSubtitle =>
+      'Your pace (or speed) each time you pass a split marker';
+
+  @override
+  String get prefsCueSplitsInfo =>
+      'Speaks a short summary every time you complete a split (set the distance under Split interval). Use Splits announce to pick split pace, average pace, or both. Example: “1 kilometre. Pace, 5 minutes 30 seconds per kilometre.”';
 
   @override
   String get prefsCueStartFinish => 'Start and finish';
 
   @override
   String get prefsCueStartFinishSubtitle =>
-      'Run started and run complete announcements';
+      '“Run started” at the start, and a summary when you finish';
+
+  @override
+  String get prefsCueStartFinishInfo =>
+      'Confirms the run began and reads your distance and time when you stop. Example: “Run complete. 10.0 kilometres in 52 minutes.”';
 
   @override
   String get prefsCueOffRoute => 'Off-route warning';
 
   @override
   String get prefsCueOffRouteSubtitle =>
-      'When you drift off the followed route';
+      'A heads-up when you stray from a route you’re following';
 
   @override
-  String get prefsCuePaceAlerts => 'Pace alerts';
+  String get prefsCueOffRouteInfo =>
+      'Only works when you start a run with a saved route. Warns you once you drift away from it so you can get back on course. Example: “Off route.”';
+
+  @override
+  String get prefsCuePaceAlerts => 'Off-pace alerts';
 
   @override
   String get prefsCuePaceAlertsSubtitle =>
-      'Speed up or slow down, with how much';
+      '“Speed up” / “slow down” when you drift from your Target pace';
+
+  @override
+  String get prefsCuePaceAlertsInfo =>
+      'Needs a Target pace set. When you drift more than about 30 seconds off it, this tells you which way to adjust and by how much. Example: “Speed up by 8 seconds.”';
 
   @override
   String get prefsCueWorkoutSteps => 'Workout steps';
 
   @override
   String get prefsCueWorkoutStepsSubtitle =>
-      'Step changes in structured workouts';
+      'Calls each step of a structured workout as it begins';
+
+  @override
+  String get prefsCueWorkoutStepsInfo =>
+      'Only active during a structured workout (a plan session or interval workout). Announces each step and its target so you can keep your eyes up. Example: “Rep 3 of 5. 400 metres at 4 minutes 30 seconds per kilometre.”';
 
   @override
   String get prefsCueCutoffCatchUp => 'Cutoff catch-up';
 
   @override
   String get prefsCueCutoffCatchUpSubtitle =>
-      'Pace needed for the next cutoff when you\'re at risk';
+      'The pace you need to make a cutoff you’re at risk of missing';
+
+  @override
+  String get prefsCueCutoffCatchUpInfo =>
+      'Only active on a route with course cutoffs. If one is at risk, it reads the distance to it and the pace that still makes it. Example: “2 kilometres to the cutoff. 6 minutes per kilometre.”';
 
   @override
   String get prefsCueMarkerTargets => 'Course marker targets';
 
   @override
   String get prefsCueMarkerTargetsSubtitle =>
-      'Ahead or behind plan at each course marker';
+      'Whether you’re ahead of or behind plan at each course marker';
+
+  @override
+  String get prefsCueMarkerTargetsInfo =>
+      'Only active on a route whose course markers carry target times. As you pass each one it tells you if you’re ahead or behind, and by how much. Example: “Aid 2: 45 seconds ahead of plan.”';
 
   @override
   String get prefsCuePhaseTransitions => 'Race phases';
 
   @override
   String get prefsCuePhaseTransitionsSubtitle =>
-      'When a pacing-strategy phase begins';
+      'A cue when each phase of your race-strategy plan begins';
+
+  @override
+  String get prefsCuePhaseTransitionsInfo =>
+      'Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”';
 
   @override
   String get runRaceStrategy => 'Race strategy';
@@ -11534,4 +11615,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routeMarkerTargetInvalid => 'Enter the target time as h:mm:ss';
+
+  @override
+  String get routeMarkerOfficialBadge => 'Route owner';
+
+  @override
+  String get routeMarkerDistanceAlongLabel => 'Distance along route';
+
+  @override
+  String get routeMarkerDistanceInvalid =>
+      'Enter a valid distance along the route.';
 }

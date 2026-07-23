@@ -298,4 +298,21 @@ void main() {
       expect(splits.first.duration.inSeconds, closeTo(483, 3));
     });
   });
+
+  group('averagePaceSecPerKm', () {
+    test('positive inputs return elapsed / distance-in-km', () {
+      // 2 km in 600 s → 300 s/km.
+      expect(averagePaceSecPerKm(2000, 600), closeTo(300, 1e-9));
+    });
+
+    test('zero (or negative) distance returns null', () {
+      expect(averagePaceSecPerKm(0, 600), isNull);
+      expect(averagePaceSecPerKm(-5, 600), isNull);
+    });
+
+    test('zero (or negative) elapsed returns null', () {
+      expect(averagePaceSecPerKm(2000, 0), isNull);
+      expect(averagePaceSecPerKm(2000, -1), isNull);
+    });
+  });
 }

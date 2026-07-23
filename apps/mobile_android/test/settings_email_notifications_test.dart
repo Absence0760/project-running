@@ -90,6 +90,9 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester
+        .ensureVisible(find.widgetWithText(ListTile, 'Email notifications'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'Email notifications'));
     await tester.pumpAndSettle();
 
@@ -113,6 +116,9 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester
+        .ensureVisible(find.widgetWithText(ListTile, 'Email notifications'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'Email notifications'));
     await tester.pumpAndSettle();
 

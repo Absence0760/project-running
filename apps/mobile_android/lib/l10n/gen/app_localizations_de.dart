@@ -2363,6 +2363,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get routesImportSharedFailed =>
+      'Datei konnte nicht importiert werden – keine gültige GPX- oder KML-Route.';
+
+  @override
   String routesSaved(String name) {
     return '\"$name\" gespeichert';
   }
@@ -2518,6 +2522,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get routeBuilderRouteFailedStraightLines =>
       'Routing fehlgeschlagen — gerade Linien durch deine Punkte werden angezeigt.';
+
+  @override
+  String get routeBuilderSnapUnavailable =>
+      'Straßenausrichtung nicht verfügbar — Punkte landen dort, wo du tippst, verbunden durch gerade Linien.';
 
   @override
   String routeBuilderSegmentsFailed(int count) {
@@ -6630,7 +6638,36 @@ class AppLocalizationsDe extends AppLocalizations {
       'Standard (1 km beim Laufen, 5 km beim Radfahren)';
 
   @override
-  String get prefsLivePaceAlert => 'Live-Tempowarnung';
+  String get prefsSplitPaceMode => 'Split-Ansage';
+
+  @override
+  String get prefsSplitPaceModeSubtitle => 'Welches Tempo jeder Split ansagt';
+
+  @override
+  String get prefsSplitPaceModeSplit => 'Split-Tempo';
+
+  @override
+  String get prefsSplitPaceModeAverage => 'Durchschnittstempo';
+
+  @override
+  String get prefsSplitPaceModeBoth => 'Beide';
+
+  @override
+  String get prefsSplitPaceModeInfo =>
+      'Wähle bei jedem Split, welches Tempo du hörst: nur das Tempo dieses Splits, dein Durchschnittstempo für den bisherigen Lauf oder beides. Praktisch, um eine gleichmäßige Belastung zu halten. Beispiel: „1 Kilometer. Durchschnittstempo, 5 Minuten 45 Sekunden pro Kilometer.“';
+
+  @override
+  String get prefsTargetPace => 'Zieltempo';
+
+  @override
+  String get prefsTargetPaceInfo =>
+      'Das Tempo, das du halten willst. Für sich allein bleibt es stumm — aktiviere den Sprachhinweis „Tempoabweichungs-Warnungen“, um „Schneller“ oder „Langsamer“ zu hören, wenn du mehr als 30 Sekunden davon abweichst. Beispiel: „Beschleunige um 8 Sekunden.“';
+
+  @override
+  String get prefsCueInfoTooltip => 'Was ist das?';
+
+  @override
+  String get prefsLivePaceAlert => 'Zieltempo';
 
   @override
   String get prefsLivePaceAlertMin => 'Min';
@@ -6640,11 +6677,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get prefsLivePaceAlertOff =>
-      'Aus — lege ein Tempo fest, um während eines Laufs gesprochene Warnungen zu erhalten';
+      'Nicht festgelegt — Ziel setzen, dann Tempoabweichungs-Warnungen aktivieren';
 
   @override
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
-    return '$pace $paceLabel — gesprochene Warnung während eines Laufs bei 30 s+ Abweichung';
+    return '$pace $paceLabel — Tempoabweichungs-Warnungen sprechen bei 30 s+ Abweichung';
   }
 
   @override
@@ -6853,7 +6890,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get prefsAudioCues => 'Audio-Hinweise';
 
   @override
-  String get prefsAudioCuesSubtitle => 'Gesprochene Split-Ansagen';
+  String get prefsAudioCuesSubtitle =>
+      'Splits, Tempo und weitere Hinweise während des Laufs ansagen';
 
   @override
   String get prefsMinimalVoiceCues => 'Minimale Sprachhinweise';
@@ -8460,6 +8498,16 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String ttsSplit(String count, String unit, String tail) {
     return '$count $unit. $tail';
+  }
+
+  @override
+  String ttsSplitAverage(String count, String unit, String tail) {
+    return '$count $unit. Durchschnitt $tail';
+  }
+
+  @override
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail) {
+    return '$count $unit. $tail. Durchschnitt $avgTail';
   }
 
   @override
@@ -11554,55 +11602,89 @@ class AppLocalizationsDe extends AppLocalizations {
   String get prefsCueSplits => 'Splits';
 
   @override
-  String get prefsCueSplitsSubtitle => 'Distanz und Tempo bei jedem Split';
+  String get prefsCueSplitsSubtitle =>
+      'Dein Tempo (oder Geschwindigkeit) bei jeder Split-Markierung';
+
+  @override
+  String get prefsCueSplitsInfo =>
+      'Sagt bei jedem abgeschlossenen Split eine kurze Zusammenfassung an (Distanz unter Split-Intervall festlegen). Über Split-Ansage wählst du Split-Tempo, Durchschnittstempo oder beides. Beispiel: „1 Kilometer. Tempo, 5 Minuten 30 Sekunden pro Kilometer.“';
 
   @override
   String get prefsCueStartFinish => 'Start und Ziel';
 
   @override
-  String get prefsCueStartFinishSubtitle => 'Ansagen bei Lauf-Start und -Ende';
+  String get prefsCueStartFinishSubtitle =>
+      '„Lauf gestartet“ am Anfang und eine Zusammenfassung am Ende';
+
+  @override
+  String get prefsCueStartFinishInfo =>
+      'Bestätigt den Start des Laufs und liest beim Stoppen deine Distanz und Zeit vor. Beispiel: „Lauf beendet. 10,0 Kilometer in 52 Minuten.“';
 
   @override
   String get prefsCueOffRoute => 'Abseits der Route';
 
   @override
   String get prefsCueOffRouteSubtitle =>
-      'Warnung beim Verlassen der gewählten Route';
+      'Ein Hinweis, wenn du von der verfolgten Route abkommst';
 
   @override
-  String get prefsCuePaceAlerts => 'Tempo-Warnungen';
+  String get prefsCueOffRouteInfo =>
+      'Funktioniert nur, wenn du einen Lauf mit einer gespeicherten Route startest. Warnt dich, sobald du davon abkommst, damit du zurück auf Kurs findest. Beispiel: „Abseits der Route.“';
+
+  @override
+  String get prefsCuePaceAlerts => 'Tempoabweichungs-Warnungen';
 
   @override
   String get prefsCuePaceAlertsSubtitle =>
-      'Schneller oder langsamer, mit Angabe wie viel';
+      '„Schneller“ / „langsamer“, wenn du vom Zieltempo abweichst';
+
+  @override
+  String get prefsCuePaceAlertsInfo =>
+      'Benötigt ein festgelegtes Zieltempo. Wenn du mehr als etwa 30 Sekunden davon abweichst, sagt dir das, in welche Richtung und um wie viel du anpassen sollst. Beispiel: „Beschleunige um 8 Sekunden.“';
 
   @override
   String get prefsCueWorkoutSteps => 'Workout-Schritte';
 
   @override
   String get prefsCueWorkoutStepsSubtitle =>
-      'Schrittwechsel in strukturierten Workouts';
+      'Sagt jeden Schritt eines strukturierten Workouts beim Beginn an';
+
+  @override
+  String get prefsCueWorkoutStepsInfo =>
+      'Nur während eines strukturierten Workouts aktiv (eine Plan-Einheit oder ein Intervall-Workout). Sagt jeden Schritt und sein Ziel an, damit du den Blick oben lassen kannst. Beispiel: „Wiederholung 3 von 5. 400 Meter bei 4 Minuten 30 Sekunden pro Kilometer.“';
 
   @override
   String get prefsCueCutoffCatchUp => 'Cut-off-Aufholtempo';
 
   @override
   String get prefsCueCutoffCatchUpSubtitle =>
-      'Benötigtes Tempo für den nächsten Cut-off bei Risiko';
+      'Das Tempo, das du für einen gefährdeten Cut-off brauchst';
+
+  @override
+  String get prefsCueCutoffCatchUpInfo =>
+      'Nur auf einer Route mit Streckenlimits aktiv. Ist eines gefährdet, liest es die Distanz dorthin und das Tempo vor, das es noch schafft. Beispiel: „2 Kilometer bis zum Cut-off. 6 Minuten pro Kilometer.“';
 
   @override
   String get prefsCueMarkerTargets => 'Strecken-Markierungen';
 
   @override
   String get prefsCueMarkerTargetsSubtitle =>
-      'Vor oder hinter dem Plan an jeder Markierung';
+      'Ob du an jeder Streckenmarkierung vor oder hinter dem Plan liegst';
+
+  @override
+  String get prefsCueMarkerTargetsInfo =>
+      'Nur auf einer Route aktiv, deren Streckenmarkierungen Zielzeiten tragen. An jeder vorbei sagt es dir, ob du vorne oder hinten liegst, und um wie viel. Beispiel: „Verpflegung 2: 45 Sekunden vor dem Plan.“';
 
   @override
   String get prefsCuePhaseTransitions => 'Rennphasen';
 
   @override
   String get prefsCuePhaseTransitionsSubtitle =>
-      'Wenn eine Phase der Pacing-Strategie beginnt';
+      'Ein Hinweis, wenn jede Phase deiner Rennstrategie beginnt';
+
+  @override
+  String get prefsCuePhaseTransitionsInfo =>
+      'Nur aktiv, wenn du eine Rennstrategie für den Lauf wählst. Sagt jede Phase und ihre Absicht bei Beginn an. Beispiel: „Phase 2 von 3. Finde dein Zieltempo.“';
 
   @override
   String get runRaceStrategy => 'Rennstrategie';
@@ -11667,4 +11749,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routeMarkerTargetInvalid => 'Zielzeit als h:mm:ss eingeben';
+
+  @override
+  String get routeMarkerOfficialBadge => 'Routenbesitzer';
+
+  @override
+  String get routeMarkerDistanceAlongLabel => 'Distanz entlang der Route';
+
+  @override
+  String get routeMarkerDistanceInvalid =>
+      'Gib eine gültige Distanz entlang der Route ein.';
 }

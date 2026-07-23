@@ -194,6 +194,25 @@ class VoiceCue {
   ];
 }
 
+/// How the split cue reads pace out loud: the split's own pace
+/// ([split], the default + prior behaviour), the cumulative average
+/// pace since the run started ([average]), or [both]. Device-local (a
+/// per-device audio preference, not roamed).
+class SplitPaceMode {
+  SplitPaceMode._();
+
+  static const split = 'split';
+  static const average = 'average';
+  static const both = 'both';
+
+  static const all = [split, average, both];
+
+  /// Coerce an arbitrary stored/incoming value to a known mode,
+  /// defaulting to [split] so a corrupt value can never disable the
+  /// split cue outright.
+  static String coerce(String? raw) => all.contains(raw) ? raw! : split;
+}
+
 /// App-wide user preferences (units, audio cues, etc.).
 class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
@@ -207,6 +226,8 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  // Device-local: which pace the split cue reads out (SplitPaceMode).
+  static const _kSplitPaceMode = 'split_pace_mode';
   // Mirrors the universal `default_activity_type` settings-bag key.
   // Drives the run screen's initial activity selection. One of
   // 'run', 'walk', 'cycle', 'hike'. Empty / unknown = 'run'.
@@ -332,6 +353,7 @@ class Preferences extends ChangeNotifier {
   List<RunGoal> _goals = [];
   bool _advancedGps = false;
   int _splitIntervalMetres = 0;
+  String _splitPaceMode = SplitPaceMode.split;
   String _deviceId = '';
   String _defaultActivityType = 'run';
   String _voiceFeedbackVerbosity = 'full';
@@ -361,6 +383,13 @@ class Preferences extends ChangeNotifier {
   /// Custom split interval in metres. 0 means use the activity-type default
   /// (1 km for run/walk/hike, 5 km for cycling).
   int get splitIntervalMetres => _splitIntervalMetres;
+
+  /// Which pace the spoken split cue reads: the split's own pace
+  /// ([SplitPaceMode.split], default), the cumulative average pace so
+  /// far ([SplitPaceMode.average]), or [SplitPaceMode.both]. Composes
+  /// independently of every other cue; when the split cue is off this
+  /// value is inert.
+  String get splitPaceMode => _splitPaceMode;
 
   /// Default activity type for the run screen. Mirrors the universal
   /// `default_activity_type` settings-bag key so the choice roams
@@ -582,6 +611,7 @@ class Preferences extends ChangeNotifier {
     // own device bag applies.
     await setAudioCues(true);
     await setSplitIntervalMetres(0);
+    await setSplitPaceMode(SplitPaceMode.split);
     await setKeepScreenOn(true);
     await setDimScreenWhileRecording(false);
     await clearVoiceCueTypes();
@@ -651,6 +681,7 @@ class Preferences extends ChangeNotifier {
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
     _writeToHealthConnect = _prefs.getBool(_kWriteToHealthConnect) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
+    _splitPaceMode = SplitPaceMode.coerce(_prefs.getString(_kSplitPaceMode));
     _defaultActivityType =
         _prefs.getString(_kDefaultActivityType) ?? 'run';
     _voiceFeedbackVerbosity =
@@ -782,6 +813,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setSplitIntervalMetres(int v) async {
     _splitIntervalMetres = v;
     await _prefs.setInt(_kSplitIntervalMetres, v);
+    notifyListeners();
+  }
+
+  Future<void> setSplitPaceMode(String mode) async {
+    _splitPaceMode = SplitPaceMode.coerce(mode);
+    await _prefs.setString(_kSplitPaceMode, _splitPaceMode);
     notifyListeners();
   }
 

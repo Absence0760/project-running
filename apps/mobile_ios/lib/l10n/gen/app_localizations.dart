@@ -4049,6 +4049,12 @@ abstract class AppLocalizations {
   /// **'Import failed: {error}'**
   String routesImportFailed(String error);
 
+  /// Banner shown when a GPX/KML file opened from another app (WhatsApp Open with / share) couldn't be imported as a route
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t import that file — it isn\'t a valid GPX or KML route.'**
+  String get routesImportSharedFailed;
+
   /// Banner shown after a route built in the in-app builder is saved
   ///
   /// In en, this message translates to:
@@ -4276,6 +4282,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t route — showing straight lines through your pins.'**
   String get routeBuilderRouteFailedStraightLines;
+
+  /// One-time banner when this build can't snap to roads (OSRM not configured), so Trail/Road behave like Straight
+  ///
+  /// In en, this message translates to:
+  /// **'Road snapping is unavailable — pins land where you tap, connected by straight lines.'**
+  String get routeBuilderSnapUnavailable;
 
   /// Banner shown when some routing segments couldn't snap to a road
   ///
@@ -10867,10 +10879,64 @@ abstract class AppLocalizations {
   /// **'Default (1 km for running, 5 km for cycling)'**
   String get prefsSplitIntervalDefaultSubtitle;
 
-  /// Tile and dialog title for the live pace alert
+  /// Tile title for choosing which pace the split cue reads
   ///
   /// In en, this message translates to:
-  /// **'Live pace alert'**
+  /// **'Splits announce'**
+  String get prefsSplitPaceMode;
+
+  /// Subtitle for the splits-announce tile
+  ///
+  /// In en, this message translates to:
+  /// **'Which pace each split reads out'**
+  String get prefsSplitPaceModeSubtitle;
+
+  /// Splits-announce option: read the pace for that split only
+  ///
+  /// In en, this message translates to:
+  /// **'Split pace'**
+  String get prefsSplitPaceModeSplit;
+
+  /// Splits-announce option: read the average pace over the whole run so far
+  ///
+  /// In en, this message translates to:
+  /// **'Average pace'**
+  String get prefsSplitPaceModeAverage;
+
+  /// Splits-announce option: read both the split pace and the average
+  ///
+  /// In en, this message translates to:
+  /// **'Both'**
+  String get prefsSplitPaceModeBoth;
+
+  /// Info popup body + example for the splits-announce setting
+  ///
+  /// In en, this message translates to:
+  /// **'At each split, choose what pace you hear: the pace for just that split, your average pace for the whole run so far, or both. Handy for holding an even effort. Example: “1 kilometre. Average pace, 5 minutes 45 seconds per kilometre.”'**
+  String get prefsSplitPaceModeInfo;
+
+  /// Tile and dialog title for the target pace (the goal pace the Off-pace alerts cue watches)
+  ///
+  /// In en, this message translates to:
+  /// **'Target pace'**
+  String get prefsTargetPace;
+
+  /// Info popup body + example for the target-pace setting
+  ///
+  /// In en, this message translates to:
+  /// **'The pace you’re aiming to hold. On its own it stays silent — turn on the “Off-pace alerts” voice cue to hear “speed up” or “slow down” when you drift more than 30 seconds from it. Example: “Speed up by 8 seconds.”'**
+  String get prefsTargetPaceInfo;
+
+  /// Tooltip / accessibility label for the info button next to a cue
+  ///
+  /// In en, this message translates to:
+  /// **'What is this?'**
+  String get prefsCueInfoTooltip;
+
+  /// Legacy key, now the Target pace tile/dialog title (was "Live pace alert")
+  ///
+  /// In en, this message translates to:
+  /// **'Target pace'**
   String get prefsLivePaceAlert;
 
   /// Minutes field label in the live-pace-alert dialog
@@ -10885,16 +10951,16 @@ abstract class AppLocalizations {
   /// **'sec'**
   String get prefsLivePaceAlertSec;
 
-  /// Live-pace-alert subtitle when no target pace is set
+  /// Target-pace subtitle when no target pace is set
   ///
   /// In en, this message translates to:
-  /// **'Off — set a pace to get spoken alerts during a run'**
+  /// **'Not set — set a target, then turn on Off-pace alerts'**
   String get prefsLivePaceAlertOff;
 
   /// Live-pace-alert subtitle showing the target pace
   ///
   /// In en, this message translates to:
-  /// **'{pace} {paceLabel} — spoken alert during a run when 30s+ off'**
+  /// **'{pace} {paceLabel} — Off-pace alerts speak when you drift 30s+'**
   String prefsLivePaceAlertOn(String pace, String paceLabel);
 
   /// Activity-type label: run
@@ -11278,7 +11344,7 @@ abstract class AppLocalizations {
   /// Subtitle of the audio-cues toggle
   ///
   /// In en, this message translates to:
-  /// **'Spoken split announcements'**
+  /// **'Speak splits, pace and other cues while you run'**
   String get prefsAudioCuesSubtitle;
 
   /// Toggle title for minimal voice cues
@@ -14039,6 +14105,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} {unit}. {tail}'**
   String ttsSplit(String count, String unit, String tail);
+
+  /// Spoken split cue reading the cumulative average pace/speed instead of the split's own. tail is the pace/speed utterance.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} {unit}. Average {tail}'**
+  String ttsSplitAverage(String count, String unit, String tail);
+
+  /// Spoken split cue reading the split's own pace/speed then the cumulative average.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} {unit}. {tail}. Average {avgTail}'**
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail);
 
   /// Spoken workout-step intro: warmup
   ///
@@ -19323,8 +19401,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Distance and pace at each split'**
+  /// **'Your pace (or speed) each time you pass a split marker'**
   String get prefsCueSplitsSubtitle;
+
+  /// Info popup body + example for the Splits cue
+  ///
+  /// In en, this message translates to:
+  /// **'Speaks a short summary every time you complete a split (set the distance under Split interval). Use Splits announce to pick split pace, average pace, or both. Example: “1 kilometre. Pace, 5 minutes 30 seconds per kilometre.”'**
+  String get prefsCueSplitsInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19335,8 +19419,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Run started and run complete announcements'**
+  /// **'“Run started” at the start, and a summary when you finish'**
   String get prefsCueStartFinishSubtitle;
+
+  /// Info popup body + example for the start/finish cue
+  ///
+  /// In en, this message translates to:
+  /// **'Confirms the run began and reads your distance and time when you stop. Example: “Run complete. 10.0 kilometres in 52 minutes.”'**
+  String get prefsCueStartFinishInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19347,20 +19437,32 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'When you drift off the followed route'**
+  /// **'A heads-up when you stray from a route you’re following'**
   String get prefsCueOffRouteSubtitle;
+
+  /// Info popup body + example for the off-route cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only works when you start a run with a saved route. Warns you once you drift away from it so you can get back on course. Example: “Off route.”'**
+  String get prefsCueOffRouteInfo;
 
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Pace alerts'**
+  /// **'Off-pace alerts'**
   String get prefsCuePaceAlerts;
 
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Speed up or slow down, with how much'**
+  /// **'“Speed up” / “slow down” when you drift from your Target pace'**
   String get prefsCuePaceAlertsSubtitle;
+
+  /// Info popup body + example for the off-pace alerts cue
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a Target pace set. When you drift more than about 30 seconds off it, this tells you which way to adjust and by how much. Example: “Speed up by 8 seconds.”'**
+  String get prefsCuePaceAlertsInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19371,8 +19473,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Step changes in structured workouts'**
+  /// **'Calls each step of a structured workout as it begins'**
   String get prefsCueWorkoutStepsSubtitle;
+
+  /// Info popup body + example for the workout-steps cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active during a structured workout (a plan session or interval workout). Announces each step and its target so you can keep your eyes up. Example: “Rep 3 of 5. 400 metres at 4 minutes 30 seconds per kilometre.”'**
+  String get prefsCueWorkoutStepsInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19383,8 +19491,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Pace needed for the next cutoff when you\'re at risk'**
+  /// **'The pace you need to make a cutoff you’re at risk of missing'**
   String get prefsCueCutoffCatchUpSubtitle;
+
+  /// Info popup body + example for the cutoff catch-up cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active on a route with course cutoffs. If one is at risk, it reads the distance to it and the pace that still makes it. Example: “2 kilometres to the cutoff. 6 minutes per kilometre.”'**
+  String get prefsCueCutoffCatchUpInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19395,8 +19509,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'Ahead or behind plan at each course marker'**
+  /// **'Whether you’re ahead of or behind plan at each course marker'**
   String get prefsCueMarkerTargetsSubtitle;
+
+  /// Info popup body + example for the marker-targets cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active on a route whose course markers carry target times. As you pass each one it tells you if you’re ahead or behind, and by how much. Example: “Aid 2: 45 seconds ahead of plan.”'**
+  String get prefsCueMarkerTargetsInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19407,8 +19527,14 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
-  /// **'When a pacing-strategy phase begins'**
+  /// **'A cue when each phase of your race-strategy plan begins'**
   String get prefsCuePhaseTransitionsSubtitle;
+
+  /// Info popup body + example for the race-phases cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”'**
+  String get prefsCuePhaseTransitionsInfo;
 
   /// Voice cues / race strategy
   ///
@@ -19523,6 +19649,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter the target time as h:mm:ss'**
   String get routeMarkerTargetInvalid;
+
+  /// Badge on a course marker that belongs to the route owner (official), shown to a non-owner viewer
+  ///
+  /// In en, this message translates to:
+  /// **'Route owner'**
+  String get routeMarkerOfficialBadge;
+
+  /// Editor field to place a course marker by distance along the route instead of lat/lng
+  ///
+  /// In en, this message translates to:
+  /// **'Distance along route'**
+  String get routeMarkerDistanceAlongLabel;
+
+  /// Validation when the distance-along-route value can't be parsed
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid distance along the route.'**
+  String get routeMarkerDistanceInvalid;
 }
 
 class _AppLocalizationsDelegate

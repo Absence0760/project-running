@@ -198,6 +198,30 @@ String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit,
   return l10n.ttsStepDistancePace(intro, dist, paceTail);
 }
 
+/// Compose the spoken split cue for the given [paceMode]. Pure — [splitTail]
+/// and [avgTail] are pre-formatted pace/speed utterances (empty string when
+/// unavailable). Degrades to the split-only form when the requested average
+/// tail is missing, so the cue never goes silent. Extracted so the mode
+/// selection is unit-testable without a TTS engine.
+String splitCueUtterance(
+  AppLocalizations l10n, {
+  required String count,
+  required String unitWord,
+  required String splitTail,
+  required String avgTail,
+  required String paceMode,
+}) {
+  if (paceMode == SplitPaceMode.average && avgTail.isNotEmpty) {
+    return l10n.ttsSplitAverage(count, unitWord, avgTail);
+  }
+  if (paceMode == SplitPaceMode.both &&
+      splitTail.isNotEmpty &&
+      avgTail.isNotEmpty) {
+    return l10n.ttsSplitBoth(count, unitWord, splitTail, avgTail);
+  }
+  return l10n.ttsSplit(count, unitWord, splitTail);
+}
+
 /// Which audio-focus ducking strategy a platform gets for TTS cues.
 /// Android requests navigation-guidance focus (transient-may-duck);
 /// iOS uses the playback category with duckOthers; every other platform
@@ -281,12 +305,23 @@ class AudioCues {
   /// If [useSpeed] is true, announces speed in km/h or mph instead of pace.
   /// [tickIntervalMetres] lets the cue describe non-1km intervals (e.g. 5km
   /// for cycling): "5 kilometres" instead of "1 kilometre".
+  ///
+  /// [paceMode] ([SplitPaceMode]) selects what pace is read out:
+  /// [SplitPaceMode.split] speaks the split's own pace (the default and
+  /// prior behaviour), [SplitPaceMode.average] the cumulative average
+  /// pace since the run started ([averagePaceSecondsPerKm]), and
+  /// [SplitPaceMode.both] speaks both. The mode composes independently of
+  /// every other cue. It degrades gracefully: if the requested average
+  /// isn't available yet (null / non-positive), the cue falls back to the
+  /// split-pace announcement rather than going silent.
   Future<void> announceSplit({
     required int distanceTicks,
     required double? paceSecondsPerKm,
     required DistanceUnit unit,
     bool useSpeed = false,
     double tickIntervalMetres = 1000,
+    double? averagePaceSecondsPerKm,
+    String paceMode = SplitPaceMode.split,
   }) async {
     await _init();
     await _applyLanguage();
@@ -298,10 +333,17 @@ class AudioCues {
         : (totalUnits == 1
             ? l10n.ttsSplitUnitKilometre
             : l10n.ttsSplitUnitKilometres);
-    final tail = useSpeed
-        ? formatSpeedUtterance(paceSecondsPerKm, unit, tag)
-        : formatPaceUtterance(paceSecondsPerKm, unit, tag);
-    await _tts.speak(l10n.ttsSplit('$totalUnits', unitWord, tail));
+    String tailOf(double? p) => useSpeed
+        ? formatSpeedUtterance(p, unit, tag)
+        : formatPaceUtterance(p, unit, tag);
+    await _tts.speak(splitCueUtterance(
+      l10n,
+      count: '$totalUnits',
+      unitWord: unitWord,
+      splitTail: tailOf(paceSecondsPerKm),
+      avgTail: tailOf(averagePaceSecondsPerKm),
+      paceMode: paceMode,
+    ));
   }
 
   /// Announce that the run started.

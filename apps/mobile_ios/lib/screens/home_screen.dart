@@ -403,6 +403,15 @@ class _HomeScreenState extends State<HomeScreen>
     setState(_rebuildPages);
     _currentIndex.value = _pageRun;
     _pageController.jumpToPage(_pageRun);
+    // Dismiss any screens pushed on top of the shell (RoutesScreen /
+    // RouteDetailScreen — "Start run" is reached by pushing those). We
+    // just jumped the shell PageView to the recorder, but a pushed
+    // route screen would keep obscuring it — so tapping "Start run" from
+    // the routes page looked like it just reopened the route page. Pop
+    // back to the shell so the recorder is actually shown.
+    if (mounted) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
   }
 
   void _goToPage(int index) {

@@ -2358,6 +2358,10 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get routesImportSharedFailed =>
+      'No se pudo importar el archivo: no es una ruta GPX o KML válida.';
+
+  @override
   String routesSaved(String name) {
     return '\"$name\" guardada';
   }
@@ -2512,6 +2516,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get routeBuilderRouteFailedStraightLines =>
       'No se pudo calcular la ruta — se muestran líneas rectas entre tus puntos.';
+
+  @override
+  String get routeBuilderSnapUnavailable =>
+      'El ajuste a carreteras no está disponible — los puntos se colocan donde tocas, unidos por líneas rectas.';
 
   @override
   String routeBuilderSegmentsFailed(int count) {
@@ -6620,7 +6628,36 @@ class AppLocalizationsEs extends AppLocalizations {
       'Predeterminado (1 km al correr, 5 km en bici)';
 
   @override
-  String get prefsLivePaceAlert => 'Alerta de ritmo en vivo';
+  String get prefsSplitPaceMode => 'Anuncio de parciales';
+
+  @override
+  String get prefsSplitPaceModeSubtitle => 'Qué ritmo anuncia cada parcial';
+
+  @override
+  String get prefsSplitPaceModeSplit => 'Ritmo del parcial';
+
+  @override
+  String get prefsSplitPaceModeAverage => 'Ritmo medio';
+
+  @override
+  String get prefsSplitPaceModeBoth => 'Ambos';
+
+  @override
+  String get prefsSplitPaceModeInfo =>
+      'En cada parcial, elige qué ritmo escuchas: el ritmo solo de ese parcial, tu ritmo medio de toda la carrera hasta ahora, o ambos. Útil para mantener un esfuerzo constante. Ejemplo: «1 kilómetro. Ritmo medio, 5 minutos 45 segundos por kilómetro.»';
+
+  @override
+  String get prefsTargetPace => 'Ritmo objetivo';
+
+  @override
+  String get prefsTargetPaceInfo =>
+      'El ritmo que quieres mantener. Por sí solo permanece en silencio: activa el aviso de voz «Alertas de desvío de ritmo» para oír «acelera» o «reduce» cuando te desvíes más de 30 segundos. Ejemplo: «Acelera 8 segundos.»';
+
+  @override
+  String get prefsCueInfoTooltip => '¿Qué es esto?';
+
+  @override
+  String get prefsLivePaceAlert => 'Ritmo objetivo';
 
   @override
   String get prefsLivePaceAlertMin => 'min';
@@ -6630,11 +6667,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get prefsLivePaceAlertOff =>
-      'Desactivado: define un ritmo para recibir avisos hablados durante una carrera';
+      'Sin definir: define un objetivo y activa las alertas de desvío de ritmo';
 
   @override
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
-    return '$pace $paceLabel — aviso hablado durante una carrera cuando hay 30 s+ de desvío';
+    return '$pace $paceLabel — las alertas de desvío de ritmo suenan al desviarte 30 s o más';
   }
 
   @override
@@ -6843,7 +6880,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsAudioCues => 'Avisos de audio';
 
   @override
-  String get prefsAudioCuesSubtitle => 'Anuncios hablados de parciales';
+  String get prefsAudioCuesSubtitle =>
+      'Anuncia parciales, ritmo y otros avisos mientras corres';
 
   @override
   String get prefsMinimalVoiceCues => 'Avisos de voz mínimos';
@@ -8451,6 +8489,16 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String ttsSplit(String count, String unit, String tail) {
     return '$count $unit. $tail';
+  }
+
+  @override
+  String ttsSplitAverage(String count, String unit, String tail) {
+    return '$count $unit. Promedio $tail';
+  }
+
+  @override
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail) {
+    return '$count $unit. $tail. Promedio $avgTail';
   }
 
   @override
@@ -11542,54 +11590,89 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsCueSplits => 'Parciales';
 
   @override
-  String get prefsCueSplitsSubtitle => 'Distancia y ritmo en cada parcial';
+  String get prefsCueSplitsSubtitle =>
+      'Tu ritmo (o velocidad) cada vez que pasas un marcador de parcial';
+
+  @override
+  String get prefsCueSplitsInfo =>
+      'Dice un breve resumen cada vez que completas un parcial (ajusta la distancia en Intervalo de parciales). Usa Anuncio de parciales para elegir ritmo del parcial, ritmo medio o ambos. Ejemplo: «1 kilómetro. Ritmo, 5 minutos 30 segundos por kilómetro.»';
 
   @override
   String get prefsCueStartFinish => 'Inicio y final';
 
   @override
   String get prefsCueStartFinishSubtitle =>
-      'Avisos al empezar y terminar la carrera';
+      '«Carrera iniciada» al empezar y un resumen al terminar';
+
+  @override
+  String get prefsCueStartFinishInfo =>
+      'Confirma que la carrera comenzó y lee tu distancia y tiempo al parar. Ejemplo: «Carrera completada. 10,0 kilómetros en 52 minutos.»';
 
   @override
   String get prefsCueOffRoute => 'Fuera de ruta';
 
   @override
-  String get prefsCueOffRouteSubtitle => 'Aviso al salirte de la ruta elegida';
+  String get prefsCueOffRouteSubtitle =>
+      'Un aviso cuando te sales de la ruta que sigues';
 
   @override
-  String get prefsCuePaceAlerts => 'Alertas de ritmo';
+  String get prefsCueOffRouteInfo =>
+      'Solo funciona si empiezas una carrera con una ruta guardada. Te avisa en cuanto te alejas de ella para que vuelvas al camino. Ejemplo: «Fuera de ruta.»';
 
   @override
-  String get prefsCuePaceAlertsSubtitle => 'Acelerar o reducir, con cuánto';
+  String get prefsCuePaceAlerts => 'Alertas de desvío de ritmo';
+
+  @override
+  String get prefsCuePaceAlertsSubtitle =>
+      '«Acelera» / «reduce» cuando te desvías de tu ritmo objetivo';
+
+  @override
+  String get prefsCuePaceAlertsInfo =>
+      'Necesita un ritmo objetivo. Cuando te desvías más de unos 30 segundos, te dice en qué sentido ajustar y cuánto. Ejemplo: «Acelera 8 segundos.»';
 
   @override
   String get prefsCueWorkoutSteps => 'Pasos del entrenamiento';
 
   @override
   String get prefsCueWorkoutStepsSubtitle =>
-      'Cambios de paso en entrenamientos estructurados';
+      'Anuncia cada paso de un entrenamiento estructurado al comenzar';
+
+  @override
+  String get prefsCueWorkoutStepsInfo =>
+      'Solo activo durante un entrenamiento estructurado (una sesión de plan o un entrenamiento de intervalos). Anuncia cada paso y su objetivo para que mantengas la vista al frente. Ejemplo: «Repetición 3 de 5. 400 metros a 4 minutos 30 segundos por kilómetro.»';
 
   @override
   String get prefsCueCutoffCatchUp => 'Alcanzar el corte';
 
   @override
   String get prefsCueCutoffCatchUpSubtitle =>
-      'Ritmo necesario para el próximo corte si vas justo';
+      'El ritmo que necesitas para un corte en peligro';
+
+  @override
+  String get prefsCueCutoffCatchUpInfo =>
+      'Solo activo en una ruta con cortes de tiempo. Si uno está en peligro, lee la distancia hasta él y el ritmo que aún lo alcanza. Ejemplo: «2 kilómetros hasta el corte. 6 minutos por kilómetro.»';
 
   @override
   String get prefsCueMarkerTargets => 'Marcadores del recorrido';
 
   @override
   String get prefsCueMarkerTargetsSubtitle =>
-      'Delante o detrás del plan en cada marcador';
+      'Si vas por delante o por detrás del plan en cada marcador';
+
+  @override
+  String get prefsCueMarkerTargetsInfo =>
+      'Solo activo en una ruta cuyos marcadores llevan tiempos objetivo. Al pasar cada uno te dice si vas por delante o por detrás, y por cuánto. Ejemplo: «Avituallamiento 2: 45 segundos por delante del plan.»';
 
   @override
   String get prefsCuePhaseTransitions => 'Fases de carrera';
 
   @override
   String get prefsCuePhaseTransitionsSubtitle =>
-      'Cuando empieza una fase de la estrategia';
+      'Un aviso al comenzar cada fase de tu estrategia de carrera';
+
+  @override
+  String get prefsCuePhaseTransitionsInfo =>
+      'Solo activo cuando eliges una estrategia de carrera. Anuncia cada fase y su intención al comenzar. Ejemplo: «Fase 2 de 3. Asiéntate en tu ritmo objetivo.»';
 
   @override
   String get runRaceStrategy => 'Estrategia de carrera';
@@ -11655,4 +11738,14 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get routeMarkerTargetInvalid =>
       'Introduce el tiempo objetivo como h:mm:ss';
+
+  @override
+  String get routeMarkerOfficialBadge => 'Propietario de la ruta';
+
+  @override
+  String get routeMarkerDistanceAlongLabel => 'Distancia a lo largo de la ruta';
+
+  @override
+  String get routeMarkerDistanceInvalid =>
+      'Introduce una distancia válida a lo largo de la ruta.';
 }

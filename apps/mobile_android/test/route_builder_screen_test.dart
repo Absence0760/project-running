@@ -142,7 +142,11 @@ void main() {
     return s;
   }
 
-  Future<void> _pumpScreen(WidgetTester tester, LocalRouteStore store) async {
+  Future<void> _pumpScreen(
+    WidgetTester tester,
+    LocalRouteStore store, {
+    bool? snapAvailable,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -161,6 +165,7 @@ void main() {
             elevationFetcher: _stubElev,
             geocodingFetcher: _stubGeocoding,
             locateFn: _stubLocate,
+            snapAvailableOverride: snapAvailable,
           ),
         ),
       ),
@@ -225,6 +230,32 @@ void main() {
     expect(find.text('Trail'), findsOneWidget);
     expect(find.text('Road'), findsOneWidget);
     expect(find.text('Straight'), findsOneWidget);
+  });
+
+  // Regression: on a release build with no OSRM_URL the prod privacy
+  // guard threw out of snapToRoad on every Trail/Road tap, silently
+  // dropping the gesture ("route builder doesn't let me tap
+  // waypoints"). The builder now degrades to straight-line placement
+  // and discloses it once on open.
+  testWidgets('degraded snapping discloses once on open (Trail default)',
+      (tester) async {
+    final store = await _store();
+    await _pumpScreen(tester, store, snapAvailable: false);
+    // The post-frame disclosure banner has run by now.
+    expect(
+      find.textContaining('Road snapping is unavailable'),
+      findsOneWidget,
+    );
+    // Drain the banner's 3s auto-dismiss timer (pumpAndSettle hangs on
+    // the flutter_map animation, so pump the fixed duration instead).
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('no snapping-unavailable banner when snapping works',
+      (tester) async {
+    final store = await _store();
+    await _pumpScreen(tester, store, snapAvailable: true);
+    expect(find.textContaining('Road snapping is unavailable'), findsNothing);
   });
 
   group('formatSaveRouteError', () {

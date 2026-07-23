@@ -213,6 +213,16 @@ double haversineMetres(
   return r * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
 
+/// Cumulative average pace so far, in seconds per kilometre — the run's
+/// overall [elapsedSeconds] divided by the distance covered. Mirrors the
+/// on-screen average-pace stat (total elapsed as the time basis). Returns
+/// null when either input is non-positive so a caller can fall back rather
+/// than divide by zero or announce a meaningless pace.
+double? averagePaceSecPerKm(double distanceMetres, int elapsedSeconds) {
+  if (distanceMetres <= 0 || elapsedSeconds <= 0) return null;
+  return elapsedSeconds / (distanceMetres / 1000);
+}
+
 /// Bracket key → dashboard PB label, and the shortest-first display order.
 /// Shared by [bestEffortsFromPersonalRecords] and [pbAchievedAtByLabel] so the
 /// time map and the achieved-date map stay keyed identically.

@@ -154,7 +154,7 @@ Each define is passed from a GitHub Secret; `main.dart`'s `String.fromEnvironmen
 
 | Secret | Define | Value / effect |
 |---|---|---|
-| `MOBILE_OSRM_URL` | `OSRM_URL` | `https://osrm.threkir.com` — **required**, or the release route builder throws on first routing call (the public demo has no DPA and is refused in release) |
+| `MOBILE_OSRM_URL` | `OSRM_URL` | **Required for road-snapping**, and must be a URL the *device* can reach over the public internet. Note the internal `osrm.threkir.com` (Fly 6PN, never publicly resolvable — see `docs/ops/deployment.md`) does **not** work here: web reaches OSRM through the server-side `osrm-proxy` Lambda, but mobile's `routing.dart` calls OSRM directly. So this needs either OSRM exposed on a public, rate-limited hostname, or a mobile-facing proxy mirroring `apps/web/lambda/osrm-proxy`. Unset (or unreachable), the release build refuses the public demo (no DPA) and the route builder's Trail/Road modes degrade to straight-line placement (pins land where you tap) with a one-time disclosure. |
 | `MOBILE_LIVE_HUB_URL` | `LIVE_HUB_URL` | Go live-hub URL; empty → falls back to Supabase `live_run_pings` |
 | `MOBILE_GOOGLE_WEB_CLIENT_ID` | `GOOGLE_WEB_CLIENT_ID` | Google Sign-In web client id; empty → Google button no-ops |
 | `MOBILE_STRAVA_CLIENT_ID` | `STRAVA_CLIENT_ID` | Strava OAuth client id; empty → connect falls back to the web flow |
@@ -336,7 +336,7 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [x] Upload keystore generated, set as GitHub Secrets, and sops-backed-up in the estate secrets repo (2026-07-21)
 - [ ] Keystore backup stored cold (off-machine)
 - [ ] Play service account created, JSON in GitHub Secrets, granted Release manager on this app
-- [ ] Shared `PUBLIC_*` secrets present (Supabase URL/anon, MapTiler — already set for web) and `MOBILE_OSRM_URL` set (required); optional `MOBILE_*` keys left unset stay fail-closed
+- [ ] Shared `PUBLIC_*` secrets present (Supabase URL/anon, MapTiler — already set for web) and `MOBILE_OSRM_URL` set (required for route-builder road-snapping — unset degrades Trail/Road to straight-line placement, not a hard failure); optional `MOBILE_*` keys left unset stay fail-closed
 - [ ] Manifest reviewed; permissions list matches data-safety form
 - [ ] BACKGROUND_LOCATION prominent in-app disclosure on OnboardingScreen verified
 - [ ] First `mobile_android@*` tag built clean, AAB landed on Internal track

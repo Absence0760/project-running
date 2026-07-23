@@ -862,29 +862,36 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         top: false,
         child: ListView(
           children: [
-            SizedBox(
-              height: 320,
-              child: LiveRunMap(
-                track: const [],
-                plannedRoute: _displayWaypoints,
-                followRunner: false,
-                courseMarkers: _markerPins,
-                markerPlacing: _markerPlacing,
-                onMarkerPlace: (wp) =>
-                    _markersPanelKey.currentState?.placeAt(wp),
-                onMarkerTap: (id) =>
-                    _markersPanelKey.currentState?.selectMarker(id),
-                // Only mount the preview-runner pulse while the user
-                // is actually scrubbing — releasing the thumb fades
-                // back to the static polyline view so the marker
-                // doesn't sit at the start indefinitely after a
-                // single drag.
-                previewPosition: _scrubbing
-                    ? interpolateAlongRoute(
-                        _displayWaypoints,
-                        _scrubFraction,
-                      )
-                    : null,
+            // Keep the map alive across ListView scroll. A bare list child is
+            // disposed once it scrolls past the cache extent, tearing down the
+            // FlutterMap + MapController; scrolling back rebuilt it from
+            // scratch — a visible tile reload plus a jank spike. Keeping it
+            // alive also pauses its pulse ticker while off-screen.
+            _KeepAliveMap(
+              child: SizedBox(
+                height: 320,
+                child: LiveRunMap(
+                  track: const [],
+                  plannedRoute: _displayWaypoints,
+                  followRunner: false,
+                  courseMarkers: _markerPins,
+                  markerPlacing: _markerPlacing,
+                  onMarkerPlace: (wp) =>
+                      _markersPanelKey.currentState?.placeAt(wp),
+                  onMarkerTap: (id) =>
+                      _markersPanelKey.currentState?.selectMarker(id),
+                  // Only mount the preview-runner pulse while the user
+                  // is actually scrubbing — releasing the thumb fades
+                  // back to the static polyline view so the marker
+                  // doesn't sit at the start indefinitely after a
+                  // single drag.
+                  previewPosition: _scrubbing
+                      ? interpolateAlongRoute(
+                          _displayWaypoints,
+                          _scrubFraction,
+                        )
+                      : null,
+                ),
               ),
             ),
             // Diagnostic for the "I'm still not seeing the map"
@@ -1100,6 +1107,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 api: widget.apiClient,
                 routeId: route.id,
                 isOwner: _isOwner,
+                viewerId: widget.apiClient?.userId,
+                routeOwnerId: widget.route.userId,
                 routeLine: _displayWaypoints,
                 onPinsChanged: (pins) {
                   if (mounted) setState(() => _markerPins = pins);
@@ -2006,5 +2015,30 @@ class RouteTransferClubPicker extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Preserves its child's State when it scrolls out of the enclosing
+/// ListView's cache extent. Wraps the route-detail map so the FlutterMap +
+/// MapController aren't disposed and rebuilt (with a full tile reload) on
+/// every scroll past it. Same `AutomaticKeepAliveClientMixin` idiom as
+/// `_LazyKeepAliveTab` on the home shell.
+class _KeepAliveMap extends StatefulWidget {
+  final Widget child;
+  const _KeepAliveMap({required this.child});
+
+  @override
+  State<_KeepAliveMap> createState() => _KeepAliveMapState();
+}
+
+class _KeepAliveMapState extends State<_KeepAliveMap>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

@@ -2459,12 +2459,16 @@ class _RunScreenState extends State<RunScreen> {
           );
           if (widget.preferences.audioCues &&
               widget.preferences.voiceCueEnabled(VoiceCue.splits)) {
+            final avgPace =
+                averagePaceSecPerKm(_distanceMetres, _elapsed.inSeconds);
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
                   distanceTicks: currentTick,
                   paceSecondsPerKm: _pace,
                   unit: unit,
                   useSpeed: _activityType.usesSpeed,
                   tickIntervalMetres: tickInterval,
+                  averagePaceSecondsPerKm: avgPace,
+                  paceMode: widget.preferences.splitPaceMode,
                 ));
           }
         }

@@ -48,29 +48,48 @@ String _osrmBaseUrl() {
   }
 }
 
+/// Whether OSRM road-snapping can run in this build. Returns `false`
+/// only when a **release** build would otherwise resolve to the
+/// uncontracted public demo (no `OSRM_URL` set) — the exact case
+/// [assertOsrmConfiguredForProd] refuses. Callers (the route builder)
+/// check this to degrade to straight-line placement — a map tap still
+/// drops a pin — instead of letting the prod guard throw out of
+/// [snapToRoad] on every tap and silently swallow the gesture. In
+/// debug / profile the demo is permitted, so snapping is always
+/// considered available there.
+///
+/// `isReleaseModeOverride` is the same unit-test escape hatch as
+/// [assertOsrmConfiguredForProd].
+bool isOsrmSnapAvailable({bool? isReleaseModeOverride}) {
+  final isRelease = isReleaseModeOverride ?? kReleaseMode;
+  if (!isRelease) return true;
+  return _osrmBaseUrl() != _kPublicDemoOsrm;
+}
+
 /// Throws when the build is in release mode AND the env override is
 /// unset (so the helper would otherwise hit the community demo).
 /// Callers invoke this at the top of each fetch helper so a
 /// misconfigured release build fails loudly on the first routing
 /// request instead of quietly forwarding user data to an
-/// uncontracted third party.
+/// uncontracted third party. Defined in terms of [isOsrmSnapAvailable]
+/// so the throw condition and the builder's degrade condition can
+/// never drift apart.
 ///
 /// `isReleaseModeOverride` is an escape hatch for unit tests that
 /// need to exercise the throwing path — production callers should
 /// leave it unset so [kReleaseMode] decides.
 @visibleForTesting
 void assertOsrmConfiguredForProd({bool? isReleaseModeOverride}) {
-  final isRelease = isReleaseModeOverride ?? kReleaseMode;
-  if (!isRelease) return;
-  if (_osrmBaseUrl() == _kPublicDemoOsrm) {
-    throw StateError(
-      'OSRM not configured: set OSRM_URL in the dotenv file to a '
-      'self-hosted instance. The community endpoint '
-      'router.project-osrm.org is uncontracted (no DPA) and must '
-      'not receive production traffic. '
-      'See audit/third-party-data-flows (2026-05-25).',
-    );
+  if (isOsrmSnapAvailable(isReleaseModeOverride: isReleaseModeOverride)) {
+    return;
   }
+  throw StateError(
+    'OSRM not configured: set OSRM_URL in the dotenv file to a '
+    'self-hosted instance. The community endpoint '
+    'router.project-osrm.org is uncontracted (no DPA) and must '
+    'not receive production traffic. '
+    'See audit/third-party-data-flows (2026-05-25).',
+  );
 }
 
 /// Test-only accessor for the resolved OSRM base URL.

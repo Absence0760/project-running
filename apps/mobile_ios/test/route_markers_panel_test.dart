@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/widgets/route_markers_panel.dart';
 
 RouteMarkerRow _marker({
@@ -11,12 +14,13 @@ RouteMarkerRow _marker({
   required String kind,
   required String label,
   double? positionM,
+  String userId = 'owner-1',
   Map<String, dynamic> meta = const {},
 }) {
   return RouteMarkerRow(
     id: id,
     routeId: 'route-1',
-    userId: 'owner-1',
+    userId: userId,
     kind: kind,
     label: label,
     lat: 51.5,
@@ -87,6 +91,8 @@ Widget _host({
   ApiClient? api,
   GlobalKey<RouteMarkersPanelState>? panelKey,
   List<Waypoint> routeLine = const [],
+  String? viewerId = 'owner-1',
+  String? routeOwnerId = 'owner-1',
 }) {
   return MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -98,6 +104,8 @@ Widget _host({
           api: api,
           routeId: 'route-1',
           isOwner: isOwner,
+          viewerId: viewerId,
+          routeOwnerId: routeOwnerId,
           routeLine: routeLine,
           initialMarkers: markers,
           onPinsChanged: (_) {},
@@ -146,9 +154,51 @@ void main() {
     expect(find.byIcon(Icons.delete_outline), findsNWidgets(2));
   });
 
-  testWidgets('non-owner sees the schedule but no edit affordances', (tester) async {
+  testWidgets(
+      'non-owner viewer: owner markers are read-only + badged, own markers '
+      'editable, and they can add their own', (tester) async {
     await tester.pumpWidget(_host(
       isOwner: false,
+      viewerId: 'viewer-2',
+      routeOwnerId: 'owner-1',
+      markers: [
+        // The route owner's OFFICIAL marker — read-only + badged.
+        _marker(
+            id: 'm1',
+            kind: 'aid_station',
+            label: 'Official aid',
+            positionM: 500,
+            userId: 'owner-1'),
+        // The viewer's OWN personal overlay — editable.
+        _marker(
+            id: 'm2',
+            kind: 'note',
+            label: 'My note',
+            positionM: 800,
+            userId: 'viewer-2'),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.text('Official aid'), findsOneWidget);
+    expect(find.text('My note'), findsOneWidget);
+
+    // A signed-in non-owner can add their own markers.
+    expect(find.text('Add marker'), findsOneWidget);
+
+    // Only the viewer's own marker carries edit/delete; the owner's is
+    // read-only and badged as the route owner's.
+    expect(find.byIcon(Icons.edit), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    expect(find.text('Route owner'), findsOneWidget);
+  });
+
+  testWidgets('signed-out viewer sees the schedule but cannot add or edit',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      isOwner: false,
+      viewerId: null,
+      routeOwnerId: 'owner-1',
       markers: [
         _marker(id: 'm1', kind: 'aid_station', label: 'Aid 1', positionM: 500),
       ],
@@ -352,6 +402,97 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('placing by distance along the route creates a marker',
+      (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Name'), 'By distance');
+    // No Preferences registered in the host-test runner → km. 0.5 km = 500 m.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Distance along route'), '0.5');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final expected = markerPointAtDistance(_routeLine, 500)!;
+    expect(api.addCalls, 1);
+    expect((api.addedLat! - expected.lat).abs() < 1e-6, isTrue,
+        reason: 'lat ${api.addedLat} vs ${expected.lat}');
+    expect((api.addedLng! - expected.lng).abs() < 1e-6, isTrue,
+        reason: 'lng ${api.addedLng} vs ${expected.lng}');
+    // 500 m sits on the first (horizontal) leg, so latitude stays put.
+    expect((api.addedLat! - 51.5).abs() < 1e-6, isTrue);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  group('parseDistanceAlong', () {
+    test('parses a km value into metres', () {
+      expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);
+      expect(parseDistanceAlong('5', unit: DistanceUnit.km), 5000);
+      expect(parseDistanceAlong('0', unit: DistanceUnit.km), 0);
+    });
+
+    test('parses a mile value into metres', () {
+      expect(parseDistanceAlong('1', unit: DistanceUnit.mi), kMetresPerMile);
+      final five = parseDistanceAlong('5', unit: DistanceUnit.mi)!;
+      expect((five - 5 * kMetresPerMile).abs() < 1e-6, isTrue);
+    });
+
+    test('rejects junk, negatives, and non-finite', () {
+      expect(parseDistanceAlong('', unit: DistanceUnit.km), isNull);
+      expect(parseDistanceAlong('abc', unit: DistanceUnit.km), isNull);
+      expect(parseDistanceAlong('-3', unit: DistanceUnit.km), isNull);
+    });
+  });
+
+  group('markerPointAtDistance', () {
+    const line = <Waypoint>[
+      Waypoint(lat: 51.5, lng: -0.12),
+      Waypoint(lat: 51.5, lng: -0.10),
+      Waypoint(lat: 51.51, lng: -0.10),
+    ];
+
+    test('needs a real line', () {
+      expect(markerPointAtDistance(const [], 100), isNull);
+      expect(markerPointAtDistance(
+          const [Waypoint(lat: 51.5, lng: -0.12)], 100), isNull);
+    });
+
+    test('distance 0 snaps to the start', () {
+      final wp = markerPointAtDistance(line, 0)!;
+      expect((wp.lat - 51.5).abs() < 1e-9, isTrue);
+      expect((wp.lng - -0.12).abs() < 1e-9, isTrue);
+    });
+
+    test('an over-long distance clamps to the end', () {
+      final wp = markerPointAtDistance(line, 1e9)!;
+      expect((wp.lat - 51.51).abs() < 1e-6, isTrue);
+      expect((wp.lng - -0.10).abs() < 1e-6, isTrue);
+    });
+
+    test('a mid distance lands on the line', () {
+      final wp = markerPointAtDistance(line, 500)!;
+      // 500 m is within the first horizontal leg — latitude unchanged, and
+      // longitude advances east of the start.
+      expect((wp.lat - 51.5).abs() < 1e-6, isTrue);
+      expect(wp.lng > -0.12 && wp.lng < -0.10, isTrue);
+    });
+  });
+
   group('parseMarkerElapsed / formatMarkerElapsed', () {
     test('accepts h:mm:ss, mm:ss, and bare minutes', () {
       expect(parseMarkerElapsed('1:45:00'), 6300);
@@ -383,5 +524,27 @@ void main() {
       expect(parseMarkerElapsed(formatMarkerElapsed(6300)), 6300);
       expect(parseMarkerElapsed(formatMarkerElapsed(1500)), 1500);
     });
+  });
+
+  test(
+      '_openEditor opens the marker sheet with useSafeArea so its Save button '
+      'clears the system nav bar', () {
+    final source =
+        File('lib/widgets/route_markers_panel.dart').readAsStringSync();
+    final start = source.indexOf('Future<void> _openEditor(');
+    expect(start, isNonNegative,
+        reason: '_openEditor not found in route_markers_panel.dart');
+    // Scope to the editor-open call, ahead of the save dispatch.
+    final end = source.indexOf('if (result == null) return;', start);
+    expect(end, greaterThan(start));
+    final openEditor = source.substring(start, end);
+    expect(openEditor.contains('showModalBottomSheet<_MarkerDraft>'), isTrue);
+    // Without useSafeArea the scroll-controlled sheet extends under the
+    // Samsung system nav bar and the Save button is occluded, so the tap
+    // misses and "Save does nothing". isScrollControlled must stay for the
+    // keyboard room.
+    expect(openEditor.contains('useSafeArea: true'), isTrue,
+        reason: 'the marker-editor bottom sheet must pass useSafeArea: true');
+    expect(openEditor.contains('isScrollControlled: true'), isTrue);
   });
 }

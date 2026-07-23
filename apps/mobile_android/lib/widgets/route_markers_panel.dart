@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../preferences.dart';
+import '../route_geometry.dart';
 import '../route_markers.dart';
 import '../route_snap.dart';
 import 'live_run_map.dart';
@@ -11,9 +13,13 @@ import 'top_banner.dart';
 
 /// Course-marker panel for the route-detail screen (Flutter twin of web
 /// `RouteMarkerEditor.svelte`). Renders an ordered course-schedule list and
-/// — for the route owner — an add / edit / delete flow that drops a pin by
-/// tapping the map or by typing lat/lng into the editor sheet (the
-/// keyboard / screen-reader placement path, WCAG 2.1.1).
+/// an add / edit / delete flow. **Any signed-in viewer** may add their own
+/// markers to a route they can see; the route owner's OFFICIAL markers are
+/// read-only to a non-owner and badged as the owner's (a marker is official
+/// iff `marker.user_id == route.user_id`; anything else is the viewer's own
+/// private overlay). A pin drops by tapping the map, by typing lat/lng, or by
+/// entering a distance along the route ("mile 5") into the editor sheet — the
+/// keyboard / screen-reader placement path, WCAG 2.1.1.
 /// The host owns the `LiveRunMap` and forwards map taps via
 /// the [GlobalKey]-exposed [RouteMarkersPanelState.placeAt] /
 /// [RouteMarkersPanelState.selectMarker]; the panel pushes the rendered pins
@@ -22,6 +28,15 @@ class RouteMarkersPanel extends StatefulWidget {
   final ApiClient? api;
   final String routeId;
   final bool isOwner;
+
+  /// The signed-in viewer's user id (`api.userId`). A marker is editable /
+  /// deletable by the viewer iff `marker.userId == viewerId`; null when
+  /// signed out (no add / edit affordances).
+  final String? viewerId;
+
+  /// The route owner's user id. A marker whose `userId` matches is the
+  /// owner's OFFICIAL marker — read-only + badged for a non-owner viewer.
+  final String? routeOwnerId;
 
   /// The route's rendered polyline. A tapped point is projected onto this
   /// line when the "Snap to route line" toggle is on (mirrors web's
@@ -44,6 +59,8 @@ class RouteMarkersPanel extends StatefulWidget {
     required this.routeLine,
     required this.onPinsChanged,
     required this.onPlacingChanged,
+    this.viewerId,
+    this.routeOwnerId,
     this.initialMarkers,
   });
 
@@ -150,12 +167,26 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     return (lat: s.lat, lng: s.lng);
   }
 
-  /// Called by the host when a course-marker pin is tapped.
+  /// A signed-in viewer can add their own markers.
+  bool get _canAdd => widget.viewerId != null;
+
+  /// The viewer may edit / delete only markers they own.
+  bool _canEditMarker(RouteMarkerRow m) =>
+      widget.viewerId != null && m.userId == widget.viewerId;
+
+  /// A marker is OFFICIAL when it belongs to the route owner. Locally-built
+  /// routes carry an empty owner id — treat those as having no official set.
+  bool _isOfficialMarker(RouteMarkerRow m) {
+    final owner = widget.routeOwnerId;
+    return owner != null && owner.isNotEmpty && m.userId == owner;
+  }
+
+  /// Called by the host when a course-marker pin is tapped. Only the viewer's
+  /// own markers open the editor; an owner's official marker is read-only.
   void selectMarker(String id) {
-    if (!widget.isOwner) return;
     for (final row in _markers) {
       if (row.id == id) {
-        _openEditor(existing: row);
+        if (_canEditMarker(row)) _openEditor(existing: row);
         return;
       }
     }
@@ -174,11 +205,20 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     final result = await showModalBottomSheet<_MarkerDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _MarkerEditorSheet(existing: existing, lat: lat, lng: lng),
+      useSafeArea: true,
+      builder: (ctx) => _MarkerEditorSheet(
+        existing: existing,
+        lat: lat,
+        lng: lng,
+        routeLine: widget.routeLine,
+      ),
     );
     if (result == null) return;
     final api = widget.api;
-    if (api == null) return;
+    if (api == null) {
+      debugPrint('route marker save skipped: api null');
+      return;
+    }
     try {
       if (existing != null) {
         await api.updateRouteMarker(
@@ -318,7 +358,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               child: Text(l10n.routeMarkerHeading,
                   style: theme.textTheme.titleMedium),
             ),
-            if (widget.isOwner && !_placing)
+            if (_canAdd && !_placing)
               TextButton.icon(
                 onPressed: _startAdd,
                 icon: const Icon(Icons.add_location_alt_outlined, size: 18),
@@ -391,9 +431,23 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(m.label,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(m.label,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                                if (_isOfficialMarker(m) && !_canEditMarker(m))
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                        start: 6),
+                                    child: _OfficialBadge(
+                                        label: l10n.routeMarkerOfficialBadge),
+                                  ),
+                              ],
+                            ),
                           ),
                           if (m.positionM != null)
                             Text(_distanceLabel(m.positionM!),
@@ -411,7 +465,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                     ],
                   ),
                 ),
-                if (widget.isOwner) ...[
+                if (_canEditMarker(m)) ...[
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.routeMarkerEdit,
@@ -433,9 +487,36 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
   }
 
   String _distanceLabel(double metres) {
-    // Display in km with one decimal — the route-detail surface already
-    // formats elsewhere; markers show a compact "X.X km".
-    return '${(metres / 1000).toStringAsFixed(1)} km';
+    // Compact "X.X km" / "X.X mi" in the viewer's unit preference.
+    final unit = activeDistanceUnit;
+    final value = unit == DistanceUnit.mi
+        ? metres / kMetresPerMile
+        : metres / 1000;
+    return '${value.toStringAsFixed(1)} ${UnitFormat.distanceLabel(unit)}';
+  }
+}
+
+/// Small pill flagging a marker as the route owner's official one, shown to a
+/// non-owner viewer (their own overlay markers carry no badge).
+class _OfficialBadge extends StatelessWidget {
+  final String label;
+  const _OfficialBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall
+            ?.copyWith(color: theme.colorScheme.onSecondaryContainer),
+      ),
+    );
   }
 }
 
@@ -456,6 +537,31 @@ String formatMarkerCoordinate(double v) {
       .toStringAsFixed(6)
       .replaceFirst(RegExp(r'0+$'), '')
       .replaceFirst(RegExp(r'\.$'), '');
+}
+
+/// Metres in one statute mile (matches `UnitFormat`'s private constant).
+const double kMetresPerMile = 1609.344;
+
+/// Parse a "distance along the route" the user typed (in [unit]) into metres.
+/// Returns null for non-numeric / non-finite / negative input. Does NOT clamp
+/// to the route length — that happens in [markerPointAtDistance] via the
+/// fraction clamp, so callers get a valid on-route point for an over-long
+/// value rather than a rejection.
+double? parseDistanceAlong(String text, {required DistanceUnit unit}) {
+  final v = double.tryParse(text.trim());
+  if (v == null || !v.isFinite || v < 0) return null;
+  return unit == DistanceUnit.mi ? v * kMetresPerMile : v * 1000;
+}
+
+/// Convert a distance-along-route in [metres] to a lat/lng on [routeLine].
+/// Out-of-range distances clamp to the route's start / end. Returns null when
+/// the line has no usable geometry (`< 2` points or zero length).
+Waypoint? markerPointAtDistance(List<Waypoint> routeLine, double metres) {
+  if (routeLine.length < 2) return null;
+  final total = polylineLengthMetres(routeLine);
+  if (total <= 0) return null;
+  final fraction = (metres / total).clamp(0.0, 1.0);
+  return interpolateAlongRoute(routeLine, fraction);
 }
 
 /// "h:mm:ss" / "mm:ss" / bare minutes → elapsed seconds; null = invalid.
@@ -511,7 +617,13 @@ class _MarkerEditorSheet extends StatefulWidget {
   final RouteMarkerRow? existing;
   final double? lat;
   final double? lng;
-  const _MarkerEditorSheet({this.existing, this.lat, this.lng});
+  final List<Waypoint> routeLine;
+  const _MarkerEditorSheet({
+    this.existing,
+    this.lat,
+    this.lng,
+    this.routeLine = const [],
+  });
 
   @override
   State<_MarkerEditorSheet> createState() => _MarkerEditorSheetState();
@@ -525,7 +637,11 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
   late TextEditingController _target;
   late TextEditingController _lat;
   late TextEditingController _lng;
+  late TextEditingController _distanceAlong;
   Set<String> _services = {};
+
+  /// The distance-along-route input needs a line with real geometry.
+  bool get _canPlaceByDistance => widget.routeLine.length >= 2;
 
   @override
   void initState() {
@@ -553,6 +669,10 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
         text: lat == null ? '' : formatMarkerCoordinate(lat));
     _lng = TextEditingController(
         text: lng == null ? '' : formatMarkerCoordinate(lng));
+    // Left empty by design — it is an alternative INPUT to lat/lng, not a
+    // mirror of the current position, so an edit that only touches lat/lng
+    // isn't silently overridden by a pre-filled distance on save.
+    _distanceAlong = TextEditingController();
   }
 
   @override
@@ -563,6 +683,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     _target.dispose();
     _lat.dispose();
     _lng.dispose();
+    _distanceAlong.dispose();
     super.dispose();
   }
 
@@ -591,15 +712,35 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       showTopBanner(context, l10n.routeMarkerLabelRequired);
       return;
     }
-    final lat = parseMarkerCoordinate(_lat.text, 90);
-    final lng = parseMarkerCoordinate(_lng.text, 180);
-    if (lat == null || lng == null) {
-      showTopBanner(
-          context,
-          _lat.text.trim().isEmpty && _lng.text.trim().isEmpty
-              ? l10n.routeMarkerPlaceRequired
-              : l10n.routeMarkerCoordInvalid);
-      return;
+    // A typed "distance along route" takes precedence over lat/lng: the user
+    // is placing "mile 5" rather than a coordinate. Empty → fall through to
+    // the map-tap / typed-coordinate path so both stay working.
+    final double lat;
+    final double lng;
+    final distText = _distanceAlong.text.trim();
+    if (distText.isNotEmpty) {
+      final metres = parseDistanceAlong(distText, unit: activeDistanceUnit);
+      final wp =
+          metres == null ? null : markerPointAtDistance(widget.routeLine, metres);
+      if (wp == null) {
+        showTopBanner(context, l10n.routeMarkerDistanceInvalid);
+        return;
+      }
+      lat = wp.lat;
+      lng = wp.lng;
+    } else {
+      final typedLat = parseMarkerCoordinate(_lat.text, 90);
+      final typedLng = parseMarkerCoordinate(_lng.text, 180);
+      if (typedLat == null || typedLng == null) {
+        showTopBanner(
+            context,
+            _lat.text.trim().isEmpty && _lng.text.trim().isEmpty
+                ? l10n.routeMarkerPlaceRequired
+                : l10n.routeMarkerCoordInvalid);
+        return;
+      }
+      lat = typedLat;
+      lng = typedLng;
     }
     final spec = kindSpec(_kind);
     final meta = <String, dynamic>{};
@@ -688,6 +829,18 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
                 ),
               ],
             ),
+            if (_canPlaceByDistance) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _distanceAlong,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                decoration: InputDecoration(
+                  labelText: l10n.routeMarkerDistanceAlongLabel,
+                  suffixText: UnitFormat.distanceLabel(activeDistanceUnit),
+                ),
+              ),
+            ],
             if (spec.hasServices) ...[
               const SizedBox(height: 4),
               Text(l10n.routeMarkerServicesLabel,
