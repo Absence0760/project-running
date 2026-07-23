@@ -211,6 +211,76 @@ test.describe('/live/[id] — anon spectator', () => {
 		}
 	});
 
+	test('concluded_at flips a not-yet-stale run to the conclusion view with a view-full-run CTA', async ({
+		page
+	}) => {
+		// started_at = now, duration_s = 3600 → the run's projected end is an
+		// hour away, so the old started_at + duration_s staleness inference
+		// would NOT treat it as finished. Only the positive concluded_at
+		// marker (20270427_001) makes it finished — the whole point of the
+		// marker over ping-absence inference.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date().toISOString(),
+			distance_m: 8_000,
+			duration_s: 3_600,
+			is_public: true,
+			concluded_at: new Date().toISOString()
+		});
+		try {
+			await page.goto(`/live/${runId}`);
+
+			await expect(page.locator('.live-badge')).toHaveClass(/finished/, {
+				timeout: 10_000
+			});
+			// The conclusion summary card + its "view the full run" CTA.
+			const card = page.getByTestId('conclusion-card');
+			await expect(card).toBeVisible();
+			await expect(card.getByRole('link')).toHaveAttribute(
+				'href',
+				`/share/run/${runId}`
+			);
+			// Frozen on the saved totals (8.00 km, not a live 0).
+			await expect(page.locator('.live-stat-value').first()).toContainText('8');
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('a live run with a recent-pace signal surfaces the extra Recent tile', async ({
+		page
+	}) => {
+		const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 5_000,
+			duration_s: 3_600,
+			is_public: true
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{ ...MELBOURNE_NEARBY_OUT_OF_ZONE[0], distance_m: 1_000, elapsed_s: 300 },
+					{ ...MELBOURNE_NEARBY_OUT_OF_ZONE[1], distance_m: 2_000, elapsed_s: 600 },
+					{ ...MELBOURNE_NEARBY_OUT_OF_ZONE[2], distance_m: 3_000, elapsed_s: 900 }
+				]
+			});
+			await page.goto(`/live/${runId}`);
+			await expect(page.locator('.live-badge')).toHaveClass(/active/, {
+				timeout: 10_000
+			});
+			// The recent-pace enrichment tile only mounts when live with >=2
+			// odometer-bearing pings — a distinct value from the cumulative
+			// average pace tile.
+			await expect(page.getByTestId('recent-pace')).toBeVisible();
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
 	test('private run renders the not-broadcasting empty state to anon', async ({ page }) => {
 		const runId = await insertRun({
 			user_id: USER_A.id,

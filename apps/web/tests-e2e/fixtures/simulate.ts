@@ -44,6 +44,10 @@ export async function insertRun(opts: {
 	/** Real `runs.activity_type` column (20261207_001). Defaults to 'run'. */
 	activity_type?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 	is_dnf?: boolean;
+	/** Positive live-finish marker (runs.concluded_at, 20270427_001). Set to
+	 *  an ISO string to simulate a concluded broadcast — the spectator page
+	 *  reads this over the old duration-staleness inference. */
+	concluded_at?: string | null;
 	metadata?: Record<string, unknown>;
 	/** Optional linked route (runs.route_id). The public_runs view only
 	 *  surfaces it back to a viewer when the route is itself public. */
@@ -70,6 +74,7 @@ export async function insertRun(opts: {
 			is_public: opts.is_public ?? false,
 			activity_type: opts.activity_type ?? 'run',
 			is_dnf: opts.is_dnf ?? false,
+			concluded_at: opts.concluded_at ?? null,
 			route_id: opts.route_id ?? null,
 			metadata: opts.metadata ?? {}
 		})
