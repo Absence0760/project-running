@@ -25,9 +25,11 @@ All three learn routes render the **same public-site chrome as the landing page*
 ```
 apps/web/src/lib/learn/
   guides/*.md          # one .md per guide; filename stem = slug; YAML frontmatter
-  guides.ts            # import.meta.glob index + listGuides/getGuide/guidesByCategory + the English-fallback resolver (getGuide / localizedGuideMeta / isEnglishFallback)
+  guides.ts            # import.meta.glob load; binds the guides_index helpers to the built index (thin, glob-coupled)
+  guides_index.ts      # pure, env-free index ops over the entry set — listGuides/getGuide/guidesByCategory + the English-fallback resolver (getGuide / localizedGuideMeta / isEnglishFallback); tsx-testable
   guides/<slug>.<locale>.md  # optional per-locale prose variants (de/fr/es/ja/pt-BR); resolver falls back to English when absent
   guides.test.ts       # frontmatter / slug-uniqueness / category / CTA guard (reads .md off disk; tsx-runnable)
+  guides_index.test.ts # unit tests for the pure index ops (ordering, locale fallback, empty-category filtering)
   categories.ts        # CATEGORIES catalogue + CTA_TARGETS map (pure; labelKeys typed MessageKey)
   learn_meta.ts        # pure SEO builders (title / desc / canonical / Article+BreadcrumbList JSON-LD)
   learn_meta.test.ts

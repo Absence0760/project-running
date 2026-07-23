@@ -239,4 +239,63 @@ void main() {
       expect(bestEffortsFromPersonalRecords(const []), isEmpty);
     });
   });
+
+  group('computeSplitDurations', () {
+    final start = DateTime(2026, 4, 10, 10, 0, 0);
+    // Move east along the equator, where haversineMetres(0,0,0,deg) is exactly
+    // R·deg·π/180, so `metres` maps to a precise longitude (6371000·π/180
+    // metres per degree). Tracks overshoot the last asserted boundary so it is
+    // unambiguously crossed (no reliance on exact float equality).
+    const mPerDeg = 6371000 * 3.141592653589793 / 180;
+    Waypoint at(double metres, int seconds) => Waypoint(
+          lat: 0,
+          lng: metres / mPerDeg,
+          timestamp: start.add(Duration(seconds: seconds)),
+        );
+
+    test('returns nothing for short tracks or a non-positive tick', () {
+      expect(computeSplitDurations(const [], 1000, start), isEmpty);
+      expect(computeSplitDurations([at(0, 0)], 1000, start), isEmpty);
+      expect(computeSplitDurations([at(0, 0), at(1000, 300)], 0, start), isEmpty);
+    });
+
+    test('a multi-boundary GPS gap yields one timed split per tick, no 0:00 phantoms', () {
+      // Dense to 500 m, then a single 2500 m fix-to-fix gap (a tunnel, a
+      // canyon/forest signal loss, or a downsampled import), then on past
+      // 4000 m — all at an even 300 s/km. The gap segment straddles the 1/2/3
+      // km boundaries. The old loop emitted the first split then 0:00 phantoms
+      // for km 2 and km 3 (which also poisoned the fastest-split highlight).
+      final track = [at(0, 0), at(500, 150), at(3000, 900), at(4100, 1230)];
+      final splits = computeSplitDurations(track, 1000, start);
+      expect(splits.map((s) => s.tick).toList(), [1, 2, 3, 4]);
+      for (final s in splits) {
+        expect(s.duration.inSeconds, closeTo(300, 2),
+            reason: 'tick ${s.tick} was ${s.duration.inSeconds}s (0 = phantom)');
+      }
+    });
+
+    test('even-paced dense run splits into full km ticks', () {
+      final track = <Waypoint>[];
+      for (var m = 0; m <= 3100; m += 100) {
+        track.add(at(m.toDouble(), (m * 3) ~/ 10)); // 300 s/km
+      }
+      final splits = computeSplitDurations(track, 1000, start);
+      expect(splits.map((s) => s.tick).toList(), [1, 2, 3]);
+      for (final s in splits) {
+        expect(s.duration.inSeconds, closeTo(300, 2));
+      }
+    });
+
+    test('mile tick produces a mile-long split (full ticks only, no partial)', () {
+      final track = <Waypoint>[];
+      for (var m = 0; m <= 2000; m += 100) {
+        track.add(at(m.toDouble(), (m * 3) ~/ 10)); // 300 s/km
+      }
+      final splits = computeSplitDurations(track, 1609.344, start);
+      expect(splits.length, 1);
+      expect(splits.first.tick, 1);
+      // 1609.344 m at 300 s/km ≈ 483 s.
+      expect(splits.first.duration.inSeconds, closeTo(483, 3));
+    });
+  });
 }

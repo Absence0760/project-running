@@ -15,8 +15,8 @@
  * dev + e2e turn it on via `PUBLIC_FUNDRAISING_ENABLED=true` in .env.development.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from '../core/env_flag';
 
 export function fundraisingEnabled(): boolean {
-	const raw = (env.PUBLIC_FUNDRAISING_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_FUNDRAISING_ENABLED);
 }

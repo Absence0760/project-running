@@ -108,14 +108,17 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 		{"event_reminder", NotificationRow{Kind: "event_reminder", EventID: &ev}, base + "/events/evt-1"},
 		{"event_cancel", NotificationRow{Kind: "event_cancel", EventID: &ev}, base + "/events/evt-1"},
 		{"event_rsvp", NotificationRow{Kind: "event_rsvp", EventID: &ev}, base + "/events/evt-1"},
-		{"plan_update", NotificationRow{Kind: "plan_update"}, base + "/training"},
+		{"plan_update", NotificationRow{Kind: "plan_update"}, base + "/plans"},
+		{"plan_assigned", NotificationRow{Kind: "plan_assigned"}, base + "/plans"},
 		{"message", NotificationRow{Kind: "message"}, base + "/messages"},
 		{"club_post", NotificationRow{Kind: "club_post", ClubID: &club}, base + "/clubs/club-1"},
 		{"run_completed", NotificationRow{Kind: "run_completed", RunID: &run}, base + "/runs/run-1"},
 		{"kudos", NotificationRow{Kind: "kudos", RunID: &run}, base + "/runs/run-1"},
 		{"comment", NotificationRow{Kind: "comment", RunID: &run}, base + "/runs/run-1"},
 		{"comment_reply", NotificationRow{Kind: "comment_reply", RunID: &run}, base + "/runs/run-1"},
-		{"follow", NotificationRow{Kind: "follow"}, base + "/profile"},
+		{"follow", NotificationRow{Kind: "follow", UserID: "usr-1"}, base + "/u/usr-1"},
+		{"challenge_complete", NotificationRow{Kind: "challenge_complete"}, base + "/challenges"},
+		{"achievement", NotificationRow{Kind: "achievement"}, base + "/notifications"},
 		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind"}, base + "/notifications"},
 	}
 
@@ -163,6 +166,56 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 	for k := range importantKinds {
 		if !covered[k] {
 			t.Errorf("importantKinds member %q has no render test case", k)
+		}
+	}
+}
+
+// pathForKind is the shared deep-link source for the email, web-push and
+// native-push channels; a wrong target sends every channel to the wrong screen
+// at once. This pins the mapping and each nil/empty-id fallback with exact
+// equality (the AllKinds test only asserts the body *contains* the path).
+func TestPathForKind(t *testing.T) {
+	const base = "https://threkir.test"
+	ev, run, club := "e1", "r1", "c1"
+	cases := []struct {
+		name string
+		kind string
+		row  NotificationRow
+		want string
+	}{
+		// Event family → /events/{id}, else the clubs hub.
+		{"event_reminder", "event_reminder", NotificationRow{EventID: &ev}, base + "/events/e1"},
+		{"event_cancel", "event_cancel", NotificationRow{EventID: &ev}, base + "/events/e1"},
+		{"event_rsvp", "event_rsvp", NotificationRow{EventID: &ev}, base + "/events/e1"},
+		{"event nil id → /clubs", "event_reminder", NotificationRow{}, base + "/clubs"},
+		// Plan family → /plans (there is NO /training route — the old target
+		// was a dead deep link).
+		{"plan_update → /plans", "plan_update", NotificationRow{}, base + "/plans"},
+		{"plan_assigned → /plans", "plan_assigned", NotificationRow{}, base + "/plans"},
+		// Club → /clubs/{id}, else the hub.
+		{"club_post", "club_post", NotificationRow{ClubID: &club}, base + "/clubs/c1"},
+		{"club nil id → /clubs", "club_post", NotificationRow{}, base + "/clubs"},
+		// Run family → /runs/{id}, else the inbox. comment_reply folds to run.
+		{"run_completed", "run_completed", NotificationRow{RunID: &run}, base + "/runs/r1"},
+		{"kudos", "kudos", NotificationRow{RunID: &run}, base + "/runs/r1"},
+		{"comment", "comment", NotificationRow{RunID: &run}, base + "/runs/r1"},
+		{"comment_reply", "comment_reply", NotificationRow{RunID: &run}, base + "/runs/r1"},
+		{"run nil id → inbox", "kudos", NotificationRow{}, base + "/notifications"},
+		// Follow → recipient's own profile (there is NO /profile route).
+		{"follow → /u/{id}", "follow", NotificationRow{UserID: "u1"}, base + "/u/u1"},
+		{"follow empty user → inbox", "follow", NotificationRow{}, base + "/notifications"},
+		// Static targets.
+		{"message", "message", NotificationRow{}, base + "/messages"},
+		{"challenge_complete", "challenge_complete", NotificationRow{}, base + "/challenges"},
+		// Inbox fallback: achievement has no dedicated surface yet, and any
+		// unknown/future kind lands on the inbox.
+		{"achievement → inbox", "achievement", NotificationRow{}, base + "/notifications"},
+		{"unknown → inbox", "totally_new_kind", NotificationRow{}, base + "/notifications"},
+	}
+	for _, c := range cases {
+		c.row.Kind = c.kind
+		if got := pathForKind(c.kind, base, c.row); got != c.want {
+			t.Errorf("%s: pathForKind(%q) = %q, want %q", c.name, c.kind, got, c.want)
 		}
 	}
 }

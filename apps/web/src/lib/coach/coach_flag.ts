@@ -17,8 +17,8 @@
  * the weigh_in_flag.ts fail-closed pattern.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from '../core/env_flag';
 
 export function coachEnabled(): boolean {
-	const raw = (env.PUBLIC_COACH_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_COACH_ENABLED);
 }
