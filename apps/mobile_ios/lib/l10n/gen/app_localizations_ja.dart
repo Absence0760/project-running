@@ -1093,6 +1093,25 @@ class AppLocalizationsJa extends AppLocalizations {
       'ライブトラッキングを開始できませんでした。「共有」をタップして再試行してください。';
 
   @override
+  String get runLiveShareActive => 'ライブ';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'ライブ共有がオンです。タップしてリンクを再共有するか、共有を停止します。';
+
+  @override
+  String get runLiveShareSheetTitle => 'ライブ共有中';
+
+  @override
+  String get runLiveShareReshare => 'リンクを再共有';
+
+  @override
+  String get runLiveShareStop => '共有を停止';
+
+  @override
+  String get runLiveShareStopped => 'ライブ共有を停止しました';
+
+  @override
   String get runTrainingPlans => 'トレーニングプラン';
 
   @override

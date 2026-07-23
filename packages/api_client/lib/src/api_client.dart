@@ -5501,15 +5501,21 @@ class ApiClient {
     });
   }
 
-  /// Wipe spectator pings for a run. Called after the recorder's
-  /// final `saveRun` so the spectator history isn't duplicated by the
-  /// completed run's track. The `cleanup-stale-live-run-pings` cron
-  /// is a safety net for clients that crash before this fires.
-  Future<void> endLiveBroadcast(String runId) async {
-    await _client
-        .from('live_run_pings')
-        .delete()
-        .eq('run_id', runId);
+  /// Mark a live-broadcast run as concluded. Called after the recorder's
+  /// final `saveRun` (which writes the real duration_s / distance_m) so
+  /// the spectator page has a POSITIVE terminal signal (runs.concluded_at,
+  /// migration 20270427_001) instead of inferring "finished" from ping
+  /// absence. Unlike the old ping-wiping teardown, the spectator pings are
+  /// LEFT in place — bounded by the `cleanup-stale-live-run-pings` 48h
+  /// cron — so a spectator who reloads right after the stop still sees the
+  /// frozen trace under the conclusion instead of a blank feed. Owner-
+  /// scoped: RLS gates the update to `auth.uid() = user_id`.
+  Future<void> concludeLiveBroadcast(String runId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client.from(RunRow.table).update({
+      RunRow.colConcludedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(RunRow.colId, runId).eq(RunRow.colUserId, userId);
   }
 
   // ─────────────────── Gym (Phase 4 multi-modal, decisions §63) ───────────────────

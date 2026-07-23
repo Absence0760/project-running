@@ -1140,6 +1140,25 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível iniciar o rastreio em direto — toque em Partilhar para tentar novamente.';
 
   @override
+  String get runLiveShareActive => 'Em direto';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'A partilha em direto está ativa. Toque para partilhar novamente o link ou parar a partilha.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Partilha em direto ativa';
+
+  @override
+  String get runLiveShareReshare => 'Partilhar link novamente';
+
+  @override
+  String get runLiveShareStop => 'Parar partilha';
+
+  @override
+  String get runLiveShareStopped => 'Partilha em direto terminada';
+
+  @override
   String get runTrainingPlans => 'Planos de treino';
 
   @override
@@ -12731,6 +12750,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runLiveShareNotStarted =>
       'Não foi possível iniciar o rastreamento ao vivo — toque em Compartilhar para tentar novamente.';
+
+  @override
+  String get runLiveShareActive => 'Ao vivo';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'O compartilhamento ao vivo está ativo. Toque para compartilhar o link novamente ou parar de compartilhar.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Compartilhamento ao vivo ativo';
+
+  @override
+  String get runLiveShareReshare => 'Compartilhar link novamente';
+
+  @override
+  String get runLiveShareStop => 'Parar de compartilhar';
+
+  @override
+  String get runLiveShareStopped => 'Compartilhamento ao vivo encerrado';
 
   @override
   String get runTrainingPlans => 'Planos de treino';

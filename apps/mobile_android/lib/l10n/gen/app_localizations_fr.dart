@@ -1145,6 +1145,25 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le suivi en direct n\'a pas pu démarrer — appuyez sur Partager pour réessayer.';
 
   @override
+  String get runLiveShareActive => 'En direct';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'Le partage en direct est actif. Appuyez pour repartager le lien ou arrêter le partage.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Partage en direct actif';
+
+  @override
+  String get runLiveShareReshare => 'Repartager le lien';
+
+  @override
+  String get runLiveShareStop => 'Arrêter le partage';
+
+  @override
+  String get runLiveShareStopped => 'Partage en direct arrêté';
+
+  @override
   String get runTrainingPlans => 'Plans d\'entraînement';
 
   @override

@@ -1142,6 +1142,25 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo iniciar el seguimiento en vivo: toca Compartir para reintentar.';
 
   @override
+  String get runLiveShareActive => 'En vivo';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'El uso compartido en vivo está activo. Toca para volver a compartir el enlace o dejar de compartir.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Uso compartido en vivo activo';
+
+  @override
+  String get runLiveShareReshare => 'Compartir enlace de nuevo';
+
+  @override
+  String get runLiveShareStop => 'Dejar de compartir';
+
+  @override
+  String get runLiveShareStopped => 'Se dejó de compartir en vivo';
+
+  @override
   String get runTrainingPlans => 'Planes de entrenamiento';
 
   @override

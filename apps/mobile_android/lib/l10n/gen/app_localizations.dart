@@ -2039,6 +2039,42 @@ abstract class AppLocalizations {
   /// **'Live tracking couldn\'t start — tap Share to retry.'**
   String get runLiveShareNotStarted;
 
+  /// Label on the persistent recording-screen pill that shows a live-tracking share is active
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get runLiveShareActive;
+
+  /// Accessibility label for the live-share indicator pill on the recording screen
+  ///
+  /// In en, this message translates to:
+  /// **'Live sharing is on. Tap to re-share the link or stop sharing.'**
+  String get runLiveShareActiveSemantics;
+
+  /// Title of the sheet opened from the live-share indicator, offering re-share and stop actions
+  ///
+  /// In en, this message translates to:
+  /// **'Live sharing on'**
+  String get runLiveShareSheetTitle;
+
+  /// Action that re-opens the OS share sheet to resend the live tracking link
+  ///
+  /// In en, this message translates to:
+  /// **'Share link again'**
+  String get runLiveShareReshare;
+
+  /// Action that stops the live-tracking share without ending the run
+  ///
+  /// In en, this message translates to:
+  /// **'Stop sharing'**
+  String get runLiveShareStop;
+
+  /// Confirmation banner shown after the runner stops the live-tracking share mid-run
+  ///
+  /// In en, this message translates to:
+  /// **'Live sharing stopped'**
+  String get runLiveShareStopped;
+
   /// Idle-screen button opening the training-plans list when no active plan exists
   ///
   /// In en, this message translates to:

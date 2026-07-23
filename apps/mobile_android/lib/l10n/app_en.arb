@@ -1512,6 +1512,30 @@
   "@runLiveShareNotStarted": {
     "description": "Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead"
   },
+  "runLiveShareActive": "Live",
+  "@runLiveShareActive": {
+    "description": "Label on the persistent recording-screen pill that shows a live-tracking share is active"
+  },
+  "runLiveShareActiveSemantics": "Live sharing is on. Tap to re-share the link or stop sharing.",
+  "@runLiveShareActiveSemantics": {
+    "description": "Accessibility label for the live-share indicator pill on the recording screen"
+  },
+  "runLiveShareSheetTitle": "Live sharing on",
+  "@runLiveShareSheetTitle": {
+    "description": "Title of the sheet opened from the live-share indicator, offering re-share and stop actions"
+  },
+  "runLiveShareReshare": "Share link again",
+  "@runLiveShareReshare": {
+    "description": "Action that re-opens the OS share sheet to resend the live tracking link"
+  },
+  "runLiveShareStop": "Stop sharing",
+  "@runLiveShareStop": {
+    "description": "Action that stops the live-tracking share without ending the run"
+  },
+  "runLiveShareStopped": "Live sharing stopped",
+  "@runLiveShareStopped": {
+    "description": "Confirmation banner shown after the runner stops the live-tracking share mid-run"
+  },
   "runTrainingPlans": "Training plans",
   "@runTrainingPlans": {
     "description": "Idle-screen button opening the training-plans list when no active plan exists"
