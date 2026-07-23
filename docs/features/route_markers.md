@@ -54,17 +54,31 @@ cut-off chip renders identically on both platforms.
 
 ## Visibility + privacy
 
-- **Base RLS** (defence in depth): SELECT is gated by
-  `private.is_route_visible_to(route_id, auth.uid())` (owner / public / club
-  member — the same helper `route_photos` / `route_reviews` / `segments` use).
-  INSERT/UPDATE/DELETE require owning the parent route.
+- **Base RLS.** SELECT returns a marker on a route you can see IF it's your own
+  OR it's the route owner's OFFICIAL marker (`private.route_owner_id` SECURITY
+  DEFINER helper) — a viewer's personal overlay never leaks to others via a direct
+  read. INSERT: any signed-in viewer may add a marker AS THEMSELVES to a route
+  they can see (public / club / own — `private.is_route_visible_to`).
+  UPDATE/DELETE are **own-markers-only**, so a viewer can't touch the owner's
+  official markers and the owner can't touch a viewer's (migration
+  `20270428_001`; was owner-only before).
+- **Viewer contributions (personal overlay, decisions §296).** A marker is
+  **official** when `user_id == route.user_id` (dropped by the owner) and
+  **personal** otherwise (a viewer's own). Personal markers are private to their
+  author — invisible to the owner and to other viewers. Web + mobile render
+  official markers read-only + badged for non-owners; a viewer edits/deletes only
+  their own (`isOfficialMarker`, `route_markers.ts ↔ .dart`).
 - **Canonical display read** is the `route_markers_for_viewer(p_route_id)`
-  SECURITY DEFINER RPC. It gates visibility AND, for a **non-owner**, redacts any
-  marker whose point falls inside one of the owner's privacy zones — the marker
-  analogue of `clip_route_for_viewer` for waypoints (decisions §33). A public
-  course therefore can't leak a pin dropped at the owner's home. The web + mobile
-  read paths (`fetchRouteMarkers`) call this RPC and fail closed (empty list) on
-  error.
+  SECURITY DEFINER RPC. It returns each caller's OWN markers plus the owner's
+  OFFICIAL markers, redacting for a **non-owner** any official pin inside one of
+  the owner's privacy zones — the marker analogue of `clip_route_for_viewer` for
+  waypoints (decisions §33). A public course therefore can't leak a pin dropped at
+  the owner's home. The web + mobile read paths (`fetchRouteMarkers`) call this RPC
+  and fail closed (empty list) on error.
+- **Placement by distance.** Besides map-tap and typed lat/lng, the editor accepts
+  a "distance along route" (mi/km) that resolves to a point on the polyline via
+  `markerPointAtDistance` (`route_geometry.ts ↔ .dart`); the server still derives
+  `position_m`.
 
 ## Surfaces
 
