@@ -123,6 +123,9 @@
 	}
 
 	let shareLink = $state('');
+	// In-flight guard: Share can flip the route public, so a double-click must
+	// not fire two setRoutePublic writes.
+	let sharing = $state(false);
 	let shareCopied = $state(false);
 	let tagDraft = $state('');
 	let tagsSaving = $state(false);
@@ -289,6 +292,16 @@
 	}
 
 	async function handleShare() {
+		if (!route || sharing) return;
+		sharing = true;
+		try {
+			await doShare();
+		} finally {
+			sharing = false;
+		}
+	}
+
+	async function doShare() {
 		if (!route) return;
 		// Share requires the route to be publicly reachable. If the
 		// owner hasn't flipped the visibility yet, flip it for them and
@@ -335,9 +348,15 @@
 
 
 	async function copyShareLink() {
-		await navigator.clipboard.writeText(shareLink);
-		shareCopied = true;
-		setTimeout(() => (shareCopied = false), 2000);
+		// clipboard.writeText rejects in an insecure context or when the
+		// permission is denied — surface it instead of leaving a dead button.
+		try {
+			await navigator.clipboard.writeText(shareLink);
+			shareCopied = true;
+			setTimeout(() => (shareCopied = false), 2000);
+		} catch {
+			showToast(m('routeDetail.copyLinkFailed'), 'error');
+		}
 	}
 
 	// Derive elevations from displayWaypoints (not route.waypoints
@@ -560,6 +579,7 @@
 										type="text"
 										bind:value={tagDraft}
 										placeholder={m('routeDetail.addTagPlaceholder')}
+										aria-label={m('routeDetail.addTagPlaceholder')}
 										maxlength="24"
 										disabled={tagsSaving}
 									/>
@@ -590,7 +610,7 @@
 							{route.is_public ? m('routeDetail.public') : m('routeDetail.private')}
 						</button>
 					{/if}
-					<button class="btn btn-primary btn-sm" onclick={handleShare}>{m('routeDetail.share')}</button>
+					<button class="btn btn-primary btn-sm" onclick={handleShare} disabled={sharing}>{m('routeDetail.share')}</button>
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"
@@ -606,7 +626,7 @@
 
 			{#if shareLink}
 				<div class="share-bar">
-					<input type="text" readonly value={shareLink} />
+					<input type="text" readonly value={shareLink} aria-label={m('routeDetail.shareLinkLabel')} />
 					<button class="btn btn-outline btn-sm" onclick={copyShareLink}>
 						{shareCopied ? m('routeDetail.copied') : m('routeDetail.copy')}
 					</button>
@@ -749,6 +769,7 @@
 						<textarea
 							bind:value={reviewComment}
 							placeholder={m('routeDetail.commentPlaceholder')}
+							aria-label={m('routeDetail.commentPlaceholder')}
 							class="review-textarea"
 							rows="2"
 						></textarea>

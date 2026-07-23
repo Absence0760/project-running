@@ -746,6 +746,8 @@ export const messages = {
 	"routeDetail.reportReview": "Signaler cet avis",
 	"routeDetail.copied": "Copié !",
 	"routeDetail.copy": "Copier",
+	"routeDetail.copyLinkFailed": "Impossible de copier le lien",
+	"routeDetail.shareLinkLabel": "Lien de partage",
 	"routeDetail.previewHeading": "Aperçu",
 	"routeDetail.elevationHeading": "Dénivelé",
 	"routeDetail.elevGain": "Montée",

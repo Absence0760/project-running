@@ -741,6 +741,8 @@ export const messages = {
 	"routeDetail.reportReview": "このレビューを報告",
 	"routeDetail.copied": "コピーしました!",
 	"routeDetail.copy": "コピー",
+	"routeDetail.copyLinkFailed": "リンクをコピーできませんでした",
+	"routeDetail.shareLinkLabel": "共有リンク",
 	"routeDetail.previewHeading": "プレビュー",
 	"routeDetail.elevationHeading": "標高",
 	"routeDetail.elevGain": "登り",

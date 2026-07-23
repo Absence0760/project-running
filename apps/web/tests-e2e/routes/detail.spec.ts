@@ -39,6 +39,26 @@ test.describe('/routes/[id]', () => {
 		);
 	});
 
+	test('copy share link surfaces an error when the clipboard is blocked', async ({ page }) => {
+		// Simulate a blocked clipboard (insecure context / denied permission).
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				configurable: true,
+				value: { writeText: () => Promise.reject(new Error('blocked')) }
+			});
+		});
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		// Route starts public (beforeEach) → Share reveals the link immediately.
+		await page.getByRole('button', { name: 'Share', exact: true }).click();
+		const shareBar = page.locator('.share-bar');
+		await expect(shareBar).toBeVisible();
+		await shareBar.getByRole('button', { name: 'Copy' }).click();
+		// Before the fix the rejection was unhandled and the button did nothing.
+		await expect(
+			page.locator('.toast-error', { hasText: "Couldn't copy the link" })
+		).toBeVisible();
+	});
+
 	test('public toggle: Public → Private, reload persists, back to Public', async ({
 		page
 	}) => {

@@ -754,6 +754,8 @@ export const en = {
 	"routeDetail.reportReview": "Report this review",
 	"routeDetail.copied": "Copied!",
 	"routeDetail.copy": "Copy",
+	"routeDetail.copyLinkFailed": "Couldn't copy the link",
+	"routeDetail.shareLinkLabel": "Shareable link",
 	"routeDetail.previewHeading": "Preview",
 	"routeDetail.elevationHeading": "Elevation",
 	"routeDetail.elevGain": "Gain",
