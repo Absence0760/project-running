@@ -344,8 +344,11 @@ func pathForKind(kind, base string, n NotificationRow) string {
 	switch kind {
 	case "event_reminder", "event_cancel", "event_rsvp":
 		return eventPath(base, n)
-	case "plan_update":
-		return base + "/training"
+	case "plan_update", "plan_assigned":
+		// Training plans live at /plans — there is no /training route, so the
+		// old target was a dead deep link. plan_assigned (a coach assigning a
+		// plan) lands on the same surface as plan_update.
+		return base + "/plans"
 	case "message":
 		return base + "/messages"
 	case "club_post":
@@ -353,10 +356,27 @@ func pathForKind(kind, base string, n NotificationRow) string {
 	case "run_completed", "kudos", "comment", "comment_reply":
 		return runPath(base, n)
 	case "follow":
-		return base + "/profile"
+		// The recipient's own profile (/u/{id}), where their followers are
+		// shown — there is no /profile route, so the old target 404'd.
+		return profilePath(base, n)
+	case "challenge_complete":
+		return base + "/challenges"
 	default:
+		// achievement + any future kind: the notifications inbox. (There is
+		// no dedicated /achievements surface yet; a real kind that gains one
+		// should get its own case here, per the comment above.)
 		return base + "/notifications"
 	}
+}
+
+// profilePath deep-links to the recipient's own profile. UserID is always set
+// on a real notification row; the empty-string guard keeps a malformed row off
+// a "/u/" dead end and on the inbox instead.
+func profilePath(base string, n NotificationRow) string {
+	if n.UserID != "" {
+		return base + "/u/" + n.UserID
+	}
+	return base + "/notifications"
 }
 
 // ─────────────────── lifecycle templates (pure) ───────────────────
