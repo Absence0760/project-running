@@ -95,6 +95,24 @@ void main() {
     dotenv.loadFromString(isOptional: true);
   });
 
+  group('routeShareUrl', () {
+    test('builds /share/route/{id} from an explicit base', () {
+      expect(routeShareUrl('abc', webBase: 'https://threkir.com'),
+          'https://threkir.com/share/route/abc');
+    });
+    test('trims trailing slashes on the base', () {
+      expect(routeShareUrl('abc', webBase: 'https://example.com//'),
+          'https://example.com/share/route/abc');
+    });
+    test('keeps a base path prefix', () {
+      expect(routeShareUrl('r1', webBase: 'https://host/app/'),
+          'https://host/app/share/route/r1');
+    });
+    test('falls back to the prod host when WEB_BASE_URL is unset', () {
+      expect(routeShareUrl('r1'), 'https://threkir.com/share/route/r1');
+    });
+  });
+
   group('RouteDetailScreen', () {
     testWidgets('renders the route name as the app-bar title', (tester) async {
       await _pump(tester, _route(name: 'River Loop'));

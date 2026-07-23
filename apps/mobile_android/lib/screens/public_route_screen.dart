@@ -2,13 +2,35 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../main.dart' show pendingStartRunWithRoute;
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/route_conditions.dart';
 import '../widgets/route_photos.dart';
 import '../widgets/segments_panel.dart';
+import '../widgets/top_banner.dart';
+
+/// Build the route a public / shared route starts a run against — carrying
+/// the CLIPPED display waypoints the viewer is allowed to see, never the
+/// source route's full trace (which may run through the owner's privacy
+/// zones). Pulled out so the privacy-relevant "start uses the clipped line"
+/// contract is unit-testable without the map-bearing screen.
+@visibleForTesting
+cm.Route publicRouteStartTarget(cm.Route source, List<cm.Waypoint> clipped) {
+  return cm.Route(
+    id: source.id,
+    name: source.name,
+    waypoints: clipped,
+    distanceMetres: source.distanceMetres,
+    userId: source.userId,
+    elevationGainMetres: source.elevationGainMetres,
+    isPublic: source.isPublic,
+    surface: source.surface,
+  );
+}
 
 /// Read-only public view of a single route. Mirrors the web
 /// `/share/route/[id]` route — anyone with the link can view a public
@@ -33,6 +55,9 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
   Object? _loadError;
   cm.Route? _route;
   List<cm.Waypoint> _waypoints = const [];
+  bool _isOwner = false;
+  bool? _bookmarked;
+  bool _bookmarkBusy = false;
 
   @override
   void initState() {
@@ -93,8 +118,13 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
       setState(() {
         _route = route;
         _waypoints = waypoints;
+        _isOwner = isOwner;
         _loading = false;
       });
+      // A non-owner viewer can save (bookmark) the route to their library —
+      // load the current bookmark state (best-effort) so the AppBar action
+      // reflects reality on first paint.
+      if (!isOwner && widget.api.userId != null) _loadBookmarkState();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -104,12 +134,89 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
     }
   }
 
+  Future<void> _loadBookmarkState() async {
+    try {
+      final saved = await widget.api.isRouteBookmarked(widget.routeId);
+      if (!mounted) return;
+      setState(() => _bookmarked = saved);
+    } catch (e) {
+      debugPrint('public route isRouteBookmarked failed: $e');
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    if (_bookmarkBusy || widget.api.userId == null) return;
+    final l10n = AppLocalizations.of(context);
+    final before = _bookmarked ?? false;
+    setState(() {
+      _bookmarkBusy = true;
+      _bookmarked = !before;
+    });
+    try {
+      if (before) {
+        await widget.api.unbookmarkRoute(widget.routeId);
+      } else {
+        await widget.api.bookmarkRoute(widget.routeId);
+      }
+    } catch (e) {
+      debugPrint('public route bookmark failed: $e');
+      if (!mounted) return;
+      setState(() => _bookmarked = before);
+      showTopBanner(
+          context, l10n.routeDetailBookmarkFailed(friendlyError(l10n, e)));
+    } finally {
+      if (mounted) setState(() => _bookmarkBusy = false);
+    }
+  }
+
+  void _startRun(cm.Route route) {
+    // Hand off through the global notifier — HomeScreen switches to the
+    // recorder with the route preselected and pops back to the shell, so a
+    // follower who opened a shared / public route can run it without owning
+    // it. Carry the CLIPPED display waypoints (never the owner's full trace).
+    pendingStartRunWithRoute.value = publicRouteStartTarget(route, _waypoints);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final route = _route;
+    final canStartRun = route != null && _waypoints.length >= 2;
+    // Save (bookmark) is offered to a signed-in viewer who doesn't own the
+    // route — owners already have it, signed-out viewers can't have a
+    // library. Starting a run needs no sign-in (offline recording is fine).
+    final canBookmark =
+        route != null && !_isOwner && widget.api.userId != null;
     return Scaffold(
-      appBar: AppBar(title: Text(_route?.name ?? l10n.publicRouteFallbackTitle)),
+      appBar: AppBar(
+        title: Text(route?.name ?? l10n.publicRouteFallbackTitle),
+        actions: [
+          if (canBookmark)
+            IconButton(
+              icon: Icon(
+                (_bookmarked ?? false) ? Icons.bookmark : Icons.bookmark_border,
+              ),
+              tooltip: (_bookmarked ?? false)
+                  ? l10n.routeDetailRemoveBookmark
+                  : l10n.routeDetailBookmarkRoute,
+              onPressed: _bookmarkBusy ? null : _toggleBookmark,
+            ),
+        ],
+      ),
+      floatingActionButton: canStartRun
+          ? FloatingActionButton.extended(
+              heroTag: 'public_route_start_run',
+              onPressed: () => _startRun(route),
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.play_arrow),
+              label: Text(
+                l10n.routeDetailStartRun,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null

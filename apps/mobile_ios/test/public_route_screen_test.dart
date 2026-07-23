@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,6 +32,40 @@ Future<void> _pump(WidgetTester tester) {
 
 void main() {
   setUpAll(_ensureSupabase);
+
+  group('publicRouteStartTarget', () {
+    test('starts against the clipped waypoints, not the source trace', () {
+      final source = cm.Route(
+        id: 'r1',
+        userId: 'owner',
+        name: 'River Loop',
+        // The source route would carry the owner's full (unclipped) trace.
+        waypoints: [
+          cm.Waypoint(lat: 0, lng: 0),
+          cm.Waypoint(lat: 0, lng: 0.001),
+          cm.Waypoint(lat: 0, lng: 0.002),
+          cm.Waypoint(lat: 0, lng: 0.003),
+          cm.Waypoint(lat: 0, lng: 0.004),
+        ],
+        distanceMetres: 5000,
+        elevationGainMetres: 40,
+        isPublic: true,
+      );
+      // What the non-owner viewer is allowed to see (privacy-clipped).
+      final clipped = [
+        cm.Waypoint(lat: 0, lng: 0.001),
+        cm.Waypoint(lat: 0, lng: 0.002),
+        cm.Waypoint(lat: 0, lng: 0.003),
+      ];
+      final target = publicRouteStartTarget(source, clipped);
+      expect(target.waypoints, clipped);
+      expect(target.waypoints.length, 3);
+      expect(target.id, 'r1');
+      expect(target.name, 'River Loop');
+      expect(target.distanceMetres, 5000);
+      expect(target.isPublic, isTrue);
+    });
+  });
 
   group('PublicRouteScreen — initial render', () {
     testWidgets('renders the Route fallback title before the route loads',
