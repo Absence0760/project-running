@@ -1512,6 +1512,30 @@
   "@runLiveShareNotStarted": {
     "description": "Shown when the live broadcast failed to start after sharing the link, so the shared link would otherwise be dead"
   },
+  "runLiveShareActive": "Live",
+  "@runLiveShareActive": {
+    "description": "Label on the persistent recording-screen pill that shows a live-tracking share is active"
+  },
+  "runLiveShareActiveSemantics": "Live sharing is on. Tap to re-share the link or stop sharing.",
+  "@runLiveShareActiveSemantics": {
+    "description": "Accessibility label for the live-share indicator pill on the recording screen"
+  },
+  "runLiveShareSheetTitle": "Live sharing on",
+  "@runLiveShareSheetTitle": {
+    "description": "Title of the sheet opened from the live-share indicator, offering re-share and stop actions"
+  },
+  "runLiveShareReshare": "Share link again",
+  "@runLiveShareReshare": {
+    "description": "Action that re-opens the OS share sheet to resend the live tracking link"
+  },
+  "runLiveShareStop": "Stop sharing",
+  "@runLiveShareStop": {
+    "description": "Action that stops the live-tracking share without ending the run"
+  },
+  "runLiveShareStopped": "Live sharing stopped",
+  "@runLiveShareStopped": {
+    "description": "Confirmation banner shown after the runner stops the live-tracking share mid-run"
+  },
   "runTrainingPlans": "Training plans",
   "@runTrainingPlans": {
     "description": "Idle-screen button opening the training-plans list when no active plan exists"
@@ -5965,6 +5989,29 @@
   "liveSpectatorBadgeDnf": "DNF",
   "@liveSpectatorBadgeDnf": {
     "description": "Status badge — the participant is race-marked Did Not Finish (terminal state)"
+  },
+  "liveSpectatorRecentPace": "Recent",
+  "@liveSpectatorRecentPace": {
+    "description": "Label for the recent-pace spectator stat tile (distinct from cumulative average pace)"
+  },
+  "liveSpectatorCourseProgress": "{p}% of route",
+  "@liveSpectatorCourseProgress": {
+    "description": "Course-progress label — how far along a linked route the runner is",
+    "placeholders": {
+      "p": { "type": "int" }
+    }
+  },
+  "liveSpectatorConcludedTitle": "Run complete",
+  "@liveSpectatorConcludedTitle": {
+    "description": "Heading of the spectator conclusion card shown when the broadcast has concluded"
+  },
+  "liveSpectatorConcludedBody": "See the full route, splits, and stats.",
+  "@liveSpectatorConcludedBody": {
+    "description": "Body of the spectator conclusion card"
+  },
+  "liveSpectatorViewFullRun": "View the full run",
+  "@liveSpectatorViewFullRun": {
+    "description": "CTA on the spectator conclusion card that opens the full public run"
   },
   "liveUpdatedNow": "Updated just now",
   "@liveUpdatedNow": {

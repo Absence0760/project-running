@@ -11,7 +11,11 @@
 	import { fetchRouteById, fetchRouteMarkers, setRunExpectedReturn } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { buildRoadbook, type RoadbookLeg } from '$lib/routes/roadbook';
-	import { distanceAlongRoute, type RouteWaypoint } from '$lib/routes/route_geometry';
+	import {
+		distanceAlongRoute,
+		polylineLengthMetres,
+		type RouteWaypoint,
+	} from '$lib/routes/route_geometry';
 	import { nextCutoffEta } from '$lib/runs/live_cutoff_eta';
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES } from '$lib/core/schema';
@@ -70,6 +74,12 @@
 	let lastPingAtMs = $state<number | null>(null);
 	let nowMs = $state(Date.now());
 	let freshnessTicker: ReturnType<typeof setInterval> | null = null;
+	// Counts freshness ticks so the concluded_at re-check fires ~every 15s
+	// (not every second) while live.
+	let concludedCheckTick = 0;
+	// Flips true on the MapLibre `load` event so the fit-to-trace effect
+	// fires once the map is actually ready (not merely consented).
+	let mapReady = $state(false);
 	const freshness = $derived(lastPingAtMs != null ? freshnessFor(lastPingAtMs, nowMs) : null);
 	const isStale = $derived(freshness?.stale ?? false);
 	// True once the latest rendered ping carries the privacy-zone
@@ -102,6 +112,16 @@
 	const distAlongRouteM = $derived.by((): number | null => {
 		if (!latestPosition || routeWaypoints.length < 2) return null;
 		return distanceAlongRoute(latestPosition, routeWaypoints);
+	});
+
+	// Course progress (0..100) — how far along a linked route the runner is.
+	// Only meaningful when the run follows a public route we could load
+	// waypoints for; otherwise null and the bar hides.
+	const courseProgressPct = $derived.by((): number | null => {
+		if (distAlongRouteM == null || routeWaypoints.length < 2) return null;
+		const total = polylineLengthMetres(routeWaypoints);
+		if (!(total > 0)) return null;
+		return Math.max(0, Math.min(100, (distAlongRouteM / total) * 100));
 	});
 
 	const eta = $derived(
@@ -346,6 +366,10 @@
 		duration_s: number;
 		distance_m: number;
 		route_id: string | null;
+		// Positive terminal marker (migration 20270427_001). Non-null once
+		// the recorder concluded the broadcast — the honest finish signal,
+		// replacing the started_at + duration_s staleness inference.
+		concluded_at: string | null;
 	};
 	let visibleRun: VisibleRun | null = null;
 
@@ -355,7 +379,7 @@
 		// exposes (decisions §33, migration 20260626_001).
 		const { data: row, error } = await supabase
 			.from('public_runs')
-			.select('id, user_id, started_at, duration_s, distance_m, route_id')
+			.select('id, user_id, started_at, duration_s, distance_m, route_id, concluded_at')
 			.eq('id', data.id)
 			.maybeSingle();
 		if (error || !row) {
@@ -368,6 +392,7 @@
 			duration_s: Number(row.duration_s ?? 0),
 			distance_m: Number(row.distance_m ?? 0),
 			route_id: (row.route_id as string | null) ?? null,
+			concluded_at: (row.concluded_at as string | null) ?? null,
 		};
 		if (row.user_id) {
 			// `public_profile_by_id` SECURITY DEFINER RPC — replaces
@@ -543,15 +568,54 @@
 		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
 	}
 
+	function teardownTransports() {
+		if (realtimeChannel) {
+			supabase.removeChannel(realtimeChannel);
+			realtimeChannel = null;
+		}
+		liveHubHandle?.close();
+		liveHubHandle = null;
+	}
+
+	// While live, poll the row for the positive concluded_at marker. The
+	// recorder now LEAVES the pings on stop (they're bounded by the 48h
+	// retention cron) so the feed no longer vanishes — it would just go
+	// stale — which means "no pings" can't be the finish signal anymore.
+	// concluded_at is the honest one: when it appears we freeze on the
+	// saved totals and switch to the conclusion view for every transport.
+	async function checkConcluded() {
+		if (status !== 'live' || !visibleRun) return;
+		const { data: row } = await supabase
+			.from('public_runs')
+			.select('concluded_at, distance_m, duration_s')
+			.eq('id', data.id)
+			.maybeSingle();
+		if (!row?.concluded_at || status !== 'live' || !visibleRun) return;
+		visibleRun = {
+			...visibleRun,
+			distance_m: Number(row.distance_m ?? visibleRun.distance_m),
+			duration_s: Number(row.duration_s ?? visibleRun.duration_s),
+			concluded_at: row.concluded_at as string,
+		};
+		freezeOnSavedTotals(visibleRun);
+		teardownTransports();
+		status = 'finished';
+	}
+
 	onMount(() => {
 		// Honour the global banner choice. The "Load map" button below
 		// is the per-page acceptance path when the banner hasn't been
 		// answered yet.
 		if (hasAcceptedConsent()) mapConsented = true;
 		// Drives the freshness readout / stale-badge transition while no
-		// new ping arrives.
+		// new ping arrives, and every ~15s re-checks the concluded_at marker
+		// so a runner who stops mid-watch flips to the conclusion view
+		// instead of just going stale.
 		freshnessTicker = setInterval(() => {
 			nowMs = Date.now();
+			if (status === 'live' && ++concludedCheckTick % 15 === 0) {
+				void checkConcluded();
+			}
 		}, 1000);
 		// Seed + keep the synchronous token mirror current. The auth
 		// listener fires on TOKEN_REFRESHED, so the next reconnect picks
@@ -566,7 +630,12 @@
 			const run = visibleRun;
 			if (!run) return;
 			void loadRouteCutoffs(run);
-			if (isFinishedStale(run.started_at, run.duration_s, Date.now())) {
+			// A stamped concluded_at is the positive terminal signal and
+			// wins over the pings — the recorder now keeps them, so
+			// statusAfterHydrate would otherwise read a concluded run as
+			// still live. isFinishedStale stays as the belt-and-braces
+			// inference for older runs saved before the marker existed.
+			if (run.concluded_at || isFinishedStale(run.started_at, run.duration_s, Date.now())) {
 				freezeOnSavedTotals(run);
 				// Best-effort backlog hydrate so the map still gets the
 				// trace shape, but don't open realtime — the run is over.
@@ -582,11 +651,14 @@
 				nowMs: Date.now(),
 			});
 			if (next === 'finished') {
-				// The recorder wipes live_run_pings on stop, so a reload in
-				// the first ~2 min after finishing lands here: the row
-				// carries the final duration but no pings survive. Freeze
-				// on the saved totals — this used to fall through to the
-				// synthesised demo loop (issue #603).
+				// Belt-and-braces no-backlog path: no concluded_at marker
+				// caught this above (an old run predating the marker, or one
+				// whose pings the 48h retention cron already cleaned) and the
+				// saved end has passed with no surviving pings. Freeze on the
+				// saved totals — this used to fall through to the synthesised
+				// demo loop (issue #603). The recorder no longer wipes pings
+				// on stop, so the common just-finished case is now caught by
+				// the concluded_at branch above with the trace intact.
 				freezeOnSavedTotals(run);
 				status = 'finished';
 				return;
@@ -605,6 +677,30 @@
 	// updates on both the pre-consented and "Load map" paths.
 	$effect(() => {
 		if (mapConsented && mapContainer) initMap();
+	});
+
+	// On a concluded run, frame the whole trace once instead of staying
+	// zoomed on the last fix — the spectator's takeaway is the finished
+	// route, not where the runner happened to stop. Depends on both status
+	// and mapReady ($state) so it fires whichever lands last: the run may
+	// be concluded before the viewer loads the map, or conclude mid-watch
+	// with the map already up. Guarded so it fits once.
+	let fittedTrace = false;
+	$effect(() => {
+		if (status !== 'finished' || !mapReady || fittedTrace || !map || traceCoords.length < 2) {
+			return;
+		}
+		fittedTrace = true;
+		const bounds = traceCoords.reduce(
+			(b, c) => b.extend(c),
+			new maplibregl.LngLatBounds(traceCoords[0], traceCoords[0]),
+		);
+		try {
+			map.fitBounds(bounds, { padding: 48, maxZoom: 16, duration: 600 });
+		} catch {
+			// A degenerate bounds (all points coincident) can throw; the
+			// last-fix centre from map load is a fine fallback.
+		}
 	});
 
 	function recentreOnRunner() {
@@ -674,6 +770,9 @@
 				map.jumpTo({ center: [last[0], last[1]], zoom: 15 });
 				centred = true;
 			}
+			// Let the fit-to-trace effect run now that the map exists — it
+			// frames the whole route on a concluded run.
+			mapReady = true;
 		});
 	}
 
@@ -783,8 +882,41 @@
 					<span class="live-stat-value">{currentPace}</span>
 					<span class="live-stat-label">{m('live.statPace')}</span>
 				</div>
+				{#if status === 'live' && recentPaceSecPerKm != null}
+					<div class="live-stat" data-testid="recent-pace">
+						<span class="live-stat-value">{formatPace(recentPaceSecPerKm, 1000)}</span>
+						<span class="live-stat-label">{m('live.statRecentPace')}</span>
+					</div>
+				{/if}
 			</div>
+			{#if status === 'live' && courseProgressPct != null}
+				<div
+					class="course-progress"
+					data-testid="course-progress"
+					aria-label={m('live.courseProgress', { p: Math.round(courseProgressPct) })}
+				>
+					<div class="course-progress-track">
+						<div class="course-progress-fill" style="width: {courseProgressPct}%"></div>
+					</div>
+					<span class="course-progress-label"
+						>{m('live.courseProgress', { p: Math.round(courseProgressPct) })}</span
+					>
+				</div>
+			{/if}
 		</section>
+
+			{#if status === 'finished'}
+				<section class="conclusion-card" data-testid="conclusion-card">
+					<span class="material-symbols conclusion-icon" aria-hidden="true">flag_circle</span>
+					<div class="conclusion-text">
+						<h2>{m('live.concludedTitle')}</h2>
+						<p>{m('live.concludedBody')}</p>
+					</div>
+					<a href={`/share/run/${data.id}`} class="btn btn-primary conclusion-cta">
+						{m('live.viewFullRun')}
+					</a>
+				</section>
+			{/if}
 
 			{#if hasCutoffRoute && eta?.checkpoint}
 				<section
@@ -1181,6 +1313,74 @@
 		}
 		.live-runner-name {
 			font-size: 0.9rem;
+		}
+	}
+
+	.course-progress {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: 0 var(--space-2xl) var(--space-md);
+	}
+	.course-progress-track {
+		flex: 1;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--color-border);
+		overflow: hidden;
+	}
+	.course-progress-fill {
+		height: 100%;
+		border-radius: 999px;
+		background: var(--color-primary);
+		transition: width 0.4s ease;
+	}
+	.course-progress-label {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.conclusion-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+		padding: var(--space-lg) var(--space-2xl);
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		border-inline-start: 4px solid var(--color-success);
+	}
+	.conclusion-icon {
+		font-size: 2rem;
+		color: var(--color-success);
+		flex-shrink: 0;
+	}
+	.conclusion-text {
+		flex: 1;
+		min-width: 0;
+	}
+	.conclusion-text h2 {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 800;
+	}
+	.conclusion-text p {
+		margin: var(--space-2xs) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+	}
+	.conclusion-cta {
+		flex-shrink: 0;
+	}
+	@media (max-width: 48rem) {
+		.conclusion-card {
+			flex-wrap: wrap;
+		}
+		.conclusion-cta {
+			width: 100%;
+			text-align: center;
 		}
 	}
 

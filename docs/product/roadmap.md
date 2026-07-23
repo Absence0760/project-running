@@ -102,7 +102,7 @@ Full technical details in `backend_scaling.md`.
 
 ### Live spectator tracking
 
-✓ **Shipped.** `/live/{run_id}` spectator page, pre-start share link, mobile per-ping broadcast to `live_run_pings`, the Go WebSocket hub (with Supabase Realtime fallback), and Redis-backed ephemeral position storage for late joiners. Only the operator env-flip (Fly.io + Redis) remains. Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md).
+✓ **Shipped.** `/live/{run_id}` spectator page, pre-start share link, mobile per-ping broadcast to `live_run_pings`, the Go WebSocket hub (with Supabase Realtime fallback), and Redis-backed ephemeral position storage for late joiners. The spectator run-conclusion view (a positive `runs.concluded_at` marker → "Run complete" card + view-the-full-run CTA, plus recent-pace / course-progress enrichment) and the mobile recorder's persistent live-share indicator shipped 2026-07-23 (issue #613). Only the operator env-flip (Fly.io + Redis) remains. Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md).
 
 ### Backend work (Phase 2)
 

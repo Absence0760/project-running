@@ -60,6 +60,7 @@ import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/ghost_pacer.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/live_share_indicator.dart';
 import '../widgets/safety_nudge_banner.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/top_banner.dart';
@@ -459,6 +460,14 @@ class _RunScreenState extends State<RunScreen> {
   // failed transiently and the auto-live-share pref is off — otherwise a
   // shared link would stay permanently dead (persona-woman safety finding).
   bool _liveShareRequested = false;
+  // Drives the persistent live-share indicator on the recording chrome
+  // (issue #613). Flipped true once the broadcaster is attached and false
+  // only when the broadcast is torn down (run finish, or an explicit
+  // stop-share) — navigating away / minimizing keeps it true because the
+  // run screen is a keep-alive tab. A dedicated notifier (not a read of
+  // `_liveBroadcaster.isActive`) because attach/detach happen outside
+  // setState, so the indicator needs its own rebuild signal.
+  final ValueNotifier<bool> _liveShareActive = ValueNotifier<bool>(false);
 
   // GPS signal state. If snapshots stop arriving for > _gpsLostThreshold we
   // show a banner warning the runner so they're not surprised at stop time.
@@ -1244,6 +1253,43 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// Tapped the persistent live-share indicator (issue #613). Offers the
+  /// two mid-run actions the runner previously had no way to reach: re-open
+  /// the OS share sheet to (re)send the link, or stop the live share.
+  Future<void> _onLiveShareIndicatorTap() async {
+    final action = await showLiveShareSheet(context);
+    if (action == null || !mounted) return;
+    switch (action) {
+      case LiveShareAction.reshare:
+        await _shareLiveLink();
+      case LiveShareAction.stop:
+        await _stopLiveShare();
+    }
+  }
+
+  /// Stop the live share mid-run without ending the run. Concludes the
+  /// broadcast (stamps runs.concluded_at so spectators see a real
+  /// conclusion, not a frozen-then-stale feed) and detaches the pump; the
+  /// run keeps recording. Clears [_liveShareRequested] so a later GO / auto
+  /// path doesn't silently re-broadcast against the runner's choice.
+  Future<void> _stopLiveShare() async {
+    _liveShareRequested = false;
+    final lb = _liveBroadcaster;
+    final api = widget.apiClient;
+    final id = _runId;
+    if (api != null && api.userId != null && id != null &&
+        lb != null && lb.isActive) {
+      try {
+        await api.concludeLiveBroadcast(id).timeout(kBackendLoadTimeout);
+      } catch (e) {
+        debugPrint('concludeLiveBroadcast (stop-share) failed: $e');
+      }
+    }
+    lb?.detach();
+    _liveShareActive.value = false;
+    if (mounted) _showTopBanner(_l10n.runLiveShareStopped);
+  }
+
   /// Pre-create the parent runs row + flip the broadcaster on so the
   /// first ping after _begin() lands successfully. The runs row is
   /// marked is_public=true (the opt-in to sharing — either the user's
@@ -1283,6 +1329,7 @@ class _RunScreenState extends State<RunScreen> {
           )
           .timeout(kBackendLoadTimeout);
       _liveBroadcaster!.attach(_runId!);
+      _liveShareActive.value = true;
       return true;
     } catch (e) {
       debugPrint('beginLiveBroadcast failed: $e');
@@ -2929,10 +2976,15 @@ class _RunScreenState extends State<RunScreen> {
     // Live broadcast wind-down. Three things to do, all best-effort:
     //   1. Re-assert is_public=true on the saved run (saveRun's upsert
     //      writes is_public=null, which clobbers the stub's true value).
-    //   2. Drop the spectator ping history — the saved track + Storage
-    //      track_url are now the canonical record.
+    //   2. Stamp runs.concluded_at so the spectator page shows a real
+    //      conclusion instead of inferring "finished" from ping absence.
+    //      The pings are LEFT for the 48h retention cron so a spectator
+    //      who reloads right after the stop still sees the frozen trace.
     //   3. Detach the broadcaster so a stray late-arriving snapshot
-    //      doesn't try to ping a wiped run id.
+    //      doesn't try to ping a concluded run id.
+    // This is the ONLY teardown of the broadcast — navigating away or
+    // minimizing keeps it live (the run screen is a keep-alive tab), so a
+    // shared link stays valid until the run actually finishes here.
     final lb = _liveBroadcaster;
     if (lb != null && lb.isActive) {
       final api2 = widget.apiClient;
@@ -2943,12 +2995,13 @@ class _RunScreenState extends State<RunScreen> {
           debugPrint('makeRunPublic after live broadcast failed: $e');
         }
         try {
-          await api2.endLiveBroadcast(run.id).timeout(kBackendLoadTimeout);
+          await api2.concludeLiveBroadcast(run.id).timeout(kBackendLoadTimeout);
         } catch (e) {
-          debugPrint('endLiveBroadcast failed: $e');
+          debugPrint('concludeLiveBroadcast failed: $e');
         }
       }
       lb.detach();
+      _liveShareActive.value = false;
     }
 
     // If this run was hosting a live race, submit the finisher time so
@@ -3006,6 +3059,11 @@ class _RunScreenState extends State<RunScreen> {
     _stopRequested = false;
     _runId = null;
     _runStartedAtWall = null;
+    // Clear the share intent + indicator so the next run starts private —
+    // a sticky flag would silently re-broadcast a fresh run the runner
+    // never chose to share.
+    _liveShareRequested = false;
+    _liveShareActive.value = false;
     _pedometerRetries = 0;
     _gpsLost = false;
     _weakGps = false;
@@ -3089,6 +3147,7 @@ class _RunScreenState extends State<RunScreen> {
     _workoutBand.dispose();
     _recorder?.dispose();
     _statsNotifier.dispose();
+    _liveShareActive.dispose();
     super.dispose();
   }
 
@@ -3881,6 +3940,23 @@ class _RunScreenState extends State<RunScreen> {
               onAbandon: _onAbandonWorkout,
             ),
           ),
+
+        // Persistent live-share indicator — top left while a broadcast is
+        // active (issue #613). Standing confirmation the feed is on, and the
+        // only mid-run tap target to re-share the link or stop sharing.
+        // Reads its own notifier so attach/detach flips it without a
+        // Stack-wide rebuild.
+        ValueListenableBuilder<bool>(
+          valueListenable: _liveShareActive,
+          builder: (context, active, _) {
+            if (!active) return const SizedBox.shrink();
+            return Positioned(
+              top: 56,
+              left: 16,
+              child: LiveShareIndicator(onTap: _onLiveShareIndicatorTap),
+            );
+          },
+        ),
 
         // "X to go" badge — top right when a route is selected. Listens
         // to the snapshot notifier so it updates at GPS rate without

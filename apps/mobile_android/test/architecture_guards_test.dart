@@ -3700,7 +3700,7 @@ void main() {
           'fetchRoutesIntersectingTrack',
           'saveRun',
           'makeRunPublic',
-          'endLiveBroadcast',
+          'concludeLiveBroadcast',
           'fetchPlanForWorkout',
           'fetchActiveOverview',
           'fetchNextRsvpedEvent',

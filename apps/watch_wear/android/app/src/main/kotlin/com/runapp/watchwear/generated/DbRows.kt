@@ -46,7 +46,8 @@ data class RunRow(
     val fastest5kS: Int? = null,
     val fastest10kS: Int? = null,
     val fastestHalfMarathonS: Int? = null,
-    val fastestMarathonS: Int? = null
+    val fastestMarathonS: Int? = null,
+    val concludedAt: Instant? = null
 ) {
     companion object {
         const val TABLE = "runs"
@@ -73,6 +74,7 @@ data class RunRow(
         const val COL_FASTEST_10K_S = "fastest_10k_s"
         const val COL_FASTEST_HALF_MARATHON_S = "fastest_half_marathon_s"
         const val COL_FASTEST_MARATHON_S = "fastest_marathon_s"
+        const val COL_CONCLUDED_AT = "concluded_at"
 
         fun fromJson(json: JsonObject): RunRow = RunRow(
             id = json["id"]!!.jsonPrimitive.content,
@@ -97,7 +99,8 @@ data class RunRow(
             fastest5kS = json["fastest_5k_s"]?.jsonPrimitive?.int,
             fastest10kS = json["fastest_10k_s"]?.jsonPrimitive?.int,
             fastestHalfMarathonS = json["fastest_half_marathon_s"]?.jsonPrimitive?.int,
-            fastestMarathonS = json["fastest_marathon_s"]?.jsonPrimitive?.int
+            fastestMarathonS = json["fastest_marathon_s"]?.jsonPrimitive?.int,
+            concludedAt = json["concluded_at"]?.jsonPrimitive?.contentOrNull?.let { Instant.parse(it) }
         )
     }
 
@@ -124,7 +127,8 @@ data class RunRow(
         COL_FASTEST_5K_S to fastest5kS,
         COL_FASTEST_10K_S to fastest10kS,
         COL_FASTEST_HALF_MARATHON_S to fastestHalfMarathonS,
-        COL_FASTEST_MARATHON_S to fastestMarathonS
+        COL_FASTEST_MARATHON_S to fastestMarathonS,
+        COL_CONCLUDED_AT to concludedAt?.toString()
     )
 }
 

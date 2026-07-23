@@ -21,6 +21,7 @@ function makeRun(overrides: Partial<Run> & { started_at: string; duration_s: num
 		fastest_half_marathon_s: null,
 		fastest_marathon_s: null,
 		is_public: false,
+		concluded_at: null,
 		metadata: null,
 		created_at: overrides.started_at,
 		updated_at: overrides.started_at,

@@ -1132,6 +1132,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Live tracking couldn\'t start — tap Share to retry.';
 
   @override
+  String get runLiveShareActive => 'Live';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'Live sharing is on. Tap to re-share the link or stop sharing.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Live sharing on';
+
+  @override
+  String get runLiveShareReshare => 'Share link again';
+
+  @override
+  String get runLiveShareStop => 'Stop sharing';
+
+  @override
+  String get runLiveShareStopped => 'Live sharing stopped';
+
+  @override
   String get runTrainingPlans => 'Training plans';
 
   @override
@@ -4382,6 +4401,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorRecentPace => 'Recent';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p% of route';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Run complete';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'See the full route, splits, and stats.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'View the full run';
 
   @override
   String get liveUpdatedNow => 'Updated just now';

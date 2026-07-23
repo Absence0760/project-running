@@ -39,6 +39,7 @@ create table runs (
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
   hr_series_url text,                        -- Storage path: {user_id}/{run_id}.hr.json.gz (indoor/trackless HR series)
   is_public     boolean default false,      -- visible at /share/run/{id}
+  concluded_at  timestamptz,                 -- positive live-broadcast terminal marker; stamped by concludeLiveBroadcast on stop, null while live or never broadcast. Exposed via public_runs so spectators detect finish honestly. 20270427_001 (issue #613)
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
@@ -107,6 +108,7 @@ when `bpm` is absent.
 - nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id` — since `20270318_001` all three helpers, incl. `is_public_club_by_id`, also answer false for a `shadow_hidden` target, and the event helper additionally honours the event-level `is_public` gate from `20270113_001`, so an auto-hidden or members-only target can't stay linkable through the public views),
 - restricts to `is_public = true`,
 - exposes `activity_type` + `is_dnf` as **columns** (public-safe — both were public-safe metadata keys before they were promoted to real columns in `20261207_001`, F3; the view now selects the columns and the keys no longer ride in the `metadata` projection), and likewise the four embedded-best columns `fastest_5k_s` / `fastest_10k_s` / `fastest_half_marathon_s` / `fastest_marathon_s` (public-safe bag keys before their promotion in `20270325_001`),
+- exposes `concluded_at` (nullable `timestamptz`, appended to the view by `20270427_001`, issue #613) — the positive live-broadcast finish marker the `/live/{run_id}` spectator surfaces read to flip a run to its conclusion view; null while the run is live or was never broadcast,
 - omits `updated_at` — same signal as `metadata.last_modified_at` (already stripped); leaks last-edit / last-sync timestamps to anyone with the share link (`20260807_001`).
 - omits `track_url` (the `{user_id}/{run_id}.json.gz` Storage path — dropped `20260924_001` for defence-in-depth so a future Storage-RLS loosening can't re-open direct download from a leaked path) but exposes a derived boolean `has_track` (`track_url IS NOT NULL`, `20261105_001`) so the feed / `/u/[id]` map-thumbnail gate has a safe existence signal without the path. Non-owner thumbnails fetch the clipped trace by `run_id` through the `clip-public-track` Edge Function, which derives the path itself.
 

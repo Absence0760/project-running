@@ -1145,6 +1145,25 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le suivi en direct n\'a pas pu démarrer — appuyez sur Partager pour réessayer.';
 
   @override
+  String get runLiveShareActive => 'En direct';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'Le partage en direct est actif. Appuyez pour repartager le lien ou arrêter le partage.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Partage en direct actif';
+
+  @override
+  String get runLiveShareReshare => 'Repartager le lien';
+
+  @override
+  String get runLiveShareStop => 'Arrêter le partage';
+
+  @override
+  String get runLiveShareStopped => 'Partage en direct arrêté';
+
+  @override
   String get runTrainingPlans => 'Plans d\'entraînement';
 
   @override
@@ -4434,6 +4453,24 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorRecentPace => 'Récente';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p % du parcours';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Course terminée';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'Voir le parcours complet, les splits et les statistiques.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'Voir la course complète';
 
   @override
   String get liveUpdatedNow => 'Mis à jour à l\'instant';

@@ -1141,6 +1141,25 @@ class AppLocalizationsDe extends AppLocalizations {
       'Live-Tracking konnte nicht gestartet werden – tippe zum erneuten Versuch auf Teilen.';
 
   @override
+  String get runLiveShareActive => 'Live';
+
+  @override
+  String get runLiveShareActiveSemantics =>
+      'Live-Teilen ist aktiv. Tippe, um den Link erneut zu teilen oder das Teilen zu beenden.';
+
+  @override
+  String get runLiveShareSheetTitle => 'Live-Teilen aktiv';
+
+  @override
+  String get runLiveShareReshare => 'Link erneut teilen';
+
+  @override
+  String get runLiveShareStop => 'Teilen beenden';
+
+  @override
+  String get runLiveShareStopped => 'Live-Teilen beendet';
+
+  @override
   String get runTrainingPlans => 'Trainingspläne';
 
   @override
@@ -4432,6 +4451,24 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorRecentPace => 'Aktuell';
+
+  @override
+  String liveSpectatorCourseProgress(int p) {
+    return '$p% der Strecke';
+  }
+
+  @override
+  String get liveSpectatorConcludedTitle => 'Lauf beendet';
+
+  @override
+  String get liveSpectatorConcludedBody =>
+      'Sieh dir die vollständige Strecke, Splits und Statistiken an.';
+
+  @override
+  String get liveSpectatorViewFullRun => 'Vollständigen Lauf ansehen';
 
   @override
   String get liveUpdatedNow => 'Gerade aktualisiert';

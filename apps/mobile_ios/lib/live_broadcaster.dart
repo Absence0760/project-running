@@ -83,7 +83,7 @@ class LiveBroadcaster {
   }
 
   /// Stop publishing. The run screen calls this after the final
-  /// save + endLiveBroadcast on stop. After detach, [pushPing] is a
+  /// save + concludeLiveBroadcast on stop. After detach, [pushPing] is a
   /// no-op even if a stale snapshot arrives mid-tear-down.
   void detach() {
     _runId = null;
