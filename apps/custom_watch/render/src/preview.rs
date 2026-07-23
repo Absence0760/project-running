@@ -271,51 +271,6 @@ fn preview_distance_and_pace_bignum_heroes() {
 }
 
 #[test]
-fn preview_run_dashboard() {
-    use sharp_mip::Icon;
-    use watch_core::face::FaceIcon;
-
-    let snap = base_snapshot();
-    let mut fb = Framebuffer::new();
-    draw_face(&mut fb, Page::Dashboard, Some(&snap), Some(150));
-    // The gutter icons, mapped the way the ui task's driver_icon does.
-    let fix = sample_fix();
-    let icons = face::page_icons(
-        Page::Dashboard,
-        Some(&fix),
-        Some(150),
-        Some(&snap),
-        100,
-        false,
-        GnssMode::default(),
-    );
-    for (row, icon) in icons.iter().enumerate() {
-        if let Some(icon) = icon {
-            fb.draw_icon(
-                0,
-                row,
-                match icon {
-                    FaceIcon::Stopwatch => Icon::Stopwatch,
-                    FaceIcon::Footsteps => Icon::Footsteps,
-                    FaceIcon::Heart => Icon::Heart,
-                    FaceIcon::HeartSmall => Icon::HeartSmall,
-                    FaceIcon::Mountain => Icon::Mountain,
-                    FaceIcon::Vert => Icon::Vert,
-                    FaceIcon::Satellite => Icon::Satellite,
-                    FaceIcon::SatSearch0 => Icon::SatSearch0,
-                    FaceIcon::SatSearch1 => Icon::SatSearch1,
-                },
-            );
-        }
-    }
-    widgets::draw_page_indicator(
-        &mut fb,
-        watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
-    );
-    show("run dashboard: hero + NOW/GAP pairing", &fb);
-}
-
-#[test]
 fn preview_pacer_page() {
     use watch_core::pacer::{PaceVerdict, PacerGoal, PacerStatus};
     let mut snap = base_snapshot();
