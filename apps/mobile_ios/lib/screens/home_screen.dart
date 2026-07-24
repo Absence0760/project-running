@@ -13,10 +13,11 @@ import '../local_gear_store.dart';
 import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
-import '../main.dart' show pendingStartWorkout;
+import '../main.dart' show pendingStartWorkout, pendingStartRunWithRoute;
 import '../preferences.dart';
 import '../race_controller.dart';
 import '../settings_sync.dart';
+import '../shared_file_import.dart' show incomingRouteImport;
 import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/billing_issue_banner.dart';
@@ -29,6 +30,7 @@ import '../onboarding.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'plan_new_screen.dart';
+import 'route_detail_screen.dart';
 import 'run_screen.dart';
 import 'setup_wizard_screen.dart';
 import 'social_screen.dart';
@@ -157,6 +159,13 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     _rebuildPages();
     pendingStartWorkout.addListener(_onPendingStartWorkout);
+    pendingStartRunWithRoute.addListener(_onPendingStartRunWithRoute);
+    incomingRouteImport.addListener(_onIncomingRouteImport);
+    // A GPX/KML opened while the app was closed sets the notifier during
+    // main() before this screen mounts, so drain any already-present value
+    // once the first frame is up (the listener only fires on later shares).
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _onIncomingRouteImport());
     // Surface the recovery banner from main.dart's in-progress
     // evaluation. Casual #3: this also fires on DISCARD ("Discarded a
     // 38 m partial recording...") — pre-fix that path was silent and
@@ -283,6 +292,45 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  /// A route surface (route-detail Start FAB, the public / shared-route
+  /// screen) asked to start a run following a route. Drain the handoff and
+  /// route into the recorder with the route preselected — `_startRunWithRoute`
+  /// itself pops back to the shell so any pushed route screen is dismissed.
+  void _onPendingStartRunWithRoute() {
+    final route = pendingStartRunWithRoute.value;
+    if (route == null || !mounted) return;
+    pendingStartRunWithRoute.value = null;
+    _startRunWithRoute(route);
+  }
+
+  /// A GPX/KML handed to the app by another app (WhatsApp "Open with" /
+  /// share, iOS document open) was imported into the route library; drain
+  /// the handoff, confirm it, and open the freshly-imported route. Every
+  /// failure collapses to one generic banner (the service logged the cause).
+  void _onIncomingRouteImport() {
+    final result = incomingRouteImport.value;
+    if (result == null || !mounted) return;
+    incomingRouteImport.value = null;
+    final l10n = AppLocalizations.of(context);
+    if (!result.ok) {
+      showTopBanner(context, l10n.routesImportSharedFailed);
+      return;
+    }
+    final route = result.route!;
+    showTopBanner(context, l10n.routesImported(route.name));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RouteDetailScreen(
+          route: route,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+          apiClient: widget.apiClient,
+          isOwner: true,
+        ),
+      ),
+    );
+  }
+
   void _rebuildPages() {
     // Each page is wrapped in `_LazyKeepAliveTab`, which only constructs
     // its heavy child on the first `build` call. PageView lazily builds
@@ -390,6 +438,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
+    pendingStartRunWithRoute.removeListener(_onPendingStartRunWithRoute);
+    incomingRouteImport.removeListener(_onIncomingRouteImport);
     _pageController.dispose();
     _currentIndex.dispose();
     super.dispose();
@@ -403,6 +453,15 @@ class _HomeScreenState extends State<HomeScreen>
     setState(_rebuildPages);
     _currentIndex.value = _pageRun;
     _pageController.jumpToPage(_pageRun);
+    // Dismiss any screens pushed on top of the shell (RoutesScreen /
+    // RouteDetailScreen — "Start run" is reached by pushing those). We
+    // just jumped the shell PageView to the recorder, but a pushed
+    // route screen would keep obscuring it — so tapping "Start run" from
+    // the routes page looked like it just reopened the route page. Pop
+    // back to the shell so the recorder is actually shown.
+    if (mounted) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
   }
 
   void _goToPage(int index) {

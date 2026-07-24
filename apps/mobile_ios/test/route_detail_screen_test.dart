@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' show ClubRow;
@@ -36,6 +38,47 @@ class _ThrowingTagsApi extends ApiClient {
   @override
   Future<void> updateRouteTags(String routeId, List<String> tags) async {
     throw StateError('network down');
+  }
+}
+
+/// Route store whose `pinOffline` blocks on a gate the test controls, so the
+/// double-tap window for the offline-pin toggle can be held open on purpose.
+class _FakePinStore extends LocalRouteStore {
+  int pinCalls = 0;
+  int unpinCalls = 0;
+  final Completer<void> pinGate = Completer<void>();
+  bool _pinned = false;
+
+  @override
+  bool isOfflinePinned(String routeId) => _pinned;
+
+  @override
+  Future<void> save(cm.Route route, {bool markSynced = false}) async {}
+
+  @override
+  Future<void> pinOffline(String routeId) async {
+    pinCalls++;
+    await pinGate.future;
+    _pinned = true;
+  }
+
+  @override
+  Future<void> unpinOffline(String routeId) async {
+    unpinCalls++;
+    _pinned = false;
+  }
+}
+
+/// Owner ApiClient whose setRoutePublic blocks on a gate the test controls.
+class _GatedPublicApi extends ApiClient {
+  int publicCalls = 0;
+  final Completer<void> gate = Completer<void>();
+  @override
+  String? get userId => 'test-user';
+  @override
+  Future<void> setRoutePublic(String routeId, bool isPublic) async {
+    publicCalls++;
+    await gate.future;
   }
 }
 
@@ -95,6 +138,24 @@ void main() {
     dotenv.loadFromString(isOptional: true);
   });
 
+  group('routeShareUrl', () {
+    test('builds /share/route/{id} from an explicit base', () {
+      expect(routeShareUrl('abc', webBase: 'https://threkir.com'),
+          'https://threkir.com/share/route/abc');
+    });
+    test('trims trailing slashes on the base', () {
+      expect(routeShareUrl('abc', webBase: 'https://example.com//'),
+          'https://example.com/share/route/abc');
+    });
+    test('keeps a base path prefix', () {
+      expect(routeShareUrl('r1', webBase: 'https://host/app/'),
+          'https://host/app/share/route/r1');
+    });
+    test('falls back to the prod host when WEB_BASE_URL is unset', () {
+      expect(routeShareUrl('r1'), 'https://threkir.com/share/route/r1');
+    });
+  });
+
   group('RouteDetailScreen', () {
     testWidgets('renders the route name as the app-bar title', (tester) async {
       await _pump(tester, _route(name: 'River Loop'));
@@ -104,6 +165,185 @@ void main() {
     testWidgets('delete button is hidden when isOwner is false', (tester) async {
       await _pump(tester, _route(), isOwner: false);
       expect(find.byIcon(Icons.delete_outline), findsNothing);
+    });
+
+    testWidgets(
+        'public toggle guards a double-tap so overlapping visibility writes '
+        'cannot race', (tester) async {
+      final api = _GatedPublicApi();
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(),
+          routeStore: store,
+          preferences: prefs,
+          apiClient: api,
+          isOwner: true,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final appBar = find.byType(AppBar);
+      // First tap flips private → public and blocks on the cloud write.
+      await tester.tap(find.descendant(
+          of: appBar, matching: find.byIcon(Icons.public_off)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(api.publicCalls, 1);
+
+      // Busy → the control is disabled; a second tap can't fire a second,
+      // out-of-order visibility write.
+      final btn = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
+      expect(btn.onPressed, isNull,
+          reason: 'visibility control must be disabled while a write is in flight');
+      await tester.tap(
+          find.descendant(of: appBar, matching: find.byIcon(Icons.public)),
+          warnIfMissed: false);
+      await tester.pump();
+      expect(api.publicCalls, 1, reason: 'second tap must not fire another write');
+
+      // Completing the write re-enables the control.
+      api.gate.complete();
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      final btnAfter = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
+      expect(btnAfter.onPressed, isNotNull);
+
+      // Drain the "made public" banner timer.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+    });
+
+    testWidgets(
+        'Share link on a private route confirms before making it public',
+        (tester) async {
+      final api = _GatedPublicApi();
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(isPublic: false),
+          routeStore: store,
+          preferences: prefs,
+          apiClient: api,
+          isOwner: true,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      Future<void> openShareLink() async {
+        await tester.tap(find.byIcon(Icons.ios_share));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.text(l10n.routeDetailShareLink));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      // Choosing "Share link" on a private route raises the confirm — and
+      // publishes nothing yet.
+      await openShareLink();
+      expect(find.text(l10n.routeDetailShareConfirmTitle), findsOneWidget);
+      expect(api.publicCalls, 0);
+
+      // Cancel → the route stays private, no visibility write fired.
+      await tester.tap(find.text(l10n.routeDetailCancel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(l10n.routeDetailShareConfirmTitle), findsNothing);
+      expect(api.publicCalls, 0,
+          reason: 'cancelling the confirm must not flip the route public');
+
+      // Reopen and confirm → the publish write fires (then blocks on the
+      // gate, so the OS share sheet is never reached in the test).
+      await openShareLink();
+      await tester.tap(find.text(l10n.routeDetailShareConfirmCta));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(Duration.zero);
+      expect(api.publicCalls, 1,
+          reason: 'confirming must flip the route public');
+    });
+
+    testWidgets(
+        'offline-pin toggle guards a double-tap race — a second tap while the '
+        'pin is in flight is ignored, then the control re-enables',
+        (tester) async {
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(),
+          routeStore: store,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final appBar = find.byType(AppBar);
+      // First tap starts the pin, which blocks on the store gate.
+      await tester.tap(find.descendant(
+          of: appBar, matching: find.byIcon(Icons.download_outlined)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(store.pinCalls, 1);
+      expect(store.unpinCalls, 0);
+
+      // The control is now disabled (busy) — a second tap must not fire
+      // another pin/unpin, which is what would race the tile-pack download
+      // against its own delete.
+      final pinBtn = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.download_done),
+          matching: find.byType(IconButton)));
+      expect(pinBtn.onPressed, isNull,
+          reason: 'pin control must be disabled while a pin is in flight');
+      // Belt-and-suspenders: even a forced tap changes nothing.
+      await tester.tap(
+          find.descendant(
+              of: appBar, matching: find.byIcon(Icons.download_done)),
+          warnIfMissed: false);
+      await tester.pump();
+      expect(store.pinCalls, 1, reason: 'second tap must not fire another pin');
+      expect(store.unpinCalls, 0);
+
+      // Releasing the in-flight pin re-enables the control (a guard, not a
+      // permanent lock).
+      store.pinGate.complete();
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      final pinBtnAfter = tester.widget<IconButton>(find.ancestor(
+          of: find.byIcon(Icons.download_done),
+          matching: find.byType(IconButton)));
+      expect(pinBtnAfter.onPressed, isNotNull,
+          reason: 'control re-enables once the pin completes');
+
+      // The completed pin fires a "Saved offline" top banner, which leaves a
+      // pending auto-dismiss timer — drain it so the framework doesn't trip.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
     });
 
     testWidgets('delete button is visible when isOwner is true and apiClient has userId',

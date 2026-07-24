@@ -1,6 +1,9 @@
 import type { Messages } from '../messages';
 
 export const messages = {
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Abbrechen',
+	'common.confirm': 'Bestätigen',
 	'nav.dashboard': 'Übersicht',
 	'nav.history': 'Verlauf',
 	'nav.runs': 'Läufe',
@@ -713,6 +716,9 @@ export const messages = {
 	"routeDetail.starFailed": "Route konnte nicht favorisiert werden: {error}",
 	"routeDetail.unstarFailed": "Favorit konnte nicht entfernt werden: {error}",
 	"routeDetail.madePublicForLink": "Die Route ist jetzt öffentlich, damit der Link funktioniert.",
+	"routeDetail.shareConfirmTitle": "Diese Route öffentlich machen?",
+	"routeDetail.shareConfirmBody": "Beim Teilen eines Links wird diese Route öffentlich – jede Person mit dem Link kann sie öffnen, und sie kann unter „Entdecken“ erscheinen. Du kannst sie jederzeit wieder auf privat stellen.",
+	"routeDetail.shareConfirmCta": "Öffentlich machen & teilen",
 	"routeDetail.makePublicFailed": "Konnte nicht öffentlich gemacht werden: {error}",
 	"routeDetail.nowPublic": "Die Route ist jetzt öffentlich.",
 	"routeDetail.nowPrivate": "Die Route ist wieder privat.",
@@ -743,6 +749,8 @@ export const messages = {
 	"routeDetail.reportReview": "Diese Bewertung melden",
 	"routeDetail.copied": "Kopiert!",
 	"routeDetail.copy": "Kopieren",
+	"routeDetail.copyLinkFailed": "Link konnte nicht kopiert werden",
+	"routeDetail.shareLinkLabel": "Teilbarer Link",
 	"routeDetail.previewHeading": "Vorschau",
 	"routeDetail.elevationHeading": "Höhenprofil",
 	"routeDetail.elevGain": "Anstieg",
@@ -2721,6 +2729,12 @@ export const messages = {
 	"routeMarker.deleteFailed": "Marker konnte nicht gelöscht werden: {error}",
 	"routeMarker.deleteConfirmTitle": "Marker löschen?",
 	"routeMarker.deleteConfirmMessage": "Dadurch wird der Marker dauerhaft von der Strecke entfernt.",
+	"routeMarker.officialBadge": "Routeninhaber",
+	"routeMarker.yoursBadge": "Deine",
+	"routeMarker.personalOverlayHint": "Marker, die du hier hinzufügst, sind nur für dich sichtbar – der Routeninhaber sieht sie nicht.",
+	"routeMarker.distanceAlongLabel": "Distanz entlang der Route ({unit})",
+	"routeMarker.distanceAlongHint": "Oder platziere den Marker über die Distanz vom Start.",
+	"routeMarker.distanceAlongClamped": "Diese Distanz liegt hinter dem Routenende – an das Ziel bei {distance} angepasst.",
 	"routeMarker.kind.aid_station": "Verpflegungsstation",
 	"routeMarker.kind.cutoff": "Cut-off",
 	"routeMarker.kind.crew_access": "Crew / Parken",

@@ -2245,6 +2245,10 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get routesImportSharedFailed =>
+      'このファイルをインポートできませんでした。有効な GPX または KML ルートではありません。';
+
+  @override
   String routesSaved(String name) {
     return '「$name」を保存しました';
   }
@@ -2375,6 +2379,10 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get routeBuilderRouteFailedStraightLines =>
       'ルートを計算できませんでした — ピン間を直線で表示します。';
+
+  @override
+  String get routeBuilderSnapUnavailable =>
+      '道路へのスナップは利用できません — ピンはタップした位置に置かれ、直線で結ばれます。';
 
   @override
   String routeBuilderSegmentsFailed(int count) {
@@ -2564,6 +2572,27 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routeDetailShareAsKml => 'KML として共有';
+
+  @override
+  String get routeDetailShareLink => 'リンクを共有';
+
+  @override
+  String get routeDetailMadePublicForLink => 'リンクを知っている全員が閲覧できるように公開しました';
+
+  @override
+  String get routeDetailShareConfirmTitle => 'このルートを公開しますか？';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'リンクを共有するとこのルートが公開され、リンクを知っている人は誰でも開くことができ、「探索」に表示される場合があります。いつでも非公開に戻せます。';
+
+  @override
+  String get routeDetailShareConfirmCta => '公開して共有';
+
+  @override
+  String routeDetailShareLinkFailed(String error) {
+    return 'リンクを共有できませんでした: $error';
+  }
 
   @override
   String get routeDetailShareAsGpxMarkers => 'GPX + マーカーとして共有';
@@ -6241,7 +6270,36 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsSplitIntervalDefaultSubtitle => 'デフォルト（ランニングは1km、サイクリングは5km）';
 
   @override
-  String get prefsLivePaceAlert => 'ライブペースアラート';
+  String get prefsSplitPaceMode => 'スプリットの読み上げ';
+
+  @override
+  String get prefsSplitPaceModeSubtitle => '各スプリットで読み上げるペース';
+
+  @override
+  String get prefsSplitPaceModeSplit => 'スプリットのペース';
+
+  @override
+  String get prefsSplitPaceModeAverage => '平均ペース';
+
+  @override
+  String get prefsSplitPaceModeBoth => '両方';
+
+  @override
+  String get prefsSplitPaceModeInfo =>
+      '各スプリットで聞くペースを選べます。そのスプリットだけのペース、ここまでのラン全体の平均ペース、またはその両方です。一定のペースを保つのに便利です。例：「1キロメートル。平均ペース、1キロメートルあたり5分45秒。」';
+
+  @override
+  String get prefsTargetPace => '目標ペース';
+
+  @override
+  String get prefsTargetPaceInfo =>
+      '維持したいペースです。単独では音声は鳴りません。音声キュー「ペースずれアラート」をオンにすると、30秒以上ずれたときに「ペースを上げて」「ペースを落として」と読み上げます。例：「8秒ペースを上げてください。」';
+
+  @override
+  String get prefsCueInfoTooltip => 'これは何？';
+
+  @override
+  String get prefsLivePaceAlert => '目標ペース';
 
   @override
   String get prefsLivePaceAlertMin => '分';
@@ -6250,11 +6308,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsLivePaceAlertSec => '秒';
 
   @override
-  String get prefsLivePaceAlertOff => 'オフ — ペースを設定すると、ラン中に音声アラートを受け取れます';
+  String get prefsLivePaceAlertOff => '未設定 — 目標を設定し、「ペースずれアラート」をオンにしてください';
 
   @override
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
-    return '$pace $paceLabel — ラン中に30秒以上ずれたら音声でアラート';
+    return '$pace $paceLabel — 30秒以上ずれると「ペースずれアラート」が読み上げます';
   }
 
   @override
@@ -6459,7 +6517,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsAudioCues => '音声キュー';
 
   @override
-  String get prefsAudioCuesSubtitle => 'スプリットの読み上げアナウンス';
+  String get prefsAudioCuesSubtitle => 'ラン中にスプリット・ペースなどの音声を読み上げます';
 
   @override
   String get prefsMinimalVoiceCues => '最小限の音声キュー';
@@ -7245,6 +7303,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get segmentsPanelEmpty => 'このルートにはまだセグメントがありません。';
 
   @override
+  String get segmentsPanelLoadError => 'セグメントを読み込めませんでした';
+
+  @override
+  String get segmentsPanelLeaderboardError => 'ランキングを読み込めませんでした';
+
+  @override
   String get segmentsPanelNameLabel => '名前';
 
   @override
@@ -7283,6 +7347,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get segmentsPanelErrMinLength => 'セグメントは少なくとも 100 m 必要です';
+
+  @override
+  String get segmentsPanelErrNameRequired => 'セグメント名を入力してください';
 
   @override
   String segmentsPanelCreateError(String error) {
@@ -8018,6 +8085,16 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String ttsSplit(String count, String unit, String tail) {
     return '$count$unit。$tail';
+  }
+
+  @override
+  String ttsSplitAverage(String count, String unit, String tail) {
+    return '$count$unit。平均$tail';
+  }
+
+  @override
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail) {
+    return '$count$unit。$tail。平均$avgTail';
   }
 
   @override
@@ -10999,49 +11076,81 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsCueSplits => 'スプリット';
 
   @override
-  String get prefsCueSplitsSubtitle => 'スプリットごとの距離とペース';
+  String get prefsCueSplitsSubtitle => 'スプリットマーカーを通過するたびのペース（または速度）';
+
+  @override
+  String get prefsCueSplitsInfo =>
+      'スプリットを終えるたびに短いまとめを読み上げます（距離はスプリット間隔で設定）。スプリットの読み上げで、スプリットのペース・平均ペース・両方から選べます。例：「1キロメートル。ペース、1キロメートルあたり5分30秒。」';
 
   @override
   String get prefsCueStartFinish => '開始と終了';
 
   @override
-  String get prefsCueStartFinishSubtitle => 'ラン開始・完了のアナウンス';
+  String get prefsCueStartFinishSubtitle => '開始時に「ランを開始しました」、終了時にまとめを読み上げ';
+
+  @override
+  String get prefsCueStartFinishInfo =>
+      'ランの開始を知らせ、停止時に距離と時間を読み上げます。例：「ラン完了。52分で10.0キロメートル。」';
 
   @override
   String get prefsCueOffRoute => 'ルート逸脱';
 
   @override
-  String get prefsCueOffRouteSubtitle => '選択したルートから外れたときの警告';
+  String get prefsCueOffRouteSubtitle => '追跡中のルートから外れたときの注意喚起';
 
   @override
-  String get prefsCuePaceAlerts => 'ペース警告';
+  String get prefsCueOffRouteInfo =>
+      '保存したルートでランを始めたときだけ機能します。ルートから外れると知らせ、コースに戻れるようにします。例：「ルートを外れています。」';
 
   @override
-  String get prefsCuePaceAlertsSubtitle => '上げ下げの量つきアナウンス';
+  String get prefsCuePaceAlerts => 'ペースずれアラート';
+
+  @override
+  String get prefsCuePaceAlertsSubtitle => '目標ペースからずれたら「ペースを上げて」「落として」';
+
+  @override
+  String get prefsCuePaceAlertsInfo =>
+      '目標ペースの設定が必要です。約30秒以上ずれると、どちらへどれだけ調整するかを知らせます。例：「8秒ペースを上げてください。」';
 
   @override
   String get prefsCueWorkoutSteps => 'ワークアウトステップ';
 
   @override
-  String get prefsCueWorkoutStepsSubtitle => '構造化ワークアウトのステップ切り替え';
+  String get prefsCueWorkoutStepsSubtitle => '構造化ワークアウトの各ステップを開始時に読み上げ';
+
+  @override
+  String get prefsCueWorkoutStepsInfo =>
+      '構造化ワークアウト（プランのセッションやインターバル）の間だけ有効です。各ステップと目標を読み上げ、前を見て走れます。例：「5本中3本目。1キロメートルあたり4分30秒で400メートル。」';
 
   @override
   String get prefsCueCutoffCatchUp => '関門ペース';
 
   @override
-  String get prefsCueCutoffCatchUpSubtitle => '関門に間に合うための必要ペース';
+  String get prefsCueCutoffCatchUpSubtitle => '間に合わなくなりそうな関門に必要なペース';
+
+  @override
+  String get prefsCueCutoffCatchUpInfo =>
+      'コース関門のあるルートでだけ有効です。危ない関門があると、そこまでの距離と間に合うペースを読み上げます。例：「関門まで2キロメートル。1キロメートルあたり6分。」';
 
   @override
   String get prefsCueMarkerTargets => 'コースマーカー';
 
   @override
-  String get prefsCueMarkerTargetsSubtitle => '各マーカーでの予定との差';
+  String get prefsCueMarkerTargetsSubtitle => '各コースマーカーで予定より前か後かを知らせます';
+
+  @override
+  String get prefsCueMarkerTargetsInfo =>
+      'コースマーカーに目標時間があるルートでだけ有効です。各マーカーを通過するたびに、予定より前か後か、どれだけかを知らせます。例：「エイド2：予定より45秒前。」';
 
   @override
   String get prefsCuePhaseTransitions => 'レースフェーズ';
 
   @override
-  String get prefsCuePhaseTransitionsSubtitle => 'ペース戦略のフェーズ開始時';
+  String get prefsCuePhaseTransitionsSubtitle => 'レース戦略プランの各フェーズが始まるときの合図';
+
+  @override
+  String get prefsCuePhaseTransitionsInfo =>
+      'ランでレース戦略を選んだときだけ有効です。各フェーズとその狙いを開始時に読み上げます。例：「3フェーズ中2フェーズ目。目標ペースに落ち着いて。」';
 
   @override
   String get runRaceStrategy => 'レース戦略';
@@ -11077,6 +11186,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runStrategyNeedsDistance => 'フェーズを使うにはルートを選ぶか距離を入力してください';
 
   @override
+  String get runStrategyInvalidGoal => '目標タイムを h:mm:ss 形式で入力してください';
+
+  @override
   String runPhaseChip(int index, int total, String intent) {
     return 'フェーズ $index/$total — $intent';
   }
@@ -11103,4 +11215,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routeMarkerTargetInvalid => '目標タイムは h:mm:ss 形式で入力してください';
+
+  @override
+  String get routeMarkerOfficialBadge => 'ルート所有者';
+
+  @override
+  String get routeMarkerDistanceAlongLabel => 'ルート上の距離';
+
+  @override
+  String get routeMarkerDistanceInvalid => 'ルート上の有効な距離を入力してください。';
 }

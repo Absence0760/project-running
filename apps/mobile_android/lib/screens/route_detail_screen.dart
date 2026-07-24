@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -15,6 +16,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_route_store.dart';
+import '../main.dart' show pendingStartRunWithRoute;
 import '../offline_tile_pack.dart';
 import '../preferences.dart';
 import '../route_describe_client.dart';
@@ -44,6 +46,20 @@ import '../widgets/top_banner.dart';
 @visibleForTesting
 List<ClubView> adminClubsForRouteTransfer(Iterable<ClubView> clubs) {
   return clubs.where((c) => c.isAdmin).toList();
+}
+
+/// Public share URL for a route — the `/share/route/{id}` page anyone with
+/// the link can open (and that deep-links back into the app). Host comes
+/// from `WEB_BASE_URL`, falling back to the prod site; trailing slashes are
+/// trimmed. Mirrors web's `${origin}/share/route/${id}` in
+/// `routes/[id]/+page.svelte`.
+String routeShareUrl(String routeId, {String? webBase}) {
+  final base = (webBase ??
+          (dotenv.isInitialized ? dotenv.maybeGet('WEB_BASE_URL') : null) ??
+          'https://threkir.com')
+      .trim()
+      .replaceAll(RegExp(r'/+$'), '');
+  return '$base/share/route/$routeId';
 }
 
 class RouteDetailScreen extends StatefulWidget {
@@ -117,6 +133,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   bool? _bookmarked;
   bool _bookmarkBusy = false;
+  bool _offlinePinBusy = false;
+  bool _publicBusy = false;
+  bool _starBusy = false;
 
   // Waypoints handed to the renderer. For the owner this mirrors
   // widget.route.waypoints from the row; for non-owners this is the
@@ -484,6 +503,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _togglePublic() async {
+    // Serialize taps: a rapid on→off→on would otherwise fire overlapping
+    // setRoutePublic calls that can land out of order, leaving the server on
+    // one value while the UI shows the other.
+    if (_publicBusy) return;
     final newValue = !_isPublic;
     final r = widget.route;
     cm.Route buildRoute(bool isPublic) => cm.Route(
@@ -509,67 +532,85 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     // back local state on any cloud error — locally-built routes
     // (which can't have a cloud row yet) could never be made
     // public until after the next sync, which wasn't obvious.
-    setState(() => _isPublic = newValue);
-    await widget.routeStore.save(buildRoute(newValue));
-    final api = widget.apiClient;
-    if (api == null || api.userId == null) {
-      // Signed-out / no api → local-only is the right answer; the
-      // route's `isPublic` flag rides through the next
-      // SyncService cycle's `saveRoute` push (the route's still in
-      // `unsyncedRoutes`).
-      if (mounted) {
-        showTopBanner(
-          context,
-          newValue
-              ? AppLocalizations.of(context).routeDetailPublicWillSync
-              : AppLocalizations.of(context).routeDetailPrivateWillSync,
-        );
-      }
-      return;
-    }
+    setState(() {
+      _publicBusy = true;
+      _isPublic = newValue;
+    });
     try {
-      await api.setRoutePublic(widget.route.id, newValue);
-    } catch (e) {
-      debugPrint('route detail visibility failed: $e');
-      // Roll back local state to match what cloud thinks. Surface
-      // the error so the user knows the toggle didn't persist
-      // cloud-side. The route stays in the unsynced queue if it
-      // was locally-built so the SyncService will retry the
-      // saveRoute push on the next cycle.
-      if (mounted) {
-        setState(() => _isPublic = !newValue);
-        await widget.routeStore.save(buildRoute(!newValue));
-        showTopBanner(context,
-            AppLocalizations.of(context).routeDetailVisibilityFailed(friendlyError(AppLocalizations.of(context), e)));
+      await widget.routeStore.save(buildRoute(newValue));
+      final api = widget.apiClient;
+      if (api == null || api.userId == null) {
+        // Signed-out / no api → local-only is the right answer; the
+        // route's `isPublic` flag rides through the next
+        // SyncService cycle's `saveRoute` push (the route's still in
+        // `unsyncedRoutes`).
+        if (mounted) {
+          showTopBanner(
+            context,
+            newValue
+                ? AppLocalizations.of(context).routeDetailPublicWillSync
+                : AppLocalizations.of(context).routeDetailPrivateWillSync,
+          );
+        }
+        return;
       }
+      try {
+        await api.setRoutePublic(widget.route.id, newValue);
+      } catch (e) {
+        debugPrint('route detail visibility failed: $e');
+        // Roll back local state to match what cloud thinks. Surface
+        // the error so the user knows the toggle didn't persist
+        // cloud-side. The route stays in the unsynced queue if it
+        // was locally-built so the SyncService will retry the
+        // saveRoute push on the next cycle.
+        if (mounted) {
+          setState(() => _isPublic = !newValue);
+          await widget.routeStore.save(buildRoute(!newValue));
+          showTopBanner(context,
+              AppLocalizations.of(context).routeDetailVisibilityFailed(friendlyError(AppLocalizations.of(context), e)));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _publicBusy = false);
     }
   }
 
   Future<void> _toggleOfflinePin() async {
+    // Serialize taps: without this, a rapid pin→unpin→pin races a tile-pack
+    // download (kicked on pin) against its own delete (kicked on unpin) for
+    // the same route id, which can leave a half-written or orphaned pack.
+    if (_offlinePinBusy) return;
     final id = widget.route.id;
     final next = !_isOfflinePinned;
-    setState(() => _isOfflinePinned = next);
-    if (next) {
-      // Make sure the JSON file is actually on disk — for a non-owner
-      // viewer who only ever saw the route via the Explore tab, the
-      // detail row may not yet be persisted locally. Mark synced so
-      // the SyncService doesn't try to push someone else's route up.
-      await widget.routeStore.save(widget.route, markSynced: true);
-      await widget.routeStore.pinOffline(id);
-      _downloadTilePack();
-    } else {
-      await widget.routeStore.unpinOffline(id);
-      // Best-effort — never block the pin toggle on a disk delete (L4).
-      unawaited(_tilePacks.deletePack(id).catchError(
-          (Object e) => debugPrint('tile-pack delete failed: $e')));
-    }
-    if (mounted) {
-      showTopBanner(
-        context,
-        next
-            ? AppLocalizations.of(context).routeDetailOfflineSaved
-            : AppLocalizations.of(context).routeDetailOfflineRemoved,
-      );
+    setState(() {
+      _offlinePinBusy = true;
+      _isOfflinePinned = next;
+    });
+    try {
+      if (next) {
+        // Make sure the JSON file is actually on disk — for a non-owner
+        // viewer who only ever saw the route via the Explore tab, the
+        // detail row may not yet be persisted locally. Mark synced so
+        // the SyncService doesn't try to push someone else's route up.
+        await widget.routeStore.save(widget.route, markSynced: true);
+        await widget.routeStore.pinOffline(id);
+        _downloadTilePack();
+      } else {
+        await widget.routeStore.unpinOffline(id);
+        // Best-effort — never block the pin toggle on a disk delete (L4).
+        unawaited(_tilePacks.deletePack(id).catchError(
+            (Object e) => debugPrint('tile-pack delete failed: $e')));
+      }
+      if (mounted) {
+        showTopBanner(
+          context,
+          next
+              ? AppLocalizations.of(context).routeDetailOfflineSaved
+              : AppLocalizations.of(context).routeDetailOfflineRemoved,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _offlinePinBusy = false);
     }
   }
 
@@ -600,6 +641,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _toggleStar() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
+    if (_starBusy) return;
     final newValue = !_isStarred;
     final r = widget.route;
     cm.Route buildRoute(bool starred) => cm.Route(
@@ -618,18 +660,25 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           isStarred: starred,
           description: r.description,
         );
-    setState(() => _isStarred = newValue);
-    await widget.routeStore.save(buildRoute(newValue));
+    setState(() {
+      _starBusy = true;
+      _isStarred = newValue;
+    });
     try {
-      await api.setRouteStar(r.id, newValue);
-    } catch (e) {
-      debugPrint('route detail star failed: $e');
-      if (mounted) setState(() => _isStarred = !newValue);
-      await widget.routeStore.save(buildRoute(!newValue));
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailStarFailed(friendlyError(AppLocalizations.of(context), e)));
+      await widget.routeStore.save(buildRoute(newValue));
+      try {
+        await api.setRouteStar(r.id, newValue);
+      } catch (e) {
+        debugPrint('route detail star failed: $e');
+        if (mounted) setState(() => _isStarred = !newValue);
+        await widget.routeStore.save(buildRoute(!newValue));
+        if (mounted) {
+          showTopBanner(
+              context, AppLocalizations.of(context).routeDetailStarFailed(friendlyError(AppLocalizations.of(context), e)));
+        }
       }
+    } finally {
+      if (mounted) setState(() => _starBusy = false);
     }
   }
 
@@ -741,7 +790,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       floatingActionButton: canStartRun
           ? FloatingActionButton.extended(
               heroTag: 'route_detail_start_run',
-              onPressed: () => Navigator.pop(context, route),
+              // Hand off through the global notifier (HomeScreen listens and
+              // routes into the recorder + pops back to the shell) instead of
+              // popping the route back to the caller. The old pop relied on
+              // whoever pushed this screen handling the returned route, so
+              // Start silently did nothing from any pusher that didn't — the
+              // shared-file import landing, a deep push, etc.
+              onPressed: () => pendingStartRunWithRoute.value = route,
               backgroundColor: const Color(0xFF22C55E),
               foregroundColor: Colors.white,
               icon: const Icon(Icons.play_arrow),
@@ -757,8 +812,17 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
             tooltip: l10n.routeDetailShare,
-            onSelected: (fmt) => _shareAs(context, fmt),
+            onSelected: (fmt) =>
+                fmt == 'link' ? _shareLink(context) : _shareAs(context, fmt),
             itemBuilder: (_) => [
+              // "Share link" is the intuitive send-to-someone path: it hands
+              // the public /share/route/[id] URL to the OS share sheet. Shown
+              // only when the route is already public or the viewer owns it
+              // (an owner's tap flips it public first) — otherwise the link
+              // would resolve to nothing for the recipient.
+              if (_isPublic || _isOwner)
+                PopupMenuItem(
+                    value: 'link', child: Text(l10n.routeDetailShareLink)),
               PopupMenuItem(
                   value: 'image', child: Text(l10n.routeDetailShareAsImage)),
               PopupMenuItem(value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
@@ -782,7 +846,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             tooltip: _isOfflinePinned
                 ? l10n.routeDetailRemoveOfflineSave
                 : l10n.routeDetailSaveForOffline,
-            onPressed: _toggleOfflinePin,
+            onPressed: _offlinePinBusy ? null : _toggleOfflinePin,
           ),
           if (_isOwner)
             IconButton(
@@ -795,7 +859,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               tooltip: _isStarred
                   ? l10n.routeDetailUnstarRoute
                   : l10n.routeDetailStarForWatch,
-              onPressed: _toggleStar,
+              onPressed: _starBusy ? null : _toggleStar,
             ),
           // Show the visibility toggle whenever the local store
           // considers the viewer to own this route — regardless of
@@ -809,7 +873,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               tooltip: _isPublic
                   ? l10n.routeDetailMakePrivate
                   : l10n.routeDetailMakePublic,
-              onPressed: _togglePublic,
+              onPressed: _publicBusy ? null : _togglePublic,
             ),
           if (!widget.isOwner &&
               widget.apiClient != null &&
@@ -862,29 +926,36 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         top: false,
         child: ListView(
           children: [
-            SizedBox(
-              height: 320,
-              child: LiveRunMap(
-                track: const [],
-                plannedRoute: _displayWaypoints,
-                followRunner: false,
-                courseMarkers: _markerPins,
-                markerPlacing: _markerPlacing,
-                onMarkerPlace: (wp) =>
-                    _markersPanelKey.currentState?.placeAt(wp),
-                onMarkerTap: (id) =>
-                    _markersPanelKey.currentState?.selectMarker(id),
-                // Only mount the preview-runner pulse while the user
-                // is actually scrubbing — releasing the thumb fades
-                // back to the static polyline view so the marker
-                // doesn't sit at the start indefinitely after a
-                // single drag.
-                previewPosition: _scrubbing
-                    ? interpolateAlongRoute(
-                        _displayWaypoints,
-                        _scrubFraction,
-                      )
-                    : null,
+            // Keep the map alive across ListView scroll. A bare list child is
+            // disposed once it scrolls past the cache extent, tearing down the
+            // FlutterMap + MapController; scrolling back rebuilt it from
+            // scratch — a visible tile reload plus a jank spike. Keeping it
+            // alive also pauses its pulse ticker while off-screen.
+            _KeepAliveMap(
+              child: SizedBox(
+                height: 320,
+                child: LiveRunMap(
+                  track: const [],
+                  plannedRoute: _displayWaypoints,
+                  followRunner: false,
+                  courseMarkers: _markerPins,
+                  markerPlacing: _markerPlacing,
+                  onMarkerPlace: (wp) =>
+                      _markersPanelKey.currentState?.placeAt(wp),
+                  onMarkerTap: (id) =>
+                      _markersPanelKey.currentState?.selectMarker(id),
+                  // Only mount the preview-runner pulse while the user
+                  // is actually scrubbing — releasing the thumb fades
+                  // back to the static polyline view so the marker
+                  // doesn't sit at the start indefinitely after a
+                  // single drag.
+                  previewPosition: _scrubbing
+                      ? interpolateAlongRoute(
+                          _displayWaypoints,
+                          _scrubFraction,
+                        )
+                      : null,
+                ),
               ),
             ),
             // Diagnostic for the "I'm still not seeing the map"
@@ -976,7 +1047,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         ),
                   ),
                   value: _isPublic,
-                  onChanged: (_) => _togglePublic(),
+                  onChanged: _publicBusy ? null : (_) => _togglePublic(),
                 ),
               ),
 
@@ -1010,7 +1081,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ),
                 ),
                 value: _isOfflinePinned,
-                onChanged: (_) => _toggleOfflinePin(),
+                onChanged: _offlinePinBusy ? null : (_) => _toggleOfflinePin(),
               ),
             ),
 
@@ -1100,6 +1171,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 api: widget.apiClient,
                 routeId: route.id,
                 isOwner: _isOwner,
+                viewerId: widget.apiClient?.userId,
+                routeOwnerId: widget.route.userId,
                 routeLine: _displayWaypoints,
                 onPinsChanged: (pins) {
                   if (mounted) setState(() => _markerPins = pins);
@@ -1137,7 +1210,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 api: widget.apiClient!,
                 routeId: route.id,
                 routeDistanceM: route.distanceMetres,
-                canCreate: _isOwner,
+                // Any signed-in viewer can add a segment (community
+                // contribution); only the owner moderates others' segments.
+                canCreate: widget.apiClient?.userId != null,
+                isRouteOwner: _isOwner,
               ),
 
             const Divider(),
@@ -1266,6 +1342,53 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     );
   }
 
+  /// Share the route as a link — the intuitive "send this to a follower"
+  /// path. Hands the public `/share/route/[id]` URL to the OS share sheet
+  /// (pick WhatsApp / a DM / any app). An owner sharing a still-private
+  /// route flips it public first (mirrors web's `handleShare`); the menu
+  /// only offers this when the route is public or the viewer owns it, so a
+  /// non-owner never shares a dead link.
+  Future<void> _shareLink(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    if (_isOwner && !_isPublic) {
+      // Making a still-private route public exposes it (and its start point)
+      // to anyone with the link and in Explore — confirm before that flip.
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.routeDetailShareConfirmTitle),
+          content: Text(l10n.routeDetailShareConfirmBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.routeDetailCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.routeDetailShareConfirmCta),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      if (!mounted) return;
+      final api = widget.apiClient!;
+      try {
+        await api.setRoutePublic(widget.route.id, true);
+        if (!mounted) return;
+        setState(() => _isPublic = true);
+        showTopBanner(context, l10n.routeDetailMadePublicForLink);
+      } catch (e) {
+        if (!mounted) return;
+        showTopBanner(context,
+            l10n.routeDetailShareLinkFailed(friendlyError(l10n, e)));
+        return;
+      }
+    }
+    await Share.share(routeShareUrl(widget.route.id),
+        subject: widget.route.name);
+  }
+
   Future<void> _shareAs(BuildContext context, String format) async {
     // Use displayWaypoints (clipped for non-owners) so a non-owner
     // sharing a public route can't leak the unclipped polyline via
@@ -1341,10 +1464,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       );
     } catch (e) {
       if (context.mounted) {
+        final l10n = AppLocalizations.of(context);
         showTopBanner(
             context,
-            AppLocalizations.of(context)
-                .routeDetailShareFailed(format.toUpperCase(), '$e'));
+            l10n.routeDetailShareFailed(
+                format.toUpperCase(), friendlyError(l10n, e)));
       }
     }
   }
@@ -2006,5 +2130,30 @@ class RouteTransferClubPicker extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Preserves its child's State when it scrolls out of the enclosing
+/// ListView's cache extent. Wraps the route-detail map so the FlutterMap +
+/// MapController aren't disposed and rebuilt (with a full tile reload) on
+/// every scroll past it. Same `AutomaticKeepAliveClientMixin` idiom as
+/// `_LazyKeepAliveTab` on the home shell.
+class _KeepAliveMap extends StatefulWidget {
+  final Widget child;
+  const _KeepAliveMap({required this.child});
+
+  @override
+  State<_KeepAliveMap> createState() => _KeepAliveMapState();
+}
+
+class _KeepAliveMapState extends State<_KeepAliveMap>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

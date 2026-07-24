@@ -103,6 +103,56 @@ void main() {
       );
     });
 
+    // isOsrmSnapAvailable is the non-throwing predicate the route
+    // builder degrades on. It must be the exact inverse of the assert's
+    // throw condition so the builder never lets the guard throw out of
+    // snapToRoad and swallow a tap (the "trail/road taps do nothing"
+    // bug).
+    test('isOsrmSnapAvailable is true in non-release mode even with '
+        'OSRM_URL unset', () {
+      expect(isOsrmSnapAvailable(isReleaseModeOverride: false), isTrue);
+    });
+
+    test('isOsrmSnapAvailable is false in release mode when OSRM_URL '
+        'is unset (resolves to the demo)', () {
+      expect(isOsrmSnapAvailable(isReleaseModeOverride: true), isFalse);
+    });
+
+    test('isOsrmSnapAvailable is true in release mode with a non-demo '
+        'OSRM_URL', () {
+      dotenv.env['OSRM_URL'] = 'https://osrm.internal.example.com';
+      expect(isOsrmSnapAvailable(isReleaseModeOverride: true), isTrue);
+    });
+
+    test('isOsrmSnapAvailable is false in release mode when OSRM_URL '
+        'points back at the public demo', () {
+      dotenv.env['OSRM_URL'] = 'https://router.project-osrm.org';
+      expect(isOsrmSnapAvailable(isReleaseModeOverride: true), isFalse);
+    });
+
+    test('assertOsrmConfiguredForProd throws iff isOsrmSnapAvailable is '
+        'false — the two can never drift', () {
+      for (final url in [
+        '', // unset -> demo -> unavailable -> throws
+        'https://router.project-osrm.org', // demo -> unavailable -> throws
+        'https://osrm.internal.example.com', // configured -> available -> ok
+      ]) {
+        dotenv.env['OSRM_URL'] = url;
+        final available = isOsrmSnapAvailable(isReleaseModeOverride: true);
+        if (available) {
+          expect(
+            () => assertOsrmConfiguredForProd(isReleaseModeOverride: true),
+            returnsNormally,
+          );
+        } else {
+          expect(
+            () => assertOsrmConfiguredForProd(isReleaseModeOverride: true),
+            throwsA(isA<StateError>()),
+          );
+        }
+      }
+    });
+
     tearDown(() {
       dotenv.env.remove('OSRM_URL');
     });

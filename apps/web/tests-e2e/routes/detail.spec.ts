@@ -39,6 +39,75 @@ test.describe('/routes/[id]', () => {
 		);
 	});
 
+	test('copy share link surfaces an error when the clipboard is blocked', async ({ page }) => {
+		// Simulate a blocked clipboard (insecure context / denied permission).
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				configurable: true,
+				value: { writeText: () => Promise.reject(new Error('blocked')) }
+			});
+		});
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		// Route starts public (beforeEach) → Share reveals the link immediately.
+		await page.getByRole('button', { name: 'Share', exact: true }).click();
+		const shareBar = page.locator('.share-bar');
+		await expect(shareBar).toBeVisible();
+		await shareBar.getByRole('button', { name: 'Copy' }).click();
+		// Before the fix the rejection was unhandled and the button did nothing.
+		await expect(
+			page.locator('.toast-error', { hasText: "Couldn't copy the link" })
+		).toBeVisible();
+	});
+
+	test('Share on a private route confirms before making it public', async ({ page }) => {
+		const admin = getAdminClient();
+		// Start private — Share must ask before exposing the route (and its
+		// start point) to anyone with the link / in Explore.
+		await admin.from('routes').update({ is_public: false }).eq('id', RUNNER_PUBLIC_ROUTE_ID);
+
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		const dialog = page.locator('[data-testid="share-confirm-dialog"]');
+		const shareBar = page.locator('.share-bar');
+		const shareBtn = page.getByRole('button', { name: 'Share', exact: true });
+
+		// First Share click opens the confirm — it must NOT flip the route yet.
+		await shareBtn.click();
+		await expect(dialog).toBeVisible();
+		await expect(shareBar).toBeHidden();
+
+		// Cancel leaves the route private and reveals no link.
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(shareBar).toBeHidden();
+		{
+			const { data } = await admin
+				.from('routes')
+				.select('is_public')
+				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+				.single();
+			expect(data?.is_public).toBe(false);
+		}
+
+		// Confirm flips it public, discloses the flip, and reveals the link.
+		await shareBtn.click();
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Make public & share' }).click();
+		await expect(
+			page.locator('.toast-info', { hasText: 'Route is now public so the link works.' })
+		).toBeVisible();
+		await expect(shareBar).toBeVisible();
+		{
+			const { data } = await admin
+				.from('routes')
+				.select('is_public')
+				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+				.single();
+			expect(data?.is_public).toBe(true);
+		}
+	});
+
 	test('public toggle: Public → Private, reload persists, back to Public', async ({
 		page
 	}) => {

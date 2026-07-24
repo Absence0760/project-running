@@ -1,6 +1,9 @@
 import type { Messages } from '../messages';
 
 export const messages = {
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Annuler',
+	'common.confirm': 'Confirmer',
 	'nav.dashboard': 'Tableau de bord',
 	'nav.history': 'Historique',
 	'nav.runs': 'Courses',
@@ -713,6 +716,9 @@ export const messages = {
 	"routeDetail.starFailed": "Impossible de mettre l'itinéraire en favori : {error}",
 	"routeDetail.unstarFailed": "Impossible de retirer l'itinéraire des favoris : {error}",
 	"routeDetail.madePublicForLink": "L'itinéraire est maintenant public pour que le lien fonctionne.",
+	"routeDetail.shareConfirmTitle": "Rendre cet itinéraire public ?",
+	"routeDetail.shareConfirmBody": "Partager un lien rend cet itinéraire public : toute personne disposant du lien peut l'ouvrir, et il peut apparaître dans Explorer. Vous pouvez le repasser en privé à tout moment.",
+	"routeDetail.shareConfirmCta": "Rendre public et partager",
 	"routeDetail.makePublicFailed": "Impossible de rendre public : {error}",
 	"routeDetail.nowPublic": "L'itinéraire est maintenant public.",
 	"routeDetail.nowPrivate": "L'itinéraire est de nouveau privé.",
@@ -743,6 +749,8 @@ export const messages = {
 	"routeDetail.reportReview": "Signaler cet avis",
 	"routeDetail.copied": "Copié !",
 	"routeDetail.copy": "Copier",
+	"routeDetail.copyLinkFailed": "Impossible de copier le lien",
+	"routeDetail.shareLinkLabel": "Lien de partage",
 	"routeDetail.previewHeading": "Aperçu",
 	"routeDetail.elevationHeading": "Dénivelé",
 	"routeDetail.elevGain": "Montée",
@@ -2721,6 +2729,12 @@ export const messages = {
 	"routeMarker.deleteFailed": "Impossible de supprimer le repère : {error}",
 	"routeMarker.deleteConfirmTitle": "Supprimer le repère ?",
 	"routeMarker.deleteConfirmMessage": "Cela supprime définitivement le repère du parcours.",
+	"routeMarker.officialBadge": "Propriétaire",
+	"routeMarker.yoursBadge": "À vous",
+	"routeMarker.personalOverlayHint": "Les repères que vous ajoutez ici sont privés — le propriétaire du parcours ne les voit pas.",
+	"routeMarker.distanceAlongLabel": "Distance sur le parcours ({unit})",
+	"routeMarker.distanceAlongHint": "Ou placez le repère selon sa distance depuis le départ.",
+	"routeMarker.distanceAlongClamped": "Cette distance dépasse la fin du parcours — ajustée à l'arrivée à {distance}.",
 	"routeMarker.kind.aid_station": "Ravitaillement",
 	"routeMarker.kind.cutoff": "Barrière horaire",
 	"routeMarker.kind.crew_access": "Assistance / parking",

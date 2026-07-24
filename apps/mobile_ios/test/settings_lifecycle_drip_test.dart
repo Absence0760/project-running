@@ -105,6 +105,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.widgetWithText(SwitchListTile, _title));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(SwitchListTile, _title));
     await tester.pumpAndSettle();
 
@@ -135,6 +137,8 @@ void main() {
     // A seeded `service` triggers the on-mount locale mirror; assert the
     // toggle write is present rather than that it's the sole write.
     s.sync.universalWrites.clear();
+    await tester.ensureVisible(find.widgetWithText(SwitchListTile, _title));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(SwitchListTile, _title));
     await tester.pumpAndSettle();
 

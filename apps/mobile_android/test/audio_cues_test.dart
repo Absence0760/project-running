@@ -25,6 +25,76 @@ import '../lib/audio_cues.dart';
 import '../lib/preferences.dart';
 
 void main() {
+  group('SplitPaceMode.coerce', () {
+    test('known values pass through', () {
+      expect(SplitPaceMode.coerce('split'), SplitPaceMode.split);
+      expect(SplitPaceMode.coerce('average'), SplitPaceMode.average);
+      expect(SplitPaceMode.coerce('both'), SplitPaceMode.both);
+    });
+    test('null / unknown falls back to split (never disables the cue)', () {
+      expect(SplitPaceMode.coerce(null), SplitPaceMode.split);
+      expect(SplitPaceMode.coerce(''), SplitPaceMode.split);
+      expect(SplitPaceMode.coerce('nonsense'), SplitPaceMode.split);
+    });
+  });
+
+  group('splitCueUtterance', () {
+    final en = ttsL10n('en');
+    const splitTail = 'Pace, 5 minutes 30 seconds per kilometre';
+    const avgTail = 'Pace, 5 minutes 45 seconds per kilometre';
+
+    test('split mode speaks only the split tail', () {
+      final s = splitCueUtterance(en,
+          count: '1',
+          unitWord: 'kilometre',
+          splitTail: splitTail,
+          avgTail: avgTail,
+          paceMode: SplitPaceMode.split);
+      expect(s, '1 kilometre. $splitTail');
+      expect(s.contains('Average'), isFalse);
+    });
+
+    test('average mode speaks the cumulative-average tail', () {
+      final s = splitCueUtterance(en,
+          count: '1',
+          unitWord: 'kilometre',
+          splitTail: splitTail,
+          avgTail: avgTail,
+          paceMode: SplitPaceMode.average);
+      expect(s, '1 kilometre. Average $avgTail');
+    });
+
+    test('both mode speaks the split tail then the average', () {
+      final s = splitCueUtterance(en,
+          count: '2',
+          unitWord: 'kilometres',
+          splitTail: splitTail,
+          avgTail: avgTail,
+          paceMode: SplitPaceMode.both);
+      expect(s, '2 kilometres. $splitTail. Average $avgTail');
+    });
+
+    test('average mode degrades to split-only when the average is missing', () {
+      final s = splitCueUtterance(en,
+          count: '1',
+          unitWord: 'kilometre',
+          splitTail: splitTail,
+          avgTail: '',
+          paceMode: SplitPaceMode.average);
+      expect(s, '1 kilometre. $splitTail');
+    });
+
+    test('both mode degrades to split-only when the average is missing', () {
+      final s = splitCueUtterance(en,
+          count: '1',
+          unitWord: 'kilometre',
+          splitTail: splitTail,
+          avgTail: '',
+          paceMode: SplitPaceMode.both);
+      expect(s, '1 kilometre. $splitTail');
+    });
+  });
+
   group('formatSpeedUtterance', () {
     test('null secondsPerKm returns the empty string (suppress cue)', () {
       // The split-cue caller appends the speed to a distance line.

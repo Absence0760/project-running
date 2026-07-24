@@ -2365,6 +2365,10 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get routesImportSharedFailed =>
+      'Impossible d\'importer ce fichier : ce n\'est pas un itinéraire GPX ou KML valide.';
+
+  @override
   String routesSaved(String name) {
     return '« $name » enregistré';
   }
@@ -2519,6 +2523,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get routeBuilderRouteFailedStraightLines =>
       'Échec du calcul d\'itinéraire — affichage de lignes droites entre vos points.';
+
+  @override
+  String get routeBuilderSnapUnavailable =>
+      'L\'accrochage aux routes est indisponible — les points se placent là où vous touchez, reliés par des lignes droites.';
 
   @override
   String routeBuilderSegmentsFailed(int count) {
@@ -2734,6 +2742,28 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeDetailShareAsKml => 'Partager en KML';
+
+  @override
+  String get routeDetailShareLink => 'Partager le lien';
+
+  @override
+  String get routeDetailMadePublicForLink =>
+      'Rendu public pour que toute personne disposant du lien puisse le voir';
+
+  @override
+  String get routeDetailShareConfirmTitle => 'Rendre cet itinéraire public ?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Partager un lien rend cet itinéraire public : toute personne disposant du lien peut l\'ouvrir, et il peut apparaître dans Explorer. Vous pouvez le repasser en privé à tout moment.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Rendre public et partager';
+
+  @override
+  String routeDetailShareLinkFailed(String error) {
+    return 'Impossible de partager le lien : $error';
+  }
 
   @override
   String get routeDetailShareAsGpxMarkers => 'Partager en GPX + repères';
@@ -6640,7 +6670,36 @@ class AppLocalizationsFr extends AppLocalizations {
       'Par défaut (1 km en course, 5 km à vélo)';
 
   @override
-  String get prefsLivePaceAlert => 'Alerte d\'allure en direct';
+  String get prefsSplitPaceMode => 'Annonce des splits';
+
+  @override
+  String get prefsSplitPaceModeSubtitle => 'Quelle allure chaque split annonce';
+
+  @override
+  String get prefsSplitPaceModeSplit => 'Allure du split';
+
+  @override
+  String get prefsSplitPaceModeAverage => 'Allure moyenne';
+
+  @override
+  String get prefsSplitPaceModeBoth => 'Les deux';
+
+  @override
+  String get prefsSplitPaceModeInfo =>
+      'À chaque split, choisis l\'allure que tu entends : celle de ce seul split, ton allure moyenne depuis le début de la course, ou les deux. Pratique pour tenir un effort régulier. Exemple : « 1 kilomètre. Allure moyenne, 5 minutes 45 secondes au kilomètre. »';
+
+  @override
+  String get prefsTargetPace => 'Allure cible';
+
+  @override
+  String get prefsTargetPaceInfo =>
+      'L\'allure que tu veux tenir. Seule, elle reste silencieuse — active le repère vocal « Alertes d\'écart d\'allure » pour entendre « accélère » ou « ralentis » quand tu t\'en écartes de plus de 30 secondes. Exemple : « Accélère de 8 secondes. »';
+
+  @override
+  String get prefsCueInfoTooltip => 'Qu\'est-ce que c\'est ?';
+
+  @override
+  String get prefsLivePaceAlert => 'Allure cible';
 
   @override
   String get prefsLivePaceAlertMin => 'min';
@@ -6650,11 +6709,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prefsLivePaceAlertOff =>
-      'Désactivé — définis une allure pour recevoir des alertes vocales pendant une course';
+      'Non définie — définis une cible, puis active les alertes d\'écart d\'allure';
 
   @override
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
-    return '$pace $paceLabel — alerte vocale pendant une course si l\'écart dépasse 30 s';
+    return '$pace $paceLabel — les alertes d\'écart d\'allure parlent dès 30 s d\'écart';
   }
 
   @override
@@ -6862,7 +6921,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsAudioCues => 'Repères audio';
 
   @override
-  String get prefsAudioCuesSubtitle => 'Annonces vocales des splits';
+  String get prefsAudioCuesSubtitle =>
+      'Annonce les splits, l\'allure et d\'autres repères pendant la course';
 
   @override
   String get prefsMinimalVoiceCues => 'Repères vocaux minimaux';
@@ -7678,6 +7738,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun segment sur cet itinéraire pour le moment.';
 
   @override
+  String get segmentsPanelLoadError => 'Impossible de charger les segments';
+
+  @override
+  String get segmentsPanelLeaderboardError =>
+      'Impossible de charger le classement';
+
+  @override
   String get segmentsPanelNameLabel => 'Nom';
 
   @override
@@ -7718,6 +7785,9 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get segmentsPanelErrMinLength =>
       'Le segment doit faire au moins 100 m';
+
+  @override
+  String get segmentsPanelErrNameRequired => 'Saisissez un nom de segment';
 
   @override
   String segmentsPanelCreateError(String error) {
@@ -8471,6 +8541,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String ttsSplit(String count, String unit, String tail) {
     return '$count $unit. $tail';
+  }
+
+  @override
+  String ttsSplitAverage(String count, String unit, String tail) {
+    return '$count $unit. Moyenne $tail';
+  }
+
+  @override
+  String ttsSplitBoth(String count, String unit, String tail, String avgTail) {
+    return '$count $unit. $tail. Moyenne $avgTail';
   }
 
   @override
@@ -11571,55 +11651,88 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prefsCueSplitsSubtitle =>
-      'Distance et allure à chaque intermédiaire';
+      'Ton allure (ou vitesse) à chaque passage d\'un repère de split';
+
+  @override
+  String get prefsCueSplitsInfo =>
+      'Annonce un bref résumé chaque fois que tu termines un split (règle la distance sous Intervalle de split). Utilise Annonce des splits pour choisir l\'allure du split, l\'allure moyenne ou les deux. Exemple : « 1 kilomètre. Allure, 5 minutes 30 secondes au kilomètre. »';
 
   @override
   String get prefsCueStartFinish => 'Départ et arrivée';
 
   @override
-  String get prefsCueStartFinishSubtitle => 'Annonces au départ et à la fin';
+  String get prefsCueStartFinishSubtitle =>
+      '« Course démarrée » au départ, et un résumé à l\'arrivée';
+
+  @override
+  String get prefsCueStartFinishInfo =>
+      'Confirme le départ de la course et lit ta distance et ton temps à l\'arrêt. Exemple : « Course terminée. 10,0 kilomètres en 52 minutes. »';
 
   @override
   String get prefsCueOffRoute => 'Hors itinéraire';
 
   @override
   String get prefsCueOffRouteSubtitle =>
-      'Alerte en cas d\'écart de l\'itinéraire suivi';
+      'Un avertissement quand tu t\'écartes de l\'itinéraire suivi';
 
   @override
-  String get prefsCuePaceAlerts => 'Alertes d\'allure';
+  String get prefsCueOffRouteInfo =>
+      'Fonctionne seulement si tu démarres une course avec un itinéraire enregistré. T\'avertit dès que tu t\'en écartes pour te remettre sur la bonne voie. Exemple : « Hors itinéraire. »';
+
+  @override
+  String get prefsCuePaceAlerts => 'Alertes d\'écart d\'allure';
 
   @override
   String get prefsCuePaceAlertsSubtitle =>
-      'Accélérer ou ralentir, avec l\'écart';
+      '« Accélère » / « ralentis » quand tu t\'écartes de ton allure cible';
+
+  @override
+  String get prefsCuePaceAlertsInfo =>
+      'Nécessite une allure cible. Quand tu t\'en écartes de plus de 30 secondes environ, ceci t\'indique dans quel sens ajuster et de combien. Exemple : « Accélère de 8 secondes. »';
 
   @override
   String get prefsCueWorkoutSteps => 'Étapes de séance';
 
   @override
   String get prefsCueWorkoutStepsSubtitle =>
-      'Changements d\'étape des séances structurées';
+      'Annonce chaque étape d\'une séance structurée à son début';
+
+  @override
+  String get prefsCueWorkoutStepsInfo =>
+      'Actif seulement pendant une séance structurée (une séance de plan ou une séance d\'intervalles). Annonce chaque étape et son objectif pour que tu gardes les yeux devant. Exemple : « Répétition 3 sur 5. 400 mètres à 4 minutes 30 secondes au kilomètre. »';
 
   @override
   String get prefsCueCutoffCatchUp => 'Rattrapage de barrière';
 
   @override
   String get prefsCueCutoffCatchUpSubtitle =>
-      'Allure requise pour la prochaine barrière horaire';
+      'L\'allure nécessaire pour une barrière horaire menacée';
+
+  @override
+  String get prefsCueCutoffCatchUpInfo =>
+      'Actif seulement sur un itinéraire avec des barrières horaires. Si l\'une est menacée, il lit la distance qui t\'en sépare et l\'allure qui permet encore de la tenir. Exemple : « 2 kilomètres jusqu\'à la barrière. 6 minutes au kilomètre. »';
 
   @override
   String get prefsCueMarkerTargets => 'Repères du parcours';
 
   @override
   String get prefsCueMarkerTargetsSubtitle =>
-      'Avance ou retard sur le plan à chaque repère';
+      'Si tu es en avance ou en retard sur le plan à chaque repère';
+
+  @override
+  String get prefsCueMarkerTargetsInfo =>
+      'Actif seulement sur un itinéraire dont les repères portent des temps cibles. À chaque passage, il te dit si tu es en avance ou en retard, et de combien. Exemple : « Ravitaillement 2 : 45 secondes d\'avance sur le plan. »';
 
   @override
   String get prefsCuePhaseTransitions => 'Phases de course';
 
   @override
   String get prefsCuePhaseTransitionsSubtitle =>
-      'Quand une phase de la stratégie commence';
+      'Un repère au début de chaque phase de ta stratégie de course';
+
+  @override
+  String get prefsCuePhaseTransitionsInfo =>
+      'Actif seulement quand tu choisis une stratégie de course. Annonce chaque phase et son intention à son début. Exemple : « Phase 2 sur 3. Installe-toi sur ton allure cible. »';
 
   @override
   String get runRaceStrategy => 'Stratégie de course';
@@ -11658,6 +11771,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Choisis un itinéraire ou saisis une distance pour activer les phases';
 
   @override
+  String get runStrategyInvalidGoal =>
+      'Saisissez le temps cible au format h:mm:ss';
+
+  @override
   String runPhaseChip(int index, int total, String intent) {
     return 'Phase $index/$total — $intent';
   }
@@ -11685,4 +11802,14 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get routeMarkerTargetInvalid =>
       'Saisis le temps visé au format h:mm:ss';
+
+  @override
+  String get routeMarkerOfficialBadge => 'Propriétaire du parcours';
+
+  @override
+  String get routeMarkerDistanceAlongLabel => 'Distance le long du parcours';
+
+  @override
+  String get routeMarkerDistanceInvalid =>
+      'Saisis une distance valide le long du parcours.';
 }

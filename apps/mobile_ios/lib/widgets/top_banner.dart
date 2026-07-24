@@ -132,83 +132,99 @@ class _TopBannerWidget extends StatelessWidget {
       top: topInset,
       left: 16,
       right: 16,
-      // Dismissible — swipe in any direction to dismiss.
-      // `DismissDirection.up` is the primary affordance the user
-      // explicitly asked for (top-anchored banner reads as
-      // "push me away upwards"). Horizontal also dismisses for
-      // Material SnackBar gesture parity. The two are combined via
-      // a wrapping Dismissible-on-Dismissible pattern because
-      // DismissDirection is an enum that doesn't bitwise-OR.
-      child: Dismissible(
-        key: ValueKey('top_banner:up:$message'),
-        direction: DismissDirection.up,
-        onDismissed: (_) => onSwipeDismiss(),
+      // The Center wraps the Dismissible chain (not the reverse) so the
+      // Dismissible sizes to the pill only. A Dismissible's hit-test
+      // area is opaque and sized to its child, so wrapping the
+      // full-width Center inside it made the whole top band absorb
+      // pointer events and block taps to widgets underneath until the
+      // banner dismissed. With Center on the outside, the empty band on
+      // either side of the pill passes taps through.
+      child: Center(
+        // Dismissible — swipe in any direction to dismiss.
+        // `DismissDirection.up` is the primary affordance the user
+        // explicitly asked for (top-anchored banner reads as
+        // "push me away upwards"). Horizontal also dismisses for
+        // Material SnackBar gesture parity. The two are combined via
+        // a wrapping Dismissible-on-Dismissible pattern because
+        // DismissDirection is an enum that doesn't bitwise-OR.
         child: Dismissible(
-          key: ValueKey('top_banner:horiz:$message'),
-          direction: DismissDirection.horizontal,
+          key: ValueKey('top_banner:up:$message'),
+          direction: DismissDirection.up,
           onDismissed: (_) => onSwipeDismiss(),
-        child: Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              6,
-              actionLabel == null ? 16 : 6,
-              6,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surface
-                  .withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 8),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // The text portion is IgnorePointer'd so a tap on the
-                // banner pill doesn't compete with whatever's
-                // underneath; only the explicit action button is
-                // interactive.
-                Flexible(
-                  child: IgnorePointer(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        message,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13),
+          child: Dismissible(
+            key: ValueKey('top_banner:horiz:$message'),
+            direction: DismissDirection.horizontal,
+            onDismissed: (_) => onSwipeDismiss(),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  6,
+                  actionLabel == null ? 16 : 6,
+                  6,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 8),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The text portion is IgnorePointer'd so a tap on the
+                    // banner pill doesn't compete with whatever's
+                    // underneath; only the explicit action button is
+                    // interactive.
+                    Flexible(
+                      child: IgnorePointer(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          // liveRegion so TalkBack/VoiceOver announce the
+                          // message when the banner appears. This primitive
+                          // replaced Material's SnackBar, which auto-announced;
+                          // without this a blind user gets no feedback on the
+                          // failures (marker save failed, sync failed, …) that
+                          // flow through here.
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (actionLabel != null) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: onAction,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          actionLabel!,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                if (actionLabel != null) ...[
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: onAction,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      actionLabel!,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
-      ),
-      ),
       ),
     );
   }

@@ -107,6 +107,29 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(rows.nth(1).locator('.marker-detail')).toContainText('Food');
 	});
 
+	test('a long marker label is clipped to one line, not overflowed', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		// Exactly the 120-char DB max (route_markers_label_check) — the longest
+		// label a user can save, which must still clip rather than overflow.
+		const longLabel = 'Aid Station Emigrant Pass Ridge Crest Water Refill '.repeat(3).slice(0, 120);
+		await insertMarker(routeId, 'aid_station', longLabel, 51.505, -0.125, {
+			services: ['water']
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		const label = page.locator('.markers-list .marker-row .marker-label').first();
+		await expect(label).toBeVisible();
+		// The fix: shrink-and-clip to one line so a long name can't overflow
+		// the row or crush the along-route distance chip beside it.
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(label).toHaveCSS('white-space', 'nowrap');
+		// The label genuinely exceeds its box here, so the clip is doing real
+		// work — guards against a future change that widens the row instead.
+		const clipped = await label.evaluate((el) => el.scrollWidth > el.clientWidth);
+		expect(clipped).toBe(true);
+	});
+
 	test('owner adds a marker by clicking the map', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await page.goto(`/routes/${routeId}`);
@@ -290,6 +313,44 @@ test.describe('/routes/[id] — course markers', () => {
 		// The form stays open (save rejected) and the row gained no target.
 		await expect(page.getByLabel('Target time (elapsed)')).toBeVisible();
 		await expect(page.locator('.markers-list .marker-row').first()).not.toContainText('Target');
+	});
+
+	test('delete-dialog cancel button is localized, not a hardcoded English label', async ({
+		browser
+	}) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {});
+
+		// A German browser negotiates the `de` catalogue on load.
+		const context = await browser.newContext({
+			storageState: USER_A.storageStatePath,
+			locale: 'de-DE'
+		});
+		const page = await context.newPage();
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+			// The seeded storageState may carry a stored locale that wins over
+			// the browser locale — force German so the fallback is exercised.
+			localStorage.setItem('locale', 'de');
+		});
+		await page.goto(`/routes/${routeId}`);
+
+		// Open the delete dialog via a locale-independent selector (the
+		// material-symbols "delete" ligature, not the localized tooltip).
+		await page
+			.locator('.markers-list .marker-row')
+			.first()
+			.locator('.marker-actions button', { hasText: 'delete' })
+			.click();
+
+		// Before the fix ConfirmDialog defaulted cancelLabel to a hardcoded
+		// English "Cancel"; now it falls back to m('common.cancel') → German.
+		await expect(page.locator('.modal .btn-secondary')).toHaveText('Abbrechen');
+
+		await context.close();
 	});
 
 	test('owner deletes a marker', async ({ page }) => {

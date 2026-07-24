@@ -10,6 +10,9 @@
 
 export const en = {
 	// App shell / sidebar (+layout.svelte)
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Cancel',
+	'common.confirm': 'Confirm',
 	'nav.dashboard': 'Dashboard',
 	'nav.history': 'History',
 	'nav.runs': 'Runs',
@@ -721,6 +724,9 @@ export const en = {
 	"routeDetail.starFailed": "Could not star route: {error}",
 	"routeDetail.unstarFailed": "Could not unstar route: {error}",
 	"routeDetail.madePublicForLink": "Route is now public so the link works.",
+	"routeDetail.shareConfirmTitle": "Make this route public?",
+	"routeDetail.shareConfirmBody": "Sharing a link makes this route public — anyone with the link can open it, and it can appear in Explore. You can switch it back to private anytime.",
+	"routeDetail.shareConfirmCta": "Make public & share",
 	"routeDetail.makePublicFailed": "Couldn't make public: {error}",
 	"routeDetail.nowPublic": "Route is now public.",
 	"routeDetail.nowPrivate": "Route is private again.",
@@ -751,6 +757,8 @@ export const en = {
 	"routeDetail.reportReview": "Report this review",
 	"routeDetail.copied": "Copied!",
 	"routeDetail.copy": "Copy",
+	"routeDetail.copyLinkFailed": "Couldn't copy the link",
+	"routeDetail.shareLinkLabel": "Shareable link",
 	"routeDetail.previewHeading": "Preview",
 	"routeDetail.elevationHeading": "Elevation",
 	"routeDetail.elevGain": "Gain",
@@ -2729,6 +2737,12 @@ export const en = {
 	"routeMarker.deleteFailed": "Could not delete marker: {error}",
 	"routeMarker.deleteConfirmTitle": "Delete marker?",
 	"routeMarker.deleteConfirmMessage": "This removes the marker from the route permanently.",
+	"routeMarker.officialBadge": "Route owner",
+	"routeMarker.yoursBadge": "Yours",
+	"routeMarker.personalOverlayHint": "Markers you add here are private to you — the route owner won't see them.",
+	"routeMarker.distanceAlongLabel": "Distance along route ({unit})",
+	"routeMarker.distanceAlongHint": "Or place the marker by its distance from the start.",
+	"routeMarker.distanceAlongClamped": "That distance is past the end of the route — snapped to the finish at {distance}.",
 	"routeMarker.kind.aid_station": "Aid station",
 	"routeMarker.kind.cutoff": "Cut-off",
 	"routeMarker.kind.crew_access": "Crew / parking",

@@ -6,7 +6,8 @@ import {
 	kindSpec,
 	sortMarkers,
 	parseCutoff,
-	parseTarget
+	parseTarget,
+	isOfficialMarker
 } from './route_markers';
 
 test('every kind has a unique key, label key, and hex colour', () => {
@@ -113,4 +114,17 @@ test('parseTarget merges clock + elapsed and returns null for neither', () => {
 	assert.equal(parseTarget({}), null);
 	assert.equal(parseTarget(null), null);
 	assert.equal(parseTarget('14:30'), null);
+});
+
+test('isOfficialMarker — a marker dropped by the route owner is official', () => {
+	assert.equal(isOfficialMarker({ user_id: 'owner-1' }, 'owner-1'), true);
+});
+
+test('isOfficialMarker — a viewer\'s personal overlay is not official', () => {
+	assert.equal(isOfficialMarker({ user_id: 'viewer-2' }, 'owner-1'), false);
+});
+
+test('isOfficialMarker — null / undefined owner id is never official (fail closed)', () => {
+	assert.equal(isOfficialMarker({ user_id: 'owner-1' }, null), false);
+	assert.equal(isOfficialMarker({ user_id: 'owner-1' }, undefined), false);
 });

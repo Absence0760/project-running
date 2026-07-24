@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -89,6 +89,12 @@ class RouteBuilderScreen extends StatefulWidget {
   /// club picker without booting a real SocialService / Supabase.
   final Future<List<RouteClubChoice>> Function()? clubChoicesLoader;
 
+  /// Test seam — overrides [isOsrmSnapAvailable] so a widget test can
+  /// exercise the degraded (no road-snapping) path without a release
+  /// build. Production passes null.
+  @visibleForTesting
+  final bool? snapAvailableOverride;
+
   const RouteBuilderScreen({
     super.key,
     required this.apiClient,
@@ -102,6 +108,7 @@ class RouteBuilderScreen extends StatefulWidget {
     this.saveRouteFn,
     this.locateFn,
     this.clubChoicesLoader,
+    this.snapAvailableOverride,
   });
 
   @override
@@ -123,6 +130,42 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   RouteBuilderMode _mode = RouteBuilderMode.trail;
   bool _routing = false;
   bool _saving = false;
+
+  /// Whether OSRM road-snapping is available in this build. `false` on
+  /// a release build with no `OSRM_URL` (the privacy guard forbids the
+  /// uncontracted public demo). When false the builder degrades to
+  /// straight-line placement so a map tap always drops a pin, instead
+  /// of the prod guard throwing out of `snapToRoad` / `fetchRouteThrough`
+  /// and silently swallowing the tap (the "trail/road taps do nothing"
+  /// bug). Evaluated once — the dotenv value is stable at runtime.
+  late final bool _snapAvailable =
+      widget.snapAvailableOverride ?? isOsrmSnapAvailable();
+
+  /// Latches after the "snapping unavailable" disclosure shows once.
+  bool _snapUnavailableNoted = false;
+
+  /// Placement + routing behave as a straight line whenever the user
+  /// picked Straight OR road-snapping is unavailable in this build.
+  bool get _effectiveStraight =>
+      _mode == RouteBuilderMode.straight || !_snapAvailable;
+
+  /// Disclose — once — that road-snapping is unavailable, so the user
+  /// understands why trail/road pins land exactly where tapped and the
+  /// line runs straight between them. No-op when snapping works, when
+  /// already disclosed, or in a plain Straight-mode session.
+  void _maybeNoteSnapUnavailable() {
+    if (_snapAvailable ||
+        _snapUnavailableNoted ||
+        _mode == RouteBuilderMode.straight) {
+      return;
+    }
+    _snapUnavailableNoted = true;
+    if (!mounted) return;
+    showTopBanner(
+      context,
+      AppLocalizations.of(context).routeBuilderSnapUnavailable,
+    );
+  }
 
   /// Monotonic counter incremented on every `_rerouteThrough` entry.
   /// Each routing pass captures `_routeGeneration` at start, threads
@@ -169,6 +212,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     _searchFocus.addListener(() {
       if (!mounted) return;
       setState(() => _searchFocused = _searchFocus.hasFocus);
+    });
+    // The builder opens in Trail mode; if this build can't snap
+    // (release with no OSRM_URL), tell the user up front rather than
+    // letting them wonder why pins don't follow roads. Post-frame so
+    // the Overlay showTopBanner needs is mounted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeNoteSnapUnavailable();
     });
   }
 
@@ -256,7 +306,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// helper called from every mutator (_onMapTap, _undo, drag commit,
   /// snap-to-start close).
   Future<void> _rerouteThrough(List<cm.Waypoint> waypoints) async {
-    if (_mode == RouteBuilderMode.straight) {
+    if (_effectiveStraight) {
       setState(() {
         _waypoints
           ..clear()
@@ -375,6 +425,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     // sticky on a slow OSRM call. Still gate on `_saving` because
     // the save-dialog flow shouldn't be racing pin placements.
     if (_saving) return;
+    _maybeNoteSnapUnavailable();
     final tapWaypoint =
         cm.Waypoint(lat: latLng.latitude, lng: latLng.longitude);
 
@@ -383,7 +434,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     if (_dragIndex != null) {
       final idx = _dragIndex!;
       _dragIndex = null;
-      final moved = _mode == RouteBuilderMode.straight
+      final moved = _effectiveStraight
           ? tapWaypoint
           : await snapToRoad(
               tapWaypoint,
@@ -427,7 +478,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       return;
     }
 
-    final next = _mode == RouteBuilderMode.straight
+    final next = _effectiveStraight
         ? tapWaypoint
         : await snapToRoad(
             tapWaypoint,

@@ -395,4 +395,38 @@ void main() {
       );
     });
   });
+
+  group('markerPointAtDistance', () {
+    final line = [wp(0, 0), wp(0, 0.010)]; // ~1113 m equatorial straight line
+    final total = polylineLengthMetres(line);
+
+    test('null for < 2 waypoints', () {
+      expect(markerPointAtDistance(const [], 100), isNull);
+      expect(markerPointAtDistance([wp(0, 0)], 100), isNull);
+    });
+    test('null for a non-finite distance', () {
+      expect(markerPointAtDistance(line, double.infinity), isNull);
+      expect(markerPointAtDistance(line, double.nan), isNull);
+    });
+    test('null for a zero-length line', () {
+      expect(markerPointAtDistance([wp(0, 0), wp(0, 0)], 10), isNull);
+    });
+    test('distance 0 returns the start', () {
+      final p = markerPointAtDistance(line, 0)!;
+      expect(p.lat, closeTo(0, 1e-9));
+      expect(p.lng, closeTo(0, 1e-9));
+    });
+    test('mid-distance returns a point on the line', () {
+      final p = markerPointAtDistance(line, total / 2)!;
+      expect(p.lng, closeTo(0.005, 1e-4));
+    });
+    test('past-end clamps to the finish', () {
+      final p = markerPointAtDistance(line, total * 5)!;
+      expect(p.lng, closeTo(0.010, 1e-6));
+    });
+    test('negative clamps to the start', () {
+      final p = markerPointAtDistance(line, -100)!;
+      expect(p.lng, closeTo(0, 1e-6));
+    });
+  });
 }

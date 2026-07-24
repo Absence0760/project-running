@@ -15,6 +15,11 @@ import '../lib/widgets/top_banner.dart';
 ///   2. Banners must be swipe-dismissible — Material SnackBar
 ///      gesture parity, so users don't have to wait if they've
 ///      already read the message.
+///   3. The transient toast must NOT block taps to the UI beneath it.
+///      The pill absorbs taps (for its swipe + optional action button),
+///      but the empty band on either side of the centred pill is
+///      click-through — otherwise a banner near the top of a screen
+///      makes the widgets under it unreachable until it auto-dismisses.
 class _BannerHost extends StatelessWidget {
   final void Function(BuildContext) onReady;
   const _BannerHost({required this.onReady});
@@ -199,6 +204,76 @@ void main() {
     );
   });
 
+  group('showTopBanner — taps pass through the empty band', () {
+    testWidgets(
+      'a tap in the banner band but outside the pill reaches the widget '
+      'below',
+      (tester) async {
+        var underlyingTapped = 0;
+        // No AppBar: the banner (topInset ~ 12 with no Scaffold app bar in
+        // scope) renders over the top of the body, so the full-area
+        // tappable genuinely underlies the pill's band. An AppBar here
+        // would sit beneath the pill and absorb the pass-through tap,
+        // masking the behaviour under test.
+        await tester.pumpWidget(MaterialApp(
+          home: Builder(
+            builder: (ctx) {
+              WidgetsBinding.instance
+                  .addPostFrameCallback((_) => showTopBanner(ctx, 'hi'));
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => underlyingTapped++,
+                child: const SizedBox.expand(),
+              );
+            },
+          ),
+        ));
+        await tester.pump(); // run the post-frame callback → insert entry
+        await tester.pump(); // let the overlay build the pill
+        expect(find.text('hi'), findsOneWidget);
+
+        // The pill is centred within the left:16/right:16 band, so there
+        // is an empty band to its left. Before the fix the two
+        // Dismissibles wrapped the full-width Center, sizing their opaque
+        // hit area to the whole band and swallowing this tap; now they
+        // wrap only the pill, so the band is click-through.
+        final pillRect = tester.getRect(
+          find.byKey(const ValueKey('top_banner:up:hi')),
+        );
+        expect(
+          pillRect.left,
+          greaterThan(40),
+          reason: 'pill should be centred, leaving an empty left band',
+        );
+
+        await tester.tapAt(Offset(20, pillRect.center.dy));
+        await tester.pump();
+        expect(
+          underlyingTapped,
+          1,
+          reason:
+              'A tap in the empty banner band must reach the widget beneath '
+              'the banner — the transient toast must not block the UI.',
+        );
+
+        // A tap ON the pill is absorbed (the Dismissible is opaque over
+        // the pill), so it must NOT also fire the widget beneath.
+        await tester.tapAt(pillRect.center);
+        await tester.pump();
+        expect(
+          underlyingTapped,
+          1,
+          reason: 'A tap on the pill itself is absorbed, not passed through.',
+        );
+
+        // Drain the auto-dismiss timer so no pending timer outlives the
+        // test (the showTopBanner-leaves-a-timer gotcha).
+        await tester.pump(kTopBannerMaxDuration);
+        await tester.pump();
+      },
+    );
+  });
+
   group('hideTopBanner', () {
     testWidgets('programmatic dismiss works alongside the timer / swipe',
         (tester) async {
@@ -226,5 +301,38 @@ void main() {
       hideTopBanner();
       await tester.pump();
     });
+  });
+
+  group('showTopBanner — accessibility', () {
+    testWidgets(
+      'the banner message is a live region so screen readers announce it',
+      (tester) async {
+        await tester.pumpWidget(_BannerHost(
+          onReady: (ctx) => showTopBanner(ctx, 'sync failed'),
+        ));
+        await tester.pump();
+
+        final liveRegion = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.liveRegion == true,
+        );
+        expect(
+          liveRegion,
+          findsOneWidget,
+          reason: 'The transient banner must be a live region — it replaced '
+              'Material SnackBar, which auto-announced to TalkBack/VoiceOver; '
+              'without it a blind user gets no feedback on the failures that '
+              'flow through here.',
+        );
+        // The announced node carries the message.
+        expect(
+          find.descendant(of: liveRegion, matching: find.text('sync failed')),
+          findsOneWidget,
+        );
+
+        // Drain the auto-dismiss timer so no pending timer trips the framework.
+        await tester.pump(const Duration(seconds: 3, milliseconds: 100));
+        await tester.pump();
+      },
+    );
   });
 }

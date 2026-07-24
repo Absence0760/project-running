@@ -119,7 +119,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final result = await showDialog<int?>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.prefsLivePaceAlert),
+        title: Text(l10n.prefsTargetPace),
         content: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -171,6 +171,36 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (mounted) FocusScope.of(context).unfocus();
     if (result != null) await prefs.setTargetPaceSecPerKm(result);
+  }
+
+  Future<void> _editSplitPaceMode() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await _pickRadio<String>(
+      title: l10n.prefsSplitPaceMode,
+      options: const [
+        SplitPaceMode.split,
+        SplitPaceMode.average,
+        SplitPaceMode.both,
+      ],
+      labels: [
+        l10n.prefsSplitPaceModeSplit,
+        l10n.prefsSplitPaceModeAverage,
+        l10n.prefsSplitPaceModeBoth,
+      ],
+      current: widget.preferences.splitPaceMode,
+    );
+    if (picked != null) await widget.preferences.setSplitPaceMode(picked);
+  }
+
+  static String _splitPaceModeLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case SplitPaceMode.average:
+        return l10n.prefsSplitPaceModeAverage;
+      case SplitPaceMode.both:
+        return l10n.prefsSplitPaceModeBoth;
+      default:
+        return l10n.prefsSplitPaceModeSplit;
+    }
   }
 
   static String _toTitle(String raw) => raw
@@ -951,9 +981,31 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
-  Widget _cueSwitch(String title, String subtitle, String cueId) {
+  void _showCueInfo(String title, String body) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(child: Text(body)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(MaterialLocalizations.of(ctx).okButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cueSwitch(
+      String title, String subtitle, String cueId, String infoBody) {
     final prefs = widget.preferences;
     return SwitchListTile(
+      secondary: IconButton(
+        icon: const Icon(Icons.info_outline),
+        tooltip: AppLocalizations.of(context).prefsCueInfoTooltip,
+        onPressed: () => _showCueInfo(title, infoBody),
+      ),
       title: Text(title),
       subtitle: Text(subtitle),
       value: prefs.voiceCueEnabled(cueId),
@@ -1127,22 +1179,49 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
             if (prefs.audioCues) ...[
               _sectionLabel(l10n.prefsVoiceCueTypesLabel),
               _cueSwitch(l10n.prefsCueSplits, l10n.prefsCueSplitsSubtitle,
-                  VoiceCue.splits),
-              _cueSwitch(l10n.prefsCueStartFinish,
-                  l10n.prefsCueStartFinishSubtitle, VoiceCue.startFinish),
+                  VoiceCue.splits, l10n.prefsCueSplitsInfo),
+              _cueSwitch(
+                  l10n.prefsCueStartFinish,
+                  l10n.prefsCueStartFinishSubtitle,
+                  VoiceCue.startFinish,
+                  l10n.prefsCueStartFinishInfo),
               _cueSwitch(l10n.prefsCueOffRoute, l10n.prefsCueOffRouteSubtitle,
-                  VoiceCue.offRoute),
+                  VoiceCue.offRoute, l10n.prefsCueOffRouteInfo),
               _cueSwitch(l10n.prefsCuePaceAlerts,
-                  l10n.prefsCuePaceAlertsSubtitle, VoiceCue.paceAlerts),
+                  l10n.prefsCuePaceAlertsSubtitle, VoiceCue.paceAlerts,
+                  l10n.prefsCuePaceAlertsInfo),
               _cueSwitch(l10n.prefsCueWorkoutSteps,
-                  l10n.prefsCueWorkoutStepsSubtitle, VoiceCue.workoutSteps),
+                  l10n.prefsCueWorkoutStepsSubtitle, VoiceCue.workoutSteps,
+                  l10n.prefsCueWorkoutStepsInfo),
               _cueSwitch(l10n.prefsCueCutoffCatchUp,
-                  l10n.prefsCueCutoffCatchUpSubtitle, VoiceCue.cutoffCatchUp),
+                  l10n.prefsCueCutoffCatchUpSubtitle, VoiceCue.cutoffCatchUp,
+                  l10n.prefsCueCutoffCatchUpInfo),
               _cueSwitch(l10n.prefsCueMarkerTargets,
-                  l10n.prefsCueMarkerTargetsSubtitle, VoiceCue.markerTargets),
-              _cueSwitch(l10n.prefsCuePhaseTransitions,
+                  l10n.prefsCueMarkerTargetsSubtitle, VoiceCue.markerTargets,
+                  l10n.prefsCueMarkerTargetsInfo),
+              _cueSwitch(
+                  l10n.prefsCuePhaseTransitions,
                   l10n.prefsCuePhaseTransitionsSubtitle,
-                  VoiceCue.phaseTransitions),
+                  VoiceCue.phaseTransitions,
+                  l10n.prefsCuePhaseTransitionsInfo),
+              ListTile(
+                title: Text(l10n.prefsSplitPaceMode),
+                subtitle:
+                    Text(_splitPaceModeLabel(l10n, prefs.splitPaceMode)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.info_outline),
+                      tooltip: l10n.prefsCueInfoTooltip,
+                      onPressed: () => _showCueInfo(
+                          l10n.prefsSplitPaceMode, l10n.prefsSplitPaceModeInfo),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+                onTap: _editSplitPaceMode,
+              ),
             ],
             ListTile(
               title: Text(l10n.prefsSplitInterval),
@@ -1155,7 +1234,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editSplitInterval,
             ),
             ListTile(
-              title: Text(l10n.prefsLivePaceAlert),
+              title: Text(l10n.prefsTargetPace),
               subtitle: Text(
                 prefs.targetPaceSecPerKm > 0
                     ? l10n.prefsLivePaceAlertOn(
@@ -1165,7 +1244,18 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                       )
                     : l10n.prefsLivePaceAlertOff,
               ),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.info_outline),
+                    tooltip: l10n.prefsCueInfoTooltip,
+                    onPressed: () => _showCueInfo(
+                        l10n.prefsTargetPace, l10n.prefsTargetPaceInfo),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
               onTap: _editTargetPace,
             ),
             SwitchListTile(

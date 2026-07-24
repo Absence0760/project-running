@@ -16,6 +16,7 @@
 	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
 	import RouteConditions from '$lib/components/RouteConditions.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
@@ -123,6 +124,9 @@
 	}
 
 	let shareLink = $state('');
+	// In-flight guard: Share can flip the route public, so a double-click must
+	// not fire two setRoutePublic writes.
+	let sharing = $state(false);
 	let shareCopied = $state(false);
 	let tagDraft = $state('');
 	let tagsSaving = $state(false);
@@ -288,7 +292,38 @@
 		downloadFile(gpx, filename, 'application/gpx+xml');
 	}
 
+	// Confirm-before-public gate. Sharing a link needs the route publicly
+	// reachable; flipping a still-private route public exposes it (and its
+	// start point) to anyone with the link and surfaces it in Explore — a
+	// privacy-relevant, one-way-for-now step, so confirm it first. An
+	// already-public route shares straight away (nothing changes).
+	let showShareConfirm = $state(false);
+
 	async function handleShare() {
+		if (!route || sharing) return;
+		if (!route.is_public) {
+			showShareConfirm = true;
+			return;
+		}
+		await runShare();
+	}
+
+	async function confirmShare() {
+		showShareConfirm = false;
+		await runShare();
+	}
+
+	async function runShare() {
+		if (!route || sharing) return;
+		sharing = true;
+		try {
+			await doShare();
+		} finally {
+			sharing = false;
+		}
+	}
+
+	async function doShare() {
 		if (!route) return;
 		// Share requires the route to be publicly reachable. If the
 		// owner hasn't flipped the visibility yet, flip it for them and
@@ -335,9 +370,15 @@
 
 
 	async function copyShareLink() {
-		await navigator.clipboard.writeText(shareLink);
-		shareCopied = true;
-		setTimeout(() => (shareCopied = false), 2000);
+		// clipboard.writeText rejects in an insecure context or when the
+		// permission is denied — surface it instead of leaving a dead button.
+		try {
+			await navigator.clipboard.writeText(shareLink);
+			shareCopied = true;
+			setTimeout(() => (shareCopied = false), 2000);
+		} catch {
+			showToast(m('routeDetail.copyLinkFailed'), 'error');
+		}
 	}
 
 	// Derive elevations from displayWaypoints (not route.waypoints
@@ -560,6 +601,7 @@
 										type="text"
 										bind:value={tagDraft}
 										placeholder={m('routeDetail.addTagPlaceholder')}
+										aria-label={m('routeDetail.addTagPlaceholder')}
 										maxlength="24"
 										disabled={tagsSaving}
 									/>
@@ -590,7 +632,7 @@
 							{route.is_public ? m('routeDetail.public') : m('routeDetail.private')}
 						</button>
 					{/if}
-					<button class="btn btn-primary btn-sm" onclick={handleShare}>{m('routeDetail.share')}</button>
+					<button class="btn btn-primary btn-sm" onclick={handleShare} disabled={sharing}>{m('routeDetail.share')}</button>
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"
@@ -606,7 +648,7 @@
 
 			{#if shareLink}
 				<div class="share-bar">
-					<input type="text" readonly value={shareLink} />
+					<input type="text" readonly value={shareLink} aria-label={m('routeDetail.shareLinkLabel')} />
 					<button class="btn btn-outline btn-sm" onclick={copyShareLink}>
 						{shareCopied ? m('routeDetail.copied') : m('routeDetail.copy')}
 					</button>
@@ -686,6 +728,8 @@
 				<RouteMarkerEditor
 					routeId={route.id}
 					{isOwner}
+					routeOwnerId={route.user_id}
+					routeWaypoints={displayWaypoints}
 					bind:pins={markerPins}
 					bind:placing={markerEditing}
 					bind:pendingPlacement={markerPendingPlacement}
@@ -707,6 +751,7 @@
 					routeId={route.id}
 					routeDistanceM={route.distance_m}
 					canCreate={auth.loggedIn}
+					{isOwner}
 					clubId={route.club_id ?? null}
 				/>
 			</section>
@@ -746,6 +791,7 @@
 						<textarea
 							bind:value={reviewComment}
 							placeholder={m('routeDetail.commentPlaceholder')}
+							aria-label={m('routeDetail.commentPlaceholder')}
 							class="review-textarea"
 							rows="2"
 						></textarea>
@@ -841,6 +887,15 @@
 		targetKind="route_review"
 		targetId={reportReviewId ?? ''}
 		onclose={() => (reportReviewId = null)}
+	/>
+	<ConfirmDialog
+		open={showShareConfirm}
+		data-testid="share-confirm-dialog"
+		title={m('routeDetail.shareConfirmTitle')}
+		message={m('routeDetail.shareConfirmBody')}
+		confirmLabel={m('routeDetail.shareConfirmCta')}
+		onconfirm={confirmShare}
+		oncancel={() => (showShareConfirm = false)}
 	/>
 {/if}
 

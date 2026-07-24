@@ -1,34 +1,38 @@
 -- RLS + trigger + viewer-RPC suite for `public.route_markers` (course
 -- markers — aid stations / cutoffs / crew access / hazards / climbs).
--- Migration 20270129_001.
+-- Migrations 20270129_001 + 20270428_001 (viewer contributions).
 --
--- Contract under test:
---   - SELECT "markers readable when route is visible" — gated by
---     private.is_route_visible_to(route_id, auth.uid()) (own / public /
---     club-member). Anon flows through the same helper.
---   - INSERT/UPDATE/DELETE require owning the parent route; INSERT also
---     pins user_id = auth.uid().
+-- Contract under test (post-20270428_001):
+--   - "Official" marker  = user_id == route.user_id (dropped by the owner).
+--   - "Personal" marker  = user_id != route.user_id (a viewer's own overlay).
+--   - INSERT: any authenticated user may add a marker AS THEMSELVES to any
+--     route they can SEE (is_route_visible_to). Forging another user_id, or a
+--     route the caller can't see, is rejected.
+--   - UPDATE/DELETE: your OWN markers only. A viewer can't touch the owner's
+--     official markers; the owner can't touch a viewer's personal ones.
+--   - SELECT (base policy) + route_markers_for_viewer(): each caller sees THEIR
+--     OWN markers plus the owner's OFFICIAL markers (privacy-zone-redacted for
+--     non-owners). A viewer's personal markers are private to that viewer —
+--     invisible to the owner and to other viewers.
 --   - route_markers_set_position() derives position_m along routes.geom.
---   - route_markers_for_viewer(route_id) gates visibility AND, for a
---     non-owner, redacts any marker inside one of the owner's privacy
---     zones — the marker analogue of clip_route_for_viewer.
 --
--- Blast radius if regressed: a private route's markers leaking to anon /
--- non-members; a forged INSERT planting markers on a route the caller
--- doesn't own; or a public course leaking a pin dropped at the owner's
--- home through the viewer RPC.
+-- Blast radius if regressed: a viewer's personal overlay leaking to the owner
+-- or to other viewers; a viewer editing/deleting the owner's official markers
+-- (or vice-versa); a forged INSERT; a private route's markers leaking to anon.
 
 begin;
 
-select plan(13);
+select plan(20);
 
--- ── Fixture ──
+-- ── Fixture: owner cc001 (with privacy zone), viewer cc002, viewer cc003 ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
   ('00000000-0000-0000-0000-0000000cc001', 'authenticated', 'authenticated',
    'route-owner@marker.local', '', now(), now()),
   ('00000000-0000-0000-0000-0000000cc002', 'authenticated', 'authenticated',
-   'other@marker.local', '', now(), now());
+   'viewer@marker.local', '', now(), now()),
+  ('00000000-0000-0000-0000-0000000cc003', 'authenticated', 'authenticated',
+   'viewer3@marker.local', '', now(), now());
 
 -- Owner has a ~150 m privacy zone around (47.37, 8.54) — the route start.
 insert into user_settings (user_id, prefs)
@@ -48,8 +52,7 @@ select tests.confirm_consent();
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc001","role":"authenticated"}';
 
--- A public and a private route, each a ~1.5 km line so geom (and thus
--- position_m) is well-defined and the two marker points are far apart.
+-- A public and a private route owned by cc001.
 insert into routes (id, user_id, name, waypoints, distance_m, is_public)
 values
   ('22222222-2222-2222-2222-2222000cc001',
@@ -63,8 +66,7 @@ values
    '[{"lat":47.37,"lng":8.54},{"lat":47.38,"lng":8.55}]',
    1500, false);
 
--- 1. Owner drops an aid station near the END of the public route (out of
---    the start-anchored privacy zone).
+-- 1. Owner drops an aid station near the END (outside the start privacy zone).
 insert into route_markers (id, route_id, user_id, kind, label, lat, lng, meta)
 values
   ('33333333-3333-3333-3333-3333000cc001',
@@ -72,9 +74,9 @@ values
    '00000000-0000-0000-0000-0000000cc001',
    'aid_station', 'Aid 1', 47.38, 8.55,
    '{"services":["water","food"]}');
-select pass('owner adds a marker to their own public route');
+select pass('owner adds an official marker to their own public route');
 
--- 2. The position trigger filled position_m (non-null, > 0) from geom.
+-- 2. The position trigger filled position_m from geom.
 select cmp_ok(
   (select position_m from route_markers
      where id = '33333333-3333-3333-3333-3333000cc001'),
@@ -100,23 +102,23 @@ values
    'cutoff', 'Cutoff A', 47.38, 8.55);
 select pass('owner adds a marker to their own private route');
 
--- 5. Owner sees all THREE via the viewer RPC (no redaction for owner).
+-- 5. Owner sees both public-route official markers via the RPC (no redaction).
 select results_eq(
   $$ select count(*)::int from route_markers_for_viewer(
        '22222222-2222-2222-2222-2222000cc001') $$,
   $$ values (2) $$,
-  'owner sees both public-route markers via the viewer RPC'
+  'owner sees both official public-route markers via the viewer RPC'
 );
 
--- ── Switch to a different signed-in user (non-owner) ──
+-- ── Switch to viewer cc002 (non-owner) ──
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc002","role":"authenticated"}';
 
--- 6. Non-owner can read markers on the PUBLIC route (base SELECT policy).
+-- 6. Non-owner can read the owner's OFFICIAL marker on the public route.
 select results_eq(
   $$ select label from route_markers
      where id = '33333333-3333-3333-3333-3333000cc001' $$,
   $$ values ('Aid 1'::text) $$,
-  'non-owner can SELECT a marker on a public route'
+  'non-owner can SELECT the owner official marker on a public route'
 );
 
 -- 7. Non-owner CANNOT read markers on the PRIVATE route.
@@ -126,13 +128,12 @@ select is_empty(
   'non-owner cannot SELECT a marker on a private route'
 );
 
--- 8. Viewer RPC redacts the in-privacy-zone marker for a non-owner:
---    only the out-of-zone Aid 1 comes back, not the Home gate note.
+-- 8. Viewer RPC redacts the in-privacy-zone official marker for a non-owner.
 select results_eq(
   $$ select label from route_markers_for_viewer(
        '22222222-2222-2222-2222-2222000cc001') order by label $$,
   $$ values ('Aid 1'::text) $$,
-  'viewer RPC redacts a non-owner marker inside the owner privacy zone'
+  'viewer RPC redacts an owner marker inside the owner privacy zone'
 );
 
 -- 9. Forged INSERT under another user_id is rejected.
@@ -146,42 +147,111 @@ select throws_ok(
   'cannot INSERT a marker under another user_id'
 );
 
--- 10. INSERT against a route the caller does not own is rejected, even
---     with the caller's own user_id (public route → visibility passes,
---     INSERT policy is stricter).
+-- 10. NEW: a non-owner CAN add their OWN personal marker to a public route.
+insert into route_markers (id, route_id, user_id, kind, label, lat, lng)
+values
+  ('33333333-3333-3333-3333-3333000cc010',
+   '22222222-2222-2222-2222-2222000cc001',
+   '00000000-0000-0000-0000-0000000cc002',
+   'note', 'My water stash', 47.375, 8.545);
+select pass('non-owner adds their own personal marker to a public route');
+
+-- 11. Viewer sees their personal marker PLUS the owner official one via the RPC.
+select results_eq(
+  $$ select label from route_markers_for_viewer(
+       '22222222-2222-2222-2222-2222000cc001') order by label $$,
+  $$ values ('Aid 1'::text), ('My water stash'::text) $$,
+  'viewer sees own personal marker + owner official via the RPC'
+);
+
+-- 12. NEW: a non-owner CANNOT add a marker to a route they can't SEE.
+select throws_ok(
+  $$ insert into route_markers (route_id, user_id, kind, label, lat, lng)
+       values ('22222222-2222-2222-2222-2222000cc002',
+               '00000000-0000-0000-0000-0000000cc002',
+               'note', 'sneaky', 47.38, 8.55) $$,
+  '42501',
+  null,
+  'cannot add a marker to a private route the caller cannot see'
+);
+
+-- 13. Non-owner UPDATE on the owner's official marker is a no-op.
+update route_markers set label = 'Hacked'
+  where id = '33333333-3333-3333-3333-3333000cc001';
+
+-- 14. NEW: a non-owner CAN update their OWN personal marker.
+update route_markers set label = 'My water (moved)'
+  where id = '33333333-3333-3333-3333-3333000cc010';
+select results_eq(
+  $$ select label from route_markers
+     where id = '33333333-3333-3333-3333-3333000cc010' $$,
+  $$ values ('My water (moved)'::text) $$,
+  'non-owner can UPDATE their own personal marker'
+);
+
+-- 15. kind CHECK rejects an unknown marker kind.
 select throws_ok(
   $$ insert into route_markers (route_id, user_id, kind, label, lat, lng)
        values ('22222222-2222-2222-2222-2222000cc001',
                '00000000-0000-0000-0000-0000000cc002',
-               'aid_station', 'NotMine', 47.38, 8.55) $$,
-  '42501',
-  null,
-  'cannot add a marker to a route the caller does not own'
-);
-
--- 11. Non-owner UPDATE on a public-route marker is a no-op.
-update route_markers set label = 'Hacked'
-  where id = '33333333-3333-3333-3333-3333000cc001';
-set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc001","role":"authenticated"}';
-select results_eq(
-  $$ select label from route_markers
-     where id = '33333333-3333-3333-3333-3333000cc001' $$,
-  $$ values ('Aid 1'::text) $$,
-  'non-owner UPDATE on a marker is a no-op'
-);
-
--- 12. The kind CHECK rejects an unknown marker kind.
-select throws_ok(
-  $$ insert into route_markers (route_id, user_id, kind, label, lat, lng)
-       values ('22222222-2222-2222-2222-2222000cc001',
-               '00000000-0000-0000-0000-0000000cc001',
                'gas_station', 'Bad', 47.38, 8.55) $$,
   '23514',
   null,
   'unknown marker kind is rejected by the CHECK constraint'
 );
 
--- 13. Anon cannot read a marker on a private route.
+-- ── Back to the owner cc001 ──
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc001","role":"authenticated"}';
+
+-- 16. The owner's UPDATE (test 13) was a no-op — Aid 1 is unchanged.
+select results_eq(
+  $$ select label from route_markers
+     where id = '33333333-3333-3333-3333-3333000cc001' $$,
+  $$ values ('Aid 1'::text) $$,
+  'a non-owner UPDATE on the owner official marker was a no-op'
+);
+
+-- 17. NEW: the owner does NOT see the viewer's personal marker via the RPC
+--     (they see only their own two official markers).
+select results_eq(
+  $$ select count(*)::int from route_markers_for_viewer(
+       '22222222-2222-2222-2222-2222000cc001') $$,
+  $$ values (2) $$,
+  'the owner does not see a viewer personal marker via the RPC'
+);
+
+-- 18. NEW: the owner CANNOT delete the viewer's personal marker. The DELETE is
+--     an RLS no-op; the owner can't even SELECT a viewer's personal marker, so
+--     we confirm it survived from the viewer's own session below (test 19).
+delete from route_markers where id = '33333333-3333-3333-3333-3333000cc010';
+
+-- ── Back to viewer cc002 — confirm the owner's delete was a no-op ──
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc002","role":"authenticated"}';
+select isnt_empty(
+  $$ select id from route_markers
+     where id = '33333333-3333-3333-3333-3333000cc010' $$,
+  'a viewer personal marker survives an owner DELETE attempt (RLS no-op)'
+);
+
+-- ── A third viewer cc003 ──
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000cc003","role":"authenticated"}';
+
+-- 19. NEW: a third viewer does NOT see cc002's personal marker via the RPC.
+select results_eq(
+  $$ select label from route_markers_for_viewer(
+       '22222222-2222-2222-2222-2222000cc001') order by label $$,
+  $$ values ('Aid 1'::text) $$,
+  'a third viewer does not see another viewer personal marker via the RPC'
+);
+
+-- 20. NEW: a third viewer cannot read cc002's personal marker via direct SELECT.
+select is_empty(
+  $$ select id from route_markers
+     where id = '33333333-3333-3333-3333-3333000cc010' $$,
+  'a third viewer cannot SELECT another viewer personal marker directly'
+);
+
+-- 21. Anon cannot read a marker on a private route.
 set local role anon;
 set local "request.jwt.claims" = '';
 select is_empty(

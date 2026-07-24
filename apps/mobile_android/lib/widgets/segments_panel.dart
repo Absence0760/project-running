@@ -5,17 +5,38 @@ import 'package:flutter/material.dart';
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
+import 'error_state.dart';
 import 'top_banner.dart';
 
 /// Route-detail segments panel: lists every segment on the parent
 /// route, expands each row to a leaderboard on tap, and (for the
 /// route owner) hosts a "New segment" form. Mirrors the web
 /// `SegmentsPanel.svelte` component (decisions §37).
+/// Whether [viewerId] may delete a segment authored by [authorId]: the
+/// route owner may delete any (moderation), everyone else only their own.
+/// Mirrors the `segment author or route owner deletes` RLS policy, so the
+/// UI never offers a delete the backend would reject. A signed-out viewer
+/// (null [viewerId]) can delete nothing.
+bool canDeleteSegment(String? authorId, String? viewerId, bool isRouteOwner) {
+  if (isRouteOwner) return true;
+  return viewerId != null && authorId != null && authorId == viewerId;
+}
+
 class SegmentsPanel extends StatefulWidget {
   final ApiClient api;
   final String routeId;
   final double routeDistanceM;
+
+  /// Whether the viewer may CREATE a segment. Segments are Strava-style
+  /// community contributions, so any signed-in viewer can add one to a
+  /// route they can see (the RLS pins created_by = the caller).
   final bool canCreate;
+
+  /// Whether the viewer OWNS the route. Only the owner may delete segments
+  /// they didn't author (moderation); everyone else deletes only their own.
+  /// Distinct from [canCreate] so a non-owner viewer never sees a delete
+  /// button on the owner's segments that the backend would reject.
+  final bool isRouteOwner;
 
   const SegmentsPanel({
     super.key,
@@ -23,6 +44,7 @@ class SegmentsPanel extends StatefulWidget {
     required this.routeId,
     required this.routeDistanceM,
     required this.canCreate,
+    this.isRouteOwner = false,
   });
 
   @override
@@ -31,6 +53,11 @@ class SegmentsPanel extends StatefulWidget {
 
 class _SegmentsPanelState extends State<SegmentsPanel> {
   bool _loading = true;
+  // Distinguish a failed load from a genuinely empty route: without these a
+  // fetch error swallowed to empty and read as "No segments yet" / "No efforts
+  // yet", with no retry (matches web's error+retry states).
+  bool _loadError = false;
+  final Map<String, bool> _leaderboardError = {};
   List<SegmentRow> _segments = const [];
   final Map<String, List<SegmentLeaderboardEntry>?> _leaderboards = {};
   String? _openSegmentId;
@@ -67,7 +94,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
 
   Future<void> _load() async {
     if (!mounted) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = false;
+    });
     try {
       final segs = await widget.api.fetchSegmentsForRoute(widget.routeId);
       if (!mounted) return;
@@ -77,7 +107,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = true;
+      });
     }
   }
 
@@ -95,7 +128,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
   }
 
   Future<void> _refreshLeaderboard(String segmentId) async {
-    setState(() => _leaderboards[segmentId] = null);
+    setState(() {
+      _leaderboards[segmentId] = null;
+      _leaderboardError.remove(segmentId);
+    });
     try {
       final entries = await widget.api.fetchSegmentLeaderboardTiered(
         segmentId,
@@ -106,7 +142,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
       setState(() => _leaderboards[segmentId] = entries);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _leaderboards[segmentId] = const []);
+      setState(() {
+        _leaderboards[segmentId] = const [];
+        _leaderboardError[segmentId] = true;
+      });
     }
   }
 
@@ -118,7 +157,10 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
 
   Future<void> _submitCreate() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      _toast(AppLocalizations.of(context).segmentsPanelErrNameRequired);
+      return;
+    }
     final start = double.tryParse(_startCtrl.text) ?? 0;
     final end = double.tryParse(_endCtrl.text) ?? 0;
     final l10n = AppLocalizations.of(context);
@@ -240,6 +282,11 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
                 ),
               ),
             )
+          else if (_loadError)
+            ErrorState(
+              message: l10n.segmentsPanelLoadError,
+              onRetry: _load,
+            )
           else if (_segments.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -256,8 +303,11 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
                 seg: seg,
                 expanded: _openSegmentId == seg.id,
                 leaderboard: _leaderboards[seg.id],
+                leaderboardError: _leaderboardError[seg.id] ?? false,
+                onRetryLeaderboard: () => _refreshLeaderboard(seg.id),
                 viewerId: widget.api.userId,
-                canDelete: widget.canCreate,
+                canDelete: canDeleteSegment(
+                    seg.authorId, widget.api.userId, widget.isRouteOwner),
                 onTap: () => _toggleLeaderboard(seg),
                 onDelete: () => _confirmDelete(seg),
                 genderFilter: _genderFilter,
@@ -375,6 +425,8 @@ class _SegmentTile extends StatelessWidget {
   final SegmentRow seg;
   final bool expanded;
   final List<SegmentLeaderboardEntry>? leaderboard;
+  final bool leaderboardError;
+  final VoidCallback onRetryLeaderboard;
   final String? viewerId;
   final bool canDelete;
   final VoidCallback onTap;
@@ -389,6 +441,8 @@ class _SegmentTile extends StatelessWidget {
     required this.seg,
     required this.expanded,
     required this.leaderboard,
+    required this.leaderboardError,
+    required this.onRetryLeaderboard,
     required this.viewerId,
     required this.canDelete,
     required this.onTap,
@@ -465,6 +519,8 @@ class _SegmentTile extends StatelessWidget {
                   const SizedBox(height: 8),
                   _Leaderboard(
                     entries: leaderboard,
+                    error: leaderboardError,
+                    onRetry: onRetryLeaderboard,
                     viewerId: viewerId,
                     filtered: genderFilter != null || ageFilter != null,
                     genderFilter: genderFilter,
@@ -571,6 +627,8 @@ class _TierFilters extends StatelessWidget {
 
 class _Leaderboard extends StatelessWidget {
   final List<SegmentLeaderboardEntry>? entries;
+  final bool error;
+  final VoidCallback onRetry;
   final String? viewerId;
   final bool filtered;
   final String? genderFilter;
@@ -578,6 +636,8 @@ class _Leaderboard extends StatelessWidget {
 
   const _Leaderboard({
     required this.entries,
+    required this.error,
+    required this.onRetry,
     required this.viewerId,
     required this.filtered,
     required this.genderFilter,
@@ -588,6 +648,12 @@ class _Leaderboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    if (error) {
+      return ErrorState(
+        message: l10n.segmentsPanelLeaderboardError,
+        onRetry: onRetry,
+      );
+    }
     if (entries == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),

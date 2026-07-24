@@ -3151,6 +3151,10 @@
       }
     }
   },
+  "routesImportSharedFailed": "Couldn't import that file — it isn't a valid GPX or KML route.",
+  "@routesImportSharedFailed": {
+    "description": "Banner shown when a GPX/KML file opened from another app (WhatsApp Open with / share) couldn't be imported as a route"
+  },
   "routesSaved": "Saved \"{name}\"",
   "@routesSaved": {
     "description": "Banner shown after a route built in the in-app builder is saved",
@@ -3351,6 +3355,10 @@
   "routeBuilderRouteFailedStraightLines": "Couldn't route — showing straight lines through your pins.",
   "@routeBuilderRouteFailedStraightLines": {
     "description": "Banner shown when every routing segment fell back to a straight line"
+  },
+  "routeBuilderSnapUnavailable": "Road snapping is unavailable — pins land where you tap, connected by straight lines.",
+  "@routeBuilderSnapUnavailable": {
+    "description": "One-time banner when this build can't snap to roads (OSRM not configured), so Trail/Road behave like Straight"
   },
   "routeBuilderSegmentsFailed": "{count, plural, one{{count} segment couldn't snap to a road. Drag the affected pin to adjust.} other{{count} segments couldn't snap to a road. Drag the affected pins to adjust.}}",
   "@routeBuilderSegmentsFailed": {
@@ -3645,6 +3653,35 @@
   "routeDetailShareAsKml": "Share as KML",
   "@routeDetailShareAsKml": {
     "description": "Share-menu option to share the route as a KML file"
+  },
+  "routeDetailShareLink": "Share link",
+  "@routeDetailShareLink": {
+    "description": "Share-menu option to share a link to the public route page (opens the OS share sheet)"
+  },
+  "routeDetailMadePublicForLink": "Made public so anyone with the link can view it",
+  "@routeDetailMadePublicForLink": {
+    "description": "Banner shown when tapping Share link auto-publishes a private route so its link resolves"
+  },
+  "routeDetailShareConfirmTitle": "Make this route public?",
+  "@routeDetailShareConfirmTitle": {
+    "description": "Title of the confirm dialog shown before Share flips a private route public"
+  },
+  "routeDetailShareConfirmBody": "Sharing a link makes this route public — anyone with the link can open it, and it can appear in Explore. You can switch it back to private anytime.",
+  "@routeDetailShareConfirmBody": {
+    "description": "Body of the confirm dialog shown before Share flips a private route public"
+  },
+  "routeDetailShareConfirmCta": "Make public & share",
+  "@routeDetailShareConfirmCta": {
+    "description": "Confirm button label on the make-route-public share dialog"
+  },
+  "routeDetailShareLinkFailed": "Couldn't share the link: {error}",
+  "@routeDetailShareLinkFailed": {
+    "description": "Banner shown when making the route public for a share link fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "routeDetailShareAsGpxMarkers": "Share as GPX + markers",
   "@routeDetailShareAsGpxMarkers": {
@@ -8811,9 +8848,45 @@
   "@prefsSplitIntervalDefaultSubtitle": {
     "description": "Subtitle shown when the split interval is at its default"
   },
-  "prefsLivePaceAlert": "Live pace alert",
+  "prefsSplitPaceMode": "Splits announce",
+  "@prefsSplitPaceMode": {
+    "description": "Tile title for choosing which pace the split cue reads"
+  },
+  "prefsSplitPaceModeSubtitle": "Which pace each split reads out",
+  "@prefsSplitPaceModeSubtitle": {
+    "description": "Subtitle for the splits-announce tile"
+  },
+  "prefsSplitPaceModeSplit": "Split pace",
+  "@prefsSplitPaceModeSplit": {
+    "description": "Splits-announce option: read the pace for that split only"
+  },
+  "prefsSplitPaceModeAverage": "Average pace",
+  "@prefsSplitPaceModeAverage": {
+    "description": "Splits-announce option: read the average pace over the whole run so far"
+  },
+  "prefsSplitPaceModeBoth": "Both",
+  "@prefsSplitPaceModeBoth": {
+    "description": "Splits-announce option: read both the split pace and the average"
+  },
+  "prefsSplitPaceModeInfo": "At each split, choose what pace you hear: the pace for just that split, your average pace for the whole run so far, or both. Handy for holding an even effort. Example: “1 kilometre. Average pace, 5 minutes 45 seconds per kilometre.”",
+  "@prefsSplitPaceModeInfo": {
+    "description": "Info popup body + example for the splits-announce setting"
+  },
+  "prefsTargetPace": "Target pace",
+  "@prefsTargetPace": {
+    "description": "Tile and dialog title for the target pace (the goal pace the Off-pace alerts cue watches)"
+  },
+  "prefsTargetPaceInfo": "The pace you’re aiming to hold. On its own it stays silent — turn on the “Off-pace alerts” voice cue to hear “speed up” or “slow down” when you drift more than 30 seconds from it. Example: “Speed up by 8 seconds.”",
+  "@prefsTargetPaceInfo": {
+    "description": "Info popup body + example for the target-pace setting"
+  },
+  "prefsCueInfoTooltip": "What is this?",
+  "@prefsCueInfoTooltip": {
+    "description": "Tooltip / accessibility label for the info button next to a cue"
+  },
+  "prefsLivePaceAlert": "Target pace",
   "@prefsLivePaceAlert": {
-    "description": "Tile and dialog title for the live pace alert"
+    "description": "Legacy key, now the Target pace tile/dialog title (was \"Live pace alert\")"
   },
   "prefsLivePaceAlertMin": "min",
   "@prefsLivePaceAlertMin": {
@@ -8823,11 +8896,11 @@
   "@prefsLivePaceAlertSec": {
     "description": "Seconds field label in the live-pace-alert dialog"
   },
-  "prefsLivePaceAlertOff": "Off — set a pace to get spoken alerts during a run",
+  "prefsLivePaceAlertOff": "Not set — set a target, then turn on Off-pace alerts",
   "@prefsLivePaceAlertOff": {
-    "description": "Live-pace-alert subtitle when no target pace is set"
+    "description": "Target-pace subtitle when no target pace is set"
   },
-  "prefsLivePaceAlertOn": "{pace} {paceLabel} — spoken alert during a run when 30s+ off",
+  "prefsLivePaceAlertOn": "{pace} {paceLabel} — Off-pace alerts speak when you drift 30s+",
   "@prefsLivePaceAlertOn": {
     "description": "Live-pace-alert subtitle showing the target pace",
     "placeholders": {
@@ -9119,7 +9192,7 @@
   "@prefsAudioCues": {
     "description": "Toggle title for spoken audio cues"
   },
-  "prefsAudioCuesSubtitle": "Spoken split announcements",
+  "prefsAudioCuesSubtitle": "Speak splits, pace and other cues while you run",
   "@prefsAudioCuesSubtitle": {
     "description": "Subtitle of the audio-cues toggle"
   },
@@ -10223,6 +10296,8 @@
     "description": "Loading state for the segments list"
   },
   "segmentsPanelEmpty": "No segments on this route yet.",
+  "segmentsPanelLoadError": "Couldn't load segments",
+  "segmentsPanelLeaderboardError": "Couldn't load the leaderboard",
   "@segmentsPanelEmpty": {
     "description": "Empty state when a route has no segments"
   },
@@ -10281,6 +10356,7 @@
     "description": "Validation error: end must be after start"
   },
   "segmentsPanelErrMinLength": "Segment must be at least 100 m",
+  "segmentsPanelErrNameRequired": "Enter a segment name",
   "@segmentsPanelErrMinLength": {
     "description": "Validation error: segment too short"
   },
@@ -11358,6 +11434,25 @@
       "tail": {
         "type": "String"
       }
+    }
+  },
+  "ttsSplitAverage": "{count} {unit}. Average {tail}",
+  "@ttsSplitAverage": {
+    "description": "Spoken split cue reading the cumulative average pace/speed instead of the split's own. tail is the pace/speed utterance.",
+    "placeholders": {
+      "count": { "type": "String" },
+      "unit": { "type": "String" },
+      "tail": { "type": "String" }
+    }
+  },
+  "ttsSplitBoth": "{count} {unit}. {tail}. Average {avgTail}",
+  "@ttsSplitBoth": {
+    "description": "Spoken split cue reading the split's own pace/speed then the cumulative average.",
+    "placeholders": {
+      "count": { "type": "String" },
+      "unit": { "type": "String" },
+      "tail": { "type": "String" },
+      "avgTail": { "type": "String" }
     }
   },
   "ttsStepWarmup": "Warmup",
@@ -14972,36 +15067,52 @@
   "@prefsVoiceCueTypesLabel": {"description": "Voice cues / race strategy"},
   "prefsCueSplits": "Splits",
   "@prefsCueSplits": {"description": "Voice cues / race strategy"},
-  "prefsCueSplitsSubtitle": "Distance and pace at each split",
+  "prefsCueSplitsSubtitle": "Your pace (or speed) each time you pass a split marker",
   "@prefsCueSplitsSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueSplitsInfo": "Speaks a short summary every time you complete a split (set the distance under Split interval). Use Splits announce to pick split pace, average pace, or both. Example: “1 kilometre. Pace, 5 minutes 30 seconds per kilometre.”",
+  "@prefsCueSplitsInfo": {"description": "Info popup body + example for the Splits cue"},
   "prefsCueStartFinish": "Start and finish",
   "@prefsCueStartFinish": {"description": "Voice cues / race strategy"},
-  "prefsCueStartFinishSubtitle": "Run started and run complete announcements",
+  "prefsCueStartFinishSubtitle": "“Run started” at the start, and a summary when you finish",
   "@prefsCueStartFinishSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueStartFinishInfo": "Confirms the run began and reads your distance and time when you stop. Example: “Run complete. 10.0 kilometres in 52 minutes.”",
+  "@prefsCueStartFinishInfo": {"description": "Info popup body + example for the start/finish cue"},
   "prefsCueOffRoute": "Off-route warning",
   "@prefsCueOffRoute": {"description": "Voice cues / race strategy"},
-  "prefsCueOffRouteSubtitle": "When you drift off the followed route",
+  "prefsCueOffRouteSubtitle": "A heads-up when you stray from a route you’re following",
   "@prefsCueOffRouteSubtitle": {"description": "Voice cues / race strategy"},
-  "prefsCuePaceAlerts": "Pace alerts",
+  "prefsCueOffRouteInfo": "Only works when you start a run with a saved route. Warns you once you drift away from it so you can get back on course. Example: “Off route.”",
+  "@prefsCueOffRouteInfo": {"description": "Info popup body + example for the off-route cue"},
+  "prefsCuePaceAlerts": "Off-pace alerts",
   "@prefsCuePaceAlerts": {"description": "Voice cues / race strategy"},
-  "prefsCuePaceAlertsSubtitle": "Speed up or slow down, with how much",
+  "prefsCuePaceAlertsSubtitle": "“Speed up” / “slow down” when you drift from your Target pace",
   "@prefsCuePaceAlertsSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCuePaceAlertsInfo": "Needs a Target pace set. When you drift more than about 30 seconds off it, this tells you which way to adjust and by how much. Example: “Speed up by 8 seconds.”",
+  "@prefsCuePaceAlertsInfo": {"description": "Info popup body + example for the off-pace alerts cue"},
   "prefsCueWorkoutSteps": "Workout steps",
   "@prefsCueWorkoutSteps": {"description": "Voice cues / race strategy"},
-  "prefsCueWorkoutStepsSubtitle": "Step changes in structured workouts",
+  "prefsCueWorkoutStepsSubtitle": "Calls each step of a structured workout as it begins",
   "@prefsCueWorkoutStepsSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueWorkoutStepsInfo": "Only active during a structured workout (a plan session or interval workout). Announces each step and its target so you can keep your eyes up. Example: “Rep 3 of 5. 400 metres at 4 minutes 30 seconds per kilometre.”",
+  "@prefsCueWorkoutStepsInfo": {"description": "Info popup body + example for the workout-steps cue"},
   "prefsCueCutoffCatchUp": "Cutoff catch-up",
   "@prefsCueCutoffCatchUp": {"description": "Voice cues / race strategy"},
-  "prefsCueCutoffCatchUpSubtitle": "Pace needed for the next cutoff when you're at risk",
+  "prefsCueCutoffCatchUpSubtitle": "The pace you need to make a cutoff you’re at risk of missing",
   "@prefsCueCutoffCatchUpSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueCutoffCatchUpInfo": "Only active on a route with course cutoffs. If one is at risk, it reads the distance to it and the pace that still makes it. Example: “2 kilometres to the cutoff. 6 minutes per kilometre.”",
+  "@prefsCueCutoffCatchUpInfo": {"description": "Info popup body + example for the cutoff catch-up cue"},
   "prefsCueMarkerTargets": "Course marker targets",
   "@prefsCueMarkerTargets": {"description": "Voice cues / race strategy"},
-  "prefsCueMarkerTargetsSubtitle": "Ahead or behind plan at each course marker",
+  "prefsCueMarkerTargetsSubtitle": "Whether you’re ahead of or behind plan at each course marker",
   "@prefsCueMarkerTargetsSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueMarkerTargetsInfo": "Only active on a route whose course markers carry target times. As you pass each one it tells you if you’re ahead or behind, and by how much. Example: “Aid 2: 45 seconds ahead of plan.”",
+  "@prefsCueMarkerTargetsInfo": {"description": "Info popup body + example for the marker-targets cue"},
   "prefsCuePhaseTransitions": "Race phases",
   "@prefsCuePhaseTransitions": {"description": "Voice cues / race strategy"},
-  "prefsCuePhaseTransitionsSubtitle": "When a pacing-strategy phase begins",
+  "prefsCuePhaseTransitionsSubtitle": "A cue when each phase of your race-strategy plan begins",
   "@prefsCuePhaseTransitionsSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCuePhaseTransitionsInfo": "Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”",
+  "@prefsCuePhaseTransitionsInfo": {"description": "Info popup body + example for the race-phases cue"},
   "runRaceStrategy": "Race strategy",
   "@runRaceStrategy": {"description": "Voice cues / race strategy"},
   "runStrategyNone": "No strategy",
@@ -15023,6 +15134,7 @@
   "runStrategyDistance": "Distance",
   "@runStrategyDistance": {"description": "Voice cues / race strategy"},
   "runStrategyNeedsDistance": "Choose a route or enter a distance to enable phases",
+  "runStrategyInvalidGoal": "Enter the goal time as h:mm:ss",
   "@runStrategyNeedsDistance": {"description": "Voice cues / race strategy"},
   "runPhaseChip": "Phase {index}/{total} — {intent}",
   "@runPhaseChip": {"description": "Voice cues / race strategy", "placeholders": {"index": {"type": "int"}, "total": {"type": "int"}, "intent": {"type": "String"}}},
@@ -15039,5 +15151,11 @@
   "routeMarkerTargetLabel": "Target time",
   "@routeMarkerTargetLabel": {"description": "Voice cues / race strategy"},
   "routeMarkerTargetInvalid": "Enter the target time as h:mm:ss",
-  "@routeMarkerTargetInvalid": {"description": "Course marker target-time validation"}
+  "@routeMarkerTargetInvalid": {"description": "Course marker target-time validation"},
+  "routeMarkerOfficialBadge": "Route owner",
+  "@routeMarkerOfficialBadge": {"description": "Badge on a course marker that belongs to the route owner (official), shown to a non-owner viewer"},
+  "routeMarkerDistanceAlongLabel": "Distance along route",
+  "@routeMarkerDistanceAlongLabel": {"description": "Editor field to place a course marker by distance along the route instead of lat/lng"},
+  "routeMarkerDistanceInvalid": "Enter a valid distance along the route.",
+  "@routeMarkerDistanceInvalid": {"description": "Validation when the distance-along-route value can't be parsed"}
 }

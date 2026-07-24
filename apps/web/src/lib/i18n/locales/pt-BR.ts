@@ -1,6 +1,9 @@
 import type { Messages } from '../messages';
 
 export const messages = {
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'Cancelar',
+	'common.confirm': 'Confirmar',
 	'nav.dashboard': 'Painel',
 	'nav.history': 'Histórico',
 	'nav.runs': 'Corridas',
@@ -712,6 +715,9 @@ export const messages = {
 	"routeDetail.starFailed": "Não foi possível favoritar a rota: {error}",
 	"routeDetail.unstarFailed": "Não foi possível desfavoritar a rota: {error}",
 	"routeDetail.madePublicForLink": "A rota agora é pública para que o link funcione.",
+	"routeDetail.shareConfirmTitle": "Tornar esta rota pública?",
+	"routeDetail.shareConfirmBody": "Compartilhar um link torna esta rota pública — qualquer pessoa com o link pode abri-la, e ela pode aparecer em Explorar. Você pode torná-la privada novamente quando quiser.",
+	"routeDetail.shareConfirmCta": "Tornar pública e compartilhar",
 	"routeDetail.makePublicFailed": "Não foi possível tornar pública: {error}",
 	"routeDetail.nowPublic": "A rota agora é pública.",
 	"routeDetail.nowPrivate": "A rota voltou a ser privada.",
@@ -742,6 +748,8 @@ export const messages = {
 	"routeDetail.reportReview": "Denunciar esta avaliação",
 	"routeDetail.copied": "Copiado!",
 	"routeDetail.copy": "Copiar",
+	"routeDetail.copyLinkFailed": "Não foi possível copiar o link",
+	"routeDetail.shareLinkLabel": "Link para compartilhar",
 	"routeDetail.previewHeading": "Prévia",
 	"routeDetail.elevationHeading": "Elevação",
 	"routeDetail.elevGain": "Subida",
@@ -2720,6 +2728,12 @@ export const messages = {
 	"routeMarker.deleteFailed": "Não foi possível excluir o marcador: {error}",
 	"routeMarker.deleteConfirmTitle": "Excluir marcador?",
 	"routeMarker.deleteConfirmMessage": "Isso remove o marcador do percurso permanentemente.",
+	"routeMarker.officialBadge": "Dono da rota",
+	"routeMarker.yoursBadge": "Seu",
+	"routeMarker.personalOverlayHint": "Os marcadores que você adiciona aqui são privados — o dono da rota não os verá.",
+	"routeMarker.distanceAlongLabel": "Distância ao longo da rota ({unit})",
+	"routeMarker.distanceAlongHint": "Ou posicione o marcador pela distância desde o início.",
+	"routeMarker.distanceAlongClamped": "Essa distância passa do fim da rota — ajustada para a chegada em {distance}.",
 	"routeMarker.kind.aid_station": "Posto de apoio",
 	"routeMarker.kind.cutoff": "Corte de tempo",
 	"routeMarker.kind.crew_access": "Equipe / estacionamento",

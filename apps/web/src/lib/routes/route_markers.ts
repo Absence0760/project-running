@@ -50,6 +50,22 @@ export const ROUTE_MARKER_KINDS: RouteMarkerKindSpec[] = [
 	{ kind: 'custom', labelKey: 'routeMarker.kind.custom', color: '#6b7280', hasServices: false, hasCutoff: false }
 ];
 
+/**
+ * A marker is OFFICIAL when it was dropped by the route owner
+ * (`marker.user_id === route.user_id`) — authoritative course furniture
+ * every viewer who can see the route sees. Any other marker is a
+ * viewer's PERSONAL overlay, private to its author. Per the RLS contract
+ * (update/delete are own-markers-only), an official marker is read-only
+ * to everyone but the owner, so the render layer badges it as the route
+ * owner's and hides edit/delete on it from a non-author.
+ */
+export function isOfficialMarker(
+	marker: { user_id: string },
+	routeOwnerId: string | null | undefined
+): boolean {
+	return routeOwnerId != null && marker.user_id === routeOwnerId;
+}
+
 const KIND_BY_KEY = new Map<RouteMarkerKind, RouteMarkerKindSpec>(
 	ROUTE_MARKER_KINDS.map((k) => [k.kind, k])
 );

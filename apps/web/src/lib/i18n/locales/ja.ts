@@ -1,6 +1,9 @@
 import type { Messages } from '../messages';
 
 export const messages = {
+	// Common / shared UI (confirm dialogs, etc.)
+	'common.cancel': 'キャンセル',
+	'common.confirm': '確認',
 	'nav.dashboard': 'ダッシュボード',
 	'nav.history': '履歴',
 	'nav.runs': 'ラン',
@@ -708,6 +711,9 @@ export const messages = {
 	"routeDetail.starFailed": "ルートをお気に入りに追加できませんでした: {error}",
 	"routeDetail.unstarFailed": "ルートのお気に入りを解除できませんでした: {error}",
 	"routeDetail.madePublicForLink": "リンクが機能するようにルートを公開しました。",
+	"routeDetail.shareConfirmTitle": "このルートを公開しますか？",
+	"routeDetail.shareConfirmBody": "リンクを共有するとこのルートが公開され、リンクを知っている人は誰でも開くことができ、「探索」に表示される場合があります。いつでも非公開に戻せます。",
+	"routeDetail.shareConfirmCta": "公開して共有",
 	"routeDetail.makePublicFailed": "公開できませんでした: {error}",
 	"routeDetail.nowPublic": "ルートを公開しました。",
 	"routeDetail.nowPrivate": "ルートを再び非公開にしました。",
@@ -738,6 +744,8 @@ export const messages = {
 	"routeDetail.reportReview": "このレビューを報告",
 	"routeDetail.copied": "コピーしました!",
 	"routeDetail.copy": "コピー",
+	"routeDetail.copyLinkFailed": "リンクをコピーできませんでした",
+	"routeDetail.shareLinkLabel": "共有リンク",
 	"routeDetail.previewHeading": "プレビュー",
 	"routeDetail.elevationHeading": "標高",
 	"routeDetail.elevGain": "登り",
@@ -2716,6 +2724,12 @@ export const messages = {
 	"routeMarker.deleteFailed": "マーカーを削除できませんでした: {error}",
 	"routeMarker.deleteConfirmTitle": "マーカーを削除しますか？",
 	"routeMarker.deleteConfirmMessage": "マーカーはルートから完全に削除されます。",
+	"routeMarker.officialBadge": "ルート所有者",
+	"routeMarker.yoursBadge": "自分",
+	"routeMarker.personalOverlayHint": "ここで追加したマーカーはあなただけに表示され、ルート所有者には見えません。",
+	"routeMarker.distanceAlongLabel": "ルート上の距離（{unit}）",
+	"routeMarker.distanceAlongHint": "またはスタートからの距離でマーカーを配置します。",
+	"routeMarker.distanceAlongClamped": "その距離はルートの終点を超えています。フィニッシュ（{distance}）に合わせました。",
 	"routeMarker.kind.aid_station": "エイドステーション",
 	"routeMarker.kind.cutoff": "関門",
 	"routeMarker.kind.crew_access": "クルー / 駐車",

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration } from '$lib/format/time';
 	import {
 		fetchSegmentsForRouteWithError,
-		fetchSegmentLeaderboardTiered,
+		fetchSegmentLeaderboardTieredWithError,
 		createSegment,
 		deleteSegment,
 		SEGMENT_AGE_BANDS,
@@ -23,18 +23,37 @@
 	interface Props {
 		routeId: string;
 		routeDistanceM: number;
+		/// Whether the viewer may CREATE a segment. Segments are Strava-style
+		/// community contributions, so any signed-in viewer can add one to a
+		/// route they can see; the RLS pins created_by = the caller.
 		canCreate: boolean;
+		/// Whether the viewer OWNS the route. Only the owner may delete
+		/// segments they didn't author (moderation); everyone else can delete
+		/// only their own. Distinct from canCreate so a non-owner viewer
+		/// doesn't see a delete button on the owner's segments that the
+		/// backend would reject.
+		isOwner?: boolean;
 		/// The route's owning club, if any. When set, a "Club only" leaderboard
 		/// toggle is offered that filters efforts to that club (persona #50).
 		clubId?: string | null;
 	}
-	let { routeId, routeDistanceM, canCreate, clubId = null }: Props = $props();
+	let {
+		routeId,
+		routeDistanceM,
+		canCreate,
+		isOwner = false,
+		clubId = null
+	}: Props = $props();
 	let clubOnly = $state(false);
 
 	let segments = $state<Segment[]>([]);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let leaderboards = $state<Map<string, SegmentLeaderboardEntry[]>>(new Map());
+	// Per-segment leaderboard load error. Without this a failed leaderboard
+	// fetch swallowed to [] and read as "No efforts yet" — a runner offline or
+	// hitting an RPC error was told the board was empty, with no retry.
+	let leaderboardErrors = $state<Map<string, string | null>>(new Map());
 	let openSegmentId = $state<string | null>(null);
 	// v2: tier filter (gender + age band). Applies to whichever
 	// segment's leaderboard is currently expanded. Cleared whenever
@@ -96,12 +115,29 @@
 	}
 
 	async function refreshLeaderboard(segmentId: string) {
-		const entries = await fetchSegmentLeaderboardTiered(segmentId, {
-			gender: genderFilter,
-			ageBand: ageFilter,
-			clubId: clubOnly ? clubId : null,
-		});
-		leaderboards = new Map(leaderboards).set(segmentId, entries);
+		// Reset to the loading state (drop the key) and clear any prior error
+		// so a retry doesn't flash the stale board or a stale error.
+		const pending = new Map(leaderboards);
+		pending.delete(segmentId);
+		leaderboards = pending;
+		leaderboardErrors = new Map(leaderboardErrors).set(segmentId, null);
+		try {
+			const res = await fetchSegmentLeaderboardTieredWithError(segmentId, {
+				gender: genderFilter,
+				ageBand: ageFilter,
+				clubId: clubOnly ? clubId : null,
+			});
+			leaderboards = new Map(leaderboards).set(segmentId, res.error ? [] : res.entries);
+			leaderboardErrors = new Map(leaderboardErrors).set(segmentId, res.error);
+		} catch (e) {
+			// A thrown rejection would otherwise leave the board stuck on the
+			// loading spinner forever — surface it as the retryable error state.
+			leaderboards = new Map(leaderboards).set(segmentId, []);
+			leaderboardErrors = new Map(leaderboardErrors).set(
+				segmentId,
+				e instanceof Error ? e.message : String(e),
+			);
+		}
 	}
 
 	$effect(() => {
@@ -115,7 +151,12 @@
 		void _g;
 		void _a;
 		void _c;
-		if (segId) refreshLeaderboard(segId);
+		// refreshLeaderboard reads AND writes leaderboards/leaderboardErrors
+		// synchronously (the "reset to loading" prologue). Without untrack those
+		// reads make this effect depend on the maps it writes, so it re-triggers
+		// itself and the board never settles — it renders empty. The four signals
+		// read above are the only real triggers for a refetch.
+		if (segId) untrack(() => refreshLeaderboard(segId));
 	});
 
 	async function submitCreate() {
@@ -305,7 +346,21 @@
 									</button>
 								{/if}
 							</div>
-							{#if leaderboards.get(seg.id) == null}
+							{#if leaderboardErrors.get(seg.id)}
+								<div class="error-banner" role="alert">
+									<span class="material-symbols" aria-hidden="true">error</span>
+									<div>
+										<strong>{t('routesPage.loadError')}</strong>
+										<span class="error-detail">{leaderboardErrors.get(seg.id)}</span>
+									</div>
+									<button
+										class="btn btn-outline btn-sm"
+										onclick={() => refreshLeaderboard(seg.id)}
+									>
+										{t('routesPage.retry')}
+									</button>
+								</div>
+							{:else if leaderboards.get(seg.id) == null}
 								<p class="muted small">{t('segments.loading')}</p>
 							{:else if (leaderboards.get(seg.id) ?? []).length === 0}
 								<p class="muted small">
@@ -356,7 +411,7 @@
 									{/each}
 								</ol>
 							{/if}
-							{#if auth.user?.id === seg.author_id || canCreate}
+							{#if auth.user?.id === seg.author_id || isOwner}
 								<button
 									class="link-btn danger"
 									type="button"
