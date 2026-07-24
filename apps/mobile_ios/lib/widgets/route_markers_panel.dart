@@ -320,7 +320,12 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       }
     } else if (spec.hasCutoff) {
       final cutoff = parseCutoff(meta);
-      if (cutoff?.clock != null) {
+      // Either form is authorable, so show whichever is set — the elapsed one
+      // wins, matching the roadbook's own preference.
+      if (cutoff?.elapsedS != null) {
+        parts.add(
+            l10n.routeMarkerCutoffAt(formatMarkerElapsed(cutoff!.elapsedS!)));
+      } else if (cutoff?.clock != null) {
         parts.add(l10n.routeMarkerCutoffAt(cutoff!.clock!));
       }
     } else if (meta is Map && meta['note'] is String) {
@@ -330,6 +335,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     if (target?.elapsedS != null) {
       parts.add(
           l10n.routeMarkerTargetChip(formatMarkerElapsed(target!.elapsedS!)));
+    } else if (target?.clock != null) {
+      parts.add(l10n.routeMarkerTargetChip(target!.clock!));
     }
     return parts.join(' · ');
   }
@@ -701,6 +708,38 @@ class _MaskedTimeFormatter extends TextInputFormatter {
   }
 }
 
+/// Clock-vs-elapsed selector for a marker time field. Both `meta` time
+/// concepts accept either form, so one field plus this beats four fields.
+class _TimeModeToggle extends StatelessWidget {
+  final bool elapsed;
+  final String clockLabel;
+  final String elapsedLabel;
+  final ValueChanged<bool> onChanged;
+  const _TimeModeToggle({
+    required this.elapsed,
+    required this.clockLabel,
+    required this.elapsedLabel,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        segments: [
+          ButtonSegment(value: false, label: Text(clockLabel)),
+          ButtonSegment(value: true, label: Text(elapsedLabel)),
+        ],
+        selected: {elapsed},
+        onSelectionChanged: (sel) => onChanged(sel.first),
+      ),
+    );
+  }
+}
+
 class _MarkerDraft {
   final String kind;
   final String label;
@@ -736,6 +775,13 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
   late TextEditingController _lng;
   late TextEditingController _distanceAlong;
   Set<String> _services = {};
+  // Each of the two time concepts stores EITHER a wall clock or an
+  // elapsed-from-start value — `parseCutoff` / `parseTarget` read both, and
+  // the roadbook prefers the elapsed form. One field per concept with a mode
+  // toggle beats four fields, and writing only the selected form keeps the
+  // two alternatives from disagreeing.
+  bool _cutoffElapsed = false;
+  bool _targetClock = false;
 
   /// The distance-along-route input needs a line with real geometry.
   bool get _canPlaceByDistance => widget.routeLine.length >= 2;
@@ -755,12 +801,21 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
           ((e.meta as Map)['services'] as List).whereType<String>().toSet();
     }
     final cutoff = parseCutoff(e?.meta);
-    _cutoff = TextEditingController(text: cutoff?.clock ?? '');
+    // An existing elapsed value selects that mode, so opening a marker shows
+    // the form it was actually saved in.
+    _cutoffElapsed = cutoff?.elapsedS != null;
+    _cutoff = TextEditingController(
+        text: _cutoffElapsed
+            ? formatMarkerElapsed(cutoff!.elapsedS!)
+            : (cutoff?.clock ?? ''));
     final target = parseTarget(e?.meta);
+    _targetClock = target?.elapsedS == null && target?.clock != null;
     _target = TextEditingController(
-        text: target?.elapsedS == null
-            ? ''
-            : formatMarkerElapsed(target!.elapsedS!));
+        text: _targetClock
+            ? target!.clock!
+            : (target?.elapsedS == null
+                ? ''
+                : formatMarkerElapsed(target!.elapsedS!)));
     final lat = widget.lat ?? e?.lat;
     final lng = widget.lng ?? e?.lng;
     _lat = TextEditingController(
@@ -863,14 +918,25 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       meta.remove('services');
     }
     if (spec.hasCutoff) {
-      final clock = _cutoff.text.trim();
-      if (clock.isEmpty) {
-        meta.remove('cutoff_clock');
-      } else if (!isValidMarkerClock(clock)) {
+      final raw = _cutoff.text.trim();
+      // The two forms are alternatives, so the unselected one is cleared —
+      // leaving both would let them disagree, and the roadbook silently
+      // prefers the elapsed one.
+      meta.remove(_cutoffElapsed ? 'cutoff_clock' : 'cutoff_elapsed_s');
+      if (raw.isEmpty) {
+        meta.remove(_cutoffElapsed ? 'cutoff_elapsed_s' : 'cutoff_clock');
+      } else if (_cutoffElapsed) {
+        final s = parseMarkerElapsed(raw, positionM: positionM);
+        if (s == null) {
+          showTopBanner(context, l10n.routeMarkerTargetInvalid);
+          return;
+        }
+        meta['cutoff_elapsed_s'] = s;
+      } else if (!isValidMarkerClock(raw)) {
         showTopBanner(context, l10n.routeMarkerCutoffInvalid);
         return;
       } else {
-        meta['cutoff_clock'] = clock;
+        meta['cutoff_clock'] = raw;
       }
     } else {
       // Not a cutoff kind any more — the whole cutoff concept goes, including
@@ -878,17 +944,23 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       meta.remove('cutoff_clock');
       meta.remove('cutoff_elapsed_s');
     }
-    if (_target.text.trim().isNotEmpty) {
-      final targetS = parseMarkerElapsed(_target.text, positionM: positionM);
+    final targetRaw = _target.text.trim();
+    meta.remove(_targetClock ? 'target_elapsed_s' : 'target_clock');
+    if (targetRaw.isEmpty) {
+      meta.remove(_targetClock ? 'target_clock' : 'target_elapsed_s');
+    } else if (_targetClock) {
+      if (!isValidMarkerClock(targetRaw)) {
+        showTopBanner(context, l10n.routeMarkerCutoffInvalid);
+        return;
+      }
+      meta['target_clock'] = targetRaw;
+    } else {
+      final targetS = parseMarkerElapsed(targetRaw, positionM: positionM);
       if (targetS == null) {
         showTopBanner(context, l10n.routeMarkerTargetInvalid);
         return;
       }
       meta['target_elapsed_s'] = targetS;
-    } else {
-      // Only the elapsed form is editable here; a `target_clock` written
-      // elsewhere is left alone rather than destroyed by an unrelated edit.
-      meta.remove('target_elapsed_s');
     }
     if ((_kind == 'note' || _kind == 'hazard') && _note.text.trim().isNotEmpty) {
       meta['note'] = _note.text.trim();
@@ -999,25 +1071,55 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
             ],
             if (spec.hasCutoff) ...[
               const SizedBox(height: 12),
+              _TimeModeToggle(
+                elapsed: _cutoffElapsed,
+                clockLabel: l10n.routeMarkerTimeClock,
+                elapsedLabel: l10n.routeMarkerTimeElapsed,
+                onChanged: (v) => setState(() {
+                  _cutoffElapsed = v;
+                  // The masks are different shapes; carrying the old digits
+                  // across would reinterpret them as a different time.
+                  _cutoff.clear();
+                }),
+              ),
               TextField(
                 controller: _cutoff,
                 keyboardType: TextInputType.number,
-                inputFormatters: [_MaskedTimeFormatter(formatClockDigits)],
+                inputFormatters: [
+                  _MaskedTimeFormatter(_cutoffElapsed
+                      ? formatElapsedDigits
+                      : formatClockDigits)
+                ],
                 decoration: InputDecoration(
                   labelText: l10n.routeMarkerCutoffLabel,
-                  hintText: 'HH:MM',
+                  hintText: _cutoffElapsed ? 'h:mm:ss' : 'HH:MM',
+                  helperText:
+                      _cutoffElapsed ? l10n.routeMarkerTargetHelper : null,
                 ),
               ),
             ],
             const SizedBox(height: 12),
+            _TimeModeToggle(
+              elapsed: !_targetClock,
+              clockLabel: l10n.routeMarkerTimeClock,
+              elapsedLabel: l10n.routeMarkerTimeElapsed,
+              onChanged: (v) => setState(() {
+                _targetClock = !v;
+                _target.clear();
+              }),
+            ),
             TextField(
               controller: _target,
               keyboardType: TextInputType.number,
-              inputFormatters: [_MaskedTimeFormatter(formatElapsedDigits)],
+              inputFormatters: [
+                _MaskedTimeFormatter(
+                    _targetClock ? formatClockDigits : formatElapsedDigits)
+              ],
               decoration: InputDecoration(
                 labelText: l10n.routeMarkerTargetLabel,
-                hintText: 'h:mm:ss',
-                helperText: l10n.routeMarkerTargetHelper,
+                hintText: _targetClock ? 'HH:MM' : 'h:mm:ss',
+                helperText:
+                    _targetClock ? null : l10n.routeMarkerTargetHelper,
               ),
             ),
             if (_kind == 'note' || _kind == 'hazard') ...[

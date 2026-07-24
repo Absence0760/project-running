@@ -9961,6 +9961,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeMarkerCutoffInvalid => '関門時刻は HH:MM（24時間制）で入力してください';
 
   @override
+  String get routeMarkerTimeClock => '時刻';
+
+  @override
+  String get routeMarkerTimeElapsed => '経過';
+
+  @override
   String get routeMarkerNoteLabel => 'メモ';
 
   @override

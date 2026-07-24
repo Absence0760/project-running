@@ -2709,6 +2709,8 @@ export const messages = {
 	"routeMarker.namePlaceholder": "z. B. Verpflegung 2",
 	"routeMarker.servicesLabel": "Leistungen",
 	"routeMarker.cutoffLabel": "Cut-off-Zeit",
+	"routeMarker.timeClock": "Uhrzeit",
+	"routeMarker.timeElapsed": "Verstrichen",
 	"routeMarker.noteLabel": "Notiz",
 	"routeMarker.clickToPlace": "Klicke auf die Karte, um diesen Marker zu platzieren.",
 	"routeMarker.placed": "Platziert. Ziehe den Pin zum Feinjustieren oder klicke auf die Karte, um ihn zu verschieben.",

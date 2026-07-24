@@ -17424,6 +17424,18 @@ abstract class AppLocalizations {
   /// **'Enter the cut-off as HH:MM (24-hour)'**
   String get routeMarkerCutoffInvalid;
 
+  /// Toggle: the marker time is a wall-clock time of day
+  ///
+  /// In en, this message translates to:
+  /// **'Clock'**
+  String get routeMarkerTimeClock;
+
+  /// Toggle: the marker time is measured from the race start
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed'**
+  String get routeMarkerTimeElapsed;
+
   /// Note field label
   ///
   /// In en, this message translates to:

@@ -2978,6 +2978,8 @@
   "routeMarkerServicesLabel": "Servicios",
   "routeMarkerCutoffLabel": "Hora de corte",
   "routeMarkerCutoffInvalid": "Introduce el corte como HH:MM (24 horas)",
+  "routeMarkerTimeClock": "Reloj",
+  "routeMarkerTimeElapsed": "Transcurrido",
   "routeMarkerNoteLabel": "Nota",
   "routeMarkerTapToPlace": "Toca el mapa para colocar este marcador.",
   "routeMarkerSnapToggle": "Ajustar a la línea de la ruta",

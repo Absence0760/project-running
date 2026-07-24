@@ -2709,6 +2709,8 @@ export const messages = {
 	"routeMarker.namePlaceholder": "ex. Ravito 2",
 	"routeMarker.servicesLabel": "Services",
 	"routeMarker.cutoffLabel": "Barrière horaire",
+	"routeMarker.timeClock": "Horloge",
+	"routeMarker.timeElapsed": "Écoulé",
 	"routeMarker.noteLabel": "Note",
 	"routeMarker.clickToPlace": "Cliquez sur la carte pour placer ce repère.",
 	"routeMarker.placed": "Placé. Faites glisser le repère pour l’ajuster, ou cliquez sur la carte pour le déplacer.",

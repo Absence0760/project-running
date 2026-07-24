@@ -2978,6 +2978,8 @@
   "routeMarkerServicesLabel": "Services",
   "routeMarkerCutoffLabel": "Barrière horaire",
   "routeMarkerCutoffInvalid": "Saisis la barrière horaire au format HH:MM (24 h)",
+  "routeMarkerTimeClock": "Horloge",
+  "routeMarkerTimeElapsed": "Écoulé",
   "routeMarkerNoteLabel": "Note",
   "routeMarkerTapToPlace": "Touchez la carte pour placer ce repère.",
   "routeMarkerSnapToggle": "Aligner sur le tracé de l'itinéraire",

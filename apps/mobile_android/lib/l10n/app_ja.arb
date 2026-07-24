@@ -2978,6 +2978,8 @@
   "routeMarkerServicesLabel": "サービス",
   "routeMarkerCutoffLabel": "関門時刻",
   "routeMarkerCutoffInvalid": "関門時刻は HH:MM（24時間制）で入力してください",
+  "routeMarkerTimeClock": "時刻",
+  "routeMarkerTimeElapsed": "経過",
   "routeMarkerNoteLabel": "メモ",
   "routeMarkerTapToPlace": "地図をタップしてマーカーを配置します。",
   "routeMarkerSnapToggle": "ルートの線に沿わせる",

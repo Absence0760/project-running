@@ -10465,6 +10465,12 @@ class AppLocalizationsPt extends AppLocalizations {
       'Introduz o corte como HH:MM (24 horas)';
 
   @override
+  String get routeMarkerTimeClock => 'Relógio';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Decorrido';
+
+  @override
   String get routeMarkerNoteLabel => 'Nota';
 
   @override
@@ -22259,6 +22265,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeMarkerCutoffInvalid =>
       'Informe o horário de corte como HH:MM (24 horas)';
+
+  @override
+  String get routeMarkerTimeClock => 'Relógio';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Decorrido';
 
   @override
   String get routeMarkerNoteLabel => 'Nota';

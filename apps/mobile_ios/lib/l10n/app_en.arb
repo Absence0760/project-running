@@ -13607,6 +13607,14 @@
     "description": "Cutoff time field label"
   },
   "routeMarkerCutoffInvalid": "Enter the cut-off as HH:MM (24-hour)",
+  "routeMarkerTimeClock": "Clock",
+  "@routeMarkerTimeClock": {
+    "description": "Toggle: the marker time is a wall-clock time of day"
+  },
+  "routeMarkerTimeElapsed": "Elapsed",
+  "@routeMarkerTimeElapsed": {
+    "description": "Toggle: the marker time is measured from the race start"
+  },
   "@routeMarkerCutoffInvalid": {
     "description": "Course marker cut-off time validation"
   },

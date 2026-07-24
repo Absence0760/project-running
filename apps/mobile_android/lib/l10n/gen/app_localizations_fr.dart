@@ -10496,6 +10496,12 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisis la barrière horaire au format HH:MM (24 h)';
 
   @override
+  String get routeMarkerTimeClock => 'Horloge';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Écoulé';
+
+  @override
   String get routeMarkerNoteLabel => 'Note';
 
   @override

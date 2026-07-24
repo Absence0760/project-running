@@ -798,7 +798,6 @@ void main() {
           positionM: 300,
           meta: {
             'cutoff_clock': '14:30',
-            'cutoff_elapsed_s': 7200,
             'target_clock': '13:45',
             'future_key': 'keep me',
           },
@@ -816,10 +815,44 @@ void main() {
     expect(api.updateCalls, 1);
     final meta = api.updatedMeta!;
     expect(meta['cutoff_clock'], '14:30');
-    expect(meta['cutoff_elapsed_s'], 7200,
-        reason: 'the elapsed cut-off has no input and must survive');
     expect(meta['target_clock'], '13:45');
-    expect(meta['future_key'], 'keep me');
+    expect(meta['future_key'], 'keep me',
+        reason: 'a key no version of the sheet knows about must survive');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a marker carrying BOTH cut-off forms normalises to one',
+      (tester) async {
+    // The two forms are alternatives and the roadbook silently prefers the
+    // elapsed one, so a marker holding both is already contradictory. The
+    // sheet opens in the mode that is actually in force and saves just that
+    // form — no reader loses a value it was honouring.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {'cutoff_clock': '14:30', 'cutoff_elapsed_s': 7200},
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final meta = api.updatedMeta!;
+    expect(meta['cutoff_elapsed_s'], 7200);
+    expect(meta.containsKey('cutoff_clock'), isFalse);
 
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
@@ -866,6 +899,94 @@ void main() {
 
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('a cut-off can be entered as elapsed, not only as a clock',
+      (tester) async {
+    // cutoff_elapsed_s and target_clock are in the meta registry but neither
+    // editor could author them, so an ultra whose cut-offs are "22 hours in"
+    // could not be described at all.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [_marker(id: 'm1', kind: 'cutoff', label: 'Gate')],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // Cut-off → Elapsed, then 22:00:00.
+    await tester.tap(find.text('Elapsed').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '220000');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['cutoff_elapsed_s'], 22 * 3600);
+    expect(api.updatedMeta!.containsKey('cutoff_clock'), isFalse,
+        reason: 'the two forms are alternatives — only the chosen one is kept');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a target can be entered as a wall clock', (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [_marker(id: 'm1', kind: 'aid_station', label: 'Aid 1')],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // The target toggle is the second one on an aid station (no cut-off row).
+    await tester.tap(find.text('Clock').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target time'), '1430');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['target_clock'], '14:30');
+    expect(api.updatedMeta!.containsKey('target_elapsed_s'), isFalse);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the schedule shows whichever time form was saved',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {'cutoff_elapsed_s': 22 * 3600},
+        ),
+        _marker(
+          id: 'm2',
+          kind: 'aid_station',
+          label: 'Aid 1',
+          positionM: 500,
+          meta: {'target_clock': '14:30'},
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.textContaining('Cut-off 22:00:00'), findsOneWidget);
+    expect(find.textContaining('14:30'), findsOneWidget);
   });
 
   group('parseDistanceAlong', () {

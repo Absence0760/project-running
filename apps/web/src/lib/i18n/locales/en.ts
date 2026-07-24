@@ -2717,6 +2717,8 @@ export const en = {
 	"routeMarker.namePlaceholder": "e.g. Aid 2",
 	"routeMarker.servicesLabel": "Services",
 	"routeMarker.cutoffLabel": "Cut-off time",
+	"routeMarker.timeClock": "Clock",
+	"routeMarker.timeElapsed": "Elapsed",
 	"routeMarker.noteLabel": "Note",
 	"routeMarker.clickToPlace": "Click the map to place this marker.",
 	"routeMarker.placed": "Placed. Drag the pin to fine-tune, or click the map to move it.",

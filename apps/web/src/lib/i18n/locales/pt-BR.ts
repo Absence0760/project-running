@@ -2708,6 +2708,8 @@ export const messages = {
 	"routeMarker.namePlaceholder": "ex.: Apoio 2",
 	"routeMarker.servicesLabel": "Serviços",
 	"routeMarker.cutoffLabel": "Horário de corte",
+	"routeMarker.timeClock": "Relógio",
+	"routeMarker.timeElapsed": "Decorrido",
 	"routeMarker.noteLabel": "Nota",
 	"routeMarker.clickToPlace": "Clique no mapa para posicionar este marcador.",
 	"routeMarker.placed": "Posicionado. Arraste o pino para ajustar, ou clique no mapa para movê-lo.",

@@ -2704,6 +2704,8 @@ export const messages = {
 	"routeMarker.namePlaceholder": "例: エイド2",
 	"routeMarker.servicesLabel": "サービス",
 	"routeMarker.cutoffLabel": "関門時刻",
+	"routeMarker.timeClock": "時刻",
+	"routeMarker.timeElapsed": "経過",
 	"routeMarker.noteLabel": "メモ",
 	"routeMarker.clickToPlace": "地図をクリックしてマーカーを配置します。",
 	"routeMarker.placed": "配置しました。ピンをドラッグして微調整するか、地図をクリックして移動できます。",

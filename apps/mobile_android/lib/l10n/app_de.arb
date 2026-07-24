@@ -2978,6 +2978,8 @@
   "routeMarkerServicesLabel": "Leistungen",
   "routeMarkerCutoffLabel": "Cut-off-Zeit",
   "routeMarkerCutoffInvalid": "Cut-off als HH:MM (24 Stunden) eingeben",
+  "routeMarkerTimeClock": "Uhrzeit",
+  "routeMarkerTimeElapsed": "Verstrichen",
   "routeMarkerNoteLabel": "Notiz",
   "routeMarkerTapToPlace": "Tippe auf die Karte, um diesen Marker zu platzieren.",
   "routeMarkerSnapToggle": "Auf die Routenlinie einrasten",
