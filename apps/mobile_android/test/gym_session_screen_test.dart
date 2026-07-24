@@ -44,6 +44,20 @@ StoredRoutine _routine({String title = 'Bench routine'}) => StoredRoutine(
       syncState: RoutineSyncState.synced,
     );
 
+/// A single timed hold (plank) — the modality that used to log its target as
+/// though it were the measured actual.
+StoredRoutine _timedRoutine() => StoredRoutine(
+      row: {'id': 'routine-2', 'title': 'Core', 'exercise_count': 1},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Plank',
+          exerciseKey: 'plank',
+          sets: [StoredRoutineSet(targetDurationS: 60, targetRpe: 8, restS: 0)],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
 Future<({LocalGymStore store, Directory dir})> _gymStore(
     WidgetTester tester) async {
   late LocalGymStore store;
@@ -86,6 +100,73 @@ void main() {
     expect(find.widgetWithText(TextField, 'RPE'), findsOneWidget);
     // The band's Complete-set control on the active step.
     expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+  });
+
+  testWidgets('a timed set logs what was entered, not the target',
+      (tester) async {
+    // Regression: _entered() returned `durationS: step.targetDurationS`, so
+    // every timed set persisted an actual duration exactly equal to plan —
+    // fabricated data that also made the duration axis of adherence
+    // unconditionally green. There was no way to enter a real one.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _timedRoutine()));
+    await tester.pump();
+
+    final field = find.widgetWithText(TextField, 'Time (s)');
+    expect(field, findsOneWidget,
+        reason: 'a timed step needs a way to record the real duration');
+    // Nothing typed yet → nothing to log, not a silent full-credit hit.
+    expect(tester.widget<TextField>(field).controller!.text, '');
+
+    await tester.enterText(field, '45');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    // Finish writes the file; let the (api == null) save path settle.
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final sets = g.store.workouts.single.sets;
+    expect(sets.length, 1);
+    expect(sets.single['duration_s'], 45,
+        reason: 'the logged duration must be the 45 s entered, not the 60 s '
+            'target');
+  });
+
+  testWidgets('a whole-number target RPE prefills as "8", not "8.0"',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _timedRoutine()));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'RPE'))
+          .controller!
+          .text,
+      '8',
+      reason: 'the routine composer already formats RPE this way; the same '
+          'routine must not read 8.0 here and 8 there',
+    );
+  });
+
+  testWidgets('an untimed set shows no duration field', (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _routine()));
+    await tester.pump();
+
+    expect(find.widgetWithText(TextField, 'Time (s)'), findsNothing);
   });
 
   testWidgets('Complete on the last step finishes the session', (tester) async {

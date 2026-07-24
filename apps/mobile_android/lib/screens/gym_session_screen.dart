@@ -58,6 +58,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   final _reps = TextEditingController();
   final _weight = TextEditingController();
   final _rpe = TextEditingController();
+  final _duration = TextEditingController();
 
   Timer? _restTimer;
   Timer? _saveTimer;
@@ -105,6 +106,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     _reps.dispose();
     _weight.dispose();
     _rpe.dispose();
+    _duration.dispose();
     try {
       WakelockPlus.disable();
     } catch (e) {
@@ -277,11 +279,14 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     _weight.text = step?.targetWeightKg == null
         ? ''
         : WeightFormat.value(step!.targetWeightKg!, activeWeightUnit);
-    _rpe.text = step?.targetRpe?.toString() ?? '';
+    _rpe.text = rpeInputString(step?.targetRpe);
+    // Deliberately NOT seeded from the target: what gets logged has to be
+    // what the athlete actually did, and a pre-filled target would be
+    // indistinguishable from a recorded one.
+    _duration.text = '';
   }
 
   ({int? reps, double? weightKg, double? rpe, int? durationS}) _entered() {
-    final step = _runner.currentStep;
     final reps = int.tryParse(_reps.text.trim());
     final weightKg = WeightFormat.parseToKg(_weight.text, activeWeightUnit);
     final rpe = double.tryParse(_rpe.text.trim().replaceAll(',', '.'));
@@ -289,7 +294,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
       reps: reps,
       weightKg: weightKg,
       rpe: rpe,
-      durationS: step?.targetDurationS,
+      durationS: int.tryParse(_duration.text.trim()),
     );
   }
 
@@ -568,6 +573,10 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(child: _field(_rpe, l10n.gymRpe, true)),
+            if (_runner.currentStep?.targetDurationS != null) ...[
+              const SizedBox(width: 12),
+              Expanded(child: _field(_duration, l10n.gymDuration, false)),
+            ],
           ],
         ),
       ],

@@ -367,6 +367,18 @@ The shipped engine collapses this to the flat single-session shape above: a 6-va
 
 The `GymWorkoutRunner` is the direct mirror of `WorkoutRunner`: a state machine that sits **on top of** the gym logging session (not inside it), consumes `expandRoutineSteps`, drives a set-by-set band, and persists prescribed-vs-actual.
 
+**An unmeasured axis logs null, never the target.** The mobile session screen
+originally had reps / load / RPE inputs only and reported a timed set's actual
+duration as `step.targetDurationS` — so every timed set persisted a
+`gym_sets.duration_s` exactly equal to plan, and the duration axis of
+`computeRoutineAdherence` graded green regardless of what happened. Timed
+steps now carry their own duration input (empty by default, matching web's
+`GymExecutionBand`), so an unrecorded hold logs null and is graded as such.
+Any future modality must add its input alongside the axis, not fall back to
+the prescription. A **distance** target still has no mobile input and no
+`targetDistanceM` on `GymRunnerStep`, so a distance-modality step is not yet
+executable there — the gap is honest (nothing fabricated), not fixed.
+
 - **Lives in `packages/run_recorder/`** (where `WorkoutRunner` lives, per `workout_runner.dart`) so iOS/watch can reuse it. The package name is a known smell — the gym runner has zero GPS/`RunRecorder` dependency — accepted for reuse symmetry rather than spinning a sibling package; noted so a future session doesn't trip on it.
 - **State machine** emits a `GymExecEvent` stream (`SetTransition`, `RestStarted` / `RestProgress` / `RestComplete`, `SetLogged`, `Complete`, `Abandoned`); idempotent `skipSet` / `rewindSet` (one deep) / `abandon`. Step transitions route through a `ValueNotifier` to avoid hot-path full-tree rebuilds, mirroring the run band.
 - **Supersets** run round-robin (Set 1 of A → Set 1 of B → rest → Set 2 of A …), not a linear list.

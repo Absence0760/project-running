@@ -267,10 +267,12 @@ class _MutableExercise {
   });
 }
 
-// `targetRpe` is a `double?`, so a whole-number RPE stringifies as "8.0" via
-// the default interpolation; web's `String(s.targetRpe)` yields "8". Drop the
-// trailing ".0" so the prefill output matches the web twin.
-String _rpeString(num? rpe) {
+/// `targetRpe` is a `double?`, so a whole-number RPE stringifies as "8.0" via
+/// the default interpolation; web's `String(s.targetRpe)` yields "8". Drop the
+/// trailing ".0" so an RPE reads the same wherever it is prefilled into an
+/// input — the routine composer and the live session logger both use this, so
+/// the same routine can't show "8" on one screen and "8.0" on the other.
+String rpeInputString(num? rpe) {
   if (rpe == null) return '';
   if (rpe == rpe.truncate()) return '${rpe.truncate()}';
   return '$rpe';
@@ -295,7 +297,7 @@ List<PrefillExercise> prefillFromRoutine(PlannedRoutine routine) {
               .map((s) => PrefillSet(
                     reps: s.targetRepsMin == null ? '' : '${s.targetRepsMin}',
                     weightKg: s.targetWeightKg,
-                    rpe: _rpeString(s.targetRpe),
+                    rpe: rpeInputString(s.targetRpe),
                   ))
               .toList(),
     ));
