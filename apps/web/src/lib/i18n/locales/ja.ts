@@ -2704,6 +2704,7 @@ export const messages = {
 	"routeMarker.namePlaceholder": "例: エイド2",
 	"routeMarker.servicesLabel": "サービス",
 	"routeMarker.cutoffLabel": "関門時刻",
+	"routeMarker.timeMode": "時間の形式",
 	"routeMarker.timeClock": "時刻",
 	"routeMarker.timeElapsed": "経過",
 	"routeMarker.noteLabel": "メモ",

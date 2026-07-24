@@ -2709,6 +2709,7 @@ export const messages = {
 	"routeMarker.namePlaceholder": "ex. Ravito 2",
 	"routeMarker.servicesLabel": "Services",
 	"routeMarker.cutoffLabel": "Barrière horaire",
+	"routeMarker.timeMode": "Format horaire",
 	"routeMarker.timeClock": "Horloge",
 	"routeMarker.timeElapsed": "Écoulé",
 	"routeMarker.noteLabel": "Note",

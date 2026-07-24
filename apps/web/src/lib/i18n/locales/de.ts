@@ -2709,6 +2709,7 @@ export const messages = {
 	"routeMarker.namePlaceholder": "z. B. Verpflegung 2",
 	"routeMarker.servicesLabel": "Leistungen",
 	"routeMarker.cutoffLabel": "Cut-off-Zeit",
+	"routeMarker.timeMode": "Zeitformat",
 	"routeMarker.timeClock": "Uhrzeit",
 	"routeMarker.timeElapsed": "Verstrichen",
 	"routeMarker.noteLabel": "Notiz",

@@ -2717,6 +2717,7 @@ export const en = {
 	"routeMarker.namePlaceholder": "e.g. Aid 2",
 	"routeMarker.servicesLabel": "Services",
 	"routeMarker.cutoffLabel": "Cut-off time",
+	"routeMarker.timeMode": "Time format",
 	"routeMarker.timeClock": "Clock",
 	"routeMarker.timeElapsed": "Elapsed",
 	"routeMarker.noteLabel": "Note",

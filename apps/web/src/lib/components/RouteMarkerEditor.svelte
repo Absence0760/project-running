@@ -694,9 +694,7 @@
 			{/if}
 
 			{#if kindSpec(draftKind).hasCutoff}
-				<label>
-					{m('routeMarker.cutoffLabel')}
-					<span class="time-mode">
+				<div class="time-mode-row" role="radiogroup" aria-label={m('routeMarker.timeMode')}>
 						<label class="toggle-row">
 							<input
 								type="radio"
@@ -719,9 +717,11 @@
 									draftCutoffClock = '';
 								}}
 							/>
-							{m('routeMarker.timeElapsed')}
-						</label>
-					</span>
+						{m('routeMarker.timeElapsed')}
+					</label>
+				</div>
+				<label>
+					{m('routeMarker.cutoffLabel')}
 					{#if draftCutoffElapsed}
 						<input
 							type="text"
@@ -735,9 +735,7 @@
 				</label>
 			{/if}
 
-			<label>
-				{m('routeMarker.targetLabel')}
-				<span class="time-mode">
+			<div class="time-mode-row" role="radiogroup" aria-label={m('routeMarker.timeMode')}>
 					<label class="toggle-row">
 						<input
 							type="radio"
@@ -762,8 +760,10 @@
 						/>
 						{m('routeMarker.timeClock')}
 					</label>
-				</span>
-				{#if draftTargetClock}
+				</div>
+				<label>
+					{m('routeMarker.targetLabel')}
+					{#if draftTargetClock}
 					<input type="time" bind:value={draftTargetText} />
 				{:else}
 					<input
@@ -805,6 +805,15 @@
 />
 
 <style>
+	/* The clock-vs-elapsed switch sits OUTSIDE its field's <label>: a nested
+	   label makes the outer one label the radio, which breaks both the
+	   accessible name and getByLabel in the e2e suite. */
+	.time-mode-row {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 0.25rem;
+		font-size: 0.85rem;
+	}
 	.markers-panel {
 		display: flex;
 		flex-direction: column;
