@@ -282,6 +282,15 @@ class _RunScreenState extends State<RunScreen> {
   /// cached; any failure — offline, no markers, malformed geometry — leaves
   /// the card hidden, never disturbing the core live stats. A mid-run dead
   /// zone simply keeps whatever was loaded at the start.
+  /// Minute-of-day the cutoff clocks are measured from. Before the run starts
+  /// that is "about now" — the runner is staging — so the pre-start card still
+  /// reads true; [_startRecording] and the partial-run restore re-run the load
+  /// once the real start is known.
+  double _startClockMin() {
+    final start = _runStartedAtWall ?? DateTime.now();
+    return (start.hour * 60 + start.minute).toDouble();
+  }
+
   Future<void> _loadCutoffLegs() async {
     final route = _selectedRoute;
     final api = widget.apiClient;
@@ -326,9 +335,14 @@ class _RunScreenState extends State<RunScreen> {
               meta: m.meta,
             ),
         ],
-        // Cutoff limits are absolute clock/elapsed times on the markers, so a
-        // nominal goal is fine — it only shapes the projected-arrival column,
-        // which the card ignores.
+        // A cutoff clock is a wall-clock time and resolves to an elapsed limit
+        // only against the start's time of day — without this every
+        // `cutoff_clock` marker (the only kind either editor can author)
+        // yields no cutoff at all and the live card never appears.
+        startClockMin: _startClockMin(),
+        // The nominal goal doesn't reach the card (the live projection comes
+        // from the runner's own pace), but it does pick which DAY a cutoff
+        // clock lands on for a race that runs past midnight.
         goalSeconds: polylineLengthMetres(waypoints),
         model: PacingModel.even,
       ).legs;
@@ -1506,6 +1520,9 @@ class _RunScreenState extends State<RunScreen> {
     // copied stays valid.
     _runId ??= _uuid.v4();
     _runStartedAtWall = DateTime.now();
+    // Rebind the cutoff clocks to the real start — the legs were built while
+    // staging, off an approximate one.
+    _loadCutoffLegs();
 
     // Reset the pedometer baseline so steps taken during the countdown
     // don't count toward the run.
@@ -1795,6 +1812,9 @@ class _RunScreenState extends State<RunScreen> {
 
     _runId = partial.id;
     _runStartedAtWall = partial.startedAt;
+    // Same rebind as a fresh start: a run resumed hours later must measure its
+    // cutoff clocks from when it actually began, not from now.
+    _loadCutoffLegs();
     _activityType = ActivityType.fromName(
         partial.metadata?[cm.MetadataKeys.activityType] as String? ??
             _activityType.name);

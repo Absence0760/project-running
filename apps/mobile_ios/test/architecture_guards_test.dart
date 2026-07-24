@@ -2260,7 +2260,7 @@ void main() {
           File('lib/screens/live_spectator_screen.dart').readAsStringSync();
       final body = _extractMethodBody(
         src,
-        r'Future<void> _loadCutoffLegs\(String\? routeId\)\s*async\s*\{',
+        r'Future<void> _loadCutoffLegs\([^)]*\)\s*async\s*\{',
       );
       expect(
         body.contains('fetchRouteById'),
@@ -4636,6 +4636,43 @@ void main() {
         gateIdx >= 0 && initIdx > gateIdx,
         isTrue,
         reason: 'The opt-out check must precede SentryFlutter.init.',
+      );
+    });
+  });
+
+  group('live cut-off wiring', () {
+    test('_loadCutoffLegs anchors cutoff clocks to the run start', () {
+      // `cutoff_clock` is the ONLY cut-off field either editor can author,
+      // and buildRoadbook resolves a clock into an elapsed limit only when it
+      // is given the start's minute-of-day (roadbook_test pins that
+      // contract). Without startClockMin every cut-off leg came back null, so
+      // _cutoffLegs stayed empty and the live CutoffCard + the cut-off
+      // catch-up voice cue never fired for any real course.
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      final start = source.indexOf('Future<void> _loadCutoffLegs() async {');
+      expect(start, isNonNegative);
+      final body = source.substring(start, source.indexOf('.legs;', start));
+      expect(
+        body,
+        contains('startClockMin: _startClockMin()'),
+        reason: 'buildRoadbook must be given the start clock or no '
+            'cutoff_clock marker ever produces a cutoff.',
+      );
+      // The legs are built while staging, before the real start exists, so
+      // both entry points into a running state must rebuild them.
+      expect(
+        RegExp(r'_runStartedAtWall = DateTime\.now\(\);\s*\n(\s*//[^\n]*\n)*\s*_loadCutoffLegs\(\);')
+            .hasMatch(source),
+        isTrue,
+        reason: 'starting a run must re-run _loadCutoffLegs against the real '
+            'start clock.',
+      );
+      expect(
+        RegExp(r'_runStartedAtWall = partial\.startedAt;\s*\n(\s*//[^\n]*\n)*\s*_loadCutoffLegs\(\);')
+            .hasMatch(source),
+        isTrue,
+        reason: 'resuming a partial run must re-anchor the cutoff clocks to '
+            'when that run actually began.',
       );
     });
   });
