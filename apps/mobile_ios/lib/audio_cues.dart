@@ -198,6 +198,33 @@ String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit,
   return l10n.ttsStepDistancePace(intro, dist, paceTail);
 }
 
+/// How far the runner has covered at a split, as the spoken count plus
+/// whether the unit word should be singular. The tick interval is in METRES
+/// and the unit word comes from the runner's preference, so the count has to
+/// be converted into that same unit — counting kilometres and saying "miles"
+/// (what an imperial runner on the default 1 km interval used to hear) is
+/// wrong by 60 %, and a metric runner on the 500 m interval used to hear the
+/// first split rounded up to "1 kilometre".
+///
+/// Rounds to one decimal FIRST and only then decides whole-vs-fractional, so
+/// the 1609 m "1 mi" preset reads "1 mile" rather than "1.0 miles".
+({String count, bool singular}) splitCueDistance(
+  int distanceTicks,
+  double tickIntervalMetres,
+  DistanceUnit unit,
+) {
+  const metresPerMile = 1609.344;
+  final metres = distanceTicks * tickIntervalMetres;
+  final units =
+      unit == DistanceUnit.mi ? metres / metresPerMile : metres / 1000;
+  final rounded = (units * 10).round() / 10;
+  final whole = rounded == rounded.roundToDouble();
+  return (
+    count: whole ? '${rounded.round()}' : rounded.toStringAsFixed(1),
+    singular: rounded == 1,
+  );
+}
+
 /// Compose the spoken split cue for the given [paceMode]. Pure — [splitTail]
 /// and [avgTail] are pre-formatted pace/speed utterances (empty string when
 /// unavailable). Degrades to the split-only form when the requested average
@@ -327,10 +354,10 @@ class AudioCues {
     await _applyLanguage();
     final tag = activeLocaleTag;
     final l10n = ttsL10n(tag);
-    final totalUnits = (distanceTicks * tickIntervalMetres / 1000).round();
+    final covered = splitCueDistance(distanceTicks, tickIntervalMetres, unit);
     final unitWord = unit == DistanceUnit.mi
-        ? (totalUnits == 1 ? l10n.ttsSplitUnitMile : l10n.ttsSplitUnitMiles)
-        : (totalUnits == 1
+        ? (covered.singular ? l10n.ttsSplitUnitMile : l10n.ttsSplitUnitMiles)
+        : (covered.singular
             ? l10n.ttsSplitUnitKilometre
             : l10n.ttsSplitUnitKilometres);
     String tailOf(double? p) => useSpeed
@@ -338,7 +365,7 @@ class AudioCues {
         : formatPaceUtterance(p, unit, tag);
     await _tts.speak(splitCueUtterance(
       l10n,
-      count: '$totalUnits',
+      count: covered.count,
       unitWord: unitWord,
       splitTail: tailOf(paceSecondsPerKm),
       avgTail: tailOf(averagePaceSecondsPerKm),
