@@ -897,7 +897,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   }
 
   Widget _buildEventsTab(ThemeData theme, ClubView c) {
-    final showCreate = c.isAdmin;
+    // event_organiser is exactly the role that exists to run events: the
+    // server's is_event_organiser RLS admits it and web's canManageEvents
+    // matches, so gating on isAdmin locked the role out on mobile only.
+    final showCreate = c.isEventOrganiser;
     if (_upcoming.isEmpty) {
       return Center(
         child: Padding(
