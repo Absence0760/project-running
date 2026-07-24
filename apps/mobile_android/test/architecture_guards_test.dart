@@ -4677,6 +4677,72 @@ void main() {
     });
   });
 
+  group('club event-creation gate matches the server role', () {
+    test('the events tab gates on isEventOrganiser, not isAdmin', () {
+      // is_event_organiser (20260428_001) admits owner / admin /
+      // event_organiser, and web's canManageEvents matches. Gating the mobile
+      // create affordance on isAdmin locked the one role that exists to run
+      // events out of creating them — on mobile only.
+      final src = File('lib/screens/club_detail_screen.dart').readAsStringSync();
+      expect(src, contains('final showCreate = c.isEventOrganiser;'));
+      expect(
+        src.contains('final showCreate = c.isAdmin;'),
+        isFalse,
+        reason: 'isAdmin excludes event_organiser',
+      );
+    });
+  });
+
+  group('pedometer baseline on resume', () {
+    test('an explicit flag marks the baseline, not a zero sentinel', () {
+      // `_startSteps == 0` doubled as "not baselined yet". On resume the
+      // computed baseline is legitimately 0 whenever no sensor event has
+      // landed — the counter only ticks on a real step, and the runner is
+      // usually still reading the Resume dialog — so the next event
+      // re-baselined to the raw cumulative reading and the steps carried over
+      // from the crashed run were lost. For an indoor run that is the whole
+      // reported distance, since it is derived as steps x stride.
+      final src = File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(
+        src.contains('if (_startSteps == 0) _startSteps = event.steps;'),
+        isFalse,
+        reason: 'the zero sentinel must be gone',
+      );
+      expect(src, contains('if (!_stepBaselineSet) {'));
+      expect(
+        src,
+        contains('_startSteps = event.steps - _stepsCarriedIn;'),
+        reason: 'the deferred baseline must subtract the carried-in steps so a '
+            'resumed run continues from them',
+      );
+      // Resume seeds the carry-in; a fresh start clears it.
+      expect(src, contains('_stepsCarriedIn = restoredSteps;'));
+      expect(src, contains('_stepsCarriedIn = 0;'));
+    });
+  });
+
+  group('crash recovery is owner-tagged', () {
+    test('the owner-tag providers are wired before the recovery save', () {
+      // LocalRunStore.save only stamps created_by_user_id when
+      // currentUserIdProvider is set, and the in-progress file is never
+      // tagged while recording. Recovering before the provider was wired left
+      // the run untagged, and filterRunsForCurrentUser reads an untagged run
+      // as adoptable — so on a shared device the next account to sign in
+      // pushed a previous user's crashed run as its own (§67).
+      final src = File('lib/main.dart').readAsStringSync();
+      final provider = src.indexOf('store.currentUserIdProvider = () => api?.userId;');
+      final recover = src.indexOf('await store.save(evaluation.recovered!);');
+      expect(provider, isNonNegative);
+      expect(recover, isNonNegative);
+      expect(
+        provider < recover,
+        isTrue,
+        reason: 'in-progress recovery must run after the owner tag is wired, '
+            'or the recovered run is adoptable by the next account.',
+      );
+    });
+  });
+
   group('every OfflineSyncStore subclass is wiped on sign-out', () {
     // Reason (issue #228): sign-out used to clear only the three
     // app-singleton stores, so the screen-owned routine / meal-template /
