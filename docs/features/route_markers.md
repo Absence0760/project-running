@@ -47,10 +47,16 @@ the registry):
 | `services` | `aid_station` | `string[]` of `water`/`food`/`medical`/`toilets`/`drop_bag` | what the aid station offers |
 | `cutoff_clock` | `cutoff` | `"HH:MM"` (24h) | wall-clock cut-off time |
 | `cutoff_elapsed_s` | `cutoff` | integer ≥ 0 | elapsed-from-start cut-off (alternative to the clock) |
+| `target_clock` | any | `"HH:MM"` (24h) | wall-clock target arrival (#608) |
+| `target_elapsed_s` | any | integer ≥ 0 | elapsed-from-start target arrival (#608) |
 | `note` | `note`, `hazard` | string | free-text note |
 
-The pure helper `parseCutoff(meta)` validates / normalises the cutoff keys so a
-cut-off chip renders identically on both platforms.
+The pure helpers `parseCutoff(meta)` / `parseTarget(meta)` validate / normalise
+those keys so a cut-off or target chip renders identically on both platforms.
+They are also the **write** gate: an editor asks `parseCutoff` whether a typed
+clock is acceptable rather than re-deriving the rule, because a value the
+readers reject is silently invisible everywhere afterwards (schedule list,
+roadbook, GPX export, live cut-off ETA).
 
 ## Visibility + privacy
 
@@ -117,9 +123,20 @@ cut-off chip renders identically on both platforms.
   server-derived. **Coordinate entry ships too**: the editor sheet carries
   Latitude / Longitude fields (prefilled from the tap or the existing marker,
   validated to ±90 / ±180; an edit persists the typed position), and placing
-  mode offers an "Enter coordinates instead" button that opens the sheet
+  mode offers an "Enter location instead" button that opens the sheet
   without a map tap — the keyboard / screen-reader placement path matching
-  web (8 widget tests in `route_markers_panel_test.dart`). The
+  web (widget tests in `route_markers_panel_test.dart`). Placing mode also
+  **scrolls the map back into view** (the panel sits below the fold, so the
+  "tap the map" instruction otherwise arrived with no map on screen) and
+  carries a **Cancel** — the Add button hides while placing, so without one a
+  placement was a one-way trip. A tap on an existing pin while placing places
+  there rather than opening that marker, so a pin is never a dead zone for the
+  placement tap. Both time fields take digits on a numeric keypad and
+  auto-insert their separators (`TextInputFormatter`); the cut-off is
+  **validated through `parseCutoff` before save** and the target time's
+  two-part h:mm-vs-mm:ss reading uses the distance-along the sheet just placed
+  at, not only a server-derived `position_m` the new marker doesn't have yet.
+  The
   **draggable-symbol drag-to-move** affordance on `LiveRunMap` still needs
   on-device maplibre `SymbolManager` work and stays a followup (followups.md).
 - **Shared helper** — `route_markers.ts` ↔ `route_markers.dart` (parity pair):
