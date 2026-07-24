@@ -76,6 +76,20 @@
     <uses-permission android:name="android.permission.USE_FINGERPRINT"
                      tools:node="remove" />
 
+    <!-- image_picker (image_picker_android) injects READ_MEDIA_IMAGES for
+         its legacy gallery-pick fallback. The app only ever picks a single
+         image occasionally (avatar, run / route / event / club photos) via
+         ImagePicker().pickImage(source: gallery), which resolves to the
+         Android Photo Picker on this target (API 36) — and the picker needs
+         NO permission. Google Play's photo/video policy requires an app with
+         infrequent access to use the photo picker rather than hold
+         READ_MEDIA_IMAGES, so strip it: picking keeps working and the Play
+         "Photo and video permissions" declaration drops away entirely.
+         tools:node="remove" deletes it at merge time (same pattern as the
+         biometric strip above). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+                     tools:node="remove" />
+
     <!-- workmanager (androidx.work) injects RECEIVE_BOOT_COMPLETED so
          its boot receiver can re-schedule the hourly background-sync
          task after a device reboot. registerBackgroundSync() in
