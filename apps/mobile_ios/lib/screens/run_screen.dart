@@ -571,9 +571,17 @@ class _RunScreenState extends State<RunScreen> {
   // Step tracking
   StreamSubscription<StepCount>? _stepSub;
   int _startSteps = 0;
+  // The pedometer's cumulative counter is only meaningful relative to a
+  // baseline taken once recording starts. `_startSteps == 0` cannot stand in
+  // for "not baselined yet": on resume the computed baseline is legitimately
+  // 0 whenever no sensor event has landed, and re-baselining then threw away
+  // the steps carried over from the crashed run.
+  bool _stepBaselineSet = false;
+  // Steps a resumed partial brought with it; the baseline is biased by this
+  // so (event.steps - _startSteps) continues from there rather than 0.
+  int _stepsCarriedIn = 0;
   int _steps = 0;
   int _cadence = 0;
-  int _latestPedometerSteps = 0;
   final List<_StepSample> _stepSamples = [];
 
   // Prepare-phase state. The recorder, GPS stream, pedometer, and wakelock
@@ -1192,9 +1200,11 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub?.cancel();
     _stepSub = Pedometer.stepCountStream.listen((event) {
       _pedometerRetries = 0; // reset back-off on successful event
-      _latestPedometerSteps = event.steps;
       if (_state != _ScreenState.recording) return;
-      if (_startSteps == 0) _startSteps = event.steps;
+      if (!_stepBaselineSet) {
+        _startSteps = event.steps - _stepsCarriedIn;
+        _stepBaselineSet = true;
+      }
       final newSteps = event.steps - _startSteps;
       _stepSamples.add(_StepSample(DateTime.now(), newSteps));
       final cutoff = DateTime.now().subtract(const Duration(seconds: 10));
@@ -1526,7 +1536,9 @@ class _RunScreenState extends State<RunScreen> {
 
     // Reset the pedometer baseline so steps taken during the countdown
     // don't count toward the run.
-    _startSteps = _latestPedometerSteps;
+    _stepsCarriedIn = 0;
+    _stepBaselineSet = false;
+    _startSteps = 0;
     _steps = 0;
     _cadence = 0;
     _stepSamples.clear();
@@ -1886,13 +1898,14 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
 
-    // Continue pedometer from the restored total: bias the baseline so the
-    // handler's (event.steps - _startSteps) resumes at restoredSteps rather
-    // than restarting at 0. A zero latest reading falls back to re-baselining
-    // on the first event.
-    _startSteps = _latestPedometerSteps > restoredSteps
-        ? _latestPedometerSteps - restoredSteps
-        : 0;
+    // Continue the pedometer from the restored total: the baseline is biased
+    // by restoredSteps so the handler's (event.steps - _startSteps) resumes
+    // there rather than restarting at 0. Deferred to the first event when the
+    // sensor hasn't reported yet — the counter only ticks on an actual step,
+    // so a runner reading the Resume dialog usually hasn't produced one.
+    _stepsCarriedIn = restoredSteps;
+    _stepBaselineSet = false;
+    _startSteps = 0;
 
     _attachRecordingSideEffects();
 
@@ -3077,7 +3090,6 @@ class _RunScreenState extends State<RunScreen> {
     _recorder = null;
     _prepareFuture = null;
     _stepSamples.clear();
-    _latestPedometerSteps = 0;
     _lastSnapshotAt = null;
     _startRequested = false;
     _stopRequested = false;
@@ -3120,6 +3132,8 @@ class _RunScreenState extends State<RunScreen> {
       _lastTickNotified = 0;
       _steps = 0;
       _startSteps = 0;
+      _stepBaselineSet = false;
+      _stepsCarriedIn = 0;
       _cadence = 0;
       _finishedRun = null;
       _synced = false;
