@@ -721,6 +721,34 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+      'a malformed services entry does not take the whole schedule down',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'aid_station',
+          label: 'Aid 1',
+          positionM: 500,
+          // meta is schemaless jsonb — a non-string in the list used to throw
+          // out of build and blank the route-detail screen.
+          meta: {
+            'services': ['water', 7, null, 'food']
+          },
+        ),
+        _marker(id: 'm2', kind: 'note', label: 'Gate', positionM: 800),
+      ],
+    ));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Aid 1'), findsOneWidget);
+    expect(find.text('Gate'), findsOneWidget);
+    expect(find.textContaining('Water · Food'), findsOneWidget);
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);

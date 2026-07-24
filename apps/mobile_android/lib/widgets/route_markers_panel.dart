@@ -322,7 +322,10 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     final spec = kindSpec(m.kind);
     final parts = <String>[];
     if (spec.hasServices && meta is Map && meta['services'] is List) {
-      final services = (meta['services'] as List).cast<String>();
+      // whereType, not cast: meta is a schemaless jsonb bag, and a cast that
+      // throws mid-build takes the whole route-detail list down with it (L4
+      // breaking L1) over one malformed marker.
+      final services = (meta['services'] as List).whereType<String>().toList();
       if (services.isNotEmpty) {
         parts.add(services.map((s) => serviceLabel(l10n, s)).join(' · '));
       }
@@ -738,7 +741,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
             ? (e.meta as Map)['note'] as String
             : '');
     if (e?.meta is Map && (e!.meta as Map)['services'] is List) {
-      _services = ((e.meta as Map)['services'] as List).cast<String>().toSet();
+      _services =
+          ((e.meta as Map)['services'] as List).whereType<String>().toSet();
     }
     final cutoff = parseCutoff(e?.meta);
     _cutoff = TextEditingController(text: cutoff?.clock ?? '');
