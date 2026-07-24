@@ -2744,6 +2744,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Se hizo pública para que cualquiera con el enlace pueda verla';
 
   @override
+  String get routeDetailShareConfirmTitle => '¿Hacer pública esta ruta?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Compartir un enlace hace pública esta ruta: cualquier persona con el enlace puede abrirla y puede aparecer en Explorar. Puedes volver a hacerla privada cuando quieras.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Hacer pública y compartir';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'No se pudo compartir el enlace: $error';
   }

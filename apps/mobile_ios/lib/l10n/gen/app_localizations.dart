@@ -4619,6 +4619,24 @@ abstract class AppLocalizations {
   /// **'Made public so anyone with the link can view it'**
   String get routeDetailMadePublicForLink;
 
+  /// Title of the confirm dialog shown before Share flips a private route public
+  ///
+  /// In en, this message translates to:
+  /// **'Make this route public?'**
+  String get routeDetailShareConfirmTitle;
+
+  /// Body of the confirm dialog shown before Share flips a private route public
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing a link makes this route public — anyone with the link can open it, and it can appear in Explore. You can switch it back to private anytime.'**
+  String get routeDetailShareConfirmBody;
+
+  /// Confirm button label on the make-route-public share dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make public & share'**
+  String get routeDetailShareConfirmCta;
+
   /// Banner shown when making the route public for a share link fails
   ///
   /// In en, this message translates to:

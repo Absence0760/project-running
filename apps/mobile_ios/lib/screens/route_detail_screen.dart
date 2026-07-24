@@ -1351,6 +1351,27 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _shareLink(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     if (_isOwner && !_isPublic) {
+      // Making a still-private route public exposes it (and its start point)
+      // to anyone with the link and in Explore — confirm before that flip.
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.routeDetailShareConfirmTitle),
+          content: Text(l10n.routeDetailShareConfirmBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.routeDetailCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.routeDetailShareConfirmCta),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      if (!mounted) return;
       final api = widget.apiClient!;
       try {
         await api.setRoutePublic(widget.route.id, true);

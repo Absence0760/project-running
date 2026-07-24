@@ -2721,6 +2721,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Made public so anyone with the link can view it';
 
   @override
+  String get routeDetailShareConfirmTitle => 'Make this route public?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Sharing a link makes this route public — anyone with the link can open it, and it can appear in Explore. You can switch it back to private anytime.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Make public & share';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'Couldn\'t share the link: $error';
   }

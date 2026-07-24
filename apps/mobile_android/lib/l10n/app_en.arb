@@ -3662,6 +3662,18 @@
   "@routeDetailMadePublicForLink": {
     "description": "Banner shown when tapping Share link auto-publishes a private route so its link resolves"
   },
+  "routeDetailShareConfirmTitle": "Make this route public?",
+  "@routeDetailShareConfirmTitle": {
+    "description": "Title of the confirm dialog shown before Share flips a private route public"
+  },
+  "routeDetailShareConfirmBody": "Sharing a link makes this route public — anyone with the link can open it, and it can appear in Explore. You can switch it back to private anytime.",
+  "@routeDetailShareConfirmBody": {
+    "description": "Body of the confirm dialog shown before Share flips a private route public"
+  },
+  "routeDetailShareConfirmCta": "Make public & share",
+  "@routeDetailShareConfirmCta": {
+    "description": "Confirm button label on the make-route-public share dialog"
+  },
   "routeDetailShareLinkFailed": "Couldn't share the link: {error}",
   "@routeDetailShareLinkFailed": {
     "description": "Banner shown when making the route public for a share link fails",

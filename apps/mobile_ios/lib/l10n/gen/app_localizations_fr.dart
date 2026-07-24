@@ -2751,6 +2751,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Rendu public pour que toute personne disposant du lien puisse le voir';
 
   @override
+  String get routeDetailShareConfirmTitle => 'Rendre cet itinéraire public ?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Partager un lien rend cet itinéraire public : toute personne disposant du lien peut l\'ouvrir, et il peut apparaître dans Explorer. Vous pouvez le repasser en privé à tout moment.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Rendre public et partager';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'Impossible de partager le lien : $error';
   }

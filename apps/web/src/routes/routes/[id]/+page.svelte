@@ -16,6 +16,7 @@
 	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
 	import RouteConditions from '$lib/components/RouteConditions.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
@@ -291,7 +292,28 @@
 		downloadFile(gpx, filename, 'application/gpx+xml');
 	}
 
+	// Confirm-before-public gate. Sharing a link needs the route publicly
+	// reachable; flipping a still-private route public exposes it (and its
+	// start point) to anyone with the link and surfaces it in Explore — a
+	// privacy-relevant, one-way-for-now step, so confirm it first. An
+	// already-public route shares straight away (nothing changes).
+	let showShareConfirm = $state(false);
+
 	async function handleShare() {
+		if (!route || sharing) return;
+		if (!route.is_public) {
+			showShareConfirm = true;
+			return;
+		}
+		await runShare();
+	}
+
+	async function confirmShare() {
+		showShareConfirm = false;
+		await runShare();
+	}
+
+	async function runShare() {
 		if (!route || sharing) return;
 		sharing = true;
 		try {
@@ -865,6 +887,15 @@
 		targetKind="route_review"
 		targetId={reportReviewId ?? ''}
 		onclose={() => (reportReviewId = null)}
+	/>
+	<ConfirmDialog
+		open={showShareConfirm}
+		data-testid="share-confirm-dialog"
+		title={m('routeDetail.shareConfirmTitle')}
+		message={m('routeDetail.shareConfirmBody')}
+		confirmLabel={m('routeDetail.shareConfirmCta')}
+		onconfirm={confirmShare}
+		oncancel={() => (showShareConfirm = false)}
 	/>
 {/if}
 

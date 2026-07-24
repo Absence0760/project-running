@@ -2580,6 +2580,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailMadePublicForLink => 'リンクを知っている全員が閲覧できるように公開しました';
 
   @override
+  String get routeDetailShareConfirmTitle => 'このルートを公開しますか？';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'リンクを共有するとこのルートが公開され、リンクを知っている人は誰でも開くことができ、「探索」に表示される場合があります。いつでも非公開に戻せます。';
+
+  @override
+  String get routeDetailShareConfirmCta => '公開して共有';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'リンクを共有できませんでした: $error';
   }

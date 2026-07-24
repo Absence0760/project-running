@@ -2740,6 +2740,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'Tornada pública para que qualquer pessoa com o link possa vê-la';
 
   @override
+  String get routeDetailShareConfirmTitle => 'Tornar esta rota pública?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Partilhar uma ligação torna esta rota pública — qualquer pessoa com a ligação pode abri-la e ela pode aparecer em Explorar. Podes torná-la privada novamente quando quiseres.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Tornar pública e partilhar';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'Não foi possível compartilhar o link: $error';
   }
@@ -14504,6 +14514,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeDetailMadePublicForLink =>
       'Tornada pública para que qualquer pessoa com o link possa vê-la';
+
+  @override
+  String get routeDetailShareConfirmTitle => 'Tornar esta rota pública?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Compartilhar um link torna esta rota pública — qualquer pessoa com o link pode abri-la, e ela pode aparecer em Explorar. Você pode torná-la privada novamente quando quiser.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Tornar pública e compartilhar';
 
   @override
   String routeDetailShareLinkFailed(String error) {

@@ -224,6 +224,65 @@ void main() {
     });
 
     testWidgets(
+        'Share link on a private route confirms before making it public',
+        (tester) async {
+      final api = _GatedPublicApi();
+      final store = _FakePinStore();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RouteDetailScreen(
+          route: _route(isPublic: false),
+          routeStore: store,
+          preferences: prefs,
+          apiClient: api,
+          isOwner: true,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      Future<void> openShareLink() async {
+        await tester.tap(find.byIcon(Icons.ios_share));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.text(l10n.routeDetailShareLink));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      // Choosing "Share link" on a private route raises the confirm — and
+      // publishes nothing yet.
+      await openShareLink();
+      expect(find.text(l10n.routeDetailShareConfirmTitle), findsOneWidget);
+      expect(api.publicCalls, 0);
+
+      // Cancel → the route stays private, no visibility write fired.
+      await tester.tap(find.text(l10n.routeDetailCancel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(l10n.routeDetailShareConfirmTitle), findsNothing);
+      expect(api.publicCalls, 0,
+          reason: 'cancelling the confirm must not flip the route public');
+
+      // Reopen and confirm → the publish write fires (then blocks on the
+      // gate, so the OS share sheet is never reached in the test).
+      await openShareLink();
+      await tester.tap(find.text(l10n.routeDetailShareConfirmCta));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(Duration.zero);
+      expect(api.publicCalls, 1,
+          reason: 'confirming must flip the route public');
+    });
+
+    testWidgets(
         'offline-pin toggle guards a double-tap race — a second tap while the '
         'pin is in flight is ignored, then the control re-enables',
         (tester) async {

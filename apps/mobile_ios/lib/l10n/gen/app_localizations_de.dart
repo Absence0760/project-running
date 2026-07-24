@@ -2751,6 +2751,16 @@ class AppLocalizationsDe extends AppLocalizations {
       'Öffentlich gemacht, damit jeder mit dem Link sie ansehen kann';
 
   @override
+  String get routeDetailShareConfirmTitle => 'Diese Route öffentlich machen?';
+
+  @override
+  String get routeDetailShareConfirmBody =>
+      'Beim Teilen eines Links wird diese Route öffentlich – jede Person mit dem Link kann sie öffnen, und sie kann unter „Entdecken“ erscheinen. Du kannst sie jederzeit wieder auf privat stellen.';
+
+  @override
+  String get routeDetailShareConfirmCta => 'Öffentlich machen & teilen';
+
+  @override
   String routeDetailShareLinkFailed(String error) {
     return 'Link konnte nicht geteilt werden: $error';
   }
