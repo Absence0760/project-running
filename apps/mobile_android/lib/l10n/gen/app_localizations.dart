@@ -4043,6 +4043,12 @@ abstract class AppLocalizations {
   /// **'Imported \"{name}\"'**
   String routesImported(String name);
 
+  /// Banner after importing a file that held several tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} routes'**
+  String routesImportedMany(int count);
+
   /// Banner shown when importing a route file fails for any other reason
   ///
   /// In en, this message translates to:

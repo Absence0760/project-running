@@ -2360,6 +2360,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return '$count itinéraires importés';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Échec de l\'import : $error';
   }

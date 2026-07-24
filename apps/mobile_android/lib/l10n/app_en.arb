@@ -3134,6 +3134,11 @@
     "description": "Banner shown when an imported route file resolves to an unreadable cloud-only content URI"
   },
   "routesImported": "Imported \"{name}\"",
+  "routesImportedMany": "Imported {count} routes",
+  "@routesImportedMany": {
+    "description": "Banner after importing a file that held several tracks",
+    "placeholders": { "count": { "type": "int" } }
+  },
   "@routesImported": {
     "description": "Banner shown after a route file is successfully imported",
     "placeholders": {

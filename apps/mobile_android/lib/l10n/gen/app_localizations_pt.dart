@@ -2348,6 +2348,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Importadas $count rotas';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Falha na importação: $error';
   }
@@ -14148,6 +14153,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String routesImported(String name) {
     return '\"$name\" importada';
+  }
+
+  @override
+  String routesImportedMany(int count) {
+    return 'Importadas $count rotas';
   }
 
   @override

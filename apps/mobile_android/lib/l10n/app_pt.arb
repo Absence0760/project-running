@@ -655,6 +655,7 @@
   "routesStarUpdateFailed": "Não foi possível atualizar a estrela: {error}",
   "routesImportFailedLocalOnly": "Falha na importação: escolha o arquivo do armazenamento local, não de um seletor de documentos apenas na nuvem.",
   "routesImported": "\"{name}\" importada",
+  "routesImportedMany": "Importadas {count} rotas",
   "routesImportFailed": "Falha na importação: {error}",
   "routesImportSharedFailed": "Não foi possível importar o arquivo: não é uma rota GPX ou KML válida.",
   "routesSaved": "\"{name}\" salva",

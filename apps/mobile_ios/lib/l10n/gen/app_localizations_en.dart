@@ -2331,6 +2331,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Imported $count routes';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Import failed: $error';
   }

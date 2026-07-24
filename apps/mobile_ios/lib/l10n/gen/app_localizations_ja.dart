@@ -2240,6 +2240,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return '$count 件のルートをインポートしました';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'インポートに失敗しました: $error';
   }

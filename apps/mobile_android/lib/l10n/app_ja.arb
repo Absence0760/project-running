@@ -655,6 +655,7 @@
   "routesStarUpdateFailed": "スターを更新できませんでした: {error}",
   "routesImportFailedLocalOnly": "インポートに失敗しました: クラウド専用のドキュメント選択ではなく、ローカルストレージからファイルを選んでください。",
   "routesImported": "「{name}」をインポートしました",
+  "routesImportedMany": "{count} 件のルートをインポートしました",
   "routesImportFailed": "インポートに失敗しました: {error}",
   "routesImportSharedFailed": "このファイルをインポートできませんでした。有効な GPX または KML ルートではありません。",
   "routesSaved": "「{name}」を保存しました",

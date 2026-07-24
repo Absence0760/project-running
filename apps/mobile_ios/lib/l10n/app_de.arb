@@ -655,6 +655,7 @@
   "routesStarUpdateFailed": "Stern konnte nicht aktualisiert werden: {error}",
   "routesImportFailedLocalOnly": "Import fehlgeschlagen: Wähle die Datei aus dem lokalen Speicher, nicht aus einem reinen Cloud-Dokumentenauswähler.",
   "routesImported": "\"{name}\" importiert",
+  "routesImportedMany": "{count} Routen importiert",
   "routesImportFailed": "Import fehlgeschlagen: {error}",
   "routesImportSharedFailed": "Datei konnte nicht importiert werden – keine gültige GPX- oder KML-Route.",
   "routesSaved": "\"{name}\" gespeichert",
