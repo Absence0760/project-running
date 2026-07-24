@@ -119,7 +119,8 @@ class _ActivityRowTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final (icon, accent) = _glyph(row.kind, theme);
     final (primary, secondary) = _summary(l10n);
-    final tappable = row.kind == 'run' || row.kind == 'lift';
+    final tappable =
+        row.kind == ActivityRow.kindRun || row.kind == ActivityRow.kindLift;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),

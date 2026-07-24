@@ -7347,6 +7347,14 @@ typedef SessionPlanItemInput = ({
 /// web `ActivityRow` (core/data.ts); `kind` stays a raw string ('run' |
 /// 'lift' | 'meal') like the web union.
 class ActivityRow {
+  /// The `kind` discriminator, one literal per UNION branch of the view.
+  /// Named because a consumer comparing against a string the view never
+  /// emits matches nothing and fails silently — `'gym'` (instead of `lift`)
+  /// dropped every strength session out of the nutrition exercise add-on.
+  static const kindRun = 'run';
+  static const kindLift = 'lift';
+  static const kindMeal = 'meal';
+
   final String id;
   final String kind;
   final DateTime startedAt;
