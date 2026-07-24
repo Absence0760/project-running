@@ -364,17 +364,39 @@
 		return markers.find((mk) => mk.id === editingId)?.position_m ?? null;
 	}
 
+	// Start from the marker's existing bag rather than a blank one: the editor
+	// owns four keys, but `meta` is a schemaless registry that also holds
+	// `cutoff_elapsed_s` and `target_clock` (no input on either platform) and
+	// whatever a later version adds. Rebuilding from scratch silently deleted
+	// all of them on any edit. Each owned key is explicitly set or deleted
+	// below, so switching kind still drops the fields that kind can't carry.
 	function buildMeta(): Record<string, unknown> {
-		const meta: Record<string, unknown> = {};
+		const existing = editingId ? markers.find((mk) => mk.id === editingId)?.meta : null;
+		const meta: Record<string, unknown> = { ...((existing ?? {}) as Record<string, unknown>) };
 		const spec = kindSpec(draftKind);
 		if (spec.hasServices && draftServices.length > 0) meta.services = draftServices;
-		if (spec.hasCutoff && draftCutoffClock.trim()) meta.cutoff_clock = draftCutoffClock.trim();
+		else delete meta.services;
+		if (spec.hasCutoff) {
+			if (draftCutoffClock.trim()) meta.cutoff_clock = draftCutoffClock.trim();
+			else delete meta.cutoff_clock;
+		} else {
+			// Not a cutoff kind any more — the whole cutoff concept goes,
+			// including the elapsed form the editor can't edit.
+			delete meta.cutoff_clock;
+			delete meta.cutoff_elapsed_s;
+		}
 		if (draftTargetText.trim()) {
 			const targetS = parseElapsedText(draftTargetText, editingPositionM());
 			if (targetS != null) meta.target_elapsed_s = targetS;
+		} else {
+			// Only the elapsed form is editable here; a `target_clock` written
+			// elsewhere is left alone rather than destroyed by an unrelated edit.
+			delete meta.target_elapsed_s;
 		}
 		if ((draftKind === 'note' || draftKind === 'hazard') && draftNote.trim()) {
 			meta.note = draftNote.trim();
+		} else {
+			delete meta.note;
 		}
 		return meta;
 	}

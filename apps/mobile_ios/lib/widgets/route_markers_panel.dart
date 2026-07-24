@@ -850,17 +850,36 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       lng = typedLng;
     }
     final spec = kindSpec(_kind);
-    final meta = <String, dynamic>{};
+    // Start from the marker's existing bag rather than a blank one: the sheet
+    // owns four keys, but `meta` is a schemaless registry that also holds
+    // `cutoff_elapsed_s` and `target_clock` (no input on either platform) and
+    // whatever a later version adds. Rebuilding from scratch silently deleted
+    // all of them on any edit. Each owned key is explicitly set or removed
+    // below, so switching kind still drops the fields that kind can't carry.
+    final existing = widget.existing?.meta;
+    final meta = <String, dynamic>{
+      if (existing is Map) ...existing.cast<String, dynamic>(),
+    };
     if (spec.hasServices && _services.isNotEmpty) {
       meta['services'] = _services.toList();
+    } else {
+      meta.remove('services');
     }
-    if (spec.hasCutoff && _cutoff.text.trim().isNotEmpty) {
+    if (spec.hasCutoff) {
       final clock = _cutoff.text.trim();
-      if (!isValidMarkerClock(clock)) {
+      if (clock.isEmpty) {
+        meta.remove('cutoff_clock');
+      } else if (!isValidMarkerClock(clock)) {
         showTopBanner(context, l10n.routeMarkerCutoffInvalid);
         return;
+      } else {
+        meta['cutoff_clock'] = clock;
       }
-      meta['cutoff_clock'] = clock;
+    } else {
+      // Not a cutoff kind any more — the whole cutoff concept goes, including
+      // the elapsed form the sheet can't edit.
+      meta.remove('cutoff_clock');
+      meta.remove('cutoff_elapsed_s');
     }
     if (_target.text.trim().isNotEmpty) {
       final targetS = parseMarkerElapsed(_target.text, positionM: positionM);
@@ -869,9 +888,15 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
         return;
       }
       meta['target_elapsed_s'] = targetS;
+    } else {
+      // Only the elapsed form is editable here; a `target_clock` written
+      // elsewhere is left alone rather than destroyed by an unrelated edit.
+      meta.remove('target_elapsed_s');
     }
     if ((_kind == 'note' || _kind == 'hazard') && _note.text.trim().isNotEmpty) {
       meta['note'] = _note.text.trim();
+    } else {
+      meta.remove('note');
     }
     Navigator.of(context).pop(
         _MarkerDraft(_kind, _label.text.trim(), lat, lng, meta));

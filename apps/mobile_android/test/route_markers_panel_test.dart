@@ -781,6 +781,93 @@ void main() {
     expect(sortMarkerRows(const <RouteMarkerRow>[]), isEmpty);
   });
 
+  testWidgets('editing a marker keeps the meta keys the sheet cannot author',
+      (tester) async {
+    // Regression: the sheet rebuilt meta from scratch, so any edit destroyed
+    // cutoff_elapsed_s / target_clock (no input on either platform) and any
+    // key a later version adds.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {
+            'cutoff_clock': '14:30',
+            'cutoff_elapsed_s': 7200,
+            'target_clock': '13:45',
+            'future_key': 'keep me',
+          },
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Gate 1');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    final meta = api.updatedMeta!;
+    expect(meta['cutoff_clock'], '14:30');
+    expect(meta['cutoff_elapsed_s'], 7200,
+        reason: 'the elapsed cut-off has no input and must survive');
+    expect(meta['target_clock'], '13:45');
+    expect(meta['future_key'], 'keep me');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('changing away from cutoff drops the whole cutoff concept',
+      (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {
+            'cutoff_clock': '14:30',
+            'cutoff_elapsed_s': 7200,
+            'target_clock': '13:45',
+          },
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cut-off').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Note').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    final meta = api.updatedMeta!;
+    expect(meta.containsKey('cutoff_clock'), isFalse);
+    expect(meta.containsKey('cutoff_elapsed_s'), isFalse,
+        reason: 'a note cannot carry a cut-off in either form');
+    // A target is kind-agnostic, so it stays.
+    expect(meta['target_clock'], '13:45');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);
