@@ -749,6 +749,38 @@ void main() {
     expect(find.textContaining('Water · Food'), findsOneWidget);
   });
 
+  test('sortMarkerRows delegates to the route_markers twin ordering', () {
+    // Position asc, nulls last, ties + null-vs-null stable by created_at —
+    // the panel used to repeat this comparator inline, so a change to the
+    // shared rule reached web but not the mobile schedule list.
+    RouteMarkerRow row(String id, double? pos, String created) => RouteMarkerRow(
+          id: id,
+          routeId: 'route-1',
+          userId: 'owner-1',
+          kind: 'note',
+          label: id,
+          lat: 51.5,
+          lng: -0.12,
+          positionM: pos,
+          meta: const {},
+          createdAt: DateTime.parse(created),
+          updatedAt: DateTime.parse(created),
+        );
+    final rows = [
+      row('d', null, '2026-01-02T00:00:00Z'),
+      row('c', null, '2026-01-01T00:00:00Z'),
+      row('b', 500, '2026-01-02T00:00:00Z'),
+      row('a', 500, '2026-01-01T00:00:00Z'),
+      row('e', 100, '2026-01-01T00:00:00Z'),
+    ];
+    expect(sortMarkerRows(rows).map((m) => m.id).toList(),
+        ['e', 'a', 'b', 'c', 'd']);
+    // Input untouched, and an unmodifiable source (the api's empty/error
+    // path) must not throw.
+    expect(rows.first.id, 'd');
+    expect(sortMarkerRows(const <RouteMarkerRow>[]), isEmpty);
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);

@@ -104,18 +104,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       debugPrint('route markers load failed for ${widget.routeId}: $e');
       fetched = const [];
     }
-    // Own a growable copy before sorting: fetchRouteMarkers returns an
-    // unmodifiable `const []` on its empty/error paths, and sort() mutates
-    // in place — sorting the borrowed list directly throws UnsupportedError.
-    final markers = [...fetched];
-    markers.sort((a, b) {
-      final ap = a.positionM, bp = b.positionM;
-      if (ap == null && bp == null) return a.createdAt.compareTo(b.createdAt);
-      if (ap == null) return 1;
-      if (bp == null) return -1;
-      if (ap != bp) return ap.compareTo(bp);
-      return a.createdAt.compareTo(b.createdAt);
-    });
+    final markers = sortMarkerRows(fetched);
     if (!mounted) return;
     setState(() {
       _markers = markers;
@@ -559,6 +548,30 @@ Color _hexColor(String hex) {
   if (v == null) return const Color(0xFF6B7280);
   return Color(0xFF000000 | v);
 }
+
+/// Adapts a `RouteMarkerRow` to the twin helper's [MarkerLike] interface.
+/// `route_markers.dart` stays free of a `core_models` dependency, and Dart
+/// has no structural typing, so the row can't satisfy it directly.
+class _SortableMarker implements MarkerLike {
+  final RouteMarkerRow row;
+  const _SortableMarker(this.row);
+
+  @override
+  double? get positionM => row.positionM;
+
+  @override
+  DateTime get createdAt => row.createdAt;
+}
+
+/// Course-schedule order for a fetched page of rows, delegating to the
+/// `route_markers` twin's [sortMarkers] rather than repeating its comparator
+/// — a change to the shared ordering rule has to reach this list too.
+/// Returns a fresh growable list: `fetchRouteMarkers` hands back an
+/// unmodifiable `const []` on its empty / error paths.
+List<RouteMarkerRow> sortMarkerRows(List<RouteMarkerRow> rows) => [
+      for (final s in sortMarkers([for (final r in rows) _SortableMarker(r)]))
+        s.row,
+    ];
 
 double? parseMarkerCoordinate(String text, double max) {
   final v = double.tryParse(text.trim());
