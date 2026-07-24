@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration } from '$lib/format/time';
 	import {
@@ -151,7 +151,12 @@
 		void _g;
 		void _a;
 		void _c;
-		if (segId) refreshLeaderboard(segId);
+		// refreshLeaderboard reads AND writes leaderboards/leaderboardErrors
+		// synchronously (the "reset to loading" prologue). Without untrack those
+		// reads make this effect depend on the maps it writes, so it re-triggers
+		// itself and the board never settles — it renders empty. The four signals
+		// read above are the only real triggers for a refetch.
+		if (segId) untrack(() => refreshLeaderboard(segId));
 	});
 
 	async function submitCreate() {
