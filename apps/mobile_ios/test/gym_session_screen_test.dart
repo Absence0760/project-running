@@ -58,6 +58,20 @@ StoredRoutine _timedRoutine() => StoredRoutine(
       syncState: RoutineSyncState.synced,
     );
 
+/// A single distance carry — the modality whose target never reached the
+/// runner, so the set had no input and graded as an unconditional `hit`.
+StoredRoutine _distanceRoutine() => StoredRoutine(
+      row: {'id': 'routine-3', 'title': 'Carries', 'exercise_count': 1},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Farmer carry',
+          exerciseKey: 'farmer_carry',
+          sets: [StoredRoutineSet(targetDistanceM: 500, restS: 0)],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
 Future<({LocalGymStore store, Directory dir})> _gymStore(
     WidgetTester tester) async {
   late LocalGymStore store;
@@ -167,6 +181,88 @@ void main() {
     await tester.pump();
 
     expect(find.widgetWithText(TextField, 'Time (s)'), findsNothing);
+  });
+
+  testWidgets('a distance set logs what was entered, not the target',
+      (tester) async {
+    // Regression: GymRunnerStep carried no targetDistanceM, so the target never
+    // reached the runner, there was no way to record an actual distance, and
+    // computeRoutineAdherence fell through its axis chain to grade the set a
+    // flat `hit` no matter what the athlete did.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _distanceRoutine()));
+    await tester.pump();
+
+    // The band surfaces the target the step now carries.
+    expect(find.text('500 m'), findsOneWidget);
+
+    final field = find.widgetWithText(TextField, 'Distance (m)');
+    expect(field, findsOneWidget,
+        reason: 'a distance step needs a way to record the real distance');
+    // Nothing typed yet → nothing to log, not a silent full-credit hit.
+    expect(tester.widget<TextField>(field).controller!.text, '');
+
+    await tester.enterText(field, '380');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    // Distance has no gym_sets column, so the flat set list stays empty — the
+    // real distance travels in the metadata step-results instead.
+    final workout = g.store.workouts.single;
+    expect(workout.sets, isEmpty);
+    final results =
+        (workout.row['metadata'] as Map)['gym_step_results'] as List;
+    expect(results.single['actual_distance_m'], 380,
+        reason: 'the logged distance must be the 380 m entered, not the 500 m '
+            'target');
+    expect(results.single['target_distance_m'], 500);
+    expect(results.single['status'], 'partial',
+        reason: '380 m is under 80% of the 500 m target');
+  });
+
+  testWidgets('an unrecorded distance logs null and is graded unrecorded',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _distanceRoutine()));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final results = ((g.store.workouts.single.row['metadata']
+        as Map)['gym_step_results'] as List);
+    expect(results.single['actual_distance_m'], isNull);
+    expect(results.single['status'], 'partial',
+        reason: 'an unlogged distance target is partial, never a hit');
+  });
+
+  testWidgets('a set with no distance target shows no distance field',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _routine()));
+    await tester.pump();
+
+    expect(find.widgetWithText(TextField, 'Distance (m)'), findsNothing);
   });
 
   testWidgets('Complete on the last step finishes the session', (tester) async {

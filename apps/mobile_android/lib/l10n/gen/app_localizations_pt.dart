@@ -9030,6 +9030,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distância (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Série $n';
   }
@@ -20815,6 +20823,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String gymDurationValue(String seconds) {
     return '${seconds}s';
+  }
+
+  @override
+  String get gymDistance => 'Distância (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
   }
 
   @override

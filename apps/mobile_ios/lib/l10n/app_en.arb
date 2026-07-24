@@ -12080,6 +12080,19 @@
       }
     }
   },
+  "gymDistance": "Distance (m)",
+  "@gymDistance": {
+    "description": "Label on the guided-session input where the athlete records the distance they actually covered on a distance-modality set"
+  },
+  "gymDistanceValue": "{metres} m",
+  "@gymDistanceValue": {
+    "description": "A set's distance target in metres",
+    "placeholders": {
+      "metres": {
+        "type": "String"
+      }
+    }
+  },
   "gymSetN": "Set {n}",
   "@gymSetN": {
     "description": "Set ordinal label in a gym workout",

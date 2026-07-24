@@ -14958,6 +14958,18 @@ abstract class AppLocalizations {
   /// **'{seconds}s'**
   String gymDurationValue(String seconds);
 
+  /// Label on the guided-session input where the athlete records the distance they actually covered on a distance-modality set
+  ///
+  /// In en, this message translates to:
+  /// **'Distance (m)'**
+  String get gymDistance;
+
+  /// A set's distance target in metres
+  ///
+  /// In en, this message translates to:
+  /// **'{metres} m'**
+  String gymDistanceValue(String metres);
+
   /// Set ordinal label in a gym workout
   ///
   /// In en, this message translates to:

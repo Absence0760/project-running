@@ -2457,6 +2457,8 @@
   "gymRpe": "RPE",
   "gymDuration": "時間 (秒)",
   "gymDurationValue": "{seconds}秒",
+  "gymDistance": "距離 (m)",
+  "gymDistanceValue": "{metres} m",
   "gymSetN": "セット {n}",
   "gymPrWeight": "最高重量",
   "gymPrVolume": "最高ボリューム",

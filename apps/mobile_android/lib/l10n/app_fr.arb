@@ -2457,6 +2457,8 @@
   "gymRpe": "RPE",
   "gymDuration": "Temps (s)",
   "gymDurationValue": "{seconds}s",
+  "gymDistance": "Distance (m)",
+  "gymDistanceValue": "{metres} m",
   "gymSetN": "Série {n}",
   "gymPrWeight": "Plus lourde",
   "gymPrVolume": "Meilleur volume",

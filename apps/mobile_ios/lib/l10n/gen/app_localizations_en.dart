@@ -8937,6 +8937,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distance (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Set $n';
   }
