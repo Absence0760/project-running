@@ -586,9 +586,6 @@ String formatMarkerCoordinate(double v) {
       .replaceFirst(RegExp(r'\.$'), '');
 }
 
-/// Metres in one statute mile (matches `UnitFormat`'s private constant).
-const double kMetresPerMile = 1609.344;
-
 /// Parse a "distance along the route" the user typed (in [unit]) into metres.
 /// Returns null for non-numeric / non-finite / negative input. Does NOT clamp
 /// to the route length — that happens in [markerPointAtDistance] via the

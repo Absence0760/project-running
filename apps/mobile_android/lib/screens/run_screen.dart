@@ -2469,7 +2469,7 @@ class _RunScreenState extends State<RunScreen> {
         final customInterval = widget.preferences.splitIntervalMetres;
         final tickInterval = customInterval > 0
             ? customInterval.toDouble()
-            : _activityType.splitIntervalMetres;
+            : _activityType.splitIntervalMetresFor(unit);
         final currentTick =
             UnitFormat.activityTicks(_distanceMetres, tickInterval);
         if (currentTick > _lastTickNotified && currentTick > 0) {
