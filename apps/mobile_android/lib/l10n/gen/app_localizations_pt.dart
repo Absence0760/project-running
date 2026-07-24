@@ -10483,7 +10483,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Inserir coordenadas';
+  String get routeMarkerEnterCoords => 'Inserir localização';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11765,6 +11765,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo objetivo';
+
+  @override
+  String get routeMarkerTargetHelper => 'Horas : minutos : segundos';
 
   @override
   String get routeMarkerTargetInvalid =>
@@ -22258,7 +22261,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Inserir coordenadas';
+  String get routeMarkerEnterCoords => 'Inserir localização';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -23540,6 +23543,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo alvo';
+
+  @override
+  String get routeMarkerTargetHelper => 'Horas : minutos : segundos';
 
   @override
   String get routeMarkerTargetInvalid => 'Informe o tempo alvo como h:mm:ss';

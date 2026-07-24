@@ -334,7 +334,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid');
     await tester.enterText(
@@ -373,7 +373,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -407,7 +407,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Bad');
@@ -516,7 +516,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -624,6 +624,50 @@ void main() {
       expect(formatMarkerElapsed(1500), '25:00');
       expect(parseMarkerElapsed(formatMarkerElapsed(6300)), 6300);
       expect(parseMarkerElapsed(formatMarkerElapsed(1500)), 1500);
+    });
+  });
+
+  group('formatElapsedDigits (target-time input mask)', () {
+    test('fills from the right into m:ss / h:mm:ss', () {
+      expect(formatElapsedDigits(''), '');
+      expect(formatElapsedDigits('4'), '0:04');
+      expect(formatElapsedDigits('43'), '0:43');
+      expect(formatElapsedDigits('430'), '4:30');
+      expect(formatElapsedDigits('2500'), '25:00');
+      expect(formatElapsedDigits('14500'), '1:45:00');
+      expect(formatElapsedDigits('430000'), '43:00:00');
+    });
+
+    test('strips non-digits so an already-formatted value re-masks cleanly', () {
+      expect(formatElapsedDigits('abc'), '');
+      // The prefill (formatMarkerElapsed output) round-trips unchanged.
+      expect(formatElapsedDigits('1:45:00'), '1:45:00');
+      expect(formatElapsedDigits('25:00'), '25:00');
+      expect(formatElapsedDigits('0:43'), '0:43');
+    });
+
+    test('caps at six digits (drops the oldest) so hours stay two-digit', () {
+      expect(formatElapsedDigits('12345678'), '34:56:78');
+    });
+
+    test('the masked value parses back to the intended seconds', () {
+      expect(parseMarkerElapsed(formatElapsedDigits('2500')), 1500);
+      expect(parseMarkerElapsed(formatElapsedDigits('14500')), 6300);
+    });
+  });
+
+  group('formatClockDigits (cut-off HH:MM input mask)', () {
+    test('fills from the left, inserting the colon after two digits', () {
+      expect(formatClockDigits(''), '');
+      expect(formatClockDigits('1'), '1');
+      expect(formatClockDigits('14'), '14');
+      expect(formatClockDigits('143'), '14:3');
+      expect(formatClockDigits('1430'), '14:30');
+    });
+
+    test('strips non-digits and caps at four digits', () {
+      expect(formatClockDigits('14:30'), '14:30');
+      expect(formatClockDigits('091530'), '15:30');
     });
   });
 

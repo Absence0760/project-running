@@ -9976,7 +9976,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeMarkerCoordInvalid => '有効な緯度（-90〜90）と経度（-180〜180）を入力してください。';
 
   @override
-  String get routeMarkerEnterCoords => '代わりに座標を入力';
+  String get routeMarkerEnterCoords => '代わりに位置を入力';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11212,6 +11212,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => '目標タイム';
+
+  @override
+  String get routeMarkerTargetHelper => '時 : 分 : 秒';
 
   @override
   String get routeMarkerTargetInvalid => '目標タイムは h:mm:ss 形式で入力してください';

@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -605,6 +606,59 @@ String formatMarkerElapsed(int s) {
   return h > 0 ? '$h:${two(m)}:${two(sec)}' : '$m:${two(sec)}';
 }
 
+/// Live-format raw digit entry into an elapsed `h:mm:ss` / `m:ss` string so a
+/// marker target time can be typed on a numeric keyboard that offers no `:`
+/// separator (the datetime keyboard hides it on many Android IMEs). Digits
+/// fill from the right — seconds, then minutes, then hours — and the value
+/// always carries at least `m:ss`, so [parseMarkerElapsed] reads it back the
+/// same way it round-trips [formatMarkerElapsed] output.
+String formatElapsedDigits(String raw) {
+  var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.length > 6) digits = digits.substring(digits.length - 6);
+  final padded = digits.padLeft(3, '0');
+  final sec = padded.substring(padded.length - 2);
+  final rest = padded.substring(0, padded.length - 2);
+  if (rest.length <= 2) {
+    // Drop a leading zero on the minutes ('04' → '4') but keep a lone '0'.
+    final min = rest.length == 2 && rest.startsWith('0') ? rest.substring(1) : rest;
+    return '$min:$sec';
+  }
+  final min = rest.substring(rest.length - 2);
+  final hrs = rest.substring(0, rest.length - 2);
+  return '$hrs:$min:$sec';
+}
+
+/// Live-format raw digit entry into a 24-hour `HH:MM` clock for a marker
+/// cut-off, so it too can be typed without a `:` key. Digits fill from the
+/// left (hours first).
+String formatClockDigits(String raw) {
+  var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.length > 4) digits = digits.substring(digits.length - 4);
+  if (digits.length <= 2) return digits;
+  return '${digits.substring(0, 2)}:${digits.substring(2)}';
+}
+
+/// A [TextInputFormatter] that live-formats digit entry through [format]
+/// (e.g. [formatElapsedDigits] / [formatClockDigits]) and pins the caret at
+/// the end, so a time field auto-inserts its `:` separators as the user types
+/// digits — no separator key required.
+class _MaskedTimeFormatter extends TextInputFormatter {
+  final String Function(String) format;
+  const _MaskedTimeFormatter(this.format);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = format(newValue.text);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
 class _MarkerDraft {
   final String kind;
   final String label;
@@ -869,21 +923,24 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
               const SizedBox(height: 12),
               TextField(
                 controller: _cutoff,
+                keyboardType: TextInputType.number,
+                inputFormatters: [_MaskedTimeFormatter(formatClockDigits)],
                 decoration: InputDecoration(
                   labelText: l10n.routeMarkerCutoffLabel,
                   hintText: 'HH:MM',
                 ),
-                keyboardType: TextInputType.datetime,
               ),
             ],
             const SizedBox(height: 12),
             TextField(
               controller: _target,
+              keyboardType: TextInputType.number,
+              inputFormatters: [_MaskedTimeFormatter(formatElapsedDigits)],
               decoration: InputDecoration(
                 labelText: l10n.routeMarkerTargetLabel,
                 hintText: 'h:mm:ss',
+                helperText: l10n.routeMarkerTargetHelper,
               ),
-              keyboardType: TextInputType.datetime,
             ),
             if (_kind == 'note' || _kind == 'hazard') ...[
               const SizedBox(height: 12),

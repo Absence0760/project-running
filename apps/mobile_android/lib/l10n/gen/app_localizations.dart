@@ -17454,10 +17454,10 @@ abstract class AppLocalizations {
   /// **'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).'**
   String get routeMarkerCoordInvalid;
 
-  /// Button opening the marker editor without a map tap, for keyboard / screen-reader placement
+  /// Button opening the marker editor without a map tap (accepts lat/lng or a distance along the route), for keyboard / screen-reader placement
   ///
   /// In en, this message translates to:
-  /// **'Enter coordinates instead'**
+  /// **'Enter location instead'**
   String get routeMarkerEnterCoords;
 
   /// Error: save marker failed
@@ -19703,6 +19703,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Target time'**
   String get routeMarkerTargetLabel;
+
+  /// Persistent helper under the course-marker target-time field clarifying the h:mm:ss format
+  ///
+  /// In en, this message translates to:
+  /// **'Hours : minutes : seconds'**
+  String get routeMarkerTargetHelper;
 
   /// Course marker target-time validation
   ///

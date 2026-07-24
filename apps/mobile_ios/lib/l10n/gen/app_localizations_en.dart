@@ -10379,7 +10379,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Enter coordinates instead';
+  String get routeMarkerEnterCoords => 'Enter location instead';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11646,6 +11646,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Target time';
+
+  @override
+  String get routeMarkerTargetHelper => 'Hours : minutes : seconds';
 
   @override
   String get routeMarkerTargetInvalid => 'Enter the target time as h:mm:ss';

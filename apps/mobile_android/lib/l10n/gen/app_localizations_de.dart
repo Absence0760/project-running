@@ -10500,7 +10500,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Gib einen gültigen Breitengrad (-90 bis 90) und Längengrad (-180 bis 180) ein.';
 
   @override
-  String get routeMarkerEnterCoords => 'Stattdessen Koordinaten eingeben';
+  String get routeMarkerEnterCoords => 'Standort stattdessen eingeben';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11781,6 +11781,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Zielzeit';
+
+  @override
+  String get routeMarkerTargetHelper => 'Stunden : Minuten : Sekunden';
 
   @override
   String get routeMarkerTargetInvalid => 'Zielzeit als h:mm:ss eingeben';

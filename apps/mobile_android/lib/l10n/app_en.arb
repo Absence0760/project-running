@@ -13630,9 +13630,9 @@
   "@routeMarkerCoordInvalid": {
     "description": "Validation: typed marker coordinates out of range or unparseable"
   },
-  "routeMarkerEnterCoords": "Enter coordinates instead",
+  "routeMarkerEnterCoords": "Enter location instead",
   "@routeMarkerEnterCoords": {
-    "description": "Button opening the marker editor without a map tap, for keyboard / screen-reader placement"
+    "description": "Button opening the marker editor without a map tap (accepts lat/lng or a distance along the route), for keyboard / screen-reader placement"
   },
   "routeMarkerSaveFailed": "Could not save marker: {error}",
   "@routeMarkerSaveFailed": {
@@ -15150,6 +15150,8 @@
   "@routeMarkerTargetChip": {"description": "Voice cues / race strategy", "placeholders": {"time": {"type": "String"}}},
   "routeMarkerTargetLabel": "Target time",
   "@routeMarkerTargetLabel": {"description": "Voice cues / race strategy"},
+  "routeMarkerTargetHelper": "Hours : minutes : seconds",
+  "@routeMarkerTargetHelper": {"description": "Persistent helper under the course-marker target-time field clarifying the h:mm:ss format"},
   "routeMarkerTargetInvalid": "Enter the target time as h:mm:ss",
   "@routeMarkerTargetInvalid": {"description": "Course marker target-time validation"},
   "routeMarkerOfficialBadge": "Route owner",
