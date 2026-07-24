@@ -584,6 +584,104 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('placing mode can be cancelled', (tester) async {
+    final placing = <bool>[];
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: RouteMarkersPanel(
+            api: _MarkersApi(),
+            routeId: 'route-1',
+            isOwner: true,
+            viewerId: 'owner-1',
+            routeOwnerId: 'owner-1',
+            routeLine: _routeLine,
+            initialMarkers: const [],
+            onPinsChanged: (_) {},
+            onPlacingChanged: placing.add,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    expect(placing, [true]);
+    expect(find.text('Add marker'), findsNothing);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+
+    // The host stops routing map taps into placement, and the entry point is
+    // back — a placement is no longer one-way.
+    expect(placing, [true, false]);
+    expect(find.text('Add marker'), findsOneWidget);
+    // The whole placing block (snap toggle, hint, cancel) is torn down.
+    expect(find.byType(Checkbox), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('tapping an existing pin while placing places there instead of '
+      'opening that marker and wedging placing mode', (tester) async {
+    final api = _MarkersApi();
+    final key = GlobalKey<RouteMarkersPanelState>();
+    final placing = <bool>[];
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: RouteMarkersPanel(
+            key: key,
+            api: api,
+            routeId: 'route-1',
+            isOwner: true,
+            viewerId: 'owner-1',
+            routeOwnerId: 'owner-1',
+            routeLine: _routeLine,
+            initialMarkers: [
+              _marker(id: 'm1', kind: 'aid_station', label: 'Aid 1'),
+            ],
+            onPinsChanged: (_) {},
+            onPlacingChanged: placing.add,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+
+    key.currentState!.selectMarker('m1');
+    await tester.pumpAndSettle();
+
+    // Placing ended and the sheet is a NEW marker at the tapped point, not
+    // Aid 1's editor.
+    expect(placing, [true, false]);
+    expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
+            .controller!
+            .text,
+        '');
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid 2');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    expect(api.updateCalls, 0);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);

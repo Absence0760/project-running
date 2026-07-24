@@ -185,10 +185,19 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
 
   /// Called by the host when a course-marker pin is tapped. Only the viewer's
   /// own markers open the editor; an owner's official marker is read-only.
+  ///
+  /// While placing, a pin is just another point on the map: the tap places
+  /// there rather than opening that marker's editor. The pin's hit box would
+  /// otherwise be a dead zone the placement tap can't reach, and opening an
+  /// unrelated editor left placing mode stuck on behind it.
   void selectMarker(String id) {
     for (final row in _markers) {
       if (row.id == id) {
-        if (_canEditMarker(row)) _openEditor(existing: row);
+        if (_placing) {
+          placeAt(Waypoint(lat: row.lat, lng: row.lng));
+        } else if (_canEditMarker(row)) {
+          _openEditor(existing: row);
+        }
         return;
       }
     }
@@ -401,16 +410,25 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               ],
             ),
           ),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () {
-                _setPlacing(false);
-                _openEditor();
-              },
-              icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
-              label: Text(l10n.routeMarkerEnterCoords),
-            ),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  _setPlacing(false);
+                  _openEditor();
+                },
+                icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+                label: Text(l10n.routeMarkerEnterCoords),
+              ),
+              // Without this, starting a placement is one-way: the Add button
+              // hides while placing, so a viewer who changes their mind is
+              // left with a map that eats every tap.
+              TextButton(
+                onPressed: () => _setPlacing(false),
+                child: Text(l10n.routeMarkerCancel),
+              ),
+            ],
           ),
         ],
         if (_loaded && _markers.isEmpty && !_placing)
