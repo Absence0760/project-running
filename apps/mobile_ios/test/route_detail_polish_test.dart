@@ -135,5 +135,27 @@ void main() {
         reason: 'Bottom-of-scroll padding must clear the FAB.',
       );
     });
+
+    test(
+        'starting a course-marker placement scrolls the map back into view',
+        () {
+      // The map is the FIRST list child; the markers panel sits hundreds of
+      // pixels below the fold. Without this, "Tap the map to place this
+      // marker" arrives with no map on screen and the placement looks broken.
+      expect(
+        src.contains('controller: _scrollController'),
+        isTrue,
+        reason: 'The detail ListView must carry the ScrollController that '
+            '_revealMap drives.',
+      );
+      final onPlacing = src.indexOf('onPlacingChanged: (placing) {');
+      expect(onPlacing, isNonNegative);
+      final block = src.substring(onPlacing, onPlacing + 220);
+      expect(
+        block.contains('if (placing) _revealMap();'),
+        isTrue,
+        reason: 'Entering placing mode must reveal the map.',
+      );
+    });
   });
 }
