@@ -388,8 +388,12 @@ class AudioCues {
   }) async {
     await _init();
     await _applyLanguage();
-    final l10n = ttsL10n(activeLocaleTag);
-    final distance = UnitFormat.distance(distanceMetres, unit);
+    final tag = activeLocaleTag;
+    final l10n = ttsL10n(tag);
+    // The spoken form, not UnitFormat's on-screen "5.2 km" — an engine reads
+    // that abbreviation out as letters, and in a non-English voice it isn't
+    // the right word at all. Every other cue already goes through here.
+    final distance = formatSpokenDistance(distanceMetres, unit, tag);
     final mins = elapsed.inMinutes;
     await _tts.speak(l10n.ttsRunComplete(distance, mins));
   }

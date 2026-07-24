@@ -18,6 +18,8 @@
 // experience without any visual signal — exactly the kind of bug
 // that's hard to catch in production.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 
@@ -451,6 +453,24 @@ void main() {
       final r = formatWorkoutStepUtterance(deStep(), DistanceUnit.km, 'de');
       expect(r, startsWith('Aufwärmen.'));
       expect(r, contains('pro Kilometer'));
+    });
+  });
+
+  group('AudioCues wiring (source guard)', () {
+    test('announceFinish speaks the distance, never UnitFormat abbreviations',
+        () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      final start = src.indexOf('Future<void> announceFinish(');
+      expect(start, isNonNegative);
+      final body = src.substring(start, src.indexOf('/// Warn that', start));
+      expect(body, contains('formatSpokenDistance(distanceMetres, unit, tag)'));
+      expect(
+        body.contains('UnitFormat.distance('),
+        isFalse,
+        reason: 'UnitFormat renders "5.2 km" — an engine reads that '
+            'abbreviation out as letters, and it is not the right word in a '
+            'non-English voice.',
+      );
     });
   });
 
