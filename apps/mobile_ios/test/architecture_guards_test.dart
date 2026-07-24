@@ -1961,11 +1961,11 @@ void main() {
         r'Future<List<Waypoint>> clipRouteForViewer\([^)]*\)\s*async\s*\{',
       );
       final tail = body.substring(body.indexOf('try'));
-      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
-      expect(catchMatch, isNotNull,
+      expect(RegExp(r'catch \([^)]*\) \{').hasMatch(tail), isTrue,
           reason: 'clipRouteForViewer must have an explicit catch branch.');
+      final catchBody = _extractMethodBody(tail, r'catch \([^)]*\) \{');
       expect(
-        catchMatch!.group(0)!.contains('return const []'),
+        catchBody.contains('return const []'),
         isTrue,
         reason: 'clipRouteForViewer must return [] on RPC failure — '
             'see decisions §33.',
@@ -2080,11 +2080,11 @@ void main() {
       );
       // The catch / shape-fail branches must not return the unclipped
       // input.
-      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
-      expect(catchMatch, isNotNull,
+      expect(RegExp(r'catch \([^)]*\) \{').hasMatch(tail), isTrue,
           reason: 'clipTrackForUser must have an explicit catch branch.');
+      final catchBody = _extractMethodBody(tail, r'catch \([^)]*\) \{');
       expect(
-        catchMatch!.group(0)!.contains('return points'),
+        catchBody.contains('return points'),
         isFalse,
         reason: 'clipTrackForUser must not fall back to the input track '
             'on RPC error — that is the leak this helper exists to '
