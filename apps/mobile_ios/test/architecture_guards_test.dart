@@ -2699,27 +2699,38 @@ void main() {
     // These tests guard the Play-policy + SDK-34/35 manifest plumbing
     // that the audit pass identified as submission blockers. The
     // checks short-circuit on the iOS twin (no android/ directory).
-    test('READ_MEDIA_IMAGES is not declared', () {
+    test('READ_MEDIA_IMAGES is stripped, never actively declared', () {
       final file =
           File('android/app/src/main/AndroidManifest.xml');
       if (!file.existsSync()) return;
       final body = file.readAsStringSync();
-      // image_picker uses the Android Photo Picker unconditionally on
-      // API 33+, which is the only API level READ_MEDIA_IMAGES exists
-      // at — so no picker path can reach it at minSdk 26. Declaring it
-      // buys nothing and forces a broad-media-access justification plus
-      // a Photos & videos Data Safety entry; Play rejects the release
-      // for an undeclared photo/video permission that the app never
-      // needed.
-      expect(
-        body,
-        isNot(contains(
-            '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"')),
-        reason:
-            'AndroidManifest.xml must NOT declare READ_MEDIA_IMAGES — '
-            'image_picker goes through the Android Photo Picker on every '
-            'API level that has the permission.',
-      );
+      // image_picker (image_picker_android) transitively injects
+      // READ_MEDIA_IMAGES into the MERGED manifest for its legacy
+      // gallery-pick fallback — even though the app only ever uses the
+      // Android Photo Picker (no permission on any API level that has
+      // the permission). Left un-stripped it forces a broad-media-access
+      // justification plus a Photos & videos Data Safety entry, and Play
+      // rejects the release for a photo/video permission the app never
+      // needed. So the manifest strips it with tools:node="remove".
+      // Guard that the strip stays in place AND that the permission is
+      // never actively declared (a bare <uses-permission .../> without
+      // the remove directive).
+      final hasStrip = RegExp(
+        r'READ_MEDIA_IMAGES"\s+tools:node="remove"',
+      ).hasMatch(body);
+      expect(hasStrip, isTrue,
+          reason:
+              'AndroidManifest.xml must strip the transitively-injected '
+              'READ_MEDIA_IMAGES via tools:node="remove" so it never '
+              'reaches the merged manifest.');
+      final hasActiveDeclaration = RegExp(
+        r'READ_MEDIA_IMAGES"\s*/>',
+      ).hasMatch(body);
+      expect(hasActiveDeclaration, isFalse,
+          reason:
+              'READ_MEDIA_IMAGES may appear ONLY as a tools:node="remove" '
+              'strip, never as an active <uses-permission> — the app uses '
+              'the Android Photo Picker and needs no media permission.');
     });
 
     test('allowBackup is disabled so GPS/HR + auth tokens stay out of cloud backup', () {
