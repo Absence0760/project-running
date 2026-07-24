@@ -375,9 +375,26 @@ duration as `step.targetDurationS` — so every timed set persisted a
 steps now carry their own duration input (empty by default, matching web's
 `GymExecutionBand`), so an unrecorded hold logs null and is graded as such.
 Any future modality must add its input alongside the axis, not fall back to
-the prescription. A **distance** target still has no mobile input and no
-`targetDistanceM` on `GymRunnerStep`, so a distance-modality step is not yet
-executable there — the gap is honest (nothing fabricated), not fixed.
+the prescription.
+
+**Distance closed the same way (2026-07-24).** A distance target was worse than
+the duration one: `GymRunnerStep` carried no `targetDistanceM` at all, so the
+session screen dropped it building the steps, `_metadataTrio` emitted no
+`target_distance_m`, and `computeRoutineAdherence` — with no distance target to
+see — fell off the end of its axis chain and graded every distance-modality set
+a flat `hit` whatever the athlete did. `GymRunnerStep.targetDistanceM` /
+`isDistanceBased` + `GymRunnerSetResult.actualDistanceM` now carry the axis, the
+session screen renders a distance input whenever the step has a target
+(**empty by default**, like duration — so an unrecorded carry logs null and
+grades `partial`, never the target), the band's target label shows the distance,
+and the metadata step-results carry `target_distance_m` / `actual_distance_m`.
+Distance has **no `gym_sets` column**, so a distance-only set writes no flat set
+row and is graded purely through the metadata trio — mirroring web's
+`GymSessionRunner.buildSets`; the finish counter counts it regardless.
+One deliberate divergence from web remains: web's `GymExecutionBand` *prefills*
+its distance input from the target (as it does reps and load), so a web athlete
+who taps Complete without touching the field logs the prescription as the
+actual. Mobile does not prefill. Web is the side that should move.
 
 - **Lives in `packages/run_recorder/`** (where `WorkoutRunner` lives, per `workout_runner.dart`) so iOS/watch can reuse it. The package name is a known smell — the gym runner has zero GPS/`RunRecorder` dependency — accepted for reuse symmetry rather than spinning a sibling package; noted so a future session doesn't trip on it.
 - **State machine** emits a `GymExecEvent` stream (`SetTransition`, `RestStarted` / `RestProgress` / `RestComplete`, `SetLogged`, `Complete`, `Abandoned`); idempotent `skipSet` / `rewindSet` (one deep) / `abandon`. Step transitions route through a `ValueNotifier` to avoid hot-path full-tree rebuilds, mirroring the run band.
