@@ -264,6 +264,21 @@ TtsDuckingStrategy ttsDuckingStrategyFor({
   return TtsDuckingStrategy.none;
 }
 
+/// flutter_tts `QUEUE_ADD` — a new utterance waits its turn instead of
+/// dropping the one being spoken.
+const int kTtsQueueAdd = 1;
+
+/// The queue mode to push to the engine, or null when the platform has no
+/// such call.
+///
+/// Android's TextToSpeech defaults to `QUEUE_FLUSH`, so a split cue landing
+/// on the same tick as a cut-off or off-route warning silently truncates it
+/// mid-word. iOS `AVSpeechSynthesizer.speak` always enqueues, and the plugin
+/// has no `setQueueMode` there — so the same Dart in the byte-identical twin
+/// behaves differently per platform until Android is told to queue too.
+int? ttsQueueModeFor({required bool isAndroid}) =>
+    isAndroid ? kTtsQueueAdd : null;
+
 class AudioCues {
   final FlutterTts _tts = FlutterTts();
   bool _initialized = false;
@@ -282,6 +297,8 @@ class AudioCues {
       await _applyLanguage();
       await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
+      final queueMode = ttsQueueModeFor(isAndroid: Platform.isAndroid);
+      if (queueMode != null) await _tts.setQueueMode(queueMode);
       // Request transient ducking so a cue lowers the runner's music /
       // podcast instead of talking over it (Android) or hard-pausing it
       // (iOS). Persona-hunt android + samsung #12. Each platform call is
@@ -595,12 +612,22 @@ class AudioCues {
     await _tts.speak(ttsL10n(activeLocaleTag).ttsWorkoutComplete);
   }
 
-  /// Speak an arbitrary guided-run cue. The TTS engine handles
-  /// interruption (a new speak() call cancels the previous utterance)
-  /// so back-to-back cues at the same second cleanly chain.
+  /// Speak an arbitrary guided-run cue, replacing anything in flight.
+  ///
+  /// This is the one cue that must interrupt rather than queue: it backs the
+  /// library's per-cue preview button, and tapping down a list should play
+  /// the cue you just tapped, not enqueue every one you tried. Run cues want
+  /// the opposite ([ttsQueueModeFor]), so the interruption is explicit here
+  /// instead of riding on the engine's queue mode — which differs by
+  /// platform.
   Future<void> speakGuidedCue(String text) async {
     await _init();
     await _applyLanguage();
+    try {
+      await _tts.stop();
+    } catch (e) {
+      debugPrint('audio_cues.speakGuidedCue stop failed: $e');
+    }
     await _tts.speak(text);
   }
 

@@ -456,7 +456,54 @@ void main() {
     });
   });
 
+  group('ttsQueueModeFor', () {
+    test('Android is told to queue — its engine defaults to flushing', () {
+      // Android TextToSpeech defaults to QUEUE_FLUSH, so a split cue landing
+      // on the same tick as a cut-off or off-route warning used to cut it off
+      // mid-word.
+      expect(ttsQueueModeFor(isAndroid: true), kTtsQueueAdd);
+    });
+
+    test('elsewhere there is no call to make', () {
+      // iOS AVSpeechSynthesizer already enqueues and the plugin answers
+      // setQueueMode with notImplemented — calling it would throw out of
+      // _init and skip the ducking setup that follows.
+      expect(ttsQueueModeFor(isAndroid: false), isNull);
+    });
+  });
+
   group('AudioCues wiring (source guard)', () {
+    test('_init pushes the queue mode, Android-gated', () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      expect(
+        src.contains(
+            'final queueMode = ttsQueueModeFor(isAndroid: Platform.isAndroid);'),
+        isTrue,
+      );
+      expect(
+        src.contains(
+            'if (queueMode != null) await _tts.setQueueMode(queueMode);'),
+        isTrue,
+        reason: 'the call must stay null-gated — on iOS it throws '
+            'notImplemented and would abort the rest of _init.',
+      );
+    });
+
+    test('speakGuidedCue interrupts rather than queues', () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      final start = src.indexOf('Future<void> speakGuidedCue(');
+      expect(start, isNonNegative);
+      final body =
+          src.substring(start, src.indexOf('Future<void> stop()', start));
+      expect(
+        body.indexOf('_tts.stop()') < body.indexOf('_tts.speak(text)'),
+        isTrue,
+        reason: 'the preview button must replace the cue in flight — with the '
+            'engine queueing, tapping down the library list would otherwise '
+            'enqueue every cue tried.',
+      );
+    });
+
     test('announceFinish speaks the distance, never UnitFormat abbreviations',
         () {
       final src = File('lib/audio_cues.dart').readAsStringSync();
