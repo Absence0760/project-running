@@ -254,4 +254,65 @@ void main() {
       expect(store.rows.any((r) => r['id'] == 'server-1'), isTrue);
     });
   });
+
+  group('retention', () {
+    Map<String, dynamic> crossing(String id, DateTime recordedAt) => {
+          'id': id,
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': instanceStart.toIso8601String(),
+          'bib': id,
+          'recorded_at': recordedAt.toIso8601String(),
+        };
+
+    DateTime ago(Duration d) => DateTime.now().toUtc().subtract(d);
+
+    test('an unsynced crossing is never pruned, however old', () async {
+      // A stamp taken offline long ago and never drained: unsent data, the
+      // only copy that exists.
+      final row = crossing('pending-1', ago(const Duration(days: 400)));
+      await store.persist(
+        StoredCrossing(row: row, syncState: CrossingSyncState.pendingCreate),
+      );
+
+      await store.replaceFromServer([]);
+
+      expect(store.rows.any((r) => r['id'] == 'pending-1'), isTrue);
+      expect(store.hasPending, isTrue);
+    });
+
+    test('a recent synced crossing survives', () async {
+      await store
+          .replaceFromServer([crossing('recent', ago(const Duration(days: 7)))]);
+      expect(store.rows.any((r) => r['id'] == 'recent'), isTrue);
+    });
+
+    test('a synced crossing past the retention window is dropped', () async {
+      await store.replaceFromServer([
+        crossing('old', ago(LocalCrossingsStore.kSyncedRetention +
+            const Duration(days: 1))),
+        crossing('fresh', ago(const Duration(days: 1))),
+      ]);
+
+      expect(store.rows.any((r) => r['id'] == 'old'), isFalse);
+      expect(store.rows.any((r) => r['id'] == 'fresh'), isTrue);
+      expect(File('${dir.path}/old.json').existsSync(), isFalse,
+          reason: 'the pruned record leaves no file behind');
+    });
+
+    test('a synced crossing with an unparseable recorded_at is kept', () async {
+      await store.replaceFromServer([
+        {
+          'id': 'undated',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': instanceStart.toIso8601String(),
+          'bib': 'undated',
+          'recorded_at': null,
+        },
+      ]);
+      expect(store.rows.any((r) => r['id'] == 'undated'), isTrue,
+          reason: 'an undatable audit record is never assumed old');
+    });
+  });
 }

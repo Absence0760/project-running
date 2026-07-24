@@ -174,10 +174,30 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
     return stored;
   }
 
+  /// How long a SYNCED crossing is kept in the local cache, measured from its
+  /// `recorded_at`. 90 days mirrors the server-side Art 9 scrub window on
+  /// `checkpoint_crossings.recorded_at` (migration `20270317_001`): by the time
+  /// the server has stripped the weigh-in fields, a phone-side copy of a
+  /// months-old race has no operational purpose left. Deliberately generous —
+  /// a crossing is race-day evidence, and a multi-day event plus its
+  /// incident-review tail must fit comfortably inside the window.
+  ///
+  /// A crossing that has NOT been pushed is never eligible: an unsynced stamp
+  /// is unsent data and is the only copy that exists, however long the
+  /// volunteer stays offline.
+  static const Duration kSyncedRetention = Duration(days: 90);
+
   /// Replace the in-memory state from a fresh server fetch (non-health
   /// columns). Pending rows are preserved as-is — only `synced` rows are
   /// overwritten so an offline stamp isn't clobbered by the server's copy.
+  ///
+  /// This is also where [kSyncedRetention] is applied: the whole live set is
+  /// rebuilt here and written back by [rewriteAll], so dropping an expired
+  /// synced crossing during the rebuild both evicts it from memory and deletes
+  /// its file (it simply isn't in the keep-set). A crossing whose `recorded_at`
+  /// can't be parsed is kept — an undatable audit record is never assumed old.
   Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
+    final now = DateTime.now().toUtc();
     final preserved = <String, StoredCrossing>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
@@ -189,13 +209,20 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
       final id = row['id'] as String;
       if (preserved.containsKey(id)) {
         rowsById[id] = preserved.remove(id)!;
-      } else {
-        rowsById[id] = StoredCrossing(row: row, syncState: SyncState.synced);
+        continue;
       }
+      if (_beyondRetention(row['recorded_at'], now)) continue;
+      rowsById[id] = StoredCrossing(row: row, syncState: SyncState.synced);
     }
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
+  }
+
+  static bool _beyondRetention(dynamic recordedAt, DateTime now) {
+    final at = _parseTime(recordedAt)?.toUtc();
+    if (at == null) return false;
+    return now.difference(at) > kSyncedRetention;
   }
 
   @override
