@@ -391,10 +391,14 @@ and the metadata step-results carry `target_distance_m` / `actual_distance_m`.
 Distance has **no `gym_sets` column**, so a distance-only set writes no flat set
 row and is graded purely through the metadata trio — mirroring web's
 `GymSessionRunner.buildSets`; the finish counter counts it regardless.
-One deliberate divergence from web remains: web's `GymExecutionBand` *prefills*
-its distance input from the target (as it does reps and load), so a web athlete
-who taps Complete without touching the field logs the prescription as the
-actual. Mobile does not prefill. Web is the side that should move.
+Web moved to match in the same pass: its `GymExecutionBand` had been prefilling
+the distance input from the target (as it does reps and load), so a web athlete
+who tapped Complete without touching the field logged the prescription as the
+actual — the same dishonesty one layer up. The rule is now stated positively and
+pinned by `gym_execution_band_seeding.test.ts`: **reps / load / RPE seed from
+the prescription** (a target the athlete confirms by completing the set),
+**distance and duration seed empty** (measurements — the app must not invent
+one). Any future axis has to pick a side of that line deliberately.
 
 - **Lives in `packages/run_recorder/`** (where `WorkoutRunner` lives, per `workout_runner.dart`) so iOS/watch can reuse it. The package name is a known smell — the gym runner has zero GPS/`RunRecorder` dependency — accepted for reuse symmetry rather than spinning a sibling package; noted so a future session doesn't trip on it.
 - **State machine** emits a `GymExecEvent` stream (`SetTransition`, `RestStarted` / `RestProgress` / `RestComplete`, `SetLogged`, `Complete`, `Abandoned`); idempotent `skipSet` / `rewindSet` (one deep) / `abandon`. Step transitions route through a `ValueNotifier` to avoid hot-path full-tree rebuilds, mirroring the run band.
