@@ -193,14 +193,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 
   int _currentWeekIndex(TrainingPlanRow plan) {
+    // Dart's clamp throws when the range is empty, unlike the web twin's
+    // Math.min — so a plan whose weeks failed to load (or never landed) would
+    // take the whole screen down rather than render an empty one.
+    if (_weeks.isEmpty) return 0;
     final dayIndex = DateTime.now().difference(plan.startDate).inDays;
     return dayIndex < 0 ? 0 : (dayIndex ~/ 7).clamp(0, _weeks.length - 1);
   }
 
   /// Summed actual run mileage dated inside `[weekIndex]`'s 7-day window.
   double _actualMetresForWeek(TrainingPlanRow plan, int weekIndex) {
-    final weekStart = plan.startDate.add(Duration(days: weekIndex * 7));
-    final weekEnd = weekStart.add(const Duration(days: 7));
+    // Calendar days, not 24-hour spans: a plan whose weeks cross a DST
+    // transition would otherwise shift every later boundary by an hour, and
+    // a run logged in that hour lands in the wrong week.
+    final weekStart = addDays(plan.startDate, weekIndex * 7);
+    final weekEnd = addDays(weekStart, 7);
     var actual = 0.0;
     for (final r in _recentRuns) {
       final t = r.startedAt.toLocal();
@@ -281,7 +288,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final today = toIsoDate(DateTime.now());
     final todayD = DateTime.now();
     return _weeks.map((w) {
-      final weekStart = plan.startDate.add(Duration(days: w.weekIndex * 7));
+      final weekStart = addDays(plan.startDate, w.weekIndex * 7);
       final weekEnd = weekStart.add(const Duration(days: 7));
       return ReplanWeek(
         weekIndex: w.weekIndex,
@@ -604,11 +611,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     }
     final theme = Theme.of(context);
     final today = toIsoDate(DateTime.now());
-    final start = p.startDate;
-    final dayIndex = DateTime.now().difference(start).inDays;
-    final currentWeek = dayIndex < 0
-        ? 0
-        : (dayIndex ~/ 7).clamp(0, _weeks.length - 1);
+    final currentWeek = _currentWeekIndex(p);
     final todayWorkout = _byWeek.values
         .expand((x) => x)
         .where((w) => toIsoDate(w.scheduledDate) == today && w.kind != 'rest')
