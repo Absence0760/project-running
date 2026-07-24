@@ -1173,6 +1173,7 @@
   "eventAttendanceNoShow": "欠席",
   "eventAttendanceFailed": "出席を更新できませんでした。もう一度お試しください。",
   "eventRsvpFailed": "参加可否を更新できませんでした。もう一度お試しください。",
+  "eventOccurrenceCancelled": "この回はキャンセルされました。",
   "eventRsvpWaitlisted": "補欠",
   "eventRsvpGoing": "参加する",
   "eventRsvpMaybe": "未定",

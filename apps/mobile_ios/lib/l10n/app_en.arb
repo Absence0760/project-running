@@ -5822,6 +5822,10 @@
   "@eventRsvpMaybe": {
     "description": "RSVP chip — maybe"
   },
+  "eventOccurrenceCancelled": "This occurrence was cancelled.",
+  "@eventOccurrenceCancelled": {
+    "description": "Banner on a cancelled occurrence of a recurring club event"
+  },
   "eventRsvpWaitlisted": "Waitlisted",
   "@eventRsvpWaitlisted": {
     "description": "Shown when the server demoted a full event RSVP to the waitlist"

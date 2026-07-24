@@ -4322,6 +4322,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventRsvpMaybe => 'Vielleicht';
 
   @override
+  String get eventOccurrenceCancelled => 'Dieser Termin wurde abgesagt.';
+
+  @override
   String get eventRsvpWaitlisted => 'Warteliste';
 
   @override

@@ -4047,6 +4047,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventRsvpMaybe => '未定';
 
   @override
+  String get eventOccurrenceCancelled => 'この回はキャンセルされました。';
+
+  @override
   String get eventRsvpWaitlisted => '補欠';
 
   @override

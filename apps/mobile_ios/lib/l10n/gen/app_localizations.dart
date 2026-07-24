@@ -7172,6 +7172,12 @@ abstract class AppLocalizations {
   /// **'Maybe'**
   String get eventRsvpMaybe;
 
+  /// Banner on a cancelled occurrence of a recurring club event
+  ///
+  /// In en, this message translates to:
+  /// **'This occurrence was cancelled.'**
+  String get eventOccurrenceCancelled;
+
   /// Shown when the server demoted a full event RSVP to the waitlist
   ///
   /// In en, this message translates to:

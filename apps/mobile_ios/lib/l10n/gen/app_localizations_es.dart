@@ -4308,6 +4308,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get eventRsvpMaybe => 'Quizás';
 
   @override
+  String get eventOccurrenceCancelled => 'Esta ocurrencia se canceló.';
+
+  @override
   String get eventRsvpWaitlisted => 'En lista de espera';
 
   @override

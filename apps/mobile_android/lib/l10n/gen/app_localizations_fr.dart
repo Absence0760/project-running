@@ -4323,6 +4323,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get eventRsvpMaybe => 'Peut-être';
 
   @override
+  String get eventOccurrenceCancelled => 'Cette occurrence a été annulée.';
+
+  @override
   String get eventRsvpWaitlisted => 'En liste d\'attente';
 
   @override

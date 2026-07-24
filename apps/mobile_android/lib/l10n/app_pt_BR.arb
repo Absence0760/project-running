@@ -1173,6 +1173,7 @@
   "eventAttendanceNoShow": "Ausente",
   "eventAttendanceFailed": "Não foi possível atualizar a presença. Tente novamente.",
   "eventRsvpFailed": "Não foi possível atualizar sua confirmação. Tente novamente.",
+  "eventOccurrenceCancelled": "Esta ocorrência foi cancelada.",
   "eventRsvpWaitlisted": "Na lista de espera",
   "eventRsvpGoing": "Eu vou",
   "eventRsvpMaybe": "Talvez",

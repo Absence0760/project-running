@@ -4312,6 +4312,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventRsvpMaybe => 'Talvez';
 
   @override
+  String get eventOccurrenceCancelled => 'Esta ocorrência foi cancelada.';
+
+  @override
   String get eventRsvpWaitlisted => 'Na lista de espera';
 
   @override
@@ -16096,6 +16099,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventRsvpMaybe => 'Talvez';
+
+  @override
+  String get eventOccurrenceCancelled => 'Esta ocorrência foi cancelada.';
 
   @override
   String get eventRsvpWaitlisted => 'Na lista de espera';

@@ -1209,6 +1209,29 @@ class SocialService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Instance starts of this event's CANCELLED occurrences
+  /// (`event_exceptions`, migration `20261019_001`). Mirrors web's
+  /// `fetchEventExceptions`: without it a cancelled occurrence stayed
+  /// selectable in the picker and RSVP-able, with nothing telling the member
+  /// it was called off. Fails closed to "none cancelled" — a read error must
+  /// not hide a live occurrence.
+  Future<Set<DateTime>> fetchCancelledInstances(String eventId) async {
+    try {
+      final rows = await _c
+          .from('event_exceptions')
+          .select('instance_start')
+          .eq('event_id', eventId);
+      return {
+        for (final r in (rows as List))
+          if (DateTime.tryParse('${(r as Map)['instance_start']}') != null)
+            DateTime.parse('${r['instance_start']}').toUtc(),
+      };
+    } catch (e) {
+      debugPrint('fetchCancelledInstances failed for $eventId: $e');
+      return const <DateTime>{};
+    }
+  }
+
   Future<List<AttendeeView>> fetchAttendees(String eventId, DateTime instance) async {
     final rows = await _c
         .from('event_attendees')
