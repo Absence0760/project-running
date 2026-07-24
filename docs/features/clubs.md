@@ -62,6 +62,8 @@ The `/clubs/[slug]/events/[id]` page carries the event's RSVP, results, and logi
 | Submit own race result | yes | yes | yes | yes | yes |
 | RSVP | yes | yes | yes | yes | yes |
 
+**Client gates must match these helpers, not `is_club_admin`.** Mobile's club events tab gated its create affordance on `isAdmin`, which excludes the one role that exists to run events — the server admitted the write and web allowed it, so `event_organiser` worked everywhere except mobile. Use the `isEventOrganiser` / `isRaceDirector` getters (`ClubView`) whose names match the SQL helper governing the action.
+
 SQL helpers (`20260428_001_role_permissions.sql`): `is_event_organiser(club_id)` matches `owner | admin | event_organiser`; `is_race_director(club_id)` matches `owner | admin | race_director`. Both are `security definer` + pinned `search_path`. RLS policies on `events`, `event_attendees`, `race_sessions`, `event_results`, and `club_posts` reference these helpers rather than `is_club_admin` for the actions they govern. Admin-only actions (settings, member management) continue to use `is_club_admin`.
 
 Admins can change any non-owner member's role from the Members tab on the web club page via a dropdown. The `setMemberRole(clubId, userId, role)` helper in `data.ts` and the `club_members` UPDATE policy (which requires `is_club_admin`) enforce this.
@@ -112,6 +114,8 @@ Roster reads are **paginated** so a club with hundreds of members / a large even
 The enrichment fields are joined client-side in `data.ts` rather than through a Postgres view — small fan-out, fewer moving parts, and it means RLS governs everything.
 
 ### Recurrence expansion
+
+**Event times are absolute instants.** `starts_at` / `recurrence_until` / `instance_start` are `timestamptz`, and a client must serialize them with `toUtc()` before writing. Mobile's create sheet builds a LOCAL `DateTime` from its pickers, and a bare `toIso8601String()` emits an offset-less string that Postgres reads in the session's zone (UTC) — so every mobile-created event was stored off by the creator's offset. `instance_start` is worse than a display error: it is an exact-match key for attendee rows, so a naive string simply misses. Every server-bound instant in `social_service.dart` now goes through `toUtc()` (a no-op when already UTC).
 
 Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/social/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`. Cancelled occurrences (`event_exceptions` rows) are filtered out of the picker client-side — `expandInstances` itself is pure and doesn't know about exceptions, so the event-detail page subtracts the cancelled `instance_start`s.
 
