@@ -10478,6 +10478,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Barrière horaire';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Saisis la barrière horaire au format HH:MM (24 h)';
+
+  @override
   String get routeMarkerNoteLabel => 'Note';
 
   @override

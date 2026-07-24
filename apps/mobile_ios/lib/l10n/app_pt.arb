@@ -2973,6 +2973,7 @@
   "routeMarkerNamePlaceholder": "ex.: Apoio 2",
   "routeMarkerServicesLabel": "Serviços",
   "routeMarkerCutoffLabel": "Horário de corte",
+  "routeMarkerCutoffInvalid": "Introduz o corte como HH:MM (24 horas)",
   "routeMarkerNoteLabel": "Nota",
   "routeMarkerTapToPlace": "Toque no mapa para posicionar este marcador.",
   "routeMarkerSnapToggle": "Ajustar à linha do percurso",

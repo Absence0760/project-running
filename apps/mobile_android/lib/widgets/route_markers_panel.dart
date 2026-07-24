@@ -635,10 +635,21 @@ String formatElapsedDigits(String raw) {
 String formatClockDigits(String raw) {
   var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
   if (digits.isEmpty) return '';
+  // A leading digit above 2 cannot start a 24-hour hour, so it is the hour's
+  // ones place — pad it. Without this the natural "930" for 09:30 masks to
+  // "93:0", which every reader's parseCutoff then rejects.
+  if (digits.codeUnitAt(0) > '2'.codeUnitAt(0)) digits = '0$digits';
   if (digits.length > 4) digits = digits.substring(digits.length - 4);
   if (digits.length <= 2) return digits;
   return '${digits.substring(0, 2)}:${digits.substring(2)}';
 }
+
+/// Whether [clock] is a cut-off the readers will accept. Asks [parseCutoff]
+/// rather than re-deriving the rule, so the editor can never write a clock
+/// string the course-schedule list, roadbook, GPX export, and live cut-off
+/// ETA all silently drop.
+bool isValidMarkerClock(String clock) =>
+    parseCutoff({'cutoff_clock': clock})?.clock != null;
 
 /// A [TextInputFormatter] that live-formats digit entry through [format]
 /// (e.g. [formatElapsedDigits] / [formatClockDigits]) and pins the caret at
@@ -803,7 +814,12 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       meta['services'] = _services.toList();
     }
     if (spec.hasCutoff && _cutoff.text.trim().isNotEmpty) {
-      meta['cutoff_clock'] = _cutoff.text.trim();
+      final clock = _cutoff.text.trim();
+      if (!isValidMarkerClock(clock)) {
+        showTopBanner(context, l10n.routeMarkerCutoffInvalid);
+        return;
+      }
+      meta['cutoff_clock'] = clock;
     }
     if (_target.text.trim().isNotEmpty) {
       final targetS = parseMarkerElapsed(_target.text,

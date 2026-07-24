@@ -13585,6 +13585,10 @@
   "@routeMarkerCutoffLabel": {
     "description": "Cutoff time field label"
   },
+  "routeMarkerCutoffInvalid": "Enter the cut-off as HH:MM (24-hour)",
+  "@routeMarkerCutoffInvalid": {
+    "description": "Course marker cut-off time validation"
+  },
   "routeMarkerNoteLabel": "Note",
   "@routeMarkerNoteLabel": {
     "description": "Note field label"

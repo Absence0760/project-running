@@ -10345,6 +10345,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Cut-off time';
 
   @override
+  String get routeMarkerCutoffInvalid => 'Enter the cut-off as HH:MM (24-hour)';
+
+  @override
   String get routeMarkerNoteLabel => 'Note';
 
   @override

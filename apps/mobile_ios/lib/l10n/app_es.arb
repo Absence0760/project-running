@@ -2973,6 +2973,7 @@
   "routeMarkerNamePlaceholder": "p. ej. Avituallamiento 2",
   "routeMarkerServicesLabel": "Servicios",
   "routeMarkerCutoffLabel": "Hora de corte",
+  "routeMarkerCutoffInvalid": "Introduce el corte como HH:MM (24 horas)",
   "routeMarkerNoteLabel": "Nota",
   "routeMarkerTapToPlace": "Toca el mapa para colocar este marcador.",
   "routeMarkerSnapToggle": "Ajustar a la línea de la ruta",

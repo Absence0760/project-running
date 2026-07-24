@@ -10453,6 +10453,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Hora de corte';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Introduce el corte como HH:MM (24 horas)';
+
+  @override
   String get routeMarkerNoteLabel => 'Nota';
 
   @override

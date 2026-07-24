@@ -45,9 +45,11 @@ const _routeLine = <Waypoint>[
 class _MarkersApi extends ApiClient {
   double? addedLat;
   double? addedLng;
+  Map<String, dynamic>? addedMeta;
   int addCalls = 0;
   double? updatedLat;
   double? updatedLng;
+  Map<String, dynamic>? updatedMeta;
   int updateCalls = 0;
 
   @override
@@ -69,6 +71,7 @@ class _MarkersApi extends ApiClient {
     addCalls++;
     addedLat = lat;
     addedLng = lng;
+    addedMeta = meta;
     return _marker(id: 'new', kind: kind, label: label);
   }
 
@@ -84,6 +87,7 @@ class _MarkersApi extends ApiClient {
     updateCalls++;
     updatedLat = lat;
     updatedLng = lng;
+    updatedMeta = meta;
   }
 }
 
@@ -540,6 +544,46 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+      'a cut-off the readers would reject blocks the save instead of being '
+      'silently dropped', (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(id: 'm1', kind: 'cutoff', label: 'Gate', positionM: 300),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // 25:00 is not a wall-clock hour. Saved verbatim it lands in meta and
+    // then vanishes from the schedule, roadbook, GPX, and live cut-off ETA,
+    // because they all read it back through parseCutoff.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '2500');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 0);
+    expect(find.text('Enter the cut-off as HH:MM (24-hour)'), findsOneWidget);
+
+    // Correcting it saves the value the readers accept.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '930');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['cutoff_clock'], '09:30');
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);
@@ -668,6 +712,26 @@ void main() {
     test('strips non-digits and caps at four digits', () {
       expect(formatClockDigits('14:30'), '14:30');
       expect(formatClockDigits('091530'), '15:30');
+    });
+
+    test('pads a leading digit that cannot start an hour', () {
+      // "930" for 09:30 used to mask to the invalid "93:0", which every
+      // reader's parseCutoff then dropped.
+      expect(formatClockDigits('9'), '09');
+      expect(formatClockDigits('93'), '09:3');
+      expect(formatClockDigits('930'), '09:30');
+      expect(isValidMarkerClock(formatClockDigits('930')), isTrue);
+    });
+
+    test('the masked value is the one parseCutoff accepts', () {
+      for (final digits in ['0000', '0930', '1430', '2359']) {
+        expect(isValidMarkerClock(formatClockDigits(digits)), isTrue,
+            reason: digits);
+      }
+      // Out of range stays invalid — the save gate is what catches it.
+      expect(isValidMarkerClock(formatClockDigits('2500')), isFalse);
+      expect(isValidMarkerClock(formatClockDigits('1470')), isFalse);
+      expect(isValidMarkerClock('14'), isFalse);
     });
   });
 

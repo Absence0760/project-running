@@ -17394,6 +17394,12 @@ abstract class AppLocalizations {
   /// **'Cut-off time'**
   String get routeMarkerCutoffLabel;
 
+  /// Course marker cut-off time validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the cut-off as HH:MM (24-hour)'**
+  String get routeMarkerCutoffInvalid;
+
   /// Note field label
   ///
   /// In en, this message translates to:
