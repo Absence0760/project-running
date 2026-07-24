@@ -18,7 +18,11 @@ function mkRun(opts: {
 		started_at: opts.startedAt,
 		distance_m: opts.distance_m,
 		duration_s: opts.duration_s,
-		elevation_m: opts.elevation_m ?? 0,
+		// The real column. The fixture used to set a top-level `elevation_m`,
+		// which no row has — so every elevation assertion here passed against a
+		// field production never reads, and totalElevationM was always 0 in the
+		// app while the suite stayed green.
+		elevation_gain_m: opts.elevation_m ?? 0,
 		track_url: null,
 		title: null,
 		notes: null,
@@ -248,6 +252,18 @@ test('buildYearInRunningRecap: zero runs → null earliest + latest start', () =
 	const r = buildYearInRunningRecap([], 2026);
 	assert.equal(r.earliestStartLocal, null);
 	assert.equal(r.latestStartLocal, null);
+});
+
+test('buildYearInRunningRecap: elevation reads the legacy metadata key too', () => {
+	// Older rows predate the promoted column and carry only
+	// metadata.elevation_m — the key the Dart twin reads.
+	const legacy = {
+		...mkRun({ startedAt: '2026-03-01T08:00:00', distance_m: 10000, duration_s: 3000 }),
+		elevation_gain_m: null,
+		metadata: { elevation_m: 250 }
+	} as unknown as Run;
+	const recap = buildYearInRunningRecap([legacy], 2026);
+	assert.equal(recap.totalElevationM, 250);
 });
 
 test('buildYearInRunningRecap: elevation falls back to 0 when absent', () => {
