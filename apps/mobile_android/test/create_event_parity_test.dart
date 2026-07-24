@@ -24,6 +24,53 @@ void main() {
   const clubId = 'club-xyz';
   final startsAt = DateTime.utc(2026, 6, 1, 9, 30);
 
+  group('buildCreateEventBody — timestamps are absolute instants', () {
+    test('a LOCAL start time is serialized as UTC, not as a naive string', () {
+      // The create sheet's date/time pickers build a local DateTime. Serialized
+      // naively it has no zone, and a timestamptz column reads that in the
+      // session's zone (UTC) — so a 7pm local event was stored as 7pm UTC.
+      // Asserting the Z suffix catches the regression in every timezone,
+      // including a UTC CI runner where the two instants coincide.
+      final local = DateTime(2026, 6, 1, 19, 30);
+      expect(local.isUtc, isFalse, reason: 'fixture must be local');
+
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'Evening session',
+        startsAt: local,
+        recurrenceUntil: DateTime(2026, 12, 1, 19, 30),
+      );
+
+      final startsAtStr = body['starts_at'] as String;
+      expect(startsAtStr.endsWith('Z'), isTrue, reason: startsAtStr);
+      expect(DateTime.parse(startsAtStr).isAtSameMomentAs(local), isTrue);
+
+      final untilStr = body['recurrence_until'] as String;
+      expect(untilStr.endsWith('Z'), isTrue, reason: untilStr);
+    });
+
+    test('an already-UTC start time is unchanged', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'Morning session',
+        startsAt: startsAt,
+      );
+      expect(body['starts_at'], '2026-06-01T09:30:00.000Z');
+    });
+
+    test('a null recurrence_until stays null', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'One-off',
+        startsAt: startsAt,
+      );
+      expect(body['recurrence_until'], isNull);
+    });
+  });
+
   group('buildCreateEventBody — text-field normalisation (parity with web)',
       () {
     test('title is trimmed', () {

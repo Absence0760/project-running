@@ -1002,7 +1002,11 @@ class SocialService extends ChangeNotifier {
             }
           : null,
       'description': trimToNull(description),
-      'starts_at': startsAt.toIso8601String(),
+      // toUtc first: the create sheet's pickers build a LOCAL DateTime, and
+      // a naive ISO string with no Z is read by a timestamptz column in the
+      // session's zone (UTC), so a 7pm local event would be stored as 7pm
+      // UTC. No-op when the caller already passed a UTC instant.
+      'starts_at': startsAt.toUtc().toIso8601String(),
       'duration_min': durationMin,
       'meet_label': trimToNull(meetLabel),
       'meet_lat': meetLat,
@@ -1014,7 +1018,7 @@ class SocialService extends ChangeNotifier {
       'author_id': authorId,
       'recurrence_freq': recurrenceFreq,
       'recurrence_byday': recurrenceByDay,
-      'recurrence_until': recurrenceUntil?.toIso8601String(),
+      'recurrence_until': recurrenceUntil?.toUtc().toIso8601String(),
       'recurrence_count': recurrenceCount,
     };
   }
@@ -1070,8 +1074,8 @@ class SocialService extends ChangeNotifier {
         .select('event_id, instance_start, status, events($_eventSelectCols)')
         .eq('user_id', uid)
         .eq('status', 'going')
-        .gte('instance_start', now.toIso8601String())
-        .lte('instance_start', end.toIso8601String())
+        .gte('instance_start', now.toUtc().toIso8601String())
+        .lte('instance_start', end.toUtc().toIso8601String())
         .order('instance_start', ascending: true)
         .limit(1);
     final rows = rsvps as List;
@@ -1130,7 +1134,7 @@ class SocialService extends ChangeNotifier {
               .select('event_id')
               .eq('event_id', id)
               .eq('status', 'going')
-              .eq('instance_start', nexts[id]!.toIso8601String())
+              .eq('instance_start', nexts[id]!.toUtc().toIso8601String())
               .count()
               .then((res) => counts[id] = res.count),
       ]),
@@ -1142,7 +1146,7 @@ class SocialService extends ChangeNotifier {
                 .select('status')
                 .eq('event_id', id)
                 .eq('user_id', uid)
-                .eq('instance_start', nexts[id]!.toIso8601String())
+                .eq('instance_start', nexts[id]!.toUtc().toIso8601String())
                 .maybeSingle()
                 .then((res) {
               final s = (res as Map?)?['status'];
@@ -1173,7 +1177,7 @@ class SocialService extends ChangeNotifier {
         'event_id': eventId,
         'user_id': uid,
         'status': status,
-        'instance_start': instance.toIso8601String(),
+        'instance_start': instance.toUtc().toIso8601String(),
       },
       onConflict: 'event_id,user_id,instance_start',
     );
@@ -1188,7 +1192,7 @@ class SocialService extends ChangeNotifier {
         .delete()
         .eq('event_id', eventId)
         .eq('user_id', uid)
-        .eq('instance_start', instance.toIso8601String());
+        .eq('instance_start', instance.toUtc().toIso8601String());
     notifyListeners();
   }
 
@@ -1210,7 +1214,7 @@ class SocialService extends ChangeNotifier {
         .from('event_attendees')
         .select()
         .eq('event_id', eventId)
-        .eq('instance_start', instance.toIso8601String())
+        .eq('instance_start', instance.toUtc().toIso8601String())
         .order('joined_at', ascending: true);
     final attendees = (rows as List).cast<Map<String, dynamic>>();
     if (attendees.isEmpty) return const [];
@@ -1267,7 +1271,7 @@ class SocialService extends ChangeNotifier {
           'organiser_approved',
         )
         .eq('event_id', eventId)
-        .eq('instance_start', instance.toIso8601String())
+        .eq('instance_start', instance.toUtc().toIso8601String())
         .order('rank', ascending: true, nullsFirst: false)
         .order('created_at', ascending: true);
     final results = (rows as List).cast<Map<String, dynamic>>();
@@ -1337,7 +1341,7 @@ class SocialService extends ChangeNotifier {
     await _c.from('event_results').upsert(
       {
         'event_id': eventId,
-        'instance_start': instance.toIso8601String(),
+        'instance_start': instance.toUtc().toIso8601String(),
         'user_id': uid,
         if (runId != null) 'run_id': runId,
         'duration_s': durationS,
@@ -1381,7 +1385,7 @@ class SocialService extends ChangeNotifier {
           .from(RaceSessionRow.table)
           .select()
           .eq(RaceSessionRow.colEventId, eventId)
-          .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+          .eq(RaceSessionRow.colInstanceStart, instance.toUtc().toIso8601String())
           .maybeSingle();
       if (row == null) return null;
       return RaceSessionRow.fromJson(row);
@@ -1413,7 +1417,7 @@ class SocialService extends ChangeNotifier {
         .upsert(
           {
             RaceSessionRow.colEventId: eventId,
-            RaceSessionRow.colInstanceStart: instance.toIso8601String(),
+            RaceSessionRow.colInstanceStart: instance.toUtc().toIso8601String(),
             RaceSessionRow.colStatus: 'armed',
             RaceSessionRow.colStartedAt: null,
             RaceSessionRow.colStartedBy: null,
@@ -1451,7 +1455,7 @@ class SocialService extends ChangeNotifier {
           RaceSessionRow.colUpdatedAt: now,
         })
         .eq(RaceSessionRow.colEventId, eventId)
-        .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+        .eq(RaceSessionRow.colInstanceStart, instance.toUtc().toIso8601String())
         .select()
         .single();
     notifyListeners();
@@ -1477,7 +1481,7 @@ class SocialService extends ChangeNotifier {
           RaceSessionRow.colUpdatedAt: now,
         })
         .eq(RaceSessionRow.colEventId, eventId)
-        .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+        .eq(RaceSessionRow.colInstanceStart, instance.toUtc().toIso8601String())
         .select()
         .single();
     notifyListeners();
@@ -1516,7 +1520,7 @@ class SocialService extends ChangeNotifier {
         .from('event_results')
         .delete()
         .eq('event_id', eventId)
-        .eq('instance_start', instance.toIso8601String())
+        .eq('instance_start', instance.toUtc().toIso8601String())
         .eq('user_id', uid);
     notifyListeners();
   }
@@ -1609,7 +1613,7 @@ class SocialService extends ChangeNotifier {
       if (parentPostId != null) 'parent_post_id': parentPostId,
       if (eventId != null) 'event_id': eventId,
       if (eventInstanceStart != null)
-        'event_instance_start': eventInstanceStart.toIso8601String(),
+        'event_instance_start': eventInstanceStart.toUtc().toIso8601String(),
     });
     notifyListeners();
   }
