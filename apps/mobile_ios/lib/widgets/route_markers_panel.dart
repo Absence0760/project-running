@@ -801,6 +801,11 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     // the map-tap / typed-coordinate path so both stay working.
     final double lat;
     final double lng;
+    // How far into the route the marker sits decides the h:mm-vs-mm:ss
+    // reading of a two-part target time. A marker placed by distance already
+    // knows that, ahead of the server deriving position_m — without it an
+    // 80 km aid station's "4:30" saves as 4½ minutes on the first save.
+    double? positionM = widget.existing?.positionM;
     final distText = _distanceAlong.text.trim();
     if (distText.isNotEmpty) {
       final metres = parseDistanceAlong(distText, unit: activeDistanceUnit);
@@ -812,6 +817,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       }
       lat = wp.lat;
       lng = wp.lng;
+      positionM = metres;
     } else {
       final typedLat = parseMarkerCoordinate(_lat.text, 90);
       final typedLng = parseMarkerCoordinate(_lng.text, 180);
@@ -840,8 +846,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       meta['cutoff_clock'] = clock;
     }
     if (_target.text.trim().isNotEmpty) {
-      final targetS = parseMarkerElapsed(_target.text,
-          positionM: widget.existing?.positionM);
+      final targetS = parseMarkerElapsed(_target.text, positionM: positionM);
       if (targetS == null) {
         showTopBanner(context, l10n.routeMarkerTargetInvalid);
         return;

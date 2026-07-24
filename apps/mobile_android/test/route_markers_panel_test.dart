@@ -682,6 +682,45 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+      'a target time on a marker placed by distance reads as h:mm, not mm:ss',
+      (tester) async {
+    // ~78 km of due-east line at this latitude, so a marker at 60 km makes
+    // the h:mm reading of "4:30" the plausible one (270 s/km).
+    const longLine = <Waypoint>[
+      Waypoint(lat: 51.5, lng: -0.12),
+      Waypoint(lat: 51.5, lng: 1.0),
+    ];
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: const [],
+      routeLine: longLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter location instead'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid 5');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Distance along route'), '60');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target time'), '430');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    // 4 h 30, not 4 min 30 — the sheet knows the distance it just placed at.
+    expect(api.addedMeta!['target_elapsed_s'], 16200);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
   group('parseDistanceAlong', () {
     test('parses a km value into metres', () {
       expect(parseDistanceAlong('0.5', unit: DistanceUnit.km), 500);
