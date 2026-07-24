@@ -209,9 +209,12 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
   /// server's older copy.
   Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
     final preserved = <String, StoredGear>{};
+    final syncedLocal = <String, StoredGear>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
+      } else {
+        syncedLocal[entry.key] = entry.value;
       }
     }
     rowsById.clear();
@@ -219,6 +222,32 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
       final id = row['id'] as String;
       if (preserved.containsKey(id)) {
         rowsById[id] = preserved.remove(id)!;
+        continue;
+      }
+      // Newer-wins, mirroring the gym / food stores: a late-arriving stale
+      // fetch must not revert a synced row to an older server state.
+      //
+      // Gear compares `gear.updated_at` on BOTH sides, never a device clock
+      // against a server one. Unlike gym / food, `updateGear` sends no
+      // client-supplied modification column — `gear`'s `gear_updated_at`
+      // trigger stamps `now()` server-side — so [SyncEntry.lastModifiedAt]
+      // (a device clock) and the incoming `updated_at` (the DB clock) are not
+      // comparable. The locally-held synced row is a verbatim copy of the last
+      // server row, `updated_at` included, so comparing the incoming stamp
+      // against THAT compares two values minted by the same database clock.
+      //
+      // Only a strictly-older incoming stamp loses. An equal stamp still takes
+      // the server row: `total_distance_m` comes from the view's `run_gear`
+      // join and moves without any gear-row update, so discarding an
+      // equal-stamped fetch would freeze a shoe's mileage.
+      final local = syncedLocal[id];
+      final serverTs = _parseTs(row['updated_at']);
+      final localTs = local == null ? null : _parseTs(local.row['updated_at']);
+      if (local != null &&
+          serverTs != null &&
+          localTs != null &&
+          serverTs.isBefore(localTs)) {
+        rowsById[id] = local;
       } else {
         rowsById[id] = StoredGear(row: row, syncState: SyncState.synced);
       }
@@ -226,6 +255,11 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
+  }
+
+  static DateTime? _parseTs(dynamic v) {
+    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
+    return null;
   }
 
   @override

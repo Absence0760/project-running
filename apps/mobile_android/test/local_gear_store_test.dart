@@ -290,6 +290,79 @@ void main() {
           reason:
               'pendingUpdate edits must override the server name until drained');
     });
+
+    // The gear guard compares `gear.updated_at` (server-stamped by the
+    // `gear_updated_at` trigger) on both sides — the local synced row is a
+    // verbatim copy of the last server row, so both values come from the DB
+    // clock and no device/server skew enters the comparison.
+    Map<String, dynamic> serverGear(
+      String id, {
+      required String name,
+      required DateTime updatedAt,
+      int totalDistanceM = 0,
+    }) =>
+        {
+          'id': id,
+          'kind': 'shoe',
+          'name': name,
+          'retired_at': null,
+          'total_distance_m': totalDistanceM,
+          'updated_at': updatedAt.toIso8601String(),
+        };
+
+    test('newer-wins: a stale server fetch does not clobber a locally-newer '
+        'synced copy', () async {
+      await store.replaceFromServer([
+        serverGear('g1', name: 'Recent', updatedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      await store.replaceFromServer([
+        serverGear('g1', name: 'Stale', updatedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      expect(store.rows.first['name'], 'Recent');
+    });
+
+    test('newer-wins: a newer server fetch overwrites the synced copy',
+        () async {
+      await store.replaceFromServer([
+        serverGear('g1', name: 'Old', updatedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      await store.replaceFromServer([
+        serverGear('g1', name: 'New', updatedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      expect(store.rows.first['name'], 'New');
+    });
+
+    test('an equal updated_at still takes the server row so total_distance_m '
+        'keeps refreshing', () async {
+      final stamp = DateTime.utc(2026, 6, 2);
+      await store.replaceFromServer(
+          [serverGear('g1', name: 'Vaporfly', updatedAt: stamp)]);
+      // `total_distance_m` comes from the view's run_gear join and moves
+      // without bumping the gear row's updated_at — an equal stamp must not
+      // be treated as stale.
+      await store.replaceFromServer([
+        serverGear('g1',
+            name: 'Vaporfly', updatedAt: stamp, totalDistanceM: 42000),
+      ]);
+      expect(store.rows.first['total_distance_m'], 42000);
+    });
+
+    test('a server row with no updated_at still overwrites (fail open)',
+        () async {
+      await store.replaceFromServer([
+        serverGear('g1', name: 'Recent', updatedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      await store.replaceFromServer([
+        {
+          'id': 'g1',
+          'kind': 'shoe',
+          'name': 'No stamp',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+      ]);
+      expect(store.rows.first['name'], 'No stamp');
+    });
   });
 
   group('_rewriteAll crash-atomic ordering', () {
