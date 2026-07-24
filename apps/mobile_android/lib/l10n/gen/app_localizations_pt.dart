@@ -4312,6 +4312,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventRsvpMaybe => 'Talvez';
 
   @override
+  String get eventRsvpWaitlisted => 'Na lista de espera';
+
+  @override
   String get eventRsvpDeclined => 'Não posso ir';
 
   @override
@@ -16093,6 +16096,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventRsvpMaybe => 'Talvez';
+
+  @override
+  String get eventRsvpWaitlisted => 'Na lista de espera';
 
   @override
   String get eventRsvpDeclined => 'Não posso ir';

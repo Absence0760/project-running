@@ -1011,11 +1011,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
 
     final l10n = AppLocalizations.of(context);
-    return Row(
+    // `enforce_event_capacity` (20261018_001) silently demotes a `going` RSVP
+    // to `waitlisted` when the event is full. Matching that against the three
+    // chips selects none of them, so a waitlisted runner saw exactly what a
+    // runner who never responded sees — surface the real status instead.
+    final waitlisted = current == 'waitlisted';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        chip('going', l10n.eventRsvpGoing),
-        chip('maybe', l10n.eventRsvpMaybe),
-        chip('declined', l10n.eventRsvpDeclined),
+        Row(
+          children: [
+            chip('going', l10n.eventRsvpGoing),
+            chip('maybe', l10n.eventRsvpMaybe),
+            chip('declined', l10n.eventRsvpDeclined),
+          ],
+        ),
+        if (waitlisted)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Icon(Icons.hourglass_bottom,
+                    size: 16, color: theme.colorScheme.tertiary),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.eventRsvpWaitlisted,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.tertiary),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

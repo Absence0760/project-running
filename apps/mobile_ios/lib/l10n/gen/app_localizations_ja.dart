@@ -4047,6 +4047,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventRsvpMaybe => '未定';
 
   @override
+  String get eventRsvpWaitlisted => '補欠';
+
+  @override
   String get eventRsvpDeclined => '行けない';
 
   @override

@@ -5822,6 +5822,10 @@
   "@eventRsvpMaybe": {
     "description": "RSVP chip — maybe"
   },
+  "eventRsvpWaitlisted": "Waitlisted",
+  "@eventRsvpWaitlisted": {
+    "description": "Shown when the server demoted a full event RSVP to the waitlist"
+  },
   "eventRsvpDeclined": "Can't make it",
   "@eventRsvpDeclined": {
     "description": "RSVP chip — declined"

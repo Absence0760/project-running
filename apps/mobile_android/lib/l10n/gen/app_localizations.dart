@@ -7172,6 +7172,12 @@ abstract class AppLocalizations {
   /// **'Maybe'**
   String get eventRsvpMaybe;
 
+  /// Shown when the server demoted a full event RSVP to the waitlist
+  ///
+  /// In en, this message translates to:
+  /// **'Waitlisted'**
+  String get eventRsvpWaitlisted;
+
   /// RSVP chip — declined
   ///
   /// In en, this message translates to:

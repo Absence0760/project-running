@@ -4273,6 +4273,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventRsvpMaybe => 'Maybe';
 
   @override
+  String get eventRsvpWaitlisted => 'Waitlisted';
+
+  @override
   String get eventRsvpDeclined => 'Can\'t make it';
 
   @override

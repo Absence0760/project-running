@@ -4322,6 +4322,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventRsvpMaybe => 'Vielleicht';
 
   @override
+  String get eventRsvpWaitlisted => 'Warteliste';
+
+  @override
   String get eventRsvpDeclined => 'Kann nicht';
 
   @override
