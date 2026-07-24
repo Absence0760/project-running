@@ -4721,6 +4721,29 @@ void main() {
     });
   });
 
+  group('sign-out clears the watch route list', () {
+    test('signedOut re-pushes the routes bridge', () {
+      // LocalRouteStore hides another account's tagged routes once the
+      // provider reports signed-out, but WearRoutesBridge only pushes on a
+      // store mutation — signing out isn't one. Without an explicit nudge the
+      // paired watch keeps a previous account's starred route names and
+      // waypoints until some unrelated future edit fires the listener.
+      final src = File('lib/main.dart').readAsStringSync();
+      final signedOut = src.indexOf('event.event == AuthChangeEvent.signedOut');
+      expect(signedOut, isNonNegative,
+          reason: 'signedOut handler not found — update this guard');
+      // The handler is long (comments); take everything up to the bootstrap
+      // attach that follows the auth listener.
+      final block = src.substring(
+          signedOut, src.indexOf('WearAuthBridge().attach(', signedOut));
+      expect(
+        block,
+        contains('WearRoutesBridge().attach(routeStore);'),
+        reason: 'sign-out must re-push the (now owner-filtered) route list',
+      );
+    });
+  });
+
   group('crash recovery is owner-tagged', () {
     test('the owner-tag providers are wired before the recovery save', () {
       // LocalRunStore.save only stamps created_by_user_id when

@@ -501,6 +501,14 @@ void main() async {
         // clear — wipe their shared on-disk directories via throwaway
         // instances. The crossings store carries bibs and, behind
         // WEIGH_IN_GATE, medical weigh-in fields.
+        // Re-push the watch's route list. LocalRouteStore hides another
+        // account's tagged routes once the provider reports signed-out, but
+        // the bridge only pushes on a store MUTATION — and signing out isn't
+        // one. Without this the paired watch keeps showing the previous
+        // account's starred route names and waypoints until some unrelated
+        // future edit happens to fire the listener. attach() re-pushes and
+        // drops the diff cache, so it is the right idempotent nudge.
+        WearRoutesBridge().attach(routeStore);
         wipeScreenOwnedOfflineStores().catchError((Object e) {
           debugPrint('Screen-owned store wipe on signedOut failed: $e');
         });
