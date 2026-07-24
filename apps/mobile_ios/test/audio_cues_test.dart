@@ -38,6 +38,52 @@ void main() {
     });
   });
 
+  group('splitCueDistance', () {
+    test('metric default interval counts whole kilometres', () {
+      final one = splitCueDistance(1, 1000, DistanceUnit.km);
+      expect(one.count, '1');
+      expect(one.singular, isTrue);
+      final five = splitCueDistance(5, 1000, DistanceUnit.km);
+      expect(five.count, '5');
+      expect(five.singular, isFalse);
+    });
+
+    test('the 500 m interval speaks halves, not a rounded-up whole', () {
+      // Regression: the count was `round(ticks * interval / 1000)`, so the
+      // first 500 m split announced "1 kilometre" — the runner is told they
+      // have run twice as far as they have.
+      expect(splitCueDistance(1, 500, DistanceUnit.km).count, '0.5');
+      expect(splitCueDistance(1, 500, DistanceUnit.km).singular, isFalse);
+      expect(splitCueDistance(3, 500, DistanceUnit.km).count, '1.5');
+      expect(splitCueDistance(4, 500, DistanceUnit.km).count, '2');
+    });
+
+    test('imperial on the default 1 km interval speaks real miles', () {
+      // Regression: the kilometre count was read out with the word "miles",
+      // so 1 km announced as "1 mile" while the on-screen banner said 0.6 mi.
+      expect(splitCueDistance(1, 1000, DistanceUnit.mi).count, '0.6');
+      expect(splitCueDistance(1, 1000, DistanceUnit.mi).singular, isFalse);
+      expect(splitCueDistance(5, 1000, DistanceUnit.mi).count, '3.1');
+    });
+
+    test('the 1 mi preset (1609 m) reads as a whole mile, not "1.0"', () {
+      final one = splitCueDistance(1, 1609, DistanceUnit.mi);
+      expect(one.count, '1');
+      expect(one.singular, isTrue);
+      final three = splitCueDistance(3, 1609, DistanceUnit.mi);
+      expect(three.count, '3');
+      expect(three.singular, isFalse);
+      // Still whole deep into an ultra, where the 0.344 m/mile the preset
+      // drops would otherwise accumulate past a tenth.
+      expect(splitCueDistance(50, 1609, DistanceUnit.mi).count, '50');
+    });
+
+    test("cycling's 5 km interval converts for an imperial rider", () {
+      expect(splitCueDistance(1, 5000, DistanceUnit.km).count, '5');
+      expect(splitCueDistance(1, 5000, DistanceUnit.mi).count, '3.1');
+    });
+  });
+
   group('splitCueUtterance', () {
     final en = ttsL10n('en');
     const splitTail = 'Pace, 5 minutes 30 seconds per kilometre';
