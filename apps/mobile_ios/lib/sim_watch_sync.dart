@@ -40,6 +40,19 @@ const int _recordTagLap = 1;
 /// The newest `run_store` format this decoder understands.
 const int _maxSupportedVersion = 2;
 
+/// Header `flags` bit (byte 5): the watch stamped this blob at commit, so it
+/// is a finished run rather than a mid-run checkpoint snapshot. Set from
+/// version 2 onward — v1's byte 5 was reserved and always zero.
+///
+/// The watch does not advertise the checkpoints of a run it is still
+/// recording, so a synced blob normally carries this. It can legitimately be
+/// clear: a run interrupted by a reset is recovered from its last checkpoint
+/// and advertised then, because the recording ended with the power. Such a
+/// blob is a real run whose footer totals are its totals-so-far, so it is
+/// ingested rather than refused — refusing it would throw away the only copy
+/// of an interrupted run.
+const int kRunFlagFinished = 0x01;
+
 /// Sentinel written by the watch when a point has no barometric/GPS
 /// elevation fix. Decoded to a null `ele`.
 const int _eleNoneSentinel = -32768;
@@ -73,6 +86,10 @@ class TrackHeader {
     required this.runSeq,
     required this.startUptimeS,
   });
+
+  /// Whether [kRunFlagFinished] is set — see that constant for why a clear
+  /// flag is still a run worth ingesting.
+  bool get finished => flags & kRunFlagFinished != 0;
 }
 
 class TrackPoint {

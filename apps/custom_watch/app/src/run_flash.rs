@@ -293,8 +293,8 @@ impl RunStore {
             return;
         }
         // The plan reuses the slot a mid-run checkpoint already reserved for this
-        // run (if any) so the final commit supersedes the checkpoint in place;
-        // otherwise it picks a fresh slot exactly like a checkpoint-free run.
+        // run (if any) so the final commit supersedes the checkpoint in place, and
+        // marks it finished — which is what puts the run in the manifest.
         let Some(plan) = flash_plan::plan_slot_write(
             &mut self.dir,
             REGION_OFFSET,
@@ -328,19 +328,25 @@ impl RunStore {
     }
 
     /// Best-effort mid-run checkpoint: persist a *recoverable* snapshot of the
-    /// run-so-far to its flash slot so a battery swap or brown-out mid-run
-    /// recovers a slightly-stale partial run instead of losing the entire
-    /// in-progress track (which otherwise only reaches flash at stop). Reserves
-    /// the run's slot on the first checkpoint and rewrites that SAME slot in
-    /// place each time — the eventual [`commit`](Self::commit) lands in the same
-    /// slot and supersedes it. L4 / best-effort: any flash error only warns and
-    /// drops, so recording is never blocked (same contract as `commit`). The
-    /// caller bounds the cadence to keep flash erase cycles within endurance.
+    /// run-so-far to flash so a battery swap or brown-out mid-run recovers a
+    /// slightly-stale partial run instead of losing the entire in-progress track
+    /// (which otherwise only reaches flash at stop).
+    ///
+    /// Reserves the run's slot on the first checkpoint and rewrites that SAME slot
+    /// each time; the eventual [`commit`](Self::commit) lands in the same slot and
+    /// supersedes it. The snapshot is recorded as UNFINISHED, so it is never
+    /// advertised in the manifest nor served over BLE while the run is still
+    /// recording — a phone connected mid-run must not be able to ingest a partial
+    /// blob as a complete run.
+    ///
+    /// L4 / best-effort: any flash error only warns and drops, so recording is
+    /// never blocked (same contract as `commit`). The caller bounds the cadence
+    /// to keep flash erase cycles within endurance.
     pub async fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
         if !self.available {
             return;
         }
-        let Some(plan) = flash_plan::plan_slot_write(
+        let Some(plan) = flash_plan::plan_checkpoint_write(
             &mut self.dir,
             REGION_OFFSET,
             run_seq,
@@ -378,11 +384,11 @@ impl RunStore {
         );
     }
 
-    /// Manifest entries for every committed run this power cycle, each run's
-    /// `start_uptime_s` clamped to `watch_uptime_s` so a run recovered from a
-    /// prior power cycle can't date in the future (see
-    /// [`SlotDir::manifest_at`]). Consumed by the BLE run-sync task; unused in
-    /// the default (non-`ble`) build.
+    /// Manifest entries for every FINISHED run — a mid-run checkpoint of the run
+    /// currently recording is never listed ([`SlotDir::manifest_at`]) — each
+    /// run's `start_uptime_s` clamped to `watch_uptime_s` so a run recovered from
+    /// a prior power cycle can't date in the future. Consumed by the BLE run-sync
+    /// task; unused in the default (non-`ble`) build.
     #[cfg_attr(not(feature = "ble"), allow(dead_code))]
     pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
         self.dir.manifest_at(watch_uptime_s)

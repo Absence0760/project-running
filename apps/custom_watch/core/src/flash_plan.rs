@@ -27,9 +27,10 @@ pub struct SlotWrite {
     pub erase_to: u32,
 }
 
-/// Reserve the slot a run's blob belongs in — reusing the slot a prior
-/// checkpoint of the SAME `run_seq` already holds, else the next free slot, else
-/// an eviction victim — and return the erase + write range for it.
+/// Reserve the slot a FINISHED run's blob is committed into, and return the
+/// erase + write range for it — the slot the run's mid-run checkpoints already
+/// hold, if any ([`plan_checkpoint_write`]), so the commit supersedes them.
+/// Marking that slot finished is what puts the run in the manifest.
 ///
 /// `None` when the blob is larger than one slot: the run is dropped whole rather
 /// than truncated into a slot, and the directory is left untouched so an
@@ -44,13 +45,41 @@ pub fn plan_slot_write(
     if blob_len > SLOT_LEN {
         return None;
     }
-    let slot = dir.place_or_update(run_seq, blob_len as u32, start_uptime_s);
+    Some(slot_write(
+        region_offset,
+        dir.reserve_commit(run_seq, blob_len as u32, start_uptime_s),
+    ))
+}
+
+/// Reserve the slot a mid-run checkpoint of `run_seq` is written into and return
+/// the erase + write range for it.
+///
+/// The reservation is NOT finished, so the snapshot never enters the manifest and
+/// is never served while the run is still recording — the whole difference from
+/// [`plan_slot_write`], whose over-a-slot rule it otherwise shares.
+pub fn plan_checkpoint_write(
+    dir: &mut SlotDir,
+    region_offset: u32,
+    run_seq: u32,
+    start_uptime_s: u32,
+    blob_len: usize,
+) -> Option<SlotWrite> {
+    if blob_len > SLOT_LEN {
+        return None;
+    }
+    Some(slot_write(
+        region_offset,
+        dir.reserve_checkpoint(run_seq, blob_len as u32, start_uptime_s),
+    ))
+}
+
+fn slot_write(region_offset: u32, slot: usize) -> SlotWrite {
     let erase_from = flash_store::slot_offset(region_offset, slot);
-    Some(SlotWrite {
+    SlotWrite {
         slot,
         erase_from,
         erase_to: erase_from + SLOT_LEN as u32,
-    })
+    }
 }
 
 /// Where one phone chunk request reads from, in absolute flash offsets.
@@ -220,6 +249,24 @@ mod tests {
         w.finalize(1234, 600, 620).expect("finalize")
     }
 
+    /// A mid-run checkpoint blob — the run-so-far plus totals-so-far, with the
+    /// finished flag clear. `elapsed_s` is what orders successive checkpoints of
+    /// one run at boot, so it is the caller's to advance.
+    fn a_checkpoint(
+        run_seq: u32,
+        start_uptime_s: u32,
+        points: u32,
+        elapsed_s: u32,
+    ) -> heapless::Vec<u8, SLOT_LEN> {
+        let sink: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, run_seq, start_uptime_s).expect("start");
+        for t in 0..points {
+            w.push_point(&a_point(t)).expect("push");
+        }
+        w.checkpoint_blob(500, elapsed_s, elapsed_s)
+            .expect("checkpoint")
+    }
+
     #[test]
     fn plan_slot_write_fills_every_slot_in_order_then_wraps() {
         let mut dir = SlotDir::new();
@@ -294,23 +341,21 @@ mod tests {
     }
 
     #[test]
-    fn plan_slot_write_reuses_a_checkpointed_runs_slot() {
-        // Every mid-run checkpoint and the final commit must target the SAME
-        // page, or a checkpoint left in another slot would be advertised
-        // alongside the finished run as a second, stale copy.
+    fn a_checkpoint_is_planned_but_never_advertised_until_the_commit() {
+        // Every mid-run checkpoint and the final commit target the same page, so
+        // one run consumes one slot — but only the commit may publish it.
         let mut dir = SlotDir::new();
-        let first = plan_slot_write(&mut dir, BASE, 7, 41, 100).expect("fits");
-        let grown = plan_slot_write(&mut dir, BASE, 7, 41, 500).expect("fits");
-        let committed = plan_slot_write(&mut dir, BASE, 7, 41, 900).expect("fits");
+        let first = plan_checkpoint_write(&mut dir, BASE, 7, 41, 100).expect("fits");
+        let grown = plan_checkpoint_write(&mut dir, BASE, 7, 41, 500).expect("fits");
         assert_eq!(first.slot, grown.slot);
-        assert_eq!(first.slot, committed.slot);
-        assert_eq!(first.erase_from, committed.erase_from);
-        assert_eq!(dir.run_count(), 1, "one slot consumed, not three");
-        assert_eq!(
-            dir.find(7),
-            Some((first.slot, 900)),
-            "size updated in place"
-        );
+        assert_eq!(dir.find(7), None, "no checkpoint is ever served");
+        assert!(dir.manifest().is_empty(), "nor advertised");
+        assert_eq!(dir.run_count(), 0);
+
+        let committed = plan_slot_write(&mut dir, BASE, 7, 41, 900).expect("fits");
+        assert_eq!(committed.slot, first.slot, "one slot consumed, not three");
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(dir.find(7), Some((first.slot, 900)));
     }
 
     #[test]
@@ -654,6 +699,7 @@ mod tests {
                 run_seq: 2,
                 size: blob_len(3),
                 start_uptime_s: 50,
+                finished: true,
             }),
             "only the new, shorter run is found"
         );
@@ -750,5 +796,53 @@ mod tests {
             let (pulled, _) = flash.pull_all(&dir, seq, 244);
             assert!(verify_blob(&pulled), "run {seq} verifies after the reboot");
         }
+    }
+
+    #[test]
+    fn a_phone_connected_through_a_run_is_offered_nothing_until_the_commit() {
+        // The straddling-transfer defect: while the run records, its checkpoints
+        // sat in the manifest, so a phone could pull a partial blob and ingest it
+        // as a complete run — and the later commit re-advertised the same run_seq
+        // with larger, disagreeing bytes. Between two checkpoints the whole prefix
+        // can also change (thinning), so a transfer spanning one reassembled bytes
+        // from two different blobs. Nothing about the live run may be visible.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        let earlier = a_blob(3, 0, 6);
+        let plan = plan_slot_write(&mut dir, BASE, 3, 0, earlier.len()).expect("fits");
+        flash.apply(plan, &earlier);
+
+        for (points, elapsed) in [(5u32, 100u32), (20, 200), (40, 300)] {
+            let blob = a_checkpoint(7, 41, points, elapsed);
+            let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, blob.len()).expect("fits");
+            flash.apply(plan, &blob);
+            let entries = dir.manifest_at(1_000);
+            assert_eq!(
+                entries
+                    .iter()
+                    .map(|e| e.run_seq)
+                    .collect::<heapless::Vec<_, SLOT_COUNT>>()[..],
+                [3][..],
+                "only the previously-committed run is advertised"
+            );
+            assert_eq!(
+                plan_chunk_read(&dir, BASE, 7, 0, 244),
+                None,
+                "and the live run is not served even when asked for by id"
+            );
+            assert!(
+                !chunk_completes_run(&dir, 7, u32::MAX),
+                "nor can it be marked synced"
+            );
+        }
+
+        let final_blob = a_blob(7, 41, 40);
+        let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
+        flash.apply(plan, &final_blob);
+        assert_eq!(dir.manifest_at(1_000).len(), 2, "now the run appears, once");
+        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(&pulled[..], &final_blob[..]);
+        assert!(verify_blob(&pulled));
+        assert!(chunk_completes_run(&dir, 7, cursor));
     }
 }

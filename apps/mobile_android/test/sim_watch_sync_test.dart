@@ -22,13 +22,17 @@ const _goldenHex =
 /// (index 1, 1 km, 5:00 split, 290 s moving) interleaved after point 2.
 /// Kept byte-identical to the firmware's `golden_v2_blob_with_a_lap_is_stable`
 /// test vector so a v2 wire-format drift on either side is caught here.
+///
+/// Header byte 5 is `01` — [kRunFlagFinished], which the firmware stamps in
+/// `RunWriter::finalize`. A mid-run checkpoint of the same points would be
+/// this blob with that byte zero and a different trailing CRC.
 const _goldenV2Hex =
-    '54524b31020000000700000029000000'
+    '54524b31020100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
     'e4cfd9170c0141c101000000723f7a00'
     '0100102700002c010000220100000001'
     '74d1d917000341c10200000000800000'
-    '454e4431d2040000580200006c020000406197f1';
+    '454e4431d2040000580200006c020000dda6c90d';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -123,7 +127,10 @@ void main() {
     test('header', () {
       final h = decodeHeader(blob);
       expect(h.version, 1);
+      // v1 predates kRunFlagFinished — byte 5 was reserved, so a v1 blob can
+      // never claim to be finished, and the phone still ingests it.
       expect(h.flags, 0);
+      expect(h.finished, isFalse);
       expect(h.runSeq, 7);
       expect(h.startUptimeS, 41);
     });
@@ -243,6 +250,21 @@ void main() {
       expect(track[2]['ts'], DateTime.utc(2026, 7, 8, 11, 49, 3).toIso8601String());
       expect(track[2]['ele'], isNull);
       expect(track[2]['bpm'], isNull);
+    });
+
+    test('the v2 golden carries the finished flag the firmware stamps', () {
+      // The one byte separating a committed run from a mid-run checkpoint of the
+      // same points. It sits inside the CRC-covered prefix, so clearing it
+      // without recomputing the CRC must fail verification — a checkpoint can
+      // never be promoted to "finished" by bit-rot in transit.
+      final blob = _goldenV2Blob();
+      final h = decodeHeader(blob);
+      expect(h.flags, kRunFlagFinished);
+      expect(h.finished, isTrue);
+
+      final tampered = Uint8List.fromList(blob);
+      tampered[5] = 0;
+      expect(verifyBlob(tampered), isFalse);
     });
 
     test('a v2 blob with a lap yields the registered metadata.laps shape', () {
