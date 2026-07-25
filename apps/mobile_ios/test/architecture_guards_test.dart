@@ -42,6 +42,21 @@ void main() {
       source = File('lib/screens/run_screen.dart').readAsStringSync();
     });
 
+    test('turn-cue announced state is cleared at the start of every recording',
+        () {
+      // TurnCueAnnouncer latches each fired band for its lifetime, and the
+      // announcer is only rebuilt when the SELECTED ROUTE changes — so without
+      // a per-recording reset a second run over the same route announces
+      // nothing at all (the repeated-loop / backyard-ultra case). _begin() is
+      // the one path every recording funnels through.
+      final begin = _extractMethodBody(source, r'Future<void> _begin\(\) async \{');
+      expect(
+        begin.contains('_turnAnnouncer?.reset()'),
+        isTrue,
+        reason: 'every recording must start from a cleared announced-turn set',
+      );
+    });
+
     test('auto-live-share hook is opt-in, L4-isolated, and duplicate-safe', () {
       // Reason: docs/features/safety.md — the auto_live_share device pref (and
       // a manual "Share live link") start a broadcast at _begin(). Three

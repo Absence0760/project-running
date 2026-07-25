@@ -70,5 +70,13 @@ class TurnCueAnnouncer {
     return null;
   }
 
+  /// Forget which bands have already fired. The fired set is per-RECORDING,
+  /// not per-route: without this, running the same route a second time (the
+  /// backyard-ultra / repeated-loop case, where the recorder is restarted on
+  /// the same loop every hour) announced nothing at all, because every band of
+  /// the nearest turn was already latched and [announcementFor] returns on the
+  /// nearest turn rather than skipping to a farther one.
+  void reset() => _fired.clear();
+
   bool get hasCues => _cues.isNotEmpty;
 }

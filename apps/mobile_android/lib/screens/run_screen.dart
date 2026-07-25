@@ -1522,6 +1522,12 @@ class _RunScreenState extends State<RunScreen> {
 
     if (!mounted || _recorder == null) return;
 
+    // Announced-turn state is per-recording. The announcer is only rebuilt when
+    // the SELECTED ROUTE changes, so a second run on the same route reused the
+    // fully-latched fired set and spoke no turn cues at all. Every recording
+    // funnels through here, so this is the one place that can't be bypassed.
+    _turnAnnouncer?.reset();
+
     _recorder!.begin();
 
     // Stable run id + wall-clock start time for incremental persistence.

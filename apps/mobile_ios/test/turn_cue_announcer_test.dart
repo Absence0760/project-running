@@ -101,4 +101,48 @@ void main() {
       expect(a.announcementFor(100), isNull);
     });
   });
+
+  group('reset (per-recording fired state)', () {
+    test('a second run over the same route announces every band again', () {
+      final a = TurnCueAnnouncer([
+        _cue(400, TurnDirection.left),
+        _cue(1200, TurnDirection.right),
+      ]);
+      // Run 1: walk the whole route so every band of every turn latches.
+      for (final along in <double>[100, 300, 395, 900, 1100, 1195, 1300]) {
+        a.announcementFor(along);
+      }
+      expect(a.announcementFor(100), isNull,
+          reason: 'all bands latched after the first pass');
+
+      a.reset();
+
+      expect(a.announcementFor(100)!.thresholdM, 300);
+      expect(a.announcementFor(300)!.thresholdM, 100);
+      expect(a.announcementFor(395)!.thresholdM, 0);
+      expect(a.announcementFor(900)!.thresholdM, 300);
+      expect(a.announcementFor(1100)!.thresholdM, 100);
+      expect(a.announcementFor(1195)!.thresholdM, 0);
+    });
+
+    test('reset mid-route re-arms the bands already spoken', () {
+      final a = TurnCueAnnouncer([_cue(400, TurnDirection.left)]);
+      expect(a.announcementFor(100)!.thresholdM, 300);
+      expect(a.announcementFor(300)!.thresholdM, 100);
+      a.reset();
+      expect(a.announcementFor(100)!.thresholdM, 300);
+    });
+
+    test('reset on a never-used announcer is a no-op', () {
+      final a = TurnCueAnnouncer([_cue(400, TurnDirection.left)]);
+      a.reset();
+      expect(a.announcementFor(100)!.thresholdM, 300);
+    });
+
+    test('reset does not resurrect turns the runner is already past', () {
+      final a = TurnCueAnnouncer([_cue(100, TurnDirection.right)]);
+      a.reset();
+      expect(a.announcementFor(500), isNull);
+    });
+  });
 }
