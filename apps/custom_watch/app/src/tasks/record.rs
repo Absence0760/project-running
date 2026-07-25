@@ -544,9 +544,9 @@ pub async fn run(store: &'static SharedStore) {
 /// transport. The QNH sea-level reference has no setter (it is a `state` watch
 /// the baro task consumes), so it is range-checked here against
 /// `record_cadence::plausible_sea_level_pa` before publishing; the timezone
-/// offset rides the same seam toward the ui task,
-/// its guard host-tested in `watch_core::settings`. Absent fields are left
-/// untouched — a partial push is a partial update, never a reset of the rest.
+/// offset rides the same seam toward the ui task, its guard host-tested in
+/// `watch_core::settings`. Absent fields are left untouched — a partial push is
+/// a partial update, never a reset of the rest.
 fn apply_settings(
     s: &WatchSettings,
     recorder: &mut Recorder,

@@ -25,12 +25,11 @@
 //! strictly (`watch_core::hr_drain`): each PPG count is paired with the latest
 //! ambient count for subtraction (bright-sun recovery), and a word with a tag
 //! we didn't enable is dropped, never fed to the detector as PPG. A slow LED
-//! auto-gain loop
-//! (`agc_next_pa_ambient`, ~1 Hz) keeps the corrected DC in the detector's
-//! band while a raw-DC guard protects ADC clipping headroom — ambient swings
-//! cancel out of the corrected level, so the drive can't oscillate against
-//! sunlight flicker. Register effects are compile-only until the dev kit
-//! lands, like the rest of this path.
+//! auto-gain loop (`agc_next_pa_ambient`, ~1 Hz) keeps the corrected DC in the
+//! detector's band while a raw-DC guard protects ADC clipping headroom —
+//! ambient swings cancel out of the corrected level, so the drive can't
+//! oscillate against sunlight flicker. Register effects are compile-only until
+//! the dev kit lands, like the rest of this path.
 //!
 //! The licensed Maxim HR algorithm is pulled in via `bindgen` post-tier-1;
 //! tier 1 uses the naive peak-detect in `max86177::peak_detect`.
