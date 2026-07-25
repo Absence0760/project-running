@@ -4251,3 +4251,21 @@ Don't re-litigate by:
 - **Claiming a rung the evidence doesn't support** — in particular using "sim-verified" to tick a parity-backlog item, or reading "compile-verified" BLE as anything other than "the dependency stack links".
 
 Pinning: [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md) holds the rung definitions + the checklist; [`roadmap.md`](../custom_watch/roadmap.md) links it from the per-step bring-up, Definition-of-Done, power-instrumentation and parity-backlog sections; [`tier1_log.md`](../custom_watch/tier1_log.md) is where bench evidence lands. `apps/custom_watch/README.md` is the per-step status surface and should point at this doc for what its rung words mean.
+
+---
+
+## 315. custom_watch CI gates all three firmware feature sets, not just the default build
+
+**Decided (2026-07-25).** The `build-firmware` job built and clippy-gated only the **default** feature set, so two of the three real builds were defended by nothing but a per-batch manual run: the `ble` set (`--no-default-features --features ble`, the S140 SoftDevice build, mutually exclusive with the default `single-core-cs` per [§ 210](#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default)) and the sim set (`sim-autostart,sim-buttons,sim-course,dev-blink`, what `bin/watch-sim.sh` actually builds). The job now builds **and** runs `clippy -D warnings` against all three.
+
+This was not hypothetical: the `ble` build had already drifted. It emitted `warning: constant FRAME_GAP is never used`, which `-D warnings` would have failed had anything run it. The root cause was not dead code — `FRAME_GAP` *is* used by `settings_rx`, and deleting it would have broken the default build. `main` gates its whole phone-link spawn block on `#[cfg(not(feature = "ble"))]`, so under `ble` the entire `phone` module is unreachable and rustc happened to flag the const first (the `#[embassy_executor::task]`-generated items don't trip the lint). The fix is a module-inner `#![cfg(not(feature = "ble"))]` in `tasks/phone.rs`, matching the reachability that already existed in `main`. Per-item `#[cfg]` would have left six unused imports failing the same gate.
+
+The general rule this sets: **a feature set nobody builds in CI is not build-verified**, whatever a doc says about it. That matters more than usual here because [§ 314](#314-the-custom-watch-verification-ladder-becomes-a-four-rung-contract-and-tier-1-bench-verification-gets-a-checklist--neither-changes--82s-dod)'s ladder makes *build-verified* a claimable rung with named evidence, and the `ble` path can never climb higher than it before the dev kit exists — the Renode sim cannot run the proprietary SoftDevice. Build-verification is the only automated evidence that path will ever have, so it has to be real.
+
+Don't re-litigate by:
+
+- **Adding a feature to `app/Cargo.toml` without adding it to the CI matrix.** An ungated feature set rots silently, exactly as `ble` did.
+- **Silencing a feature-gated warning with `#[allow(dead_code)]` or an underscore rename.** Both were available for `FRAME_GAP` and both would have hidden the real finding, which was that a whole module is unreachable in that build.
+- **Reading a green default build as "the firmware compiles".** It compiles *one* of three ways.
+
+Pinning: `.github/workflows/ci.yml` § `build-firmware`; the canonical command list lives in [`apps/custom_watch/local_testing.md`](../../apps/custom_watch/local_testing.md) § CI parity.
