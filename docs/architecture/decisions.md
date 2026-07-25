@@ -4077,3 +4077,13 @@ Fixing the tri-state also exposed the ordering bug underneath it: the slow-path 
 A ceiling is the conservative direction, which is why it ships rather than waiting: telling a runner who just finished a hundred-miler to drink 14 L is an exercise-associated-hyponatremia risk stated as a goal, and the unbounded version had no evidence behind it above an hour — it is a daily-baseline heuristic being extrapolated four to twenty-four times past its range. Long-effort fluid is already modelled properly elsewhere: `fuel_plan` allocates per leg against aid stations with carbs alongside, which is the surface that should answer "how much do I drink during a 12 h race".
 
 **The specific number is a product call the owner can tune, not a clinical recommendation** — four hours is chosen as the point past which a daily water goal stops being the right instrument, not as a physiological limit. Sweat rates vary roughly 0.5–2.0 L/h by athlete and conditions, so a per-athlete sweat-rate input (or a hand-off to the fuel plan once a long effort is logged) is the better long-term answer; this ceiling is the safe floor under it. Twin-pinned on both platforms (11 tests each).
+
+---
+
+## 301. A watch-ingest payload that cannot be parsed is quarantined and swept, not retried forever or deleted on sight
+
+**Decided (2026-07-25).** `WatchIngestQueue.drain` treated every failure the same: log it, leave the file, move on. That conflates two opposite classes. An upload failure is transient and must keep retrying — that is the queue's entire purpose. A read/decode failure is permanent: the bytes will not improve, so the entry was re-read on every sign-in forever and `pendingCount` reported a phantom queued run the user could never clear. `enqueue` also used a bare `writeAsString` while every sibling store used `writeStringAtomic`, so a process death mid-write manufactured exactly those unparseable files; it is now atomic.
+
+The two classes are now split at the seam: parse (read → decode → envelope detection → `runFromWatchPayload`) versus upload (`api.saveRun`). A parse failure renames the file to `<uuid>.json.rejected`, which drops it out of the `.json` glob every listing here uses — so it stops being retried and stops counting as pending — and a sweep at `init` deletes rejected entries past 30 days.
+
+Renaming rather than deleting is the deliberate middle: deleting on sight would let a decoder bug silently destroy a real recorded run, while keeping it forever is residue that carries GPS. The 30-day sweep mirrors the bounded-retention rule `LocalCrossingsStore` adopted, and `rejectedCount` is test-visible so the retry-forever regression stays pinned.
