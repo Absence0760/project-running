@@ -191,6 +191,14 @@ class RunRecorder {
   // segment jumps backwards and "distance remaining" climbs UP. Clamping the
   // search to start at the last matched index keeps remaining non-increasing.
   int _minMatchedSegmentIdx = 1;
+  // Whether [_currentWaypoint] is a fix the L1 distance chain accepted into
+  // the track. A fix rejected as an implausible teleport still refreshes the
+  // blue dot, but must never drive route progress: the closest-segment search
+  // ADVANCES the monotonic [_minMatchedSegmentIdx] floor, and the floor is by
+  // design never lowered — so one corrupt fix would pin the search kilometres
+  // ahead for the rest of the run, permanently inflating off-route distance
+  // (up to a false safety escalation) and understating distance remaining.
+  bool _currentWaypointTrusted = true;
   DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
@@ -335,6 +343,7 @@ class RunRecorder {
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
+    _currentWaypointTrusted = true;
     _recording = false;
     _paused = false;
     _route = route;
@@ -684,6 +693,7 @@ class RunRecorder {
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
+    _currentWaypointTrusted = true;
     _recording = false;
     _paused = false;
     _route = route;
@@ -943,6 +953,7 @@ class RunRecorder {
         _lastTrackedPosition = pos;
         _lastTrackedPositionAt = pos.timestamp;
         _track.add(_currentWaypoint!);
+        _currentWaypointTrusted = true;
       } else {
         final delta = Geolocator.distanceBetween(
           last.latitude,
@@ -977,6 +988,7 @@ class RunRecorder {
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);
+          _currentWaypointTrusted = true;
         } else if (dtSec >= _gpsReanchorAfterSeconds) {
           // Real GPS gap: the hop failed the < 100 m cap (the runner genuinely
           // moved away while fixes were dropped) but a genuine interval has
@@ -989,8 +1001,13 @@ class RunRecorder {
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);
+          _currentWaypointTrusted = true;
+        } else {
+          _currentWaypointTrusted = false;
         }
       }
+    } else {
+      _currentWaypointTrusted = true;
     }
 
     _emitSnapshot();
@@ -1018,7 +1035,12 @@ class RunRecorder {
     double? offRoute;
     double? remaining;
     if (current != null) {
-      if (identical(current, _lastRouteCalcFor)) {
+      // Reuse the cached values both when the position hasn't changed and when
+      // the current fix is one the distance filter rejected — an untrusted fix
+      // must not advance the monotonic route floor (see
+      // [_currentWaypointTrusted]). The last trusted fix's values are still
+      // the best available answer.
+      if (identical(current, _lastRouteCalcFor) || !_currentWaypointTrusted) {
         offRoute = _cachedOffRoute;
         remaining = _cachedRouteRemaining;
       } else {

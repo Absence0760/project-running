@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:run_recorder/run_recorder.dart';
 
 void main() {
@@ -15,6 +16,107 @@ void main() {
   }
 
   Waypoint at(double lat, double lng) => Waypoint(lat: lat, lng: lng);
+
+  group('route progress only follows fixes the distance filter accepted', () {
+    // At lat 0 one degree of longitude is the full 111320 m, so metres map
+    // straight onto lng and the fixtures stay readable.
+    const metrePerDegLng = 111320.0;
+
+    Route eastRoute({required int lengthM, required int stepM}) => route([
+          for (var m = 0; m <= lengthM; m += stepM) [0.0, m / metrePerDegLng],
+        ]);
+
+    Position fix(double metresEast, int seconds) => Position(
+          longitude: metresEast / metrePerDegLng,
+          latitude: 0,
+          timestamp: DateTime(2026, 4, 10, 10, 0, seconds),
+          accuracy: 5,
+          altitude: 100,
+          altitudeAccuracy: 2,
+          heading: 90,
+          headingAccuracy: 5,
+          speed: 2.5,
+          speedAccuracy: 1,
+        );
+
+    /// Drive [fixes] through the full filter chain and return the last emitted
+    /// snapshot.
+    Future<RunSnapshot> lastSnapshotFor(List<Position> fixes) async {
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(route: eastRoute(lengthM: 3000, stepM: 100));
+      final seen = <RunSnapshot>[];
+      final sub = r.snapshots.listen(seen.add);
+      addTearDown(() async {
+        await sub.cancel();
+        r.dispose();
+      });
+      r.begin();
+      for (final f in fixes) {
+        r.debugInjectPosition(f);
+      }
+      await Future<void>.delayed(Duration.zero);
+      return seen.last;
+    }
+
+    test('a rejected teleport does not poison the monotonic floor', () async {
+      // 1000 m in 1 s is rejected for distance (fails the < 100 m hop cap and
+      // the speed clamp, and 1 s is under the re-anchor window). It must not
+      // drag the closest-segment floor up to ~1500 m, which the floor's
+      // never-lowered contract would then make permanent.
+      final snap = await lastSnapshotFor([
+        fix(500, 0),
+        fix(1500, 1),
+        fix(505, 2),
+      ]);
+      expect(snap.offRouteDistanceMetres, closeTo(0, 2));
+      expect(snap.routeRemainingMetres, closeTo(2495, 5));
+    });
+
+    test('the rejected teleport is still excluded from distance', () async {
+      // Guards the fix from "solving" the floor by accepting the bad fix.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(route: eastRoute(lengthM: 3000, stepM: 100));
+      addTearDown(r.dispose);
+      r.begin();
+      r.debugInjectPosition(fix(500, 0));
+      r.debugInjectPosition(fix(1500, 1));
+      r.debugInjectPosition(fix(505, 2));
+      expect(r.debugDistanceMetres, closeTo(5, 1));
+      expect(r.debugTrack.length, 2);
+    });
+
+    test('a rejected backwards teleport does not move the floor either',
+        () async {
+      final snap = await lastSnapshotFor([
+        fix(1000, 0),
+        fix(20, 1),
+        fix(1005, 2),
+      ]);
+      expect(snap.offRouteDistanceMetres, closeTo(0, 2));
+      expect(snap.routeRemainingMetres, closeTo(1995, 5));
+    });
+
+    test('a genuine GPS-gap re-anchor still advances the floor', () async {
+      // The >= 10 s re-anchor branch appends the fix to the track, so it IS
+      // trusted — without this case the fix above could over-correct and
+      // freeze route progress across a real signal gap (#330).
+      final snap = await lastSnapshotFor([
+        fix(500, 0),
+        fix(1500, 60),
+      ]);
+      expect(snap.routeRemainingMetres, closeTo(1500, 5));
+      expect(snap.offRouteDistanceMetres, closeTo(0, 2));
+    });
+
+    test('sub-threshold jitter keeps the last trusted route values', () async {
+      final snap = await lastSnapshotFor([
+        fix(500, 0),
+        fix(500.5, 1),
+      ]);
+      expect(snap.routeRemainingMetres, closeTo(2500, 5));
+      expect(snap.offRouteDistanceMetres, closeTo(0, 2));
+    });
+  });
 
   group('_routeRemaining', () {
     test('returns null when no route is loaded', () {
