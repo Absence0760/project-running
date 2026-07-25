@@ -76,6 +76,14 @@
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping
+//! - [`input_flow`] — the rest of the button task's decisions: how a BTN3 hold
+//!   resolves tier by tier, the in-grid cursor step, the page a press lands on,
+//!   and where a dismissed run leaves the view
+//! - [`ui_frame`] — per-frame screen decisions: the animation window, the hero
+//!   band's precedence, which rows may be skipped, and whether a time-based
+//!   refresh is still owed
+//! - [`nav_map`] — the Nav page's map panel: whole-course fit vs the
+//!   runner-centred auto-zoom window, the position marker, and the repaint key
 //! - [`run_store`] — on-device run wire format + BLE sync framing
 //! - [`settings`] — phone→watch settings frame (max HR / pacer goal / gear /
 //!   HR-zone ceiling) decoded into the recorder's settings-sync hooks
@@ -219,9 +227,11 @@ pub mod guided_runs;
 pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
+pub mod input_flow;
 pub mod link;
 pub mod live_freshness;
 pub mod locale_defaults;
+pub mod nav_map;
 pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
@@ -258,3 +268,4 @@ pub mod trackback;
 pub mod training_load;
 pub mod training_paces;
 pub mod turn_cues;
+pub mod ui_frame;
