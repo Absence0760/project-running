@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/gym_adherence.dart';
 
+// `stepIndex` defaults to `setIndex` — true for a single-block routine, which
+// is what every case below is. The two-block case passes it explicitly.
 PlannedSetRef planned(
   String exerciseKey,
   int setIndex, [
@@ -11,8 +13,10 @@ PlannedSetRef planned(
   num? targetRepsMax,
   String setType = 'working',
   num? targetDistanceM,
+  int? stepIndex,
 ]) => PlannedSetRef(
   exerciseKey: exerciseKey,
+  stepIndex: stepIndex ?? setIndex,
   setIndex: setIndex,
   setType: setType,
   targetRepsMin: targetRepsMin,
@@ -29,8 +33,10 @@ ActualSetRef actual(
   num? weightKg,
   num? durationS,
   num? distanceM,
+  int? stepIndex,
 ]) => ActualSetRef(
   exerciseKey: exerciseKey,
+  stepIndex: stepIndex ?? setIndex,
   setIndex: setIndex,
   reps: reps,
   weightKg: weightKg,
@@ -339,5 +345,30 @@ void main() {
     expect(extra.status, SetAdherenceStatus.extra);
     expect(r.plannedCount, 1);
     expect(r.completedCount, 1);
+  });
+
+  test('the same exercise in two blocks grades each block on its own logged set',
+      () {
+    // The heavy-top-set-then-back-off pattern. setIndex restarts per block, so
+    // keying on it collapsed both blocks onto one logged set: a perfectly
+    // executed session graded 50% / partial, the deltas were lifted off the
+    // wrong set, and the heavy top set was neither graded nor flagged extra.
+    final r = computeRoutineAdherence(
+      [
+        planned('bench', 0, 3, 100, null, null, 'working', null, 0), // heavy
+        planned('bench', 0, 10, 60, null, null, 'working', null, 1), // back-off
+      ],
+      [
+        actual('bench', 0, 3, 100, null, null, 0),
+        actual('bench', 0, 10, 60, null, null, 1),
+      ],
+    );
+    expect(r.plannedCount, 2);
+    expect(r.completedCount, 2);
+    expect(r.verdict, RoutineVerdict.completed);
+    expect(r.sets.map((s) => s.status).toList(),
+        [SetAdherenceStatus.hit, SetAdherenceStatus.hit]);
+    // Each block's delta comes off its OWN logged set, not the other's.
+    expect(r.sets.map((s) => s.weightDeltaKg).toList(), [0, 0]);
   });
 }

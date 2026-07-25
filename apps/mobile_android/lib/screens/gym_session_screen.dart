@@ -427,22 +427,27 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // reads identically in the web /gym/[id] review panel.
   Map<String, dynamic> _metadataTrio() {
     final planned = _steps
-        .map((s) => PlannedSetRef(
-              exerciseKey: s.exerciseKey,
-              setIndex: s.setIndex,
-              setType: s.setType,
-              targetRepsMin: s.targetRepsMin,
-              targetRepsMax: s.targetRepsMax,
-              targetWeightKg: s.targetWeightKg,
-              targetDurationS: s.targetDurationS,
-              targetDistanceM: s.targetDistanceM,
+        .asMap()
+        .entries
+        .map((e) => PlannedSetRef(
+              exerciseKey: e.value.exerciseKey,
+              stepIndex: e.key,
+              setIndex: e.value.setIndex,
+              setType: e.value.setType,
+              targetRepsMin: e.value.targetRepsMin,
+              targetRepsMax: e.value.targetRepsMax,
+              targetWeightKg: e.value.targetWeightKg,
+              targetDurationS: e.value.targetDurationS,
+              targetDistanceM: e.value.targetDistanceM,
             ))
         .toList();
     final actual = <ActualSetRef>[];
-    for (final r in _runner.snapshotResults()) {
+    for (final entry in _runner.snapshotResults().asMap().entries) {
+      final r = entry.value;
       if (r.status != GymRunnerStepStatus.completed) continue;
       actual.add(ActualSetRef(
         exerciseKey: r.step.exerciseKey,
+        stepIndex: entry.key,
         setIndex: r.step.setIndex,
         reps: r.actualReps,
         weightKg: r.actualWeightKg,
@@ -452,17 +457,18 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     }
     final adherence = computeRoutineAdherence(planned, actual);
     final plannedByKey = {
-      for (final p in planned) '${p.exerciseKey} ${p.setIndex}': p,
+      for (final p in planned) refKey(p.exerciseKey, p.stepIndex): p,
     };
     final actualByKey = {
-      for (final a in actual) '${a.exerciseKey} ${a.setIndex}': a,
+      for (final a in actual) refKey(a.exerciseKey, a.stepIndex): a,
     };
     final stepResults = adherence.sets.map((s) {
-      final key = '${s.exerciseKey} ${s.setIndex}';
+      final key = refKey(s.exerciseKey, s.stepIndex);
       final p = plannedByKey[key];
       final a = actualByKey[key];
       return {
         'exercise_key': s.exerciseKey,
+        'step_index': s.stepIndex,
         'set_index': s.setIndex,
         'status': s.status.name,
         'reps_delta': s.repsDelta,

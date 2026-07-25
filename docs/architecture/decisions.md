@@ -4110,3 +4110,15 @@ The merge rules differ because the two sidecars fail in opposite directions:
 
 - **`synced_ids`** — ids this process knows about are decided by its own `_syncedIds`, so a run it deliberately holds unsynced can't be resurrected from a stale file. An unknown id is kept only if its run FILE still exists, which is the process-independent version of the "no local row ⇒ prune the ghost" rule the old code approximated with `_summaries` (this process's view only).
 - **`pending_remote_deletes`** — additions always win, and removals are carried by an explicit `_clearedRemoteDeletes` ledger rather than inferred from absence, because absence cannot distinguish "I cleared this" from "they queued this while I was running". The ledger resets after each successful write, at which point disk already reflects our removals. The asymmetry is deliberate: re-deleting an already-deleted row is a no-op, losing a queued delete is unrecoverable.
+
+---
+
+## 304. Gym adherence matches planned to actual by expanded-step ordinal, not by the per-block set index
+
+**Decided (2026-07-25).** `computeRoutineAdherence` keyed its planned↔actual match on `(exerciseKey, setIndex)`. `setIndex` is the position of a set *within its exercise block* and restarts in each block, so a routine that programs the same exercise twice — the heavy-top-set-then-back-off pattern, which is ordinary strength programming — minted identical keys for two different planned sets. Both collapsed onto one logged set: a perfectly executed session graded 50% / `partial`, the deltas were lifted off the wrong set, and the heavy top set was neither graded nor surfaced as `extra`. The persisted `gym_step_results` row carried the other block's targets for the same reason. Both twins had it, and all 24 cases in each suite happened to use distinct keys.
+
+The match identity is now `stepIndex`: the ref's ordinal position in the expanded step list, stamped by the runner that builds the list. `setIndex` stays on the ref for display. Both runners pass the ordinal, and the persisted row now carries `step_index` — which `gym_programming.md` § P3 had specced from the start; only the implementation omitted it.
+
+Two alternatives were rejected. **Consume-in-order matching** (each planned ref takes the first unclaimed actual with its key) needs no new field, but it mis-pairs the moment a set is skipped — and a skipped set is precisely what adherence exists to measure. **Renumbering `setIndex` to be routine-global** would fix the key but overload a field whose per-block meaning the editor, the DB rows, and the display all depend on.
+
+Test factories on both sides default `stepIndex` to `setIndex`, which is exactly true for the single-block routines every pre-existing case uses — so the 24 existing cases are unchanged and the new two-block case passes the ordinal explicitly.
