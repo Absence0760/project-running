@@ -455,6 +455,28 @@ void main() {
       expect(reloaded.workouts.map((w) => w.id).toSet(), {'w1', mine.id});
     });
 
+    test('cold load sweeps a stale atomic-write orphan but spares a fresh one',
+        () async {
+      // writeStringAtomic leaves `<name>.json.<n>.tmp` behind when the process
+      // dies between flush and rename. Every listing here filters on `.json`,
+      // so the orphan is invisible to the store and would sit on disk forever
+      // holding a full row. The age gate keeps the sweep off the temp file of
+      // a genuinely concurrent writer (background_sync holds its own instance
+      // over this same directory).
+      final stale = File('${dir.path}/w-crashed.json.0.tmp')
+        ..writeAsStringSync('{"id":"w-crashed"}')
+        ..setLastModifiedSync(DateTime.now().subtract(const Duration(days: 1)));
+      final fresh = File('${dir.path}/w-inflight.json.1.tmp')
+        ..writeAsStringSync('{"id":"w-inflight"}');
+
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+
+      expect(stale.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue,
+          reason: 'a write still in flight must not lose its temp file');
+    });
+
     test('a no-change refresh performs zero atomic rewrites (diff-before-write)',
         () async {
       await store.replaceFromServer([

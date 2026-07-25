@@ -200,6 +200,8 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       }
     }
 
+    _sweepAtomicWriteOrphans(d);
+
     // Reuse a valid, matching on-disk index for the summary view — its id-set
     // must equal the on-disk row-file id-set (membership only, no reads). A
     // missing / corrupt / drifted index (crash between a row write and the
@@ -503,8 +505,16 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     _indexDirty = false;
     final d = dir;
     if (d != null && d.existsSync()) {
+      // Delete EVERY file, not just `*.json`. The store owns this directory
+      // outright, and `writeStringAtomic` leaves a `<name>.json.<n>.tmp`
+      // sibling behind whenever the process dies between its flush and its
+      // rename — an orphan that every listing in this layer filters out, so it
+      // survives sign-out carrying a full row (for LocalCrossingsStore, a bib
+      // number and weigh-in fields). The contract here is "nothing of the
+      // prior user survives", which a filename filter can only ever
+      // approximate.
       for (final entity in d.listSync()) {
-        if (entity is! File || !entity.path.endsWith('.json')) continue;
+        if (entity is! File) continue;
         try {
           entity.deleteSync();
         } catch (e) {
@@ -513,6 +523,31 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// A `writeStringAtomic` temp sibling older than this is an orphan of a
+  /// crashed write, never a write still in flight — an atomic write completes
+  /// in milliseconds, and the age gate keeps the sweep from deleting the temp
+  /// file of a genuinely concurrent writer (the background-sync isolate holds
+  /// its own store instance over the same directory).
+  static const _atomicOrphanMinAge = Duration(hours: 1);
+
+  /// Delete `<name>.json.<n>.tmp` files left behind when the process died
+  /// between `writeStringAtomic`'s flush and its rename. Every listing in this
+  /// layer filters on `.json`, so an orphan is invisible to the store and
+  /// otherwise sits on disk forever holding a full row.
+  void _sweepAtomicWriteOrphans(Directory d) {
+    final cutoff = DateTime.now().subtract(_atomicOrphanMinAge);
+    for (final entity in d.listSync()) {
+      if (entity is! File || !entity.path.endsWith('.tmp')) continue;
+      try {
+        if (entity.statSync().modified.isAfter(cutoff)) continue;
+        entity.deleteSync();
+        debugPrint('$debugLabel: swept atomic-write orphan ${entity.path}');
+      } catch (e) {
+        debugPrint('$debugLabel: orphan sweep failed ${entity.path}: $e');
+      }
+    }
   }
 
   @visibleForTesting
