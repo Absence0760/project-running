@@ -72,6 +72,7 @@ mod imp {
     use defmt::*;
     use embassy_futures::select::{select, Either};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
     use embassy_sync::signal::Signal;
     use embassy_time::{Duration, Instant, Ticker, Timer};
     use heapless::Vec;
@@ -108,6 +109,16 @@ mod imp {
     /// worst-case frame is ~160 bytes; see `link.rs`). Also the run-chunk
     /// notify payload cap — a chunk reply never exceeds one notification.
     const FRAME_CAP: usize = 244;
+
+    /// Depth of the per-connection `run_chunk` request queue. A single-value
+    /// holder answers only the newest request, so a phone that PIPELINES pulls
+    /// (writes the next request before the previous notification lands) loses
+    /// every request but the last and then waits forever for a notification that
+    /// was never owed. A FIFO absorbs a realistic pipeline instead, and 8 is
+    /// several connection events' worth at the ~1 s interval this task
+    /// negotiates. Overflow past that is refused loudly rather than silently
+    /// overwritten (the phone's own reply timeout is what retries).
+    const CHUNK_QUEUE_DEPTH: usize = 8;
 
     // Every characteristic requires an encrypted (paired) link — issue #598.
     // `justworks` = Security Mode 1 Level 2: the SoftDevice rejects any read,
@@ -473,11 +484,12 @@ mod imp {
             }
 
             // Shared between the GATT event handler (sets them on CCCD write /
-            // signals a chunk request) and the serve loop (reads them). The
-            // executor is single-threaded, so a Cell + a Signal suffice.
+            // enqueues a chunk request) and the serve loop (reads them). The
+            // executor is single-threaded, so a Cell + a Channel suffice.
             let notifications = Cell::new(false);
             let manifest_notify = Cell::new(false);
-            let chunk_req: Signal<CriticalSectionRawMutex, ChunkRequest> = Signal::new();
+            let chunk_req: Channel<CriticalSectionRawMutex, ChunkRequest, CHUNK_QUEUE_DEPTH> =
+                Channel::new();
             // Reassembles a chunked course push over this connection. Interior
             // mutability (RefCell) keeps the GATT handler a plain `Fn`, like the
             // Cell/Signal above; the single-threaded executor makes it sound.
@@ -494,7 +506,14 @@ mod imp {
                         manifest_notify.set(on);
                     }
                     LinkServiceEvent::RunChunkWrite(bytes) => match ChunkRequest::decode(&bytes) {
-                        Some(req) => chunk_req.signal(req),
+                        Some(req) => {
+                            if chunk_req.try_send(req).is_err() {
+                                warn!(
+                                    "ble: chunk queue full, dropped run {=u32} @ {=u32}",
+                                    req.run_seq, req.offset
+                                );
+                            }
+                        }
                         None => warn!("ble: bad chunk request ({=usize} B)", bytes.len()),
                     },
                     LinkServiceEvent::RunChunkCccdWrite { notifications: on } => {
@@ -543,7 +562,7 @@ mod imp {
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
                 loop {
-                    match select(ticker.next(), chunk_req.wait()).await {
+                    match select(ticker.next(), chunk_req.receive()).await {
                         Either::First(()) => {
                             let now_s = Instant::now().as_secs() as u32;
                             if let Some(fix) = fix_rx.try_changed() {
