@@ -9,8 +9,10 @@
 //! far more than this holds (see [`MAX_POINTS_PER_RUN`]) — that is the tier-2
 //! external QSPI flash job, deliberately not solved here.
 //!
-//! The invariant the [`SlotDir`] enforces and the rest of the run-sync vertical
-//! depends on: a run is advertised or served only once it is **finished**.
+//! Two invariants the [`SlotDir`] enforces and the rest of the run-sync vertical
+//! depends on: a run is advertised or served only once it is **finished**, and a
+//! run's successive flash writes **ping-pong** between two slots so the erase
+//! window can never take the last good copy with it.
 //!
 //! Everything in this module is pure arithmetic plus a small in-RAM directory,
 //! so it is `cargo test`-able on the host; the actual flash reads / erases /
@@ -213,8 +215,15 @@ pub struct RecoveredRun {
     pub size: u32,
     pub start_uptime_s: u32,
     /// The blob carried [`FLAG_FINISHED`]: it is a committed run rather than a
-    /// mid-run checkpoint snapshot.
+    /// mid-run checkpoint snapshot. A finished blob always supersedes an
+    /// unfinished one for the same `run_seq` — see
+    /// [`SlotDir::from_recovered`](SlotDir::from_recovered).
     pub finished: bool,
+    /// The footer's elapsed seconds. Monotonic across a run's successive
+    /// checkpoints (the totals only grow), so it orders two same-run blobs when
+    /// neither is finished. Blob *size* cannot: a post-thinning checkpoint holds
+    /// half the points of the one before it.
+    pub elapsed_s: u32,
 }
 
 /// Recover the run persisted in one slot's raw flash bytes, or `None` if the
@@ -224,8 +233,9 @@ pub struct RecoveredRun {
 /// A CRC-valid blob is reported whether or not it carries [`FLAG_FINISHED`] —
 /// after a reset a mid-run checkpoint is a run that will never grow again, and
 /// surfacing it is the entire purpose of checkpointing. The flag rides along on
-/// [`RecoveredRun::finished`]. Refusing to advertise an unfinished blob is the
-/// *live* recorder's job, held in RAM by [`SlotDir`], not this scan's.
+/// [`RecoveredRun::finished`] so a run whose two ping-pong slots both survived
+/// resolves to its authoritative copy. Refusing to advertise an unfinished blob
+/// is the *live* recorder's job, held in RAM by [`SlotDir`], not this scan's.
 ///
 /// The blob does not store its own length, so the footer position is found by
 /// scanning each point-aligned offset for the footer magic *and* a CRC32 that
@@ -252,11 +262,20 @@ pub fn recover_slot(bytes: &[u8]) -> Option<RecoveredRun> {
                     size: (footer_at + FOOTER_LEN) as u32,
                     start_uptime_s: header.start_uptime_s,
                     finished: header.flags & FLAG_FINISHED != 0,
+                    elapsed_s: footer.elapsed_s,
                 });
             }
         }
     }
     None
+}
+
+/// Whether `new` is the copy to keep when both it and `old` recovered for the
+/// same `run_seq`: a committed blob beats a mid-run checkpoint, then the later
+/// elapsed time, then the larger blob. Equal on all three keeps `old`, so the
+/// boot scan is order-independent.
+fn supersedes(new: &RecoveredRun, old: &RecoveredRun) -> bool {
+    (new.finished, new.elapsed_s, new.size) > (old.finished, old.elapsed_s, old.size)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -279,6 +298,11 @@ struct SlotMeta {
     /// larger, disagreeing bytes (and a transfer straddling a checkpoint would
     /// reassemble bytes from two different blobs).
     finished: bool,
+    /// Write ordinal within this run: 1 for its first flash write, incrementing
+    /// per checkpoint. A run's writes ping-pong between two slots, so the higher
+    /// ordinal is the fresher copy and the lower one is what the next write may
+    /// safely erase.
+    write_no: u32,
 }
 
 /// In-RAM index of which slot holds which run, and which of those runs are
@@ -289,9 +313,16 @@ struct SlotMeta {
 /// cycle is re-advertised rather than lost until overwritten. Run ids
 /// (`run_seq`) are assigned by the caller (the `record` task), which is the
 /// single writer and resumes numbering from [`next_run_seq`](Self::next_run_seq)
-/// so a fresh run can't collide with a recovered one. A run's slot is reserved by
-/// [`reserve_checkpoint`](Self::reserve_checkpoint) while it records and sealed by
-/// [`reserve_commit`](Self::reserve_commit) when it stops.
+/// so a fresh run can't collide with a recovered one.
+///
+/// **Ping-pong.** A run's flash writes alternate between two slots
+/// ([`reserve_checkpoint`](Self::reserve_checkpoint) /
+/// [`reserve_commit`](Self::reserve_commit)): each write targets the slot that is
+/// NOT holding the run's freshest copy, so the erase+write window can never
+/// destroy the last good copy of the run-so-far. The cost is that a run in
+/// progress reserves up to two of the [`SLOT_COUNT`] slots, so at most
+/// `SLOT_COUNT - 2` finished runs are retained while recording. Raising that
+/// ceiling is the tier-2 external-QSPI job, same as the point budget.
 pub struct SlotDir {
     slots: [Option<SlotMeta>; SLOT_COUNT],
 }
@@ -316,18 +347,41 @@ impl SlotDir {
     /// OWN slot index — not round-robined — so [`find`](Self::find) maps it back
     /// to the flash offset its bytes physically occupy.
     ///
-    /// Every recovered run is marked finished: the reset ended its recording, so
-    /// even a mid-run checkpoint is as complete as the watch will ever know, and
+    /// **Reconciles the ping-pong pair.** A run interrupted mid-write leaves both
+    /// of its slots populated: the copy that was being written (possibly torn,
+    /// in which case [`recover_slot`] already rejected it) and the previous good
+    /// one. When both recover, [`supersedes`] keeps the authoritative copy —
+    /// committed over mid-run checkpoint, then later elapsed time — and frees the
+    /// other slot, so one run is never advertised twice with disagreeing sizes.
+    ///
+    /// Every survivor is marked finished: the reset ended its recording, so even
+    /// a mid-run checkpoint is as complete as the watch will ever know, and
     /// surfacing it is exactly what checkpointing exists for.
     pub fn from_recovered(slots: [Option<RecoveredRun>; SLOT_COUNT]) -> Self {
-        let mut dir = Self::new();
+        let mut kept: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
         for (i, r) in slots.into_iter().enumerate() {
+            let Some(r) = r else { continue };
+            let held = kept
+                .iter()
+                .enumerate()
+                .find_map(|(j, k)| k.filter(|k| k.run_seq == r.run_seq).map(|k| (j, k)));
+            if let Some((j, prev)) = held {
+                if !supersedes(&r, &prev) {
+                    continue;
+                }
+                kept[j] = None;
+            }
+            kept[i] = Some(r);
+        }
+        let mut dir = Self::new();
+        for (i, r) in kept.into_iter().enumerate() {
             dir.slots[i] = r.map(|r| SlotMeta {
                 run_seq: r.run_seq,
                 size: r.size,
                 start_uptime_s: r.start_uptime_s,
                 synced: false,
                 finished: true,
+                write_no: 0,
             });
         }
         dir
@@ -347,43 +401,52 @@ impl SlotDir {
             .map_or(0, |s| s.wrapping_add(1))
     }
 
-    /// Reserve the slot a mid-run checkpoint of `run_seq` writes into and return
-    /// the slot index — the slot the run already holds if it has checkpointed
-    /// before, else a fresh one.
+    /// Reserve the slot a mid-run checkpoint of `run_seq` writes into, leaving
+    /// the run's freshest existing copy untouched, and return the slot index.
     ///
     /// The slot is recorded as NOT finished, so the snapshot is invisible to the
     /// manifest and to [`find`](Self::find) while the run is still recording. The
     /// caller erases + writes that slot and, if either fails,
-    /// [`forget`](Self::forget)s it.
+    /// [`forget`](Self::forget)s it — the previous copy is still on flash either
+    /// way, which is the whole point of alternating.
     pub fn reserve_checkpoint(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
-        self.reserve(run_seq, size, start_uptime_s, false)
-    }
-
-    /// Reserve the slot a finished run's commit writes into — the slot its
-    /// checkpoints already hold, if any — and mark it finished, which is what puts
-    /// the run in the manifest and lets [`find`](Self::find) serve it.
-    pub fn reserve_commit(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
-        self.reserve(run_seq, size, start_uptime_s, true)
-    }
-
-    fn reserve(&mut self, run_seq: u32, size: u32, start_uptime_s: u32, finished: bool) -> usize {
-        let slot = self.slot_of(run_seq).unwrap_or_else(|| self.victim());
+        let (slot, write_no) = self.next_write(run_seq);
         self.slots[slot] = Some(SlotMeta {
             run_seq,
             size,
             start_uptime_s,
             synced: false,
-            finished,
+            finished: false,
+            write_no,
         });
         slot
     }
 
-    /// The slot holding `run_seq`, finished or not — the placement lookup, unlike
-    /// [`find`](Self::find), which answers only for a run the phone may pull.
-    fn slot_of(&self, run_seq: u32) -> Option<usize> {
-        self.slots
-            .iter()
-            .position(|s| s.is_some_and(|m| m.run_seq == run_seq))
+    /// Reserve the slot a finished run's commit writes into — again the slot NOT
+    /// holding the run's freshest copy, so a torn commit leaves the newest
+    /// checkpoint intact — mark it finished, and drop any other slot this run
+    /// held, since the commit supersedes every checkpoint of it.
+    ///
+    /// The superseded slot's *bytes* are left alone (its page is not the one
+    /// being written), so if this commit tears and the caller
+    /// [`forget`](Self::forget)s the target, the next boot's scan still recovers
+    /// the checkpoint from flash.
+    pub fn reserve_commit(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
+        let (slot, write_no) = self.next_write(run_seq);
+        for (i, s) in self.slots.iter_mut().enumerate() {
+            if i != slot && s.is_some_and(|m| m.run_seq == run_seq) {
+                *s = None;
+            }
+        }
+        self.slots[slot] = Some(SlotMeta {
+            run_seq,
+            size,
+            start_uptime_s,
+            synced: false,
+            finished: true,
+            write_no,
+        });
+        slot
     }
 
     /// Mark a finished run as fully pulled by the phone, so a later reservation
@@ -396,9 +459,43 @@ impl SlotDir {
         }
     }
 
+    /// The slot the next flash write for `run_seq` targets, and the write ordinal
+    /// to stamp on it.
+    ///
+    /// Once the run holds both of its ping-pong slots the target is the STALER of
+    /// the two (lowest `write_no`), so the erase can only ever destroy the copy
+    /// we no longer need. Before that it is a fresh slot — the run's first write
+    /// has nothing to protect, and its second must not land on top of its first.
+    fn next_write(&self, run_seq: u32) -> (usize, u32) {
+        let mut held = 0;
+        let mut latest = 0;
+        let mut stalest: Option<(usize, u32)> = None;
+        for (i, m) in self
+            .slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.map(|m| (i, m)))
+        {
+            if m.run_seq != run_seq {
+                continue;
+            }
+            held += 1;
+            latest = latest.max(m.write_no);
+            if stalest.is_none_or(|(_, no)| m.write_no < no) {
+                stalest = Some((i, m.write_no));
+            }
+        }
+        let slot = match stalest {
+            Some((i, _)) if held >= 2 => i,
+            _ => self.victim(run_seq),
+        };
+        (slot, latest.saturating_add(1))
+    }
+
     /// Choose the slot a new reservation takes: the first free slot, else an
-    /// eviction victim.
-    fn victim(&self) -> usize {
+    /// eviction victim. Never a slot holding `keep_run` — that is the run being
+    /// written, and its other copy is the fallback a torn write relies on.
+    fn victim(&self, keep_run: u32) -> usize {
         for (i, s) in self.slots.iter().enumerate() {
             if s.is_none() {
                 return i;
@@ -408,28 +505,26 @@ impl SlotDir {
         // pulled) so a finished-but-unsynced run is never silently overwritten
         // while any synced run still occupies a slot.
         let mut synced_victim: Option<(usize, u32)> = None;
+        let mut oldest: Option<(usize, u32)> = None;
         for (i, m) in self
             .slots
             .iter()
             .enumerate()
             .filter_map(|(i, s)| s.map(|m| (i, m)))
         {
+            if m.run_seq == keep_run {
+                continue;
+            }
             if m.synced && synced_victim.is_none_or(|(_, seq)| m.run_seq < seq) {
                 synced_victim = Some((i, m.run_seq));
             }
-        }
-        if let Some((i, _)) = synced_victim {
-            return i;
+            if oldest.is_none_or(|(_, seq)| m.run_seq < seq) {
+                oldest = Some((i, m.run_seq));
+            }
         }
         // Nothing synced: fall back to the oldest run overall — the region can't
         // hold more than SLOT_COUNT, so an unsynced run must go. Best-effort.
-        let mut oldest = 0;
-        for i in 1..SLOT_COUNT {
-            if self.slots[i].map(|m| m.run_seq) < self.slots[oldest].map(|m| m.run_seq) {
-                oldest = i;
-            }
-        }
-        oldest
+        synced_victim.or(oldest).map_or(0, |(i, _)| i)
     }
 
     /// Drop a slot's record — used when the flash write for it failed, so the
@@ -526,6 +621,7 @@ mod tests {
             size,
             start_uptime_s,
             finished: true,
+            elapsed_s: 0,
         }
     }
 
@@ -586,32 +682,289 @@ mod tests {
     }
 
     #[test]
-    fn a_recording_runs_checkpoints_are_never_advertised_or_served() {
-        // The live run's snapshots must be invisible to the phone: advertised, the
-        // phone would ingest a partial blob as a complete run and the later commit
-        // would re-advertise the same run_seq with larger, disagreeing bytes.
+    fn checkpoints_ping_pong_between_two_slots_and_are_never_advertised() {
+        // Rewriting ONE slot in place is what made a brownout mid-checkpoint blank
+        // the slot and lose the whole run-so-far. Successive checkpoints must
+        // alternate, so the erase can only ever land on the copy we no longer
+        // need — and neither copy may be advertised while the run records.
         let mut dir = SlotDir::new();
-        let slot = dir.reserve_checkpoint(7, 100, 41);
-        assert_eq!(dir.reserve_checkpoint(7, 260, 41), slot, "reuses its slot");
+        let s0 = dir.reserve_checkpoint(7, 100, 41);
+        let s1 = dir.reserve_checkpoint(7, 260, 41);
+        assert_ne!(s0, s1, "the second checkpoint must not erase the first");
+        let s2 = dir.reserve_checkpoint(7, 400, 41);
+        assert_eq!(
+            s2, s0,
+            "the third reuses the staler of the two, not a third slot"
+        );
+        let s3 = dir.reserve_checkpoint(7, 520, 41);
+        assert_eq!(s3, s1, "and alternates back");
+
         assert_eq!(dir.find(7), None, "an in-progress run is never served");
         assert!(dir.manifest().is_empty(), "nor advertised");
         assert_eq!(dir.run_count(), 0, "nor counted as a stored run");
         assert_eq!(dir.next_run_seq(), 8, "but its id is still reserved");
+    }
 
-        // The commit is what publishes it, in the same slot.
-        assert_eq!(dir.reserve_commit(7, 400, 41), slot);
-        assert_eq!(dir.find(7), Some((slot, 400)));
-        assert_eq!(dir.manifest().len(), 1);
-        assert_eq!(dir.run_count(), 1);
+    #[test]
+    fn a_commit_supersedes_the_checkpoints_and_lands_on_the_staler_slot() {
+        let mut dir = SlotDir::new();
+        let fresh = {
+            dir.reserve_checkpoint(7, 100, 41);
+            dir.reserve_checkpoint(7, 260, 41)
+        };
+        let committed = dir.reserve_commit(7, 400, 41);
+        assert_ne!(
+            committed, fresh,
+            "the commit write must not erase the freshest checkpoint"
+        );
+        assert_eq!(
+            dir.find(7),
+            Some((committed, 400)),
+            "the committed blob is what gets served"
+        );
+        assert_eq!(dir.run_count(), 1, "the superseded slot is released");
+        assert_eq!(dir.manifest().len(), 1, "and the run is advertised once");
     }
 
     #[test]
     fn a_checkpoint_free_run_commits_into_one_slot() {
+        // A run short enough that no checkpoint ever fired costs exactly one slot,
+        // as it always did — the two-slot cost is only paid while recording.
         let mut a = SlotDir::new();
         let mut b = SlotDir::new();
         assert_eq!(a.reserve_commit(3, 100, 10), b.reserve_commit(3, 100, 10));
         assert_eq!(a.find(3), b.find(3));
         assert_eq!(a.run_count(), 1);
+    }
+
+    #[test]
+    fn a_recording_run_never_evicts_its_own_other_copy() {
+        // Region full of finished runs, then a run starts checkpointing. Each
+        // reservation must sacrifice someone else's slot — never the sibling
+        // holding this run's only good copy.
+        let mut dir = SlotDir::new();
+        for seq in 0..SLOT_COUNT as u32 {
+            dir.reserve_commit(seq, 100, seq);
+            dir.mark_synced(seq);
+        }
+        let first = dir.reserve_checkpoint(9, 100, 500);
+        let second = dir.reserve_checkpoint(9, 200, 500);
+        assert_ne!(first, second);
+        // Two slots of history were spent to hold the live run's pair — the
+        // explicit price of never losing the run in progress to a torn write.
+        assert_eq!(dir.run_count(), (SLOT_COUNT - 2) as u8);
+    }
+
+    #[test]
+    fn recover_slot_reads_back_a_checkpoint_blob_as_a_partial_run() {
+        // A mid-run checkpoint (partial track + totals-so-far) written into a
+        // slot and power-cycled recovers exactly like a finished run — the whole
+        // point of checkpointing: a reset mid-run recovers a slightly-stale
+        // partial run instead of nothing.
+        let sink: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 9, 77).expect("start");
+        for t in 0..5 {
+            w.push_point(&a_point(t)).expect("push");
+        }
+        let ckpt = w.checkpoint_blob(321, 200, 210).expect("checkpoint");
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..ckpt.len()].copy_from_slice(&ckpt);
+        assert_eq!(
+            recover_slot(&slot),
+            Some(RecoveredRun {
+                run_seq: 9,
+                size: blob_len(5),
+                start_uptime_s: 77,
+                finished: false,
+                elapsed_s: 210,
+            }),
+            "the partial run recovers with the totals-so-far, flagged unfinished"
+        );
+    }
+
+    #[test]
+    fn manifest_lists_every_committed_run() {
+        let mut dir = SlotDir::new();
+        dir.reserve_commit(7, blob_len(3), 41);
+        dir.reserve_commit(8, blob_len(5), 700);
+        let m = dir.manifest();
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0].run_seq, 7);
+        assert_eq!(m[0].size, blob_len(3));
+        assert_eq!(m[0].start_uptime_s, 41);
+        assert_eq!(m[1].run_seq, 8);
+    }
+
+    #[test]
+    fn forget_removes_a_slot_from_the_directory() {
+        let mut dir = SlotDir::new();
+        let slot = dir.reserve_commit(7, 100, 41);
+        assert_eq!(dir.find(7), Some((slot, 100)));
+        dir.forget(slot);
+        assert_eq!(dir.find(7), None);
+        assert_eq!(dir.run_count(), 0);
+        // The freed slot is reused first.
+        assert_eq!(dir.reserve_commit(9, 200, 50), slot);
+    }
+
+    #[test]
+    fn recover_slot_reads_back_a_finished_run() {
+        let pts = [a_point(0), a_point(1), a_point(2)];
+        let slot = slot_image(7, 41, &pts);
+        assert_eq!(
+            recover_slot(&slot),
+            Some(RecoveredRun {
+                run_seq: 7,
+                size: blob_len(3),
+                start_uptime_s: 41,
+                finished: true,
+                elapsed_s: 620,
+            }),
+            "the footer is found past the erased 0xFF tail and the size is the blob, not the slot"
+        );
+    }
+
+    #[test]
+    fn recover_slot_reads_back_the_max_length_run() {
+        let pts: heapless::Vec<TrackPoint, { MAX_POINTS_PER_RUN as usize }> =
+            (0..MAX_POINTS_PER_RUN).map(a_point).collect();
+        let slot = slot_image(3, 9, &pts);
+        let r = recover_slot(&slot).expect("max-length run recovers");
+        assert_eq!(r.run_seq, 3);
+        assert_eq!(r.size, blob_len(MAX_POINTS_PER_RUN));
+    }
+
+    #[test]
+    fn recover_slot_rejects_an_erased_slot() {
+        assert_eq!(recover_slot(&[0xFFu8; SLOT_LEN]), None);
+        assert_eq!(recover_slot(&[0x00u8; SLOT_LEN]), None);
+    }
+
+    #[test]
+    fn recover_slot_rejects_a_never_finalised_blob() {
+        // Header + points but no footer (power lost mid-run): the tail past the
+        // points is erased 0xFF, so no footer magic + CRC ever matches.
+        let mut staged: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        staged
+            .extend_from_slice(
+                &RunHeader {
+                    version: FORMAT_VERSION,
+                    flags: 0,
+                    run_seq: 5,
+                    start_uptime_s: 12,
+                }
+                .encode(),
+            )
+            .unwrap();
+        for t in 0..4 {
+            staged.extend_from_slice(&a_point(t).encode()).unwrap();
+        }
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..staged.len()].copy_from_slice(&staged);
+        assert_eq!(recover_slot(&slot), None);
+    }
+
+    #[test]
+    fn recover_slot_rejects_a_newer_format_version() {
+        let mut slot = slot_image(7, 41, &[a_point(0)]);
+        slot[4] = FORMAT_VERSION + 1; // header version byte
+        assert_eq!(recover_slot(&slot), None);
+    }
+
+    #[test]
+    fn recover_slot_reads_past_footer_magic_inside_point_data() {
+        // A track point whose first bytes equal the footer magic "END1" must not
+        // fool the scan: the CRC at that offset won't match, so recovery reads
+        // on to the real footer. lat_e7's LE bytes are the point's first four.
+        let magic_lat = i32::from_le_bytes(*b"END1");
+        let sneaky = TrackPoint {
+            lat_e7: magic_lat,
+            lon_e7: 5,
+            t_offset_s: 0,
+            ele_dm: None,
+            bpm: None,
+        };
+        let pts = [sneaky, a_point(1), a_point(2)];
+        let slot = slot_image(21, 8, &pts);
+        // Sanity: the decoy footer magic really is sitting at the point-0 offset.
+        assert_eq!(&slot[HEADER_LEN..HEADER_LEN + 4], b"END1");
+        let r = recover_slot(&slot).expect("recovers despite the decoy magic");
+        assert_eq!(r.run_seq, 21);
+        assert_eq!(r.size, blob_len(3), "found the real footer, not the decoy");
+    }
+
+    #[test]
+    fn from_recovered_places_runs_at_their_own_slots() {
+        let mut slots = [None; SLOT_COUNT];
+        slots[0] = Some(recovered(5, blob_len(3), 40));
+        slots[2] = Some(recovered(9, blob_len(7), 900));
+        let dir = SlotDir::from_recovered(slots);
+        assert_eq!(dir.run_count(), 2);
+        // Each run maps back to the physical slot its bytes occupy.
+        assert_eq!(dir.find(5), Some((0, blob_len(3))));
+        assert_eq!(dir.find(9), Some((2, blob_len(7))));
+        let m = dir.manifest();
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0].run_seq, 5);
+        assert_eq!(m[1].run_seq, 9);
+    }
+
+    #[test]
+    fn from_recovered_keeps_one_copy_of_a_ping_ponged_run() {
+        // Both of a run's ping-pong slots survived the reset. Advertising both
+        // would offer the phone one run_seq twice at two different sizes.
+        for (a, b) in [(0usize, 2usize), (2, 0)] {
+            let mut slots = [None; SLOT_COUNT];
+            slots[a] = Some(RecoveredRun {
+                run_seq: 7,
+                size: 200,
+                start_uptime_s: 41,
+                finished: false,
+                elapsed_s: 100,
+            });
+            slots[b] = Some(RecoveredRun {
+                run_seq: 7,
+                size: 400,
+                start_uptime_s: 41,
+                finished: false,
+                elapsed_s: 200,
+            });
+            let dir = SlotDir::from_recovered(slots);
+            assert_eq!(dir.run_count(), 1, "scan order {a} then {b}");
+            assert_eq!(
+                dir.find(7),
+                Some((b, 400)),
+                "the later-elapsed checkpoint wins, whichever slot it sits in"
+            );
+        }
+    }
+
+    #[test]
+    fn from_recovered_prefers_a_committed_blob_over_a_longer_checkpoint() {
+        // Thinning means a commit can be SHORTER than an earlier checkpoint of the
+        // same run, so the finished flag has to outrank both size and elapsed time.
+        let mut slots = [None; SLOT_COUNT];
+        slots[0] = Some(RecoveredRun {
+            run_seq: 7,
+            size: 4_000,
+            start_uptime_s: 41,
+            finished: false,
+            elapsed_s: 9_999,
+        });
+        slots[1] = Some(RecoveredRun {
+            run_seq: 7,
+            size: 100,
+            start_uptime_s: 41,
+            finished: true,
+            elapsed_s: 1,
+        });
+        let dir = SlotDir::from_recovered(slots);
+        assert_eq!(
+            dir.find(7),
+            Some((1, 100)),
+            "the committed blob is authoritative"
+        );
+        assert_eq!(dir.run_count(), 1);
     }
 
     #[test]
@@ -757,6 +1110,7 @@ mod tests {
                 size: blob_len(2),
                 start_uptime_s: 41,
                 finished: true,
+                elapsed_s: 620,
             })
         );
     }
@@ -829,6 +1183,7 @@ mod tests {
                 size: blob_len(3),
                 start_uptime_s: 17,
                 finished: false,
+                elapsed_s: 620,
             })
         );
         let mut slots = [None; SLOT_COUNT];
@@ -898,6 +1253,7 @@ mod tests {
                 size: blob_len(0),
                 start_uptime_s: 15,
                 finished: true,
+                elapsed_s: 620,
             })
         );
     }

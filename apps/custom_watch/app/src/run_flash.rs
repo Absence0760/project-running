@@ -292,9 +292,9 @@ impl RunStore {
         if !self.available {
             return;
         }
-        // The plan reuses the slot a mid-run checkpoint already reserved for this
-        // run (if any) so the final commit supersedes the checkpoint in place, and
-        // marks it finished — which is what puts the run in the manifest.
+        // The plan takes the slot NOT holding this run's freshest checkpoint, so
+        // a torn commit leaves that checkpoint recoverable at the next boot; the
+        // superseded slot is released from the directory on the way.
         let Some(plan) = flash_plan::plan_slot_write(
             &mut self.dir,
             REGION_OFFSET,
@@ -332,16 +332,16 @@ impl RunStore {
     /// slightly-stale partial run instead of losing the entire in-progress track
     /// (which otherwise only reaches flash at stop).
     ///
-    /// Reserves the run's slot on the first checkpoint and rewrites that SAME slot
-    /// each time; the eventual [`commit`](Self::commit) lands in the same slot and
-    /// supersedes it. The snapshot is recorded as UNFINISHED, so it is never
-    /// advertised in the manifest nor served over BLE while the run is still
-    /// recording — a phone connected mid-run must not be able to ingest a partial
-    /// blob as a complete run.
+    /// Each checkpoint ping-pongs into the slot NOT holding the previous one, so
+    /// the erase+write window can never blank the only copy of the run-so-far —
+    /// a brown-out mid-checkpoint costs the newest few minutes, not the run. The
+    /// snapshot is recorded as unfinished, so it is never advertised or served
+    /// while the run is still recording.
     ///
     /// L4 / best-effort: any flash error only warns and drops, so recording is
     /// never blocked (same contract as `commit`). The caller bounds the cadence
-    /// to keep flash erase cycles within endurance.
+    /// to keep flash erase cycles within endurance — with two slots in rotation
+    /// each takes half the erases it used to.
     pub async fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
         if !self.available {
             return;

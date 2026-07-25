@@ -11,6 +11,16 @@
 //! [`SlotReader`] — so the reboot-recovery scan and every offset are host-tested
 //! rather than only reasoned about. A bug in any of it silently destroys a
 //! recorded run, and the `app/` crate cannot be host-tested at all.
+//!
+//! **Slot budget.** Because a run's writes ping-pong across two slots so a torn
+//! erase can never take the run-so-far with it, a run in progress reserves up to
+//! two of the [`SLOT_COUNT`] slots and a starting run can therefore evict two
+//! finished runs rather than one. That is the deliberate trade: bounding the loss
+//! from a brownout to the newest few minutes is worth one slot of history, since
+//! the evicted runs are (preferentially) ones the phone has already pulled while
+//! the run in progress exists nowhere else. A completed run settles back to one
+//! slot. The real fix for the cramped budget is tier-2's external QSPI, same as
+//! for [`flash_store::MAX_POINTS_PER_RUN`].
 
 use crate::flash_store::{self, chunk_len, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
 
@@ -28,9 +38,13 @@ pub struct SlotWrite {
 }
 
 /// Reserve the slot a FINISHED run's blob is committed into, and return the
-/// erase + write range for it — the slot the run's mid-run checkpoints already
-/// hold, if any ([`plan_checkpoint_write`]), so the commit supersedes them.
-/// Marking that slot finished is what puts the run in the manifest.
+/// erase + write range for it.
+///
+/// The target is the slot NOT holding the run's freshest mid-run checkpoint (see
+/// [`plan_checkpoint_write`]), so a torn commit leaves that checkpoint's bytes
+/// intact for the next boot's scan to recover. The run's superseded slot is
+/// released from the directory — its bytes stay put, unerased, precisely so the
+/// torn-commit case still has something to recover.
 ///
 /// `None` when the blob is larger than one slot: the run is dropped whole rather
 /// than truncated into a slot, and the directory is left untouched so an
@@ -54,9 +68,15 @@ pub fn plan_slot_write(
 /// Reserve the slot a mid-run checkpoint of `run_seq` is written into and return
 /// the erase + write range for it.
 ///
-/// The reservation is NOT finished, so the snapshot never enters the manifest and
-/// is never served while the run is still recording — the whole difference from
-/// [`plan_slot_write`], whose over-a-slot rule it otherwise shares.
+/// Alternates away from the run's freshest copy: erasing a whole slot to rewrite
+/// it in place — what this used to do — meant a brownout inside that window left
+/// the slot BLANK and lost the entire run-so-far, the exact failure checkpointing
+/// exists to prevent, recurring on every checkpoint. Ping-ponging makes a torn
+/// checkpoint cost only the newest few minutes.
+///
+/// The reservation is not finished, so the snapshot never enters the manifest and
+/// is never served while the run is still recording. Same over-a-slot rule as
+/// [`plan_slot_write`].
 pub fn plan_checkpoint_write(
     dir: &mut SlotDir,
     region_offset: u32,
@@ -341,21 +361,35 @@ mod tests {
     }
 
     #[test]
-    fn a_checkpoint_is_planned_but_never_advertised_until_the_commit() {
-        // Every mid-run checkpoint and the final commit target the same page, so
-        // one run consumes one slot — but only the commit may publish it.
+    fn a_checkpoint_never_erases_the_run_so_far_and_the_commit_supersedes_it() {
+        // Each write for one run must target a DIFFERENT page than the run's
+        // freshest copy: erasing the same page in place — what this used to do —
+        // meant a brownout inside the erase+write window left the slot blank and
+        // lost the whole run-so-far, on every checkpoint. And when the run
+        // commits, the leftover checkpoint must stop occupying a slot, or a stale
+        // second copy of the same run would linger.
         let mut dir = SlotDir::new();
         let first = plan_checkpoint_write(&mut dir, BASE, 7, 41, 100).expect("fits");
-        let grown = plan_checkpoint_write(&mut dir, BASE, 7, 41, 500).expect("fits");
-        assert_eq!(first.slot, grown.slot);
+        let second = plan_checkpoint_write(&mut dir, BASE, 7, 41, 500).expect("fits");
+        assert_ne!(
+            first.erase_from, second.erase_from,
+            "the second checkpoint must not erase the first"
+        );
+        let third = plan_checkpoint_write(&mut dir, BASE, 7, 41, 700).expect("fits");
+        assert_eq!(
+            third.erase_from, first.erase_from,
+            "checkpoints alternate across two slots, they don't keep allocating"
+        );
         assert_eq!(dir.find(7), None, "no checkpoint is ever served");
         assert!(dir.manifest().is_empty(), "nor advertised");
-        assert_eq!(dir.run_count(), 0);
 
         let committed = plan_slot_write(&mut dir, BASE, 7, 41, 900).expect("fits");
-        assert_eq!(committed.slot, first.slot, "one slot consumed, not three");
-        assert_eq!(dir.run_count(), 1);
-        assert_eq!(dir.find(7), Some((first.slot, 900)));
+        assert_ne!(
+            committed.erase_from, third.erase_from,
+            "the commit must not erase the freshest checkpoint either"
+        );
+        assert_eq!(dir.run_count(), 1, "the checkpoint slot is released");
+        assert_eq!(dir.find(7), Some((committed.slot, 900)));
     }
 
     #[test]
@@ -700,6 +734,7 @@ mod tests {
                 size: blob_len(3),
                 start_uptime_s: 50,
                 finished: true,
+                elapsed_s: 620,
             }),
             "only the new, shorter run is found"
         );
@@ -796,6 +831,126 @@ mod tests {
             let (pulled, _) = flash.pull_all(&dir, seq, 244);
             assert!(verify_blob(&pulled), "run {seq} verifies after the reboot");
         }
+    }
+
+    #[test]
+    fn a_brownout_mid_checkpoint_still_leaves_the_run_so_far_on_flash() {
+        // The failure checkpointing exists to prevent, which checkpointing itself
+        // used to cause: the erase+write window. Two checkpoints land, the third
+        // is interrupted after its erase and before its footer — and the run must
+        // still come back, one checkpoint stale.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+
+        let early = a_checkpoint(7, 41, 5, 100);
+        let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, early.len()).expect("fits");
+        flash.apply(plan, &early);
+
+        let later = a_checkpoint(7, 41, 20, 200);
+        let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, later.len()).expect("fits");
+        flash.apply(plan, &later);
+
+        // Third checkpoint: erase happens, then the power goes. Nothing more is
+        // written and the in-RAM directory dies with it.
+        let torn = a_checkpoint(7, 41, 40, 300);
+        let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, torn.len()).expect("fits");
+        flash.erase(plan.erase_from, plan.erase_to);
+        assert_eq!(
+            plan.erase_from,
+            flash_store::slot_offset(BASE, 0),
+            "the third checkpoint erases the slot holding the FIRST, not the second"
+        );
+
+        let dir = recover_dir(&mut flash);
+        assert_eq!(dir.run_count(), 1, "the run survived the torn checkpoint");
+        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(
+            &pulled[..],
+            &later[..],
+            "the second checkpoint came back whole"
+        );
+        assert!(verify_blob(&pulled));
+        assert!(chunk_completes_run(&dir, 7, cursor));
+    }
+
+    #[test]
+    fn a_reboot_with_both_ping_pong_slots_intact_keeps_the_newer_one() {
+        // Both checkpoints landed cleanly before the reset. Exactly one run may be
+        // advertised, and it must be the fresher snapshot.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        for (points, elapsed) in [(5u32, 100u32), (20, 200)] {
+            let blob = a_checkpoint(7, 41, points, elapsed);
+            let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, blob.len()).expect("fits");
+            flash.apply(plan, &blob);
+        }
+
+        let dir = recover_dir(&mut flash);
+        assert_eq!(dir.manifest().len(), 1, "one run, not two copies of it");
+        assert_eq!(
+            dir.find(7),
+            Some((1, blob_len(20))),
+            "the newer checkpoint, at the slot its bytes occupy"
+        );
+        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(&pulled[..], &a_checkpoint(7, 41, 20, 200)[..]);
+        assert!(verify_blob(&pulled));
+        assert_eq!(dir.next_run_seq(), 8, "the id is not reused");
+    }
+
+    #[test]
+    fn a_torn_commit_falls_back_to_the_surviving_checkpoint_at_the_next_boot() {
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        for (points, elapsed) in [(5u32, 100u32), (20, 200)] {
+            let blob = a_checkpoint(7, 41, points, elapsed);
+            let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, blob.len()).expect("fits");
+            flash.apply(plan, &blob);
+        }
+        // The commit erases its target and dies mid-write.
+        let final_blob = a_blob(7, 41, 40);
+        let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
+        flash.erase(plan.erase_from, plan.erase_to);
+        flash.write(plan.erase_from, &final_blob[..64]);
+
+        let dir = recover_dir(&mut flash);
+        assert_eq!(dir.run_count(), 1);
+        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(
+            &pulled[..],
+            &a_checkpoint(7, 41, 20, 200)[..],
+            "the newest checkpoint the commit deliberately did not erase"
+        );
+        assert!(verify_blob(&pulled));
+    }
+
+    #[test]
+    fn a_committed_run_supersedes_its_leftover_checkpoint_at_the_next_boot() {
+        // A successful commit leaves the staler checkpoint's BYTES on flash (its
+        // page was never the write target). At the next boot both slots claim run
+        // 7, and the finished blob has to win even though it is SHORTER — a
+        // post-thinning commit holds half the points of a pre-thinning checkpoint,
+        // so size cannot be the tiebreaker.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        for (points, elapsed) in [(5u32, 100u32), (20, 200)] {
+            let blob = a_checkpoint(7, 41, points, elapsed);
+            let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, blob.len()).expect("fits");
+            flash.apply(plan, &blob);
+        }
+        let final_blob = a_blob(7, 41, 10);
+        let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
+        flash.apply(plan, &final_blob);
+        assert!(
+            final_blob.len() < blob_len(20) as usize,
+            "shorter than a checkpoint"
+        );
+
+        let dir = recover_dir(&mut flash);
+        assert_eq!(dir.manifest().len(), 1, "one entry, not the pair");
+        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(&pulled[..], &final_blob[..], "the committed blob won");
+        assert!(verify_blob(&pulled));
     }
 
     #[test]
