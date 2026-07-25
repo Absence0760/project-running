@@ -53,8 +53,18 @@ pub const FOOTER_LEN: usize = 20;
 pub const RECORD_TAG_POINT: u8 = 0;
 pub const RECORD_TAG_LAP: u8 = 1;
 
-/// `flags` bit: the run reached `stop()` (a footer follows). Unfinished blobs
-/// are never listed in the manifest.
+/// `flags` bit, stamped by [`RunWriter::finalize`]: this blob is a committed
+/// run, not a mid-run [`checkpoint_blob`](RunWriter::checkpoint_blob) snapshot
+/// of a run that is still recording. Both forms carry a valid footer + CRC, so
+/// the flag is the ONLY thing separating them on flash — it is what stops a
+/// partial blob being advertised to the phone as a complete run, and it is the
+/// tiebreaker when both of a run's ping-pong slots survive a reset
+/// ([`crate::flash_store::SlotDir::from_recovered`]).
+///
+/// It sits inside the CRC-covered header prefix, so a bit-rotted flag fails
+/// verification rather than promoting a checkpoint. Version 1 blobs predate the
+/// flag (their writer left byte 5 zero even on a commit), so a v1 blob can
+/// never prove it was finished.
 pub const FLAG_FINISHED: u8 = 0x01;
 
 /// Altitude sentinel meaning "no barometric/GPS altitude for this point".
@@ -293,17 +303,22 @@ pub trait ByteSink {
     fn write(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
 }
 
+/// The slot-sized staging buffer has no room left for the bytes offered — the
+/// only way a write into it can fail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SinkFull;
+
 impl<const N: usize> ByteSink for heapless::Vec<u8, N> {
-    type Error = ();
-    fn write(&mut self, bytes: &[u8]) -> Result<(), ()> {
-        self.extend_from_slice(bytes).map_err(|_| ())
+    type Error = SinkFull;
+    fn write(&mut self, bytes: &[u8]) -> Result<(), SinkFull> {
+        self.extend_from_slice(bytes).map_err(|_| SinkFull)
     }
 }
 
 /// Frames a run as it records: header on [`start`](RunWriter::start), a 16-byte
 /// record per [`push_point`](RunWriter::push_point), a CRC-stamped footer on
-/// [`finalize`](RunWriter::finalize). The running CRC covers header + points,
-/// so a truncated (never-finalised) blob fails verification on the phone.
+/// `finalize`. The running CRC covers header + points, so a truncated
+/// (never-finalised) blob fails verification on the phone.
 pub struct RunWriter<S> {
     sink: S,
     crc: Crc32,
@@ -376,25 +391,6 @@ impl<S: ByteSink> RunWriter<S> {
     pub fn thinning(&self) -> u32 {
         self.keep_every
     }
-
-    /// Write the footer and return the sink. `elapsed_s`/`moving_s`/`distance_m`
-    /// are the finished run's totals (from `record::Snapshot`).
-    pub fn finalize(
-        mut self,
-        distance_m: u32,
-        moving_s: u32,
-        elapsed_s: u32,
-    ) -> Result<S, S::Error> {
-        let footer = RunFooter {
-            distance_m,
-            moving_s,
-            elapsed_s,
-            crc32: self.crc.finish(),
-        }
-        .encode();
-        self.sink.write(&footer)?;
-        Ok(self.sink)
-    }
 }
 
 /// What [`RunWriter::push_point_bounded`] did with an incoming point.
@@ -412,6 +408,39 @@ pub enum PushOutcome {
 }
 
 impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
+    /// Stamp [`FLAG_FINISHED`] into the staged header, write the footer, and
+    /// return the sink. `elapsed_s`/`moving_s`/`distance_m` are the finished
+    /// run's totals (from `record::Snapshot`).
+    ///
+    /// Stamping the flag mutates a byte the running CRC already covered, so the
+    /// CRC is recomputed over the whole stamped prefix — the flag stays inside
+    /// the CRC'd region, and a checkpoint of the same prefix (which leaves the
+    /// flag clear) is a different, equally-honest blob. That random access is
+    /// why this lives on the `heapless::Vec` staging sink rather than on the
+    /// append-only [`ByteSink`]; the on-device writer stages into exactly that.
+    pub fn finalize(
+        mut self,
+        distance_m: u32,
+        moving_s: u32,
+        elapsed_s: u32,
+    ) -> Result<heapless::Vec<u8, N>, SinkFull> {
+        // Indexing byte 5 would panic — a device reset on this target — if the
+        // header somehow never reached the sink. Then the CRC below covers a
+        // header-less buffer, so the blob fails verification: fail closed.
+        if let Some(flags) = self.sink.get_mut(5) {
+            *flags |= FLAG_FINISHED;
+        }
+        let footer = RunFooter {
+            distance_m,
+            moving_s,
+            elapsed_s,
+            crc32: crc32(&self.sink),
+        }
+        .encode();
+        self.sink.write(&footer)?;
+        Ok(self.sink)
+    }
+
     /// [`push_point`](Self::push_point) for the slot-bounded RAM staging
     /// buffer, decimating instead of truncating (issue #599): when the next
     /// point + footer would no longer fit `N`, every second stored point is
@@ -491,15 +520,18 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
 
     /// Emit a recoverable checkpoint blob of the run staged so far WITHOUT
     /// consuming the writer: the staged `header|points` prefix plus a footer
-    /// stamped with the totals-so-far. It reuses the running CRC, so the result
-    /// is byte-identical in structure to what [`finalize`](Self::finalize) would
-    /// write for the same prefix + totals — a checkpoint reads back through
-    /// [`verify_blob`] / [`recover_slot`](crate::flash_store::recover_slot) as an
-    /// ordinary finished run. This lets the recorder persist a mid-run snapshot
-    /// to flash while continuing to stream into the same writer, so a reset
-    /// mid-run recovers a (slightly stale) partial run instead of nothing.
-    /// `None` only if the blob doesn't fit `N` (the sink is already `N`-bounded,
-    /// so this can't happen once a run staged into the same-sized sink).
+    /// stamped with the totals-so-far. It reuses the running CRC, which covers
+    /// the header with [`FLAG_FINISHED`] still clear — so the blob verifies
+    /// through [`verify_blob`] exactly like a committed run, but says on its face
+    /// that the run was still recording. That is the one byte separating it from
+    /// what [`finalize`](Self::finalize) would write for the same prefix, and it
+    /// is what keeps a mid-run snapshot out of the phone's manifest.
+    ///
+    /// This lets the recorder persist a mid-run snapshot to flash while
+    /// continuing to stream into the same writer, so a reset mid-run recovers a
+    /// (slightly stale) partial run instead of nothing. `None` only if the blob
+    /// doesn't fit `N` (the sink is already `N`-bounded, so this can't happen
+    /// once a run staged into the same-sized sink).
     pub fn checkpoint_blob(
         &self,
         distance_m: u32,
@@ -699,28 +731,76 @@ mod tests {
     }
 
     #[test]
-    fn checkpoint_blob_is_byte_identical_to_a_finalize() {
-        // A mid-run checkpoint of a staged writer must equal, byte-for-byte,
-        // what finalize would emit for the same prefix + totals — so a
-        // checkpointed partial run reads back exactly like a finished one and
-        // the wire format / golden vector is unchanged.
+    fn checkpoint_blob_differs_from_a_finalize_only_in_the_finished_flag() {
+        // A mid-run checkpoint and the commit of the same staged prefix must be
+        // TELLABLE APART on flash — otherwise a partial run is advertised to the
+        // phone as complete, and a later commit re-advertises the same run_seq
+        // with disagreeing bytes. The whole difference is the header flag (and
+        // the CRC that covers it); every other byte, including the totals, is
+        // identical.
         let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w = RunWriter::start(sink, 7, 41).expect("start");
         for p in sample_points() {
             w.push_point(&p).expect("push");
         }
         let ckpt = w.checkpoint_blob(1234, 600, 620).expect("checkpoint");
-        assert!(verify_blob(&ckpt));
+        assert!(
+            verify_blob(&ckpt),
+            "a checkpoint is still a well-formed blob"
+        );
         assert_eq!(ckpt.len() as u32, blob_len(3));
+        assert_eq!(
+            RunHeader::decode(&ckpt).unwrap().flags & FLAG_FINISHED,
+            0,
+            "a mid-run checkpoint must not claim to be finished"
+        );
 
-        // Identically-staged second writer, finalised: same bytes.
+        // Identically-staged second writer, finalised.
         let sink2: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w2 = RunWriter::start(sink2, 7, 41).expect("start");
         for p in sample_points() {
             w2.push_point(&p).expect("push");
         }
         let finalised = w2.finalize(1234, 600, 620).expect("finalize");
-        assert_eq!(&ckpt[..], &finalised[..], "checkpoint == finalize");
+        assert!(verify_blob(&finalised));
+        assert_eq!(
+            RunHeader::decode(&finalised).unwrap().flags & FLAG_FINISHED,
+            FLAG_FINISHED,
+            "finalize stamps the finished flag"
+        );
+        assert_eq!(ckpt.len(), finalised.len());
+        // Byte 5 is the flag; the last four are the CRC that covers it. Nothing
+        // else moved.
+        let differs: heapless::Vec<usize, 8> = (0..ckpt.len())
+            .filter(|&i| ckpt[i] != finalised[i])
+            .collect();
+        let footer_crc_at = finalised.len() - 4;
+        assert_eq!(
+            differs.as_slice(),
+            &[
+                5,
+                footer_crc_at,
+                footer_crc_at + 1,
+                footer_crc_at + 2,
+                footer_crc_at + 3
+            ][..],
+            "only the flag byte and the CRC over it differ"
+        );
+    }
+
+    #[test]
+    fn a_checkpoint_flag_flip_fails_verification() {
+        // Fail-closed: the flag lives inside the CRC-covered prefix, so bit-rot
+        // (or a tamper) that promotes a checkpoint to "finished" is caught, not
+        // trusted.
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 7, 41).expect("start");
+        for p in sample_points() {
+            w.push_point(&p).expect("push");
+        }
+        let mut ckpt = w.checkpoint_blob(1234, 600, 620).expect("checkpoint");
+        ckpt[5] |= FLAG_FINISHED;
+        assert!(!verify_blob(&ckpt));
     }
 
     #[test]
@@ -842,9 +922,9 @@ mod tests {
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
     }
 
-    /// Golden vector: the exact bytes a fixed run produces. The Dart decoder
-    /// (`sim_watch_sync.dart`) pins this same hex, so a format drift on either
-    /// side fails a test rather than silently corrupting a synced run.
+    /// Golden vector: the exact bytes a fixed run produces. Byte 5 is
+    /// [`FLAG_FINISHED`] — set, because this is a committed run — and the trailing
+    /// CRC covers it.
     #[test]
     fn golden_blob_is_stable() {
         let blob = build();
@@ -856,9 +936,9 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31020000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c020000a768fb39",
-            "wire format changed — update BOTH this vector and the Dart mirror \
-             in apps/mobile_android/lib/sim_watch_sync.dart"
+            "54524b31020100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c020000566db750",
+            "wire format changed — update this vector, and the Dart mirror in \
+             apps/mobile_android/test/sim_watch_sync_test.dart if the layout moved"
         );
     }
 
@@ -889,7 +969,7 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31020000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c020000406197f1",
+            "54524b31020100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c020000dda6c90d",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/test/sim_watch_sync_test.dart"
         );
@@ -1111,7 +1191,7 @@ mod tests {
     /// A run staged into a slot-sized sink, as the on-device recorder does
     /// (`app/run_flash.rs` stages into a `heapless::Vec<u8, SLOT_LEN>`). Returns
     /// the finalised blob, or `Err` if any push or the footer overran the sink.
-    fn build_n(n: u32) -> Result<heapless::Vec<u8, 4096>, ()> {
+    fn build_n(n: u32) -> Result<heapless::Vec<u8, 4096>, SinkFull> {
         let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w = RunWriter::start(sink, 1, 0)?;
         for i in 0..n {
