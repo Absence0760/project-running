@@ -65,6 +65,9 @@
 //! - [`battery`] — 1S LiPo supply millivolts → percent (piecewise-linear
 //!   discharge curve + the plausibility band the battery task parks on), plus
 //!   the gauge icon's fill fraction and low-state threshold
+//! - [`battery_sense`] — the `battery` task's SAADC-counts → millivolts
+//!   conversion and the one gate that both parks the task at boot and blanks
+//!   the gauge mid-stream
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
@@ -205,6 +208,7 @@ pub mod badges;
 pub mod bar_chart;
 pub mod baro_rezero;
 pub mod battery;
+pub mod battery_sense;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
