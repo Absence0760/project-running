@@ -245,8 +245,17 @@ rustup show                                            # installs toolchain per 
 cargo build --release --target thumbv7em-none-eabihf
 cargo test --target <HOST_TRIPLE> --workspace --exclude app --exclude nrf52840_dk
 cargo clippy --workspace --release --target thumbv7em-none-eabihf -- -D warnings
+
+# the two off-by-default feature sets, build + clippy each
+cargo build  --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble
+cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
+cargo build  --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink
+cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink -- -D warnings
+
 cargo fmt --check
 ```
+
+The `ble` and sim feature sets are gated because the default-only job let them rot: `ble` had already accumulated a dead-code warning (`FRAME_GAP` in the phone task, whose whole module is unreachable once the radio owns the link) that no default build could see, so the "compile-and-link-verified" claim behind the BLE run-sync vertical had nothing defending it. `ble` needs its own `--no-default-features` invocation — the S140 SoftDevice provides `critical-section`, so it is mutually exclusive with the default `single-core-cs`. The sim set is the one `bin/watch-sim.sh` builds, so a sim-only regression fails a PR instead of the next sim session.
 
 All of those run on a stock Ubuntu CI runner with no hardware, with Cargo registry + `target/` cached across PRs via `actions/cache` keyed on the `Cargo.toml` + `rust-toolchain.toml` hashes (uncached cold builds are ~3-5 min; cached re-runs are seconds). On-target tests stay manual / local until tier 2+ where we'd connect a HIL (hardware-in-the-loop) rig to a self-hosted runner.
 
