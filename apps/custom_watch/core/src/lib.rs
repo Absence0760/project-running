@@ -31,6 +31,9 @@
 //! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
 //!   (port of web `gear/gear_wear.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`baro_rezero`] — the `baro` task's manual QNH re-zero decision: the
+//!   barometer's own freshness gate over [`elevation::rezero_reference`], and
+//!   the two distinct refusals
 //! - [`gnss_cadence`] — the `gps` task's fix-publication cadence: which
 //!   interval is owed in the current record state + mode, the throttle gate,
 //!   and whether a published fix earns the receiver a nap
@@ -200,6 +203,7 @@ pub mod alerts;
 pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
+pub mod baro_rezero;
 pub mod battery;
 pub mod button;
 pub mod challenge_progress;
