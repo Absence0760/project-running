@@ -340,6 +340,24 @@ jobs:
       - name: Clippy (no warnings allowed)
         working-directory: apps/custom_watch
         run: cargo clippy --workspace --release --target thumbv7em-none-eabihf -- -D warnings
+      # The steps above only cover the DEFAULT feature set, so both
+      # off-by-default builds drifted unnoticed (a dead `FRAME_GAP` const in
+      # the phone task that only the `ble` build could see). `ble` needs its
+      # own --no-default-features invocation: the S140 SoftDevice owns
+      # critical-section, so it is mutually exclusive with the default
+      # `single-core-cs`. The sim set mirrors what bin/watch-sim.sh builds.
+      - name: Build firmware (ble feature set, S140 SoftDevice)
+        working-directory: apps/custom_watch
+        run: cargo build --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble
+      - name: Clippy (ble feature set, no warnings allowed)
+        working-directory: apps/custom_watch
+        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
+      - name: Build firmware (sim feature set)
+        working-directory: apps/custom_watch
+        run: cargo build --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink
+      - name: Clippy (sim feature set, no warnings allowed)
+        working-directory: apps/custom_watch
+        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink -- -D warnings
       - name: Rustfmt check
         working-directory: apps/custom_watch
         run: cargo fmt --check
