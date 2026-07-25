@@ -256,6 +256,10 @@ class RunRecorder {
   bool _treadmillMode = false;
   double _treadmillDistanceMetres = 0;
   double? _treadmillBaselineMetres;
+  // Last cumulative belt total seen. A total BELOW this one is the console
+  // having restarted its own session and zeroed the counter; the baseline
+  // alone can't detect that (it is usually 0, so nothing is ever below it).
+  double? _treadmillLastTotalMetres;
   double _treadmillLastSpeedMps = 0;
   DateTime? _treadmillLastSampleAt;
   // Armed by [pause] so a cumulative-distance belt advance during the pause is
@@ -846,10 +850,26 @@ class RunRecorder {
             _treadmillNeedsRebaseline = false;
           }
           _treadmillBaselineMetres ??= totalDistanceMetres;
-          final delta = totalDistanceMetres - _treadmillBaselineMetres!;
+          final lastTotal = _treadmillLastTotalMetres;
+          if (lastTotal != null && totalDistanceMetres < lastTotal) {
+            // The belt's cumulative counter went BACKWARDS. An FTMS console
+            // zeroes it whenever its own session restarts (safety key pulled,
+            // stop/start mid-run, workout ended on the console) — a permanent
+            // step down, not a transient glitch, so the decrease has to be
+            // measured against the last total we saw rather than the baseline
+            // (which is usually 0 and so never trips). Holding the last good
+            // value froze the headline distance for the rest of the run and
+            // then dropped it to 0 once the belt climbed past the baseline
+            // again. Rebase onto the new counter origin, preserving what has
+            // already been accumulated (same formula as the pause and
+            // post-resume re-anchors above), so belt distance is monotonic.
+            _treadmillBaselineMetres =
+                totalDistanceMetres - _treadmillDistanceMetres;
+          }
           _treadmillDistanceMetres =
-              delta < 0 ? _treadmillDistanceMetres : delta;
+              totalDistanceMetres - _treadmillBaselineMetres!;
         }
+        _treadmillLastTotalMetres = totalDistanceMetres;
       } else {
         final last = _treadmillLastSampleAt;
         if (last != null && !_paused) {
@@ -891,6 +911,7 @@ class RunRecorder {
   void _resetTreadmillAccumulators() {
     _treadmillDistanceMetres = 0;
     _treadmillBaselineMetres = null;
+    _treadmillLastTotalMetres = null;
     _treadmillLastSpeedMps = 0;
     _treadmillLastSampleAt = null;
     _treadmillNeedsRebaseline = false;

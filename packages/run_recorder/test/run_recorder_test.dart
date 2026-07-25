@@ -528,6 +528,69 @@ void main() {
       expect(r.recording, isTrue);
     });
 
+    test('a console session reset keeps belt distance monotonic', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 0);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 5000);
+      expect(r.debugReportedDistanceMetres, closeTo(5000, 0.1));
+      // Safety key pulled / workout ended on the console: the belt's cumulative
+      // counter restarts from 0 while the runner keeps going. Holding the last
+      // good value froze distance at 5000 for the next 5 km, then dropped it to
+      // 0 the moment the belt climbed past the stale baseline.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 0);
+      expect(r.debugReportedDistanceMetres, closeTo(5000, 0.1),
+          reason: 'the reset itself must not lose the banked 5 km');
+      r.setTreadmillSample(3.0, totalDistanceMetres: 2500);
+      expect(r.debugReportedDistanceMetres, closeTo(7500, 0.1));
+      r.setTreadmillSample(3.0, totalDistanceMetres: 5000);
+      expect(r.debugReportedDistanceMetres, closeTo(10000, 0.1),
+          reason: '10 km run must report 10 km, not 5 km');
+    });
+
+    test('a partial counter step-down rebases without losing distance', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 100);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1100);
+      expect(r.debugReportedDistanceMetres, closeTo(1000, 0.1));
+      // Console restarts but its counter resumes from a nonzero value.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 400);
+      expect(r.debugReportedDistanceMetres, closeTo(1000, 0.1));
+      r.setTreadmillSample(3.0, totalDistanceMetres: 900);
+      expect(r.debugReportedDistanceMetres, closeTo(1500, 0.1));
+    });
+
+    test('belt distance never goes backwards across a reset', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      var previous = 0.0;
+      for (final total in <double>[0, 800, 1600, 2400, 0, 700, 1400, 40, 900]) {
+        r.setTreadmillSample(3.0, totalDistanceMetres: total);
+        final reported = r.debugReportedDistanceMetres;
+        expect(reported, greaterThanOrEqualTo(previous - 0.001),
+            reason: 'distance dropped after belt total $total');
+        previous = reported;
+      }
+      expect(previous, closeTo(2400 + 1400 + 860, 0.1));
+    });
+
+    test('a reset during a pause still excludes the paused advance', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 0);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
+      r.pause();
+      // Console reset while paused, then the belt advances 200 m unattended.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 0);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 200);
+      expect(r.debugReportedDistanceMetres, closeTo(1000, 0.1),
+          reason: 'paused belt advance is never credited');
+      r.resume();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 300);
+      expect(r.debugReportedDistanceMetres, closeTo(1100, 0.1));
+    });
+
     test('a bogus belt sample is not carried forward to poison the next interval',
         () async {
       final r = RunRecorder()..debugPrepareWithoutStream();
