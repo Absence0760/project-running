@@ -72,6 +72,36 @@ StoredRoutine _distanceRoutine() => StoredRoutine(
       syncState: RoutineSyncState.synced,
     );
 
+/// Three distinct one-set exercises — the smallest routine that can show a
+/// rewind past a *skipped* step disturbing an earlier step's logged set.
+StoredRoutine _tripleRoutine() => StoredRoutine(
+      row: {'id': 'routine-4', 'title': 'Full body', 'exercise_count': 3},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Bench',
+          exerciseKey: 'bench',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 10, targetWeightKg: 100, restS: 0),
+          ],
+        ),
+        StoredRoutineExercise(
+          exerciseName: 'Squat',
+          exerciseKey: 'squat',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 8, targetWeightKg: 60, restS: 0),
+          ],
+        ),
+        StoredRoutineExercise(
+          exerciseName: 'Row',
+          exerciseKey: 'row',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 12, targetWeightKg: 40, restS: 0),
+          ],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
 Future<({LocalGymStore store, Directory dir})> _gymStore(
     WidgetTester tester) async {
   late LocalGymStore store;
@@ -334,6 +364,106 @@ void main() {
     expect(w.row['title'], 'Bench routine');
     expect(w.sets.length, 2);
     expect(w.row['metadata']?['routine_id'], 'routine-1');
+  });
+
+  testWidgets('Previous after a skipped step keeps the earlier logged set',
+      (tester) async {
+    // Regression: the screen kept an append-only `_loggedSets` list but only
+    // appended on a Complete, so rewinding past a Skip popped an *earlier*
+    // exercise's row — and the metadata step-results, read from the runner,
+    // then claimed a set the flat gym_sets rows no longer had.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _tripleRoutine()));
+    await tester.pump();
+
+    // Bench: log the prefilled 10 × 100 target.
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    // Squat: skipped by mistake.
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+
+    // On Row now; go back to redo the squat.
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Previous'));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final w = g.store.workouts.single;
+    expect(
+      w.sets.map((s) => s['exercise_name']).toList(),
+      ['Bench', 'Squat', 'Row'],
+      reason: 'rewinding past the skipped squat must not delete the bench row',
+    );
+
+    // The two writes have to agree: every step-result carrying an actual needs
+    // a matching flat set row, or every gym_sets consumer under-counts while
+    // the review panel shows a full session.
+    final results = (w.row['metadata'] as Map)['gym_step_results'] as List;
+    final logged = results
+        .cast<Map>()
+        .where((r) => r['actual_reps'] != null)
+        .toList();
+    expect(logged.map((r) => r['exercise_key']).toList(),
+        ['bench', 'squat', 'row']);
+    expect(logged.length, w.sets.length);
+  });
+
+  testWidgets('Previous re-seeds the entered actuals, not the plan targets',
+      (tester) async {
+    // Regression: the step-transition handler re-seeded from the step's
+    // targets, so a rewind replaced the athlete's 8 × 90 with the prescribed
+    // 10 × 100 and a re-Complete persisted the plan as the fact.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _tripleRoutine()));
+    await tester.pump();
+
+    final reps = find.widgetWithText(TextField, 'Reps');
+    final weight = find.widgetWithText(TextField, 'kg');
+    await tester.enterText(reps, '8');
+    await tester.enterText(weight, '90');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Previous'));
+    await tester.pump();
+
+    expect(tester.widget<TextField>(reps).controller!.text, '8',
+        reason: 'the rewound step must show what was lifted, not the target');
+    expect(tester.widget<TextField>(weight).controller!.text, '90.0');
+
+    // Re-Complete without editing, then skip out to the finish view.
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final set = g.store.workouts.single.sets.single;
+    expect(set['reps'], 8);
+    expect(set['weight_kg'], 90);
   });
 
   testWidgets('an empty-titled routine falls back to a generic AppBar title',

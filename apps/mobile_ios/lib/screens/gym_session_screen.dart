@@ -29,6 +29,14 @@ import '../widgets/top_banner.dart';
 /// publisher; step transitions go through setState (low cadence). A periodic
 /// durable save mirrors `run_screen._saveInProgress` so a force-kill mid-session
 /// doesn't lose entered sets.
+typedef _EnteredSet = ({
+  int? reps,
+  double? weightKg,
+  double? rpe,
+  int? durationS,
+  double? distanceM,
+});
+
 class GymSessionScreen extends StatefulWidget {
   final ApiClient? api;
   final StoredRoutine routine;
@@ -70,9 +78,11 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   int _restTotal = 0;
   final DateTime _startedAt = DateTime.now().toUtc();
 
-  // The accumulated logged sets (Complete + Skip), kept so the durable save and
-  // the final write share one source of truth. A skipped set contributes no row.
-  final List<GymSetInput> _loggedSets = [];
+  // What the athlete entered, keyed by expanded-step index — mirrors web
+  // GymSessionRunner's sparse `outcomes` so a rewind re-surfaces the prior edit
+  // rather than the prescription. A skip drops the step's entry, matching web's
+  // `{kind: 'skipped'}` reading back through `enteredFor` as all-nulls.
+  final Map<int, _EnteredSet> _enteredByStep = {};
 
   // The draft's stable id — minted once so the periodic durable save updates a
   // single row rather than appending. Null until the first save creates it.
@@ -279,25 +289,20 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
 
   void _seedInputs() {
     final step = _runner.currentStep;
-    _reps.text = step?.targetRepsMin?.toString() ?? '';
-    _weight.text = step?.targetWeightKg == null
-        ? ''
-        : WeightFormat.value(step!.targetWeightKg!, activeWeightUnit);
-    _rpe.text = rpeInputString(step?.targetRpe);
+    final prior = _enteredByStep[_runner.currentStepIndex];
+    _reps.text = (prior?.reps ?? step?.targetRepsMin)?.toString() ?? '';
+    final weightKg = prior?.weightKg ?? step?.targetWeightKg;
+    _weight.text =
+        weightKg == null ? '' : WeightFormat.value(weightKg, activeWeightUnit);
+    _rpe.text = rpeInputString(prior?.rpe ?? step?.targetRpe);
     // Deliberately NOT seeded from the target: what gets logged has to be
     // what the athlete actually did, and a pre-filled target would be
     // indistinguishable from a recorded one.
-    _duration.text = '';
-    _distance.text = '';
+    _duration.text = prior?.durationS?.toString() ?? '';
+    _distance.text = prior?.distanceM?.toString() ?? '';
   }
 
-  ({
-    int? reps,
-    double? weightKg,
-    double? rpe,
-    int? durationS,
-    double? distanceM,
-  }) _entered() {
+  _EnteredSet _entered() {
     final reps = int.tryParse(_reps.text.trim());
     final weightKg = WeightFormat.parseToKg(_weight.text, activeWeightUnit);
     final rpe = double.tryParse(_rpe.text.trim().replaceAll(',', '.'));
@@ -330,16 +335,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     );
   }
 
-  bool _targetHit(
-    GymRunnerStep? step,
-    ({
-      int? reps,
-      double? weightKg,
-      double? rpe,
-      int? durationS,
-      double? distanceM,
-    }) e,
-  ) {
+  bool _targetHit(GymRunnerStep? step, _EnteredSet e) {
     if (step == null) return false;
     final repsOk = step.targetRepsMin == null ||
         (e.reps != null && e.reps! >= step.targetRepsMin!);
@@ -356,22 +352,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     final step = _runner.currentStep;
     if (step == null) return;
     final e = _entered();
-    // Distance has no `gym_sets` column, so a distance-only set legitimately
-    // writes no flat set row — it is carried (and graded) through the
-    // metadata step-results instead. Mirrors web GymSessionRunner.buildSets.
-    if (e.reps != null || e.weightKg != null || e.durationS != null) {
-      _loggedSets.add((
-        exerciseName: step.exerciseName,
-        reps: e.reps,
-        weightKg: e.weightKg,
-        rpe: e.rpe,
-        setType: step.setType,
-        durationS: e.durationS,
-        // Routine steps bind to logged sets by normalised name, not a catalogue
-        // id, so a routine-run set logs free-text (exercise_id null).
-        exerciseId: null,
-      ));
-    }
+    _enteredByStep[_runner.currentStepIndex] = e;
     _runner.completeSet(
       reps: e.reps,
       weightKg: e.weightKg,
@@ -381,13 +362,36 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     );
   }
 
-  void _onSkip() => _runner.skipStep();
-
-  void _onRewind() {
-    if (_runner.rewindStep()) {
-      if (_loggedSets.isNotEmpty) _loggedSets.removeLast();
-    }
+  void _onSkip() {
+    _enteredByStep.remove(_runner.currentStepIndex);
+    _runner.skipStep();
   }
+
+  void _onRewind() => _runner.rewindStep();
+
+  // Derived from the runner's results, the same source `_metadataTrio` reads,
+  // so a rewind can't leave the flat set rows disagreeing with
+  // `gym_step_results`. Distance has no `gym_sets` column, so a distance-only
+  // set legitimately writes no flat row — it is carried (and graded) through
+  // the metadata step-results instead. Mirrors web GymSessionRunner.buildSets.
+  List<GymSetInput> _buildSets() => [
+        for (final r in _runner.snapshotResults())
+          if (r.status == GymRunnerStepStatus.completed &&
+              (r.actualReps != null ||
+                  r.actualWeightKg != null ||
+                  r.actualDurationS != null))
+            (
+              exerciseName: r.step.exerciseName,
+              reps: r.actualReps,
+              weightKg: r.actualWeightKg,
+              rpe: r.actualRpe,
+              setType: r.step.setType,
+              durationS: r.actualDurationS,
+              // Routine steps bind to logged sets by normalised name, not a
+              // catalogue id, so a routine-run set logs free-text.
+              exerciseId: null,
+            ),
+      ];
 
   Future<void> _onAbandon() async {
     final l10n = AppLocalizations.of(context);
@@ -496,21 +500,23 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // run_screen._saveInProgress. Best-effort: a write failure leaves the
   // in-memory state intact for the next tick / the final save.
   Future<void> _durableSave() async {
-    if (_finished || _abandoned || _loggedSets.isEmpty) return;
+    if (_finished || _abandoned) return;
+    final sets = _buildSets();
+    if (sets.isEmpty) return;
     try {
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
           title: widget.routine.title,
           startedAt: _startedAt,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
         );
         _draftId = stored.id;
       } else {
         await widget.gymStore.updateLocal(
           _draftId!,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
         );
       }
     } catch (e) {
@@ -534,12 +540,13 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     final l10n = AppLocalizations.of(context);
     try {
       final metadata = _metadataTrio();
+      final sets = _buildSets();
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
           title: widget.routine.title,
           startedAt: _startedAt,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
           metadata: metadata,
         );
         _draftId = stored.id;
@@ -547,7 +554,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
         await widget.gymStore.updateLocal(
           _draftId!,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
           metadata: metadata,
         );
       }
@@ -638,7 +645,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   }
 
   // Counts every set the athlete logged a value for, including a distance-only
-  // one — which `_loggedSets` legitimately omits because it has no `gym_sets`
+  // one — which `_buildSets` legitimately omits because it has no `gym_sets`
   // column. Mirrors web GymSessionRunner's `loggedCount`.
   int _completedSetCount() => _runner
       .snapshotResults()
