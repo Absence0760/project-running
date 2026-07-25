@@ -4843,6 +4843,9 @@ void main() {
       'lib/screens/period_summary_screen.dart':
           r'DateTime periodEnd\(PeriodType period, DateTime anchor,\s*'
           r'\{String weekStartDay = .monday.\}\) \{',
+      // The trend chart buckets weekly the same way; a skewed Monday mislabels
+      // the bars and drops the transition week out of the chart entirely.
+      'lib/mileage_trend.dart': r'DateTime _mondayOf\(DateTime d\) \{',
     };
 
     weekBoundaryFns.forEach((path, signature) {
@@ -4888,6 +4891,23 @@ void main() {
         body.contains('DateTime(now.year, now.month, now.day - daysFromStart)'),
         isTrue,
         reason: 'the week start must be constructed, not offset by a Duration',
+      );
+    });
+
+    test('the trend chart steps back a week with the Y/M/D constructor', () {
+      final body = _extractMethodBody(
+        File('lib/mileage_trend.dart').readAsStringSync(),
+        r'DateTime _previousBucketStart\(DateTime d, MileageView view\) \{',
+      );
+      expect(
+        body.contains('DateTime(d.year, d.month, d.day - 7)'),
+        isTrue,
+        reason: 'the previous week bucket must be constructed from the start',
+      );
+      expect(
+        body.contains('Duration(days:'),
+        isFalse,
+        reason: 'a fixed 7×24 h week labels the back-filled bars a week early',
       );
     });
   });

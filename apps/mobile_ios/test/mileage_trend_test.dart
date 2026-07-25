@@ -234,4 +234,81 @@ void main() {
               'output they always have.');
     });
   });
+
+  group('back-fill window', () {
+    test('the window ends at the bucket containing now, not the last with data',
+        () {
+      // Idle runner: last logged eight days ago. The card labels the final
+      // bucket "this week", so ending on the last bucket WITH DATA reported a
+      // stale total as the current one.
+      final out = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 5, 11, 7), distanceM: 10000)],
+        view: MileageView.weekly,
+        now: now,
+        minBuckets: 3,
+      );
+      expect(out.last.startsAt, DateTime(2026, 5, 18),
+          reason: "the last bar must be now's week (Mon 18 May)");
+      expect(out.last.distanceM, 0);
+      expect(out.map((p) => p.distanceM), contains(10000));
+    });
+
+    test('a run in the current bucket is not duplicated by the anchor', () {
+      final out = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 5, 19, 7), distanceM: 4000)],
+        view: MileageView.weekly,
+        now: now,
+        minBuckets: 3,
+      );
+      expect(out.where((p) => p.startsAt == DateTime(2026, 5, 18)), hasLength(1));
+      expect(out.last.distanceM, 4000);
+    });
+
+    // DST safety. These invariants hold in every timezone, but they can only
+    // FAIL in one that observes a transition — CI runs UTC, so the source-level
+    // guard in architecture_guards_test.dart is what actually catches a
+    // regression. Verified failing under TZ=America/New_York before the fix.
+    test('every weekly bucket starts at local midnight on a Monday', () {
+      for (final anchor in [
+        DateTime(2026, 3, 12, 12), // week after a US spring-forward
+        DateTime(2026, 11, 5, 12), // week after a US fall-back
+        DateTime(2026, 3, 29, 12), // week of the EU spring-forward
+      ]) {
+        final out = aggregateMileage(
+          const [],
+          view: MileageView.weekly,
+          now: anchor,
+          minBuckets: 5,
+        );
+        for (final p in out) {
+          expect(p.startsAt.hour, 0, reason: '${p.startsAt} is not midnight');
+          expect(p.startsAt.minute, 0);
+          expect(p.startsAt.weekday, DateTime.monday,
+              reason: '${p.startsAt} is not a Monday');
+        }
+        // Consecutive buckets are exactly one calendar week apart.
+        for (var i = 1; i < out.length; i++) {
+          final prev = out[i - 1].startsAt;
+          expect(out[i].startsAt, DateTime(prev.year, prev.month, prev.day + 7));
+        }
+      }
+    });
+
+    test('a run in a DST transition week lands in that week, exactly once', () {
+      for (final day in [DateTime(2026, 3, 8, 3, 30), DateTime(2026, 11, 1, 23, 30)]) {
+        final out = aggregateMileage(
+          [_run(startedAt: day, distanceM: 6000)],
+          view: MileageView.weekly,
+          now: DateTime(day.year, day.month, day.day + 3, 12),
+          minBuckets: 3,
+        );
+        final carrying = out.where((p) => p.distanceM == 6000).toList();
+        expect(carrying, hasLength(1), reason: 'run at $day was mis-bucketed');
+        final start = carrying.single.startsAt;
+        expect(start.weekday, DateTime.monday);
+        expect(start.isAfter(day), isFalse);
+        expect(DateTime(start.year, start.month, start.day + 7).isAfter(day), isTrue);
+      }
+    });
+  });
 }
