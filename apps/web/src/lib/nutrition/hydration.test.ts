@@ -6,6 +6,7 @@ import {
 	hydrationBudget,
 	BASELINE_ML_PER_KG,
 	DEFAULT_BASELINE_ML,
+	MAX_EXERCISE_MINUTES,
 } from './hydration';
 
 test('hydrationTargetMl: bodyweight baseline at 35 ml/kg, rounded to 50', () => {
@@ -67,4 +68,17 @@ test('hydrationBudget: rounds and floors negative consumed', () => {
 	const b = hydrationBudget(-50, 2000);
 	assert.equal(b.consumedMl, 0);
 	assert.equal(b.remainingMl, 2000);
+});
+
+test('hydrationTargetMl: the exercise add-on stops scaling at four hours', () => {
+	// A 12 h ultra and a 24 h effort must not read as 8 L and 14 L of water.
+	const capped = hydrationTargetMl(70, MAX_EXERCISE_MINUTES);
+	assert.equal(capped, 4350); // 2450 baseline + 1920 add-on, rounded
+	assert.equal(hydrationTargetMl(70, 720), capped);
+	assert.equal(hydrationTargetMl(70, 1440), capped);
+});
+
+test('hydrationTargetMl: below the cap the add-on still scales linearly', () => {
+	assert.equal(hydrationTargetMl(70, 120), 3400); // 2450 + 960
+	assert.equal(hydrationTargetMl(70, 0), 2450);
 });
