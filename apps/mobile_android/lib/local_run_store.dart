@@ -756,15 +756,71 @@ class LocalRunStore extends ChangeNotifier {
     // re-uploads its full track on the next drain.
     final liveIds = _summaries.map((s) => s.id).toSet();
     _syncedIds.retainWhere(liveIds.contains);
+    await _withSidecarLock(_syncedIdsFilename, () async {
+      // Merge, never replace. `background_sync.dart` builds its OWN
+      // LocalRunStore over this same directory in the WorkManager isolate, so
+      // a whole-file write from one process's snapshot silently discards the
+      // other's. An id this process has never heard of belongs to the other's
+      // newer view — carry it through instead of pruning it, or the run it
+      // describes re-uploads its entire track on the next cold start. Ids this
+      // process DOES know are authoritative from `_syncedIds`, so a run it
+      // deliberately holds unsynced can't be resurrected from a stale file.
+      final disk = await _readSyncedIdsSidecar() ?? const <String>{};
+      final merged = <String>{..._syncedIds};
+      for (final id in disk) {
+        // Ids this process knows about are already decided by `_syncedIds`.
+        if (liveIds.contains(id)) continue;
+        // An unknown id is either the other process's newer row or a ghost
+        // whose run was deleted server-side. The run FILE is the
+        // process-independent test — `_summaries` is only this process's view,
+        // so pruning against it would delete the other's work.
+        if (File('${_dir.path}/$id.json').existsSync()) merged.add(id);
+      }
+      try {
+        await writeJsonAtomic(_syncedIdsFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'ids': merged.toList(),
+        });
+      } catch (e) {
+        // Not fatal — the in-memory set is still correct for the rest of
+        // the session; we'll retry on the next sync event.
+        debugPrint('Failed to persist synced ids sidecar: $e');
+      }
+    });
+  }
+
+  /// Hold an exclusive cross-process advisory lock on [name] for the duration
+  /// of [action]. The sidecars are read-modify-write, and the WorkManager
+  /// isolate runs a second store over the same directory — without the lock
+  /// two interleaved merges still drop the later writer's addition. Best
+  /// effort: if the lock can't be taken the action still runs, because a
+  /// merged write without a lock is strictly better than no write at all.
+  Future<void> _withSidecarLock(
+      String name, Future<void> Function() action) async {
+    RandomAccessFile? handle;
     try {
-      await writeJsonAtomic(_syncedIdsFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'ids': _syncedIds.toList(),
-      });
+      handle = await File('${_dir.path}/$name.lock').open(mode: FileMode.write);
+      await handle.lock(FileLock.blockingExclusive);
     } catch (e) {
-      // Not fatal — the in-memory set is still correct for the rest of
-      // the session; we'll retry on the next sync event.
-      debugPrint('Failed to persist synced ids sidecar: $e');
+      debugPrint('local_run_store: sidecar lock unavailable for $name: $e');
+      try {
+        await handle?.close();
+      } catch (_) {/* best-effort */}
+      handle = null;
+    }
+    try {
+      await action();
+    } finally {
+      if (handle != null) {
+        try {
+          await handle.unlock();
+        } catch (e) {
+          debugPrint('local_run_store: sidecar unlock failed for $name: $e');
+        }
+        try {
+          await handle.close();
+        } catch (_) {/* best-effort */}
+      }
     }
   }
 
@@ -878,6 +934,7 @@ class LocalRunStore extends ChangeNotifier {
     final prevOwner = existed ? _pendingRemoteDeletes[runId] : null;
     if (existed && prevOwner == ownerUserId) return;
     _pendingRemoteDeletes[runId] = ownerUserId;
+    _clearedRemoteDeletes.remove(runId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
@@ -894,6 +951,7 @@ class LocalRunStore extends ChangeNotifier {
       final prevOwner = existed ? _pendingRemoteDeletes[id] : null;
       if (!existed || prevOwner != ownerUserId) {
         _pendingRemoteDeletes[id] = ownerUserId;
+        _clearedRemoteDeletes.remove(id);
         changed = true;
       }
     }
@@ -911,28 +969,60 @@ class LocalRunStore extends ChangeNotifier {
     // which would silently skip the persistence + notify for those.
     if (!_pendingRemoteDeletes.containsKey(runId)) return;
     _pendingRemoteDeletes.remove(runId);
+    _clearedRemoteDeletes.add(runId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
 
+  /// Ids this process has cleared from [_pendingRemoteDeletes] since its last
+  /// successful sidecar write. Needed because the merge can't read a removal
+  /// out of absence — see [_persistPendingRemoteDeletes].
+  final Set<String> _clearedRemoteDeletes = <String>{};
+
   Future<void> _persistPendingRemoteDeletes() async {
-    try {
-      if (_pendingRemoteDeletes.isEmpty &&
-          _pendingRemoteDeletesFile.existsSync()) {
-        await _pendingRemoteDeletesFile.delete();
-        return;
+    await _withSidecarLock(_pendingRemoteDeletesFilename, () async {
+      // Merge, never replace — see _persistSyncedIds. This sidecar is the
+      // worse of the two to clobber: an entry that goes missing is a run that
+      // stays on the server forever with nothing left to retry it, and the old
+      // code even DELETED the file when its in-memory map was empty, so a
+      // background drain that loaded before the foreground queued a delete
+      // wiped that delete outright.
+      //
+      // Removals are carried by `_clearedRemoteDeletes` rather than by absence
+      // from the map, because absence can't distinguish "I cleared this" from
+      // "they added this while I was running". Additions therefore always win,
+      // which is the safe asymmetry: a repeated delete of an already-deleted
+      // row is a no-op, a dropped one is unrecoverable.
+      final disk =
+          await _readPendingRemoteDeletes() ?? const <String, String?>{};
+      final merged = <String, String?>{
+        for (final e in disk.entries)
+          if (!_clearedRemoteDeletes.contains(e.key)) e.key: e.value,
+      }..addAll(_pendingRemoteDeletes);
+      try {
+        if (merged.isEmpty) {
+          if (_pendingRemoteDeletesFile.existsSync()) {
+            await _pendingRemoteDeletesFile.delete();
+          }
+          _clearedRemoteDeletes.clear();
+          return;
+        }
+        // New format: {"deletes": {id: owner_user_id_or_null}}. Old
+        // format ({"ids": [...]}) is still readable (see
+        // _readPendingRemoteDeletes) for one-way migration from existing
+        // installs — the next write upgrades them.
+        await writeJsonAtomic(_pendingRemoteDeletesFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'deletes': merged,
+        });
+        // Disk now reflects our removals, so a later disk entry for one of
+        // those ids is a genuine re-queue by the other process, not a stale
+        // copy of what we cleared.
+        _clearedRemoteDeletes.clear();
+      } catch (e) {
+        debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
       }
-      // New format: {"deletes": {id: owner_user_id_or_null}}. Old
-      // format ({"ids": [...]}) is still readable (see
-      // _readPendingRemoteDeletes) for one-way migration from existing
-      // installs — the next write upgrades them.
-      await writeJsonAtomic(_pendingRemoteDeletesFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'deletes': _pendingRemoteDeletes,
-      });
-    } catch (e) {
-      debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
-    }
+    });
   }
 
   Future<Map<String, String?>?> _readPendingRemoteDeletes() async {
@@ -970,6 +1060,7 @@ class LocalRunStore extends ChangeNotifier {
     _summaries = [];
     _syncedIds.clear();
     _pendingRemoteDeletes.clear();
+    _clearedRemoteDeletes.clear();
 
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);

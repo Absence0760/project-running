@@ -4097,3 +4097,16 @@ Renaming rather than deleting is the deliberate middle: deleting on sight would 
 `markSynced` now takes the pushed entry and only marks it when it is still `identical` to the resident row; the `pendingDelete` branch applies the same test before `dropRow`. Identity is the exact test here because entries are immutable value objects and every mutation installs a new instance — there is no in-place edit to miss. A false negative (a same-content instance swapped in by an unrelated path) costs one extra drain, which is the harmless direction. A `lastModifiedAt` comparison was the alternative and is strictly weaker: two mutations inside one clock tick would compare equal.
 
 `syncWithServer` also gained a re-entrancy guard, mirroring `SyncService._syncing`. `session_detail_screen` fires it unawaited and several screens drain on both a manual refresh and a connectivity return, so two concurrent drains over one store were reachable — they would push the same row twice and race each other's state writes. A second concurrent call returns 0 rather than queueing, matching the count-for-a-banner contract callers already have. All eight subclasses inherit both changes.
+
+---
+
+## 303. The run store's sidecars merge under a cross-process lock, because two isolates own the same directory
+
+**Decided (2026-07-25).** `background_sync.dart` constructs its own `LocalRunStore` + `LocalRouteStore` in the WorkManager isolate, over the same on-disk directory the foreground stores use. Both sidecars — `synced_ids.json` and `pending_remote_deletes.json` — were whole-file writes from one process's in-memory snapshot, so each write silently discarded whatever the other had done since that snapshot was taken. `pending_remote_deletes` was the dangerous one: the old code *deleted the file* when its map was empty, so a background drain that loaded before the foreground queued a remote delete wiped that delete outright and the run stayed on the server with nothing left to retry it. The `synced_ids` clobber "only" cost a full-track re-upload.
+
+Both writes are now read-merge-write inside an exclusive advisory lock (`<sidecar>.lock`, `FileLock.blockingExclusive`, best-effort — a failed lock still performs the merged write, which beats no write). Merging alone closes the whole-file discard; the lock closes the remaining interleave where two merges race.
+
+The merge rules differ because the two sidecars fail in opposite directions:
+
+- **`synced_ids`** — ids this process knows about are decided by its own `_syncedIds`, so a run it deliberately holds unsynced can't be resurrected from a stale file. An unknown id is kept only if its run FILE still exists, which is the process-independent version of the "no local row ⇒ prune the ghost" rule the old code approximated with `_summaries` (this process's view only).
+- **`pending_remote_deletes`** — additions always win, and removals are carried by an explicit `_clearedRemoteDeletes` ledger rather than inferred from absence, because absence cannot distinguish "I cleared this" from "they queued this while I was running". The ledger resets after each successful write, at which point disk already reflects our removals. The asymmetry is deliberate: re-deleting an already-deleted row is a no-op, losing a queued delete is unrecoverable.

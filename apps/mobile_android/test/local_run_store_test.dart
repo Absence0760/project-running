@@ -675,6 +675,70 @@ void main() {
       expect(store.unsyncedRuns.map((r) => r.id), ['legacy-pending']);
     });
 
+    // background_sync.dart builds its OWN LocalRunStore over the same
+    // directory in the WorkManager isolate, so both sidecars are written by
+    // two processes from independent snapshots. A whole-file replace silently
+    // discarded the other's work.
+    group('two stores over one directory', () {
+      test('a background drain cannot wipe a remote-delete queued in the '
+          'foreground', () async {
+        // The worst shape: the background store loaded while the queue was
+        // empty, and an empty map used to DELETE the file outright — so the
+        // run stayed on the server with nothing left to retry it.
+        final foreground = LocalRunStore();
+        await foreground.init(overrideDirectory: tempDir);
+        final background = LocalRunStore();
+        await background.init(overrideDirectory: tempDir);
+
+        await foreground.markPendingRemoteDelete('orphan-fg');
+        // The background store queues and drains its own delete. Its map is
+        // now empty — and an empty map used to delete the whole file.
+        await background.markPendingRemoteDelete('orphan-bg');
+        await background.clearPendingRemoteDelete('orphan-bg');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.pendingRemoteDeleteIds, contains('orphan-fg'),
+            reason: 'a queued remote delete is unrecoverable if it is lost');
+        expect(reloaded.pendingRemoteDeleteIds, isNot(contains('orphan-bg')),
+            reason: 'the background drain\'s own clear must still stick');
+      });
+
+      test('a clear from the store that queued it still takes effect',
+          () async {
+        // The other direction — the merge must not make removal impossible.
+        final store = LocalRunStore();
+        await store.init(overrideDirectory: tempDir);
+        await store.markPendingRemoteDelete('orphan-2');
+        await store.clearPendingRemoteDelete('orphan-2');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.pendingRemoteDeleteIds, isEmpty);
+      });
+
+      test('a background markSynced cannot cost the foreground a re-upload',
+          () async {
+        final foreground = LocalRunStore();
+        await foreground.init(overrideDirectory: tempDir);
+        await foreground.save(makeRun(id: 'run-fg'));
+
+        final background = LocalRunStore();
+        await background.init(overrideDirectory: tempDir);
+        await background.save(makeRun(id: 'run-bg'));
+        await background.markSynced('run-bg');
+
+        // The foreground's snapshot predates run-bg; its own write must not
+        // drop run-bg's synced flag and re-upload that whole track.
+        await foreground.markSynced('run-fg');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.unsyncedRuns, isEmpty,
+            reason: 'both stores marked their own run synced');
+      });
+    });
+
     test('markPendingRemoteDelete persists across reload and is idempotent', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
