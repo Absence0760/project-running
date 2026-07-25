@@ -1037,20 +1037,32 @@ class LocalRunStore extends ChangeNotifier {
     // the fast path. `_runs` holds the full set for this one session (the read
     // is already paid); the next launch windows it. `Future.wait` keeps the
     // cold-start parallel rather than O(n) sequential.
+    // Authority order once the sidecar is unusable: the index's `synced` flag
+    // (a cache of the same set, rewritten from `_syncedIds` on every mutation,
+    // so it can only lag toward "unsynced"), then the legacy per-run flag.
+    // `markSynced` stopped writing that per-run flag, so for a DAMAGED sidecar
+    // it records nothing and reading it reports the whole library as unsynced —
+    // a full re-upload of every track. Unlike `LocalRouteStore`, a damaged
+    // sidecar here does not presume-synced: the two directions aren't
+    // symmetric for runs. A redundant upload costs bandwidth; wrongly
+    // presuming a run synced means it never drains, and a recorded run is the
+    // only copy of something that happened.
+    final indexSynced =
+        index == null ? null : {for (final s in index) if (s.synced) s.id};
+
     final loaded = await Future.wait(files.map(_readRunFile), eagerError: false);
     for (final entry in loaded) {
       if (entry == null) continue;
       _runs.add(entry.run);
       if (sidecarIds != null) {
         if (sidecarIds.contains(entry.run.id)) _syncedIds.add(entry.run.id);
-      } else if (entry.synced) {
-        // Migration path: no sidecar yet, read the legacy per-file flag.
+      } else if (indexSynced != null) {
+        if (indexSynced.contains(entry.run.id)) _syncedIds.add(entry.run.id);
+      } else if (!_syncedIdsSidecarDamaged && entry.synced) {
+        // Migration path: no sidecar was ever written, so the legacy per-file
+        // flag is the only record of sync state — and a real one.
         _syncedIds.add(entry.run.id);
       }
-    }
-
-    if (sidecarIds == null && _syncedIds.isNotEmpty) {
-      await _persistSyncedIds();
     }
 
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
@@ -1058,6 +1070,14 @@ class LocalRunStore extends ChangeNotifier {
       for (final r in _runs)
         RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
     ];
+    // Repair the sidecar from whatever record we recovered — AFTER `_summaries`
+    // exists. `_persistSyncedIds` prunes the set against `_summaries`, so
+    // writing here while it was still empty cleared every recovered id and
+    // durably persisted an empty sidecar: the whole library then read as
+    // unsynced and re-uploaded its tracks on the next drain.
+    if (sidecarIds == null && _syncedIds.isNotEmpty) {
+      await _persistSyncedIds();
+    }
     // Skip the write for a brand-new empty store (no runs AND no prior index).
     if (_runs.isNotEmpty || _indexFile.existsSync()) {
       await _persistIndex();
@@ -1074,16 +1094,27 @@ class LocalRunStore extends ChangeNotifier {
         : name;
   }
 
+  /// Read the authoritative `synced_ids` sidecar. Null means "no usable set" —
+  /// [_syncedIdsSidecarDamaged] separates a sidecar that was never written (a
+  /// pre-sidecar install, where the legacy per-run flag IS the record) from one
+  /// that exists but can't be read (where the per-run flag records nothing,
+  /// because `markSynced` stopped writing it).
+  bool _syncedIdsSidecarDamaged = false;
+
   Future<Set<String>?> _readSyncedIdsSidecar() async {
+    _syncedIdsSidecarDamaged = false;
     final file = _syncedIdsFile;
     if (!file.existsSync()) return null;
     try {
       final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      return (data['ids'] as List).cast<String>().toSet();
+      final ids = data['ids'];
+      if (ids is List) return ids.whereType<String>().toSet();
+      debugPrint('synced_ids sidecar has an unexpected shape');
     } catch (e) {
       debugPrint('Failed to read synced_ids sidecar: $e');
-      return null;
     }
+    _syncedIdsSidecarDamaged = true;
+    return null;
   }
 
   Future<_LoadedRun?> _readRunFile(File file) async {

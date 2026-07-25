@@ -539,6 +539,87 @@ void main() {
       expect(ids.contains('ghost-deleted-server-side'), isFalse);
     });
 
+    // A damaged sidecar used to be indistinguishable from an absent one, so the
+    // loader fell through to the legacy per-run `synced` flag — which
+    // markSynced stopped writing. Every already-synced run then read as
+    // unsynced and the whole library re-uploaded its tracks.
+    for (final corrupt in const <String, String>{
+      'truncated JSON': '{"ids": ["run-a"',
+      'zero bytes': '',
+      'wrong shape': '{"ids": {"run-a": true}}',
+      'a bare list': '["run-a","run-b"]',
+      'not JSON at all': 'not json',
+    }.entries)
+      test(
+          'a ${corrupt.key} sidecar falls back to the index, not a full re-upload',
+          () async {
+        final s1 = LocalRunStore();
+        await s1.init(overrideDirectory: tempDir);
+        await s1.save(makeRun(id: 'run-a'));
+        await s1.save(makeRun(id: 'run-b'));
+        await s1.markSynced('run-a');
+        await s1.markSynced('run-b');
+        // A mutation after the markSynced calls refreshes the index's cached
+        // `synced` flags from the authoritative set.
+        await s1.save(makeRun(id: 'run-c'));
+        await s1.markSynced('run-c');
+        await s1.save(makeRun(id: 'run-d'));
+
+        File('${tempDir.path}/synced_ids.json').writeAsStringSync(corrupt.value);
+        // Plant an unindexed run file so the id-set drifts and the loader takes
+        // the full-walk slow path, where the legacy flag used to be consulted.
+        File('${tempDir.path}/run-planted.json').writeAsStringSync(jsonEncode({
+          'run': makeRun(id: 'run-planted').toJson(),
+          'synced': true,
+        }));
+
+        final s2 = LocalRunStore();
+        await s2.init(overrideDirectory: tempDir);
+
+        expect(s2.runs, hasLength(5));
+        expect(
+          s2.unsyncedRuns.map((r) => r.id).toSet(),
+          {'run-d', 'run-planted'},
+          reason: 'only runs no record calls synced may be re-uploaded',
+        );
+      });
+
+    test('a damaged sidecar with no index never presumes a run synced', () async {
+      // The deliberate asymmetry with LocalRouteStore: with no surviving record
+      // of what was pushed, a run re-uploads rather than risk never draining
+      // the only copy of a recorded run.
+      final s1 = LocalRunStore();
+      await s1.init(overrideDirectory: tempDir);
+      await s1.save(makeRun(id: 'run-a'));
+      await s1.markSynced('run-a');
+
+      File('${tempDir.path}/synced_ids.json').writeAsStringSync('not json');
+      File('${tempDir.path}/index.json').deleteSync();
+
+      final s2 = LocalRunStore();
+      await s2.init(overrideDirectory: tempDir);
+
+      expect(s2.unsyncedRuns.map((r) => r.id), ['run-a']);
+    });
+
+    test('an absent sidecar still migrates from the legacy per-run flag', () async {
+      // Pre-sidecar install: the per-run flag is the only record, and a real
+      // one — the damaged-sidecar path must not have disabled this.
+      File('${tempDir.path}/legacy-synced.json').writeAsStringSync(jsonEncode({
+        'run': makeRun(id: 'legacy-synced').toJson(),
+        'synced': true,
+      }));
+      File('${tempDir.path}/legacy-pending.json').writeAsStringSync(jsonEncode({
+        'run': makeRun(id: 'legacy-pending').toJson(),
+        'synced': false,
+      }));
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.unsyncedRuns.map((r) => r.id), ['legacy-pending']);
+    });
+
     test('markPendingRemoteDelete persists across reload and is idempotent', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
