@@ -22,14 +22,14 @@
 //!
 //! The FIFO interleaves two measurement slots — MEAS1 (LED-on PPG) and MEAS2
 //! (LED-off ambient) — told apart by their word tags. The drain demuxes
-//! strictly: each PPG count is paired with the latest ambient count for
-//! subtraction (bright-sun recovery), and a word with a tag we didn't enable
-//! is dropped, never fed to the detector as PPG. A slow LED auto-gain loop
-//! (`agc_next_pa_ambient`, ~1 Hz) keeps the corrected DC in the detector's
-//! band while a raw-DC guard protects ADC clipping headroom — ambient swings
-//! cancel out of the corrected level, so the drive can't oscillate against
-//! sunlight flicker. Register effects are compile-only until the dev kit
-//! lands, like the rest of this path.
+//! strictly (`watch_core::hr_drain`): each PPG count is paired with the latest
+//! ambient count for subtraction (bright-sun recovery), and a word with a tag
+//! we didn't enable is dropped, never fed to the detector as PPG. A slow LED
+//! auto-gain loop (`agc_next_pa_ambient`, ~1 Hz) keeps the corrected DC in the
+//! detector's band while a raw-DC guard protects ADC clipping headroom —
+//! ambient swings cancel out of the corrected level, so the drive can't
+//! oscillate against sunlight flicker. Register effects are compile-only until
+//! the dev kit lands, like the rest of this path.
 //!
 //! The licensed Maxim HR algorithm is pulled in via `bindgen` post-tier-1;
 //! tier 1 uses the naive peak-detect in `max86177::peak_detect`.
@@ -44,6 +44,7 @@ use max86177::{
     MEAS2_TAG,
 };
 use watch_core::gnss_mode::GnssMode;
+use watch_core::hr_drain::{next_window_wait_s, FifoDemux, FifoSlot, FifoTags};
 use watch_core::hr_duty::{self, HrSample};
 
 use crate::state;
@@ -94,10 +95,13 @@ pub async fn run(mut twim: Twim<'static>) {
     let mut mode = GnssMode::default();
     let mut asleep = false;
     info!("hr: MAX86177 streaming");
-    // Latest ambient (LED-off) count; each PPG (LED-on) sample is corrected
-    // against it so bright-sun ambient bleed can't rail the pulse. Starts at 0
-    // (no subtraction) until the first ambient word arrives — an honest raw read.
-    let mut ambient: i32 = 0;
+    // Slot demux + the ambient (LED-off) latch each PPG (LED-on) sample is
+    // corrected against, so bright-sun ambient bleed can't rail the pulse
+    // (`watch_core::hr_drain`).
+    let mut demux = FifoDemux::new(FifoTags {
+        ppg: MEAS1_TAG,
+        ambient: MEAS2_TAG,
+    });
     // LED auto-gain state. `led_pa` mirrors the LEDx_PA register (init programs
     // LED_PA_DEFAULT; the register survives shutdown, so it carries across duty
     // windows without a re-write). The AGC judges the corrected DC for
@@ -145,7 +149,7 @@ pub async fn run(mut twim: Twim<'static>) {
                 }
                 // Sleep to the next window start, but let an idle mode change
                 // (BTN3) re-evaluate the schedule immediately.
-                let wait_s = w.next_start_s(now_s).saturating_sub(now_s).max(1);
+                let wait_s = next_window_wait_s(w, now_s);
                 if let Ok(m) =
                     with_timeout(Duration::from_secs(u64::from(wait_s)), mode_rx.changed()).await
                 {
@@ -162,7 +166,7 @@ pub async fn run(mut twim: Twim<'static>) {
                     // detector converges on live samples instead of stitching
                     // the stale history into a bogus inter-beat interval.
                     detector.reset();
-                    ambient = 0;
+                    demux.reset();
                     agc_samples = 0;
                     info!("hr: window open; sensor sampling");
                 }
@@ -174,7 +178,7 @@ pub async fn run(mut twim: Twim<'static>) {
                     warn!("hr: wake failed {:?}; no HR this window", e);
                     match hr_duty::duty_window(mode) {
                         Some(w) => {
-                            let wait_s = w.next_start_s(now_s).saturating_sub(now_s).max(1);
+                            let wait_s = next_window_wait_s(w, now_s);
                             if let Ok(m) = with_timeout(
                                 Duration::from_secs(u64::from(wait_s)),
                                 mode_rx.changed(),
@@ -194,20 +198,19 @@ pub async fn run(mut twim: Twim<'static>) {
         let mut latest: Option<Reading> = None;
         loop {
             match sensor.read_tagged_sample() {
-                Ok(Some(FifoWord { tag, value })) if tag == MEAS2_TAG => ambient = value as i32,
-                Ok(Some(FifoWord { tag, value })) if tag == MEAS1_TAG => {
-                    latest = Some(detector.push_ambient(value as i32, ambient));
-                    agc_samples = agc_samples.saturating_add(1);
-                }
-                Ok(Some(FifoWord { tag, .. })) => {
-                    // Not a slot we enabled — a marker or a mis-decoded word.
-                    // Feeding it to the detector as PPG would corrupt the
-                    // estimate; drop it, flag config drift once.
-                    if !warned_unknown_tag {
-                        warned_unknown_tag = true;
-                        warn!("hr: unknown FIFO tag {=u8}; dropping", tag);
+                Ok(Some(FifoWord { tag, value })) => match demux.apply(tag, value as i32) {
+                    FifoSlot::Ppg => {
+                        latest = Some(detector.push_ambient(value as i32, demux.ambient()));
+                        agc_samples = agc_samples.saturating_add(1);
                     }
-                }
+                    FifoSlot::Ambient => {}
+                    FifoSlot::Unknown => {
+                        if !warned_unknown_tag {
+                            warned_unknown_tag = true;
+                            warn!("hr: unknown FIFO tag {=u8}; dropping", tag);
+                        }
+                    }
+                },
                 Ok(None) => break,
                 Err(e) => {
                     warn!("hr: read error {:?}", e);

@@ -16,6 +16,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`nav_project`] — the `nav` task's per-fix composition over [`course`] +
+//!   [`turn_cues`]: biased projection, the off-course latch's two edges, and
+//!   the next turn ahead
 //! - [`cutoff_eta`] — live next-cutoff ETA: on / tight / behind at the nearest
 //!   cutoff ahead from distance-along-route + recent pace, honest `Unknown` on
 //!   a stale fix (port of web `runs/live_cutoff_eta.ts`)
@@ -31,6 +34,12 @@
 //! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
 //!   (port of web `gear/gear_wear.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`baro_rezero`] — the `baro` task's manual QNH re-zero decision: the
+//!   barometer's own freshness gate over [`elevation::rezero_reference`], and
+//!   the two distinct refusals
+//! - [`gnss_cadence`] — the `gps` task's fix-publication cadence: which
+//!   interval is owed in the current record state + mode, the throttle gate,
+//!   and whether a published fix earns the receiver a nap
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
 //! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
@@ -43,6 +52,8 @@
 //!   `(prev, now]` tick dispatcher that fires each timed cue (port of web
 //!   `training/guided_runs.ts`; cue/title text carried as i18n key identifiers,
 //!   the TTS speaking + `GuidedTranslate` injection are web/mobile-only)
+//! - [`hr_drain`] — the `hr` task's FIFO drain: PPG / ambient / unknown slot
+//!   demux with the ambient latch, plus the between-window wait
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
@@ -57,6 +68,9 @@
 //! - [`battery`] — 1S LiPo supply millivolts → percent (piecewise-linear
 //!   discharge curve + the plausibility band the battery task parks on), plus
 //!   the gauge icon's fill fraction and low-state threshold
+//! - [`battery_sense`] — the `battery` task's SAADC-counts → millivolts
+//!   conversion and the one gate that both parks the task at boot and blanks
+//!   the gauge mid-stream
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
@@ -73,6 +87,9 @@
 //!   around a 75 baseline + the dominant-contributor advice (port of web
 //!   `training/readiness.ts`; notes/advice carried as enums, not English)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
+//! - [`record_cadence`] — the `record` task's decisions around that machine:
+//!   the live-run tick gate, the mid-run flash-checkpoint cadence, the
+//!   fix → stored-track-point shaping, and the pushed-QNH plausibility guard
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping
@@ -200,7 +217,9 @@ pub mod alerts;
 pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
+pub mod baro_rezero;
 pub mod battery;
+pub mod battery_sense;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
@@ -219,11 +238,13 @@ pub mod flash_store;
 pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
+pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;
+pub mod hr_drain;
 pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
@@ -232,6 +253,7 @@ pub mod link;
 pub mod live_freshness;
 pub mod locale_defaults;
 pub mod nav_map;
+pub mod nav_project;
 pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
@@ -248,6 +270,7 @@ pub mod race_predictor;
 pub mod readiness;
 pub mod recap;
 pub mod record;
+pub mod record_cadence;
 pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;

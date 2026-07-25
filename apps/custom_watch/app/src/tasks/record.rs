@@ -6,7 +6,9 @@
 //! Thin glue by design: distance, moving time, pace, the point-acceptance
 //! filter, and the auto-pause all live in `watch_core::record` (host-tested);
 //! the button-press → command mapping lives in `watch_core::button`; the flash
-//! slot layout in `watch_core::flash_store`. This task selects over incoming
+//! slot layout in `watch_core::flash_store`; the tick gate, flash-checkpoint
+//! cadence, track-point shaping and pushed-QNH guard in
+//! `watch_core::record_cadence`. This task selects over incoming
 //! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
 //! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
 //! the wall clock between fixes. Idle and Finished have no clock to advance, so
@@ -48,7 +50,8 @@ use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter, TrackPoint};
+use watch_core::record_cadence::{plausible_sea_level_pa, run_active, track_point, CheckpointMark};
+use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
 use watch_core::settings::WatchSettings;
 use watch_core::trackback::Trackback;
 
@@ -70,12 +73,9 @@ struct OpenRun {
     writer: RunWriter<Vec<u8, SLOT_LEN>>,
     run_seq: u32,
     start_uptime_s: u32,
-    /// Snapshot `elapsed_s` at the last mid-run flash checkpoint — the time-based
-    /// checkpoint cadence measures against this.
-    last_ckpt_elapsed_s: u32,
-    /// Staged point count at the last mid-run checkpoint — the point-based
-    /// cadence measures against this.
-    last_ckpt_points: u32,
+    /// Where the last mid-run flash checkpoint left off — both checkpoint
+    /// triggers measure against it (`CheckpointMark::due`).
+    last_ckpt: CheckpointMark,
 }
 
 /// Open a fresh staging writer for a new run, assigning the next run id. Returns
@@ -89,8 +89,7 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
             writer,
             run_seq,
             start_uptime_s,
-            last_ckpt_elapsed_s: 0,
-            last_ckpt_points: 0,
+            last_ckpt: CheckpointMark::default(),
         }),
         Err(_) => {
             warn!("record: run writer start failed");
@@ -107,16 +106,10 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
 fn push_point(
     open: &mut OpenRun,
     fix: &Fix,
-    bpm: Option<u8>,
+    bpm: Option<u16>,
     baro_alt_m: Option<f32>,
 ) -> Option<u32> {
-    let point = TrackPoint {
-        lat_e7: (fix.lat_deg * 1e7) as i32,
-        lon_e7: (fix.lon_deg * 1e7) as i32,
-        t_offset_s: fix.uptime_s.saturating_sub(open.start_uptime_s),
-        ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
-        bpm,
-    };
+    let point = track_point(fix, open.start_uptime_s, bpm, baro_alt_m);
     match open.writer.push_point_bounded(&point) {
         PushOutcome::Thinned(k) => {
             warn!(
@@ -152,29 +145,6 @@ fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
         ),
     }
 }
-
-/// Mid-run flash-checkpoint cadence. The in-progress run is staged in RAM and
-/// only committed to flash at stop, so a battery swap or brown-out mid-run would
-/// otherwise lose the whole track. A periodic best-effort checkpoint writes a
-/// recoverable blob into the run's slot (`run_flash::RunStore::checkpoint`); the
-/// final `commit_run` at stop supersedes the last checkpoint (same slot).
-///
-/// Wear budget: each checkpoint erases one 4 KiB flash page, and the nRF52840's
-/// internal flash is rated ~10,000 erase cycles/page. At a 300 s cadence a
-/// 100-hour run erases 100·3600/300 = 1,200 times — ~12 % of one page's
-/// endurance in a single extreme run — and because a run keeps to a single slot
-/// while successive runs round-robin across all 4 slots, real multi-run wear
-/// spreads further; a typical sub-24 h ultra is ≤288 erases. A 60 s cadence
-/// would burn ~6,000 erases (>½ the page) in one 100 h run, so 300 s is the
-/// floor that keeps wear well within endurance.
-const CHECKPOINT_INTERVAL_S: u32 = 300;
-
-/// Also checkpoint every this many newly-accepted track points, so the early
-/// (still-growing) track reaches flash within minutes rather than waiting a full
-/// `CHECKPOINT_INTERVAL_S`. Bounded by `MAX_POINTS_PER_RUN` (253), so at most a
-/// handful of point-triggered checkpoints ever fire before the track is full and
-/// only the time trigger (refreshing the totals) remains.
-const CHECKPOINT_POINTS: u32 = 60;
 
 /// Persist a recoverable snapshot of the run-so-far to its flash slot WITHOUT
 /// consuming the staging writer (best-effort / L4). Mirrors [`commit_run`] but
@@ -231,23 +201,6 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
         .await
         .commit(open.run_seq, open.start_uptime_s, &blob)
         .await;
-}
-
-/// Altitude in metres → wire-format decimetres, dropping values outside the
-/// `i16` decimetre range (about ±3276 m — a frozen `TrackPoint` limit; tier-2
-/// widens it) so an out-of-range reading stores `None`, never a wrong value.
-fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
-    let dm = alt_m * 10.0;
-    if dm.is_finite() && dm > i16::MIN as f32 && dm <= i16::MAX as f32 {
-        Some(dm as i16)
-    } else {
-        None
-    }
-}
-
-/// A held HR estimate → a track point's `bpm`, dropping out-of-`u8` values.
-fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
-    bpm.and_then(|b| ((1..=255).contains(&b)).then_some(b as u8))
 }
 
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
@@ -381,7 +334,7 @@ pub async fn run(store: &'static SharedStore) {
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
         // Finished don't, so drop the ticker there and wait purely on events.
-        let event = if is_active(recorder.state()) {
+        let event = if run_active(recorder.state()) {
             match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
                 Either3::First(()) => Event::Tick,
                 Either3::Second(fix) => Event::Fix(fix),
@@ -465,7 +418,7 @@ pub async fn run(store: &'static SharedStore) {
                 recorder.on_fix(&fix);
                 if recorder.last_fix_stored() {
                     if let Some(o) = open.as_mut() {
-                        if let Some(k) = push_point(o, &fix, bpm_u8(held), latest_baro_alt_m) {
+                        if let Some(k) = push_point(o, &fix, held, latest_baro_alt_m) {
                             recorder.set_track_thinning(k);
                         }
                     }
@@ -539,18 +492,18 @@ pub async fn run(store: &'static SharedStore) {
         // run-so-far to its slot so a reset mid-run recovers a slightly-stale
         // partial run instead of the whole in-progress track (which only reaches
         // flash at stop otherwise). Cadence is wear-bounded — see
-        // CHECKPOINT_INTERVAL_S. Runs after the recorder updates and never in its
-        // way; the final commit_run at stop supersedes the last checkpoint.
+        // record_cadence::CHECKPOINT_INTERVAL_S. Runs after the recorder updates
+        // and never in its way; the final commit_run at stop supersedes the last
+        // checkpoint.
         if recorder.state() == RecordState::Recording {
             if let Some(o) = open.as_mut() {
                 let points = o.writer.point_count();
-                let due_time =
-                    snap.elapsed_s >= o.last_ckpt_elapsed_s.saturating_add(CHECKPOINT_INTERVAL_S);
-                let due_points = points >= o.last_ckpt_points.saturating_add(CHECKPOINT_POINTS);
-                if points > 0 && (due_time || due_points) {
+                if o.last_ckpt.due(points, snap.elapsed_s) {
                     checkpoint_run(store, o, &snap).await;
-                    o.last_ckpt_elapsed_s = snap.elapsed_s;
-                    o.last_ckpt_points = points;
+                    o.last_ckpt = CheckpointMark {
+                        points,
+                        elapsed_s: snap.elapsed_s,
+                    };
                 }
             }
         }
@@ -585,28 +538,15 @@ pub async fn run(store: &'static SharedStore) {
     }
 }
 
-/// A run advances its wall clock only while Recording or Paused; Idle and
-/// Finished are inert, so the 1 Hz tick is dropped in those states.
-fn is_active(state: RecordState) -> bool {
-    matches!(state, RecordState::Recording | RecordState::Paused)
-}
-
-/// Plausible QNH sea-level pressure window (Pa). A pushed `sea_level_pa` outside
-/// this is ignored — never published — the same "reject, don't clamp"
-/// discipline the recorder/alert setters keep for a garbage value. ~870–1080
-/// hPa spans every real weather system (record sea-level pressure extremes sit
-/// well inside it), so anything outside is a corrupt or misframed push.
-const MIN_SEA_LEVEL_PA: f32 = 87_000.0;
-const MAX_SEA_LEVEL_PA: f32 = 108_000.0;
-
 /// Apply a pushed settings frame: each present field feeds the recorder's (or
 /// alert engine's) existing settings-sync setter, which keeps its own
 /// plausibility guard, so a bad value is rejected the same way regardless of
 /// transport. The QNH sea-level reference has no setter (it is a `state` watch
-/// the baro task consumes), so its plausibility guard lives here — range-check,
-/// then publish; the timezone offset rides the same seam toward the ui task,
-/// its guard host-tested in `watch_core::settings`. Absent fields are left
-/// untouched — a partial push is a partial update, never a reset of the rest.
+/// the baro task consumes), so it is range-checked here against
+/// `record_cadence::plausible_sea_level_pa` before publishing; the timezone
+/// offset rides the same seam toward the ui task, its guard host-tested in
+/// `watch_core::settings`. Absent fields are left untouched — a partial push is
+/// a partial update, never a reset of the rest.
 fn apply_settings(
     s: &WatchSettings,
     recorder: &mut Recorder,
@@ -627,7 +567,7 @@ fn apply_settings(
         alerts.set_zone_ceiling(z);
     }
     if let Some(pa) = s.sea_level_pa {
-        if (MIN_SEA_LEVEL_PA..=MAX_SEA_LEVEL_PA).contains(&pa) {
+        if plausible_sea_level_pa(pa) {
             sea_level_tx.send(pa);
         }
     }

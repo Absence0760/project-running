@@ -2,10 +2,12 @@
 //! publishes the result to `state::NAV`.
 //!
 //! Thin glue by design: the projection math and the off-course alert latch
-//! live in host-tested `watch_core::course`. This task only feeds fixes in and
-//! publishes what came out, logging the alert's rising edge and the recovery
-//! so an off-course excursion is visible in the defmt stream regardless of
-//! which display page is up.
+//! live in host-tested `watch_core::course`, and their per-fix composition —
+//! biased projection, latch edges, next turn ahead — in
+//! `watch_core::nav_project`. This task only feeds fixes in and publishes what
+//! came out, logging the alert's rising edge and the recovery so an off-course
+//! excursion is visible in the defmt stream regardless of which display page is
+//! up.
 //!
 //! The task follows one of two courses: the canned sim course carried at boot
 //! behind the default-OFF `sim-course` feature (built by `bin/watch-sim.sh`), or
@@ -18,13 +20,10 @@
 
 use defmt::{info, unwrap, warn};
 use embassy_futures::select::{select, Either};
-use watch_core::course::{Course, NavStatus, OffCourseAlert};
+use watch_core::course::{Course, OffCourseAlert};
 use watch_core::face::NavView;
-use watch_core::record::TurnCueView;
-use watch_core::turn_cues::{
-    direction_code, generate_turn_cues, next_turn_ahead, TurnCue, TurnCueOptions, TurnCueWaypoint,
-    MAX_TURN_CUES, MAX_TURN_CUE_WAYPOINTS,
-};
+use watch_core::nav_project::{course_cues, project_fix};
+use watch_core::turn_cues::{TurnCue, MAX_TURN_CUES};
 
 use crate::state;
 
@@ -64,20 +63,6 @@ pub fn course() -> Option<&'static Course> {
     None
 }
 
-/// Precompute the turn cues for a course — the run-view TurnCue page source.
-/// Recomputed whenever the active course changes (boot → pushed, or a re-push).
-fn compute_cues(course: &Course) -> heapless::Vec<TurnCue, MAX_TURN_CUES> {
-    let mut waypoints: heapless::Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> =
-        heapless::Vec::new();
-    for cp in course.points() {
-        let _ = waypoints.push(TurnCueWaypoint {
-            lat: cp.lat_deg,
-            lng: cp.lon_deg,
-        });
-    }
-    generate_turn_cues(&waypoints, TurnCueOptions::default())
-}
-
 #[embassy_executor::task]
 pub async fn run(boot_course: Option<&'static Course>) {
     let sender = state::NAV.sender();
@@ -101,7 +86,7 @@ pub async fn run(boot_course: Option<&'static Course>) {
                 c.points().len(),
                 c.total_m() as u32
             );
-            cues = compute_cues(c);
+            cues = course_cues(c);
             sender.send(NavView::NoFix);
         }
         None => {
@@ -118,35 +103,29 @@ pub async fn run(boot_course: Option<&'static Course>) {
                 };
                 // Forward-progress-biased projection keeps along-distance
                 // monotonic on a retracing course (course::project_from).
-                let projected = match prev_along {
-                    Some(prev) => course.project_from(fix.lat_deg, fix.lon_deg, prev),
-                    None => course.project(fix.lat_deg, fix.lon_deg),
-                };
-                let Some(p) = projected else {
+                let Some(out) = project_fix(
+                    course,
+                    &mut alert,
+                    prev_along,
+                    &cues,
+                    fix.lat_deg,
+                    fix.lon_deg,
+                ) else {
                     continue;
                 };
-                prev_along = Some(p.along_m);
-                let was_active = alert.active();
-                if alert.update(p.off_m) {
+                prev_along = Some(out.status.along_m);
+                if out.went_off_course {
                     warn!(
                         "nav: OFF COURSE ({} m off, {} m along)",
-                        p.off_m as u32, p.along_m as u32
+                        out.status.off_m as u32, out.status.along_m as u32
                     );
-                } else if was_active && !alert.active() {
-                    info!("nav: back on course ({} m along)", p.along_m as u32);
+                } else if out.back_on_course {
+                    info!(
+                        "nav: back on course ({} m along)",
+                        out.status.along_m as u32
+                    );
                 }
-                let next_turn =
-                    next_turn_ahead(&cues, p.along_m).map(|(c, remaining)| TurnCueView {
-                        direction: direction_code(c.direction),
-                        distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
-                        remaining,
-                    });
-                sender.send(NavView::Status(NavStatus {
-                    off_m: p.off_m,
-                    along_m: p.along_m,
-                    alerting: alert.active(),
-                    next_turn,
-                }));
+                sender.send(NavView::Status(out.status));
             }
             // A phone-pushed course arrived (or replaced the current one): swap to
             // it, re-arm the off-course latch, restart along-distance, recompute
@@ -162,7 +141,7 @@ pub async fn run(boot_course: Option<&'static Course>) {
                             c.points().len(),
                             c.total_m() as u32
                         );
-                        cues = compute_cues(c);
+                        cues = course_cues(c);
                         sender.send(NavView::NoFix);
                     }
                     None => {

@@ -1,7 +1,8 @@
 //! Battery task — samples the supply rail through the SAADC's internal VDD
-//! channel, maps millivolts onto a 1S LiPo percent via the host-tested
-//! `watch_core::battery` curve, and publishes to `state::BATTERY` for the
-//! idle faces' gauge + the diagnostics BAT row.
+//! channel, maps the conversion onto a 1S LiPo percent via the host-tested
+//! `watch_core::battery_sense` (over the `watch_core::battery` curve), and
+//! publishes to `state::BATTERY` for the idle faces' gauge + the diagnostics
+//! BAT row.
 //!
 //! Same resilience posture as the hr/baro tasks — L4, best-effort, a battery
 //! bug must never disturb recording — but the park mechanics differ, because
@@ -40,19 +41,12 @@ use defmt::*;
 use embassy_futures::select::{select, Either};
 use embassy_nrf::saadc::Saadc;
 use embassy_time::{Duration, Ticker, Timer};
-use watch_core::battery::{percent_from_mv, plausible_mv};
+use watch_core::battery_sense::{mv_from_raw, plausible_percent};
 
 use crate::state;
 
 const SAMPLE: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
-
-/// SAADC counts → millivolts for the driver's default single-ended config:
-/// 12-bit over a 3.6 V full scale. Negative counts (ground-noise wobble on an
-/// idle input) clamp to zero rather than wrapping.
-fn mv_from_raw(raw: i16) -> u16 {
-    (i32::from(raw.max(0)) * 3600 / 4096) as u16
-}
 
 #[embassy_executor::task]
 pub async fn run(mut saadc: Saadc<'static, 1>) {
@@ -65,35 +59,28 @@ pub async fn run(mut saadc: Saadc<'static, 1>) {
         }
     }
     let mv = mv_from_raw(buf[0]);
-    if !plausible_mv(mv) {
+    let Some(pct) = plausible_percent(mv) else {
         info!(
             "battery: VDD {=u16}mV is not a 1S LiPo (bench/USB rail); task parked",
             mv
         );
         return;
-    }
+    };
     let sender = state::BATTERY.sender();
-    let mut shown = Some(percent_from_mv(mv));
+    let mut shown = Some(pct);
     sender.send(shown);
-    info!(
-        "battery: streaming ({=u16}mV -> {=u8}%)",
-        mv,
-        unwrap!(shown)
-    );
+    info!("battery: streaming ({=u16}mV -> {=u8}%)", mv, pct);
     let mut ticker = Ticker::every(SAMPLE);
     loop {
         ticker.next().await;
         saadc.sample(&mut buf).await;
         let mv = mv_from_raw(buf[0]);
-        let next = if plausible_mv(mv) {
-            Some(percent_from_mv(mv))
-        } else {
-            // A reading that left the LiPo band mid-stream blanks the gauge
-            // instead of rendering a percent off a rail; the next tick
-            // retries.
+        // A reading that left the LiPo band mid-stream blanks the gauge instead
+        // of rendering a percent off a rail; the next tick retries.
+        let next = plausible_percent(mv);
+        if next.is_none() {
             warn!("battery: implausible {=u16}mV; blanking", mv);
-            None
-        };
+        }
         if next != shown {
             match next {
                 Some(pct) => info!("battery: {=u8}%", pct),
