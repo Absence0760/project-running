@@ -177,17 +177,21 @@ fn an_unknown_version_byte_is_rejected() {
 
 #[test]
 fn a_corrupt_magic_is_rejected() {
-    check(512, (a_settings(), 0usize..4, 1u8..=u8::MAX), |(s, at, mask)| {
-        let mut frame = encoded(&s);
-        frame[at] ^= mask;
-        prop_assert_eq!(
-            WatchSettings::decode(&frame),
-            None,
-            "a flipped magic byte {} decoded",
-            at
-        );
-        Ok(())
-    });
+    check(
+        512,
+        (a_settings(), 0usize..4, 1u8..=u8::MAX),
+        |(s, at, mask)| {
+            let mut frame = encoded(&s);
+            frame[at] ^= mask;
+            prop_assert_eq!(
+                WatchSettings::decode(&frame),
+                None,
+                "a flipped magic byte {} decoded",
+                at
+            );
+            Ok(())
+        },
+    );
 }
 
 #[test]
@@ -308,22 +312,18 @@ fn a_single_bit_flip_of_a_presence_byte_is_always_caught() {
     // Flipping one presence bit changes the length the flags claim, so the
     // exact-length check rejects the frame. This is the whole integrity story
     // the format has — see the ignored property below for where it runs out.
-    check(
-        1024,
-        (a_settings(), 5usize..=6, 0u32..8),
-        |(s, at, bit)| {
-            let mut frame = encoded(&s);
-            frame[at] ^= 1 << bit;
-            prop_assert_eq!(
-                WatchSettings::decode(&frame),
-                None,
-                "bit {} of byte {} survived",
-                bit,
-                at
-            );
-            Ok(())
-        },
-    );
+    check(1024, (a_settings(), 5usize..=6, 0u32..8), |(s, at, bit)| {
+        let mut frame = encoded(&s);
+        frame[at] ^= 1 << bit;
+        prop_assert_eq!(
+            WatchSettings::decode(&frame),
+            None,
+            "bit {} of byte {} survived",
+            bit,
+            at
+        );
+        Ok(())
+    });
 }
 
 #[test]
@@ -358,10 +358,7 @@ fn a_single_byte_corruption_never_yields_a_frame_claiming_different_fields() {
             prop_assert_eq!(got.sea_level_pa.is_some(), s.sea_level_pa.is_some());
             prop_assert_eq!(got.fuel.is_some(), s.fuel.is_some());
             prop_assert_eq!(got.pages.is_some(), s.pages.is_some());
-            prop_assert_eq!(
-                got.hide_empty_pages.is_some(),
-                s.hide_empty_pages.is_some()
-            );
+            prop_assert_eq!(got.hide_empty_pages.is_some(), s.hide_empty_pages.is_some());
             prop_assert_eq!(got.tz_offset_min.is_some(), s.tz_offset_min.is_some());
             Ok(())
         },

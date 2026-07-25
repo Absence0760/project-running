@@ -6,9 +6,7 @@
 #![allow(dead_code)]
 
 use proptest::strategy::Strategy;
-use proptest::test_runner::{
-    Config, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner,
-};
+use proptest::test_runner::{Config, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner};
 
 /// Run `test` over `cases` generated inputs.
 ///

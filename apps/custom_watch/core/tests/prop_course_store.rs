@@ -92,11 +92,15 @@ fn a_polyline_round_trips_through_the_frame() {
 
 #[test]
 fn an_over_cap_or_too_short_polyline_is_refused() {
-    check(64, prop::collection::vec((0i32..1000, 0i32..1000), 0..=1), |short| {
-        let mut buf = [0u8; MAX_COURSE_FRAME_LEN];
-        prop_assert_eq!(encode(&to_points(&short), &mut buf), None);
-        Ok(())
-    });
+    check(
+        64,
+        prop::collection::vec((0i32..1000, 0i32..1000), 0..=1),
+        |short| {
+            let mut buf = [0u8; MAX_COURSE_FRAME_LEN];
+            prop_assert_eq!(encode(&to_points(&short), &mut buf), None);
+            Ok(())
+        },
+    );
     check(
         16,
         prop::collection::vec(
@@ -129,12 +133,16 @@ fn every_proper_prefix_of_a_frame_is_rejected() {
 
 #[test]
 fn a_frame_with_trailing_bytes_is_rejected() {
-    check(256, (a_polyline(64), prop::collection::vec(any::<u8>(), 1..=8)), |(e7, tail)| {
-        let mut frame = encoded(&e7);
-        frame.extend_from_slice(&tail);
-        prop_assert!(decode(&frame).is_none(), "trailing bytes must not decode");
-        Ok(())
-    });
+    check(
+        256,
+        (a_polyline(64), prop::collection::vec(any::<u8>(), 1..=8)),
+        |(e7, tail)| {
+            let mut frame = encoded(&e7);
+            frame.extend_from_slice(&tail);
+            prop_assert!(decode(&frame).is_none(), "trailing bytes must not decode");
+            Ok(())
+        },
+    );
 }
 
 #[test]
@@ -181,7 +189,7 @@ fn a_chunked_push_reassembles_the_frame_it_was_split_from() {
             prop_assert_eq!(asm.frame(), frame.as_slice());
             let course = decode(asm.frame()).expect("a reassembled frame decodes");
             let want = to_points(&e7);
-        prop_assert_eq!(course.points(), want.as_slice());
+            prop_assert_eq!(course.points(), want.as_slice());
             Ok(())
         },
     );
@@ -193,7 +201,11 @@ fn an_arbitrary_chunk_stream_never_completes_an_undecodable_frame() {
         256,
         prop::collection::vec(
             (
-                prop_oneof![Just(0usize), 0usize..=MAX_COURSE_FRAME_LEN, any::<u16>().prop_map(|v| v as usize)],
+                prop_oneof![
+                    Just(0usize),
+                    0usize..=MAX_COURSE_FRAME_LEN,
+                    any::<u16>().prop_map(|v| v as usize)
+                ],
                 prop::collection::vec(any::<u8>(), 0..=COURSE_CHUNK_CAP),
             ),
             0..=12,

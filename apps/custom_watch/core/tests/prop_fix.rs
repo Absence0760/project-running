@@ -103,13 +103,16 @@ fn a_fix_never_outlives_the_sentence_it_came_from() {
                     "a fix must be stamped with the uptime it was assembled at"
                 );
                 let rmc = armed_rmc.expect("a fix requires a currently-valid RMC");
+                // Compared by bit pattern, not by value: a generated NaN
+                // coordinate is not equal to itself, and "the fix carried the
+                // armed RMC's exact bytes through" is the claim.
                 prop_assert_eq!(
-                    Some(fix.lat_deg).map(f64::to_bits),
+                    Some(f64::to_bits(fix.lat_deg)),
                     rmc.lat_deg.map(f64::to_bits),
                     "the fix position is not the armed RMC's"
                 );
                 prop_assert_eq!(
-                    Some(fix.lon_deg).map(f64::to_bits),
+                    Some(f64::to_bits(fix.lon_deg)),
                     rmc.lon_deg.map(f64::to_bits)
                 );
                 prop_assert_eq!(fix.time_of_day, rmc.time);

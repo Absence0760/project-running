@@ -83,18 +83,16 @@ fn a_course_write_either_parses_whole_or_is_dropped() {
     check(
         1024,
         prop::collection::vec(any::<u8>(), 0..=64),
-        |bytes| {
-            match parse_course_chunk(&bytes) {
-                None => {
-                    prop_assert!(bytes.len() < 2, "a {}-byte write was dropped", bytes.len());
-                    Ok(())
-                }
-                Some((offset, payload)) => {
-                    prop_assert!(bytes.len() >= 2);
-                    prop_assert_eq!(payload, &bytes[2..]);
-                    prop_assert_eq!(offset, u16::from_le_bytes([bytes[0], bytes[1]]) as usize);
-                    Ok(())
-                }
+        |bytes| match parse_course_chunk(&bytes) {
+            None => {
+                prop_assert!(bytes.len() < 2, "a {}-byte write was dropped", bytes.len());
+                Ok(())
+            }
+            Some((offset, payload)) => {
+                prop_assert!(bytes.len() >= 2);
+                prop_assert_eq!(payload, &bytes[2..]);
+                prop_assert_eq!(offset, u16::from_le_bytes([bytes[0], bytes[1]]) as usize);
+                Ok(())
             }
         },
     );

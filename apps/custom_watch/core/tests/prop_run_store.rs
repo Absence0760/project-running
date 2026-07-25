@@ -88,7 +88,9 @@ fn a_blob(max_records: usize) -> impl Strategy<Value = (Vec<Record>, Vec<u8>)> {
                         }
                     }
                 }
-                let blob = w.finalize(distance_m, moving_s, elapsed_s).expect("finalize");
+                let blob = w
+                    .finalize(distance_m, moving_s, elapsed_s)
+                    .expect("finalize");
                 (records, blob.to_vec())
             },
         )
@@ -234,19 +236,15 @@ fn a_written_blob_verifies_and_replays_its_records_in_order() {
 
 #[test]
 fn every_proper_prefix_of_a_blob_is_rejected() {
-    check(
-        256,
-        (a_blob(32), any::<Index>()),
-        |((_, blob), idx)| {
-            let cut = idx.index(blob.len());
-            prop_assert!(
-                !verify_blob(&blob[..cut]),
-                "a {cut}-byte prefix of a {}-byte blob must not verify",
-                blob.len()
-            );
-            Ok(())
-        },
-    );
+    check(256, (a_blob(32), any::<Index>()), |((_, blob), idx)| {
+        let cut = idx.index(blob.len());
+        prop_assert!(
+            !verify_blob(&blob[..cut]),
+            "a {cut}-byte prefix of a {}-byte blob must not verify",
+            blob.len()
+        );
+        Ok(())
+    });
 }
 
 #[test]
@@ -289,7 +287,10 @@ fn a_single_byte_corruption_never_yields_a_different_run() {
 fn a_manifest_entrys_size_is_always_a_decodable_blob_length() {
     check(
         512,
-        prop::collection::vec(any::<u8>(), MANIFEST_HEADER_LEN..=(MANIFEST_HEADER_LEN + 4 * MANIFEST_ENTRY_LEN)),
+        prop::collection::vec(
+            any::<u8>(),
+            MANIFEST_HEADER_LEN..=(MANIFEST_HEADER_LEN + 4 * MANIFEST_ENTRY_LEN),
+        ),
         |bytes| {
             let Some(header) = ManifestHeader::decode(&bytes) else {
                 return Ok(());

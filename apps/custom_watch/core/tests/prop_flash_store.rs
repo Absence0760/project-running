@@ -130,7 +130,12 @@ fn the_bond_record_round_trips_and_rejects_every_truncation() {
         let rec = bond.encode();
         prop_assert_eq!(BondRecord::decode(&rec), Some(bond));
         let cut = idx.index(BOND_RECORD_LEN);
-        prop_assert_eq!(BondRecord::decode(&rec[..cut]), None, "prefix of {} bytes", cut);
+        prop_assert_eq!(
+            BondRecord::decode(&rec[..cut]),
+            None,
+            "prefix of {} bytes",
+            cut
+        );
         Ok(())
     });
 }
