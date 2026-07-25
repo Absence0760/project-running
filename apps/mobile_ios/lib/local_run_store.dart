@@ -337,7 +337,7 @@ class LocalRunStore extends ChangeNotifier {
     await writeStringAtomic(file, encoded);
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
-    _upsertSummary(stamped, synced: false, atFront: true);
+    _upsertSummary(stamped, synced: false);
     await _persistIndex();
     notifyListeners();
   }
@@ -428,7 +428,6 @@ class LocalRunStore extends ChangeNotifier {
     _syncedIds.add(merged.id);
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     _upsertSummary(merged, synced: true);
-    _sortSummaries();
     await _persistIndex();
     notifyListeners();
   }
@@ -494,7 +493,6 @@ class LocalRunStore extends ChangeNotifier {
       _upsertSummary(merged, synced: true);
     }
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
-    _sortSummaries();
     await _persistIndex();
     notifyListeners();
   }
@@ -753,16 +751,30 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   /// Insert or replace [run]'s summary, keeping `_summaries` in lockstep with
-  /// the per-run files. [atFront] mirrors `_runs.insert(0, …)` for a freshly
-  /// recorded run; otherwise the caller re-sorts via [_sortSummaries].
-  void _upsertSummary(Run run, {required bool synced, bool atFront = false}) {
+  /// the per-run files AND newest-first.
+  ///
+  /// Newest-first is an invariant of `_summaries`, not a caller obligation.
+  /// runs_screen reads `.last` as "the oldest local run" to drive the cloud
+  /// load-more cursor and the show-more gate, and the old contract ("the caller
+  /// re-sorts") was silently unmet by `update()` — so editing the newest run's
+  /// title moved it to the tail and the cursor then re-fetched the newest page
+  /// forever, making older cloud history unreachable. A back-dated `save()`
+  /// (a CSV / Strava import of runs older than the local history) broke the
+  /// same reader by pushing an old run to the front.
+  void _upsertSummary(Run run, {required bool synced}) {
     _summaries.removeWhere((s) => s.id == run.id);
     final summary = RunSummary.fromRun(run, synced: synced);
-    if (atFront) {
-      _summaries.insert(0, summary);
-    } else {
-      _summaries.add(summary);
+    var lo = 0;
+    var hi = _summaries.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (_summaries[mid].startedAt.isAfter(summary.startedAt)) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
     }
+    _summaries.insert(lo, summary);
   }
 
   void _sortSummaries() =>

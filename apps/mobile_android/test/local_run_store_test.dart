@@ -999,6 +999,66 @@ void main() {
       expect(store.summaries.map((s) => s.id), ['newer', 'old']);
     });
 
+    // runs_screen reads `summaries.last` as "the oldest local run" to drive the
+    // cloud load-more cursor (`getRuns(before: cursor)`) and the show-more gate.
+    // Newest-first therefore has to survive EVERY mutation path, not just the
+    // two that happened to call the private re-sort.
+    Run runAt(String id, DateTime startedAt) => Run(
+          id: id,
+          startedAt: startedAt,
+          duration: const Duration(minutes: 20),
+          distanceMetres: 3000,
+          source: RunSource.app,
+        );
+
+    test('update() keeps the index newest-first', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('oldest', DateTime(2025, 1, 1, 8)));
+      await store.saveFromRemote(runAt('middle', DateTime(2026, 1, 1, 8)));
+      await store.saveFromRemote(runAt('newest', DateTime(2026, 7, 20, 8)));
+      expect(store.summaries.map((s) => s.id), ['newest', 'middle', 'oldest']);
+
+      // Editing the newest run's title used to append it to the TAIL, so the
+      // load-more cursor became the newest run's start and every "load more"
+      // re-fetched the page already on disk — older cloud history unreachable.
+      await store.update(runAt('newest', DateTime(2026, 7, 20, 8)));
+      expect(store.summaries.map((s) => s.id), ['newest', 'middle', 'oldest']);
+      expect(store.summaries.last.startedAt, DateTime(2025, 1, 1, 8));
+    });
+
+    test('a back-dated save() lands in order, not at the front', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('recent', DateTime(2026, 7, 1, 8)));
+      // A CSV / Strava import of history older than everything local.
+      await store.save(runAt('imported-2024', DateTime(2024, 3, 3, 8)));
+      expect(store.summaries.map((s) => s.id), ['recent', 'imported-2024']);
+      expect(store.summaries.last.id, 'imported-2024',
+          reason: 'the cursor must reach past the imported range');
+    });
+
+    test('a freshly recorded run still lands at the front', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('older', DateTime(2026, 1, 1, 8)));
+      await store.save(runAt('just-now', DateTime(2026, 7, 24, 8)));
+      expect(store.summaries.first.id, 'just-now');
+    });
+
+    test('interleaved saves and updates stay sorted', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(runAt('c', DateTime(2026, 3, 1, 8)));
+      await store.save(runAt('a', DateTime(2026, 5, 1, 8)));
+      await store.save(runAt('e', DateTime(2026, 1, 1, 8)));
+      await store.update(runAt('a', DateTime(2026, 5, 1, 8)));
+      await store.save(runAt('d', DateTime(2026, 2, 1, 8)));
+      await store.update(runAt('e', DateTime(2026, 1, 1, 8)));
+      await store.save(runAt('b', DateTime(2026, 4, 1, 8)));
+      expect(store.summaries.map((s) => s.id), ['a', 'b', 'c', 'd', 'e']);
+    });
+
     test('delete drops the summary from the index', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
