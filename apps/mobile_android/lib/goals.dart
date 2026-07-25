@@ -385,11 +385,15 @@ String _formatSecondsCoarse(double seconds) {
 /// cards. Honours the user's `week_start_day` setting ('monday' | 'sunday'),
 /// defaulting to Monday — mirrors web `periodStart` in training/goals.ts.
 DateTime weekStartLocal(DateTime now, {String weekStartDay = 'monday'}) {
-  final startOfToday = DateTime(now.year, now.month, now.day);
   final daysFromStart = weekStartDay == 'sunday'
       ? now.weekday % 7
       : (now.weekday - DateTime.monday) % 7;
-  return startOfToday.subtract(Duration(days: daysFromStart));
+  // Step days via the year/month/day constructor, not a fixed 24-hour Duration
+  // — a calendar week spanning a DST transition is 167 or 169 hours, so
+  // subtracting `days` skewed the boundary off midnight and runs near it landed
+  // in the wrong week (or in no week at all). Same reasoning as
+  // _previousLocalDay in streaks.dart; matches the web twin's setDate() form.
+  return DateTime(now.year, now.month, now.day - daysFromStart);
 }
 
 /// Start of the period containing [now], inclusive, in local time.
@@ -408,8 +412,9 @@ DateTime goalPeriodEnd(GoalPeriod period, DateTime now,
     {String weekStartDay = 'monday'}) {
   switch (period) {
     case GoalPeriod.week:
-      return goalPeriodStart(period, now, weekStartDay: weekStartDay)
-          .add(const Duration(days: 7));
+      final start = goalPeriodStart(period, now, weekStartDay: weekStartDay);
+      // Calendar arithmetic, not +7×24 h — see weekStartLocal.
+      return DateTime(start.year, start.month, start.day + 7);
     case GoalPeriod.month:
       final nextMonth = now.month == 12 ? 1 : now.month + 1;
       final year = now.month == 12 ? now.year + 1 : now.year;

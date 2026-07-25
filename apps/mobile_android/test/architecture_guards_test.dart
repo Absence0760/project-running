@@ -4822,4 +4822,73 @@ void main() {
       }
     });
   });
+
+  group('local-day arithmetic is DST-safe', () {
+    // A calendar week spanning a DST transition is 167 or 169 hours, so
+    // stepping days with a fixed Duration walks the boundary off local
+    // midnight: a run in the seam is then counted in both adjacent weeks
+    // (spring forward) or in neither (fall back), and disappears from the
+    // weekly goal, the dashboard "This week" card, the runs-screen week filter
+    // and both weekly period-summary pages. The web twin
+    // (apps/web/src/lib/training/goals.ts) uses setDate(), which is calendar
+    // arithmetic — Dart's equivalent is the year/month/day constructor, as
+    // streaks.dart's _previousLocalDay already documents.
+    //
+    // The behavioural proof lives in goals_test.dart's "DST safety" group, but
+    // it can only fail in a DST timezone and CI runs UTC — so these source
+    // guards are what actually catch a regression.
+    const weekBoundaryFns = <String, String>{
+      'lib/goals.dart': r'DateTime weekStartLocal\(DateTime now, '
+          r'\{String weekStartDay = .monday.\}\) \{',
+      'lib/screens/period_summary_screen.dart':
+          r'DateTime periodEnd\(PeriodType period, DateTime anchor,\s*'
+          r'\{String weekStartDay = .monday.\}\) \{',
+    };
+
+    weekBoundaryFns.forEach((path, signature) {
+      test('$path steps week boundaries with the Y/M/D constructor', () {
+        final source = File(path).readAsStringSync();
+        final body = _extractMethodBody(source, signature);
+        expect(
+          body.contains('Duration(days:'),
+          isFalse,
+          reason: 'a fixed 24-hour day skews on a DST transition — use '
+              'DateTime(y, m, d ± n), see streaks.dart _previousLocalDay',
+        );
+      });
+    });
+
+    test('goalPeriodEnd steps a week with the Y/M/D constructor', () {
+      final source = File('lib/goals.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'DateTime goalPeriodEnd\(GoalPeriod period, DateTime now,\s*'
+        r'\{String weekStartDay = .monday.\}\) \{',
+      );
+      expect(
+        body.contains('start.day + 7'),
+        isTrue,
+        reason: 'the exclusive week end must be constructed from the start',
+      );
+      expect(
+        body.contains('Duration(days:'),
+        isFalse,
+        reason: 'a fixed 7×24 h week skews on a DST transition',
+      );
+    });
+
+    test('weekStartLocal itself uses the Y/M/D constructor', () {
+      final source = File('lib/goals.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'DateTime weekStartLocal\(DateTime now, '
+        r'\{String weekStartDay = .monday.\}\) \{',
+      );
+      expect(
+        body.contains('DateTime(now.year, now.month, now.day - daysFromStart)'),
+        isTrue,
+        reason: 'the week start must be constructed, not offset by a Duration',
+      );
+    });
+  });
 }
