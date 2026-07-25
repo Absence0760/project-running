@@ -434,6 +434,64 @@ void main() {
       expect(result.runsImported, 1);
       expect(result.warnings.any((w) => w.contains('broken')), isTrue);
     });
+
+    // The id read used to sit OUTSIDE the per-row guard its sibling casts are
+    // inside, so a hand-edited or third-party archive aborted the whole restore
+    // mid-way: earlier rows were already committed, the caller got a bare
+    // TypeError instead of a RestoreResult, and a re-run died at the same row.
+    test('a run row with no id is skipped, later rows still land', () async {
+      final bytes = buildBackupZip(runs: [
+        runRow(id: 'r-before'),
+        <String, dynamic>{'started_at': '2026-04-10T08:00:00Z', 'distance_m': 5000},
+        runRow(id: 'r-after'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 2);
+      expect(runStore.runs.map((r) => r.id),
+          containsAll(<String>['r-before', 'r-after']));
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('a run row with a null id is skipped, later rows still land', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': null, 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-null'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-null');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('a run row with a non-string id is skipped', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': 42, 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-int'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-int');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('an empty-string run id is skipped rather than written', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': '', 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-empty'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-empty');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
   });
 
   group('offline restore — routes', () {

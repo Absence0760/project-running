@@ -526,7 +526,18 @@ class BackupService {
         onProgress?.call(RestoreProgress.runs(i, runs.length));
         if (entry is! Map) { i++; continue; }
         final r = Map<String, dynamic>.from(entry);
-        final origId = r['id'] as String;
+        // Read the id like its sibling casts INSIDE the per-row guard: a
+        // hand-edited or third-party archive with a missing/null id used to
+        // throw straight out of the loop and out of the whole restore, after
+        // earlier rows had already been committed — the user got a bare error
+        // toast with no RestoreResult and no way to tell how far it got, and a
+        // re-run died at the same row forever.
+        final origId = r['id'];
+        if (origId is! String || origId.isEmpty) {
+          result.warnings.add('run $i: missing id, skipped');
+          i++;
+          continue;
+        }
         final newId = generateNewIds ? _randomUuid() : origId;
 
         // Upload track from archive.
@@ -698,7 +709,12 @@ class BackupService {
           onProgress?.call(RestoreProgress.runs(i, runs.length));
           if (entry is! Map) { i++; continue; }
           final r = Map<String, dynamic>.from(entry);
-          final origId = r['id'] as String;
+          final origId = r['id'];
+          if (origId is! String || origId.isEmpty) {
+            result.warnings.add('run $i: missing id, skipped');
+            i++;
+            continue;
+          }
           final newId = generateNewIds ? _randomUuid() : origId;
 
           final track = _decodeTrack(archive, origId);
@@ -753,7 +769,12 @@ class BackupService {
           onProgress?.call(RestoreProgress.routes(i, routes.length));
           if (entry is! Map) { i++; continue; }
           final r = Map<String, dynamic>.from(entry);
-          final origId = r['id'] as String;
+          final origId = r['id'];
+          if (origId is! String || origId.isEmpty) {
+            result.warnings.add('route $i: missing id, skipped');
+            i++;
+            continue;
+          }
           final newId = generateNewIds ? _randomUuid() : origId;
           try {
             final waypoints = <cm.Waypoint>[];
