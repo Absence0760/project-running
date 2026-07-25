@@ -140,14 +140,20 @@ Verified-but-deferred findings from the 2026-06-15 five-worker bug hunt (the thr
 
 ## Mobile bug hunt deferrals (2026-07-24)
 
-Verified-but-deferred findings from the 2026-07-24 three-worker mobile hunt. The
-nine bugs fixed that round (route-progress floor poisoned by a rejected fix,
-treadmill console reset, pace across a pause, silent turn cues on a second run,
-negative splits, run-index ordering, DST week boundaries, backup-restore abort,
-route-sidecar fail-open) are in git history on the same PR. Each item below was
-confirmed against the source; they are parked because the correct fix needs a
-product call, a schema change, or a coordinated web+mobile change rather than
-because they are low priority.
+Findings from the 2026-07-24 three-worker mobile hunt that were parked for a
+product call, a schema change, or a coordinated web+mobile change. The nine bugs
+fixed that round (route-progress floor poisoned by a rejected fix, treadmill
+console reset, pace across a pause, silent turn cues on a second run, negative
+splits, run-index ordering, DST week boundaries, backup-restore abort,
+route-sidecar fail-open) are in git history on the same PR.
+
+**All twelve were resolved on 2026-07-25**, on the same PR, each with the
+decision it needed recorded in [decisions.md](../architecture/decisions.md)
+§§ 299-305 and a pinning test confirmed to fail against the old behaviour. Two
+carry a judgement the owner may want to revisit rather than a defect: the
+hydration ceiling's specific value (§ 300) and the run-store's
+re-upload-rather-than-presume-synced asymmetry (§ 299). Kept here rather than
+pruned so the reasoning stays next to the finding it answers.
 
 - [x] **`OfflineSyncStore.markSynced` re-reads the live row instead of the pushed snapshot.** RESOLVED 2026-07-25 ([decisions.md § 302](../architecture/decisions.md)). The compare key is **identity**, not `lastModifiedAt`: entries are immutable and every mutation installs a new instance, so `identical` is exact, while a clock comparison would miss two mutations inside one tick. `markSynced` now takes the pushed entry and marks only while it is still resident; the `pendingDelete` branch applies the same test before `dropRow`, so a tombstone raised mid-push is no longer flipped to synced and left with a live server row. `syncWithServer` also gained the drain guard (a second concurrent call returns 0). All eight subclasses inherit both. Three pinning tests, each confirmed failing against the old behaviour.
 - [x] **Two `LocalRunStore` / `LocalRouteStore` instances write the same whole-file sidecars from independent snapshots.** RESOLVED 2026-07-25 ([decisions.md § 303](../architecture/decisions.md)). Both sidecar writes are now read-merge-write inside an exclusive advisory lock (`<sidecar>.lock`); merging closes the whole-file discard, the lock closes the racing-merge interleave. The merge rules differ by failure direction — `synced_ids` keeps an unknown id only while its run file exists (the process-independent form of the ghost prune), while `pending_remote_deletes` lets additions always win and carries removals in an explicit cleared-ledger, since absence can't tell "I cleared this" from "they queued this". Pinned by three two-stores-over-one-directory tests, two of which fail against the old whole-file write.
