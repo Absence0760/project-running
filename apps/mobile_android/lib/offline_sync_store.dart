@@ -448,11 +448,19 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// written as `pendingCreate` so [syncWithServer] pushes it once the user
   /// signs in. Additive + idempotent: an id already present is left untouched
   /// so re-running a restore can't clobber a locally-newer copy.
-  Future<int> restoreFromBackup(List<Map<String, dynamic>> records) async {
+  Future<int> restoreFromBackup(
+    List<Map<String, dynamic>> records, {
+    bool generateNewIds = false,
+  }) async {
     var imported = 0;
     for (final json in records) {
       try {
-        final parsed = entryFromJson(json);
+        final record = generateNewIds ? _reKeyed(json) : json;
+        if (record == null) {
+          debugPrint('$debugLabel: restore refused a record it cannot re-key');
+          continue;
+        }
+        final parsed = entryFromJson(record);
         if (rowsById.containsKey(parsed.id)) continue;
         await _persistRow(asPendingCreate(parsed));
         imported++;
@@ -465,6 +473,26 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       notifyListeners();
     }
     return imported;
+  }
+
+  /// Re-mint a restored record's id, so restoring SOMEONE ELSE's archive
+  /// can't queue a create against a primary key that already exists. Returns
+  /// null when the record's shape carries no id to re-mint — refusing is the
+  /// only safe answer there, because a queued foreign id produces a
+  /// `pendingCreate` whose INSERT can never succeed: `pushCreate` fails on the
+  /// PK (or RLS), the failure is swallowed, `hasPending` never clears, and
+  /// every refresh re-runs the drain forever with no backoff.
+  ///
+  /// Every subclass keeps its id at `row['id']` and serialises the same
+  /// `{row, sync_state, last_modified_at}` envelope, so this is generic; a
+  /// future entry shape that breaks that gets refused rather than corrupted.
+  Map<String, dynamic>? _reKeyed(Map<String, dynamic> json) {
+    final row = json['row'];
+    if (row is! Map || row['id'] is! String) return null;
+    return {
+      ...json,
+      'row': {...Map<String, dynamic>.from(row), 'id': newUuid()},
+    };
   }
 
   /// Return a copy of [entry] forced into `pendingCreate`, preserving its

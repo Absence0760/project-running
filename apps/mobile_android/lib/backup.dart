@@ -624,7 +624,7 @@ class BackupService {
     // server-synced from the restore path yet — the stores drain to Supabase
     // on the next sign-in). No-op when the archive carries neither key or the
     // caller didn't supply the stores.
-    await _restoreGymFood(archive, gymStore, foodStore, result);
+    await _restoreGymFood(archive, gymStore, foodStore, result, generateNewIds);
 
     onProgress?.call(const RestoreProgress.done());
     return result;
@@ -642,6 +642,7 @@ class BackupService {
     LocalGymStore? gymStore,
     LocalFoodStore? foodStore,
     RestoreResult result,
+    bool generateNewIds,
   ) async {
     if (gymStore != null) {
       final gym = _readJson(archive, 'gym_workouts.json') as List?;
@@ -652,6 +653,7 @@ class BackupService {
                 .whereType<Map>()
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList(),
+            generateNewIds: generateNewIds,
           );
         } catch (e) {
           result.warnings.add('gym_workouts: $e');
@@ -667,6 +669,7 @@ class BackupService {
                 .whereType<Map>()
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList(),
+            generateNewIds: generateNewIds,
           );
         } catch (e) {
           result.warnings.add('food_log: $e');
@@ -826,7 +829,7 @@ class BackupService {
       }
     }
 
-    await _restoreGymFood(archive, gymStore, foodStore, result);
+    await _restoreGymFood(archive, gymStore, foodStore, result, generateNewIds);
 
     onProgress?.call(const RestoreProgress.done());
     return result;

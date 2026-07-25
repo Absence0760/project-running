@@ -1364,5 +1364,88 @@ void main() {
       expect(second.gymWorkoutsImported, 0);
       expect(dstGym.workouts, hasLength(1));
     });
+  
+
+    test('generateNewIds re-keys gym + food rows so a foreign archive can land',
+        () async {
+      // The flag exists to restore SOMEONE ELSE's archive. It re-minted run
+      // and route ids but was never plumbed into the gym/food path, so those
+      // rows kept the archive's id and were queued as pendingCreate — an
+      // INSERT that can never succeed against an id the server already has.
+      // pushCreate fails on the PK/RLS, the error is swallowed, hasPending
+      // never clears, and every refresh re-runs the drain.
+      final workout = await srcGym.createLocal(
+        title: 'Foreign push day',
+        startedAt: DateTime.utc(2026, 6, 5, 7),
+      );
+      final entry = await srcFood.createLocal(
+        startedAt: DateTime.utc(2026, 6, 5, 12),
+        itemName: 'Foreign banana',
+        calories: 90,
+      );
+
+      final out = File('${tempDir.path}/gymfood4.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: srcFood.backupRecords,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(
+        zipFile: out,
+        gymStore: dstGym,
+        foodStore: dstFood,
+        generateNewIds: true,
+      );
+
+      expect(res.gymWorkoutsImported, 1);
+      expect(res.foodLogImported, 1);
+      expect(dstGym.byId(workout.id), isNull,
+          reason: "the archive's id must not be reused");
+      expect(dstGym.workouts.single.workout.title, 'Foreign push day');
+      expect(dstFood.rows.where((r) => r['id'] == entry.id), isEmpty);
+      expect(dstFood.rows.single['item_name'], 'Foreign banana');
+    });
+
+    test('generateNewIds lets the same archive restore twice, side by side',
+        () async {
+      // The other half: with fresh ids there is no id collision to skip on,
+      // so a second restore lands as a second row rather than being dropped
+      // by the idempotence check.
+      await srcGym.createLocal(
+        title: 'Twice',
+        startedAt: DateTime.utc(2026, 6, 6, 7),
+      );
+      final out = File('${tempDir.path}/gymfood5.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: const [],
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      await svc.restore(zipFile: out, gymStore: dstGym, generateNewIds: true);
+      await svc.restore(zipFile: out, gymStore: dstGym, generateNewIds: true);
+
+      expect(dstGym.workouts, hasLength(2));
+      expect(dstGym.workouts.map((w) => w.id).toSet(), hasLength(2));
+    });
   });
 }
