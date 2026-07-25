@@ -9,6 +9,13 @@
 //! two-directional: [`settings_rx`] decodes `SET1` settings frames written
 //! into the socket — the sim twin of the BLE settings characteristic — so a
 //! settings push is provable end-to-end with no hardware attached.
+//!
+//! The whole module is therefore compiled out of the `ble` build: `main` only
+//! spawns these tasks under `not(feature = "ble")`, so under `ble` every item
+//! here is unreachable and the dead-code lint fires on the first one it can
+//! see.
+
+#![cfg(not(feature = "ble"))]
 
 use defmt::*;
 use embassy_nrf::uarte::{UarteRx, UarteTx};
