@@ -4058,8 +4058,6 @@ Two deliberate trade-offs. (1) The Android `ACTION_VIEW` filter includes `applic
 
 **Amendment (2026-07-23) — confirm before the public flip.** The owner-facing half of (1) now asks first: on both web (`ConfirmDialog`, `data-testid="share-confirm-dialog"`) and mobile (`AlertDialog`), tapping Share on a *still-private* route opens a confirm ("Make this route public?") before `setRoutePublic`, because that flip exposes the route (and its start point) to anyone with the link and surfaces it in Explore — a privacy-relevant, one-way-for-now step, so it should be a deliberate yes rather than a side effect of tapping Share. An **already-public** route still shares in one tap (nothing changes), and the post-flip `…MadePublicForLink` disclosure banner stays as the "here's what happened" confirmation. Pinned by a web e2e in `detail.spec.ts` (cancel keeps it private + reveals no link; confirm flips public + reveals the link) and a mobile widget test in `route_detail_screen_test.dart`.
 
----
-
 ## 299. The custom-watch verification ladder becomes a four-rung contract, and tier-1 bench verification gets a checklist — neither changes § 82's DoD
 
 **Decided (2026-07-25).** Two related gaps in the custom_watch research effort, closed together in [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md).
