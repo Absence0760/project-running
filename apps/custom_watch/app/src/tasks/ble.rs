@@ -85,13 +85,12 @@ mod imp {
         IdentityResolutionKey, MasterId, SecurityMode,
     };
     use nrf_softdevice::{raw, Softdevice};
+    use watch_core::ble_sync::{self, MANIFEST_CAP};
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
-    use watch_core::run_store::{
-        ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
-    };
+    use watch_core::link;
+    use watch_core::run_store::ChunkRequest;
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
-    use watch_core::{flash_store, link};
 
     use crate::run_flash::SharedStore;
     use crate::state;
@@ -109,10 +108,6 @@ mod imp {
     /// worst-case frame is ~160 bytes; see `link.rs`). Also the run-chunk
     /// notify payload cap — a chunk reply never exceeds one notification.
     const FRAME_CAP: usize = 244;
-
-    /// Manifest characteristic value: a `ManifestHeader` + one `ManifestEntry`
-    /// per slot. `flash_store::SLOT_COUNT` runs fit in one read/notify.
-    const MANIFEST_CAP: usize = MANIFEST_HEADER_LEN + flash_store::SLOT_COUNT * MANIFEST_ENTRY_LEN;
 
     // Every characteristic requires an encrypted (paired) link — issue #598.
     // `justworks` = Security Mode 1 Level 2: the SoftDevice rejects any read,
@@ -392,23 +387,13 @@ mod imp {
         .services_128(ServiceList::Complete, &[LINK_SERVICE_UUID.to_le_bytes()])
         .build();
 
-    /// Build the manifest characteristic value: header (run count + the watch
-    /// uptime anchor) followed by one entry per finished run.
+    /// Build the manifest characteristic value from the store's current run list.
     async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
         // Clamp each run's start to the current uptime so a run recovered from a
         // prior power cycle can't advertise a start ahead of `uptime_s` and date
         // in the future on the phone (run_flash::manifest_at).
         let entries = store.lock().await.manifest_at(uptime_s);
-        let mut buf: Vec<u8, MANIFEST_CAP> = Vec::new();
-        let header = ManifestHeader {
-            run_count: entries.len() as u8,
-            watch_uptime_s: uptime_s,
-        };
-        let _ = buf.extend_from_slice(&header.encode());
-        for e in entries.iter() {
-            let _ = buf.extend_from_slice(&e.encode());
-        }
-        buf
+        ble_sync::encode_manifest(&entries, uptime_s)
     }
 
     /// Advertise → serve → re-advertise on disconnect, forever. While
@@ -523,14 +508,11 @@ mod imp {
                         None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
                     },
                     LinkServiceEvent::CourseWrite(bytes) => {
-                        // Chunk framing: offset(2, u16 LE) | payload. Feed the
-                        // reassembler; on completion decode + publish the course.
-                        if bytes.len() < 2 {
-                            warn!("ble: short course chunk ({=usize} B)", bytes.len());
-                        } else {
-                            let offset = u16::from_le_bytes([bytes[0], bytes[1]]) as usize;
+                        // Feed the reassembler; on completion decode + publish
+                        // the course.
+                        if let Some((offset, payload)) = ble_sync::parse_course_chunk(&bytes) {
                             let mut asm = course_asm.borrow_mut();
-                            match asm.push(offset, &bytes[2..]) {
+                            match asm.push(offset, payload) {
                                 CoursePush::Complete => match course_store::decode(asm.frame()) {
                                     Some(course) => {
                                         info!(
@@ -551,6 +533,8 @@ mod imp {
                                     warn!("ble: bad course chunk @ {=usize}", offset)
                                 }
                             }
+                        } else {
+                            warn!("ble: short course chunk ({=usize} B)", bytes.len());
                         }
                     }
                 },
@@ -600,7 +584,8 @@ mod imp {
                             // Clamp to the notify MTU; read_chunk further clamps
                             // to the blob end. An empty reply means unknown run
                             // or past-the-end, so the phone isn't left waiting.
-                            let want = (req.len as usize).min(FRAME_CAP);
+                            let want =
+                                ble_sync::chunk_notify_len(req.len, FRAME_CAP as u16) as usize;
                             let mut scratch = [0u8; FRAME_CAP];
                             let n = {
                                 let mut guard = store.lock().await;

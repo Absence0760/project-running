@@ -105,6 +105,14 @@
 //! - [`settings`] — phone→watch settings frame (max HR / pacer goal / gear /
 //!   HR-zone ceiling) decoded into the recorder's settings-sync hooks
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
+//! - [`flash_plan`] — which slot a commit / checkpoint lands in and the erase +
+//!   write range it implies, where a chunk request reads from, and the boot
+//!   recovery scan over a [`flash_plan::SlotReader`] (the pure decisions the
+//!   `app/src/run_flash.rs` driver wraps around [`flash_store`])
+//! - [`ble_sync`] — `run_manifest` value framing, the `run_chunk` notify bound,
+//!   and the `course` write's offset header (the pure half of the GATT
+//!   characteristics `app/src/tasks/ble.rs` serves, which the Renode sim cannot
+//!   exercise at all)
 //! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
 //!   estimate (port of web `training/training_load.ts`)
 //! - [`age_grade`] — age-graded performance % for a standard-distance effort
@@ -220,6 +228,7 @@ pub mod bar_chart;
 pub mod baro_rezero;
 pub mod battery;
 pub mod battery_sense;
+pub mod ble_sync;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
@@ -234,6 +243,7 @@ pub mod face;
 pub mod finisher_certificate;
 pub mod fitness;
 pub mod fix;
+pub mod flash_plan;
 pub mod flash_store;
 pub mod fuel_plan;
 pub mod gauge;

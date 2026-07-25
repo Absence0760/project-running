@@ -5,6 +5,11 @@
 //! [`watch_core::flash_store`]) over the build's flash backend, and serves it
 //! back to the BLE run-sync characteristics as a manifest + byte-range chunks.
 //!
+//! Every decision here — which slot a commit or checkpoint takes, the erase +
+//! write range, where a chunk request reads from, and the boot recovery scan —
+//! is [`watch_core::flash_plan`]'s, host-tested there. What is left in this file
+//! is the flash I/O and the L4 logging around it.
+//!
 //! **Best-effort / L4.** Flash is the highest recording layer: a flash error
 //! only `warn!`-logs and is dropped — it never panics and never disturbs the
 //! L0/L1 recording math in `watch_core::record`. The default build probes the
@@ -49,7 +54,8 @@ use embedded_storage::nor_flash::ReadNorFlash;
 #[cfg(feature = "ble")]
 use embedded_storage_async::nor_flash::NorFlash;
 use heapless::Vec;
-use watch_core::flash_store::{self, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
+use watch_core::flash_plan::{self, SlotReader};
+use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::run_store::ManifestEntry;
 
@@ -110,7 +116,7 @@ impl RunStore {
         // power cycle are advertised again — their blobs survive, only the
         // in-RAM index is lost on reset. No NVMC (sim) → empty directory.
         let dir = if available {
-            recover_dir(&mut flash)
+            flash_plan::recover_dir(&mut SlotFlash(&mut flash))
         } else {
             SlotDir::new()
         };
@@ -286,37 +292,38 @@ impl RunStore {
         if !self.available {
             return;
         }
-        if blob.len() > SLOT_LEN {
+        // The plan reuses the slot a mid-run checkpoint already reserved for this
+        // run (if any) so the final commit supersedes the checkpoint in place;
+        // otherwise it picks a fresh slot exactly like a checkpoint-free run.
+        let Some(plan) = flash_plan::plan_slot_write(
+            &mut self.dir,
+            REGION_OFFSET,
+            run_seq,
+            start_uptime_s,
+            blob.len(),
+        ) else {
             warn!(
                 "run_flash: blob {=usize} B exceeds slot {=usize} B, dropped",
                 blob.len(),
                 SLOT_LEN
             );
             return;
-        }
-        // Reuse the slot a mid-run checkpoint already reserved for this run (if
-        // any) so the final commit supersedes the checkpoint in place; otherwise
-        // this picks a fresh slot exactly like a checkpoint-free run.
-        let slot = self
-            .dir
-            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
-        let start = flash_store::slot_offset(REGION_OFFSET, slot);
-        let end = start + SLOT_LEN as u32;
-        if let Err(e) = self.flash_erase(start, end).await {
-            warn!("run_flash: erase slot {=usize} failed {:?}", slot, e);
-            self.dir.forget(slot);
+        };
+        if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
+            warn!("run_flash: erase slot {=usize} failed {:?}", plan.slot, e);
+            self.dir.forget(plan.slot);
             return;
         }
-        if let Err(e) = self.flash_write(start, blob).await {
+        if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!("run_flash: write run {=u32} failed {:?}", run_seq, e);
-            self.dir.forget(slot);
+            self.dir.forget(plan.slot);
             return;
         }
         info!(
             "run_flash: stored run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,
             blob.len(),
-            slot
+            plan.slot
         );
     }
 
@@ -333,40 +340,41 @@ impl RunStore {
         if !self.available {
             return;
         }
-        if blob.len() > SLOT_LEN {
+        let Some(plan) = flash_plan::plan_slot_write(
+            &mut self.dir,
+            REGION_OFFSET,
+            run_seq,
+            start_uptime_s,
+            blob.len(),
+        ) else {
             warn!(
                 "run_flash: checkpoint blob {=usize} B exceeds slot {=usize} B, dropped",
                 blob.len(),
                 SLOT_LEN
             );
             return;
-        }
-        let slot = self
-            .dir
-            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
-        let start = flash_store::slot_offset(REGION_OFFSET, slot);
-        let end = start + SLOT_LEN as u32;
-        if let Err(e) = self.flash_erase(start, end).await {
+        };
+        if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!(
                 "run_flash: checkpoint erase slot {=usize} failed {:?}",
-                slot, e
+                plan.slot, e
             );
-            self.dir.forget(slot);
+            self.dir.forget(plan.slot);
             return;
         }
-        if let Err(e) = self.flash_write(start, blob).await {
+        if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!(
                 "run_flash: checkpoint write run {=u32} failed {:?}",
                 run_seq, e
             );
-            self.dir.forget(slot);
+            self.dir.forget(plan.slot);
             return;
         }
         debug!(
             "run_flash: checkpointed run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,
             blob.len(),
-            slot
+            plan.slot
         );
     }
 
@@ -387,10 +395,8 @@ impl RunStore {
     /// run-sync task; unused in the default build.
     #[cfg_attr(not(feature = "ble"), allow(dead_code))]
     pub fn mark_synced_if_complete(&mut self, run_seq: u32, next_offset: u32) {
-        if let Some((_, size)) = self.dir.find(run_seq) {
-            if next_offset >= size {
-                self.dir.mark_synced(run_seq);
-            }
+        if flash_plan::chunk_completes_run(&self.dir, run_seq, next_offset) {
+            self.dir.mark_synced(run_seq);
         }
     }
 
@@ -403,44 +409,39 @@ impl RunStore {
         if !self.available {
             return 0;
         }
-        let Some((slot, size)) = self.dir.find(run_seq) else {
+        let cap = buf.len().min(u16::MAX as usize) as u16;
+        let Some(plan) =
+            flash_plan::plan_chunk_read(&self.dir, REGION_OFFSET, run_seq, rel_offset, cap)
+        else {
             return 0;
         };
-        let remaining = size.saturating_sub(rel_offset);
-        if remaining == 0 {
-            return 0;
-        }
-        let n = (buf.len() as u32).min(remaining) as usize;
-        let abs = flash_store::slot_offset(REGION_OFFSET, slot) + rel_offset;
-        if let Err(e) = self.flash.read(abs, &mut buf[..n]) {
+        if let Err(e) = self.flash.read(plan.at, &mut buf[..plan.len]) {
             warn!(
                 "run_flash: read run {=u32} @ {=u32} failed {:?}",
                 run_seq, rel_offset, e
             );
             return 0;
         }
-        n
+        plan.len
     }
 }
 
-/// Read each slot's raw bytes from flash once at boot and rebuild the directory
-/// from whatever finished runs are found there. Best-effort / L4: a read error
-/// on a slot just leaves it empty (that run stays unadvertised until overwritten)
-/// and never blocks boot. The one-slot scratch buffer is transient — this runs
-/// before the record task stages its own slot-sized blob, so the two never
-/// coexist on the stack.
-fn recover_dir(flash: &mut FlashBackend) -> SlotDir {
-    let mut recovered: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
-    let mut buf = [0u8; SLOT_LEN];
-    for (slot, entry) in recovered.iter_mut().enumerate() {
+/// Feeds each slot's raw flash bytes to [`flash_plan::recover_dir`]'s boot scan.
+/// Best-effort / L4: a read error on a slot only warns and recovers nothing from
+/// it (that run stays unadvertised until overwritten), never blocking boot. The
+/// scan's one-slot scratch buffer is transient — it runs before the record task
+/// stages its own slot-sized blob, so the two never coexist on the stack.
+struct SlotFlash<'a>(&'a mut FlashBackend);
+
+impl SlotReader for SlotFlash<'_> {
+    fn read_slot(&mut self, slot: usize, into: &mut [u8; SLOT_LEN]) -> bool {
         let abs = flash_store::slot_offset(REGION_OFFSET, slot);
-        if let Err(e) = flash.read(abs, &mut buf) {
+        if let Err(e) = self.0.read(abs, into) {
             warn!("run_flash: recover read slot {=usize} failed {:?}", slot, e);
-            continue;
+            return false;
         }
-        *entry = flash_store::recover_slot(&buf);
+        true
     }
-    SlotDir::from_recovered(recovered)
 }
 
 #[cfg(not(feature = "ble"))]
