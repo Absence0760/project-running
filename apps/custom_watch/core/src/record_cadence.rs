@@ -72,16 +72,19 @@ impl CheckpointMark {
 }
 
 /// Altitude in metres → wire-format decimetres, dropping values outside the
-/// `i16` decimetre range (about ±3276 m — a frozen
+/// `i16` decimetre range (-3276.8 m..=3276.7 m — a frozen
 /// [`crate::run_store::TrackPoint`] limit; tier-2 widens it) so an out-of-range
 /// reading stores `None`, never a wrong value.
+///
+/// The range is inclusive at BOTH ends: every `i16` decimetre value is
+/// representable, so there is no reason for the bottom of the field to store
+/// nothing while the top stores fine. A NaN or infinite metre value compares
+/// false against both ends and so is dropped, never saturated.
 pub fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
     let dm = alt_m * 10.0;
-    if dm.is_finite() && dm > i16::MIN as f32 && dm <= i16::MAX as f32 {
-        Some(dm as i16)
-    } else {
-        None
-    }
+    (i16::MIN as f32..=i16::MAX as f32)
+        .contains(&dm)
+        .then_some(dm as i16)
 }
 
 /// A held HR estimate ([`crate::hr_duty::shown_bpm`]) → a track point's `bpm`,
@@ -242,9 +245,20 @@ mod tests {
     }
 
     #[test]
-    fn altitude_range_edges_are_inclusive_at_the_top() {
+    fn altitude_range_edges_are_inclusive_at_both_ends() {
+        // Both extremes are representable decimetre values, so both store. The
+        // bounds used to be asymmetric (`>` at the bottom, `<=` at the top), which
+        // silently dropped exactly -3276.8 m while +3276.7 m stored fine.
         assert_eq!(ele_dm_from_m(i16::MAX as f32 / 10.0), Some(i16::MAX));
-        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), None);
+        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), Some(i16::MIN));
+    }
+
+    #[test]
+    fn one_decimetre_past_either_edge_stores_nothing_rather_than_saturating() {
+        // `as i16` would clamp to the same edge value, which reads back as a real
+        // altitude the runner never reached.
+        assert_eq!(ele_dm_from_m((i16::MAX as f32 + 1.0) / 10.0), None);
+        assert_eq!(ele_dm_from_m((i16::MIN as f32 - 1.0) / 10.0), None);
     }
 
     #[test]
