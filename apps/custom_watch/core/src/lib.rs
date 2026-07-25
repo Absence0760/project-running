@@ -16,6 +16,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`nav_project`] — the `nav` task's per-fix composition over [`course`] +
+//!   [`turn_cues`]: biased projection, the off-course latch's two edges, and
+//!   the next turn ahead
 //! - [`cutoff_eta`] — live next-cutoff ETA: on / tight / behind at the nearest
 //!   cutoff ahead from distance-along-route + recent pace, honest `Unknown` on
 //!   a stale fix (port of web `runs/live_cutoff_eta.ts`)
@@ -240,6 +243,7 @@ pub mod hydration;
 pub mod link;
 pub mod live_freshness;
 pub mod locale_defaults;
+pub mod nav_project;
 pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
