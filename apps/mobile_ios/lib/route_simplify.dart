@@ -139,24 +139,50 @@ double computeElevationLoss(List<Waypoint> track) {
 }
 
 double computeElevationGain(List<Waypoint> track) {
-  double gain = 0;
-  double? ref;
-  for (final p in track) {
-    final ele = p.elevationMetres;
-    if (ele == null) continue;
+  final acc = ElevationGainAccumulator();
+  acc.addAll(track);
+  return acc.gainMetres;
+}
+
+/// Streaming form of [computeElevationGain] — the same gate and dropout-carry,
+/// fed one waypoint at a time. The live recording screen sees the track grow
+/// every GPS tick and cannot re-scan the whole thing per tick on a multi-hour
+/// run, so it holds an accumulator and appends the tail. [computeElevationGain]
+/// is this class run to completion, which is what keeps the live counter and
+/// the finished-run figure from ever disagreeing.
+class ElevationGainAccumulator {
+  double _gain = 0;
+  double? _ref;
+
+  double get gainMetres => _gain;
+
+  void reset() {
+    _gain = 0;
+    _ref = null;
+  }
+
+  void add(Waypoint point) {
+    final ele = point.elevationMetres;
+    if (ele == null) return;
+    final ref = _ref;
     if (ref == null) {
-      ref = ele;
-      continue;
+      _ref = ele;
+      return;
     }
     final delta = ele - ref;
     if (delta >= kElevationGainMinDeltaM) {
-      gain += delta;
-      ref = ele;
+      _gain += delta;
+      _ref = ele;
     } else if (delta <= -kElevationGainMinDeltaM) {
       // A real descent — move the reference down so the next climb is measured
       // from the valley, not from the previous summit.
-      ref = ele;
+      _ref = ele;
     }
   }
-  return gain;
+
+  void addAll(Iterable<Waypoint> points) {
+    for (final p in points) {
+      add(p);
+    }
+  }
 }

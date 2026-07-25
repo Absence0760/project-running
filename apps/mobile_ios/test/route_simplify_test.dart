@@ -188,4 +188,65 @@ void main() {
       expect(computeElevationGain(track), 50);
     });
   });
+
+  group('ElevationGainAccumulator', () {
+    test('a flat track with sub-3 m jitter accumulates nothing', () {
+      // The live run screen used to sum every positive delta, turning a 1 Hz
+      // sawtooth on a flat road into hundreds of metres of phantom vert while
+      // the finished-run screen showed ~0 for the same track.
+      final acc = ElevationGainAccumulator();
+      for (var i = 0; i < 2000; i++) {
+        acc.add(wp(0, i * 0.00001, ele: 100 + (i % 3).toDouble()));
+      }
+      expect(acc.gainMetres, 0);
+    });
+
+    test('fed one point at a time it matches computeElevationGain exactly', () {
+      final track = [
+        wp(0, 0, ele: 100),
+        wp(0, 0.0001, ele: 101),
+        wp(0, 0.0002, ele: 104),
+        wp(0, 0.0003), // dropout carries the reference
+        wp(0, 0.0004, ele: 106),
+        wp(0, 0.0005, ele: 90),
+        wp(0, 0.0006, ele: 140),
+        wp(0, 0.0007, ele: 141),
+      ];
+      final acc = ElevationGainAccumulator();
+      for (final p in track) {
+        acc.add(p);
+      }
+      expect(acc.gainMetres, computeElevationGain(track));
+      expect(acc.gainMetres, 54);
+    });
+
+    test('appending a tail matches replaying the whole track', () {
+      // How the run screen uses it: only the waypoints appended since the last
+      // GPS tick are fed in, so the tail-only result must equal the full one.
+      final track = [
+        for (var i = 0; i <= 60; i++)
+          wp(0, i * 0.0001, ele: 100 + (i <= 30 ? i * 4 : (60 - i) * 4).toDouble()),
+      ];
+      final incremental = ElevationGainAccumulator();
+      var processed = 0;
+      while (processed < track.length) {
+        final next = (processed + 7).clamp(0, track.length);
+        for (var i = processed; i < next; i++) {
+          incremental.add(track[i]);
+        }
+        processed = next;
+      }
+      expect(incremental.gainMetres, computeElevationGain(track));
+    });
+
+    test('reset clears both the total and the carried reference', () {
+      final acc = ElevationGainAccumulator();
+      acc.addAll([wp(0, 0, ele: 100), wp(0, 0.0001, ele: 150)]);
+      expect(acc.gainMetres, 50);
+      acc.reset();
+      // A fresh 200 m start must not be read as a 100 m climb from the old ref.
+      acc.addAll([wp(0, 0, ele: 200), wp(0, 0.0001, ele: 201)]);
+      expect(acc.gainMetres, 0);
+    });
+  });
 }

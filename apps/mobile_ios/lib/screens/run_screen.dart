@@ -44,6 +44,7 @@ import '../roadbook.dart';
 import '../route_geometry.dart';
 import '../route_markers.dart' show parseTarget;
 import '../route_match.dart';
+import '../route_simplify.dart';
 import '../safety_nudge.dart';
 import '../settings_sync.dart';
 import '../turn_cue_announcer.dart';
@@ -434,10 +435,10 @@ class _RunScreenState extends State<RunScreen> {
   // Running elevation gain, updated incrementally as new waypoints arrive
   // in _onSnapshot. The naive O(n) rescan of the full track on every
   // build was the hottest per-frame work in the run screen — a 60-minute
-  // run rescans 3600+ points every tween tick (~60 Hz). This field is
-  // the only authoritative source; reset on discard alongside the other
-  // live-stats fields.
-  double _elevationGainMetres = 0;
+  // run rescans 3600+ points every tween tick (~60 Hz). This is the same
+  // noise gate + dropout carry computeElevationGain applies to the
+  // finished track, so the live figure and the run-detail figure agree.
+  final ElevationGainAccumulator _elevationGain = ElevationGainAccumulator();
   int _elevationProcessedCount = 0;
 
   // Reentrancy guard on start — prevents rapid taps from spawning
@@ -2086,19 +2087,11 @@ class _RunScreenState extends State<RunScreen> {
         // Defensive reset — shouldn't happen unless the recorder was
         // swapped out from under us (discard → new run inside the same
         // lifecycle, which does go through _discard anyway).
-        _elevationGainMetres = 0;
+        _elevationGain.reset();
         _elevationProcessedCount = 0;
       }
-      for (int i = _elevationProcessedCount == 0
-              ? 1
-              : _elevationProcessedCount;
-          i < track.length;
-          i++) {
-        final prev = track[i - 1].elevationMetres;
-        final curr = track[i].elevationMetres;
-        if (prev != null && curr != null && curr > prev) {
-          _elevationGainMetres += curr - prev;
-        }
+      for (int i = _elevationProcessedCount; i < track.length; i++) {
+        _elevationGain.add(track[i]);
       }
       _elevationProcessedCount = track.length;
 
@@ -2339,8 +2332,9 @@ class _RunScreenState extends State<RunScreen> {
       // movement so it doesn't cancel the start cue (a new speak() call
       // interrupts the previous utterance).
       try {
-        if (_phasePlan.isNotEmpty && _distanceMetres > 50) {
-          final idx = phaseAt(_phasePlan, _distanceMetres);
+        final phaseDistance = _displayDistanceMetres;
+        if (_phasePlan.isNotEmpty && phaseDistance > 50) {
+          final idx = phaseAt(_phasePlan, phaseDistance);
           if (idx >= 0 && idx != _phaseIndex) {
             _phaseIndex = idx;
             if (widget.preferences.audioCues &&
@@ -2476,8 +2470,9 @@ class _RunScreenState extends State<RunScreen> {
         final tickInterval = customInterval > 0
             ? customInterval.toDouble()
             : _activityType.splitIntervalMetresFor(unit);
+        final tickDistance = _displayDistanceMetres;
         final currentTick =
-            UnitFormat.activityTicks(_distanceMetres, tickInterval);
+            UnitFormat.activityTicks(tickDistance, tickInterval);
         if (currentTick > _lastTickNotified && currentTick > 0) {
           _lastTickNotified = currentTick;
           final totalDistanceMetres = (currentTick * tickInterval).toDouble();
@@ -2499,7 +2494,7 @@ class _RunScreenState extends State<RunScreen> {
           if (widget.preferences.audioCues &&
               widget.preferences.voiceCueEnabled(VoiceCue.splits)) {
             final avgPace =
-                averagePaceSecPerKm(_distanceMetres, _elapsed.inSeconds);
+                averagePaceSecPerKm(tickDistance, _elapsed.inSeconds);
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
                   distanceTicks: currentTick,
                   paceSecondsPerKm: _pace,
@@ -3120,7 +3115,7 @@ class _RunScreenState extends State<RunScreen> {
     _lastCutoffCueStatus = null;
     _permissionLost = false;
     _everHadGpsFix = false;
-    _elevationGainMetres = 0;
+    _elevationGain.reset();
     _elevationProcessedCount = 0;
     _statsNotifier.value = _LiveStats.empty;
     // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
@@ -3486,16 +3481,16 @@ class _RunScreenState extends State<RunScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  /// Distance the UI should display. GPS track distance when a fix has
-  /// arrived; pedometer-estimated distance (`steps × stride`) for indoor
-  /// runs where GPS never produced a fix. Cycling has no pedometer so the
-  /// estimate is zero — there's no meaningful fallback for that activity.
-  double get _displayDistanceMetres {
-    if (_everHadGpsFix || _distanceMetres > 0) return _distanceMetres;
-    final stride = _activityType.strideMetres;
-    if (stride <= 0 || _steps <= 0) return 0;
-    return _steps * stride;
-  }
+  /// Distance the screen displays AND every distance-derived behaviour acts
+  /// on — split ticks, split average pace, race-phase transitions. Cycling has
+  /// no pedometer so its estimate is zero; there's no meaningful fallback for
+  /// that activity.
+  double get _displayDistanceMetres => liveDistanceMetres(
+        everHadGpsFix: _everHadGpsFix,
+        gpsDistanceMetres: _distanceMetres,
+        steps: _steps,
+        strideMetres: _activityType.strideMetres,
+      );
 
   /// True when [_displayDistanceMetres] is pedometer-estimated rather than
   /// GPS-measured. Drives the tilde prefix and the "estimated" chip so the
@@ -3549,7 +3544,7 @@ class _RunScreenState extends State<RunScreen> {
     return '$cals';
   }
 
-  String get _formattedElevation => '${_elevationGainMetres.round()}';
+  String get _formattedElevation => '${_elevationGain.gainMetres.round()}';
 
   // ──────────────── Build ────────────────
 
@@ -4196,8 +4191,8 @@ class _RunScreenState extends State<RunScreen> {
                 if (_phasePlan.isNotEmpty)
                   ValueListenableBuilder<_LiveStats>(
                     valueListenable: _statsNotifier,
-                    builder: (context, stats, _) {
-                      final idx = phaseAt(_phasePlan, stats.distanceMetres);
+                    builder: (context, _, _) {
+                      final idx = phaseAt(_phasePlan, _displayDistanceMetres);
                       if (idx < 0) return const SizedBox.shrink();
                       final phase = _phasePlan[idx];
                       final target = phaseTargetPaceSecPerKm(

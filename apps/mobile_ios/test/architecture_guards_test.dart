@@ -199,18 +199,84 @@ void main() {
       );
     });
 
-    test('_formattedElevation reads the accumulator field, not a loop', () {
+    test('_formattedElevation reads the accumulator, not a loop', () {
       // Reason: was O(n) over the full track on every build. For a 60-min
       // run (~3600 waypoints) that's millions of iterator steps per
       // minute. Now maintained incrementally in _onSnapshot.
       final match = RegExp(
-        r"String get _formattedElevation =>\s*'\$\{_elevationGainMetres\.round\(\)\}';",
+        r"String get _formattedElevation =>\s*'\$\{_elevationGain\.gainMetres\.round\(\)\}';",
       ).firstMatch(source);
       expect(
         match,
         isNotNull,
         reason: '_formattedElevation must read the incrementally-updated '
-            '_elevationGainMetres field. Do not iterate _track here.',
+            'ElevationGainAccumulator. Do not iterate _track here.',
+      );
+    });
+
+    test('live elevation gain goes through the shared gated contract', () {
+      // Reason: the live counter used to sum every positive altitude delta
+      // with no noise band and no dropout carry, so a flat 10K read ~1,200 m
+      // on the run screen and ~38 m on the run-detail screen minutes later.
+      // computeElevationGain / ElevationGainAccumulator in route_simplify.dart
+      // are the ONE elevation-gain contract (3 m gate + dropout carry); the
+      // screen must feed the accumulator, not re-derive the arithmetic.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      expect(
+        body,
+        contains('_elevationGain.add('),
+        reason: '_onSnapshot must append new waypoints to the shared '
+            'ElevationGainAccumulator.',
+      );
+      expect(
+        body.contains('_elevationGainMetres +='),
+        isFalse,
+        reason: 'No hand-rolled elevation sum in _onSnapshot — an ungated '
+            'copy re-introduces phantom vert on a flat run.',
+      );
+      expect(
+        source,
+        contains("import '../route_simplify.dart';"),
+        reason: 'The gate constant and the accumulator live in '
+            'route_simplify.dart; do not fork a second 3 m threshold here.',
+      );
+    });
+
+    test('split ticks and race phases read the resolved display distance', () {
+      // Reason: an indoor / treadmill run never gets a GPS fix, so the
+      // recorder's own distance stays 0 for the entire session while
+      // _displayDistanceMetres climbs off the pedometer. Reading the raw
+      // mirror field at these two sites meant no split banner, no split
+      // voice cue and no race-phase transition for the whole run, while the
+      // screen, the lock screen and the saved run all showed ~10 km.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      expect(
+        body.contains('UnitFormat.activityTicks(_distanceMetres'),
+        isFalse,
+        reason: 'Split ticks must be counted off _displayDistanceMetres.',
+      );
+      expect(
+        body.contains('phaseAt(_phasePlan, _distanceMetres)'),
+        isFalse,
+        reason: 'Race-phase membership must use _displayDistanceMetres.',
+      );
+      expect(
+        body.contains('averagePaceSecPerKm(_distanceMetres'),
+        isFalse,
+        reason: 'The split cue average pace must use the same distance the '
+            'split itself was counted from.',
+      );
+      expect(
+        RegExp(r'phaseAt\(_phasePlan, phaseDistance\)').hasMatch(body),
+        isTrue,
+        reason: 'The phase block should resolve its distance once through '
+            '_displayDistanceMetres.',
       );
     });
 
