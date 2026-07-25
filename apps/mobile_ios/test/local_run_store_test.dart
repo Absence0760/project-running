@@ -233,6 +233,61 @@ void main() {
       expect(loaded.duration, const Duration(minutes: 7, seconds: 30));
     });
 
+    test('overlapping saves never append the same waypoints twice', () async {
+      // The driver is a fire-and-forget Timer.periodic: the cursor is read
+      // before the isolate hop and written after it, so a tick whose write
+      // outlasts the interval used to let the next tick re-append the same
+      // slice and the recovered polyline doubled back on itself.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      final track = [
+        for (var i = 0; i < 4; i++)
+          Waypoint(
+            lat: 51.5 + i * 0.001,
+            lng: -0.1,
+            timestamp: DateTime(2026, 4, 10, 8, 0, i),
+          ),
+      ];
+      // Establish the file first, so the overlapping pair are incremental
+      // appends rather than two full snapshots (a snapshot restarts the
+      // loader's accumulation and would hide the double-append).
+      await store.saveInProgress(makeRun(id: 'live', track: track.sublist(0, 2)));
+
+      final live = makeRun(id: 'live', track: track);
+      await Future.wait([store.saveInProgress(live), store.saveInProgress(live)]);
+
+      final loaded = await store.loadInProgress();
+      expect(loaded!.track, hasLength(track.length));
+      expect(
+        loaded.track.map((w) => w.lat).toList(),
+        track.map((w) => w.lat).toList(),
+      );
+    });
+
+    test('a save skipped while one is in flight goes out on the next tick',
+        () async {
+      // Skipping must not drop data: the cursor only advances for waypoints
+      // actually written, so the next call carries the whole backlog.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      Waypoint wp(int i) => Waypoint(
+            lat: 51.5 + i * 0.001,
+            lng: -0.1,
+            timestamp: DateTime(2026, 4, 10, 8, 0, i),
+          );
+
+      final first = store.saveInProgress(makeRun(id: 'live', track: [wp(0)]));
+      // Contends with the in-flight write and is dropped.
+      final dropped =
+          store.saveInProgress(makeRun(id: 'live', track: [wp(0), wp(1)]));
+      await Future.wait([first, dropped]);
+      await store.saveInProgress(
+          makeRun(id: 'live', track: [wp(0), wp(1), wp(2)]));
+
+      final loaded = await store.loadInProgress();
+      expect(loaded!.track.map((w) => w.timestamp?.second).toList(), [0, 1, 2]);
+    });
+
     test('loadInProgress returns null when no file', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);

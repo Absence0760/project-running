@@ -87,6 +87,11 @@ class LocalRunStore extends ChangeNotifier {
   int _inProgressWaypointsWritten = 0;
   String? _inProgressRunId;
 
+  /// In-flight guard for [saveInProgress] — the cursor above is read before an
+  /// isolate hop and written after it, so two overlapping ticks would append
+  /// the same waypoints twice.
+  bool _savingInProgress = false;
+
   /// Display-side half of the §67 owner tag (issue #230): every public read
   /// seam filters to the active account's rows ∪ untagged rows, so user A's
   /// runs (with their GPS tracks + home start points) stop rendering for
@@ -609,32 +614,45 @@ class LocalRunStore extends ChangeNotifier {
   /// crash) is skipped — earlier lines still reconstruct a valid
   /// partial run. Persona-hunt Round 3 finding Ultra #2.
   Future<void> saveInProgress(Run run) async {
-    final path = _inProgressFile.path;
-    // Reset the cursor if the active run id changed OR the file is
-    // gone (post-clearInProgress). A fresh write starts with the
-    // full track + header.
-    final isFreshRun = _inProgressRunId != run.id ||
-        !File(path).existsSync();
-    if (isFreshRun) {
-      _inProgressRunId = run.id;
-      _inProgressWaypointsWritten = 0;
-    }
-    final newSlice = run.track.length > _inProgressWaypointsWritten
-        ? run.track.sublist(_inProgressWaypointsWritten)
-        : const <Waypoint>[];
+    // The driver is a fire-and-forget Timer.periodic, so a tick whose isolate
+    // spawn outlasts the interval would otherwise overlap the next one: both
+    // read the same cursor, both append the same waypoints, and a recovered
+    // run's polyline doubles back on itself. Skip rather than queue — the
+    // cursor has not advanced, so the skipped waypoints go out with the next
+    // tick and nothing is lost.
+    if (_savingInProgress) return;
+    _savingInProgress = true;
+    try {
+      final path = _inProgressFile.path;
+      // Reset the cursor if the active run id changed OR the file is
+      // gone (post-clearInProgress). A fresh write starts with the
+      // full track + header.
+      final isFreshRun = _inProgressRunId != run.id || !File(path).existsSync();
+      if (isFreshRun) {
+        _inProgressRunId = run.id;
+        _inProgressWaypointsWritten = 0;
+      }
+      final newSlice = run.track.length > _inProgressWaypointsWritten
+          ? run.track.sublist(_inProgressWaypointsWritten)
+          : const <Waypoint>[];
 
-    // Build the header from Run.toJson() with track stripped — the
-    // loader passes this back to Run.fromJson verbatim plus the
-    // reconstructed track, so it must use the exact same wire shape.
-    final header = Map<String, dynamic>.from(run.toJson())..remove('track');
-    final record = {
-      'h': header,
-      'w': [for (final wp in newSlice) wp.toJson()],
-      't': DateTime.now().toIso8601String(),
-      if (isFreshRun) 'snap': true,
-    };
-    await compute(_appendInProgressLine, {'path': path, 'data': record});
-    _inProgressWaypointsWritten = run.track.length;
+      // Build the header from Run.toJson() with track stripped — the
+      // loader passes this back to Run.fromJson verbatim plus the
+      // reconstructed track, so it must use the exact same wire shape.
+      final header = Map<String, dynamic>.from(run.toJson())..remove('track');
+      final record = {
+        'h': header,
+        'w': [for (final wp in newSlice) wp.toJson()],
+        't': DateTime.now().toIso8601String(),
+        if (isFreshRun) 'snap': true,
+      };
+      await compute(_appendInProgressLine, {'path': path, 'data': record});
+      // Only advance past what this write actually appended. `run.track` is
+      // the caller's snapshot, so a longer live track is picked up next tick.
+      _inProgressWaypointsWritten = run.track.length;
+    } finally {
+      _savingInProgress = false;
+    }
   }
 
   /// Load an in-progress run left over from a previous session, if any.
