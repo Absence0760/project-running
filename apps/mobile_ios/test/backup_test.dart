@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:api_client/api_client.dart';
 import 'package:archive/archive.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1446,6 +1447,147 @@ void main() {
 
       expect(dstGym.workouts, hasLength(2));
       expect(dstGym.workouts.map((w) => w.id).toSet(), hasLength(2));
+    });
+  });
+
+  // ---- M5: undrained runs must be in the archive ----
+  group('local-only runs in the archive', () {
+    test('rawRunRowForBackup emits the raw column shape restore upserts',
+        () async {
+      final run = cm.Run(
+        id: 'local-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [],
+        source: cm.RunSource.app,
+        metadata: const {
+          'activity_type': 'trail_run',
+          'is_dnf': true,
+          'fastest_5k_s': 1200,
+          'title': 'Ridge loop',
+        },
+      );
+      final row = BackupService.rawRunRowForBackup(run);
+
+      expect(row['id'], 'local-1');
+      expect(row.containsKey('user_id'), isFalse,
+          reason: 'the archive is re-homeable; restore stamps the new owner');
+      expect(row.containsKey('track_url'), isFalse,
+          reason: 'the blob rides in tracks/<id>.json.gz, not a storage path');
+      expect(row['started_at'], '2026-04-10T08:00:00.000Z');
+      expect(row['duration_s'], 1500);
+      expect(row['distance_m'], 5000);
+      // Promoted columns are lifted out of the bag, exactly as saveRun does.
+      expect(row['activity_type'], 'trail_run');
+      expect(row['is_dnf'], isTrue);
+      expect(row['fastest_5k_s'], 1200);
+      expect(row['metadata'], {'title': 'Ridge loop'});
+    });
+
+    test('an undrained run round-trips through the archive with its track',
+        () async {
+      final localRun = cm.Run(
+        id: 'local-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [
+          cm.Waypoint(lat: 47.37, lng: 8.54),
+          cm.Waypoint(lat: 47.371, lng: 8.541),
+          cm.Waypoint(lat: 47.372, lng: 8.542),
+        ],
+        source: cm.RunSource.app,
+      );
+      final localTracks = <String, Uint8List>{
+        'local-1': Uint8List.fromList(GZipEncoder().encode(utf8.encode(
+            jsonEncode(const [
+          {'lat': 47.37, 'lng': 8.54},
+          {'lat': 47.371, 'lng': 8.541},
+          {'lat': 47.372, 'lng': 8.542},
+        ])))),
+      };
+
+      final out = File('${tempDir.path}/localonly.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [BackupService.rawRunRowForBackup(localRun)],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        localTracks: localTracks,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final archive = ZipDecoder().decodeBytes(out.readAsBytesSync());
+      final manifest = jsonDecode(
+              utf8.decode(archive.findFile('manifest.json')!.content as List<int>))
+          as Map<String, dynamic>;
+      expect((manifest['counts'] as Map)['runs'], 1);
+      expect((manifest['counts'] as Map)['tracks'], 1,
+          reason: 'a device-only track must be counted like a downloaded one');
+
+      final dstDir = Directory('${tempDir.path}/restored')..createSync();
+      final dst = LocalRunStore();
+      await dst.init(overrideDirectory: dstDir);
+      final res = await BackupService(api: _OfflineApi())
+          .restore(zipFile: out, runStore: dst);
+
+      expect(res.runsImported, 1);
+      expect((await dst.runById('local-1'))!.track, hasLength(3));
+    });
+  });
+
+  // ---- M4: the offline restore is additive ----
+  group('offline restore never clobbers a local run', () {
+    test('a track-less archive entry leaves the richer local copy alone',
+        () async {
+      final local = cm.Run(
+        id: 'r-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [
+          cm.Waypoint(lat: 47.37, lng: 8.54),
+          cm.Waypoint(lat: 47.371, lng: 8.541),
+          cm.Waypoint(lat: 47.372, lng: 8.542),
+        ],
+        source: cm.RunSource.app,
+      );
+      await runStore.save(local);
+      await runStore.markSynced('r-1');
+
+      // createBackup only LOGS a failed track download, so an archive can
+      // carry the row with no tracks/ entry at all.
+      final res = await restoreFromBytes(buildBackupZip(runs: [runRow(id: 'r-1')]));
+
+      expect(res.runsImported, 0);
+      expect((await runStore.runById('r-1'))!.track, hasLength(3),
+          reason: 'the on-device GPS trace is the only copy of what happened');
+      expect(res.warnings.any((w) => w.contains('already present locally')),
+          isTrue);
+    });
+
+    test('generateNewIds still imports the archive copy alongside', () async {
+      await runStore.save(cm.Run(
+        id: 'r-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [],
+        source: cm.RunSource.app,
+      ));
+
+      final res = await restoreFromBytes(
+        buildBackupZip(runs: [runRow(id: 'r-1')]),
+        generateNewIds: true,
+      );
+
+      expect(res.runsImported, 1);
+      expect(runStore.summaries, hasLength(2));
     });
   });
 }

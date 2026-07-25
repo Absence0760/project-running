@@ -253,6 +253,82 @@ void main() {
           reason: 'pendingCreate row must survive a server refresh');
       expect(store.rows.any((r) => r['id'] == 'server-1'), isTrue);
     });
+
+    test('a scoped fetch keeps synced rows for other events, on disk too',
+        () async {
+      // M3: the only caller fetches ONE (event, instance) pair, but the prune
+      // was unscoped — so opening the check-in screen for E2 deleted every
+      // stamped row for E1 from memory AND from disk, and offline the
+      // volunteer never got them back.
+      await store.replaceFromServer([
+        {
+          'id': 'e1-row',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': instanceStart.toIso8601String(),
+          'bib': '1',
+          'recorded_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      ]);
+      expect(store.rows.any((r) => r['id'] == 'e1-row'), isTrue);
+
+      await store.replaceFromServer(
+        [
+          {
+            'id': 'e2-row',
+            'event_id': 'event-2',
+            'checkpoint_id': checkpointId,
+            'instance_start': instanceStart.toIso8601String(),
+            'bib': '2',
+            'recorded_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        ],
+        eventId: 'event-2',
+        instanceStart: instanceStart,
+      );
+
+      expect(store.rows.any((r) => r['id'] == 'e1-row'), isTrue);
+      expect(File('${dir.path}/e1-row.json').existsSync(), isTrue);
+      expect(store.rows.any((r) => r['id'] == 'e2-row'), isTrue);
+    });
+
+    test('an out-of-scope synced row still ages out of retention', () async {
+      await store.replaceFromServer([
+        {
+          'id': 'e1-stale',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': instanceStart.toIso8601String(),
+          'bib': '1',
+          'recorded_at': DateTime.now()
+              .toUtc()
+              .subtract(const Duration(days: 5))
+              .toIso8601String(),
+        },
+      ]);
+      // Backdate it past the window without going through the server path.
+      final stored = store.debugStored('e1-stale')!;
+      await store.persist(StoredCrossing(
+        row: {
+          ...stored.row,
+          'recorded_at': DateTime.now()
+              .toUtc()
+              .subtract(LocalCrossingsStore.kSyncedRetention +
+                  const Duration(days: 1))
+              .toIso8601String(),
+        },
+        syncState: CrossingSyncState.synced,
+      ));
+
+      await store.replaceFromServer(
+        const [],
+        eventId: 'event-2',
+        instanceStart: instanceStart,
+      );
+
+      expect(store.rows.any((r) => r['id'] == 'e1-stale'), isFalse,
+          reason: 'the Art 9 mirror must keep expiring other events');
+    });
   });
 
   group('retention', () {

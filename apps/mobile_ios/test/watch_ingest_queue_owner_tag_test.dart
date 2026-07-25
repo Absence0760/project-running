@@ -245,6 +245,61 @@ void main() {
       expect(queue.rejectedCount, 1);
     });
 
+    test('a payload with no id is quarantined, never uploaded', () async {
+      // L4: `raw['id'] as String? ?? ''` made a missing id decode "cleanly",
+      // so the failure surfaced on the upload side — where every error is
+      // classified transient. Postgres rejects '' as a uuid on every attempt,
+      // so the entry retried on every sign-in for the life of the install.
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      File('$docPath/no-id.json').writeAsStringSync(jsonEncode({
+        'payload': {
+          'started_at': '2026-04-10T08:00:00.000Z',
+          'duration_s': 1500,
+          'distance_m': 5000.0,
+        }
+      }));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      await queue.drain(api);
+
+      expect(api.saved, isEmpty,
+          reason: 'an id-less run must never reach saveRun');
+      expect(queue.pendingCount, 0);
+      expect(queue.rejectedCount, 1);
+    });
+
+    test('the last-owner stamp is written atomically', () async {
+      // L2: a bare writeAsString truncates to zero bytes first, and init()
+      // reads an empty file as "no owner" — so a kill mid-write drops the
+      // stamp and the next account adopts the previous user's watch run.
+      await queue.setLastKnownOwner('user-a');
+      final names = Directory('${tempDir.path}/watch_ingest_queue')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)
+          .toList();
+      expect(names, contains('last_owner.txt'));
+      expect(names.where((n) => n.endsWith('.tmp')), isEmpty,
+          reason: 'the atomic write renames its temp sibling away');
+
+      final reloaded = WatchIngestQueue();
+      await reloaded.init();
+      expect(reloaded.debugLastKnownOwner, 'user-a');
+    });
+
+    test('a stale atomic-write orphan is swept at init', () async {
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      final stale = File('$docPath/abc.json.0.tmp')..writeAsStringSync('{}');
+      stale.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 3)));
+
+      final reloaded = WatchIngestQueue();
+      await reloaded.init();
+
+      expect(stale.existsSync(), isFalse);
+      expect(reloaded.pendingCount, 0);
+    });
+
     test('a structurally valid but incomplete payload is quarantined too',
         () async {
       // runFromWatchPayload casts started_at / duration_s / distance_m

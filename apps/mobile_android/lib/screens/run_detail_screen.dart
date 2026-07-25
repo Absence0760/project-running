@@ -694,6 +694,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (api != null) {
       try {
         await api.updateRunFields(updated);
+        // The column push covers every field this dialog can change, so the
+        // server row is now current. `update()` deliberately left the run
+        // unsynced (durably, since the H1 sidecar fix) — without settling it
+        // here the next SyncService cycle runs saveRunsBatch and re-uploads
+        // the whole GPS track, megabytes of cellular for a title edit.
+        await widget.runStore.markSynced(updated.id);
       } catch (e) {
         debugPrint('updateRunFields failed for ${run.id}: $e');
       }

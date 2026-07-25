@@ -24,6 +24,19 @@ class LocalRouteStore extends ChangeNotifier {
   static const _syncedIdsFilename = 'synced_route_ids.json';
   File get _syncedIdsFile => File('${_dir!.path}/$_syncedIdsFilename');
 
+  /// Ids this process has deliberately dropped from [_syncedIds] (or
+  /// [_offlinePinnedIds]) since its last successful sidecar write. The merge
+  /// can't read a removal out of absence — absence equally means "the other
+  /// isolate hasn't heard of it yet" — so removals travel explicitly while
+  /// additions always win. Mirrors `LocalRunStore._clearedRemoteDeletes`.
+  final Set<String> _syncedIdsCleared = {};
+  final Set<String> _offlinePinnedCleared = {};
+
+  /// Route ids whose owner tag this process has set or dropped since its last
+  /// successful `route_owner_tags.json` write — the same ledger idea, for a
+  /// map: only these keys override the on-disk map.
+  final Set<String> _ownerTagsTouched = {};
+
   /// Per-device "save for offline" pins. A pinned route is one the
   /// user has explicitly marked to keep on this phone — surfaces a
   /// download_done badge in the routes list, and (forward-looking)
@@ -87,6 +100,7 @@ class LocalRouteStore extends ChangeNotifier {
     } else {
       _ownerTags.putIfAbsent(routeId, () => '');
     }
+    _ownerTagsTouched.add(routeId);
   }
 
   List<Route> get routes => List.unmodifiable(
@@ -195,11 +209,13 @@ class LocalRouteStore extends ChangeNotifier {
     _routes.insert(0, route);
     if (markSynced) {
       _syncedIds.add(route.id);
+      _syncedIdsCleared.remove(route.id);
     } else {
       // User-created route — clear the synced flag if it was set
       // previously (rare, but a future "edit + re-save" path should
       // re-queue the cloud push).
       _syncedIds.remove(route.id);
+      _syncedIdsCleared.add(route.id);
     }
     // Always persist so a cold-start can distinguish "tracking is
     // active but nothing's synced yet" (sidecar exists, empty list)
@@ -248,8 +264,10 @@ class LocalRouteStore extends ChangeNotifier {
     }
     if (markSynced) {
       _syncedIds.addAll(list.map((r) => r.id));
+      _syncedIdsCleared.removeAll(list.map((r) => r.id));
     } else {
       _syncedIds.removeAll(list.map((r) => r.id));
+      _syncedIdsCleared.addAll(list.map((r) => r.id));
     }
     await _persistSyncedIds();
     for (final route in list) {
@@ -263,6 +281,7 @@ class LocalRouteStore extends ChangeNotifier {
   /// [SyncService] after a successful `api.saveRoute(...)`.
   Future<void> markRouteSynced(String routeId) async {
     if (_syncedIds.add(routeId)) {
+      _syncedIdsCleared.remove(routeId);
       await _persistSyncedIds();
       notifyListeners();
     }
@@ -275,6 +294,7 @@ class LocalRouteStore extends ChangeNotifier {
       if (_syncedIds.add(id)) added.add(id);
     }
     if (added.isEmpty) return;
+    _syncedIdsCleared.removeAll(added);
     await _persistSyncedIds();
     notifyListeners();
   }
@@ -289,6 +309,7 @@ class LocalRouteStore extends ChangeNotifier {
     for (final id in routeIds) {
       if (_ownerTags[id] != owner) {
         _ownerTags[id] = owner;
+        _ownerTagsTouched.add(id);
         touched = true;
       }
     }
@@ -303,12 +324,15 @@ class LocalRouteStore extends ChangeNotifier {
     if (file.existsSync()) await file.delete();
     _routes.removeWhere((r) => r.id == routeId);
     if (_syncedIds.remove(routeId)) {
+      _syncedIdsCleared.add(routeId);
       await _persistSyncedIds();
     }
     if (_offlinePinnedIds.remove(routeId)) {
+      _offlinePinnedCleared.add(routeId);
       await _persistOfflinePinnedIds();
     }
     if (_ownerTags.remove(routeId) != null) {
+      _ownerTagsTouched.add(routeId);
       await _persistOwnerTags();
     }
     notifyListeners();
@@ -334,6 +358,9 @@ class LocalRouteStore extends ChangeNotifier {
     _syncedIds.removeAll(ids);
     _offlinePinnedIds.removeAll(ids);
     _ownerTags.removeWhere((id, _) => ids.contains(id));
+    _syncedIdsCleared.addAll(ids);
+    _offlinePinnedCleared.addAll(ids);
+    _ownerTagsTouched.addAll(ids);
     if (touchedSynced) await _persistSyncedIds();
     if (touchedPinned) await _persistOfflinePinnedIds();
     if (touchedTags) await _persistOwnerTags();
@@ -344,20 +371,27 @@ class LocalRouteStore extends ChangeNotifier {
   /// pushed to Supabase. Idempotent (re-pinning is a no-op).
   Future<void> pinOffline(String routeId) async {
     if (!_offlinePinnedIds.add(routeId)) return;
+    _offlinePinnedCleared.remove(routeId);
     await _persistOfflinePinnedIds();
     notifyListeners();
   }
 
   Future<void> unpinOffline(String routeId) async {
     if (!_offlinePinnedIds.remove(routeId)) return;
+    _offlinePinnedCleared.add(routeId);
     await _persistOfflinePinnedIds();
     notifyListeners();
   }
 
   Future<void> _loadAll() async {
     _routes = [];
+    _syncedIdsCleared.clear();
+    _offlinePinnedCleared.clear();
+    _ownerTagsTouched.clear();
     final dir = _dir;
     if (dir == null) return; // init() not yet completed — nothing to load.
+    sweepAtomicWriteOrphans(dir,
+        onError: (m) => debugPrint('local_route_store: $m'));
     // listSync is intentional — see LocalRunStore._loadAll for the
     // explanation (async _dir.list() deadlocks under `testWidgets`).
     final files = dir
@@ -418,18 +452,10 @@ class LocalRouteStore extends ChangeNotifier {
       _syncedIds.addAll(_routes.map((r) => r.id));
       return;
     }
-    try {
-      final raw = await file.readAsString();
-      final data = jsonDecode(raw);
-      if (data is Map && data['ids'] is List) {
-        for (final id in data['ids'] as List) {
-          if (id is String) _syncedIds.add(id);
-        }
-        return;
-      }
-      debugPrint('Synced route ids sidecar has an unexpected shape');
-    } catch (e) {
-      debugPrint('Failed to load synced route ids sidecar: $e');
+    final parsed = await _readSyncedIdsFromDisk();
+    if (parsed != null) {
+      _syncedIds.addAll(parsed);
+      return;
     }
     // Fail CLOSED to the same presumed-synced default the absent-file branch
     // uses. An empty set means "every route is unsynced", which makes
@@ -444,18 +470,160 @@ class LocalRouteStore extends ChangeNotifier {
       ..addAll(_routes.map((r) => r.id));
   }
 
-  Future<void> _persistSyncedIds() async {
+  /// Parse half of [_loadSyncedIds]: the ids the sidecar actually records, or
+  /// null when the file is absent / unreadable / malformed. Deliberately
+  /// WITHOUT the presumed-synced fallback, which belongs only on cold load —
+  /// a merge that inherited it would mark every local route synced.
+  Future<Set<String>?> _readSyncedIdsFromDisk() async {
+    final file = _syncedIdsFile;
+    if (!file.existsSync()) return null;
     try {
-      await writeJsonAtomic(_syncedIdsFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'ids': _syncedIds.toList(),
-      });
+      final data = jsonDecode(await file.readAsString());
+      if (data is Map && data['ids'] is List) {
+        return {
+          for (final id in data['ids'] as List)
+            if (id is String) id,
+        };
+      }
+      debugPrint('Synced route ids sidecar has an unexpected shape');
     } catch (e) {
-      // Not fatal — the in-memory set is still correct for this
-      // session; the next sync attempt will write it again.
-      debugPrint('Failed to persist synced route ids sidecar: $e');
+      debugPrint('Failed to load synced route ids sidecar: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, String>?> _readOwnerTagsFromDisk() async {
+    final file = _ownerTagsFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is Map && data['tags'] is Map) {
+        final out = <String, String>{};
+        (data['tags'] as Map).forEach((id, owner) {
+          if (id is String && owner is String) out[id] = owner;
+        });
+        return out;
+      }
+    } catch (e) {
+      debugPrint('Failed to load route owner tags sidecar: $e');
+    }
+    return null;
+  }
+
+  Future<Set<String>?> _readOfflinePinnedFromDisk() async {
+    final file = _offlinePinnedIdsFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is Map && data['ids'] is List) {
+        return {
+          for (final id in data['ids'] as List)
+            if (id is String) id,
+        };
+      }
+    } catch (e) {
+      debugPrint('Failed to load offline pinned route ids sidecar: $e');
+    }
+    return null;
+  }
+
+  /// Hold an exclusive cross-process advisory lock on [name] for the duration
+  /// of [action]. Ported verbatim from `LocalRunStore._withSidecarLock`:
+  /// `background_sync.dart` builds a second [LocalRouteStore] over this same
+  /// directory in the WorkManager isolate, so a read-modify-write of any
+  /// sidecar needs the lock or two interleaved merges still drop the later
+  /// writer's work. Best effort — if the lock can't be taken the action still
+  /// runs, because a merged write without a lock beats no write at all.
+  Future<void> _withSidecarLock(
+      String name, Future<void> Function() action) async {
+    final dir = await _ensureDir();
+    RandomAccessFile? handle;
+    try {
+      handle = await File('${dir.path}/$name.lock').open(mode: FileMode.write);
+      await handle.lock(FileLock.blockingExclusive);
+    } catch (e) {
+      debugPrint('local_route_store: sidecar lock unavailable for $name: $e');
+      try {
+        await handle?.close();
+      } catch (_) {/* best-effort */}
+      handle = null;
+    }
+    try {
+      await action();
+    } finally {
+      if (handle != null) {
+        try {
+          await handle.unlock();
+        } catch (e) {
+          debugPrint('local_route_store: sidecar unlock failed for $name: $e');
+        }
+        try {
+          await handle.close();
+        } catch (_) {/* best-effort */}
+      }
     }
   }
+
+  /// Merge-write one id-set sidecar under its lock. [live] is this process's
+  /// current set, [cleared] the ids it has deliberately dropped since the last
+  /// successful write.
+  ///
+  /// Additions always win and removals travel by the explicit ledger, because
+  /// absence on disk equally means "the other isolate hasn't heard of it yet".
+  /// That asymmetry is the one the route store already chose on cold load
+  /// (`_loadSyncedIds` fails closed to presumed-synced): a re-push we skipped
+  /// is recoverable, a route pushed into the wrong cloud account is not.
+  ///
+  /// [pruneMissing] bounds sidecar growth the way
+  /// `LocalRunStore._persistSyncedIds` does — an id for a route this process
+  /// no longer holds AND whose file is gone is dropped. Off for the offline
+  /// pins, which are a forward-looking intent set: pinning an id before its
+  /// route lands is supported.
+  Future<void> _persistIdSetSidecar({
+    required String filename,
+    required File file,
+    required Set<String> live,
+    required Set<String> cleared,
+    required Future<Set<String>?> Function() readDisk,
+    required bool pruneMissing,
+  }) async {
+    final dir = await _ensureDir();
+    final known = _routes.map((r) => r.id).toSet();
+    if (pruneMissing) live.retainWhere(known.contains);
+    await _withSidecarLock(filename, () async {
+      final merged = <String>{...live};
+      for (final id in await readDisk() ?? const <String>{}) {
+        if (cleared.contains(id)) continue;
+        // An id this process has never heard of is the other isolate's newer
+        // view; the route FILE is the process-independent liveness test.
+        if (!pruneMissing ||
+            known.contains(id) ||
+            File('${dir.path}/$id.json').existsSync()) {
+          merged.add(id);
+        }
+      }
+      try {
+        await writeJsonAtomic(file, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'ids': merged.toList(),
+        });
+        cleared.clear();
+      } catch (e) {
+        // Not fatal — the in-memory set is still correct for this
+        // session; the next sync attempt will write it again.
+        debugPrint('local_route_store: failed to persist $filename: $e');
+      }
+    });
+  }
+
+  Future<void> _persistSyncedIds() => _persistIdSetSidecar(
+        filename: _syncedIdsFilename,
+        file: _syncedIdsFile,
+        live: _syncedIds,
+        cleared: _syncedIdsCleared,
+        readDisk: _readSyncedIdsFromDisk,
+        pruneMissing: true,
+      );
 
   Future<void> _loadOfflinePinnedIds() async {
     final dir = _dir;
@@ -477,19 +645,16 @@ class LocalRouteStore extends ChangeNotifier {
   }
 
   Future<void> _persistOfflinePinnedIds() {
-    // Chain onto the previous write so concurrent calls serialise. Each
-    // write snapshots the set at execution time, so once the in-memory
-    // mutations have settled the final write matches the final state.
-    _offlinePersistChain = _offlinePersistChain.then((_) async {
-      try {
-        await writeJsonAtomic(_offlinePinnedIdsFile, {
-          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-          'ids': _offlinePinnedIds.toList(),
-        });
-      } catch (e) {
-        debugPrint('Failed to persist offline pinned route ids sidecar: $e');
-      }
-    });
+    // Chain onto the previous write so concurrent calls serialise in-process;
+    // the sidecar lock inside handles the cross-isolate half.
+    _offlinePersistChain = _offlinePersistChain.then((_) => _persistIdSetSidecar(
+          filename: _offlinePinnedIdsFilename,
+          file: _offlinePinnedIdsFile,
+          live: _offlinePinnedIds,
+          cleared: _offlinePinnedCleared,
+          readDisk: _readOfflinePinnedFromDisk,
+          pruneMissing: false,
+        ));
     return _offlinePersistChain;
   }
 
@@ -499,31 +664,47 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> _loadOwnerTags() async {
     final dir = _dir;
     if (dir == null) return;
-    _ownerTags.clear();
-    final file = _ownerTagsFile;
-    if (!file.existsSync()) return;
-    try {
-      final raw = await file.readAsString();
-      final data = jsonDecode(raw);
-      if (data is Map && data['tags'] is Map) {
-        (data['tags'] as Map).forEach((id, owner) {
-          if (id is String && owner is String) _ownerTags[id] = owner;
-        });
-      }
-    } catch (e) {
-      debugPrint('Failed to load route owner tags sidecar: $e');
-    }
+    _ownerTags
+      ..clear()
+      ..addAll(await _readOwnerTagsFromDisk() ?? const <String, String>{});
   }
 
+  /// Merge-write the §67 owner tags under the sidecar lock.
+  ///
+  /// A map can't carry removals in absence either, so only the keys this
+  /// process actually touched override the on-disk map — otherwise a
+  /// foreground `save()` from a snapshot taken before the WorkManager
+  /// isolate's `tagRoutesOwner` reverts that route to untagged, and an
+  /// untagged route is visible to (and drainable by) every account on a
+  /// shared device. That is the unrecoverable direction: the next account's
+  /// drain copies the other user's route into their cloud account.
   Future<void> _persistOwnerTags() async {
-    try {
-      await writeJsonAtomic(_ownerTagsFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'tags': _ownerTags,
-      });
-    } catch (e) {
-      // Not fatal — the in-memory map is still correct for this session.
-      debugPrint('Failed to persist route owner tags sidecar: $e');
-    }
+    final dir = await _ensureDir();
+    await _withSidecarLock(_ownerTagsFilename, () async {
+      final merged = <String, String>{
+        ...?await _readOwnerTagsFromDisk(),
+      };
+      for (final id in _ownerTagsTouched) {
+        final tag = _ownerTags[id];
+        if (tag == null) {
+          merged.remove(id);
+        } else {
+          merged[id] = tag;
+        }
+      }
+      final known = _routes.map((r) => r.id).toSet();
+      merged.removeWhere((id, _) =>
+          !known.contains(id) && !File('${dir.path}/$id.json').existsSync());
+      try {
+        await writeJsonAtomic(_ownerTagsFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'tags': merged,
+        });
+        _ownerTagsTouched.clear();
+      } catch (e) {
+        // Not fatal — the in-memory map is still correct for this session.
+        debugPrint('Failed to persist route owner tags sidecar: $e');
+      }
+    });
   }
 }

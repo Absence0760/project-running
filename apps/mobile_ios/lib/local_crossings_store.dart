@@ -196,13 +196,37 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
   /// synced crossing during the rebuild both evicts it from memory and deletes
   /// its file (it simply isn't in the keep-set). A crossing whose `recorded_at`
   /// can't be parsed is kept — an undatable audit record is never assumed old.
-  Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
+  ///
+  /// [eventId] / [instanceStart] scope the prune to the rows the fetch could
+  /// actually have returned — mirroring the `windowStart` / `fetchLimit` guard
+  /// [LocalGymStore.replaceFromServer] carries. A synced row outside that scope
+  /// is absent from [serverRows] because it was not asked for, NOT because the
+  /// server deleted it; pruning it strands the volunteer with an empty
+  /// "already stamped here" list for every other aid station, offline, which is
+  /// the entire reason this store exists. Both null = full replace, correct
+  /// only when the caller fetched the COMPLETE set.
+  Future<void> replaceFromServer(
+    List<Map<String, dynamic>> serverRows, {
+    String? eventId,
+    DateTime? instanceStart,
+  }) async {
     final now = DateTime.now().toUtc();
+    final iso = instanceStart?.toIso8601String();
+    bool outOfScope(Map<String, dynamic> row) =>
+        eventId != null &&
+        (row['event_id'] != eventId ||
+            (iso != null && row['instance_start'] != iso));
     final preserved = <String, StoredCrossing>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
+        continue;
       }
+      if (!outOfScope(entry.value.row)) continue;
+      // Retention still runs over the rows the fetch didn't cover, or the
+      // 90-day Art 9 mirror would silently stop expiring every other event.
+      if (_beyondRetention(entry.value.row['recorded_at'], now)) continue;
+      preserved[entry.key] = entry.value;
     }
     rowsById.clear();
     for (final row in serverRows) {

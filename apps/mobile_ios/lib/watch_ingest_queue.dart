@@ -56,6 +56,8 @@ class WatchIngestQueue {
       _queueDir.createSync(recursive: true);
     }
     _sweepRejected();
+    cm.sweepAtomicWriteOrphans(_queueDir,
+        onError: (m) => debugPrint('WatchIngestQueue: $m'));
     // Hydrate the in-memory cache from the sidecar so enqueues that
     // run before the first setLastKnownOwner call still carry the
     // correct stamp (e.g. payload arrives during the brief window
@@ -85,7 +87,10 @@ class WatchIngestQueue {
       if (userId == null || userId.isEmpty) {
         if (_lastOwnerFile.existsSync()) await _lastOwnerFile.delete();
       } else {
-        await _lastOwnerFile.writeAsString(userId);
+        // Atomic like the envelope write: a bare writeAsString truncates
+        // first, and init() reads an empty file as "no owner" — which drops
+        // the stamp and lets the next account adopt the previous user's run.
+        await cm.writeStringAtomic(_lastOwnerFile, userId);
       }
     } catch (e) {
       debugPrint('WatchIngestQueue.setLastKnownOwner write failed: $e');
@@ -247,7 +252,14 @@ class WatchIngestQueue {
 /// queue directory) into a [cm.Run]. Pure — exposed for tests so the
 /// payload schema can be exercised without disk IO.
 cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
-  final id = raw['id'] as String? ?? '';
+  final id = raw['id'] as String?;
+  if (id == null || id.isEmpty) {
+    // A blank id can never be uploaded — Postgres rejects it as a uuid — so it
+    // has to fail on the PARSE side, where drain quarantines it. Left to the
+    // upload branch it is classified transient and retried on every sign-in
+    // for the life of the install, inflating pendingCount with a phantom run.
+    throw const FormatException('watch payload has no id');
+  }
   final startedAt = DateTime.parse(raw['started_at'] as String);
   final durationS = (raw['duration_s'] as num).toInt();
   final distanceM = (raw['distance_m'] as num).toDouble();

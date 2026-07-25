@@ -90,8 +90,11 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
       try {
         final crossings = await _api.fetchCheckpointCrossings(
             widget.eventId, widget.instanceStart);
-        await _store
-            .replaceFromServer(crossings.map((c) => c.toJson()).toList());
+        await _store.replaceFromServer(
+          crossings.map((c) => c.toJson()).toList(),
+          eventId: widget.eventId,
+          instanceStart: widget.instanceStart,
+        );
       } catch (_) {
         // Offline / not yet synced — the local store is the source of truth.
       }

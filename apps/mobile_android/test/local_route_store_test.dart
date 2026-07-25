@@ -672,6 +672,81 @@ void main() {
     });
   });
 
+  group('two stores over one directory', () {
+    // H2: background_sync.dart builds a second LocalRouteStore over
+    // <appDocs>/routes/ in the WorkManager isolate and calls
+    // markManyRoutesSynced + tagRoutesOwner. All three sidecars were unlocked
+    // whole-file replaces from a per-process snapshot, so the foreground's
+    // next save() discarded the background isolate's work.
+    test('a background markRouteSynced cannot cost the foreground a re-upload',
+        () async {
+      final foreground = LocalRouteStore();
+      await foreground.init(overrideDirectory: tempDir);
+      await foreground.save(makeRoute(id: 'r-fg'));
+
+      final background = LocalRouteStore();
+      await background.init(overrideDirectory: tempDir);
+      await background.markRouteSynced('r-fg');
+
+      // The foreground's snapshot predates the drain; its own write must not
+      // drop r-fg back to unsynced and re-push the whole route.
+      await foreground.save(makeRoute(id: 'r-other'), markSynced: true);
+
+      final reloaded = LocalRouteStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRoutes, isEmpty);
+    });
+
+    test('a background tagRoutesOwner is not reverted to untagged', () async {
+      // The unrecoverable direction: an untagged route is visible to — and
+      // drainable by — every account on a shared device, so reverting B's
+      // adoption tag copies B's route into A's cloud account.
+      final foreground = LocalRouteStore();
+      await foreground.init(overrideDirectory: tempDir);
+      await foreground.save(makeRoute(id: 'r-shared'));
+
+      final background = LocalRouteStore();
+      await background.init(overrideDirectory: tempDir);
+      await background.tagRoutesOwner(['r-shared'], 'user-b');
+
+      await foreground.save(makeRoute(id: 'r-other'));
+
+      final reloaded = LocalRouteStore();
+      reloaded.currentUserIdProvider = () => 'user-a';
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.routes.map((r) => r.id), isNot(contains('r-shared')));
+    });
+
+    test('this store\'s own un-sync still sticks through the merge', () async {
+      // The merge must not make removal impossible — an edited route has to
+      // stay queued for the next drain.
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-1'), markSynced: true);
+      await store.save(makeRoute(id: 'r-1', name: 'edited'));
+
+      final reloaded = LocalRouteStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRoutes.map((r) => r.id), ['r-1']);
+    });
+
+    test('a stale .tmp sibling is swept on cold load, a fresh one is kept',
+        () async {
+      final stale = File('${tempDir.path}/abc.json.0.tmp')
+        ..writeAsStringSync('{}');
+      stale.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 3)));
+      final fresh = File('${tempDir.path}/def.json.1.tmp')
+        ..writeAsStringSync('{}');
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(stale.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue);
+    });
+  });
+
   group('lazy init resilience — _ensureDir', () {
     // Reason: an earlier version held `_dir` as a `late Directory`; a
     // save that raced ahead of `init()` (or hit an environment where

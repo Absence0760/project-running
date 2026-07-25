@@ -806,6 +806,7 @@ void main() {
     // §122); run / route + the base itself still call it directly.
     const noBareWriteStores = [
       'lib/local_run_store.dart',
+      'lib/watch_ingest_queue.dart',
       'lib/local_route_store.dart',
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',

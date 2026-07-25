@@ -38,15 +38,19 @@ void main() {
       expect(run.metadata, isNull);
     });
 
-    test('falls back to id="" and source="watch" when missing', () {
+    test('falls back to source="watch" when missing', () {
       // The watch native bridge occasionally posts a payload without an
       // explicit source — the queue must still accept it.
-      final raw = _basePayload();
-      raw.remove('id');
-      raw.remove('source');
+      final raw = _basePayload()..remove('source');
       final run = runFromWatchPayload(raw);
-      expect(run.id, '');
       expect(run.source, RunSource.watch);
+    });
+
+    test('a missing id throws instead of decoding to an empty id', () {
+      // An empty id is unuploadable (Postgres rejects it as a uuid), so it
+      // must fail on the parse side where drain quarantines it.
+      expect(() => runFromWatchPayload(_basePayload()..remove('id')),
+          throwsFormatException);
     });
 
     test('decodes track waypoints with optional ele + ts', () {
