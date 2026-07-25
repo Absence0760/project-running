@@ -10,7 +10,9 @@
 //! frozen field widths, and whether a pushed QNH reference is plausible enough
 //! to publish.
 
+use crate::fix::Fix;
 use crate::record::RecordState;
+use crate::run_store::TrackPoint;
 
 /// Whether a run is live: advancing its wall clock and consuming fixes at the
 /// selected mode's cadence. Idle and Finished are inert — the `record` task
@@ -87,6 +89,28 @@ pub fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
 /// sentinel, so a stored 0 would read back as a real 0 bpm pulse.
 pub fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
     bpm.and_then(|b| ((1..=255).contains(&b)).then_some(b as u8))
+}
+
+/// Shape one accepted fix into the stored track point, stamped with the held HR
+/// and the freshest barometric altitude.
+///
+/// The barometer is preferred over the fix's own GPS altitude — it is the
+/// steadier of the two over a climb — and both narrow through
+/// [`ele_dm_from_m`], so a reading either side can only ever store an honest
+/// value or nothing.
+pub fn track_point(
+    fix: &Fix,
+    start_uptime_s: u32,
+    bpm: Option<u16>,
+    baro_alt_m: Option<f32>,
+) -> TrackPoint {
+    TrackPoint {
+        lat_e7: (fix.lat_deg * 1e7) as i32,
+        lon_e7: (fix.lon_deg * 1e7) as i32,
+        t_offset_s: fix.uptime_s.saturating_sub(start_uptime_s),
+        ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
+        bpm: bpm_u8(bpm),
+    }
 }
 
 /// Plausible QNH sea-level pressure window (Pa). A pushed `sea_level_pa`
@@ -238,6 +262,73 @@ mod tests {
         assert_eq!(bpm_u8(Some(0)), None);
         assert_eq!(bpm_u8(Some(256)), None);
         assert_eq!(bpm_u8(Some(u16::MAX)), None);
+    }
+
+    fn fix_at(lat_deg: f64, lon_deg: f64, alt_m: Option<f32>, uptime_s: u32) -> Fix {
+        Fix {
+            lat_deg,
+            lon_deg,
+            speed_mps: 3.0,
+            course_deg: None,
+            sats: 8,
+            alt_m,
+            time_of_day: None,
+            uptime_s,
+        }
+    }
+
+    #[test]
+    fn a_track_point_carries_the_fix_scaled_to_e7() {
+        let p = track_point(
+            &fix_at(40.0158083, -105.2705, None, 1_100),
+            1_000,
+            Some(150),
+            None,
+        );
+        assert_eq!(p.lat_e7, 400_158_083);
+        assert_eq!(p.lon_e7, -1_052_705_000);
+        assert_eq!(p.t_offset_s, 100);
+        assert_eq!(p.bpm, Some(150));
+    }
+
+    #[test]
+    fn the_barometric_altitude_is_preferred_over_the_fixs_own() {
+        // The barometer is the steadier of the two over a climb, so it wins when
+        // both are present, and the GPS altitude is the fallback when it is not.
+        let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
+        assert_eq!(
+            track_point(&fix, 1_000, None, Some(1_610.0)).ele_dm,
+            Some(16_100)
+        );
+        assert_eq!(track_point(&fix, 1_000, None, None).ele_dm, Some(15_000));
+        let no_alt = fix_at(40.0, -105.0, None, 1_000);
+        assert_eq!(track_point(&no_alt, 1_000, None, None).ele_dm, None);
+    }
+
+    #[test]
+    fn an_out_of_range_baro_altitude_does_not_fall_back_to_the_gps_one() {
+        // The preference is picked BEFORE the narrowing, so a wild barometer
+        // reading stores no elevation rather than silently substituting a GPS
+        // altitude the runner never saw on the wrist.
+        let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
+        assert_eq!(track_point(&fix, 1_000, None, Some(9_000.0)).ele_dm, None);
+    }
+
+    #[test]
+    fn a_fix_older_than_the_run_start_clamps_its_offset_to_zero() {
+        // The run's start uptime and the fix's are stamped by different tasks; a
+        // fix that raced the start must not wrap its offset to ~136 years.
+        let p = track_point(&fix_at(40.0, -105.0, None, 999), 1_000, None, None);
+        assert_eq!(p.t_offset_s, 0);
+    }
+
+    #[test]
+    fn an_absurd_position_saturates_rather_than_wrapping() {
+        // Rust's float-to-int `as` cast saturates, so a corrupt position pins at
+        // the i32 ends instead of wrapping to a plausible-looking coordinate on
+        // the other side of the planet.
+        let p = track_point(&fix_at(1e300, -1e300, None, 1_000), 1_000, None, None);
+        assert_eq!((p.lat_e7, p.lon_e7), (i32::MAX, i32::MIN));
     }
 
     #[test]

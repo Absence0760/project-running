@@ -89,7 +89,7 @@
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`record_cadence`] — the `record` task's decisions around that machine:
 //!   the live-run tick gate, the mid-run flash-checkpoint cadence, the
-//!   track-point field narrowing, and the pushed-QNH plausibility guard
+//!   fix → stored-track-point shaping, and the pushed-QNH plausibility guard
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping

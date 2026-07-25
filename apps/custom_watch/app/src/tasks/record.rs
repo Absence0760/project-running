@@ -7,7 +7,7 @@
 //! filter, and the auto-pause all live in `watch_core::record` (host-tested);
 //! the button-press → command mapping lives in `watch_core::button`; the flash
 //! slot layout in `watch_core::flash_store`; the tick gate, flash-checkpoint
-//! cadence, track-point field narrowing and pushed-QNH guard in
+//! cadence, track-point shaping and pushed-QNH guard in
 //! `watch_core::record_cadence`. This task selects over incoming
 //! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
 //! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
@@ -50,10 +50,8 @@ use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::record_cadence::{
-    bpm_u8, ele_dm_from_m, plausible_sea_level_pa, run_active, CheckpointMark,
-};
-use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter, TrackPoint};
+use watch_core::record_cadence::{plausible_sea_level_pa, run_active, track_point, CheckpointMark};
+use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
 use watch_core::settings::WatchSettings;
 use watch_core::trackback::Trackback;
 
@@ -108,16 +106,10 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
 fn push_point(
     open: &mut OpenRun,
     fix: &Fix,
-    bpm: Option<u8>,
+    bpm: Option<u16>,
     baro_alt_m: Option<f32>,
 ) -> Option<u32> {
-    let point = TrackPoint {
-        lat_e7: (fix.lat_deg * 1e7) as i32,
-        lon_e7: (fix.lon_deg * 1e7) as i32,
-        t_offset_s: fix.uptime_s.saturating_sub(open.start_uptime_s),
-        ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
-        bpm,
-    };
+    let point = track_point(fix, open.start_uptime_s, bpm, baro_alt_m);
     match open.writer.push_point_bounded(&point) {
         PushOutcome::Thinned(k) => {
             warn!(
@@ -426,7 +418,7 @@ pub async fn run(store: &'static SharedStore) {
                 recorder.on_fix(&fix);
                 if recorder.last_fix_stored() {
                     if let Some(o) = open.as_mut() {
-                        if let Some(k) = push_point(o, &fix, bpm_u8(held), latest_baro_alt_m) {
+                        if let Some(k) = push_point(o, &fix, held, latest_baro_alt_m) {
                             recorder.set_track_thinning(k);
                         }
                     }
