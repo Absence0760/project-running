@@ -330,38 +330,78 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// banner when ≥1. Per-row failures are isolated: a failed push leaves the
   /// row in its pending state for the next drain.
   Future<int> syncWithServer(ApiClient api) async {
-    var drained = 0;
-    for (final stored in List<S>.from(rowsById.values)) {
-      try {
-        switch (stored.syncState) {
-          case SyncState.pendingCreate:
-            await pushCreate(api, stored);
-            await markSynced(stored.id);
-            drained++;
-            break;
-          case SyncState.pendingUpdate:
-            await pushUpdate(api, stored);
-            await markSynced(stored.id);
-            drained++;
-            break;
-          case SyncState.pendingDelete:
-            await pushDelete(api, stored);
-            await dropRow(stored.id);
-            drained++;
-            break;
-          case SyncState.synced:
-            break;
+    // Drain guard, mirroring SyncService._syncing. `session_detail_screen`
+    // fires this unawaited and several screens drain on both a manual refresh
+    // and a connectivity return, so two concurrent drains over one store are
+    // reachable — they would push the same row twice and race each other's
+    // state writes.
+    if (_syncing) return 0;
+    _syncing = true;
+    try {
+      var drained = 0;
+      for (final stored in List<S>.from(rowsById.values)) {
+        try {
+          switch (stored.syncState) {
+            case SyncState.pendingCreate:
+              await pushCreate(api, stored);
+              await markSynced(stored);
+              drained++;
+              break;
+            case SyncState.pendingUpdate:
+              await pushUpdate(api, stored);
+              await markSynced(stored);
+              drained++;
+              break;
+            case SyncState.pendingDelete:
+              await pushDelete(api, stored);
+              // Same rule as markSynced: only drop the row we actually
+              // deleted. A row re-created during the push is a NEW local row
+              // that has never been sent.
+              if (identical(rowsById[stored.id], stored)) {
+                await dropRow(stored.id);
+              } else {
+                debugPrint('$debugLabel: ${stored.id} was replaced during its '
+                    'delete push — keeping the resident row');
+              }
+              drained++;
+              break;
+            case SyncState.synced:
+              break;
+          }
+        } catch (e) {
+          debugPrint('$debugLabel: sync failed for ${stored.id}: $e');
         }
-      } catch (e) {
-        debugPrint('$debugLabel: sync failed for ${stored.id}: $e');
       }
+      return drained;
+    } finally {
+      _syncing = false;
     }
-    return drained;
   }
 
-  Future<void> markSynced(String id) async {
-    final existing = rowsById[id];
+  bool _syncing = false;
+
+  /// Flip [pushed] to `synced` — but only while it is still the resident copy.
+  ///
+  /// [syncWithServer] snapshots the rows, awaits a network push, then marks.
+  /// Marking by id alone flipped WHATEVER was resident at that later moment,
+  /// so an edit made during the push was recorded as synced and never sent;
+  /// `replaceFromServer`'s newer-wins then preserved the local copy, leaving a
+  /// divergence that is permanent and invisible on both sides. The
+  /// delete-during-push variant was worse: it flipped the fresh tombstone to
+  /// `synced`, so the server row survived with no local record that it should
+  /// be gone.
+  ///
+  /// Entries are immutable and every mutation installs a new instance, so
+  /// identity is an exact "did this row change under us" test. A false
+  /// negative only costs one more drain.
+  Future<void> markSynced(S pushed) async {
+    final existing = rowsById[pushed.id];
     if (existing == null) return;
+    if (!identical(existing, pushed)) {
+      debugPrint('$debugLabel: ${pushed.id} changed during its push — left '
+          'pending for the next drain');
+      return;
+    }
     await persist(asSynced(existing));
   }
 

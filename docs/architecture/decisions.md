@@ -4087,3 +4087,13 @@ A ceiling is the conservative direction, which is why it ships rather than waiti
 The two classes are now split at the seam: parse (read → decode → envelope detection → `runFromWatchPayload`) versus upload (`api.saveRun`). A parse failure renames the file to `<uuid>.json.rejected`, which drops it out of the `.json` glob every listing here uses — so it stops being retried and stops counting as pending — and a sweep at `init` deletes rejected entries past 30 days.
 
 Renaming rather than deleting is the deliberate middle: deleting on sight would let a decoder bug silently destroy a real recorded run, while keeping it forever is residue that carries GPS. The 30-day sweep mirrors the bounded-retention rule `LocalCrossingsStore` adopted, and `rejectedCount` is test-visible so the retry-forever regression stays pinned.
+
+---
+
+## 302. A drained row is marked synced by identity, not by id — and a store drains one at a time
+
+**Decided (2026-07-25).** `OfflineSyncStore.syncWithServer` snapshots the rows, awaits a network push per row, then called `markSynced(id)`, which flipped *whatever was resident at that later moment* to `synced`. An edit made during the push was therefore recorded as sent when it had not been: `replaceFromServer`'s newer-wins then preserves the local copy, so the client and the server diverge permanently and neither side can see it. The delete-during-push variant was worse — the fresh tombstone was flipped to `synced`, so the server row survived with no local record that it should be gone.
+
+`markSynced` now takes the pushed entry and only marks it when it is still `identical` to the resident row; the `pendingDelete` branch applies the same test before `dropRow`. Identity is the exact test here because entries are immutable value objects and every mutation installs a new instance — there is no in-place edit to miss. A false negative (a same-content instance swapped in by an unrelated path) costs one extra drain, which is the harmless direction. A `lastModifiedAt` comparison was the alternative and is strictly weaker: two mutations inside one clock tick would compare equal.
+
+`syncWithServer` also gained a re-entrancy guard, mirroring `SyncService._syncing`. `session_detail_screen` fires it unawaited and several screens drain on both a manual refresh and a connectivity return, so two concurrent drains over one store were reachable — they would push the same row twice and race each other's state writes. A second concurrent call returns 0 rather than queueing, matching the count-for-a-banner contract callers already have. All eight subclasses inherit both changes.

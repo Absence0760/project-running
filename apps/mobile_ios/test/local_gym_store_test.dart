@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,73 @@ import '../lib/local_gym_store.dart';
 /// per-method failure modes. Tracks the order of operations so we can
 /// assert the drain order (create → update → delete) and the sets that
 /// travelled with each create/update.
+/// Holds the first push open so a test can mutate the store mid-flight.
+class _GatedGymApi extends _FakeGymApi {
+  final pushStarted = Completer<void>();
+  final _gate = Completer<void>();
+
+  void release() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  Future<void> _hold() async {
+    if (!pushStarted.isCompleted) pushStarted.complete();
+    await _gate.future;
+  }
+
+  @override
+  Future<GymWorkoutRow> createGymWorkout({
+    String? id,
+    String? title,
+    required DateTime startedAt,
+    int? durationS,
+    String? notes,
+    bool isPublic = false,
+    String? externalId,
+    DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput> sets = const [],
+  }) async {
+    await _hold();
+    return super.createGymWorkout(
+      id: id,
+      title: title,
+      startedAt: startedAt,
+      durationS: durationS,
+      notes: notes,
+      isPublic: isPublic,
+      externalId: externalId,
+      lastModifiedAt: lastModifiedAt,
+      metadata: metadata,
+      sets: sets,
+    );
+  }
+
+  @override
+  Future<void> updateGymWorkout(
+    String id, {
+    String? title,
+    int? durationS,
+    String? notes,
+    bool? isPublic,
+    DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput>? sets,
+  }) async {
+    await _hold();
+    return super.updateGymWorkout(
+      id,
+      title: title,
+      durationS: durationS,
+      notes: notes,
+      isPublic: isPublic,
+      lastModifiedAt: lastModifiedAt,
+      metadata: metadata,
+      sets: sets,
+    );
+  }
+}
+
 class _FakeGymApi extends ApiClient {
   final List<String> calls = [];
   final Map<String, List<GymSetInput>> sentSets = {};
@@ -621,6 +689,71 @@ void main() {
 
       expect(drained, 0);
       expect(store.hasPending, isTrue);
+    });
+
+    test('an edit during a push stays pending instead of being marked synced',
+        () async {
+      // The drain snapshots the rows, awaits the network, then marks. Marking
+      // by id alone flipped WHATEVER was resident at that later moment, so an
+      // edit made during the push was recorded as synced and never sent —
+      // replaceFromServer's newer-wins then keeps the local copy, so the
+      // divergence is permanent and invisible on both sides.
+      await store.replaceFromServer([_serverWorkout('srv-1', title: 'Old')]);
+      await store.updateLocal('srv-1', title: 'Pushing');
+      final api = _GatedGymApi();
+
+      final drain = store.syncWithServer(api);
+      await api.pushStarted.future;
+      await store.updateLocal('srv-1', title: 'Edited mid-push');
+      api.release();
+      await drain;
+
+      expect(store.byId('srv-1')!.syncState, GymSyncState.pendingUpdate,
+          reason: 'the edit never reached the server, so it is still pending');
+      expect(store.byId('srv-1')!.row['title'], 'Edited mid-push');
+      expect(store.hasPending, isTrue);
+    });
+
+    test('a delete queued during a push is not flipped to synced', () async {
+      // Worse variant: marking the fresh tombstone synced left the server row
+      // alive with no local record that it should be gone.
+      await store.replaceFromServer([_serverWorkout('srv-2', title: 'Old')]);
+      await store.updateLocal('srv-2', title: 'Pushing');
+      final api = _GatedGymApi();
+
+      final drain = store.syncWithServer(api);
+      await api.pushStarted.future;
+      await store.deleteLocal('srv-2');
+      api.release();
+      await drain;
+
+      expect(store.hasPending, isTrue,
+          reason: 'the tombstone must survive to be pushed on the next drain');
+      expect(api.calls, ['update:srv-2']);
+
+      final next = _FakeGymApi();
+      await store.syncWithServer(next);
+      expect(next.calls, ['delete:srv-2']);
+    });
+
+    test('a second drain while one is in flight is a no-op', () async {
+      // session_detail_screen fires syncWithServer unawaited and several
+      // screens drain on both a refresh and a connectivity return, so two
+      // concurrent drains over one store are reachable — they would push the
+      // same row twice and race each other's state writes.
+      final stored =
+          await store.createLocal(startedAt: DateTime.utc(2026, 6, 2));
+      final api = _GatedGymApi();
+
+      final first = store.syncWithServer(api);
+      await api.pushStarted.future;
+      final second = await store.syncWithServer(api);
+      api.release();
+
+      expect(second, 0);
+      expect(await first, 1);
+      expect(api.calls, ['create:${stored.id}'],
+          reason: 'the row must be pushed exactly once');
     });
 
     test('clean store: syncWithServer is a no-op (drained=0)', () async {
