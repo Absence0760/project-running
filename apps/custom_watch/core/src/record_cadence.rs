@@ -72,16 +72,19 @@ impl CheckpointMark {
 }
 
 /// Altitude in metres → wire-format decimetres, dropping values outside the
-/// `i16` decimetre range (about ±3276 m — a frozen
+/// `i16` decimetre range (-3276.8 m..=3276.7 m — a frozen
 /// [`crate::run_store::TrackPoint`] limit; tier-2 widens it) so an out-of-range
 /// reading stores `None`, never a wrong value.
+///
+/// The range is inclusive at BOTH ends: every `i16` decimetre value is
+/// representable, so there is no reason for the bottom of the field to store
+/// nothing while the top stores fine. A NaN or infinite metre value compares
+/// false against both ends and so is dropped, never saturated.
 pub fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
     let dm = alt_m * 10.0;
-    if dm.is_finite() && dm > i16::MIN as f32 && dm <= i16::MAX as f32 {
-        Some(dm as i16)
-    } else {
-        None
-    }
+    (i16::MIN as f32..=i16::MAX as f32)
+        .contains(&dm)
+        .then_some(dm as i16)
 }
 
 /// A held HR estimate ([`crate::hr_duty::shown_bpm`]) → a track point's `bpm`,
@@ -95,9 +98,12 @@ pub fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
 /// and the freshest barometric altitude.
 ///
 /// The barometer is preferred over the fix's own GPS altitude — it is the
-/// steadier of the two over a climb — and both narrow through
-/// [`ele_dm_from_m`], so a reading either side can only ever store an honest
-/// value or nothing.
+/// steadier of the two over a climb — but each candidate narrows through
+/// [`ele_dm_from_m`] on its own, so an out-of-range barometric reading falls
+/// THROUGH to the fix's GPS altitude rather than discarding the elevation
+/// entirely: a wild baro value is a bad sensor reading, while the GPS altitude
+/// beside it is a real measurement, and storing it beats storing nothing. Only
+/// when neither candidate is storable does the point carry no elevation.
 pub fn track_point(
     fix: &Fix,
     start_uptime_s: u32,
@@ -108,7 +114,9 @@ pub fn track_point(
         lat_e7: (fix.lat_deg * 1e7) as i32,
         lon_e7: (fix.lon_deg * 1e7) as i32,
         t_offset_s: fix.uptime_s.saturating_sub(start_uptime_s),
-        ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
+        ele_dm: baro_alt_m
+            .and_then(ele_dm_from_m)
+            .or_else(|| fix.alt_m.and_then(ele_dm_from_m)),
         bpm: bpm_u8(bpm),
     }
 }
@@ -242,9 +250,20 @@ mod tests {
     }
 
     #[test]
-    fn altitude_range_edges_are_inclusive_at_the_top() {
+    fn altitude_range_edges_are_inclusive_at_both_ends() {
+        // Both extremes are representable decimetre values, so both store. The
+        // bounds used to be asymmetric (`>` at the bottom, `<=` at the top), which
+        // silently dropped exactly -3276.8 m while +3276.7 m stored fine.
         assert_eq!(ele_dm_from_m(i16::MAX as f32 / 10.0), Some(i16::MAX));
-        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), None);
+        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), Some(i16::MIN));
+    }
+
+    #[test]
+    fn one_decimetre_past_either_edge_stores_nothing_rather_than_saturating() {
+        // `as i16` would clamp to the same edge value, which reads back as a real
+        // altitude the runner never reached.
+        assert_eq!(ele_dm_from_m((i16::MAX as f32 + 1.0) / 10.0), None);
+        assert_eq!(ele_dm_from_m((i16::MIN as f32 - 1.0) / 10.0), None);
     }
 
     #[test]
@@ -306,12 +325,34 @@ mod tests {
     }
 
     #[test]
-    fn an_out_of_range_baro_altitude_does_not_fall_back_to_the_gps_one() {
-        // The preference is picked BEFORE the narrowing, so a wild barometer
-        // reading stores no elevation rather than silently substituting a GPS
-        // altitude the runner never saw on the wrist.
+    fn an_out_of_range_baro_altitude_falls_back_to_the_gps_one() {
+        // A wild barometric reading is a bad sensor value; the GPS altitude beside
+        // it is a real measurement. Each candidate narrows on its own so the fix's
+        // altitude still reaches the wire — the preference used to be picked BEFORE
+        // the narrowing, which stored no elevation at all.
         let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
-        assert_eq!(track_point(&fix, 1_000, None, Some(9_000.0)).ele_dm, None);
+        assert_eq!(
+            track_point(&fix, 1_000, None, Some(9_000.0)).ele_dm,
+            Some(15_000)
+        );
+        assert_eq!(
+            track_point(&fix, 1_000, None, Some(f32::NAN)).ele_dm,
+            Some(15_000)
+        );
+    }
+
+    #[test]
+    fn a_point_stores_no_elevation_only_when_neither_candidate_is_storable() {
+        let out_of_range = fix_at(40.0, -105.0, Some(9_000.0), 1_000);
+        assert_eq!(
+            track_point(&out_of_range, 1_000, None, Some(9_000.0)).ele_dm,
+            None
+        );
+        let no_gps_alt = fix_at(40.0, -105.0, None, 1_000);
+        assert_eq!(
+            track_point(&no_gps_alt, 1_000, None, Some(9_000.0)).ele_dm,
+            None
+        );
     }
 
     #[test]
