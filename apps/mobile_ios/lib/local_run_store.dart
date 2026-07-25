@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -86,6 +87,14 @@ class LocalRunStore extends ChangeNotifier {
   // tick cost is now O(new-waypoints) instead of O(total).
   int _inProgressWaypointsWritten = 0;
   String? _inProgressRunId;
+
+  /// The in-flight [saveInProgress] append, or null. Two roles: it makes
+  /// overlapping ticks mutually exclusive (the cursor above is read before an
+  /// isolate hop and written after it, so two would append the same waypoints
+  /// twice), and [clearInProgress] awaits it before deleting — the append
+  /// opens in `writeOnlyAppend`, so one that lands after the delete RECREATES
+  /// the file as a phantom partial for a run that has already been saved.
+  Future<void>? _inFlightSave;
 
   /// Display-side half of the §67 owner tag (issue #230): every public read
   /// seam filters to the active account's rows ∪ untagged rows, so user A's
@@ -219,17 +228,6 @@ class LocalRunStore extends ChangeNotifier {
     return added;
   }
 
-  /// Lazily yield every run on disk (full [Run]s with tracks), newest-first by
-  /// the index order, without buffering the whole history in memory. Backs the
-  /// backup export, which must include the complete history — including unsynced
-  /// runs whose track lives only in the local file.
-  Stream<Run> iterateAllRuns() async* {
-    for (final s in _summaries.where(_summaryVisible)) {
-      final run = await runById(s.id);
-      if (run != null) yield run;
-    }
-  }
-
   /// Run ids that the user asked to delete but whose remote-side
   /// `api.deleteRun` failed (network error, RLS, transient 5xx). The
   /// SyncService retries these on the next sync trigger. Surfaced as
@@ -337,10 +335,23 @@ class LocalRunStore extends ChangeNotifier {
     await writeStringAtomic(file, encoded);
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
-    _upsertSummary(stamped, synced: false, atFront: true);
+    // Re-saving a known id (a backup restore, a re-import) is a local edit and
+    // must become DURABLY unsynced — `synced_ids.json` outranks the index on
+    // cold load, so leaving the id there re-marks the run synced next launch
+    // and the rewritten file never drains. Skipped for a brand-new id, which
+    // was never in the set: the terminal run save stays one write.
+    final wasSynced = _syncedIds.remove(stamped.id);
+    _upsertSummary(stamped, synced: false);
+    if (wasSynced) await _persistSyncedIds();
     await _persistIndex();
     notifyListeners();
   }
+
+  /// Whether a run with this id exists anywhere in the local history — the
+  /// full-index test, unlike [contains], which only sees the resident window.
+  /// Unfiltered by owner on purpose: the backup restore uses it to refuse to
+  /// clobber a local copy, and another account's file is still a local copy.
+  bool hasRun(String id) => _summaries.any((s) => s.id == id);
 
   /// Return a copy of [run] with `metadata.created_by_user_id`
   /// stamped. Public so the SyncService can adopt previously-
@@ -428,7 +439,6 @@ class LocalRunStore extends ChangeNotifier {
     _syncedIds.add(merged.id);
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     _upsertSummary(merged, synced: true);
-    _sortSummaries();
     await _persistIndex();
     notifyListeners();
   }
@@ -494,7 +504,6 @@ class LocalRunStore extends ChangeNotifier {
       _upsertSummary(merged, synced: true);
     }
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
-    _sortSummaries();
     await _persistIndex();
     notifyListeners();
   }
@@ -523,9 +532,22 @@ class LocalRunStore extends ChangeNotifier {
     await writeJsonAtomic(file, data);
 
     final idx = _runs.indexWhere((r) => r.id == stamped.id);
-    if (idx >= 0) _runs[idx] = stamped;
+    if (idx >= 0) {
+      _runs[idx] = stamped;
+    } else {
+      // Residency invariant (§135): every unsynced run must be resident,
+      // because `unsyncedRuns` — and so the whole drain — reads `_runs`, never
+      // the track-less summaries. An edit to a windowed-out run would
+      // otherwise be invisible to sync for the rest of the session.
+      _runs.add(stamped);
+      _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    }
     _syncedIds.remove(stamped.id);
     _upsertSummary(stamped, synced: false);
+    // `synced_ids.json` is authoritative on cold load and OVERRIDES the index's
+    // flag, so the un-sync has to be durable here: otherwise the next launch
+    // silently re-marks the run synced and the edit can never leave the phone.
+    await _persistSyncedIds();
     await _persistIndex();
     notifyListeners();
   }
@@ -611,32 +633,47 @@ class LocalRunStore extends ChangeNotifier {
   /// crash) is skipped — earlier lines still reconstruct a valid
   /// partial run. Persona-hunt Round 3 finding Ultra #2.
   Future<void> saveInProgress(Run run) async {
-    final path = _inProgressFile.path;
-    // Reset the cursor if the active run id changed OR the file is
-    // gone (post-clearInProgress). A fresh write starts with the
-    // full track + header.
-    final isFreshRun = _inProgressRunId != run.id ||
-        !File(path).existsSync();
-    if (isFreshRun) {
-      _inProgressRunId = run.id;
-      _inProgressWaypointsWritten = 0;
-    }
-    final newSlice = run.track.length > _inProgressWaypointsWritten
-        ? run.track.sublist(_inProgressWaypointsWritten)
-        : const <Waypoint>[];
+    // The driver is a fire-and-forget Timer.periodic, so a tick whose isolate
+    // spawn outlasts the interval would otherwise overlap the next one: both
+    // read the same cursor, both append the same waypoints, and a recovered
+    // run's polyline doubles back on itself. Skip rather than queue — the
+    // cursor has not advanced, so the skipped waypoints go out with the next
+    // tick and nothing is lost.
+    if (_inFlightSave != null) return;
+    final completer = Completer<void>();
+    _inFlightSave = completer.future;
+    try {
+      final path = _inProgressFile.path;
+      // Reset the cursor if the active run id changed OR the file is
+      // gone (post-clearInProgress). A fresh write starts with the
+      // full track + header.
+      final isFreshRun = _inProgressRunId != run.id || !File(path).existsSync();
+      if (isFreshRun) {
+        _inProgressRunId = run.id;
+        _inProgressWaypointsWritten = 0;
+      }
+      final newSlice = run.track.length > _inProgressWaypointsWritten
+          ? run.track.sublist(_inProgressWaypointsWritten)
+          : const <Waypoint>[];
 
-    // Build the header from Run.toJson() with track stripped — the
-    // loader passes this back to Run.fromJson verbatim plus the
-    // reconstructed track, so it must use the exact same wire shape.
-    final header = Map<String, dynamic>.from(run.toJson())..remove('track');
-    final record = {
-      'h': header,
-      'w': [for (final wp in newSlice) wp.toJson()],
-      't': DateTime.now().toIso8601String(),
-      if (isFreshRun) 'snap': true,
-    };
-    await compute(_appendInProgressLine, {'path': path, 'data': record});
-    _inProgressWaypointsWritten = run.track.length;
+      // Build the header from Run.toJson() with track stripped — the
+      // loader passes this back to Run.fromJson verbatim plus the
+      // reconstructed track, so it must use the exact same wire shape.
+      final header = Map<String, dynamic>.from(run.toJson())..remove('track');
+      final record = {
+        'h': header,
+        'w': [for (final wp in newSlice) wp.toJson()],
+        't': DateTime.now().toIso8601String(),
+        if (isFreshRun) 'snap': true,
+      };
+      await compute(_appendInProgressLine, {'path': path, 'data': record});
+      // Only advance past what this write actually appended. `run.track` is
+      // the caller's snapshot, so a longer live track is picked up next tick.
+      _inProgressWaypointsWritten = run.track.length;
+    } finally {
+      _inFlightSave = null;
+      completer.complete();
+    }
   }
 
   /// Load an in-progress run left over from a previous session, if any.
@@ -688,6 +725,13 @@ class LocalRunStore extends ChangeNotifier {
   /// Remove the in-progress save file. Called on successful [stop] and on
   /// successful recovery (after promoting the partial run into the list).
   Future<void> clearInProgress() async {
+    // Drain an append already past its guard before deleting — see
+    // [_inFlightSave]. The bare catch is right: the save path logs its own
+    // failures, and a failed append is exactly the case where the delete
+    // still has to happen.
+    try {
+      await _inFlightSave;
+    } catch (_) {/* the save reports its own error to its own caller */}
     // Drop the per-run cursor so a subsequent saveInProgress starts
     // a fresh file with a full snapshot. (Ultra #2 cursor reset.)
     _inProgressRunId = null;
@@ -740,29 +784,99 @@ class LocalRunStore extends ChangeNotifier {
     // re-uploads its full track on the next drain.
     final liveIds = _summaries.map((s) => s.id).toSet();
     _syncedIds.retainWhere(liveIds.contains);
+    await _withSidecarLock(_syncedIdsFilename, () async {
+      // Merge, never replace. `background_sync.dart` builds its OWN
+      // LocalRunStore over this same directory in the WorkManager isolate, so
+      // a whole-file write from one process's snapshot silently discards the
+      // other's. An id this process has never heard of belongs to the other's
+      // newer view — carry it through instead of pruning it, or the run it
+      // describes re-uploads its entire track on the next cold start. Ids this
+      // process DOES know are authoritative from `_syncedIds`, so a run it
+      // deliberately holds unsynced can't be resurrected from a stale file.
+      final disk = await _readSyncedIdsSidecar() ?? const <String>{};
+      final merged = <String>{..._syncedIds};
+      for (final id in disk) {
+        // Ids this process knows about are already decided by `_syncedIds`.
+        if (liveIds.contains(id)) continue;
+        // An unknown id is either the other process's newer row or a ghost
+        // whose run was deleted server-side. The run FILE is the
+        // process-independent test — `_summaries` is only this process's view,
+        // so pruning against it would delete the other's work.
+        if (File('${_dir.path}/$id.json').existsSync()) merged.add(id);
+      }
+      try {
+        await writeJsonAtomic(_syncedIdsFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'ids': merged.toList(),
+        });
+      } catch (e) {
+        // Not fatal — the in-memory set is still correct for the rest of
+        // the session; we'll retry on the next sync event.
+        debugPrint('Failed to persist synced ids sidecar: $e');
+      }
+    });
+  }
+
+  /// Hold an exclusive cross-process advisory lock on [name] for the duration
+  /// of [action]. The sidecars are read-modify-write, and the WorkManager
+  /// isolate runs a second store over the same directory — without the lock
+  /// two interleaved merges still drop the later writer's addition. Best
+  /// effort: if the lock can't be taken the action still runs, because a
+  /// merged write without a lock is strictly better than no write at all.
+  Future<void> _withSidecarLock(
+      String name, Future<void> Function() action) async {
+    RandomAccessFile? handle;
     try {
-      await writeJsonAtomic(_syncedIdsFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'ids': _syncedIds.toList(),
-      });
+      handle = await File('${_dir.path}/$name.lock').open(mode: FileMode.write);
+      await handle.lock(FileLock.blockingExclusive);
     } catch (e) {
-      // Not fatal — the in-memory set is still correct for the rest of
-      // the session; we'll retry on the next sync event.
-      debugPrint('Failed to persist synced ids sidecar: $e');
+      debugPrint('local_run_store: sidecar lock unavailable for $name: $e');
+      try {
+        await handle?.close();
+      } catch (_) {/* best-effort */}
+      handle = null;
+    }
+    try {
+      await action();
+    } finally {
+      if (handle != null) {
+        try {
+          await handle.unlock();
+        } catch (e) {
+          debugPrint('local_run_store: sidecar unlock failed for $name: $e');
+        }
+        try {
+          await handle.close();
+        } catch (_) {/* best-effort */}
+      }
     }
   }
 
   /// Insert or replace [run]'s summary, keeping `_summaries` in lockstep with
-  /// the per-run files. [atFront] mirrors `_runs.insert(0, …)` for a freshly
-  /// recorded run; otherwise the caller re-sorts via [_sortSummaries].
-  void _upsertSummary(Run run, {required bool synced, bool atFront = false}) {
+  /// the per-run files AND newest-first.
+  ///
+  /// Newest-first is an invariant of `_summaries`, not a caller obligation.
+  /// runs_screen reads `.last` as "the oldest local run" to drive the cloud
+  /// load-more cursor and the show-more gate, and the old contract ("the caller
+  /// re-sorts") was silently unmet by `update()` — so editing the newest run's
+  /// title moved it to the tail and the cursor then re-fetched the newest page
+  /// forever, making older cloud history unreachable. A back-dated `save()`
+  /// (a CSV / Strava import of runs older than the local history) broke the
+  /// same reader by pushing an old run to the front.
+  void _upsertSummary(Run run, {required bool synced}) {
     _summaries.removeWhere((s) => s.id == run.id);
     final summary = RunSummary.fromRun(run, synced: synced);
-    if (atFront) {
-      _summaries.insert(0, summary);
-    } else {
-      _summaries.add(summary);
+    var lo = 0;
+    var hi = _summaries.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (_summaries[mid].startedAt.isAfter(summary.startedAt)) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
     }
+    _summaries.insert(lo, summary);
   }
 
   void _sortSummaries() =>
@@ -786,17 +900,39 @@ class LocalRunStore extends ChangeNotifier {
   /// set stays correct and cold-load self-heals the disk copy from the per-run
   /// files next launch.
   Future<void> _persistIndex() async {
-    try {
-      await writeJsonAtomic(_indexFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'summaries': [
-          for (final s in _summaries)
-            s.withSynced(_syncedIds.contains(s.id)).toIndexJson(),
-        ],
-      });
-    } catch (e) {
-      debugPrint('local_run_store: failed to persist index: $e');
-    }
+    await _withSidecarLock(_indexFilename, () async {
+      // Merge, never replace — `background_sync.dart` runs a second store over
+      // this directory (§303). The cold-load gate compares the id SET only, so
+      // a whole-file replace from a stale snapshot leaves per-id content drift
+      // that passes the gate and is then re-persisted from memory forever:
+      // every all-history consumer reads the wrong distance while run-detail
+      // (which reads the file) reads the right one.
+      final merged = <String, RunSummary>{
+        for (final s in await _readIndex() ?? const <RunSummary>[]) s.id: s,
+      };
+      for (final s in _summaries) {
+        final disk = merged[s.id];
+        // Per-id newest-wins on the same modification clock `saveFromRemote`
+        // uses; a tie goes to this process, which just wrote the file.
+        if (disk == null ||
+            !_lastModifiedOf(disk.toRun()).isAfter(_lastModifiedOf(s.toRun()))) {
+          merged[s.id] = s.withSynced(_syncedIds.contains(s.id));
+        }
+      }
+      // The run FILE is the process-independent liveness test — pruning
+      // against `_summaries` would delete the other process's rows.
+      merged.removeWhere((id, _) => !File('${_dir.path}/$id.json').existsSync());
+      final out = merged.values.toList()
+        ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      try {
+        await writeJsonAtomic(_indexFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'summaries': [for (final s in out) s.toIndexJson()],
+        });
+      } catch (e) {
+        debugPrint('local_run_store: failed to persist index: $e');
+      }
+    });
   }
 
   /// Read `index.json` into `RunSummary`s, or null when the file is absent,
@@ -848,6 +984,7 @@ class LocalRunStore extends ChangeNotifier {
     final prevOwner = existed ? _pendingRemoteDeletes[runId] : null;
     if (existed && prevOwner == ownerUserId) return;
     _pendingRemoteDeletes[runId] = ownerUserId;
+    _clearedRemoteDeletes.remove(runId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
@@ -864,6 +1001,7 @@ class LocalRunStore extends ChangeNotifier {
       final prevOwner = existed ? _pendingRemoteDeletes[id] : null;
       if (!existed || prevOwner != ownerUserId) {
         _pendingRemoteDeletes[id] = ownerUserId;
+        _clearedRemoteDeletes.remove(id);
         changed = true;
       }
     }
@@ -881,28 +1019,60 @@ class LocalRunStore extends ChangeNotifier {
     // which would silently skip the persistence + notify for those.
     if (!_pendingRemoteDeletes.containsKey(runId)) return;
     _pendingRemoteDeletes.remove(runId);
+    _clearedRemoteDeletes.add(runId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
 
+  /// Ids this process has cleared from [_pendingRemoteDeletes] since its last
+  /// successful sidecar write. Needed because the merge can't read a removal
+  /// out of absence — see [_persistPendingRemoteDeletes].
+  final Set<String> _clearedRemoteDeletes = <String>{};
+
   Future<void> _persistPendingRemoteDeletes() async {
-    try {
-      if (_pendingRemoteDeletes.isEmpty &&
-          _pendingRemoteDeletesFile.existsSync()) {
-        await _pendingRemoteDeletesFile.delete();
-        return;
+    await _withSidecarLock(_pendingRemoteDeletesFilename, () async {
+      // Merge, never replace — see _persistSyncedIds. This sidecar is the
+      // worse of the two to clobber: an entry that goes missing is a run that
+      // stays on the server forever with nothing left to retry it, and the old
+      // code even DELETED the file when its in-memory map was empty, so a
+      // background drain that loaded before the foreground queued a delete
+      // wiped that delete outright.
+      //
+      // Removals are carried by `_clearedRemoteDeletes` rather than by absence
+      // from the map, because absence can't distinguish "I cleared this" from
+      // "they added this while I was running". Additions therefore always win,
+      // which is the safe asymmetry: a repeated delete of an already-deleted
+      // row is a no-op, a dropped one is unrecoverable.
+      final disk =
+          await _readPendingRemoteDeletes() ?? const <String, String?>{};
+      final merged = <String, String?>{
+        for (final e in disk.entries)
+          if (!_clearedRemoteDeletes.contains(e.key)) e.key: e.value,
+      }..addAll(_pendingRemoteDeletes);
+      try {
+        if (merged.isEmpty) {
+          if (_pendingRemoteDeletesFile.existsSync()) {
+            await _pendingRemoteDeletesFile.delete();
+          }
+          _clearedRemoteDeletes.clear();
+          return;
+        }
+        // New format: {"deletes": {id: owner_user_id_or_null}}. Old
+        // format ({"ids": [...]}) is still readable (see
+        // _readPendingRemoteDeletes) for one-way migration from existing
+        // installs — the next write upgrades them.
+        await writeJsonAtomic(_pendingRemoteDeletesFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'deletes': merged,
+        });
+        // Disk now reflects our removals, so a later disk entry for one of
+        // those ids is a genuine re-queue by the other process, not a stale
+        // copy of what we cleared.
+        _clearedRemoteDeletes.clear();
+      } catch (e) {
+        debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
       }
-      // New format: {"deletes": {id: owner_user_id_or_null}}. Old
-      // format ({"ids": [...]}) is still readable (see
-      // _readPendingRemoteDeletes) for one-way migration from existing
-      // installs — the next write upgrades them.
-      await writeJsonAtomic(_pendingRemoteDeletesFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'deletes': _pendingRemoteDeletes,
-      });
-    } catch (e) {
-      debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
-    }
+    });
   }
 
   Future<Map<String, String?>?> _readPendingRemoteDeletes() async {
@@ -940,9 +1110,13 @@ class LocalRunStore extends ChangeNotifier {
     _summaries = [];
     _syncedIds.clear();
     _pendingRemoteDeletes.clear();
+    _clearedRemoteDeletes.clear();
 
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);
+
+    sweepAtomicWriteOrphans(_dir,
+        onError: (m) => debugPrint('local_run_store: $m'));
 
     // listSync is intentional: the async stream form (`_dir.list()`)
     // deadlocks inside `testWidgets` because the I/O isolate's reply
@@ -1025,20 +1199,32 @@ class LocalRunStore extends ChangeNotifier {
     // the fast path. `_runs` holds the full set for this one session (the read
     // is already paid); the next launch windows it. `Future.wait` keeps the
     // cold-start parallel rather than O(n) sequential.
+    // Authority order once the sidecar is unusable: the index's `synced` flag
+    // (a cache of the same set, rewritten from `_syncedIds` on every mutation,
+    // so it can only lag toward "unsynced"), then the legacy per-run flag.
+    // `markSynced` stopped writing that per-run flag, so for a DAMAGED sidecar
+    // it records nothing and reading it reports the whole library as unsynced —
+    // a full re-upload of every track. Unlike `LocalRouteStore`, a damaged
+    // sidecar here does not presume-synced: the two directions aren't
+    // symmetric for runs. A redundant upload costs bandwidth; wrongly
+    // presuming a run synced means it never drains, and a recorded run is the
+    // only copy of something that happened.
+    final indexSynced =
+        index == null ? null : {for (final s in index) if (s.synced) s.id};
+
     final loaded = await Future.wait(files.map(_readRunFile), eagerError: false);
     for (final entry in loaded) {
       if (entry == null) continue;
       _runs.add(entry.run);
       if (sidecarIds != null) {
         if (sidecarIds.contains(entry.run.id)) _syncedIds.add(entry.run.id);
-      } else if (entry.synced) {
-        // Migration path: no sidecar yet, read the legacy per-file flag.
+      } else if (indexSynced != null) {
+        if (indexSynced.contains(entry.run.id)) _syncedIds.add(entry.run.id);
+      } else if (!_syncedIdsSidecarDamaged && entry.synced) {
+        // Migration path: no sidecar was ever written, so the legacy per-file
+        // flag is the only record of sync state — and a real one.
         _syncedIds.add(entry.run.id);
       }
-    }
-
-    if (sidecarIds == null && _syncedIds.isNotEmpty) {
-      await _persistSyncedIds();
     }
 
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
@@ -1046,6 +1232,14 @@ class LocalRunStore extends ChangeNotifier {
       for (final r in _runs)
         RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
     ];
+    // Repair the sidecar from whatever record we recovered — AFTER `_summaries`
+    // exists. `_persistSyncedIds` prunes the set against `_summaries`, so
+    // writing here while it was still empty cleared every recovered id and
+    // durably persisted an empty sidecar: the whole library then read as
+    // unsynced and re-uploaded its tracks on the next drain.
+    if (sidecarIds == null && _syncedIds.isNotEmpty) {
+      await _persistSyncedIds();
+    }
     // Skip the write for a brand-new empty store (no runs AND no prior index).
     if (_runs.isNotEmpty || _indexFile.existsSync()) {
       await _persistIndex();
@@ -1062,16 +1256,27 @@ class LocalRunStore extends ChangeNotifier {
         : name;
   }
 
+  /// Read the authoritative `synced_ids` sidecar. Null means "no usable set" —
+  /// [_syncedIdsSidecarDamaged] separates a sidecar that was never written (a
+  /// pre-sidecar install, where the legacy per-run flag IS the record) from one
+  /// that exists but can't be read (where the per-run flag records nothing,
+  /// because `markSynced` stopped writing it).
+  bool _syncedIdsSidecarDamaged = false;
+
   Future<Set<String>?> _readSyncedIdsSidecar() async {
+    _syncedIdsSidecarDamaged = false;
     final file = _syncedIdsFile;
     if (!file.existsSync()) return null;
     try {
       final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      return (data['ids'] as List).cast<String>().toSet();
+      final ids = data['ids'];
+      if (ids is List) return ids.whereType<String>().toSet();
+      debugPrint('synced_ids sidecar has an unexpected shape');
     } catch (e) {
       debugPrint('Failed to read synced_ids sidecar: $e');
-      return null;
     }
+    _syncedIdsSidecarDamaged = true;
+    return null;
   }
 
   Future<_LoadedRun?> _readRunFile(File file) async {

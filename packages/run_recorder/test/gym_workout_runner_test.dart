@@ -12,6 +12,7 @@ GymRunnerStep _step({
   double? rpe,
   int? restS,
   int? durationS,
+  double? distanceM,
   int? supersetGroup,
 }) =>
     GymRunnerStep(
@@ -25,6 +26,7 @@ GymRunnerStep _step({
       targetRpe: rpe,
       restS: restS,
       targetDurationS: durationS,
+      targetDistanceM: distanceM,
       supersetGroup: supersetGroup,
     );
 
@@ -275,6 +277,7 @@ void main() {
         actualWeightKg: 80,
         actualRpe: 7.5,
         actualDurationS: null,
+        actualDistanceM: null,
         status: GymRunnerStepStatus.completed,
       );
       final json = result.toJson();
@@ -301,6 +304,28 @@ void main() {
       final results = runner.snapshotResults();
       final json = results.first.toJson();
       expect(json, containsPair('actual_duration_s', 50));
+      runner.dispose();
+    });
+
+    test('a distance set records actual_distance_m', () {
+      final runner = GymWorkoutRunner(steps: [
+        _step(setIndex: 0, distanceM: 500, repsMin: null, repsMax: null),
+      ]);
+      runner.start();
+      runner.completeSet(distanceM: 480);
+      final json = runner.snapshotResults().first.toJson();
+      expect(json, containsPair('actual_distance_m', 480));
+      runner.dispose();
+    });
+
+    test('an unrecorded distance records null, never the target', () {
+      final runner = GymWorkoutRunner(steps: [
+        _step(setIndex: 0, distanceM: 500, repsMin: null, repsMax: null),
+      ]);
+      runner.start();
+      runner.completeSet();
+      final json = runner.snapshotResults().first.toJson();
+      expect(json['actual_distance_m'], isNull);
       runner.dispose();
     });
   });
@@ -332,6 +357,26 @@ void main() {
       ]);
       runner.start();
       runner.completeSet(reps: 5, weightKg: 60);
+      expect(runner.adherence(), GymRunnerAdherence.partial);
+      runner.dispose();
+    });
+
+    test('a distance set at or over 80% of target yields completed', () {
+      final runner = GymWorkoutRunner(steps: [
+        _step(setIndex: 0, distanceM: 500, repsMin: null, repsMax: null),
+      ]);
+      runner.start();
+      runner.completeSet(distanceM: 400);
+      expect(runner.adherence(), GymRunnerAdherence.completed);
+      runner.dispose();
+    });
+
+    test('a distance target left unlogged yields partial, never completed', () {
+      final runner = GymWorkoutRunner(steps: [
+        _step(setIndex: 0, distanceM: 500, repsMin: null, repsMax: null),
+      ]);
+      runner.start();
+      runner.completeSet();
       expect(runner.adherence(), GymRunnerAdherence.partial);
       runner.dispose();
     });

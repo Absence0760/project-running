@@ -2353,6 +2353,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Se importaron $count rutas';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Error al importar: $error';
   }
@@ -4306,6 +4311,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get eventRsvpMaybe => 'Quizás';
+
+  @override
+  String get eventOccurrenceCancelled => 'Esta ocurrencia se canceló.';
+
+  @override
+  String get eventRsvpWaitlisted => 'En lista de espera';
 
   @override
   String get eventRsvpDeclined => 'No puedo';
@@ -9031,6 +9042,14 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distancia (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Serie $n';
   }
@@ -10453,6 +10472,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Hora de corte';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Introduce el corte como HH:MM (24 horas)';
+
+  @override
+  String get routeMarkerTimeClock => 'Reloj';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Transcurrido';
+
+  @override
   String get routeMarkerNoteLabel => 'Nota';
 
   @override
@@ -10489,7 +10518,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Introduce una latitud válida (-90 a 90) y una longitud válida (-180 a 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Introducir coordenadas en su lugar';
+  String get routeMarkerEnterCoords => 'Introducir ubicación en su lugar';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11770,6 +11799,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Tiempo objetivo';
+
+  @override
+  String get routeMarkerTargetHelper => 'Horas : minutos : segundos';
 
   @override
   String get routeMarkerTargetInvalid =>

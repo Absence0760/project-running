@@ -554,4 +554,71 @@ void main() {
       expect(p.complete, isTrue);
     });
   });
+
+  group('DST safety of week boundaries', () {
+    // These invariants hold in EVERY timezone, and are the ones a fixed
+    // 24-hour Duration breaks in a DST zone: the boundary walks off local
+    // midnight, so a run near it lands in both adjacent weeks (spring forward)
+    // or in neither (fall back). Run under TZ=America/New_York to see the old
+    // code fail; the source guard in architecture_guards_test.dart is what
+    // catches a regression on a UTC CI box.
+    final transitionDays = <DateTime>[
+      // US spring forward (23-hour day) and fall back (25-hour day).
+      DateTime(2026, 3, 8, 12),
+      DateTime(2026, 11, 1, 12),
+      // EU transitions, which land on different dates.
+      DateTime(2026, 3, 29, 12),
+      DateTime(2026, 10, 25, 12),
+    ];
+
+    for (final weekStart in ['monday', 'sunday']) {
+      test('week start stays on local midnight through a transition '
+          '($weekStart)', () {
+        for (final day in transitionDays) {
+          for (var offset = -7; offset <= 7; offset++) {
+            final probe = DateTime(day.year, day.month, day.day + offset, 12);
+            final start = weekStartLocal(probe, weekStartDay: weekStart);
+            expect(start.hour, 0, reason: 'not midnight for $probe');
+            expect(start.minute, 0, reason: 'not midnight for $probe');
+            expect(start.second, 0, reason: 'not midnight for $probe');
+          }
+        }
+      });
+
+      test('a week end is exactly the next week start — no gap, no overlap '
+          '($weekStart)', () {
+        for (final day in transitionDays) {
+          for (var offset = -7; offset <= 7; offset++) {
+            final probe = DateTime(day.year, day.month, day.day + offset, 12);
+            final end = goalPeriodEnd(GoalPeriod.week, probe,
+                weekStartDay: weekStart);
+            // The instant the week ends must be the start of the week that
+            // contains it. A drifted boundary makes a run in the seam either
+            // double-counted or invisible to every weekly surface.
+            final nextStart = weekStartLocal(end, weekStartDay: weekStart);
+            expect(nextStart, end, reason: 'seam broken for $probe');
+          }
+        }
+      });
+
+      test('every day of a transition week is counted exactly once '
+          '($weekStart)', () {
+        for (final day in transitionDays) {
+          final start = weekStartLocal(day, weekStartDay: weekStart);
+          final end =
+              goalPeriodEnd(GoalPeriod.week, day, weekStartDay: weekStart);
+          // Probe late-evening on each of the seven days plus the seam itself.
+          for (var i = 0; i < 7; i++) {
+            final probe =
+                DateTime(start.year, start.month, start.day + i, 23, 30);
+            final inside =
+                !probe.isBefore(start) && probe.isBefore(end);
+            expect(inside, isTrue,
+                reason: '$probe fell outside its own week '
+                    '($start .. $end)');
+          }
+        }
+      });
+    }
+  });
 }

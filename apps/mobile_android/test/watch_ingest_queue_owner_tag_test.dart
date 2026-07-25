@@ -28,6 +28,15 @@ class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceM
   Future<String?> getApplicationDocumentsPath() async => _docsPath;
 }
 
+/// Uploads always fail — the transient half of the drain's failure
+/// classification.
+class _FailingUploadApi extends _FakeApiClient {
+  @override
+  Future<void> saveRun(Run run, {bool? isPublic}) async {
+    throw StateError('network down');
+  }
+}
+
 class _FakeApiClient extends ApiClient {
   String? fakeUserId;
   final List<Run> saved = [];
@@ -197,6 +206,149 @@ void main() {
       await queue.setLastKnownOwner('user-a');
       // No enqueues — count should be 0 even though the sidecar exists.
       expect(queue.pendingCount, 0);
+    });
+  });
+
+  // ── Durability: atomic write + parse-vs-upload failure classes ──────
+  group('durability', () {
+    test('enqueue writes atomically, leaving no partial file behind',
+        () async {
+      await queue.setLastKnownOwner('user-a');
+      await queue.enqueue(_payload(id: 'a-run-1'));
+
+      final names = Directory('${tempDir.path}/watch_ingest_queue')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)
+          .toList();
+      expect(names.where((n) => n.endsWith('.tmp')), isEmpty);
+      expect(names.where((n) => n.endsWith('.json')), hasLength(1));
+    });
+
+    test('an unparseable entry is quarantined, not retried forever', () async {
+      // A process death mid-write used to leave a truncated file that drain
+      // hit, logged, and left in place — so it was re-read on every sign-in
+      // and pendingCount reported a phantom queued run indefinitely.
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      File('$docPath/truncated.json').writeAsStringSync('{"payload": {"id"');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      await queue.drain(api);
+
+      expect(api.saved, isEmpty);
+      expect(queue.pendingCount, 0,
+          reason: 'a payload nothing can parse is not a pending run');
+      expect(queue.rejectedCount, 1);
+
+      // A second sign-in must not re-read it.
+      await queue.drain(api);
+      expect(queue.rejectedCount, 1);
+    });
+
+    test('a payload with no id is quarantined, never uploaded', () async {
+      // L4: `raw['id'] as String? ?? ''` made a missing id decode "cleanly",
+      // so the failure surfaced on the upload side — where every error is
+      // classified transient. Postgres rejects '' as a uuid on every attempt,
+      // so the entry retried on every sign-in for the life of the install.
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      File('$docPath/no-id.json').writeAsStringSync(jsonEncode({
+        'payload': {
+          'started_at': '2026-04-10T08:00:00.000Z',
+          'duration_s': 1500,
+          'distance_m': 5000.0,
+        }
+      }));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      await queue.drain(api);
+
+      expect(api.saved, isEmpty,
+          reason: 'an id-less run must never reach saveRun');
+      expect(queue.pendingCount, 0);
+      expect(queue.rejectedCount, 1);
+    });
+
+    test('the last-owner stamp is written atomically', () async {
+      // L2: a bare writeAsString truncates to zero bytes first, and init()
+      // reads an empty file as "no owner" — so a kill mid-write drops the
+      // stamp and the next account adopts the previous user's watch run.
+      await queue.setLastKnownOwner('user-a');
+      final names = Directory('${tempDir.path}/watch_ingest_queue')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)
+          .toList();
+      expect(names, contains('last_owner.txt'));
+      expect(names.where((n) => n.endsWith('.tmp')), isEmpty,
+          reason: 'the atomic write renames its temp sibling away');
+
+      final reloaded = WatchIngestQueue();
+      await reloaded.init();
+      expect(reloaded.debugLastKnownOwner, 'user-a');
+    });
+
+    test('a stale atomic-write orphan is swept at init', () async {
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      final stale = File('$docPath/abc.json.0.tmp')..writeAsStringSync('{}');
+      stale.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 3)));
+
+      final reloaded = WatchIngestQueue();
+      await reloaded.init();
+
+      expect(stale.existsSync(), isFalse);
+      expect(reloaded.pendingCount, 0);
+    });
+
+    test('a structurally valid but incomplete payload is quarantined too',
+        () async {
+      // runFromWatchPayload casts started_at / duration_s / distance_m
+      // unguarded, so a payload missing one throws exactly like a decode
+      // failure — and is just as permanent.
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      File('$docPath/incomplete.json').writeAsStringSync(
+          jsonEncode({'payload': {'id': 'x', 'distance_m': 100}}));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      await queue.drain(api);
+
+      expect(queue.pendingCount, 0);
+      expect(queue.rejectedCount, 1);
+    });
+
+    test('an upload failure keeps retrying — it is not quarantined', () async {
+      // The other half of the classification: a transient network failure
+      // must leave the entry queued.
+      await queue.setLastKnownOwner('user-a');
+      await queue.enqueue(_payload(id: 'a-run-1'));
+
+      final api = _FailingUploadApi()..fakeUserId = 'user-a';
+      await queue.drain(api);
+
+      expect(queue.pendingCount, 1);
+      expect(queue.rejectedCount, 0);
+
+      final ok = _FakeApiClient()..fakeUserId = 'user-a';
+      await queue.drain(ok);
+      expect(ok.saved.single.id, 'a-run-1');
+      expect(queue.pendingCount, 0);
+    });
+
+    test('a rejected entry is swept once it passes the retention window',
+        () async {
+      final docPath = '${tempDir.path}/watch_ingest_queue';
+      final old = File('$docPath/stale.json.rejected')
+        ..writeAsStringSync('{')
+        ..setLastModifiedSync(DateTime.now().subtract(const Duration(days: 31)));
+      final recent = File('$docPath/recent.json.rejected')
+        ..writeAsStringSync('{');
+
+      final fresh = WatchIngestQueue();
+      await fresh.init();
+
+      expect(old.existsSync(), isFalse,
+          reason: 'a payload nothing can read is residue, and it carries GPS');
+      expect(recent.existsSync(), isTrue);
     });
   });
 }

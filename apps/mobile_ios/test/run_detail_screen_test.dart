@@ -55,6 +55,22 @@ Run _run({
           : const [],
     );
 
+/// Signed-in fake whose column-only edit push succeeds.
+class _EditOkApi extends ApiClient {
+  final List<String> updated = [];
+
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<void> updateRunFields(Run run) async => updated.add(run.id);
+}
+
+class _EditFailApi extends _EditOkApi {
+  @override
+  Future<void> updateRunFields(Run run) async => throw Exception('offline');
+}
+
 class _ThrowingRouteStore extends LocalRouteStore {
   @override
   Future<void> save(Route route, {bool markSynced = false}) async =>
@@ -906,6 +922,111 @@ void main() {
       expect(runStore.runs, isEmpty);
       expect(runStore.pendingRemoteDeleteIds, isEmpty);
       expect(find.byType(RunDetailScreen), findsNothing);
+    });
+  });
+
+  group('RunDetailScreen — edit push settles the sync state', () {
+    // Same runAsync-window caveat as the delete group: pumping the real event
+    // loop activates the connectivity EventChannel, which is harmless under
+    // pure fake-async but throws unmocked.
+    const connectivityChannel =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+    setUp(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(
+        connectivityChannel,
+        MockStreamHandler.inline(onListen: (arguments, events) {}),
+      );
+    });
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityChannel, null);
+    });
+
+    Future<LocalRunStore> pumpForEdit(
+      WidgetTester tester,
+      Run run,
+      ApiClient api,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      _runsDir = Directory.systemTemp.createTempSync('run_detail_edit_test_');
+      final runStore = LocalRunStore();
+      await tester.runAsync(() async {
+        await runStore.init(overrideDirectory: _runsDir);
+        await runStore.save(run);
+        await runStore.markSynced(run.id);
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunDetailScreen(
+            run: run,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+            apiClient: api,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      return runStore;
+    }
+
+    Future<void> saveViaEditDialog(WidgetTester tester) async {
+      // Whole interaction inside runAsync so the store's real file I/O
+      // (update's atomic write + the synced-ids sidecar) completes.
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Edit run'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        for (var i = 0; i < 200; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+          if (find.byType(AlertDialog).evaluate().isEmpty) break;
+        }
+        for (var i = 0; i < 50; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+        }
+      });
+    }
+
+    testWidgets('a successful updateRunFields leaves nothing to re-upload',
+        (tester) async {
+      // M2: update() marks the run unsynced (durably, since H1), and the
+      // column-only push covers every field the dialog can change — so
+      // leaving it unsynced makes the next drain call saveRunsBatch and
+      // re-gzip + re-upload the entire GPS track for a title edit.
+      final run = _run(title: 'Morning Tempo', withTrack: true);
+      final api = _EditOkApi();
+      final runStore = await pumpForEdit(tester, run, api);
+
+      await saveViaEditDialog(tester);
+
+      expect(api.updated, [run.id]);
+      expect(runStore.unsyncedRuns, isEmpty,
+          reason: 'the server row is current after the column push');
+    });
+
+    testWidgets('a failed updateRunFields leaves the run queued for the drain',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo', withTrack: true);
+      final api = _EditFailApi();
+      final runStore = await pumpForEdit(tester, run, api);
+
+      await saveViaEditDialog(tester);
+
+      expect(runStore.unsyncedRuns.map((r) => r.id), [run.id]);
+
+      // Drain the failure banner's auto-dismiss timer before teardown.
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

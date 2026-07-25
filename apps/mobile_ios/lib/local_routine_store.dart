@@ -307,19 +307,68 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     await persist(tombstone);
   }
 
+  /// Install / refresh ONE routine the caller fetched by id, without touching
+  /// the rest of the library. [replaceFromServer] is a COMPLETE-snapshot
+  /// operation whose prune deletes every routine it wasn't handed, so the
+  /// adopt flows — which know about exactly the routine they just cloned —
+  /// must come through here instead. A row with unpushed local work, or one
+  /// whose local clock is ahead of the server's, is left alone.
+  Future<void> upsertFromServer(
+    Map<String, dynamic> routine,
+    List<StoredRoutineExercise> exercises,
+  ) async {
+    final id = routine['id'];
+    if (id is! String) return;
+    final existing = rowsById[id];
+    if (existing != null && existing.syncState != SyncState.synced) return;
+    final serverTs = _parseTs(routine['last_modified_at']);
+    if (existing != null &&
+        serverTs != null &&
+        existing.lastModifiedAt.isAfter(serverTs)) {
+      return;
+    }
+    await persist(StoredRoutine(
+      row: routine,
+      exercises: exercises,
+      syncState: SyncState.synced,
+      lastModifiedAt: serverTs,
+    ));
+  }
+
   /// Replace the in-memory state from a fresh server fetch (each routine with
   /// its exercises + their planned sets). Pending-* routines are preserved —
   /// only `synced` rows are overwritten so an offline create / delete isn't
   /// clobbered by the server's copy. Newer-wins on the synced copies, mirroring
   /// [LocalGymStore.replaceFromServer].
+  ///
+  /// The library fetches only the newest N routines
+  /// (`fetchGymRoutines(limit:)`), so pass that limit as [fetchLimit]. When the
+  /// returned page is full (>= limit) there may be OLDER routines the fetch
+  /// couldn't see; their lower bound is the oldest `last_modified_at` returned,
+  /// and a synced routine below it is preserved — its absence is "outside the
+  /// fetch window", not a server-side deletion. With no [fetchLimit] this is a
+  /// full replace — correct only when the caller fetched the COMPLETE set.
   Future<void> replaceFromServer(
     List<({Map<String, dynamic> routine, List<StoredRoutineExercise> exercises})>
-        serverRoutines,
-  ) async {
+        serverRoutines, {
+    int? fetchLimit,
+  }) async {
+    DateTime? windowStart;
+    if (fetchLimit != null && serverRoutines.length >= fetchLimit) {
+      for (final r in serverRoutines) {
+        final ts = _parseTs(r.routine['last_modified_at']);
+        if (ts != null && (windowStart == null || ts.isBefore(windowStart))) {
+          windowStart = ts;
+        }
+      }
+    }
     final preserved = <String, StoredRoutine>{};
     final syncedLocal = <String, StoredRoutine>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
+        preserved[entry.key] = entry.value;
+      } else if (windowStart != null &&
+          entry.value.lastModifiedAt.isBefore(windowStart)) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;

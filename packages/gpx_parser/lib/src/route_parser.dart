@@ -7,72 +7,134 @@ import 'package:xml/xml.dart';
 ///
 /// All methods are pure file parsing — no network calls.
 class RouteParser {
-  /// Parse a GPX XML string into a [Route]. Reads `<trkpt>` and `<rtept>` nodes.
+  /// Parse a GPX XML string into a [Route] — the FIRST track in the file.
+  /// Use [routesFromGpx] to get every track.
   static Route fromGpx(String xmlString) {
+    final all = routesFromGpx(xmlString);
+    if (all.isNotEmpty) return all.first;
+    // A pointless file still surfaces the name it declared, so the caller can
+    // say WHICH import came back empty.
     final doc = XmlDocument.parse(xmlString);
+    return _buildRoute(
+        _containerName(doc, const ['trk', 'metadata', 'rte']), const []);
+  }
 
-    // Scope the route name to its container (trk / metadata / rte), not
-    // the first `<name>` anywhere in the document — a `<wpt>` or `<trkpt>`
-    // can carry its own `<name>` (a waypoint label) that would otherwise
-    // shadow the real track name. Matches the web import.ts scoping.
-    final name = _containerName(doc, const ['trk', 'metadata', 'rte']);
+  /// Every route in a GPX file: one per `<trk>`, else one per `<rte>`, else a
+  /// single route built from the loose `<wpt>`s.
+  ///
+  /// Scoped per container on purpose. Collecting `trkpt` document-wide joined
+  /// unrelated tracks into ONE polyline, so a file holding a London loop and a
+  /// New York loop imported as a single route with a 5,500 km transatlantic
+  /// leg — poisoning its distance, elevation and map. Mirrors the web
+  /// importer's one-route-per-track contract (`integrations/import.ts`).
+  static List<Route> routesFromGpx(String xmlString) {
+    final doc = XmlDocument.parse(xmlString);
+    final docName = _containerName(doc, const ['metadata']);
+    final routes = <Route>[];
 
-    final points = <Waypoint>[];
-    // Track points
-    for (final pt in doc.findAllElements('trkpt')) {
-      final w = _waypointFromGpxNode(pt);
-      if (w != null) points.add(w);
-    }
-    // Route points (fallback)
-    if (points.isEmpty) {
-      for (final pt in doc.findAllElements('rtept')) {
-        final w = _waypointFromGpxNode(pt);
-        if (w != null) points.add(w);
+    for (final trk in doc.findAllElements('trk')) {
+      final points = _waypointsFrom(trk, 'trkpt');
+      if (points.isNotEmpty) {
+        routes.add(_buildRoute(_elementName(trk) ?? docName, points));
       }
     }
-    // Plain waypoints (last resort)
-    if (points.isEmpty) {
+    if (routes.isEmpty) {
+      for (final rte in doc.findAllElements('rte')) {
+        final points = _waypointsFrom(rte, 'rtept');
+        if (points.isNotEmpty) {
+          routes.add(_buildRoute(_elementName(rte) ?? docName, points));
+        }
+      }
+    }
+    // Loose waypoints are a single ordered route — they have no container to
+    // split on.
+    if (routes.isEmpty) {
+      final points = <Waypoint>[];
       for (final pt in doc.findAllElements('wpt')) {
         final w = _waypointFromGpxNode(pt);
         if (w != null) points.add(w);
       }
+      if (points.isNotEmpty) routes.add(_buildRoute(docName, points));
     }
-
-    return _buildRoute(name, points);
+    return routes;
   }
 
-  /// Parse a KML XML string into a [Route]. Reads `<coordinates>` from
-  /// the first `<LineString>`.
-  static Route fromKml(String xmlString) {
-    final doc = XmlDocument.parse(xmlString);
+  static const _fallbackName = 'Imported route';
 
-    final name = doc
-            .findAllElements('name')
+  static String? _elementName(XmlElement el) {
+    final n = el.findElements('name').firstOrNull?.innerText.trim();
+    return (n == null || n.isEmpty) ? null : n;
+  }
+
+  static List<Waypoint> _waypointsFrom(XmlElement container, String tag) {
+    final points = <Waypoint>[];
+    for (final pt in container.findAllElements(tag)) {
+      final w = _waypointFromGpxNode(pt);
+      if (w != null) points.add(w);
+    }
+    return points;
+  }
+
+  /// Parse a KML XML string into a [Route] — the FIRST line in the file.
+  /// Use [routesFromKml] to get every line.
+  static Route fromKml(String xmlString) {
+    final all = routesFromKml(xmlString);
+    if (all.isNotEmpty) return all.first;
+    final doc = XmlDocument.parse(xmlString);
+    final name = doc.findAllElements('name').firstOrNull?.innerText.trim();
+    return _buildRoute(
+        (name == null || name.isEmpty) ? _fallbackName : name, const []);
+  }
+
+  /// Every route in a KML file: one per `<LineString>`.
+  ///
+  /// Scoped to LineStrings on purpose. Taking the first `<coordinates>`
+  /// anywhere in the document meant a `<Point>` placemark — the "start pin" a
+  /// Google My Maps export writes BEFORE the track — won the lookup, so the
+  /// whole route imported as a single point with zero distance and the real
+  /// line was dropped without a word.
+  static List<Route> routesFromKml(String xmlString) {
+    final doc = XmlDocument.parse(xmlString);
+    final docName = doc
+            .findAllElements('Document')
+            .firstOrNull
+            ?.findElements('name')
             .firstOrNull
             ?.innerText
             .trim() ??
-        'Imported route';
+        _fallbackName;
 
-    final coordsNode = doc.findAllElements('coordinates').firstOrNull;
-    if (coordsNode == null) {
-      return Route(id: _id(), name: name, waypoints: const [], distanceMetres: 0);
+    final routes = <Route>[];
+    for (final line in doc.findAllElements('LineString')) {
+      final coordsNode = line.findElements('coordinates').firstOrNull;
+      if (coordsNode == null) continue;
+      final points = _kmlCoords(coordsNode.innerText);
+      if (points.isEmpty) continue;
+      // The name lives on the enclosing Placemark, not the LineString.
+      final placemark = line.ancestors
+          .whereType<XmlElement>()
+          .where((e) => e.name.local == 'Placemark')
+          .firstOrNull;
+      final name =
+          (placemark == null ? null : _elementName(placemark)) ?? docName;
+      routes.add(_buildRoute(name, points));
     }
+    return routes;
+  }
 
+  static List<Waypoint> _kmlCoords(String raw) {
     final points = <Waypoint>[];
-    final raw = coordsNode.innerText.trim().split(RegExp(r'\s+'));
-    for (final triple in raw) {
+    for (final triple in raw.trim().split(RegExp(r'\s+'))) {
       final parts = triple.split(',');
-      if (parts.length >= 2) {
-        final lng = double.tryParse(parts[0]);
-        final lat = double.tryParse(parts[1]);
-        final ele = parts.length >= 3 ? double.tryParse(parts[2]) : null;
-        if (lat != null && lng != null) {
-          points.add(Waypoint(lat: lat, lng: lng, elevationMetres: ele));
-        }
+      if (parts.length < 2) continue;
+      final lng = double.tryParse(parts[0]);
+      final lat = double.tryParse(parts[1]);
+      final ele = parts.length >= 3 ? double.tryParse(parts[2]) : null;
+      if (lat != null && lng != null) {
+        points.add(Waypoint(lat: lat, lng: lng, elevationMetres: ele));
       }
     }
-
-    return _buildRoute(name, points);
+    return points;
   }
 
   /// Parse a TCX (Training Center XML) string into a [Route]. Reads

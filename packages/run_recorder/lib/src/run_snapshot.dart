@@ -11,6 +11,22 @@ class RunSnapshot {
   /// keeps ticking and the live map falls back to its "Waiting for GPS..."
   /// placeholder until a fix arrives.
   final Waypoint? currentPosition;
+
+  /// Wall-clock time the fix in [currentPosition] was accepted from the
+  /// sensor, or null while no fix has arrived. The 1-second timer re-emits
+  /// the LAST fix on every tick, so the arrival time of a snapshot is not
+  /// the age of its position — anything deciding "is the GPS still alive"
+  /// (a lost-signal banner, a spectator ping, a cut-off projection) must
+  /// threshold on this and never on `currentPosition != null`.
+  final DateTime? positionFixedAt;
+
+  /// False when [currentPosition] is a fix the distance filter REJECTED
+  /// (jitter below the movement threshold, or an implausible teleport). It
+  /// still drives the blue dot at sensor rate, but it must never advance
+  /// route progress — a rejected teleport would otherwise latch every
+  /// course-marker cue it skipped over.
+  final bool positionTrusted;
+
   final double? offRouteDistanceMetres;
 
   /// Distance remaining to the end of the selected route, in metres.
@@ -33,6 +49,8 @@ class RunSnapshot {
     required this.distanceMetres,
     this.currentPaceSecondsPerKm,
     this.currentPosition,
+    this.positionFixedAt,
+    this.positionTrusted = true,
     this.offRouteDistanceMetres,
     this.routeRemainingMetres,
     this.track = const [],

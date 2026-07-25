@@ -200,6 +200,8 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       }
     }
 
+    sweepAtomicWriteOrphans(d, onError: (m) => debugPrint('$debugLabel: $m'));
+
     // Reuse a valid, matching on-disk index for the summary view — its id-set
     // must equal the on-disk row-file id-set (membership only, no reads). A
     // missing / corrupt / drifted index (crash between a row write and the
@@ -328,38 +330,78 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// banner when ≥1. Per-row failures are isolated: a failed push leaves the
   /// row in its pending state for the next drain.
   Future<int> syncWithServer(ApiClient api) async {
-    var drained = 0;
-    for (final stored in List<S>.from(rowsById.values)) {
-      try {
-        switch (stored.syncState) {
-          case SyncState.pendingCreate:
-            await pushCreate(api, stored);
-            await markSynced(stored.id);
-            drained++;
-            break;
-          case SyncState.pendingUpdate:
-            await pushUpdate(api, stored);
-            await markSynced(stored.id);
-            drained++;
-            break;
-          case SyncState.pendingDelete:
-            await pushDelete(api, stored);
-            await dropRow(stored.id);
-            drained++;
-            break;
-          case SyncState.synced:
-            break;
+    // Drain guard, mirroring SyncService._syncing. `session_detail_screen`
+    // fires this unawaited and several screens drain on both a manual refresh
+    // and a connectivity return, so two concurrent drains over one store are
+    // reachable — they would push the same row twice and race each other's
+    // state writes.
+    if (_syncing) return 0;
+    _syncing = true;
+    try {
+      var drained = 0;
+      for (final stored in List<S>.from(rowsById.values)) {
+        try {
+          switch (stored.syncState) {
+            case SyncState.pendingCreate:
+              await pushCreate(api, stored);
+              await markSynced(stored);
+              drained++;
+              break;
+            case SyncState.pendingUpdate:
+              await pushUpdate(api, stored);
+              await markSynced(stored);
+              drained++;
+              break;
+            case SyncState.pendingDelete:
+              await pushDelete(api, stored);
+              // Same rule as markSynced: only drop the row we actually
+              // deleted. A row re-created during the push is a NEW local row
+              // that has never been sent.
+              if (identical(rowsById[stored.id], stored)) {
+                await dropRow(stored.id);
+              } else {
+                debugPrint('$debugLabel: ${stored.id} was replaced during its '
+                    'delete push — keeping the resident row');
+              }
+              drained++;
+              break;
+            case SyncState.synced:
+              break;
+          }
+        } catch (e) {
+          debugPrint('$debugLabel: sync failed for ${stored.id}: $e');
         }
-      } catch (e) {
-        debugPrint('$debugLabel: sync failed for ${stored.id}: $e');
       }
+      return drained;
+    } finally {
+      _syncing = false;
     }
-    return drained;
   }
 
-  Future<void> markSynced(String id) async {
-    final existing = rowsById[id];
+  bool _syncing = false;
+
+  /// Flip [pushed] to `synced` — but only while it is still the resident copy.
+  ///
+  /// [syncWithServer] snapshots the rows, awaits a network push, then marks.
+  /// Marking by id alone flipped WHATEVER was resident at that later moment,
+  /// so an edit made during the push was recorded as synced and never sent;
+  /// `replaceFromServer`'s newer-wins then preserved the local copy, leaving a
+  /// divergence that is permanent and invisible on both sides. The
+  /// delete-during-push variant was worse: it flipped the fresh tombstone to
+  /// `synced`, so the server row survived with no local record that it should
+  /// be gone.
+  ///
+  /// Entries are immutable and every mutation installs a new instance, so
+  /// identity is an exact "did this row change under us" test. A false
+  /// negative only costs one more drain.
+  Future<void> markSynced(S pushed) async {
+    final existing = rowsById[pushed.id];
     if (existing == null) return;
+    if (!identical(existing, pushed)) {
+      debugPrint('$debugLabel: ${pushed.id} changed during its push — left '
+          'pending for the next drain');
+      return;
+    }
     await persist(asSynced(existing));
   }
 
@@ -446,11 +488,19 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// written as `pendingCreate` so [syncWithServer] pushes it once the user
   /// signs in. Additive + idempotent: an id already present is left untouched
   /// so re-running a restore can't clobber a locally-newer copy.
-  Future<int> restoreFromBackup(List<Map<String, dynamic>> records) async {
+  Future<int> restoreFromBackup(
+    List<Map<String, dynamic>> records, {
+    bool generateNewIds = false,
+  }) async {
     var imported = 0;
     for (final json in records) {
       try {
-        final parsed = entryFromJson(json);
+        final record = generateNewIds ? _reKeyed(json) : json;
+        if (record == null) {
+          debugPrint('$debugLabel: restore refused a record it cannot re-key');
+          continue;
+        }
+        final parsed = entryFromJson(record);
         if (rowsById.containsKey(parsed.id)) continue;
         await _persistRow(asPendingCreate(parsed));
         imported++;
@@ -463,6 +513,26 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       notifyListeners();
     }
     return imported;
+  }
+
+  /// Re-mint a restored record's id, so restoring SOMEONE ELSE's archive
+  /// can't queue a create against a primary key that already exists. Returns
+  /// null when the record's shape carries no id to re-mint — refusing is the
+  /// only safe answer there, because a queued foreign id produces a
+  /// `pendingCreate` whose INSERT can never succeed: `pushCreate` fails on the
+  /// PK (or RLS), the failure is swallowed, `hasPending` never clears, and
+  /// every refresh re-runs the drain forever with no backoff.
+  ///
+  /// Every subclass keeps its id at `row['id']` and serialises the same
+  /// `{row, sync_state, last_modified_at}` envelope, so this is generic; a
+  /// future entry shape that breaks that gets refused rather than corrupted.
+  Map<String, dynamic>? _reKeyed(Map<String, dynamic> json) {
+    final row = json['row'];
+    if (row is! Map || row['id'] is! String) return null;
+    return {
+      ...json,
+      'row': {...Map<String, dynamic>.from(row), 'id': newUuid()},
+    };
   }
 
   /// Return a copy of [entry] forced into `pendingCreate`, preserving its
@@ -503,8 +573,16 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     _indexDirty = false;
     final d = dir;
     if (d != null && d.existsSync()) {
+      // Delete EVERY file, not just `*.json`. The store owns this directory
+      // outright, and `writeStringAtomic` leaves a `<name>.json.<n>.tmp`
+      // sibling behind whenever the process dies between its flush and its
+      // rename — an orphan that every listing in this layer filters out, so it
+      // survives sign-out carrying a full row (for LocalCrossingsStore, a bib
+      // number and weigh-in fields). The contract here is "nothing of the
+      // prior user survives", which a filename filter can only ever
+      // approximate.
       for (final entity in d.listSync()) {
-        if (entity is! File || !entity.path.endsWith('.json')) continue;
+        if (entity is! File) continue;
         try {
           entity.deleteSync();
         } catch (e) {

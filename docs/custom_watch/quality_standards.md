@@ -201,7 +201,7 @@ Tier 1 explicitly does **not** have to hit:
 
 ## Pinning
 
-- Decision recording this doc: [decisions.md § 299](../architecture/decisions.md).
+- Decision recording this doc: [decisions.md § 314](../architecture/decisions.md).
 - Definition of Done: [§ 82](../architecture/decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) (unchanged).
 - Power methodology: [§ 83](../architecture/decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem).
 - BLE verification ceiling: [§ 210](../architecture/decisions.md#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default).

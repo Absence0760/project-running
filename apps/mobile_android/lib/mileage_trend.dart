@@ -88,18 +88,16 @@ List<MileagePeriod> aggregateMileage(
   // empty bucket for any key that's missing. Handles the "no runs"
   // case (ordered is empty → anchor is the current week/month/year,
   // we back-fill from there).
-  if (effectiveMin > 0 && ordered.length < effectiveMin) {
-    final anchor = ordered.isNotEmpty
-        ? ordered.last.startsAt
-        : _startOfBucket(now, view);
+  if (effectiveMin > 0) {
+    // The window always ENDS at the bucket containing `now`, even when nothing
+    // was logged in it. It used to end at the last bucket WITH DATA, so an
+    // idle runner's rightmost bar was a three-week-old total — and the card
+    // labels that bar "this week". Back-fill then walks back from now, which
+    // is what this parameter has always claimed to do.
+    final anchor = _startOfBucket(now, view);
     final existingKeys =
         ordered.map((b) => _keyForDate(b.startsAt, view)).toSet();
-    // Walk back from the anchor bucket up to `effectiveMin` buckets
-    // total. We need (effectiveMin - 1) buckets STARTING from the
-    // anchor going back (the anchor is one of them if present;
-    // otherwise we include it as the "current" bucket).
-    final include = !existingKeys.contains(_keyForDate(anchor, view));
-    if (include) {
+    if (!existingKeys.contains(_keyForDate(anchor, view))) {
       ordered.add(_Bucket(
         startsAt: anchor,
         label: _labelFor(anchor, view, localeTag),
@@ -141,7 +139,11 @@ List<MileagePeriod> aggregateMileage(
 DateTime _previousBucketStart(DateTime d, MileageView view) {
   switch (view) {
     case MileageView.weekly:
-      return d.subtract(const Duration(days: 7));
+      // Calendar arithmetic, not 7×24 h — a week spanning a DST transition is
+      // 167 or 169 hours, so a fixed Duration walks the boundary off local
+      // midnight and the back-filled bars are labelled a week early. Same
+      // reasoning as weekStartLocal in goals.dart.
+      return DateTime(d.year, d.month, d.day - 7);
     case MileageView.monthly:
       return DateTime(d.year, d.month - 1);
     case MileageView.yearly:
@@ -211,8 +213,10 @@ String _labelFor(DateTime d, MileageView view, String localeTag) {
 }
 
 DateTime _mondayOf(DateTime d) {
-  // DateTime.weekday: Mon=1..Sun=7. Subtract (weekday - 1) days, zero
-  // out the time so the bucket boundary is midnight local time.
+  // DateTime.weekday: Mon=1..Sun=7. Step back (weekday - 1) days with the
+  // year/month/day constructor so the boundary is local midnight even when the
+  // week spans a DST transition — a fixed Duration lands on 23:00 the previous
+  // day and mis-buckets every run in the seam. See goals.dart weekStartLocal.
   final local = DateTime(d.year, d.month, d.day);
-  return local.subtract(Duration(days: local.weekday - 1));
+  return DateTime(local.year, local.month, local.day - (local.weekday - 1));
 }

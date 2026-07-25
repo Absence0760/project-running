@@ -45,17 +45,60 @@ void main() {
     });
 
     test('the 0 band marks the "now" announcement', () {
-      final a = TurnCueAnnouncer([_cue(200, TurnDirection.left)]);
-      // Jump straight to the turn — far bands fire first on the way in, so
-      // start close enough that 300/100 already passed.
-      a.announcementFor(700); // far past nothing (turn is at 200, behind)
       final fresh = TurnCueAnnouncer([_cue(200, TurnDirection.left)]);
-      // Approach: 300 fires, 100 fires, then now.
-      expect(fresh.announcementFor(0)!.thresholdM, 300);
-      expect(fresh.announcementFor(100)!.thresholdM, 100);
+      // Approach: 300 fires, 100 fires, then now. Each announcement reports
+      // the runner's REAL distance ahead, not the band that triggered it.
+      final far = fresh.announcementFor(0);
+      expect(far!.thresholdM, 300);
+      expect(far.aheadM, 200,
+          reason: 'the turn is 200 m away — a cue saying "in 300 metres" is '
+              'simply false');
+      final near = fresh.announcementFor(100);
+      expect(near!.thresholdM, 100);
+      expect(near.aheadM, 100);
       final now = fresh.announcementFor(190);
       expect(now!.thresholdM, 0);
       expect(now.isNow, isTrue);
+      expect(now.aheadM, 10);
+    });
+
+    test('a turn first seen inside a band announces the tightest one', () {
+      // The common case the band walk got wrong: a route whose first turn is
+      // 120 m from the start. Firing 300 then 100 then "now" in three
+      // consecutive snapshots told the runner a distance they were nowhere
+      // near, twice.
+      final a = TurnCueAnnouncer([_cue(120, TurnDirection.left)]);
+      final first = a.announcementFor(0);
+      expect(first!.thresholdM, 100,
+          reason: 'the 300 band is retired silently — the runner is 120 m '
+              'out, not 300');
+      expect(first.aheadM, 120);
+      // The retired band never speaks later either.
+      expect(a.announcementFor(5), isNull);
+      final now = a.announcementFor(100);
+      expect(now!.isNow, isTrue);
+    });
+
+    test('an along-route jump past several bands announces once', () {
+      // A GPS gap (tunnel, batched fixes) can advance the along-route value
+      // by more than a band width in one step.
+      final a = TurnCueAnnouncer([_cue(1000, TurnDirection.right)]);
+      expect(a.announcementFor(700)!.thresholdM, 300);
+      final afterGap = a.announcementFor(960);
+      expect(afterGap!.aheadM, 40,
+          reason: 'the spoken distance is the real one, not the band');
+      expect(afterGap.thresholdM, 100);
+      final now = a.announcementFor(995);
+      expect(now!.isNow, isTrue);
+      expect(a.announcementFor(1000), isNull,
+          reason: 'every band of this turn is spent');
+    });
+
+    test('a turn first observed at the corner still says "now"', () {
+      final a = TurnCueAnnouncer([_cue(15, TurnDirection.right)]);
+      final ann = a.announcementFor(0);
+      expect(ann!.isNow, isTrue,
+          reason: 'a route starting at a corner must still be announced');
     });
 
     test('a turn well behind the runner is never announced', () {
@@ -99,6 +142,50 @@ void main() {
     test('null is returned when no turn is near', () {
       final a = TurnCueAnnouncer([_cue(5000, TurnDirection.left)]);
       expect(a.announcementFor(100), isNull);
+    });
+  });
+
+  group('reset (per-recording fired state)', () {
+    test('a second run over the same route announces every band again', () {
+      final a = TurnCueAnnouncer([
+        _cue(400, TurnDirection.left),
+        _cue(1200, TurnDirection.right),
+      ]);
+      // Run 1: walk the whole route so every band of every turn latches.
+      for (final along in <double>[100, 300, 395, 900, 1100, 1195, 1300]) {
+        a.announcementFor(along);
+      }
+      expect(a.announcementFor(100), isNull,
+          reason: 'all bands latched after the first pass');
+
+      a.reset();
+
+      expect(a.announcementFor(100)!.thresholdM, 300);
+      expect(a.announcementFor(300)!.thresholdM, 100);
+      expect(a.announcementFor(395)!.thresholdM, 0);
+      expect(a.announcementFor(900)!.thresholdM, 300);
+      expect(a.announcementFor(1100)!.thresholdM, 100);
+      expect(a.announcementFor(1195)!.thresholdM, 0);
+    });
+
+    test('reset mid-route re-arms the bands already spoken', () {
+      final a = TurnCueAnnouncer([_cue(400, TurnDirection.left)]);
+      expect(a.announcementFor(100)!.thresholdM, 300);
+      expect(a.announcementFor(300)!.thresholdM, 100);
+      a.reset();
+      expect(a.announcementFor(100)!.thresholdM, 300);
+    });
+
+    test('reset on a never-used announcer is a no-op', () {
+      final a = TurnCueAnnouncer([_cue(400, TurnDirection.left)]);
+      a.reset();
+      expect(a.announcementFor(100)!.thresholdM, 300);
+    });
+
+    test('reset does not resurrect turns the runner is already past', () {
+      final a = TurnCueAnnouncer([_cue(100, TurnDirection.right)]);
+      a.reset();
+      expect(a.announcementFor(500), isNull);
     });
   });
 }

@@ -47,9 +47,29 @@ const double kCrossSourceDistanceFraction = 0.05;
 /// index at the DB, the mobile equivalent of the web importers running their
 /// exact `seen`/`composite` dedupe first), and a zero-distance existing run is
 /// ignored so a trackless indoor summary can't false-match.
+/// Sources that are AGGREGATORS, not providers: Health Connect and HealthKit
+/// hold records written by many other apps, so two rows both tagged with one
+/// of these can be the same physical run recorded by Garmin Connect and by
+/// Samsung Health. They carry different record uuids, so the `external_id`
+/// unique index that guards a same-source RE-import does not see them as the
+/// same thing — skipping the comparison let both land and doubled the
+/// runner's mileage, PRs and heatmap.
+const Set<RunSource> kAggregatorSources = {
+  RunSource.healthconnect,
+  RunSource.healthkit,
+};
+
 bool isCrossSourceDuplicate(Run candidate, List<Run> existing) {
   for (final r in existing) {
-    if (r.source == candidate.source) continue;
+    // Same-source pairs are normally left to the external_id index — except
+    // for an aggregator, where "same source" says nothing about which app
+    // actually recorded the run. Two genuinely distinct runs cannot start
+    // within 180 s of each other AND match to 5 % on distance, so widening
+    // the comparison here can't suppress a real one.
+    if (r.source == candidate.source &&
+        !kAggregatorSources.contains(candidate.source)) {
+      continue;
+    }
     final dt = r.startedAt.difference(candidate.startedAt).abs();
     if (dt > kCrossSourceTimeWindow) continue;
     final candidateDist = candidate.distanceMetres;

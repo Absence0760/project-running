@@ -98,7 +98,12 @@ with markers (which define the checkpoints) and the roadbook cutoff math.
 - **Mobile volunteer screen (offline-first):** pick event + your checkpoint →
   scan/enter bib → stamp in/out → works fully offline via a new
   `local_crossings_store` (mirror `OfflineSyncStore`), syncs in batches when
-  signal returns. This is the persona's core surface.
+  signal returns. This is the persona's core surface. The local cache is
+  bounded by `LocalCrossingsStore.kSyncedRetention` (90 days from
+  `recorded_at`, mirroring the server-side Art 9 scrub window in migration
+  `20270317_001`), applied on `replaceFromServer`. **Only `synced` records are
+  ever dropped** — an unsynced stamp is unsent data and the only copy that
+  exists — and a record with an unparseable `recorded_at` is kept.
 
 ### P2 — live results + cutoff board (web, organiser)
 - Organiser dashboard ingesting crossings → per-runner progress + projected /

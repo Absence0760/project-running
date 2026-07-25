@@ -169,9 +169,18 @@ class RunRecorder {
   // (which used to fire 1×/second minimum + once per GPS fix).
   late final UnmodifiableListView<Waypoint> _trackView =
       UnmodifiableListView(_track);
+  // Lowest `_track` index [_calculatePace] may walk back to. Bumped to the
+  // current track length on every resume so the rolling-pace window never
+  // straddles a pause (or a dead-process gap), whose wall-clock duration would
+  // otherwise be charged to the post-resume distance.
+  int _paceFloorIdx = 0;
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
   /// on every fix, independent of the track-append threshold.
   Waypoint? _currentWaypoint;
+  /// Wall-clock time [_currentWaypoint] was accepted from the sensor. The
+  /// 1-second timer re-emits the same fix forever, so this — not the
+  /// snapshot's arrival — is the only honest measure of GPS liveness.
+  DateTime? _currentWaypointAt;
   /// Last position that was appended to [_track]. Used to gate the next
   /// track append + distance accumulation on real movement.
   Position? _lastTrackedPosition;
@@ -191,6 +200,14 @@ class RunRecorder {
   // segment jumps backwards and "distance remaining" climbs UP. Clamping the
   // search to start at the last matched index keeps remaining non-increasing.
   int _minMatchedSegmentIdx = 1;
+  // Whether [_currentWaypoint] is a fix the L1 distance chain accepted into
+  // the track. A fix rejected as an implausible teleport still refreshes the
+  // blue dot, but must never drive route progress: the closest-segment search
+  // ADVANCES the monotonic [_minMatchedSegmentIdx] floor, and the floor is by
+  // design never lowered — so one corrupt fix would pin the search kilometres
+  // ahead for the rest of the run, permanently inflating off-route distance
+  // (up to a false safety escalation) and understating distance remaining.
+  bool _currentWaypointTrusted = true;
   DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
@@ -248,6 +265,10 @@ class RunRecorder {
   bool _treadmillMode = false;
   double _treadmillDistanceMetres = 0;
   double? _treadmillBaselineMetres;
+  // Last cumulative belt total seen. A total BELOW this one is the console
+  // having restarted its own session and zeroed the counter; the baseline
+  // alone can't detect that (it is usually 0, so nothing is ever below it).
+  double? _treadmillLastTotalMetres;
   double _treadmillLastSpeedMps = 0;
   DateTime? _treadmillLastSampleAt;
   // Armed by [pause] so a cumulative-distance belt advance during the pause is
@@ -329,12 +350,15 @@ class RunRecorder {
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
+    _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
+    _currentWaypointTrusted = true;
+    _paceFloorIdx = 0;
     _recording = false;
     _paused = false;
     _route = route;
@@ -481,6 +505,7 @@ class RunRecorder {
     _laps.clear();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = 0;
     _weakGps = false;
     _resetTreadmillAccumulators();
     _recording = true;
@@ -613,6 +638,7 @@ class RunRecorder {
       ..start();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = _track.length;
     _weakGps = false;
     _resetTreadmillAccumulators();
     _recording = true;
@@ -678,12 +704,15 @@ class RunRecorder {
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
+    _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
+    _currentWaypointTrusted = true;
+    _paceFloorIdx = 0;
     _recording = false;
     _paused = false;
     _route = route;
@@ -772,6 +801,7 @@ class RunRecorder {
     _stopwatch.start();
     _lastTrackedPosition = null; // avoid a big jump after resume
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = _track.length;
     // Drop the speed-integration anchor too. Without this, the first
     // post-resume belt sample integrates dt back to a timestamp written
     // during/before the pause, crediting the paused gap as distance for any
@@ -836,10 +866,26 @@ class RunRecorder {
             _treadmillNeedsRebaseline = false;
           }
           _treadmillBaselineMetres ??= totalDistanceMetres;
-          final delta = totalDistanceMetres - _treadmillBaselineMetres!;
+          final lastTotal = _treadmillLastTotalMetres;
+          if (lastTotal != null && totalDistanceMetres < lastTotal) {
+            // The belt's cumulative counter went BACKWARDS. An FTMS console
+            // zeroes it whenever its own session restarts (safety key pulled,
+            // stop/start mid-run, workout ended on the console) — a permanent
+            // step down, not a transient glitch, so the decrease has to be
+            // measured against the last total we saw rather than the baseline
+            // (which is usually 0 and so never trips). Holding the last good
+            // value froze the headline distance for the rest of the run and
+            // then dropped it to 0 once the belt climbed past the baseline
+            // again. Rebase onto the new counter origin, preserving what has
+            // already been accumulated (same formula as the pause and
+            // post-resume re-anchors above), so belt distance is monotonic.
+            _treadmillBaselineMetres =
+                totalDistanceMetres - _treadmillDistanceMetres;
+          }
           _treadmillDistanceMetres =
-              delta < 0 ? _treadmillDistanceMetres : delta;
+              totalDistanceMetres - _treadmillBaselineMetres!;
         }
+        _treadmillLastTotalMetres = totalDistanceMetres;
       } else {
         final last = _treadmillLastSampleAt;
         if (last != null && !_paused) {
@@ -881,6 +927,7 @@ class RunRecorder {
   void _resetTreadmillAccumulators() {
     _treadmillDistanceMetres = 0;
     _treadmillBaselineMetres = null;
+    _treadmillLastTotalMetres = null;
     _treadmillLastSpeedMps = 0;
     _treadmillLastSampleAt = null;
     _treadmillNeedsRebaseline = false;
@@ -933,6 +980,7 @@ class RunRecorder {
       timestamp: pos.timestamp,
       bpm: _currentBpm,
     );
+    _currentWaypointAt = DateTime.now();
 
     // Only append to the track and accumulate distance once the run has
     // officially started (post-[begin]).
@@ -943,6 +991,7 @@ class RunRecorder {
         _lastTrackedPosition = pos;
         _lastTrackedPositionAt = pos.timestamp;
         _track.add(_currentWaypoint!);
+        _currentWaypointTrusted = true;
       } else {
         final delta = Geolocator.distanceBetween(
           last.latitude,
@@ -977,6 +1026,7 @@ class RunRecorder {
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);
+          _currentWaypointTrusted = true;
         } else if (dtSec >= _gpsReanchorAfterSeconds) {
           // Real GPS gap: the hop failed the < 100 m cap (the runner genuinely
           // moved away while fixes were dropped) but a genuine interval has
@@ -989,8 +1039,13 @@ class RunRecorder {
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);
+          _currentWaypointTrusted = true;
+        } else {
+          _currentWaypointTrusted = false;
         }
       }
+    } else {
+      _currentWaypointTrusted = true;
     }
 
     _emitSnapshot();
@@ -1018,7 +1073,12 @@ class RunRecorder {
     double? offRoute;
     double? remaining;
     if (current != null) {
-      if (identical(current, _lastRouteCalcFor)) {
+      // Reuse the cached values both when the position hasn't changed and when
+      // the current fix is one the distance filter rejected — an untrusted fix
+      // must not advance the monotonic route floor (see
+      // [_currentWaypointTrusted]). The last trusted fix's values are still
+      // the best available answer.
+      if (identical(current, _lastRouteCalcFor) || !_currentWaypointTrusted) {
         offRoute = _cachedOffRoute;
         remaining = _cachedRouteRemaining;
       } else {
@@ -1049,6 +1109,8 @@ class RunRecorder {
       distanceMetres: _reportedDistanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: current,
+      positionFixedAt: _currentWaypointAt,
+      positionTrusted: _currentWaypointTrusted,
       track: _trackView,
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,
@@ -1236,12 +1298,21 @@ class RunRecorder {
 
   /// Calculate pace from the last ~200m of track.
   double? _calculatePace() {
-    if (_track.length < 5) return null;
+    // Never walk back across a pause / process-kill boundary. `_track` keeps
+    // the pre-pause tail, but its timestamps are separated from the
+    // post-resume points by the paused wall-clock gap — which is unbounded
+    // (a resumed run may have been dead for up to kResumableWindow). Timing
+    // post-resume distance against a pre-pause timestamp reported a pace
+    // hundreds of times too slow for the first ~200 m after every resume, and
+    // the run screen feeds that number to the pace-alert and cut-off
+    // catch-up voice cues.
+    final floor = _paceFloorIdx.clamp(0, _track.length);
+    if (_track.length - floor < 5) return null;
 
     double segmentDistance = 0;
     int segmentStart = _track.length - 1;
 
-    for (int i = _track.length - 2; i >= 0; i--) {
+    for (int i = _track.length - 2; i >= floor; i--) {
       final a = _track[i];
       final b = _track[i + 1];
       segmentDistance += _haversine(a.lat, a.lng, b.lat, b.lng);

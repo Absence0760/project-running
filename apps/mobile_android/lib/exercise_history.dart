@@ -137,7 +137,7 @@ ExerciseProgress? exerciseProgress(List<DatedGymSet> sets, String exerciseName) 
     }
     if (reps != null && reps > 0) {
       g.volumeKg += weight * reps;
-      final e1rm = estimatedOneRepMax(weight, reps.toInt());
+      final e1rm = estimatedOneRepMax(weight, reps);
       if (g.bestEst1RmKg == null || e1rm > g.bestEst1RmKg!) g.bestEst1RmKg = e1rm;
     }
   }

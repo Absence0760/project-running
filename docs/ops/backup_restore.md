@@ -83,6 +83,15 @@ same archive can re-home runs to a different account.
 
 `track_url` is rewritten on restore to point at the new user's bucket path.
 
+On mobile the array is the union of the server's rows and the local store's
+**unsynced** runs — a run that hasn't drained (the drain in backoff, a failed
+track upload, a long offline stretch) exists only in `<appDocs>/runs/<id>.json`,
+and an archive that omits it is a backup of the cloud rather than of the phone
+(decisions § 311). A local-only run's track is gzipped from memory into the same
+`tracks/<id>.json.gz` entry and counted in `manifest.counts.tracks`; its row
+carries no `track_url`. The server-built archive (the Go service) can only see
+cloud rows, so mobile skips that path entirely while anything is local-only.
+
 ## `routes.json`, `goals.json`, `profile.json`
 
 Optional. Readers must tolerate them being absent. Same shape / semantics
@@ -143,8 +152,12 @@ as their DB rows.
   during export is a hazard. JSZip writes incrementally; the Dart
   `archive.writeZipBytes` also accepts a streaming builder.
 - Restore is **additive**. It never deletes runs that aren't in the
-  archive. Users who want to wipe-and-restore should delete their
-  account first (Danger Zone in Settings) and import into the fresh one.
+  archive, and (offline path, `generateNewIds: false`) it never overwrites a
+  run already present locally — the on-device copy can hold a richer track
+  than the archive, since `createBackup` only logs a failed track download.
+  Pass `generateNewIds: true` to import the archive's copy alongside. Users who
+  want to wipe-and-restore should delete their account first (Danger Zone in
+  Settings) and import into the fresh one.
 - Restore is **resumable on conflict**. An `ON CONFLICT (id) DO UPDATE`
   upsert means an interrupted restore can be re-run and will converge.
 - A backup contains PII (the user's own data only). It is not encrypted

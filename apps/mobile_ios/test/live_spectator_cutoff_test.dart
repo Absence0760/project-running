@@ -90,6 +90,29 @@ RouteMarkerRow _cutoff({required int limitS}) => RouteMarkerRow(
       updatedAt: DateTime.utc(2026),
     );
 
+/// The same marker, but expressing its limit the way BOTH editors actually
+/// author one: a wall-clock `cutoff_clock`. Resolving this to an elapsed
+/// limit needs the run's start time of day, so it is the case that catches a
+/// screen forgetting to pass `startClockMin`.
+RouteMarkerRow _cutoffAtClock(DateTime limit) {
+  final l = limit.toLocal();
+  final hh = l.hour.toString().padLeft(2, '0');
+  final mm = l.minute.toString().padLeft(2, '0');
+  return RouteMarkerRow(
+    id: 'm1',
+    routeId: 'route-1',
+    userId: 'u1',
+    kind: 'cutoff',
+    label: 'Aid 1',
+    lat: 0,
+    lng: 0.036,
+    positionM: 4000,
+    meta: {'cutoff_clock': '$hh:$mm'},
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  );
+}
+
 /// A ping ~2000 m along the route (lng 0.018), carrying distance/elapsed so
 /// the recent-pace buffer can derive a pace. [at] drives the freshness clock.
 Map<String, dynamic> _ping({
@@ -160,6 +183,37 @@ void main() {
         expect(find.text('Aid 1'), findsOneWidget);
         expect(find.textContaining('to spare'), findsOneWidget);
         expect(find.textContaining('Waiting for a fresh signal'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+      });
+    });
+
+    testWidgets('a wall-clock cutoff resolves against the run start',
+        (tester) async {
+      // Regression: the screen built the roadbook without `startClockMin`, so
+      // a `cutoff_clock` marker produced no cutoff leg at all and the card
+      // silently never mounted — for every cut-off either editor can author,
+      // since neither writes `cutoff_elapsed_s`.
+      final now = DateTime.now();
+      final start = now.subtract(const Duration(minutes: 5));
+      final api = _FakeApi(
+        run: _liveRun('route-1'),
+        route: _route('route-1'),
+        markers: [_cutoffAtClock(start.add(const Duration(hours: 3)))],
+        pings: [
+          _ping(
+            at: now.subtract(const Duration(minutes: 2)),
+            distanceM: 1500,
+            elapsedS: 480,
+          ),
+          _ping(at: now, distanceM: 2000, elapsedS: 600),
+        ],
+      );
+      await tester.runAsync(() async {
+        await _pump(tester, api);
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Aid 1'), findsOneWidget);
+        expect(find.textContaining('to spare'), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
       });
     });

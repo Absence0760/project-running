@@ -198,6 +198,33 @@ String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit,
   return l10n.ttsStepDistancePace(intro, dist, paceTail);
 }
 
+/// How far the runner has covered at a split, as the spoken count plus
+/// whether the unit word should be singular. The tick interval is in METRES
+/// and the unit word comes from the runner's preference, so the count has to
+/// be converted into that same unit — counting kilometres and saying "miles"
+/// (what an imperial runner on the default 1 km interval used to hear) is
+/// wrong by 60 %, and a metric runner on the 500 m interval used to hear the
+/// first split rounded up to "1 kilometre".
+///
+/// Rounds to one decimal FIRST and only then decides whole-vs-fractional, so
+/// the 1609 m "1 mi" preset reads "1 mile" rather than "1.0 miles".
+({String count, bool singular}) splitCueDistance(
+  int distanceTicks,
+  double tickIntervalMetres,
+  DistanceUnit unit,
+) {
+  const metresPerMile = 1609.344;
+  final metres = distanceTicks * tickIntervalMetres;
+  final units =
+      unit == DistanceUnit.mi ? metres / metresPerMile : metres / 1000;
+  final rounded = (units * 10).round() / 10;
+  final whole = rounded == rounded.roundToDouble();
+  return (
+    count: whole ? '${rounded.round()}' : rounded.toStringAsFixed(1),
+    singular: rounded == 1,
+  );
+}
+
 /// Compose the spoken split cue for the given [paceMode]. Pure — [splitTail]
 /// and [avgTail] are pre-formatted pace/speed utterances (empty string when
 /// unavailable). Degrades to the split-only form when the requested average
@@ -237,6 +264,21 @@ TtsDuckingStrategy ttsDuckingStrategyFor({
   return TtsDuckingStrategy.none;
 }
 
+/// flutter_tts `QUEUE_ADD` — a new utterance waits its turn instead of
+/// dropping the one being spoken.
+const int kTtsQueueAdd = 1;
+
+/// The queue mode to push to the engine, or null when the platform has no
+/// such call.
+///
+/// Android's TextToSpeech defaults to `QUEUE_FLUSH`, so a split cue landing
+/// on the same tick as a cut-off or off-route warning silently truncates it
+/// mid-word. iOS `AVSpeechSynthesizer.speak` always enqueues, and the plugin
+/// has no `setQueueMode` there — so the same Dart in the byte-identical twin
+/// behaves differently per platform until Android is told to queue too.
+int? ttsQueueModeFor({required bool isAndroid}) =>
+    isAndroid ? kTtsQueueAdd : null;
+
 class AudioCues {
   final FlutterTts _tts = FlutterTts();
   bool _initialized = false;
@@ -255,6 +297,8 @@ class AudioCues {
       await _applyLanguage();
       await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
+      final queueMode = ttsQueueModeFor(isAndroid: Platform.isAndroid);
+      if (queueMode != null) await _tts.setQueueMode(queueMode);
       // Request transient ducking so a cue lowers the runner's music /
       // podcast instead of talking over it (Android) or hard-pausing it
       // (iOS). Persona-hunt android + samsung #12. Each platform call is
@@ -327,10 +371,10 @@ class AudioCues {
     await _applyLanguage();
     final tag = activeLocaleTag;
     final l10n = ttsL10n(tag);
-    final totalUnits = (distanceTicks * tickIntervalMetres / 1000).round();
+    final covered = splitCueDistance(distanceTicks, tickIntervalMetres, unit);
     final unitWord = unit == DistanceUnit.mi
-        ? (totalUnits == 1 ? l10n.ttsSplitUnitMile : l10n.ttsSplitUnitMiles)
-        : (totalUnits == 1
+        ? (covered.singular ? l10n.ttsSplitUnitMile : l10n.ttsSplitUnitMiles)
+        : (covered.singular
             ? l10n.ttsSplitUnitKilometre
             : l10n.ttsSplitUnitKilometres);
     String tailOf(double? p) => useSpeed
@@ -338,7 +382,7 @@ class AudioCues {
         : formatPaceUtterance(p, unit, tag);
     await _tts.speak(splitCueUtterance(
       l10n,
-      count: '$totalUnits',
+      count: covered.count,
       unitWord: unitWord,
       splitTail: tailOf(paceSecondsPerKm),
       avgTail: tailOf(averagePaceSecondsPerKm),
@@ -361,8 +405,12 @@ class AudioCues {
   }) async {
     await _init();
     await _applyLanguage();
-    final l10n = ttsL10n(activeLocaleTag);
-    final distance = UnitFormat.distance(distanceMetres, unit);
+    final tag = activeLocaleTag;
+    final l10n = ttsL10n(tag);
+    // The spoken form, not UnitFormat's on-screen "5.2 km" — an engine reads
+    // that abbreviation out as letters, and in a non-English voice it isn't
+    // the right word at all. Every other cue already goes through here.
+    final distance = formatSpokenDistance(distanceMetres, unit, tag);
     final mins = elapsed.inMinutes;
     await _tts.speak(l10n.ttsRunComplete(distance, mins));
   }
@@ -564,12 +612,22 @@ class AudioCues {
     await _tts.speak(ttsL10n(activeLocaleTag).ttsWorkoutComplete);
   }
 
-  /// Speak an arbitrary guided-run cue. The TTS engine handles
-  /// interruption (a new speak() call cancels the previous utterance)
-  /// so back-to-back cues at the same second cleanly chain.
+  /// Speak an arbitrary guided-run cue, replacing anything in flight.
+  ///
+  /// This is the one cue that must interrupt rather than queue: it backs the
+  /// library's per-cue preview button, and tapping down a list should play
+  /// the cue you just tapped, not enqueue every one you tried. Run cues want
+  /// the opposite ([ttsQueueModeFor]), so the interruption is explicit here
+  /// instead of riding on the engine's queue mode — which differs by
+  /// platform.
   Future<void> speakGuidedCue(String text) async {
     await _init();
     await _applyLanguage();
+    try {
+      await _tts.stop();
+    } catch (e) {
+      debugPrint('audio_cues.speakGuidedCue stop failed: $e');
+    }
     await _tts.speak(text);
   }
 

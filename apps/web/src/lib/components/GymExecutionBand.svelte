@@ -52,12 +52,14 @@
 					? weightInputValue(step.targetWeightKg)
 					: '';
 		rpeStr = entered.rpe != null ? String(entered.rpe) : step.targetRpe != null ? String(step.targetRpe) : '';
-		distanceStr =
-			entered.distanceM != null
-				? String(entered.distanceM)
-				: step.targetDistanceM != null
-					? String(step.targetDistanceM)
-					: '';
+		// Distance and duration are MEASUREMENTS, so they seed only from what was
+		// actually entered — never from the prescription. Reps / load / RPE above
+		// are different: those are targets the athlete confirms by completing the
+		// set. Prefilling a measured axis means an athlete who taps Complete
+		// without touching the field logs the plan as the fact, which is what
+		// `gym_programming.md`'s "an unmeasured axis logs null, never the target"
+		// rule exists to stop.
+		distanceStr = entered.distanceM != null ? String(entered.distanceM) : '';
 		durationStr = entered.durationS != null ? String(entered.durationS) : '';
 		stopwatch = idleStopwatch();
 	});

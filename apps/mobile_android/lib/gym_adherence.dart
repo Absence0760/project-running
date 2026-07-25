@@ -6,8 +6,15 @@
 ///
 /// Reduces a routine's planned set targets against the sets a runner actually
 /// logged into a per-set verdict plus a session roll-up. Matching is by
-/// (exerciseKey, setIndex) — a stable identity stamped at plan time — never by
+/// (exerciseKey, stepIndex) — a stable identity stamped at plan time — never by
 /// name spelling, so a re-typed exercise label never desyncs the comparison.
+/// `stepIndex` is the ref's ordinal position in the EXPANDED step list, not the
+/// per-block `setIndex`: setIndex restarts inside each exercise block, so a
+/// routine that programs the same exercise twice (the heavy-top-set-then-
+/// back-off pattern) minted identical keys and collapsed both blocks onto one
+/// logged set — a perfectly executed session graded 50% / partial with the
+/// deltas lifted off the wrong set. An ordinal also survives a skipped set,
+/// which a consume-in-order match would not.
 /// Weights stay canonical kg; the caller formats through the weight pref.
 ///
 /// The session `verdict` mirrors the run-side WorkoutAdherence 80% threshold:
@@ -18,6 +25,12 @@ library;
 
 class PlannedSetRef {
   final String exerciseKey;
+
+  /// Ordinal position in the expanded step list — the match identity.
+  final int stepIndex;
+
+  /// Position within this exercise block. Display only; restarts per block,
+  /// so it is NOT unique across a routine.
   final int setIndex;
 
   /// gym_routine_sets.set_type — raw string (matches the DB CHECK union). Drives
@@ -30,6 +43,7 @@ class PlannedSetRef {
   final num? targetDistanceM;
   const PlannedSetRef({
     required this.exerciseKey,
+    required this.stepIndex,
     required this.setIndex,
     this.setType,
     this.targetRepsMin,
@@ -42,6 +56,9 @@ class PlannedSetRef {
 
 class ActualSetRef {
   final String exerciseKey;
+
+  /// The planned step this logged set answers — see [PlannedSetRef.stepIndex].
+  final int stepIndex;
   final int setIndex;
   final num? reps;
   final num? weightKg;
@@ -49,6 +66,7 @@ class ActualSetRef {
   final num? distanceM;
   const ActualSetRef({
     required this.exerciseKey,
+    required this.stepIndex,
     required this.setIndex,
     this.reps,
     this.weightKg,
@@ -61,6 +79,7 @@ enum SetAdherenceStatus { hit, partial, missed, extra }
 
 class SetAdherence {
   final String exerciseKey;
+  final int stepIndex;
   final int setIndex;
   final SetAdherenceStatus status;
 
@@ -72,6 +91,7 @@ class SetAdherence {
   final num? weightDeltaKg;
   const SetAdherence({
     required this.exerciseKey,
+    required this.stepIndex,
     required this.setIndex,
     required this.status,
     required this.repsDelta,
@@ -106,7 +126,7 @@ const double gymAdherenceCompletedThreshold = 0.8;
 /// fraction of it (gym_programming.md § Adherence). Same 80% the run side uses.
 const double _axisHitFraction = 0.8;
 
-String _refKey(String exerciseKey, int setIndex) => '$exerciseKey $setIndex';
+String refKey(String exerciseKey, int stepIndex) => '$exerciseKey $stepIndex';
 
 /// Reduce planned set targets against logged sets into per-set verdicts and a
 /// session roll-up. A planned set is `hit` when the actual reps reach 80% of the
@@ -128,7 +148,7 @@ RoutineAdherence computeRoutineAdherence(
 ) {
   final actualByKey = <String, ActualSetRef>{};
   for (final a in actual) {
-    actualByKey[_refKey(a.exerciseKey, a.setIndex)] = a;
+    actualByKey[refKey(a.exerciseKey, a.stepIndex)] = a;
   }
   final plannedKeys = <String>{};
   final sets = <SetAdherence>[];
@@ -136,7 +156,7 @@ RoutineAdherence computeRoutineAdherence(
   var plannedCount = 0;
 
   for (final p in planned) {
-    final key = _refKey(p.exerciseKey, p.setIndex);
+    final key = refKey(p.exerciseKey, p.stepIndex);
     plannedKeys.add(key);
     // Warmups are matched (so their logged set isn't flagged extra) but never
     // counted toward the verdict.
@@ -194,6 +214,7 @@ RoutineAdherence computeRoutineAdherence(
     sets.add(
       SetAdherence(
         exerciseKey: p.exerciseKey,
+        stepIndex: p.stepIndex,
         setIndex: p.setIndex,
         status: status,
         repsDelta: repsDelta,
@@ -203,11 +224,12 @@ RoutineAdherence computeRoutineAdherence(
   }
 
   for (final a in actual) {
-    final key = _refKey(a.exerciseKey, a.setIndex);
+    final key = refKey(a.exerciseKey, a.stepIndex);
     if (plannedKeys.contains(key)) continue;
     sets.add(
       SetAdherence(
         exerciseKey: a.exerciseKey,
+        stepIndex: a.stepIndex,
         setIndex: a.setIndex,
         status: SetAdherenceStatus.extra,
         repsDelta: null,

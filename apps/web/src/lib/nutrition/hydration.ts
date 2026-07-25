@@ -17,20 +17,32 @@ export const BASELINE_ML_PER_KG = 35;
 export const DEFAULT_BASELINE_ML = 2000;
 /// Extra water per minute of logged exercise (~480 ml/hr sweat replacement).
 export const EXERCISE_ML_PER_MIN = 8;
+/// Ceiling on the exercise add-on: four hours' worth (1.92 L). Past that the
+/// linear nudge stops being a nudge — a logged 12 h ultra would ask for 5.8 L
+/// of add-on and a 24 h effort ~11.5 L, which is not a daily baseline, it is a
+/// hyponatremia risk printed as a goal. Long-effort fluid belongs to the
+/// in-race plan (`fuel_plan`), which allocates per leg against aid stations.
+export const MAX_EXERCISE_MINUTES = 240;
 /// Targets round to this for a tidy number.
 export const TARGET_ROUND_ML = 50;
 
 /// Daily water goal in ml from bodyweight + today's exercise minutes. Always
 /// returns a positive target (the flat baseline covers missing bodyweight).
+/// The exercise add-on stops scaling at [MAX_EXERCISE_MINUTES].
 export function hydrationTargetMl(
 	weightKg: number | null | undefined,
 	exerciseMinutes: number | null | undefined,
 ): number {
 	const baseline =
 		weightKg != null && weightKg > 0 ? weightKg * BASELINE_ML_PER_KG : DEFAULT_BASELINE_ML;
-	const exercise =
-		exerciseMinutes != null && exerciseMinutes > 0 ? exerciseMinutes * EXERCISE_ML_PER_MIN : 0;
-	return Math.round((baseline + exercise) / TARGET_ROUND_ML) * TARGET_ROUND_ML;
+	const countedMinutes =
+		exerciseMinutes != null && exerciseMinutes > 0
+			? Math.min(exerciseMinutes, MAX_EXERCISE_MINUTES)
+			: 0;
+	return (
+		Math.round((baseline + countedMinutes * EXERCISE_ML_PER_MIN) / TARGET_ROUND_ML) *
+		TARGET_ROUND_ML
+	);
 }
 
 export interface HydrationBudget {

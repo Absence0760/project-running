@@ -78,8 +78,15 @@ class BackupService {
   /// is dropped. Peak heap is roughly
   /// `_kTrackDownloadConcurrency × average-track-size`, regardless of
   /// total run count. See [decisions.md § 66](../../../docs/architecture/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
+  ///
+  /// Pass [runStore] so runs that have not drained yet — the drain is in
+  /// backoff, a track upload failed, the user has been offline — are archived
+  /// from the device. They exist ONLY in `<appDocs>/runs/<id>.json`; without
+  /// this the archive is a backup of the cloud, not of the phone, and a
+  /// wipe-and-restore silently loses whatever hadn't synced.
   Future<File> createBackup({
     required File outputFile,
+    LocalRunStore? runStore,
     LocalGymStore? gymStore,
     LocalFoodStore? foodStore,
     void Function(BackupProgress)? onProgress,
@@ -101,12 +108,19 @@ class BackupService {
     // getting a backup because the server hiccuped. See
     // [decisions.md § 66] for the trade-off (server caps at 5000
     // runs; the local writer covers the rest of the long tail).
-    final didServer = await tryServerBackup(
-      serverClient: _serverClient,
-      accessToken: client.auth.currentSession?.accessToken,
-      outputFile: outputFile,
-      onProgress: onProgress,
-    );
+    //
+    // Skipped outright while anything is still local-only: the server builds
+    // the archive from the cloud rows and cannot see this device's undrained
+    // runs, so taking it would produce an archive missing them.
+    final localOnly = runStore?.unsyncedRuns ?? const <cm.Run>[];
+    final didServer = localOnly.isNotEmpty
+        ? false
+        : await tryServerBackup(
+            serverClient: _serverClient,
+            accessToken: client.auth.currentSession?.accessToken,
+            outputFile: outputFile,
+            onProgress: onProgress,
+          );
     if (didServer) return outputFile;
 
     onProgress?.call(const BackupProgress.stage('runs'));
@@ -131,11 +145,20 @@ class BackupService {
 
     // Strip user_id so the archive is re-homeable (restore stamps the
     // new owner's uid).
+    final serverIds = {for (final r in runs) r['id'] as String};
     final runsOut = runs.map((r) {
       final copy = Map<String, dynamic>.from(r);
       copy.remove('user_id');
       return copy;
     }).toList();
+    final localTracks = <String, Uint8List>{};
+    for (final run in localOnly) {
+      if (serverIds.contains(run.id)) continue;
+      runsOut.add(rawRunRowForBackup(run));
+      if (run.track.isEmpty) continue;
+      localTracks[run.id] = Uint8List.fromList(gzip.encode(utf8.encode(
+          jsonEncode([for (final w in run.track) _backupWaypointJson(w)]))));
+    }
     final routesOut = routes.map((r) {
       final copy = Map<String, dynamic>.from(r);
       copy.remove('user_id');
@@ -169,6 +192,7 @@ class BackupService {
       exportedFrom: 'mobile_android',
       runsWithTracks: runsWithTracks,
       runsWithHrSeries: runsWithHrSeries,
+      localTracks: localTracks,
       gymWorkoutsOut: gymStore?.backupRecords ?? const [],
       foodLogOut: foodStore?.backupRecords ?? const [],
       fetchTrackBytes: (path) => api.downloadTrackBytes(path),
@@ -247,6 +271,10 @@ class BackupService {
     required List<Map<String, dynamic>> runsWithTracks,
     required Future<Uint8List> Function(String path) fetchTrackBytes,
     List<Map<String, dynamic>> runsWithHrSeries = const [],
+    /// Gzipped track blobs for runs that exist only on this device, keyed by
+    /// run id. Server-backed tracks come down through [fetchTrackBytes]; these
+    /// were never uploaded, so the caller hands the bytes over directly.
+    Map<String, Uint8List> localTracks = const {},
     List<Map<String, dynamic>> gymWorkoutsOut = const [],
     List<Map<String, dynamic>> foodLogOut = const [],
     int concurrency = _kTrackDownloadConcurrency,
@@ -316,6 +344,13 @@ class BackupService {
           (i + batch.length).clamp(0, runsWithTracks.length),
           runsWithTracks.length,
         ));
+      }
+
+      for (final entry in localTracks.entries) {
+        encoder.addArchiveFile(
+          ArchiveFile.bytes('tracks/${entry.key}.json.gz', entry.value),
+        );
+        tracksAdded++;
       }
 
       // HR sidecars (indoor/treadmill runs, decisions §116). Same gzipped
@@ -526,7 +561,18 @@ class BackupService {
         onProgress?.call(RestoreProgress.runs(i, runs.length));
         if (entry is! Map) { i++; continue; }
         final r = Map<String, dynamic>.from(entry);
-        final origId = r['id'] as String;
+        // Read the id like its sibling casts INSIDE the per-row guard: a
+        // hand-edited or third-party archive with a missing/null id used to
+        // throw straight out of the loop and out of the whole restore, after
+        // earlier rows had already been committed — the user got a bare error
+        // toast with no RestoreResult and no way to tell how far it got, and a
+        // re-run died at the same row forever.
+        final origId = r['id'];
+        if (origId is! String || origId.isEmpty) {
+          result.warnings.add('run $i: missing id, skipped');
+          i++;
+          continue;
+        }
         final newId = generateNewIds ? _randomUuid() : origId;
 
         // Upload track from archive.
@@ -613,7 +659,7 @@ class BackupService {
     // server-synced from the restore path yet — the stores drain to Supabase
     // on the next sign-in). No-op when the archive carries neither key or the
     // caller didn't supply the stores.
-    await _restoreGymFood(archive, gymStore, foodStore, result);
+    await _restoreGymFood(archive, gymStore, foodStore, result, generateNewIds);
 
     onProgress?.call(const RestoreProgress.done());
     return result;
@@ -631,6 +677,7 @@ class BackupService {
     LocalGymStore? gymStore,
     LocalFoodStore? foodStore,
     RestoreResult result,
+    bool generateNewIds,
   ) async {
     if (gymStore != null) {
       final gym = _readJson(archive, 'gym_workouts.json') as List?;
@@ -641,6 +688,7 @@ class BackupService {
                 .whereType<Map>()
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList(),
+            generateNewIds: generateNewIds,
           );
         } catch (e) {
           result.warnings.add('gym_workouts: $e');
@@ -656,6 +704,7 @@ class BackupService {
                 .whereType<Map>()
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList(),
+            generateNewIds: generateNewIds,
           );
         } catch (e) {
           result.warnings.add('food_log: $e');
@@ -698,8 +747,24 @@ class BackupService {
           onProgress?.call(RestoreProgress.runs(i, runs.length));
           if (entry is! Map) { i++; continue; }
           final r = Map<String, dynamic>.from(entry);
-          final origId = r['id'] as String;
+          final origId = r['id'];
+          if (origId is! String || origId.isEmpty) {
+            result.warnings.add('run $i: missing id, skipped');
+            i++;
+            continue;
+          }
           final newId = generateNewIds ? _randomUuid() : origId;
+
+          // Additive, like the gym / food restore (`restoreFromBackup` skips
+          // known ids): never clobber a local copy. `createBackup` only logs a
+          // failed track download, so the archive's copy of a run can be
+          // track-less while the on-device file still holds the full GPS
+          // trace — and `save()` would overwrite it with the empty one.
+          if (!generateNewIds && runStore.hasRun(newId)) {
+            result.warnings.add('run $origId: already present locally, skipped');
+            i++;
+            continue;
+          }
 
           final track = _decodeTrack(archive, origId);
 
@@ -753,7 +818,12 @@ class BackupService {
           onProgress?.call(RestoreProgress.routes(i, routes.length));
           if (entry is! Map) { i++; continue; }
           final r = Map<String, dynamic>.from(entry);
-          final origId = r['id'] as String;
+          final origId = r['id'];
+          if (origId is! String || origId.isEmpty) {
+            result.warnings.add('route $i: missing id, skipped');
+            i++;
+            continue;
+          }
           final newId = generateNewIds ? _randomUuid() : origId;
           try {
             final waypoints = <cm.Waypoint>[];
@@ -805,11 +875,68 @@ class BackupService {
       }
     }
 
-    await _restoreGymFood(archive, gymStore, foodStore, result);
+    await _restoreGymFood(archive, gymStore, foodStore, result, generateNewIds);
 
     onProgress?.call(const RestoreProgress.done());
     return result;
   }
+
+  /// Serialise a device-only [run] into the raw `runs.json` row shape the
+  /// restore paths upsert. `user_id` is omitted (restore stamps the new
+  /// owner), `track_url` is null (the blob rides in `tracks/<id>.json.gz`),
+  /// and the promoted columns are lifted out of the metadata bag exactly as
+  /// `ApiClient.saveRun` does — the column is the only stored copy, so a bag
+  /// left carrying them would shadow a later edit after restore.
+  @visibleForTesting
+  static Map<String, dynamic> rawRunRowForBackup(cm.Run run) {
+    final meta = run.metadata;
+    int? best(String key) {
+      final v = meta?[key];
+      final secs = v is int ? v : (v is num ? v.toInt() : null);
+      return (secs == null || secs < 0) ? null : secs;
+    }
+
+    final bag = meta == null
+        ? null
+        : (Map<String, dynamic>.from(meta)
+          ..remove('activity_type')
+          ..remove('is_dnf')
+          ..remove('fastest_5k_s')
+          ..remove('fastest_10k_s')
+          ..remove('fastest_half_marathon_s')
+          ..remove('fastest_marathon_s')
+          ..remove('track_url'));
+    final row = cm.RunRow(
+      id: run.id,
+      // Stripped below — RunRow requires it, the archive must not carry it.
+      userId: '',
+      startedAt: run.startedAt.toUtc(),
+      durationS: run.duration.inSeconds,
+      distanceM: run.distanceMetres,
+      routeId: run.routeId,
+      source: run.source.name,
+      externalId: run.externalId,
+      metadata: (bag == null || bag.isEmpty) ? null : bag,
+      createdAt: run.createdAt,
+      activityType: (meta?['activity_type'] as String?) ?? 'run',
+      isDnf: meta?['is_dnf'] == true,
+      fastest5kS: best('fastest_5k_s'),
+      fastest10kS: best('fastest_10k_s'),
+      fastestHalfMarathonS: best('fastest_half_marathon_s'),
+      fastestMarathonS: best('fastest_marathon_s'),
+    );
+    return row.toJson()
+      ..remove('user_id')
+      ..remove('track_url');
+  }
+
+  static Map<String, dynamic> _backupWaypointJson(cm.Waypoint w) => {
+        'lat': w.lat,
+        'lng': w.lng,
+        'ele': w.elevationMetres,
+        'ts': w.timestamp?.toUtc().toIso8601String(),
+        if (w.bpm != null) 'bpm': w.bpm,
+      };
 
   List<cm.Waypoint> _decodeTrack(Archive archive, String runId) {
     final file = archive.findFile('tracks/$runId.json.gz');

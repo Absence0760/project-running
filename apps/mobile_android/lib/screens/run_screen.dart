@@ -44,6 +44,7 @@ import '../roadbook.dart';
 import '../route_geometry.dart';
 import '../route_markers.dart' show parseTarget;
 import '../route_match.dart';
+import '../route_simplify.dart';
 import '../safety_nudge.dart';
 import '../settings_sync.dart';
 import '../turn_cue_announcer.dart';
@@ -282,6 +283,15 @@ class _RunScreenState extends State<RunScreen> {
   /// cached; any failure — offline, no markers, malformed geometry — leaves
   /// the card hidden, never disturbing the core live stats. A mid-run dead
   /// zone simply keeps whatever was loaded at the start.
+  /// Minute-of-day the cutoff clocks are measured from. Before the run starts
+  /// that is "about now" — the runner is staging — so the pre-start card still
+  /// reads true; [_startRecording] and the partial-run restore re-run the load
+  /// once the real start is known.
+  double _startClockMin() {
+    final start = _runStartedAtWall ?? DateTime.now();
+    return (start.hour * 60 + start.minute).toDouble();
+  }
+
   Future<void> _loadCutoffLegs() async {
     final route = _selectedRoute;
     final api = widget.apiClient;
@@ -326,9 +336,14 @@ class _RunScreenState extends State<RunScreen> {
               meta: m.meta,
             ),
         ],
-        // Cutoff limits are absolute clock/elapsed times on the markers, so a
-        // nominal goal is fine — it only shapes the projected-arrival column,
-        // which the card ignores.
+        // A cutoff clock is a wall-clock time and resolves to an elapsed limit
+        // only against the start's time of day — without this every
+        // `cutoff_clock` marker (the only kind either editor can author)
+        // yields no cutoff at all and the live card never appears.
+        startClockMin: _startClockMin(),
+        // The nominal goal doesn't reach the card (the live projection comes
+        // from the runner's own pace), but it does pick which DAY a cutoff
+        // clock lands on for a race that runs past midnight.
         goalSeconds: polylineLengthMetres(waypoints),
         model: PacingModel.even,
       ).legs;
@@ -352,7 +367,7 @@ class _RunScreenState extends State<RunScreen> {
   /// [LiveCutoffStatus.unknown]) rather than fabricating an ETA off an old fix.
   LiveCutoffEta? _cutoffEta(_LiveStats stats, bool stale) {
     if (_cutoffLegs.isEmpty) return null;
-    final pos = stats.currentPosition;
+    final pos = stats.routePosition;
     final route = _selectedRoute;
     if (pos == null || route == null) return null;
     try {
@@ -399,6 +414,11 @@ class _RunScreenState extends State<RunScreen> {
   double? _pace;
   List<cm.Waypoint> _track = [];
   cm.Waypoint? _currentPosition;
+  // Last fix the recorder's distance chain accepted. Everything that maps a
+  // position onto the followed route (turn cues, marker-target cues, the
+  // cut-off ETA) reads this rather than the raw `_currentPosition`, which
+  // deliberately carries rejected fixes so the blue dot keeps up.
+  cm.Waypoint? _routePosition;
   int _lastTickNotified = 0;
   final ValueNotifier<_LiveStats> _statsNotifier =
       ValueNotifier(_LiveStats.empty);
@@ -420,10 +440,10 @@ class _RunScreenState extends State<RunScreen> {
   // Running elevation gain, updated incrementally as new waypoints arrive
   // in _onSnapshot. The naive O(n) rescan of the full track on every
   // build was the hottest per-frame work in the run screen — a 60-minute
-  // run rescans 3600+ points every tween tick (~60 Hz). This field is
-  // the only authoritative source; reset on discard alongside the other
-  // live-stats fields.
-  double _elevationGainMetres = 0;
+  // run rescans 3600+ points every tween tick (~60 Hz). This is the same
+  // noise gate + dropout carry computeElevationGain applies to the
+  // finished track, so the live figure and the run-detail figure agree.
+  final ElevationGainAccumulator _elevationGain = ElevationGainAccumulator();
   int _elevationProcessedCount = 0;
 
   // Reentrancy guard on start — prevents rapid taps from spawning
@@ -557,15 +577,26 @@ class _RunScreenState extends State<RunScreen> {
   // Step tracking
   StreamSubscription<StepCount>? _stepSub;
   int _startSteps = 0;
+  // The pedometer's cumulative counter is only meaningful relative to a
+  // baseline taken once recording starts. `_startSteps == 0` cannot stand in
+  // for "not baselined yet": on resume the computed baseline is legitimately
+  // 0 whenever no sensor event has landed, and re-baselining then threw away
+  // the steps carried over from the crashed run.
+  bool _stepBaselineSet = false;
+  // Steps a resumed partial brought with it; the baseline is biased by this
+  // so (event.steps - _startSteps) continues from there rather than 0.
+  int _stepsCarriedIn = 0;
   int _steps = 0;
   int _cadence = 0;
-  int _latestPedometerSteps = 0;
   final List<_StepSample> _stepSamples = [];
 
   // Prepare-phase state. The recorder, GPS stream, pedometer, and wakelock
   // are warmed up at the start of the countdown so begin() is instant when
   // the 3 seconds are up.
   Future<void>? _prepareFuture;
+  // Error from the in-flight [prepare], held (not swallowed) so _begin can
+  // surface the typed error object through _notifyGpsUnavailable.
+  Object? _prepareError;
 
   // Finished run
   cm.Run? _finishedRun;
@@ -1157,18 +1188,28 @@ class _RunScreenState extends State<RunScreen> {
 
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
-    // but don't accumulate into the track or distance. Errors propagate on
-    // _prepareFuture so _begin can surface them via _notifyGpsUnavailable
-    // (non-blocking snackbar) and proceed in time-only indoor mode — the
-    // recorder's retry loop self-heals once services come back.
+    // but don't accumulate into the track or distance. A failure is HELD in
+    // _prepareError, not swallowed: _begin surfaces it via
+    // _notifyGpsUnavailable (non-blocking snackbar) and proceeds in
+    // time-only indoor mode — the recorder's retry loop self-heals once
+    // services come back. The handler is attached here rather than at
+    // _begin's await three seconds later because Dart reports an error that
+    // completes on a listener-less future to the zone as uncaught, so the
+    // documented indoor-fallback path was emitting a spurious error report
+    // on every occurrence.
     final adv = widget.preferences.advancedGps;
-    _prepareFuture = _recorder!.prepare(
+    _prepareError = null;
+    _prepareFuture = _recorder!
+        .prepare(
       route: _selectedRoute,
       distanceFilterMetres: adv ? 2 : _activityType.gpsDistanceFilter,
       minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
       maxSpeedMps: _activityType.maxSpeedMps,
       accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
-    );
+    )
+        .catchError((Object e) {
+      _prepareError = e;
+    });
   }
 
   /// Subscribe to the pedometer stream. On error, wait a bit and retry —
@@ -1178,9 +1219,11 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub?.cancel();
     _stepSub = Pedometer.stepCountStream.listen((event) {
       _pedometerRetries = 0; // reset back-off on successful event
-      _latestPedometerSteps = event.steps;
       if (_state != _ScreenState.recording) return;
-      if (_startSteps == 0) _startSteps = event.steps;
+      if (!_stepBaselineSet) {
+        _startSteps = event.steps - _stepsCarriedIn;
+        _stepBaselineSet = true;
+      }
       final newSteps = event.steps - _startSteps;
       _stepSamples.add(_StepSample(DateTime.now(), newSteps));
       final cutoff = DateTime.now().subtract(const Duration(seconds: 10));
@@ -1379,17 +1422,24 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// Whether an off-route escalation could actually reach the contact right
+  /// now: a backend to call, a run to name, and an active live broadcast so
+  /// the `/live` link the contact receives works. Checked BEFORE the
+  /// detector's sustain clock is advanced — see the call site in
+  /// [_onSnapshot].
+  bool get _offRouteEscalationDeliverable =>
+      widget.apiClient != null &&
+      _runId != null &&
+      (_liveBroadcaster?.isActive ?? false);
+
   /// Fire the off-route trusted-contact escalation once (docs/features/safety.md).
-  /// Requires an active live broadcast so the `/live` link the contact
-  /// receives actually works; the RPC re-checks every server-side gate (owner,
-  /// opt-in, confirmed contact, once-per-run). L4 — best-effort, its own catch
-  /// path; a failure must never touch the recording.
+  /// The RPC re-checks every server-side gate (owner, opt-in, confirmed
+  /// contact, once-per-run). L4 — best-effort, its own catch path; a failure
+  /// must never touch the recording.
   void _escalateOffRoute() {
     final api = widget.apiClient;
     final runId = _runId;
     if (api == null || runId == null) return;
-    // No live broadcast → the contact would get a dead link; skip.
-    if (!(_liveBroadcaster?.isActive ?? false)) return;
     _offRouteAlertFiring = true;
     unawaited(api.escalateRunOffRoute(runId).then((escalated) {
       if (escalated && mounted) {
@@ -1490,13 +1540,17 @@ class _RunScreenState extends State<RunScreen> {
     // still marked prepared and we proceed into an indoor/time-only run —
     // the stopwatch ticks, distance stays 0, and the live map shows its
     // "Waiting for GPS..." placeholder until a fix arrives (if ever).
-    try {
-      await _prepareFuture;
-    } catch (e) {
-      _notifyGpsUnavailable(e);
-    }
+    await _prepareFuture;
+    final prepareError = _prepareError;
+    if (prepareError != null) _notifyGpsUnavailable(prepareError);
 
     if (!mounted || _recorder == null) return;
+
+    // Announced-turn state is per-recording. The announcer is only rebuilt when
+    // the SELECTED ROUTE changes, so a second run on the same route reused the
+    // fully-latched fired set and spoke no turn cues at all. Every recording
+    // funnels through here, so this is the one place that can't be bypassed.
+    _turnAnnouncer?.reset();
 
     _recorder!.begin();
 
@@ -1506,10 +1560,15 @@ class _RunScreenState extends State<RunScreen> {
     // copied stays valid.
     _runId ??= _uuid.v4();
     _runStartedAtWall = DateTime.now();
+    // Rebind the cutoff clocks to the real start — the legs were built while
+    // staging, off an approximate one.
+    _loadCutoffLegs();
 
     // Reset the pedometer baseline so steps taken during the countdown
     // don't count toward the run.
-    _startSteps = _latestPedometerSteps;
+    _stepsCarriedIn = 0;
+    _stepBaselineSet = false;
+    _startSteps = 0;
     _steps = 0;
     _cadence = 0;
     _stepSamples.clear();
@@ -1795,6 +1854,9 @@ class _RunScreenState extends State<RunScreen> {
 
     _runId = partial.id;
     _runStartedAtWall = partial.startedAt;
+    // Same rebind as a fresh start: a run resumed hours later must measure its
+    // cutoff clocks from when it actually began, not from now.
+    _loadCutoffLegs();
     _activityType = ActivityType.fromName(
         partial.metadata?[cm.MetadataKeys.activityType] as String? ??
             _activityType.name);
@@ -1834,6 +1896,14 @@ class _RunScreenState extends State<RunScreen> {
     _lapCount = restoredLaps.length;
     _steps = restoredSteps;
     _everHadGpsFix = partial.track.isNotEmpty;
+    // Splits already announced before the process was killed must not
+    // re-announce on the first post-resume snapshot: a fresh State starts at
+    // tick 0, so 42 km of restored distance reads as a just-crossed split.
+    final resumeTickInterval = widget.preferences.splitIntervalMetres > 0
+        ? widget.preferences.splitIntervalMetres.toDouble()
+        : _activityType.splitIntervalMetresFor(widget.preferences.unit);
+    _lastTickNotified = UnitFormat.activityTicks(
+        _displayDistanceMetres, resumeTickInterval);
 
     _recorder = RunRecorder();
     _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
@@ -1866,13 +1936,14 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
 
-    // Continue pedometer from the restored total: bias the baseline so the
-    // handler's (event.steps - _startSteps) resumes at restoredSteps rather
-    // than restarting at 0. A zero latest reading falls back to re-baselining
-    // on the first event.
-    _startSteps = _latestPedometerSteps > restoredSteps
-        ? _latestPedometerSteps - restoredSteps
-        : 0;
+    // Continue the pedometer from the restored total: the baseline is biased
+    // by restoredSteps so the handler's (event.steps - _startSteps) resumes
+    // there rather than restarting at 0. Deferred to the first event when the
+    // sensor hasn't reported yet — the counter only ticks on an actual step,
+    // so a runner reading the Resume dialog usually hasn't produced one.
+    _stepsCarriedIn = restoredSteps;
+    _stepBaselineSet = false;
+    _startSteps = 0;
 
     _attachRecordingSideEffects();
 
@@ -2030,13 +2101,26 @@ class _RunScreenState extends State<RunScreen> {
   void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
 
-      // Only count GPS-backed snapshots as evidence that the sensor is
-      // alive. Timer-driven snapshots without a fix (indoor run, warmup)
-      // don't mask a real GPS outage mid-run. Also latch _everHadGpsFix
-      // so we know whether to fall back to the pedometer for distance.
-      if (snapshot.currentPosition != null) {
-        _lastSnapshotAt = DateTime.now();
+      // Sensor liveness comes from the fix's own acceptance time, never
+      // from `currentPosition != null`: the recorder re-emits the LAST fix
+      // on every 1 s tick, so a non-null position outlives the sensor and
+      // a total GPS blackout would otherwise look permanently healthy.
+      // Also latch _everHadGpsFix so we know whether to fall back to the
+      // pedometer for distance.
+      final fixedAt = snapshot.positionFixedAt;
+      if (fixedAt != null) {
+        _lastSnapshotAt = fixedAt;
         if (!_everHadGpsFix) _everHadGpsFix = true;
+      }
+      final positionFresh = fixedAt != null &&
+          DateTime.now().difference(fixedAt) <= _gpsLostThreshold;
+      // Route progress must only ever advance on a fix the recorder's
+      // distance chain ACCEPTED. A rejected teleport still drives the blue
+      // dot, but feeding it to distanceAlongRoute latches every course
+      // marker it skipped over — permanently, since the announced set is
+      // never un-latched.
+      if (snapshot.currentPosition != null && snapshot.positionTrusted) {
+        _routePosition = snapshot.currentPosition;
       }
 
       // Extend the elevation-gain accumulator with any new waypoints. The
@@ -2047,19 +2131,11 @@ class _RunScreenState extends State<RunScreen> {
         // Defensive reset — shouldn't happen unless the recorder was
         // swapped out from under us (discard → new run inside the same
         // lifecycle, which does go through _discard anyway).
-        _elevationGainMetres = 0;
+        _elevationGain.reset();
         _elevationProcessedCount = 0;
       }
-      for (int i = _elevationProcessedCount == 0
-              ? 1
-              : _elevationProcessedCount;
-          i < track.length;
-          i++) {
-        final prev = track[i - 1].elevationMetres;
-        final curr = track[i].elevationMetres;
-        if (prev != null && curr != null && curr > prev) {
-          _elevationGainMetres += curr - prev;
-        }
+      for (int i = _elevationProcessedCount; i < track.length; i++) {
+        _elevationGain.add(track[i]);
       }
       _elevationProcessedCount = track.length;
 
@@ -2085,6 +2161,7 @@ class _RunScreenState extends State<RunScreen> {
         pace: _pace,
         track: _track,
         currentPosition: _currentPosition,
+        routePosition: _routePosition,
         offRouteDistance: _offRouteDistance,
         routeRemaining: _routeRemaining,
       );
@@ -2123,12 +2200,12 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('workout runner snapshot failed: $e');
       }
 
-      // L4 — Live race spectator ping. Requires a real GPS fix; cadence
-      // throttled inside RaceController. Network / Supabase realtime can
-      // throw; swallow and keep going.
+      // L4 — Live race spectator ping. Requires a real, FRESH GPS fix;
+      // cadence throttled inside RaceController. Network / Supabase realtime
+      // can throw; swallow and keep going.
       try {
         final pos = snapshot.currentPosition;
-        if (pos != null) {
+        if (pos != null && positionFresh) {
           widget.raceController?.pushPing(
             lat: pos.lat,
             lng: pos.lng,
@@ -2144,9 +2221,12 @@ class _RunScreenState extends State<RunScreen> {
       // L4 — Live spectator broadcast (separate from race-mode pings).
       // Active only when the user has tapped "Share live link"; throttled
       // inside the broadcaster. Same swallow-on-fail rule as race pings.
+      // Gated on freshness so the spectator's live_freshness reads an
+      // honest "updated N min ago" during a signal blackout instead of a
+      // fresh, stationary runner re-pinged off a frozen coordinate.
       try {
         final pos = snapshot.currentPosition;
-        if (pos != null) {
+        if (pos != null && positionFresh) {
           _liveBroadcaster?.pushPing(
             lat: pos.lat,
             lng: pos.lng,
@@ -2187,7 +2267,14 @@ class _RunScreenState extends State<RunScreen> {
       // core stats above.
       try {
         final detector = _offRouteAlertDetector;
-        if (detector != null && !_offRouteAlertFiring) {
+        // Deliverability is part of the gate, not a post-hoc check: the
+        // detector fires ONCE per run, so letting the sustain clock run
+        // while the escalation cannot be delivered (no live broadcast → the
+        // contact gets a dead link) spends the latch and leaves the runner
+        // with a silently-dead safety net for the rest of the run.
+        if (detector != null &&
+            !_offRouteAlertFiring &&
+            _offRouteEscalationDeliverable) {
           final fired = detector.update(
             snapshot.offRouteDistanceMetres,
             DateTime.now().millisecondsSinceEpoch,
@@ -2204,7 +2291,7 @@ class _RunScreenState extends State<RunScreen> {
       // disturbs the recording (decisions §169).
       try {
         final announcer = _turnAnnouncer;
-        final pos = snapshot.currentPosition;
+        final pos = _routePosition;
         final route = _selectedRoute;
         if (announcer != null &&
             pos != null &&
@@ -2218,8 +2305,10 @@ class _RunScreenState extends State<RunScreen> {
           if (along != null) {
             final a = announcer.announcementFor(along);
             if (a != null) {
+              // The runner's real distance to the turn, not the band that
+              // triggered the cue — the band is a coarse trigger.
               final distanceStr =
-                  a.isNow ? null : UnitFormat.distance(a.thresholdM, unit);
+                  a.isNow ? null : UnitFormat.distance(a.aheadM, unit);
               _ttsCue(
                 'announceTurn',
                 () => widget.audioCues.announceTurn(
@@ -2300,8 +2389,9 @@ class _RunScreenState extends State<RunScreen> {
       // movement so it doesn't cancel the start cue (a new speak() call
       // interrupts the previous utterance).
       try {
-        if (_phasePlan.isNotEmpty && _distanceMetres > 50) {
-          final idx = phaseAt(_phasePlan, _distanceMetres);
+        final phaseDistance = _displayDistanceMetres;
+        if (_phasePlan.isNotEmpty && phaseDistance > 50) {
+          final idx = phaseAt(_phasePlan, phaseDistance);
           if (idx >= 0 && idx != _phaseIndex) {
             _phaseIndex = idx;
             if (widget.preferences.audioCues &&
@@ -2393,7 +2483,7 @@ class _RunScreenState extends State<RunScreen> {
       // burst-announce every marker passed while it was off.
       try {
         final route = _selectedRoute;
-        final pos = snapshot.currentPosition;
+        final pos = _routePosition;
         if (_targetMarkers.isNotEmpty && route != null && pos != null) {
           final along = distanceAlongRoute(
             (lat: pos.lat, lng: pos.lng),
@@ -2436,9 +2526,10 @@ class _RunScreenState extends State<RunScreen> {
         final customInterval = widget.preferences.splitIntervalMetres;
         final tickInterval = customInterval > 0
             ? customInterval.toDouble()
-            : _activityType.splitIntervalMetres;
+            : _activityType.splitIntervalMetresFor(unit);
+        final tickDistance = _displayDistanceMetres;
         final currentTick =
-            UnitFormat.activityTicks(_distanceMetres, tickInterval);
+            UnitFormat.activityTicks(tickDistance, tickInterval);
         if (currentTick > _lastTickNotified && currentTick > 0) {
           _lastTickNotified = currentTick;
           final totalDistanceMetres = (currentTick * tickInterval).toDouble();
@@ -2460,7 +2551,7 @@ class _RunScreenState extends State<RunScreen> {
           if (widget.preferences.audioCues &&
               widget.preferences.voiceCueEnabled(VoiceCue.splits)) {
             final avgPace =
-                averagePaceSecPerKm(_distanceMetres, _elapsed.inSeconds);
+                averagePaceSecPerKm(tickDistance, _elapsed.inSeconds);
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
                   distanceTicks: currentTick,
                   paceSecondsPerKm: _pace,
@@ -2609,8 +2700,12 @@ class _RunScreenState extends State<RunScreen> {
   void _checkGpsHealth() {
     if (_state != _ScreenState.recording) return;
     final last = _lastSnapshotAt;
-    final lost =
-        last != null && DateTime.now().difference(last) > _gpsLostThreshold;
+    // The recorder drops every fix while paused, so the fix age says
+    // nothing about the sensor — a paused runner at an aid station has not
+    // lost signal.
+    final lost = last != null &&
+        !_manualPaused &&
+        DateTime.now().difference(last) > _gpsLostThreshold;
     // Weak-GPS only matters while the signal is still live; a full GPS-lost
     // state supersedes it (and carries its own, louder banner).
     final weak = _weakGpsLatest && !lost;
@@ -3056,8 +3151,8 @@ class _RunScreenState extends State<RunScreen> {
     _recorder?.dispose();
     _recorder = null;
     _prepareFuture = null;
+    _prepareError = null;
     _stepSamples.clear();
-    _latestPedometerSteps = 0;
     _lastSnapshotAt = null;
     _startRequested = false;
     _stopRequested = false;
@@ -3082,7 +3177,7 @@ class _RunScreenState extends State<RunScreen> {
     _lastCutoffCueStatus = null;
     _permissionLost = false;
     _everHadGpsFix = false;
-    _elevationGainMetres = 0;
+    _elevationGain.reset();
     _elevationProcessedCount = 0;
     _statsNotifier.value = _LiveStats.empty;
     // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
@@ -3097,9 +3192,12 @@ class _RunScreenState extends State<RunScreen> {
       _pace = null;
       _track = [];
       _currentPosition = null;
+      _routePosition = null;
       _lastTickNotified = 0;
       _steps = 0;
       _startSteps = 0;
+      _stepBaselineSet = false;
+      _stepsCarriedIn = 0;
       _cadence = 0;
       _finishedRun = null;
       _synced = false;
@@ -3446,16 +3544,16 @@ class _RunScreenState extends State<RunScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  /// Distance the UI should display. GPS track distance when a fix has
-  /// arrived; pedometer-estimated distance (`steps × stride`) for indoor
-  /// runs where GPS never produced a fix. Cycling has no pedometer so the
-  /// estimate is zero — there's no meaningful fallback for that activity.
-  double get _displayDistanceMetres {
-    if (_everHadGpsFix || _distanceMetres > 0) return _distanceMetres;
-    final stride = _activityType.strideMetres;
-    if (stride <= 0 || _steps <= 0) return 0;
-    return _steps * stride;
-  }
+  /// Distance the screen displays AND every distance-derived behaviour acts
+  /// on — split ticks, split average pace, race-phase transitions. Cycling has
+  /// no pedometer so its estimate is zero; there's no meaningful fallback for
+  /// that activity.
+  double get _displayDistanceMetres => liveDistanceMetres(
+        everHadGpsFix: _everHadGpsFix,
+        gpsDistanceMetres: _distanceMetres,
+        steps: _steps,
+        strideMetres: _activityType.strideMetres,
+      );
 
   /// True when [_displayDistanceMetres] is pedometer-estimated rather than
   /// GPS-measured. Drives the tilde prefix and the "estimated" chip so the
@@ -3509,7 +3607,7 @@ class _RunScreenState extends State<RunScreen> {
     return '$cals';
   }
 
-  String get _formattedElevation => '${_elevationGainMetres.round()}';
+  String get _formattedElevation => '${_elevationGain.gainMetres.round()}';
 
   // ──────────────── Build ────────────────
 
@@ -4156,8 +4254,8 @@ class _RunScreenState extends State<RunScreen> {
                 if (_phasePlan.isNotEmpty)
                   ValueListenableBuilder<_LiveStats>(
                     valueListenable: _statsNotifier,
-                    builder: (context, stats, _) {
-                      final idx = phaseAt(_phasePlan, stats.distanceMetres);
+                    builder: (context, _, _) {
+                      final idx = phaseAt(_phasePlan, _displayDistanceMetres);
                       if (idx < 0) return const SizedBox.shrink();
                       final phase = _phasePlan[idx];
                       final target = phaseTargetPaceSecPerKm(
@@ -4855,6 +4953,10 @@ class _LiveStats {
   final double? pace;
   final List<cm.Waypoint> track;
   final cm.Waypoint? currentPosition;
+
+  /// Last fix the recorder ACCEPTED — the only position route-relative math
+  /// may use. [currentPosition] can be a rejected teleport.
+  final cm.Waypoint? routePosition;
   final double? offRouteDistance;
   final double? routeRemaining;
 
@@ -4864,6 +4966,7 @@ class _LiveStats {
     required this.pace,
     required this.track,
     required this.currentPosition,
+    required this.routePosition,
     required this.offRouteDistance,
     required this.routeRemaining,
   });
@@ -4874,6 +4977,7 @@ class _LiveStats {
     pace: null,
     track: [],
     currentPosition: null,
+    routePosition: null,
     offRouteDistance: null,
     routeRemaining: null,
   );

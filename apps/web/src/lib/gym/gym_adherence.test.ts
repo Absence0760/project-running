@@ -6,6 +6,8 @@ import {
 	type ActualSetRef,
 } from './gym_adherence';
 
+// `stepIndex` defaults to `setIndex` — true for a single-block routine, which
+// is what every case below is. The two-block case passes it explicitly.
 function planned(
 	exerciseKey: string,
 	setIndex: number,
@@ -15,9 +17,11 @@ function planned(
 	targetRepsMax: number | null = null,
 	setType: string = 'working',
 	targetDistanceM: number | null = null,
+	stepIndex: number = setIndex,
 ): PlannedSetRef {
 	return {
 		exerciseKey,
+		stepIndex,
 		setIndex,
 		setType,
 		targetRepsMin,
@@ -35,8 +39,9 @@ function actual(
 	weightKg: number | null = null,
 	durationS: number | null = null,
 	distanceM: number | null = null,
+	stepIndex: number = setIndex,
 ): ActualSetRef {
-	return { exerciseKey, setIndex, reps, weightKg, durationS, distanceM };
+	return { exerciseKey, stepIndex, setIndex, reps, weightKg, durationS, distanceM };
 }
 
 test('all sets hit -> completed, pct 1.0', () => {
@@ -293,4 +298,33 @@ test('match by key+setIndex, not name spelling', () => {
 	assert.equal(extra?.status, 'extra');
 	assert.equal(r.plannedCount, 1);
 	assert.equal(r.completedCount, 1);
+});
+
+test('the same exercise in two blocks grades each block on its own logged set', () => {
+	// The heavy-top-set-then-back-off pattern. setIndex restarts per block, so
+	// keying on it collapsed both blocks onto one logged set: a perfectly
+	// executed session graded 50% / partial, the deltas were lifted off the
+	// wrong set, and the heavy top set was neither graded nor flagged extra.
+	const r = computeRoutineAdherence(
+		[
+			planned('bench', 0, 3, 100, null, null, 'working', null, 0), // block A: heavy
+			planned('bench', 0, 10, 60, null, null, 'working', null, 1), // block B: back-off
+		],
+		[
+			actual('bench', 0, 3, 100, null, null, 0),
+			actual('bench', 0, 10, 60, null, null, 1),
+		],
+	);
+	assert.equal(r.plannedCount, 2);
+	assert.equal(r.completedCount, 2);
+	assert.equal(r.verdict, 'completed');
+	assert.deepEqual(
+		r.sets.map((s) => s.status),
+		['hit', 'hit'],
+	);
+	// Each block's delta comes off its OWN logged set, not the other's.
+	assert.deepEqual(
+		r.sets.map((s) => s.weightDeltaKg),
+		[0, 0],
+	);
 });

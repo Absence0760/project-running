@@ -113,7 +113,7 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
                 ],
         ));
       }
-      await widget.store.replaceFromServer(hydrated);
+      await widget.store.replaceFromServer(hydrated, fetchLimit: 100);
       if (widget.store.hasPending) {
         await widget.store.syncWithServer(api);
       }

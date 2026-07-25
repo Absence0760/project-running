@@ -86,10 +86,14 @@ class _EventSocial extends SocialService {
     this.club,
     this.category = 'run',
     this.attendees = const [],
+    this.viewerRsvp,
+    this.cancelled = const {},
   });
   ClubView? club;
   String category;
   List<AttendeeView> attendees;
+  String? viewerRsvp;
+  Set<DateTime> cancelled;
   int rsvpCalls = 0;
   int clearCalls = 0;
   String? lastRsvpStatus;
@@ -110,9 +114,13 @@ class _EventSocial extends SocialService {
         ),
         byday: null,
         attendeeCount: attendees.length,
-        viewerRsvp: null,
+        viewerRsvp: viewerRsvp,
         nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
       );
+  @override
+  Future<Set<DateTime>> fetchCancelledInstances(String eventId) async =>
+      cancelled;
+
   @override
   Future<List<AttendeeView>> fetchAttendees(
           String eventId, DateTime instance) async =>
@@ -201,6 +209,79 @@ void main() {
     testWidgets('initial Scaffold has no AppBar yet', (tester) async {
       await _pump(tester);
       expect(find.byType(AppBar), findsNothing);
+    });
+  });
+
+  group('EventDetailScreen — cancelled occurrence', () {
+    Future<_EventSocial> pumpWith(
+        WidgetTester tester, Set<DateTime> cancelled) async {
+      final social =
+          _EventSocial(club: _club('member'), cancelled: cancelled);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: social,
+            clubSlug: 'fake-slug',
+            eventId: 'fake-event-id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return social;
+    }
+
+    testWidgets('a cancelled occurrence says so and withholds the RSVP row',
+        (tester) async {
+      // event_exceptions was never read on mobile, so a cancelled occurrence
+      // stayed selectable and RSVP-able with nothing saying it was called off.
+      await pumpWith(tester, {DateTime.utc(2026, 6, 20, 8)});
+      expect(find.text('This occurrence was cancelled.'), findsOneWidget);
+      expect(find.text("I'm in"), findsNothing);
+    });
+
+    testWidgets('a live occurrence keeps the RSVP row', (tester) async {
+      await pumpWith(tester, const {});
+      expect(find.text('This occurrence was cancelled.'), findsNothing);
+      expect(find.text("I'm in"), findsOneWidget);
+    });
+  });
+
+  group('EventDetailScreen — waitlisted RSVP', () {
+    Future<void> pumpWith(WidgetTester tester, String? rsvp) async {
+      final social = _EventSocial(club: _club('member'), viewerRsvp: rsvp);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: social,
+            clubSlug: 'fake-slug',
+            eventId: 'fake-event-id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a demoted RSVP reads as waitlisted, not as no answer',
+        (tester) async {
+      // enforce_event_capacity silently rewrites a full event's `going` to
+      // `waitlisted`. That matches none of the three chips, so the row looked
+      // exactly like it does for someone who never responded.
+      await pumpWith(tester, 'waitlisted');
+      expect(find.text('Waitlisted'), findsOneWidget);
+    });
+
+    testWidgets('an ordinary RSVP shows no waitlist line', (tester) async {
+      await pumpWith(tester, 'going');
+      expect(find.text('Waitlisted'), findsNothing);
+    });
+
+    testWidgets('no RSVP shows no waitlist line', (tester) async {
+      await pumpWith(tester, null);
+      expect(find.text('Waitlisted'), findsNothing);
     });
   });
 

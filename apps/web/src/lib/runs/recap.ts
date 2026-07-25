@@ -186,8 +186,16 @@ function hhmm(d: Date): string {
  * audits.
  */
 function elevationOf(r: Run): number {
-	const raw = r as unknown as { elevation_m?: number | null };
-	return raw.elevation_m ?? 0;
+	// `elevation_m` was never a top-level column, so this read was always 0 and
+	// both elevation trophies were unreachable. The promoted `elevation_gain_m`
+	// column is the canonical value (writers populate it alongside the jsonb
+	// key); `metadata.elevation_m` is the fallback the Dart twin reads and is
+	// what older rows carry.
+	const gain = r.elevation_gain_m;
+	if (typeof gain === 'number' && Number.isFinite(gain)) return gain;
+	const meta = (r.metadata ?? {}) as { elevation_m?: unknown };
+	const legacy = meta.elevation_m;
+	return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : 0;
 }
 
 /**

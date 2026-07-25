@@ -48,6 +48,20 @@ not the same-day 6h; an at-or-before-start clock still wraps to ≥ 24h.
 `marginS = limit − projectedElapsed`; `status` is
 `miss` (negative), `tight` (within `CUTOFF_TIGHT_S` = 30 min), else `safe`.
 
+**Every caller must pass `startClockMin`.** `cutoff_clock` is the only cut-off
+field the web and mobile marker editors can author (`cutoff_elapsed_s` has no
+input on either), so a caller that omits the start clock gets `cutoff: null` on
+every leg — not a wrong verdict but *no cut-off at all*, and any surface gated
+on "does this route have cut-offs" silently disappears. The callers and where
+each gets its start: the web + mobile roadbook screens (user-picked start
+time), the web `/live/[id]` page and the mobile spectator screen (the run's
+`started_at`, read as local time of day), and the mobile run screen (the
+recording's own wall-clock start, re-anchored when the run starts and when a
+partial run resumes, since the legs are first built while staging). The
+`goalSeconds` a live caller passes never reaches the card — the projection
+comes from the runner's own pace — but it does choose which day a clock lands
+on, per the snapping rule above.
+
 ## Sharing — URL params, no schema
 
 The web page encodes the **goal time, start time, and pacing model in the URL

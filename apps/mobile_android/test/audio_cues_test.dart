@@ -18,6 +18,8 @@
 // experience without any visual signal — exactly the kind of bug
 // that's hard to catch in production.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 
@@ -35,6 +37,52 @@ void main() {
       expect(SplitPaceMode.coerce(null), SplitPaceMode.split);
       expect(SplitPaceMode.coerce(''), SplitPaceMode.split);
       expect(SplitPaceMode.coerce('nonsense'), SplitPaceMode.split);
+    });
+  });
+
+  group('splitCueDistance', () {
+    test('metric default interval counts whole kilometres', () {
+      final one = splitCueDistance(1, 1000, DistanceUnit.km);
+      expect(one.count, '1');
+      expect(one.singular, isTrue);
+      final five = splitCueDistance(5, 1000, DistanceUnit.km);
+      expect(five.count, '5');
+      expect(five.singular, isFalse);
+    });
+
+    test('the 500 m interval speaks halves, not a rounded-up whole', () {
+      // Regression: the count was `round(ticks * interval / 1000)`, so the
+      // first 500 m split announced "1 kilometre" — the runner is told they
+      // have run twice as far as they have.
+      expect(splitCueDistance(1, 500, DistanceUnit.km).count, '0.5');
+      expect(splitCueDistance(1, 500, DistanceUnit.km).singular, isFalse);
+      expect(splitCueDistance(3, 500, DistanceUnit.km).count, '1.5');
+      expect(splitCueDistance(4, 500, DistanceUnit.km).count, '2');
+    });
+
+    test('imperial on the default 1 km interval speaks real miles', () {
+      // Regression: the kilometre count was read out with the word "miles",
+      // so 1 km announced as "1 mile" while the on-screen banner said 0.6 mi.
+      expect(splitCueDistance(1, 1000, DistanceUnit.mi).count, '0.6');
+      expect(splitCueDistance(1, 1000, DistanceUnit.mi).singular, isFalse);
+      expect(splitCueDistance(5, 1000, DistanceUnit.mi).count, '3.1');
+    });
+
+    test('the 1 mi preset (1609 m) reads as a whole mile, not "1.0"', () {
+      final one = splitCueDistance(1, 1609, DistanceUnit.mi);
+      expect(one.count, '1');
+      expect(one.singular, isTrue);
+      final three = splitCueDistance(3, 1609, DistanceUnit.mi);
+      expect(three.count, '3');
+      expect(three.singular, isFalse);
+      // Still whole deep into an ultra, where the 0.344 m/mile the preset
+      // drops would otherwise accumulate past a tenth.
+      expect(splitCueDistance(50, 1609, DistanceUnit.mi).count, '50');
+    });
+
+    test("cycling's 5 km interval converts for an imperial rider", () {
+      expect(splitCueDistance(1, 5000, DistanceUnit.km).count, '5');
+      expect(splitCueDistance(1, 5000, DistanceUnit.mi).count, '3.1');
     });
   });
 
@@ -405,6 +453,71 @@ void main() {
       final r = formatWorkoutStepUtterance(deStep(), DistanceUnit.km, 'de');
       expect(r, startsWith('Aufwärmen.'));
       expect(r, contains('pro Kilometer'));
+    });
+  });
+
+  group('ttsQueueModeFor', () {
+    test('Android is told to queue — its engine defaults to flushing', () {
+      // Android TextToSpeech defaults to QUEUE_FLUSH, so a split cue landing
+      // on the same tick as a cut-off or off-route warning used to cut it off
+      // mid-word.
+      expect(ttsQueueModeFor(isAndroid: true), kTtsQueueAdd);
+    });
+
+    test('elsewhere there is no call to make', () {
+      // iOS AVSpeechSynthesizer already enqueues and the plugin answers
+      // setQueueMode with notImplemented — calling it would throw out of
+      // _init and skip the ducking setup that follows.
+      expect(ttsQueueModeFor(isAndroid: false), isNull);
+    });
+  });
+
+  group('AudioCues wiring (source guard)', () {
+    test('_init pushes the queue mode, Android-gated', () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      expect(
+        src.contains(
+            'final queueMode = ttsQueueModeFor(isAndroid: Platform.isAndroid);'),
+        isTrue,
+      );
+      expect(
+        src.contains(
+            'if (queueMode != null) await _tts.setQueueMode(queueMode);'),
+        isTrue,
+        reason: 'the call must stay null-gated — on iOS it throws '
+            'notImplemented and would abort the rest of _init.',
+      );
+    });
+
+    test('speakGuidedCue interrupts rather than queues', () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      final start = src.indexOf('Future<void> speakGuidedCue(');
+      expect(start, isNonNegative);
+      final body =
+          src.substring(start, src.indexOf('Future<void> stop()', start));
+      expect(
+        body.indexOf('_tts.stop()') < body.indexOf('_tts.speak(text)'),
+        isTrue,
+        reason: 'the preview button must replace the cue in flight — with the '
+            'engine queueing, tapping down the library list would otherwise '
+            'enqueue every cue tried.',
+      );
+    });
+
+    test('announceFinish speaks the distance, never UnitFormat abbreviations',
+        () {
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      final start = src.indexOf('Future<void> announceFinish(');
+      expect(start, isNonNegative);
+      final body = src.substring(start, src.indexOf('/// Warn that', start));
+      expect(body, contains('formatSpokenDistance(distanceMetres, unit, tag)'));
+      expect(
+        body.contains('UnitFormat.distance('),
+        isFalse,
+        reason: 'UnitFormat renders "5.2 km" — an engine reads that '
+            'abbreviation out as letters, and it is not the right word in a '
+            'non-English voice.',
+      );
     });
   });
 

@@ -125,7 +125,9 @@ void main() {
       // recent bucket's value now anchors the card as a spotlight
       // headline. Pin both unit branches of UnitFormat.distance:
       // "10.00 km" vs "6.21 mi".
-      final tenKm = [_run(startedAt: DateTime(2026, 5, 11, 7), distanceM: 10000)];
+      // Dated into `now`'s own week (Mon 18 May) — the spotlight reports the
+      // CURRENT bucket, so a run from a previous week must not fill it.
+      final tenKm = [_run(startedAt: DateTime(2026, 5, 18, 7), distanceM: 10000)];
 
       await _pump(tester, runs: tenKm, unit: DistanceUnit.km, now: now);
       expect(find.text('10.00 km'), findsOneWidget);
@@ -136,6 +138,21 @@ void main() {
       await _pump(tester, runs: tenKm, unit: DistanceUnit.mi, now: now);
       // 10 km ≈ 6.21 mi.
       expect(find.text('6.21 mi'), findsOneWidget);
+    });
+
+    testWidgets('an idle week spotlights zero, not the last week with data',
+        (tester) async {
+      // The series used to end at the last bucket WITH DATA while the card
+      // labelled that bucket "this week", so a runner who last ran eight days
+      // ago read their old total as the current one.
+      await _pump(
+        tester,
+        runs: [_run(startedAt: DateTime(2026, 5, 11, 7), distanceM: 10000)],
+        now: now,
+      );
+      expect(find.text('0.00 km'), findsOneWidget);
+      expect(find.text('this week'), findsOneWidget);
+      expect(find.text('10.00 km'), findsNothing);
     });
   });
 }

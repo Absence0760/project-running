@@ -32,6 +32,18 @@ class WatchIngestQueue {
   static const _uuid = Uuid();
   static const _lastOwnerFilename = 'last_owner.txt';
 
+  /// Suffix for an entry [drain] can never parse. Renaming takes it out of the
+  /// `.json` glob every listing here uses, so it stops being retried on every
+  /// sign-in and stops inflating [pendingCount] — but it is kept, not deleted,
+  /// because the alternative is silently destroying a real run over what may
+  /// be a decoder bug.
+  static const _rejectedSuffix = '.rejected';
+
+  /// How long a rejected entry is kept before the sweep drops it. Mirrors the
+  /// bounded-retention rule the other local caches follow: a payload nothing
+  /// can read is residue, and it carries GPS.
+  static const _rejectedRetention = Duration(days: 30);
+
   late Directory _queueDir;
   String? _lastKnownOwnerCache;
 
@@ -43,6 +55,9 @@ class WatchIngestQueue {
     if (!_queueDir.existsSync()) {
       _queueDir.createSync(recursive: true);
     }
+    _sweepRejected();
+    cm.sweepAtomicWriteOrphans(_queueDir,
+        onError: (m) => debugPrint('WatchIngestQueue: $m'));
     // Hydrate the in-memory cache from the sidecar so enqueues that
     // run before the first setLastKnownOwner call still carry the
     // correct stamp (e.g. payload arrives during the brief window
@@ -72,7 +87,10 @@ class WatchIngestQueue {
       if (userId == null || userId.isEmpty) {
         if (_lastOwnerFile.existsSync()) await _lastOwnerFile.delete();
       } else {
-        await _lastOwnerFile.writeAsString(userId);
+        // Atomic like the envelope write: a bare writeAsString truncates
+        // first, and init() reads an empty file as "no owner" — which drops
+        // the stamp and lets the next account adopt the previous user's run.
+        await cm.writeStringAtomic(_lastOwnerFile, userId);
       }
     } catch (e) {
       debugPrint('WatchIngestQueue.setLastKnownOwner write failed: $e');
@@ -96,7 +114,10 @@ class WatchIngestQueue {
       'payload': payload,
     };
     try {
-      await file.writeAsString(jsonEncode(envelope));
+      // Atomic, like every sibling store: a bare writeAsString truncates the
+      // target first, so a process death mid-write leaves a truncated file
+      // that drain can never parse.
+      await cm.writeStringAtomic(file, jsonEncode(envelope));
     } catch (e) {
       debugPrint('WatchIngestQueue.enqueue failed: $e');
     }
@@ -123,6 +144,11 @@ class WatchIngestQueue {
         .toList();
 
     for (final file in files) {
+      // Two failure classes, and they need opposite handling. A read/decode
+      // failure is PERMANENT — the bytes will not improve, so retrying it on
+      // every sign-in is a forever-loop that also reports a phantom queued run
+      // — while an upload failure is TRANSIENT and must keep retrying.
+      final cm.Run run;
       try {
         final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
         // Envelope-or-bare format detection. New format has a `payload`
@@ -146,16 +172,51 @@ class WatchIngestQueue {
           );
           continue;
         }
-        final run = runFromWatchPayload(payload);
-        await api.saveRun(run);
-        try {
-          await file.delete();
-        } catch (e) {
-          debugPrint('WatchIngestQueue: could not delete drained file: $e');
-        }
+        run = runFromWatchPayload(payload);
       } catch (e) {
-        debugPrint('WatchIngestQueue.drain failed for ${file.path}: $e');
+        _reject(file, e);
+        continue;
       }
+      try {
+        await api.saveRun(run);
+      } catch (e) {
+        debugPrint('WatchIngestQueue.drain upload failed for ${file.path}: $e');
+        continue; // transient — left on disk for the next sign-in
+      }
+      try {
+        await file.delete();
+      } catch (e) {
+        debugPrint('WatchIngestQueue: could not delete drained file: $e');
+      }
+    }
+  }
+
+  /// Move an unreadable entry out of the queue glob so it stops being retried.
+  void _reject(File file, Object error) {
+    debugPrint('WatchIngestQueue.drain rejecting ${file.path}: $error');
+    try {
+      file.renameSync('${file.path}$_rejectedSuffix');
+    } catch (e) {
+      debugPrint('WatchIngestQueue: could not quarantine ${file.path}: $e');
+    }
+  }
+
+  /// Drop rejected entries past [_rejectedRetention]. Best-effort, at init.
+  void _sweepRejected() {
+    final cutoff = DateTime.now().subtract(_rejectedRetention);
+    try {
+      for (final entity in _queueDir.listSync()) {
+        if (entity is! File || !entity.path.endsWith(_rejectedSuffix)) continue;
+        try {
+          if (entity.statSync().modified.isAfter(cutoff)) continue;
+          entity.deleteSync();
+        } catch (e) {
+          debugPrint('WatchIngestQueue: rejected sweep failed for '
+              '${entity.path}: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('WatchIngestQueue: rejected sweep failed: $e');
     }
   }
 
@@ -165,7 +226,21 @@ class WatchIngestQueue {
           .listSync()
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))
-          .where((f) => !f.path.endsWith(_lastOwnerFilename))
+          .length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Entries [drain] could not parse and has quarantined. Test-visible so the
+  /// retry-forever regression stays pinned.
+  @visibleForTesting
+  int get rejectedCount {
+    try {
+      return _queueDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith(_rejectedSuffix))
           .length;
     } catch (_) {
       return 0;
@@ -177,7 +252,14 @@ class WatchIngestQueue {
 /// queue directory) into a [cm.Run]. Pure — exposed for tests so the
 /// payload schema can be exercised without disk IO.
 cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
-  final id = raw['id'] as String? ?? '';
+  final id = raw['id'] as String?;
+  if (id == null || id.isEmpty) {
+    // A blank id can never be uploaded — Postgres rejects it as a uuid — so it
+    // has to fail on the PARSE side, where drain quarantines it. Left to the
+    // upload branch it is classified transient and retried on every sign-in
+    // for the life of the install, inflating pendingCount with a phantom run.
+    throw const FormatException('watch payload has no id');
+  }
   final startedAt = DateTime.parse(raw['started_at'] as String);
   final durationS = (raw['duration_s'] as num).toInt();
   final distanceM = (raw['distance_m'] as num).toDouble();

@@ -29,6 +29,14 @@ import '../widgets/top_banner.dart';
 /// publisher; step transitions go through setState (low cadence). A periodic
 /// durable save mirrors `run_screen._saveInProgress` so a force-kill mid-session
 /// doesn't lose entered sets.
+typedef _EnteredSet = ({
+  int? reps,
+  double? weightKg,
+  double? rpe,
+  int? durationS,
+  double? distanceM,
+});
+
 class GymSessionScreen extends StatefulWidget {
   final ApiClient? api;
   final StoredRoutine routine;
@@ -58,6 +66,8 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   final _reps = TextEditingController();
   final _weight = TextEditingController();
   final _rpe = TextEditingController();
+  final _duration = TextEditingController();
+  final _distance = TextEditingController();
 
   Timer? _restTimer;
   Timer? _saveTimer;
@@ -68,9 +78,11 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   int _restTotal = 0;
   final DateTime _startedAt = DateTime.now().toUtc();
 
-  // The accumulated logged sets (Complete + Skip), kept so the durable save and
-  // the final write share one source of truth. A skipped set contributes no row.
-  final List<GymSetInput> _loggedSets = [];
+  // What the athlete entered, keyed by expanded-step index — mirrors web
+  // GymSessionRunner's sparse `outcomes` so a rewind re-surfaces the prior edit
+  // rather than the prescription. A skip drops the step's entry, matching web's
+  // `{kind: 'skipped'}` reading back through `enteredFor` as all-nulls.
+  final Map<int, _EnteredSet> _enteredByStep = {};
 
   // The draft's stable id — minted once so the periodic durable save updates a
   // single row rather than appending. Null until the first save creates it.
@@ -105,6 +117,8 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     _reps.dispose();
     _weight.dispose();
     _rpe.dispose();
+    _duration.dispose();
+    _distance.dispose();
     try {
       WakelockPlus.disable();
     } catch (e) {
@@ -135,6 +149,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
                   setType: r.exercises[p].sets[i].setType,
                   restS: r.exercises[p].sets[i].restS,
                   targetDurationS: r.exercises[p].sets[i].targetDurationS,
+                  targetDistanceM: r.exercises[p].sets[i].targetDistanceM,
                 ),
             ],
           ),
@@ -158,6 +173,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
             targetRpe: s.targetRpe?.toDouble(),
             restS: s.restS?.toInt(),
             targetDurationS: s.targetDurationS?.toInt(),
+            targetDistanceM: s.targetDistanceM?.toDouble(),
             supersetGroup: s.supersetGroup,
           );
         }(),
@@ -273,15 +289,20 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
 
   void _seedInputs() {
     final step = _runner.currentStep;
-    _reps.text = step?.targetRepsMin?.toString() ?? '';
-    _weight.text = step?.targetWeightKg == null
-        ? ''
-        : WeightFormat.value(step!.targetWeightKg!, activeWeightUnit);
-    _rpe.text = step?.targetRpe?.toString() ?? '';
+    final prior = _enteredByStep[_runner.currentStepIndex];
+    _reps.text = (prior?.reps ?? step?.targetRepsMin)?.toString() ?? '';
+    final weightKg = prior?.weightKg ?? step?.targetWeightKg;
+    _weight.text =
+        weightKg == null ? '' : WeightFormat.value(weightKg, activeWeightUnit);
+    _rpe.text = rpeInputString(prior?.rpe ?? step?.targetRpe);
+    // Deliberately NOT seeded from the target: what gets logged has to be
+    // what the athlete actually did, and a pre-filled target would be
+    // indistinguishable from a recorded one.
+    _duration.text = prior?.durationS?.toString() ?? '';
+    _distance.text = prior?.distanceM?.toString() ?? '';
   }
 
-  ({int? reps, double? weightKg, double? rpe, int? durationS}) _entered() {
-    final step = _runner.currentStep;
+  _EnteredSet _entered() {
     final reps = int.tryParse(_reps.text.trim());
     final weightKg = WeightFormat.parseToKg(_weight.text, activeWeightUnit);
     final rpe = double.tryParse(_rpe.text.trim().replaceAll(',', '.'));
@@ -289,15 +310,19 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
       reps: reps,
       weightKg: weightKg,
       rpe: rpe,
-      durationS: step?.targetDurationS,
+      durationS: int.tryParse(_duration.text.trim()),
+      distanceM:
+          double.tryParse(_distance.text.trim().replaceAll(',', '.')),
     );
   }
 
   void _publishBand() {
     final step = _runner.currentStep;
     final e = _entered();
-    final entered =
-        e.reps != null || e.weightKg != null || e.durationS != null;
+    final entered = e.reps != null ||
+        e.weightKg != null ||
+        e.durationS != null ||
+        e.distanceM != null;
     _band.value = GymBandState(
       step: step,
       total: _steps.length,
@@ -310,10 +335,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     );
   }
 
-  bool _targetHit(
-    GymRunnerStep? step,
-    ({int? reps, double? weightKg, double? rpe, int? durationS}) e,
-  ) {
+  bool _targetHit(GymRunnerStep? step, _EnteredSet e) {
     if (step == null) return false;
     final repsOk = step.targetRepsMin == null ||
         (e.reps != null && e.reps! >= step.targetRepsMin!);
@@ -321,41 +343,55 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
         (e.weightKg != null && e.weightKg! >= step.targetWeightKg!);
     final durationOk = step.targetDurationS == null ||
         (e.durationS != null && e.durationS! >= step.targetDurationS!);
-    return repsOk && weightOk && durationOk;
+    final distanceOk = step.targetDistanceM == null ||
+        (e.distanceM != null && e.distanceM! >= step.targetDistanceM!);
+    return repsOk && weightOk && durationOk && distanceOk;
   }
 
   void _onComplete() {
     final step = _runner.currentStep;
     if (step == null) return;
     final e = _entered();
-    if (e.reps != null || e.weightKg != null || e.durationS != null) {
-      _loggedSets.add((
-        exerciseName: step.exerciseName,
-        reps: e.reps,
-        weightKg: e.weightKg,
-        rpe: e.rpe,
-        setType: step.setType,
-        durationS: e.durationS,
-        // Routine steps bind to logged sets by normalised name, not a catalogue
-        // id, so a routine-run set logs free-text (exercise_id null).
-        exerciseId: null,
-      ));
-    }
+    _enteredByStep[_runner.currentStepIndex] = e;
     _runner.completeSet(
       reps: e.reps,
       weightKg: e.weightKg,
       rpe: e.rpe,
       durationS: e.durationS,
+      distanceM: e.distanceM,
     );
   }
 
-  void _onSkip() => _runner.skipStep();
-
-  void _onRewind() {
-    if (_runner.rewindStep()) {
-      if (_loggedSets.isNotEmpty) _loggedSets.removeLast();
-    }
+  void _onSkip() {
+    _enteredByStep.remove(_runner.currentStepIndex);
+    _runner.skipStep();
   }
+
+  void _onRewind() => _runner.rewindStep();
+
+  // Derived from the runner's results, the same source `_metadataTrio` reads,
+  // so a rewind can't leave the flat set rows disagreeing with
+  // `gym_step_results`. Distance has no `gym_sets` column, so a distance-only
+  // set legitimately writes no flat row — it is carried (and graded) through
+  // the metadata step-results instead. Mirrors web GymSessionRunner.buildSets.
+  List<GymSetInput> _buildSets() => [
+        for (final r in _runner.snapshotResults())
+          if (r.status == GymRunnerStepStatus.completed &&
+              (r.actualReps != null ||
+                  r.actualWeightKg != null ||
+                  r.actualDurationS != null))
+            (
+              exerciseName: r.step.exerciseName,
+              reps: r.actualReps,
+              weightKg: r.actualWeightKg,
+              rpe: r.actualRpe,
+              setType: r.step.setType,
+              durationS: r.actualDurationS,
+              // Routine steps bind to logged sets by normalised name, not a
+              // catalogue id, so a routine-run set logs free-text.
+              exerciseId: null,
+            ),
+      ];
 
   Future<void> _onAbandon() async {
     final l10n = AppLocalizations.of(context);
@@ -395,40 +431,48 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // reads identically in the web /gym/[id] review panel.
   Map<String, dynamic> _metadataTrio() {
     final planned = _steps
-        .map((s) => PlannedSetRef(
-              exerciseKey: s.exerciseKey,
-              setIndex: s.setIndex,
-              setType: s.setType,
-              targetRepsMin: s.targetRepsMin,
-              targetRepsMax: s.targetRepsMax,
-              targetWeightKg: s.targetWeightKg,
-              targetDurationS: s.targetDurationS,
+        .asMap()
+        .entries
+        .map((e) => PlannedSetRef(
+              exerciseKey: e.value.exerciseKey,
+              stepIndex: e.key,
+              setIndex: e.value.setIndex,
+              setType: e.value.setType,
+              targetRepsMin: e.value.targetRepsMin,
+              targetRepsMax: e.value.targetRepsMax,
+              targetWeightKg: e.value.targetWeightKg,
+              targetDurationS: e.value.targetDurationS,
+              targetDistanceM: e.value.targetDistanceM,
             ))
         .toList();
     final actual = <ActualSetRef>[];
-    for (final r in _runner.snapshotResults()) {
+    for (final entry in _runner.snapshotResults().asMap().entries) {
+      final r = entry.value;
       if (r.status != GymRunnerStepStatus.completed) continue;
       actual.add(ActualSetRef(
         exerciseKey: r.step.exerciseKey,
+        stepIndex: entry.key,
         setIndex: r.step.setIndex,
         reps: r.actualReps,
         weightKg: r.actualWeightKg,
         durationS: r.actualDurationS,
+        distanceM: r.actualDistanceM,
       ));
     }
     final adherence = computeRoutineAdherence(planned, actual);
     final plannedByKey = {
-      for (final p in planned) '${p.exerciseKey} ${p.setIndex}': p,
+      for (final p in planned) refKey(p.exerciseKey, p.stepIndex): p,
     };
     final actualByKey = {
-      for (final a in actual) '${a.exerciseKey} ${a.setIndex}': a,
+      for (final a in actual) refKey(a.exerciseKey, a.stepIndex): a,
     };
     final stepResults = adherence.sets.map((s) {
-      final key = '${s.exerciseKey} ${s.setIndex}';
+      final key = refKey(s.exerciseKey, s.stepIndex);
       final p = plannedByKey[key];
       final a = actualByKey[key];
       return {
         'exercise_key': s.exerciseKey,
+        'step_index': s.stepIndex,
         'set_index': s.setIndex,
         'status': s.status.name,
         'reps_delta': s.repsDelta,
@@ -437,9 +481,11 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
         'target_reps_max': p?.targetRepsMax,
         'target_weight_kg': p?.targetWeightKg,
         'target_duration_s': p?.targetDurationS,
+        'target_distance_m': p?.targetDistanceM,
         'actual_reps': a?.reps,
         'actual_weight_kg': a?.weightKg,
         'actual_duration_s': a?.durationS,
+        'actual_distance_m': a?.distanceM,
       };
     }).toList();
     return {
@@ -454,21 +500,23 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // run_screen._saveInProgress. Best-effort: a write failure leaves the
   // in-memory state intact for the next tick / the final save.
   Future<void> _durableSave() async {
-    if (_finished || _abandoned || _loggedSets.isEmpty) return;
+    if (_finished || _abandoned) return;
+    final sets = _buildSets();
+    if (sets.isEmpty) return;
     try {
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
           title: widget.routine.title,
           startedAt: _startedAt,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
         );
         _draftId = stored.id;
       } else {
         await widget.gymStore.updateLocal(
           _draftId!,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
         );
       }
     } catch (e) {
@@ -492,12 +540,13 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     final l10n = AppLocalizations.of(context);
     try {
       final metadata = _metadataTrio();
+      final sets = _buildSets();
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
           title: widget.routine.title,
           startedAt: _startedAt,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
           metadata: metadata,
         );
         _draftId = stored.id;
@@ -505,7 +554,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
         await widget.gymStore.updateLocal(
           _draftId!,
           durationS: _durationS(),
-          sets: List.of(_loggedSets),
+          sets: sets,
           metadata: metadata,
         );
       }
@@ -568,6 +617,14 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(child: _field(_rpe, l10n.gymRpe, true)),
+            if (_runner.currentStep?.targetDurationS != null) ...[
+              const SizedBox(width: 12),
+              Expanded(child: _field(_duration, l10n.gymDuration, false)),
+            ],
+            if (_runner.currentStep?.targetDistanceM != null) ...[
+              const SizedBox(width: 12),
+              Expanded(child: _field(_distance, l10n.gymDistance, true)),
+            ],
           ],
         ),
       ],
@@ -587,6 +644,19 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     );
   }
 
+  // Counts every set the athlete logged a value for, including a distance-only
+  // one — which `_buildSets` legitimately omits because it has no `gym_sets`
+  // column. Mirrors web GymSessionRunner's `loggedCount`.
+  int _completedSetCount() => _runner
+      .snapshotResults()
+      .where((r) =>
+          r.status == GymRunnerStepStatus.completed &&
+          (r.actualReps != null ||
+              r.actualWeightKg != null ||
+              r.actualDurationS != null ||
+              r.actualDistanceM != null))
+      .length;
+
   Widget _finishView(AppLocalizations l10n) {
     final theme = Theme.of(context);
     return Padding(
@@ -597,7 +667,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
           Icon(Icons.flag, size: 48, color: theme.colorScheme.primary),
           const SizedBox(height: 12),
           Text(
-            l10n.gymSessionSetProgress(_loggedSets.length, _steps.length),
+            l10n.gymSessionSetProgress(_completedSetCount(), _steps.length),
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 24),

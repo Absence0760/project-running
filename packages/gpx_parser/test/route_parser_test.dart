@@ -162,6 +162,117 @@ void main() {
     });
   });
 
+  group('RouteParser.routesFromGpx — one route per track', () {
+    const twoTracks = '''<?xml version="1.0"?>
+<gpx version="1.1">
+  <trk><name>London loop</name><trkseg>
+    <trkpt lat="51.5000" lon="-0.1200"/><trkpt lat="51.5010" lon="-0.1200"/>
+  </trkseg></trk>
+  <trk><name>NYC loop</name><trkseg>
+    <trkpt lat="40.7000" lon="-74.0000"/><trkpt lat="40.7010" lon="-74.0000"/>
+  </trkseg></trk>
+</gpx>''';
+
+    test('two tracks stay two routes, with no leg between them', () {
+      // Regression: trkpt was collected document-wide, so these imported as
+      // ONE 4-point route with a ~5,500 km transatlantic leg — which also
+      // poisoned its distance, elevation and map.
+      final routes = RouteParser.routesFromGpx(twoTracks);
+      expect(routes.length, 2);
+      expect(routes[0].name, 'London loop');
+      expect(routes[1].name, 'NYC loop');
+      for (final r in routes) {
+        expect(r.waypoints.length, 2);
+        expect(r.distanceMetres, lessThan(1000),
+            reason: 'each loop is metres across, not thousands of km');
+      }
+    });
+
+    test('fromGpx keeps the first track for single-route callers', () {
+      final route = RouteParser.fromGpx(twoTracks);
+      expect(route.name, 'London loop');
+      expect(route.waypoints.length, 2);
+      expect(route.distanceMetres, lessThan(1000));
+    });
+
+    test('a single-track file is unchanged', () {
+      const one = '''<?xml version="1.0"?>
+<gpx><trk><name>Solo</name><trkseg>
+<trkpt lat="51.5" lon="-0.12"/><trkpt lat="51.501" lon="-0.12"/>
+</trkseg></trk></gpx>''';
+      final routes = RouteParser.routesFromGpx(one);
+      expect(routes.length, 1);
+      expect(routes.single.name, 'Solo');
+    });
+
+    test('several segments inside ONE track stay one route', () {
+      const segs = '''<?xml version="1.0"?>
+<gpx><trk><name>Paused run</name>
+<trkseg><trkpt lat="51.5" lon="-0.12"/><trkpt lat="51.501" lon="-0.12"/></trkseg>
+<trkseg><trkpt lat="51.502" lon="-0.12"/></trkseg>
+</trk></gpx>''';
+      final routes = RouteParser.routesFromGpx(segs);
+      expect(routes.length, 1);
+      expect(routes.single.waypoints.length, 3);
+    });
+
+    test('rte and loose wpt files still parse', () {
+      const rte = '''<?xml version="1.0"?>
+<gpx><rte><name>Planned</name>
+<rtept lat="51.5" lon="-0.12"/><rtept lat="51.501" lon="-0.12"/>
+</rte></gpx>''';
+      expect(RouteParser.routesFromGpx(rte).single.name, 'Planned');
+      const wpts = '''<?xml version="1.0"?>
+<gpx><wpt lat="51.5" lon="-0.12"/><wpt lat="51.501" lon="-0.12"/></gpx>''';
+      expect(RouteParser.routesFromGpx(wpts).single.waypoints.length, 2);
+    });
+  });
+
+  group('RouteParser.routesFromKml — scoped to LineStrings', () {
+    test('a Point placemark before the line no longer wins', () {
+      // Regression: the first <coordinates> anywhere won, so a Google My Maps
+      // export whose "start pin" precedes the track imported as a single
+      // point with zero distance and the real line vanished.
+      const kml = '''<?xml version="1.0"?>
+<kml><Document><name>My map</name>
+  <Placemark><name>Start pin</name><Point>
+    <coordinates>-0.1200,51.5000,0</coordinates></Point></Placemark>
+  <Placemark><name>The route</name><LineString>
+    <coordinates>-0.1200,51.5000,0 -0.1210,51.5010,0 -0.1220,51.5020,0</coordinates>
+  </LineString></Placemark>
+</Document></kml>''';
+      final routes = RouteParser.routesFromKml(kml);
+      expect(routes.length, 1);
+      expect(routes.single.name, 'The route');
+      expect(routes.single.waypoints.length, 3);
+      expect(routes.single.distanceMetres, greaterThan(0));
+      expect(RouteParser.fromKml(kml).waypoints.length, 3);
+    });
+
+    test('two LineStrings become two routes', () {
+      const kml = '''<?xml version="1.0"?>
+<kml><Document>
+  <Placemark><name>A</name><LineString><coordinates>
+    -0.12,51.5,0 -0.121,51.501,0</coordinates></LineString></Placemark>
+  <Placemark><name>B</name><LineString><coordinates>
+    -74.0,40.7,0 -74.001,40.701,0</coordinates></LineString></Placemark>
+</Document></kml>''';
+      final routes = RouteParser.routesFromKml(kml);
+      expect(routes.map((r) => r.name).toList(), ['A', 'B']);
+      for (final r in routes) {
+        expect(r.distanceMetres, lessThan(1000));
+      }
+    });
+
+    test('a document with no LineString yields no routes', () {
+      const kml = '''<?xml version="1.0"?>
+<kml><Document><Placemark><Point>
+<coordinates>-0.12,51.5,0</coordinates></Point></Placemark></Document></kml>''';
+      expect(RouteParser.routesFromKml(kml), isEmpty);
+      expect(RouteParser.fromKml(kml).waypoints, isEmpty);
+    });
+  });
+
   group('RouteParser.fromKml', () {
     test('parses LineString coordinates with elevation', () {
       const kml = '''<?xml version="1.0"?>

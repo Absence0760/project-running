@@ -179,15 +179,28 @@ List<RunSplit> computeSplitDurations(
     final segDist = haversineMetres(a.lat, a.lng, b.lat, b.lng);
     cumulative += segDist;
     final aTime = a.timestamp;
-    final bTime = b.timestamp ?? startedAt;
+    // Fall back to the segment's own start, never to the run start. A GPX
+    // import can leave a mid-track point untimestamped (route_parser sets
+    // timestamp: null when a <trkpt> has no <time>), and substituting
+    // startedAt there made bTime.difference(aTime) hugely NEGATIVE — the
+    // interpolated crossing landed before tickStart, so that split reported a
+    // negative duration and, because tickStart is then advanced to it, every
+    // later split was garbage too.
+    final bTime = b.timestamp ?? aTime ?? startedAt;
 
     while (segDist > 0 && cumulative >= nextTick * tickLengthM) {
       final boundaryDist = nextTick * tickLengthM;
       final f = (boundaryDist - segStart) / segDist;
-      final crossTime = aTime != null
+      final interpolated = aTime != null
           ? aTime.add(Duration(
               milliseconds: (bTime.difference(aTime).inMilliseconds * f).round()))
           : bTime;
+      // Crossing times are monotonic by construction: a split can be 0:00 but
+      // never negative. Also absorbs a genuinely backwards timestamp, which
+      // Android produces when it batches queued fixes or after an NTP
+      // correction.
+      final crossTime =
+          interpolated.isBefore(tickStart) ? tickStart : interpolated;
       splits.add(RunSplit(nextTick, crossTime.difference(tickStart)));
       tickStart = crossTime;
       nextTick++;
@@ -221,6 +234,25 @@ double haversineMetres(
 double? averagePaceSecPerKm(double distanceMetres, int elapsedSeconds) {
   if (distanceMetres <= 0 || elapsedSeconds <= 0) return null;
   return elapsedSeconds / (distanceMetres / 1000);
+}
+
+/// Distance a live recording should report, in metres: GPS track distance once
+/// a fix has arrived, otherwise the pedometer estimate `steps × strideMetres`
+/// so an indoor / treadmill session isn't pinned at zero.
+///
+/// Every distance-DERIVED behaviour resolves its source through here, not just
+/// the on-screen readout — split ticks, split average pace and race-phase
+/// transitions included. Reading the raw GPS figure at one of those sites
+/// silently disables it for the whole of a pedometer-only run.
+double liveDistanceMetres({
+  required bool everHadGpsFix,
+  required double gpsDistanceMetres,
+  required int steps,
+  required double strideMetres,
+}) {
+  if (everHadGpsFix || gpsDistanceMetres > 0) return gpsDistanceMetres;
+  if (strideMetres <= 0 || steps <= 0) return 0;
+  return steps * strideMetres;
 }
 
 /// Bracket key → dashboard PB label, and the shortest-first display order.

@@ -2331,6 +2331,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Imported $count routes';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Import failed: $error';
   }
@@ -4271,6 +4276,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get eventRsvpMaybe => 'Maybe';
+
+  @override
+  String get eventOccurrenceCancelled => 'This occurrence was cancelled.';
+
+  @override
+  String get eventRsvpWaitlisted => 'Waitlisted';
 
   @override
   String get eventRsvpDeclined => 'Can\'t make it';
@@ -8931,6 +8942,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distance (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Set $n';
   }
@@ -10345,6 +10364,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Cut-off time';
 
   @override
+  String get routeMarkerCutoffInvalid => 'Enter the cut-off as HH:MM (24-hour)';
+
+  @override
+  String get routeMarkerTimeClock => 'Clock';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Elapsed';
+
+  @override
   String get routeMarkerNoteLabel => 'Note';
 
   @override
@@ -10379,7 +10407,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Enter coordinates instead';
+  String get routeMarkerEnterCoords => 'Enter location instead';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11646,6 +11674,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Target time';
+
+  @override
+  String get routeMarkerTargetHelper => 'Hours : minutes : seconds';
 
   @override
   String get routeMarkerTargetInvalid => 'Enter the target time as h:mm:ss';

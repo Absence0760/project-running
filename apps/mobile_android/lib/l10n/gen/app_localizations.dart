@@ -4043,6 +4043,12 @@ abstract class AppLocalizations {
   /// **'Imported \"{name}\"'**
   String routesImported(String name);
 
+  /// Banner after importing a file that held several tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} routes'**
+  String routesImportedMany(int count);
+
   /// Banner shown when importing a route file fails for any other reason
   ///
   /// In en, this message translates to:
@@ -7171,6 +7177,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Maybe'**
   String get eventRsvpMaybe;
+
+  /// Banner on a cancelled occurrence of a recurring club event
+  ///
+  /// In en, this message translates to:
+  /// **'This occurrence was cancelled.'**
+  String get eventOccurrenceCancelled;
+
+  /// Shown when the server demoted a full event RSVP to the waitlist
+  ///
+  /// In en, this message translates to:
+  /// **'Waitlisted'**
+  String get eventRsvpWaitlisted;
 
   /// RSVP chip — declined
   ///
@@ -14946,6 +14964,18 @@ abstract class AppLocalizations {
   /// **'{seconds}s'**
   String gymDurationValue(String seconds);
 
+  /// Label on the guided-session input where the athlete records the distance they actually covered on a distance-modality set
+  ///
+  /// In en, this message translates to:
+  /// **'Distance (m)'**
+  String get gymDistance;
+
+  /// A set's distance target in metres
+  ///
+  /// In en, this message translates to:
+  /// **'{metres} m'**
+  String gymDistanceValue(String metres);
+
   /// Set ordinal label in a gym workout
   ///
   /// In en, this message translates to:
@@ -17394,6 +17424,24 @@ abstract class AppLocalizations {
   /// **'Cut-off time'**
   String get routeMarkerCutoffLabel;
 
+  /// Course marker cut-off time validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the cut-off as HH:MM (24-hour)'**
+  String get routeMarkerCutoffInvalid;
+
+  /// Toggle: the marker time is a wall-clock time of day
+  ///
+  /// In en, this message translates to:
+  /// **'Clock'**
+  String get routeMarkerTimeClock;
+
+  /// Toggle: the marker time is measured from the race start
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed'**
+  String get routeMarkerTimeElapsed;
+
   /// Note field label
   ///
   /// In en, this message translates to:
@@ -17454,10 +17502,10 @@ abstract class AppLocalizations {
   /// **'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).'**
   String get routeMarkerCoordInvalid;
 
-  /// Button opening the marker editor without a map tap, for keyboard / screen-reader placement
+  /// Button opening the marker editor without a map tap (accepts lat/lng or a distance along the route), for keyboard / screen-reader placement
   ///
   /// In en, this message translates to:
-  /// **'Enter coordinates instead'**
+  /// **'Enter location instead'**
   String get routeMarkerEnterCoords;
 
   /// Error: save marker failed
@@ -19703,6 +19751,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Target time'**
   String get routeMarkerTargetLabel;
+
+  /// Persistent helper under the course-marker target-time field clarifying the h:mm:ss format
+  ///
+  /// In en, this message translates to:
+  /// **'Hours : minutes : seconds'**
+  String get routeMarkerTargetHelper;
 
   /// Course marker target-time validation
   ///

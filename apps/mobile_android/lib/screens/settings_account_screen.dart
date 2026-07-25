@@ -775,7 +775,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         serverClient: serviceBase.isEmpty
             ? null
             : BackupServerClient(baseUrl: serviceBase),
-      ).createBackup(outputFile: file);
+      ).createBackup(outputFile: file, runStore: widget.runStore);
       await Share.shareXFiles(
         [XFile(file.path)],
         text: l10n.settingsAccountBackupShareText,

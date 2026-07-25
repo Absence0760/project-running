@@ -2358,6 +2358,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return '$count Routen importiert';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Import fehlgeschlagen: $error';
   }
@@ -4320,6 +4325,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get eventRsvpMaybe => 'Vielleicht';
+
+  @override
+  String get eventOccurrenceCancelled => 'Dieser Termin wurde abgesagt.';
+
+  @override
+  String get eventRsvpWaitlisted => 'Warteliste';
 
   @override
   String get eventRsvpDeclined => 'Kann nicht';
@@ -9038,6 +9049,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distanz (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Satz $n';
   }
@@ -10464,6 +10483,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Cut-off-Zeit';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Cut-off als HH:MM (24 Stunden) eingeben';
+
+  @override
+  String get routeMarkerTimeClock => 'Uhrzeit';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Verstrichen';
+
+  @override
   String get routeMarkerNoteLabel => 'Notiz';
 
   @override
@@ -10500,7 +10529,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Gib einen gültigen Breitengrad (-90 bis 90) und Längengrad (-180 bis 180) ein.';
 
   @override
-  String get routeMarkerEnterCoords => 'Stattdessen Koordinaten eingeben';
+  String get routeMarkerEnterCoords => 'Standort stattdessen eingeben';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11781,6 +11810,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Zielzeit';
+
+  @override
+  String get routeMarkerTargetHelper => 'Stunden : Minuten : Sekunden';
 
   @override
   String get routeMarkerTargetInvalid => 'Zielzeit als h:mm:ss eingeben';

@@ -67,22 +67,25 @@ List<DatedGymSet> gymSetHistory(List<StoredGymWorkout> workouts) {
   return out;
 }
 
-/// Which workouts set at least one PR. Walk oldest→newest accumulating prior
-/// sets so each workout is judged against everything logged before it —
-/// mirrors web `/gym`'s `prWorkoutIds`.
+/// Which workouts set at least one PR. Walk oldest→newest with one running PR
+/// tracker so each workout is judged against everything logged before it in a
+/// single O(total sets) pass — mirrors web `/gym`'s `prWorkoutIds`.
 Set<String> gymPrWorkoutIds(List<StoredGymWorkout> workouts) {
   final ids = <String>{};
+  // A workout whose started_at is missing or unparseable sorts last: comparing
+  // it equal to every dated workout would make the comparator non-transitive,
+  // so it could land anywhere and be judged "prior" to a dated one.
   final ordered = [...workouts]..sort((a, b) {
       final at = a.startedAt;
       final bt = b.startedAt;
-      if (at == null || bt == null) return 0;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
       return at.compareTo(bt);
     });
-  final prior = <GymSetLike>[];
+  final tracker = RunningPrTracker();
   for (final w in ordered) {
-    final mine = _setsToLikes(w);
-    if (workoutPrs(prior, mine).isNotEmpty) ids.add(w.id);
-    prior.addAll(mine);
+    if (tracker.judge(_setsToLikes(w)).isNotEmpty) ids.add(w.id);
   }
   return ids;
 }

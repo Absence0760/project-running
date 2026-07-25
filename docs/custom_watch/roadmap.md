@@ -45,7 +45,7 @@ The five rigs and their pass criterion ("a number exists, and it's within an ord
 
 Per [decisions.md § 82](../architecture/decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end.
 
-That stays the only completion bar. The [`quality_standards.md`](quality_standards.md) bench checklist ([§ 299](../architecture/decisions.md)) is **not** an additional gate — it's how bench verification gets conducted and claimed, so an open or failed item is a recorded finding and a tier-2 input, never an un-completion. Its [what tier 1 does not have to hit](quality_standards.md#what-tier-1-does-not-have-to-hit) section names the tier-2 targets (≥ 24 hr GPS battery, 100 % outdoor fix reliability) that must not leak into tier 1.
+That stays the only completion bar. The [`quality_standards.md`](quality_standards.md) bench checklist ([§ 314](../architecture/decisions.md)) is **not** an additional gate — it's how bench verification gets conducted and claimed, so an open or failed item is a recorded finding and a tier-2 input, never an un-completion. Its [what tier 1 does not have to hit](quality_standards.md#what-tier-1-does-not-have-to-hit) section names the tier-2 targets (≥ 24 hr GPS battery, 100 % outdoor fix reliability) that must not leak into tier 1.
 
 ## Tier 2 — wearable prototype (gated)
 
@@ -231,5 +231,5 @@ These are real but lower-leverage. Worth tracking; not blocking.
 - **Locked decisions:** [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) (deferral + amendment), [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (firmware stack), [§ 81](../architecture/decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen) (input).
 - **Active workspace:** [`apps/custom_watch/`](../../apps/custom_watch/README.md).
 - **Strategic / spec references:** [`vision.md`](vision.md), [`competitive_landscape.md`](competitive_landscape.md), [`bom.md`](bom.md), [`prototyping.md`](prototyping.md), [`performance_path.md`](performance_path.md), [`firmware.md`](firmware.md).
-- **Quality bar + verification vocabulary:** [`quality_standards.md`](quality_standards.md) ([§ 299](../architecture/decisions.md)) — the four rungs, the tier-1 bench checklist, and the derived-not-measured register.
+- **Quality bar + verification vocabulary:** [`quality_standards.md`](quality_standards.md) ([§ 314](../architecture/decisions.md)) — the four rungs, the tier-1 bench checklist, and the derived-not-measured register.
 - **Active checklists:** [`parts.md`](parts.md) (order / receipt), [`quality_standards.md § Tier-1 bench-verification checklist`](quality_standards.md#tier-1-bench-verification-checklist) (day-the-parts-arrive).

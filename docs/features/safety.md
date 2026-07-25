@@ -354,7 +354,14 @@ stayed off — their planned route on a live-shared run.
   `OFF_ROUTE_ESCALATION_ENABLED` deploy flag is on (`off_route_flag.ts` /
   `dotenv`, default off), the runner opted into `safety_off_route_alerts` (U
   pref, default off), a route is selected, AND a live broadcast is active (so
-  the `/live` link the contact receives works). The RPC re-checks every gate
+  the `/live` link the contact receives works). **All four are checked BEFORE
+  the detector is fed**, not after it decides: `OffRouteAlertDetector.update`
+  latches once per run at the moment it returns true, so a deliverability
+  check downstream of the call would spend the runner's single escalation on
+  an episode nobody could be told about — leaving a silently-dead safety net
+  for the rest of the run. Practical consequence: the 90 s sustain clock only
+  accrues while an escalation is deliverable, so a runner who starts sharing
+  mid-departure waits another full window. The RPC re-checks every gate
   server-side: owner-only, in-progress-stub-only, the opt-in pref, ≥1 confirmed
   contact, and the atomic once-per-run stamp (a concurrent double-tap no-ops).
   The SMS leg additionally needs the (default-unset) Twilio provider.

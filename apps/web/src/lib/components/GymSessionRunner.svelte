@@ -5,6 +5,7 @@
 	import { createGymWorkout, type GymSetInput } from '$lib/core/data';
 	import {
 		computeRoutineAdherence,
+		refKey,
 		type PlannedSetRef,
 		type ActualSetRef,
 	} from '$lib/gym/gym_adherence';
@@ -118,8 +119,9 @@
 	}
 
 	function buildMetadata() {
-		const planned: PlannedSetRef[] = steps.map((step) => ({
+		const planned: PlannedSetRef[] = steps.map((step, i) => ({
 			exerciseKey: step.exerciseKey,
+			stepIndex: i,
 			setIndex: step.setIndex,
 			setType: step.setType,
 			targetRepsMin: step.targetRepsMin,
@@ -135,6 +137,7 @@
 			const e = o.entered;
 			actual.push({
 				exerciseKey: step.exerciseKey,
+				stepIndex: i,
 				setIndex: step.setIndex,
 				reps: e.reps,
 				weightKg: e.weightKg,
@@ -143,14 +146,15 @@
 			});
 		});
 		const adherence = computeRoutineAdherence(planned, actual);
-		const actualByKey = new Map(actual.map((a) => [`${a.exerciseKey} ${a.setIndex}`, a]));
-		const plannedByKey = new Map(planned.map((p) => [`${p.exerciseKey} ${p.setIndex}`, p]));
+		const actualByKey = new Map(actual.map((a) => [refKey(a.exerciseKey, a.stepIndex), a]));
+		const plannedByKey = new Map(planned.map((p) => [refKey(p.exerciseKey, p.stepIndex), p]));
 		const stepResults = adherence.sets.map((s) => {
-			const key = `${s.exerciseKey} ${s.setIndex}`;
+			const key = refKey(s.exerciseKey, s.stepIndex);
 			const p = plannedByKey.get(key);
 			const a = actualByKey.get(key);
 			return {
 				exercise_key: s.exerciseKey,
+				step_index: s.stepIndex,
 				set_index: s.setIndex,
 				status: s.status,
 				reps_delta: s.repsDelta,

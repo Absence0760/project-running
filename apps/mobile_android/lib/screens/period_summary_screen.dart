@@ -41,8 +41,9 @@ DateTime periodEnd(PeriodType period, DateTime anchor,
     {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return weekStartLocal(anchor, weekStartDay: weekStartDay)
-          .add(const Duration(days: 7));
+      final start = weekStartLocal(anchor, weekStartDay: weekStartDay);
+      // Calendar arithmetic, not +7×24 h — see weekStartLocal in goals.dart.
+      return DateTime(start.year, start.month, start.day + 7);
     case PeriodType.month:
       final nextMonth = anchor.month == 12 ? 1 : anchor.month + 1;
       final year = anchor.month == 12 ? anchor.year + 1 : anchor.year;
