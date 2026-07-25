@@ -4269,3 +4269,67 @@ Don't re-litigate by:
 - **Reading a green default build as "the firmware compiles".** It compiles *one* of three ways.
 
 Pinning: `.github/workflows/ci.yml` § `build-firmware`; the canonical command list lives in [`apps/custom_watch/local_testing.md`](../../apps/custom_watch/local_testing.md) § CI parity.
+
+---
+
+## 316. The six recorded firmware defects are fixed, and three of the fixes are posture calls worth naming
+
+**Decided (2026-07-25).** The `app/`-logic extraction (§ 314's batch) found six defects and deliberately left each pinned by a test asserting the wrong behaviour rather than fixing them inside a refactor diff. All six are now fixed, each flipping its pinning test on purpose. Three of the fixes chose between defensible alternatives, so the reasoning is recorded here rather than left to be re-derived.
+
+**(a) An out-of-range barometric altitude now falls back to the fix's GPS altitude.** The old `baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m)` picked the preference *before* narrowing, so a wild baro reading stored **no** elevation even when the fix carried a good GPS one. The counter-argument for keeping that ("don't substitute a number the runner never saw") was rejected: the stored track's per-point elevation is not what the runner saw on the panel anyway, a wild baro value is a bad sensor reading rather than a measurement, and a real GPS altitude beats nothing. Barometric still wins whenever it is in range; the fallback fires only when baro is unusable and only when the GPS value is itself storable.
+
+**(b) A railed battery conversion now reads absent, not a confident low percent.** `FULL_SCALE_MV = 3600` on the DK's direct-VDD read means a full 4.2 V cell saturates the SAADC and mapped to roughly **8 %** — a wrong number presented with full confidence, which is the failure mode this project's `None`-means-absent posture exists to prevent (§ 294 built the gauge that way deliberately). A saturated conversion code now yields `None`: the boot path parks, the steady loop blanks the gauge and warns. **The visible consequence is accepted:** on the current wiring the gauge blanks across the 4.2→3.6 V stretch and reads honestly from 3.6→3.3 V, where before it showed a flat ~8 % lie across the whole range. A blank gauge is a smaller harm than telling an ultra runner their full battery is nearly dead. Recovering the top of the charge curve needs the VDDH/5 channel plus high-voltage mode and is a bench item, not a code fix — the physical input was deliberately **not** re-pointed, because no such change can be verified without the board.
+
+**(c) A boot-recovered *unfinished* blob is still advertised, by design.** `FLAG_FINISHED` is now stamped by `finalize`, left clear by `checkpoint_blob`, and the RAM `SlotDir` answers `manifest_at` / `find` / `run_count` only for finished slots — so a run in progress is neither advertised, served, nor markable as synced however the phone asks. But `recover_slot` deliberately does **not** gate recovery on the flag. After a reset an interrupted run will never grow again, and refusing to recover it would delete the only copy of it — which would disable checkpointing entirely and defeat the point of § 316(d) below. "Still recording" is knowable only in RAM, so that is where the gate lives; the on-flash flag is the boot-time tiebreaker (committed beats checkpoint) rather than an admission test. Consequence to keep in mind: such a run reaches the phone as an ordinary run whose totals are its totals-so-far. Flagging it phone-side (a `metadata` key) is an open follow-up.
+
+**(d) Checkpoints ping-pong across two slots.** `checkpoint()` used to erase its slot and rewrite the same page, so a brownout in that window lost the entire run-so-far — the exact failure checkpointing was added to prevent, recurring on every checkpoint. Each write now targets the staler of the run's two copies, and the commit alternates too, so a torn write always leaves an intact predecessor. Boot reconciliation keeps one copy per `run_seq` via `supersedes`: committed beats checkpoint, then **later `elapsed_s`**, then larger blob. Elapsed rather than size is load-bearing — track thinning makes a later blob *shorter* than an earlier one, so size alone would prefer stale bytes.
+
+**Cost of (d), accepted:** a run in progress reserves up to **2 of the 4** flash slots, so at most 2 finished runs are retained while recording and a starting run can evict two rather than one. Taken deliberately: an evicted finished run is preferentially one the phone already pulled, whereas the run in progress exists nowhere else. A completed run settles back to one slot, and a run whose checkpoint cadence never fired still costs exactly one. The real fix is tier-2 external QSPI flash, not a cleverer 4-slot policy.
+
+**Wire format:** unchanged. Byte 5 was already `flags` in both the Rust codec and the Dart `decodeHeader`, so only its value moved (`00` → `01`) plus the CRC that covers it. No version bump was needed; the golden vectors moved in lockstep on both sides and the **v1 golden is untouched** — a v1 blob leaves byte 5 reserved, reports unfinished, and is still recovered and advertised rather than dropped.
+
+Don't re-litigate by:
+
+- **"Restoring" a battery percent for the railed range.** Any number there is fabricated. Fix the input channel at the bench instead.
+- **Gating `recover_slot` on `FLAG_FINISHED`** because the flag "means finished". It does — but recovery is not admission, and gating it throws away interrupted runs.
+- **Preferring blob size over `elapsed_s`** in boot reconciliation. Thinning inverts that comparison.
+- **Reclaiming the second checkpoint slot** to retain a third finished run. The in-progress run is the only copy that exists.
+
+Pinning: `core/src/{run_store,flash_store,flash_plan,record_cadence,battery_sense}.rs`, `app/src/{run_flash.rs,tasks/ble.rs,tasks/battery.rs}`, and the Dart mirror `sim_watch_sync.dart` in both twins.
+
+---
+
+## 317. The firmware's untrusted-byte decoders get property-based tests, which immediately found that the settings frame has no integrity check
+
+**Decided (2026-07-25).** The workspace had no fuzz or property-test harness at all, while at least seven modules parse bytes arriving from flash (possibly corrupt or half-written), the BLE radio (possibly hostile or truncated), or the GNSS UART (possibly garbage). On this `no_std` target a **panic is a device reset** — mid-race, with the run staged in RAM — so "never panics" is a safety property, not a nicety. Hand-written adversarial cases were the only coverage, which is precisely the shape that misses the input nobody imagined.
+
+`proptest` now ships as a **dev-dependency** (`default-features = false`, `features = ["std"]`), so the properties run inside the existing host-test job with no new CI job and no nightly toolchain — `cargo-fuzz` was rejected for needing both. 45 properties cover `run_store`, `flash_store`, `course_store`, `settings`, `ble_sync`, `fix`, and the `ublox_nmea` parser + `ubx` encoder. The suite is configured `failure_persistence: None` with a fixed ChaCha RNG, so it is deterministic (verified identical across runs and under a forced `PROPTEST_CASES` / RNG-algorithm override), never writes a `proptest-regressions/` directory, and costs about +0.09 s.
+
+Because the properties had to survive concurrent behaviour changes in the same modules, they assert **invariants rather than values**: never panics, fail-closed, round-trip over the legal domain, every proper prefix rejected, single-byte corruption caught or provably harmless, and declared counts never exceeding the format's caps.
+
+**The finding: `WatchSettings::decode` is the only wire format in the firmware with no checksum.** Its sole integrity check is that the byte count exactly accounts for the fields the presence bitfield claims. That catches any single-*bit* flip, but not a single-*byte* corruption flipping two bits across equal-width fields — the frame length is unchanged, so it decodes as fully valid but **different** settings. Verified minimal case: one byte XOR `0x50` turns `flags` `0xB8` into `0xE8`, and the four bytes the phone sent as the **QNH sea-level reference pressure** are applied as the **run-view page mask** while the QNH silently vanishes. Every equal-width pair is confusable the same way (`sea_level_pa ↔ pages`, `pacer ↔ gear ↔ fuel`, `zone_ceiling ↔ hide_empty_pages`). The module doc's claim of "never a partial or off-frame struct" is exactly what this violates.
+
+Impact is bounded — the BLE link layer carries its own CRC-24 and the apply-side plausibility guards reject implausible values — but the QNH↔pages swap **passes those guards**, since a valid pressure and a valid page mask occupy the same four bytes. **The durable fix is a CRC32 over the frame** as a `SET1` v3 bump following the v1/v2 precedent (accept older versions, stay fail-closed), reusing the existing `run_store::crc32` that `flash_store`'s config and bond records already share. It is not done here: it is a wire-format change needing the Dart encoder and goldens moved in lockstep.
+
+The property was **not weakened to go green.** It ships `#[ignore]`d, carrying its reproducer and the intended fix in its doc comment, so it flips green the moment a checksum lands. Two achievable properties hold the neighbouring ground meanwhile: that a decoded frame carries exactly the fields its presence bytes declare, and that a single-bit flip of a presence byte is always caught — the second marking precisely where the format's integrity currently runs out.
+
+A second, smaller gap is recorded rather than fixed: `run_store`'s footer totals (`distance_m`, `moving_s`, `elapsed_s`) are **not** CRC-covered, so flash bit-rot in those 12 bytes yields a run that still passes `verify_blob` with wrong totals. The format's own doc says the CRC covers header + points, so the honest invariant was encoded (record count and records never move) rather than pinning a guarantee the format does not make.
+
+Don't re-litigate by:
+
+- **Deleting or un-ignoring the settings property** to get a clean run. It is the bug's only executable record.
+- **Weakening a property until it passes.** A failing property is a found defect; report it.
+- **Asserting concrete decoded values** in these files. Value-pinning fights legitimate behaviour changes; the invariants are the point.
+- **Adding `cargo-fuzz`** alongside this. It needs nightly and a separate job for the same class of coverage.
+
+---
+
+## 318. The Renode simulator runs in CI, but deliberately outside the required gate until it has been observed green
+
+**Decided (2026-07-25).** `apps/custom_watch/README.md` carried roughly 15 *sim-verified* claims while CI never ran the simulator — it was invoked by hand via `bin/watch-sim.sh`, so a change breaking the sim stayed invisible until someone ran it manually. § 314 made *sim-verified* a claimable rung whose claims must name their evidence, and CI already defends *build-verified* (§ 315). A new standalone `sim-firmware` job now defends the smoke-level slice of the sim rung: it installs a sha256-pinned Renode, builds the sim feature set with `DEFMT_LOG=debug` (the distance and fix lines are DEBUG-level and defmt filters at **compile** time), and drives `bin/watch-sim.sh` rather than reimplementing the boot sequence, so a launcher regression also fails CI. Seven assertions each wait on a specific defmt line — flash store arms, a canned-NMEA fix parses with satellites, autostart records, distance accumulates, the panel renders, two BTN2 presses commit a non-empty blob, and nothing panicked — with every expected string traced to the recorded evidence in `sim/verification-2026-07-19/`.
+
+**The job is deliberately NOT in the `ci-gate` aggregator's `needs:` list.** Renode is not installable on the authoring machine, so the job's first real execution is its first push; wiring an unvalidated job into the repo's single required status check would block every PR if it misbehaves. Promotion into the aggregator is an explicit follow-up once it has been seen green, and a comment in `ci.yml` says so, so the omission does not read as an oversight.
+
+What it does **not** prove, and what the docs must not claim it does: nothing about BLE (Renode cannot run the proprietary S140 SoftDevice at all), nothing about power in any form, and nothing about real silicon — the peripheral models are pinned to what the drivers *believe* about the parts (register maps, retention across shutdown, contact and AGC constants) and the waveforms are clean synthetic shapes. Green means the firmware is self-consistent under the emulator. The bench-verify list is untouched by it.
+
+One coupling to respect: the harness keys on exact defmt strings (`run_flash: run store armed at`, `gps: fix lat=… sats=`, `record: sim-autostart on first fix`, `record: recording dist=`, `button: BTN2 armed`, `run_flash: stored run N (M B) in slot S`). Renaming any of them requires the matching change in `sim/ci_smoke.py`.
