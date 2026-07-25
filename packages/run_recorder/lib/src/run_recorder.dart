@@ -169,6 +169,11 @@ class RunRecorder {
   // (which used to fire 1×/second minimum + once per GPS fix).
   late final UnmodifiableListView<Waypoint> _trackView =
       UnmodifiableListView(_track);
+  // Lowest `_track` index [_calculatePace] may walk back to. Bumped to the
+  // current track length on every resume so the rolling-pace window never
+  // straddles a pause (or a dead-process gap), whose wall-clock duration would
+  // otherwise be charged to the post-resume distance.
+  int _paceFloorIdx = 0;
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
   /// on every fix, independent of the track-append threshold.
   Waypoint? _currentWaypoint;
@@ -348,6 +353,7 @@ class RunRecorder {
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
     _currentWaypointTrusted = true;
+    _paceFloorIdx = 0;
     _recording = false;
     _paused = false;
     _route = route;
@@ -494,6 +500,7 @@ class RunRecorder {
     _laps.clear();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = 0;
     _weakGps = false;
     _resetTreadmillAccumulators();
     _recording = true;
@@ -626,6 +633,7 @@ class RunRecorder {
       ..start();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = _track.length;
     _weakGps = false;
     _resetTreadmillAccumulators();
     _recording = true;
@@ -698,6 +706,7 @@ class RunRecorder {
     _cachedRouteRemaining = null;
     _minMatchedSegmentIdx = 1;
     _currentWaypointTrusted = true;
+    _paceFloorIdx = 0;
     _recording = false;
     _paused = false;
     _route = route;
@@ -786,6 +795,7 @@ class RunRecorder {
     _stopwatch.start();
     _lastTrackedPosition = null; // avoid a big jump after resume
     _lastTrackedPositionAt = null;
+    _paceFloorIdx = _track.length;
     // Drop the speed-integration anchor too. Without this, the first
     // post-resume belt sample integrates dt back to a timestamp written
     // during/before the pause, crediting the paused gap as distance for any
@@ -1279,12 +1289,21 @@ class RunRecorder {
 
   /// Calculate pace from the last ~200m of track.
   double? _calculatePace() {
-    if (_track.length < 5) return null;
+    // Never walk back across a pause / process-kill boundary. `_track` keeps
+    // the pre-pause tail, but its timestamps are separated from the
+    // post-resume points by the paused wall-clock gap — which is unbounded
+    // (a resumed run may have been dead for up to kResumableWindow). Timing
+    // post-resume distance against a pre-pause timestamp reported a pace
+    // hundreds of times too slow for the first ~200 m after every resume, and
+    // the run screen feeds that number to the pace-alert and cut-off
+    // catch-up voice cues.
+    final floor = _paceFloorIdx.clamp(0, _track.length);
+    if (_track.length - floor < 5) return null;
 
     double segmentDistance = 0;
     int segmentStart = _track.length - 1;
 
-    for (int i = _track.length - 2; i >= 0; i--) {
+    for (int i = _track.length - 2; i >= floor; i--) {
       final a = _track[i];
       final b = _track[i + 1];
       segmentDistance += _haversine(a.lat, a.lng, b.lat, b.lng);

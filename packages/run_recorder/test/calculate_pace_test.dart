@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:core_models/core_models.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:run_recorder/run_recorder.dart';
 
@@ -145,6 +146,129 @@ void main() {
 
       expect(r.debugTrack.length, 2);
       expect(r.debugPaceSecondsPerKm, isNull);
+    });
+  });
+
+  group('pace never spans a pause or a resumed-session gap', () {
+    /// Five accepted fixes at a true 200 s/km, ending 200 m along at t=40 s.
+    void runPrePauseLeg(RunRecorder r) {
+      for (int i = 0; i < 5; i++) {
+        r.debugInjectPosition(
+          makePosition(metresEast: i * 50.0, secondsFromStart: i * 10),
+        );
+      }
+    }
+
+    test('a 10-minute pause is not charged to the post-resume distance', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      addTearDown(r.dispose);
+      r.begin();
+      runPrePauseLeg(r);
+      r.pause();
+      // The runner rests 600 s at an aid station without moving, then resumes
+      // and covers 75 m in 25 s (3 m/s -> 333 s/km).
+      r.resume();
+      for (int i = 0; i < 6; i++) {
+        r.debugInjectPosition(makePosition(
+          metresEast: 200 + i * 15.0,
+          secondsFromStart: 640 + i * 5,
+        ));
+      }
+      // Walking back across the pause billed 225 m against 645 s of wall clock
+      // and reported ~2866 s/km — which run_screen feeds to the pace-alert and
+      // cut-off catch-up voice cues.
+      expect(r.debugPaceSecondsPerKm, closeTo(333, 20));
+    });
+
+    test('pace is null until enough post-resume fixes exist', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      addTearDown(r.dispose);
+      r.begin();
+      runPrePauseLeg(r);
+      expect(r.debugPaceSecondsPerKm, isNotNull);
+      r.pause();
+      r.resume();
+      // Two post-resume points is below the 5-point smoothing floor, so the
+      // honest answer is "unknown" rather than a pace timed off a stale fix.
+      r.debugInjectPosition(
+          makePosition(metresEast: 200, secondsFromStart: 640));
+      r.debugInjectPosition(
+          makePosition(metresEast: 250, secondsFromStart: 650));
+      expect(r.debugPaceSecondsPerKm, isNull);
+    });
+
+    test('pace recovers to the true value once the post-resume leg is long',
+        () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      addTearDown(r.dispose);
+      r.begin();
+      runPrePauseLeg(r);
+      r.pause();
+      r.resume();
+      // 300 m post-resume at a true 200 s/km — past the ~200 m window, so the
+      // walk never reaches the floor and the answer is the normal rolling pace.
+      for (int i = 0; i < 7; i++) {
+        r.debugInjectPosition(makePosition(
+          metresEast: 200 + i * 50.0,
+          secondsFromStart: 640 + i * 10,
+        ));
+      }
+      expect(r.debugPaceSecondsPerKm, closeTo(200, 10));
+    });
+
+    test('repeated pauses each reseal the window', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      addTearDown(r.dispose);
+      r.begin();
+      runPrePauseLeg(r);
+      r.pause();
+      r.resume();
+      for (int i = 0; i < 6; i++) {
+        r.debugInjectPosition(makePosition(
+          metresEast: 200 + i * 15.0,
+          secondsFromStart: 640 + i * 5,
+        ));
+      }
+      r.pause();
+      r.resume();
+      for (int i = 0; i < 6; i++) {
+        r.debugInjectPosition(makePosition(
+          metresEast: 275 + i * 15.0,
+          secondsFromStart: 1300 + i * 5,
+        ));
+      }
+      expect(r.debugPaceSecondsPerKm, closeTo(333, 20));
+    });
+
+    test('a resumed session does not time against the pre-kill track', () {
+      // The seeded track's last timestamp can be up to kResumableWindow (48 h)
+      // old, so timing the first post-resume metres against it reported a pace
+      // hundreds of times too slow.
+      final seeded = [
+        for (int i = 0; i < 5; i++)
+          Waypoint(
+            lat: lat,
+            lng: lngBase + (i * 50.0) / metrePerDegLng,
+            timestamp: DateTime(2026, 4, 9, 10, 0, i * 10),
+          ),
+      ];
+      final r = RunRecorder()
+        ..debugResumeWithoutStream(
+          track: seeded,
+          distanceMetres: 200,
+          elapsed: const Duration(seconds: 40),
+          startedAt: DateTime(2026, 4, 9, 10, 0),
+        );
+      addTearDown(r.dispose);
+      expect(r.debugPaceSecondsPerKm, isNull,
+          reason: 'the seeded track is all pre-kill — nothing to time yet');
+      for (int i = 0; i < 6; i++) {
+        r.debugInjectPosition(makePosition(
+          metresEast: 200 + i * 15.0,
+          secondsFromStart: i * 5,
+        ));
+      }
+      expect(r.debugPaceSecondsPerKm, closeTo(333, 20));
     });
   });
 }
