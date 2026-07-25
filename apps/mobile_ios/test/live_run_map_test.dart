@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
@@ -391,6 +392,23 @@ void main() {
           reason: 'A spectator/host tapping a course marker must hear it '
               'announced as a button with its label, not an unlabeled tap '
               'target.');
+
+      // The coloured dot must sit ON the coordinate, not float above it.
+      // flutter_map's Marker is a config object (not a Widget), so its
+      // alignment can't be read off the tree — guard it at the source level
+      // instead. A positive-y Alignment centres the dot on the point (label
+      // below); the old Alignment.topCenter floated the whole pin ~30 px
+      // ABOVE the route line, so a marker placed exactly on the route (e.g.
+      // by distance-along) read as off it — the regression this guards.
+      final src = File('lib/widgets/live_run_map.dart').readAsStringSync();
+      final start = src.indexOf('if (widget.courseMarkers.isNotEmpty)');
+      final end = src.indexOf('_CourseMarkerPin(', start);
+      expect(start, isNonNegative);
+      expect(end, greaterThan(start));
+      final block = src.substring(start, end);
+      expect(block.contains('alignment: Alignment.topCenter'), isFalse,
+          reason: 'course-marker dot must anchor ON the point, not above it');
+      expect(block.contains('alignment: const Alignment(0, 0.64)'), isTrue);
     });
   });
 

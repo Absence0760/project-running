@@ -42,6 +42,21 @@ void main() {
       source = File('lib/screens/run_screen.dart').readAsStringSync();
     });
 
+    test('turn-cue announced state is cleared at the start of every recording',
+        () {
+      // TurnCueAnnouncer latches each fired band for its lifetime, and the
+      // announcer is only rebuilt when the SELECTED ROUTE changes — so without
+      // a per-recording reset a second run over the same route announces
+      // nothing at all (the repeated-loop / backyard-ultra case). _begin() is
+      // the one path every recording funnels through.
+      final begin = _extractMethodBody(source, r'Future<void> _begin\(\) async \{');
+      expect(
+        begin.contains('_turnAnnouncer?.reset()'),
+        isTrue,
+        reason: 'every recording must start from a cleared announced-turn set',
+      );
+    });
+
     test('auto-live-share hook is opt-in, L4-isolated, and duplicate-safe', () {
       // Reason: docs/features/safety.md — the auto_live_share device pref (and
       // a manual "Share live link") start a broadcast at _begin(). Three
@@ -184,18 +199,84 @@ void main() {
       );
     });
 
-    test('_formattedElevation reads the accumulator field, not a loop', () {
+    test('_formattedElevation reads the accumulator, not a loop', () {
       // Reason: was O(n) over the full track on every build. For a 60-min
       // run (~3600 waypoints) that's millions of iterator steps per
       // minute. Now maintained incrementally in _onSnapshot.
       final match = RegExp(
-        r"String get _formattedElevation =>\s*'\$\{_elevationGainMetres\.round\(\)\}';",
+        r"String get _formattedElevation =>\s*'\$\{_elevationGain\.gainMetres\.round\(\)\}';",
       ).firstMatch(source);
       expect(
         match,
         isNotNull,
         reason: '_formattedElevation must read the incrementally-updated '
-            '_elevationGainMetres field. Do not iterate _track here.',
+            'ElevationGainAccumulator. Do not iterate _track here.',
+      );
+    });
+
+    test('live elevation gain goes through the shared gated contract', () {
+      // Reason: the live counter used to sum every positive altitude delta
+      // with no noise band and no dropout carry, so a flat 10K read ~1,200 m
+      // on the run screen and ~38 m on the run-detail screen minutes later.
+      // computeElevationGain / ElevationGainAccumulator in route_simplify.dart
+      // are the ONE elevation-gain contract (3 m gate + dropout carry); the
+      // screen must feed the accumulator, not re-derive the arithmetic.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      expect(
+        body,
+        contains('_elevationGain.add('),
+        reason: '_onSnapshot must append new waypoints to the shared '
+            'ElevationGainAccumulator.',
+      );
+      expect(
+        body.contains('_elevationGainMetres +='),
+        isFalse,
+        reason: 'No hand-rolled elevation sum in _onSnapshot — an ungated '
+            'copy re-introduces phantom vert on a flat run.',
+      );
+      expect(
+        source,
+        contains("import '../route_simplify.dart';"),
+        reason: 'The gate constant and the accumulator live in '
+            'route_simplify.dart; do not fork a second 3 m threshold here.',
+      );
+    });
+
+    test('split ticks and race phases read the resolved display distance', () {
+      // Reason: an indoor / treadmill run never gets a GPS fix, so the
+      // recorder's own distance stays 0 for the entire session while
+      // _displayDistanceMetres climbs off the pedometer. Reading the raw
+      // mirror field at these two sites meant no split banner, no split
+      // voice cue and no race-phase transition for the whole run, while the
+      // screen, the lock screen and the saved run all showed ~10 km.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      expect(
+        body.contains('UnitFormat.activityTicks(_distanceMetres'),
+        isFalse,
+        reason: 'Split ticks must be counted off _displayDistanceMetres.',
+      );
+      expect(
+        body.contains('phaseAt(_phasePlan, _distanceMetres)'),
+        isFalse,
+        reason: 'Race-phase membership must use _displayDistanceMetres.',
+      );
+      expect(
+        body.contains('averagePaceSecPerKm(_distanceMetres'),
+        isFalse,
+        reason: 'The split cue average pace must use the same distance the '
+            'split itself was counted from.',
+      );
+      expect(
+        RegExp(r'phaseAt\(_phasePlan, phaseDistance\)').hasMatch(body),
+        isTrue,
+        reason: 'The phase block should resolve its distance once through '
+            '_displayDistanceMetres.',
       );
     });
 
@@ -725,6 +806,7 @@ void main() {
     // §122); run / route + the base itself still call it directly.
     const noBareWriteStores = [
       'lib/local_run_store.dart',
+      'lib/watch_ingest_queue.dart',
       'lib/local_route_store.dart',
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',
@@ -1961,11 +2043,11 @@ void main() {
         r'Future<List<Waypoint>> clipRouteForViewer\([^)]*\)\s*async\s*\{',
       );
       final tail = body.substring(body.indexOf('try'));
-      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
-      expect(catchMatch, isNotNull,
+      expect(RegExp(r'catch \([^)]*\) \{').hasMatch(tail), isTrue,
           reason: 'clipRouteForViewer must have an explicit catch branch.');
+      final catchBody = _extractMethodBody(tail, r'catch \([^)]*\) \{');
       expect(
-        catchMatch!.group(0)!.contains('return const []'),
+        catchBody.contains('return const []'),
         isTrue,
         reason: 'clipRouteForViewer must return [] on RPC failure — '
             'see decisions §33.',
@@ -2080,11 +2162,11 @@ void main() {
       );
       // The catch / shape-fail branches must not return the unclipped
       // input.
-      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
-      expect(catchMatch, isNotNull,
+      expect(RegExp(r'catch \([^)]*\) \{').hasMatch(tail), isTrue,
           reason: 'clipTrackForUser must have an explicit catch branch.');
+      final catchBody = _extractMethodBody(tail, r'catch \([^)]*\) \{');
       expect(
-        catchMatch!.group(0)!.contains('return points'),
+        catchBody.contains('return points'),
         isFalse,
         reason: 'clipTrackForUser must not fall back to the input track '
             'on RPC error — that is the leak this helper exists to '
@@ -2260,7 +2342,7 @@ void main() {
           File('lib/screens/live_spectator_screen.dart').readAsStringSync();
       final body = _extractMethodBody(
         src,
-        r'Future<void> _loadCutoffLegs\(String\? routeId\)\s*async\s*\{',
+        r'Future<void> _loadCutoffLegs\([^)]*\)\s*async\s*\{',
       );
       expect(
         body.contains('fetchRouteById'),
@@ -4640,6 +4722,132 @@ void main() {
     });
   });
 
+  group('live cut-off wiring', () {
+    test('_loadCutoffLegs anchors cutoff clocks to the run start', () {
+      // `cutoff_clock` is the ONLY cut-off field either editor can author,
+      // and buildRoadbook resolves a clock into an elapsed limit only when it
+      // is given the start's minute-of-day (roadbook_test pins that
+      // contract). Without startClockMin every cut-off leg came back null, so
+      // _cutoffLegs stayed empty and the live CutoffCard + the cut-off
+      // catch-up voice cue never fired for any real course.
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      final start = source.indexOf('Future<void> _loadCutoffLegs() async {');
+      expect(start, isNonNegative);
+      final body = source.substring(start, source.indexOf('.legs;', start));
+      expect(
+        body,
+        contains('startClockMin: _startClockMin()'),
+        reason: 'buildRoadbook must be given the start clock or no '
+            'cutoff_clock marker ever produces a cutoff.',
+      );
+      // The legs are built while staging, before the real start exists, so
+      // both entry points into a running state must rebuild them.
+      expect(
+        RegExp(r'_runStartedAtWall = DateTime\.now\(\);\s*\n(\s*//[^\n]*\n)*\s*_loadCutoffLegs\(\);')
+            .hasMatch(source),
+        isTrue,
+        reason: 'starting a run must re-run _loadCutoffLegs against the real '
+            'start clock.',
+      );
+      expect(
+        RegExp(r'_runStartedAtWall = partial\.startedAt;\s*\n(\s*//[^\n]*\n)*\s*_loadCutoffLegs\(\);')
+            .hasMatch(source),
+        isTrue,
+        reason: 'resuming a partial run must re-anchor the cutoff clocks to '
+            'when that run actually began.',
+      );
+    });
+  });
+
+  group('club event-creation gate matches the server role', () {
+    test('the events tab gates on isEventOrganiser, not isAdmin', () {
+      // is_event_organiser (20260428_001) admits owner / admin /
+      // event_organiser, and web's canManageEvents matches. Gating the mobile
+      // create affordance on isAdmin locked the one role that exists to run
+      // events out of creating them — on mobile only.
+      final src = File('lib/screens/club_detail_screen.dart').readAsStringSync();
+      expect(src, contains('final showCreate = c.isEventOrganiser;'));
+      expect(
+        src.contains('final showCreate = c.isAdmin;'),
+        isFalse,
+        reason: 'isAdmin excludes event_organiser',
+      );
+    });
+  });
+
+  group('pedometer baseline on resume', () {
+    test('an explicit flag marks the baseline, not a zero sentinel', () {
+      // `_startSteps == 0` doubled as "not baselined yet". On resume the
+      // computed baseline is legitimately 0 whenever no sensor event has
+      // landed — the counter only ticks on a real step, and the runner is
+      // usually still reading the Resume dialog — so the next event
+      // re-baselined to the raw cumulative reading and the steps carried over
+      // from the crashed run were lost. For an indoor run that is the whole
+      // reported distance, since it is derived as steps x stride.
+      final src = File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(
+        src.contains('if (_startSteps == 0) _startSteps = event.steps;'),
+        isFalse,
+        reason: 'the zero sentinel must be gone',
+      );
+      expect(src, contains('if (!_stepBaselineSet) {'));
+      expect(
+        src,
+        contains('_startSteps = event.steps - _stepsCarriedIn;'),
+        reason: 'the deferred baseline must subtract the carried-in steps so a '
+            'resumed run continues from them',
+      );
+      // Resume seeds the carry-in; a fresh start clears it.
+      expect(src, contains('_stepsCarriedIn = restoredSteps;'));
+      expect(src, contains('_stepsCarriedIn = 0;'));
+    });
+  });
+
+  group('sign-out clears the watch route list', () {
+    test('signedOut re-pushes the routes bridge', () {
+      // LocalRouteStore hides another account's tagged routes once the
+      // provider reports signed-out, but WearRoutesBridge only pushes on a
+      // store mutation — signing out isn't one. Without an explicit nudge the
+      // paired watch keeps a previous account's starred route names and
+      // waypoints until some unrelated future edit fires the listener.
+      final src = File('lib/main.dart').readAsStringSync();
+      final signedOut = src.indexOf('event.event == AuthChangeEvent.signedOut');
+      expect(signedOut, isNonNegative,
+          reason: 'signedOut handler not found — update this guard');
+      // The handler is long (comments); take everything up to the bootstrap
+      // attach that follows the auth listener.
+      final block = src.substring(
+          signedOut, src.indexOf('WearAuthBridge().attach(', signedOut));
+      expect(
+        block,
+        contains('WearRoutesBridge().attach(routeStore);'),
+        reason: 'sign-out must re-push the (now owner-filtered) route list',
+      );
+    });
+  });
+
+  group('crash recovery is owner-tagged', () {
+    test('the owner-tag providers are wired before the recovery save', () {
+      // LocalRunStore.save only stamps created_by_user_id when
+      // currentUserIdProvider is set, and the in-progress file is never
+      // tagged while recording. Recovering before the provider was wired left
+      // the run untagged, and filterRunsForCurrentUser reads an untagged run
+      // as adoptable — so on a shared device the next account to sign in
+      // pushed a previous user's crashed run as its own (§67).
+      final src = File('lib/main.dart').readAsStringSync();
+      final provider = src.indexOf('store.currentUserIdProvider = () => api?.userId;');
+      final recover = src.indexOf('await store.save(evaluation.recovered!);');
+      expect(provider, isNonNegative);
+      expect(recover, isNonNegative);
+      expect(
+        provider < recover,
+        isTrue,
+        reason: 'in-progress recovery must run after the owner tag is wired, '
+            'or the recovered run is adoptable by the next account.',
+      );
+    });
+  });
+
   group('every OfflineSyncStore subclass is wiped on sign-out', () {
     // Reason (issue #228): sign-out used to clear only the three
     // app-singleton stores, so the screen-owned routine / meal-template /
@@ -4679,6 +4887,95 @@ void main() {
               'sign-out and leak to (and be adopted by) the next account.',
         );
       }
+    });
+  });
+
+  group('local-day arithmetic is DST-safe', () {
+    // A calendar week spanning a DST transition is 167 or 169 hours, so
+    // stepping days with a fixed Duration walks the boundary off local
+    // midnight: a run in the seam is then counted in both adjacent weeks
+    // (spring forward) or in neither (fall back), and disappears from the
+    // weekly goal, the dashboard "This week" card, the runs-screen week filter
+    // and both weekly period-summary pages. The web twin
+    // (apps/web/src/lib/training/goals.ts) uses setDate(), which is calendar
+    // arithmetic — Dart's equivalent is the year/month/day constructor, as
+    // streaks.dart's _previousLocalDay already documents.
+    //
+    // The behavioural proof lives in goals_test.dart's "DST safety" group, but
+    // it can only fail in a DST timezone and CI runs UTC — so these source
+    // guards are what actually catch a regression.
+    const weekBoundaryFns = <String, String>{
+      'lib/goals.dart': r'DateTime weekStartLocal\(DateTime now, '
+          r'\{String weekStartDay = .monday.\}\) \{',
+      'lib/screens/period_summary_screen.dart':
+          r'DateTime periodEnd\(PeriodType period, DateTime anchor,\s*'
+          r'\{String weekStartDay = .monday.\}\) \{',
+      // The trend chart buckets weekly the same way; a skewed Monday mislabels
+      // the bars and drops the transition week out of the chart entirely.
+      'lib/mileage_trend.dart': r'DateTime _mondayOf\(DateTime d\) \{',
+    };
+
+    weekBoundaryFns.forEach((path, signature) {
+      test('$path steps week boundaries with the Y/M/D constructor', () {
+        final source = File(path).readAsStringSync();
+        final body = _extractMethodBody(source, signature);
+        expect(
+          body.contains('Duration(days:'),
+          isFalse,
+          reason: 'a fixed 24-hour day skews on a DST transition — use '
+              'DateTime(y, m, d ± n), see streaks.dart _previousLocalDay',
+        );
+      });
+    });
+
+    test('goalPeriodEnd steps a week with the Y/M/D constructor', () {
+      final source = File('lib/goals.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'DateTime goalPeriodEnd\(GoalPeriod period, DateTime now,\s*'
+        r'\{String weekStartDay = .monday.\}\) \{',
+      );
+      expect(
+        body.contains('start.day + 7'),
+        isTrue,
+        reason: 'the exclusive week end must be constructed from the start',
+      );
+      expect(
+        body.contains('Duration(days:'),
+        isFalse,
+        reason: 'a fixed 7×24 h week skews on a DST transition',
+      );
+    });
+
+    test('weekStartLocal itself uses the Y/M/D constructor', () {
+      final source = File('lib/goals.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'DateTime weekStartLocal\(DateTime now, '
+        r'\{String weekStartDay = .monday.\}\) \{',
+      );
+      expect(
+        body.contains('DateTime(now.year, now.month, now.day - daysFromStart)'),
+        isTrue,
+        reason: 'the week start must be constructed, not offset by a Duration',
+      );
+    });
+
+    test('the trend chart steps back a week with the Y/M/D constructor', () {
+      final body = _extractMethodBody(
+        File('lib/mileage_trend.dart').readAsStringSync(),
+        r'DateTime _previousBucketStart\(DateTime d, MileageView view\) \{',
+      );
+      expect(
+        body.contains('DateTime(d.year, d.month, d.day - 7)'),
+        isTrue,
+        reason: 'the previous week bucket must be constructed from the start',
+      );
+      expect(
+        body.contains('Duration(days:'),
+        isFalse,
+        reason: 'a fixed 7×24 h week labels the back-filled bars a week early',
+      );
     });
   });
 }

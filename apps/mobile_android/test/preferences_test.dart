@@ -140,17 +140,17 @@ void main() {
     });
   });
 
-  group('ActivityType.splitIntervalMetres', () {
+  group('ActivityType.splitIntervalMetresFor', () {
     test('cycle splits every 5km, others every 1km', () {
       // A 30 km ride at 1 km splits would fire 30 audio cues — too
       // noisy. The default-vs-cycle branch is one line of switch;
       // pin both sides so a regression that dropped the case (and
       // fell through to 1000 for cycle) would surface as a flood
       // of mid-ride announcements.
-      expect(ActivityType.cycle.splitIntervalMetres, 5000);
-      expect(ActivityType.run.splitIntervalMetres, 1000);
-      expect(ActivityType.walk.splitIntervalMetres, 1000);
-      expect(ActivityType.hike.splitIntervalMetres, 1000);
+      expect(ActivityType.cycle.splitIntervalMetresFor(DistanceUnit.km), 5000);
+      expect(ActivityType.run.splitIntervalMetresFor(DistanceUnit.km), 1000);
+      expect(ActivityType.walk.splitIntervalMetresFor(DistanceUnit.km), 1000);
+      expect(ActivityType.hike.splitIntervalMetresFor(DistanceUnit.km), 1000);
     });
   });
 

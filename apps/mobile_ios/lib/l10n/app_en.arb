@@ -3134,6 +3134,11 @@
     "description": "Banner shown when an imported route file resolves to an unreadable cloud-only content URI"
   },
   "routesImported": "Imported \"{name}\"",
+  "routesImportedMany": "Imported {count} routes",
+  "@routesImportedMany": {
+    "description": "Banner after importing a file that held several tracks",
+    "placeholders": { "count": { "type": "int" } }
+  },
   "@routesImported": {
     "description": "Banner shown after a route file is successfully imported",
     "placeholders": {
@@ -5821,6 +5826,14 @@
   "eventRsvpMaybe": "Maybe",
   "@eventRsvpMaybe": {
     "description": "RSVP chip — maybe"
+  },
+  "eventOccurrenceCancelled": "This occurrence was cancelled.",
+  "@eventOccurrenceCancelled": {
+    "description": "Banner on a cancelled occurrence of a recurring club event"
+  },
+  "eventRsvpWaitlisted": "Waitlisted",
+  "@eventRsvpWaitlisted": {
+    "description": "Shown when the server demoted a full event RSVP to the waitlist"
   },
   "eventRsvpDeclined": "Can't make it",
   "@eventRsvpDeclined": {
@@ -12072,6 +12085,19 @@
       }
     }
   },
+  "gymDistance": "Distance (m)",
+  "@gymDistance": {
+    "description": "Label on the guided-session input where the athlete records the distance they actually covered on a distance-modality set"
+  },
+  "gymDistanceValue": "{metres} m",
+  "@gymDistanceValue": {
+    "description": "A set's distance target in metres",
+    "placeholders": {
+      "metres": {
+        "type": "String"
+      }
+    }
+  },
   "gymSetN": "Set {n}",
   "@gymSetN": {
     "description": "Set ordinal label in a gym workout",
@@ -13585,6 +13611,18 @@
   "@routeMarkerCutoffLabel": {
     "description": "Cutoff time field label"
   },
+  "routeMarkerCutoffInvalid": "Enter the cut-off as HH:MM (24-hour)",
+  "routeMarkerTimeClock": "Clock",
+  "@routeMarkerTimeClock": {
+    "description": "Toggle: the marker time is a wall-clock time of day"
+  },
+  "routeMarkerTimeElapsed": "Elapsed",
+  "@routeMarkerTimeElapsed": {
+    "description": "Toggle: the marker time is measured from the race start"
+  },
+  "@routeMarkerCutoffInvalid": {
+    "description": "Course marker cut-off time validation"
+  },
   "routeMarkerNoteLabel": "Note",
   "@routeMarkerNoteLabel": {
     "description": "Note field label"
@@ -13630,9 +13668,9 @@
   "@routeMarkerCoordInvalid": {
     "description": "Validation: typed marker coordinates out of range or unparseable"
   },
-  "routeMarkerEnterCoords": "Enter coordinates instead",
+  "routeMarkerEnterCoords": "Enter location instead",
   "@routeMarkerEnterCoords": {
-    "description": "Button opening the marker editor without a map tap, for keyboard / screen-reader placement"
+    "description": "Button opening the marker editor without a map tap (accepts lat/lng or a distance along the route), for keyboard / screen-reader placement"
   },
   "routeMarkerSaveFailed": "Could not save marker: {error}",
   "@routeMarkerSaveFailed": {
@@ -15150,6 +15188,8 @@
   "@routeMarkerTargetChip": {"description": "Voice cues / race strategy", "placeholders": {"time": {"type": "String"}}},
   "routeMarkerTargetLabel": "Target time",
   "@routeMarkerTargetLabel": {"description": "Voice cues / race strategy"},
+  "routeMarkerTargetHelper": "Hours : minutes : seconds",
+  "@routeMarkerTargetHelper": {"description": "Persistent helper under the course-marker target-time field clarifying the h:mm:ss format"},
   "routeMarkerTargetInvalid": "Enter the target time as h:mm:ss",
   "@routeMarkerTargetInvalid": {"description": "Course marker target-time validation"},
   "routeMarkerOfficialBadge": "Route owner",

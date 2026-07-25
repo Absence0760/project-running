@@ -80,6 +80,12 @@
 	let draftServices = $state<string[]>([]);
 	let draftCutoffClock = $state('');
 	let draftTargetText = $state('');
+	// Both meta time concepts accept EITHER a wall clock or an elapsed-from-start
+	// value (`parseCutoff` / `parseTarget` read both, and the roadbook prefers
+	// elapsed). One field per concept plus a mode switch beats four fields; only
+	// the selected form is written, so the two alternatives can't disagree.
+	let draftCutoffElapsed = $state(false);
+	let draftTargetClock = $state(false);
 	let draftNote = $state('');
 	let draftLat = $state<number | null>(null);
 	let draftLng = $state<number | null>(null);
@@ -270,6 +276,8 @@
 		draftServices = [];
 		draftCutoffClock = '';
 		draftTargetText = '';
+		draftCutoffElapsed = false;
+		draftTargetClock = false;
 		draftNote = '';
 		draftLat = null;
 		draftLng = null;
@@ -291,9 +299,18 @@
 		draftLabel = mk.label;
 		draftServices = Array.isArray(mk.meta?.services) ? [...(mk.meta.services as string[])] : [];
 		const cutoff = parseCutoff(mk.meta);
-		draftCutoffClock = cutoff?.clock ?? '';
+		// Open in the form the marker was actually saved in.
+		draftCutoffElapsed = cutoff?.elapsedS != null;
+		draftCutoffClock = draftCutoffElapsed
+			? formatElapsed(cutoff!.elapsedS!)
+			: (cutoff?.clock ?? '');
 		const target = parseTarget(mk.meta);
-		draftTargetText = target?.elapsedS != null ? formatElapsed(target.elapsedS) : '';
+		draftTargetClock = target?.elapsedS == null && target?.clock != null;
+		draftTargetText = draftTargetClock
+			? (target!.clock as string)
+			: target?.elapsedS != null
+				? formatElapsed(target.elapsedS)
+				: '';
 		draftNote = typeof mk.meta?.note === 'string' ? (mk.meta.note as string) : '';
 		draftLat = mk.lat;
 		draftLng = mk.lng;
@@ -364,17 +381,50 @@
 		return markers.find((mk) => mk.id === editingId)?.position_m ?? null;
 	}
 
+	// Start from the marker's existing bag rather than a blank one: `meta` is a
+	// schemaless registry that also holds whatever a later version adds, and
+	// rebuilding from scratch silently deleted all of it on any edit. Each key
+	// the editor owns is explicitly set or deleted below, so switching kind
+	// still drops the fields that kind can't carry.
 	function buildMeta(): Record<string, unknown> {
-		const meta: Record<string, unknown> = {};
+		const existing = editingId ? markers.find((mk) => mk.id === editingId)?.meta : null;
+		const meta: Record<string, unknown> = { ...((existing ?? {}) as Record<string, unknown>) };
 		const spec = kindSpec(draftKind);
 		if (spec.hasServices && draftServices.length > 0) meta.services = draftServices;
-		if (spec.hasCutoff && draftCutoffClock.trim()) meta.cutoff_clock = draftCutoffClock.trim();
-		if (draftTargetText.trim()) {
-			const targetS = parseElapsedText(draftTargetText, editingPositionM());
+		else delete meta.services;
+		if (spec.hasCutoff) {
+			const raw = draftCutoffClock.trim();
+			// The two forms are alternatives — leaving both would let them
+			// disagree, and the roadbook silently prefers the elapsed one.
+			delete meta[draftCutoffElapsed ? 'cutoff_clock' : 'cutoff_elapsed_s'];
+			if (!raw) {
+				delete meta[draftCutoffElapsed ? 'cutoff_elapsed_s' : 'cutoff_clock'];
+			} else if (draftCutoffElapsed) {
+				const s = parseElapsedText(raw, editingPositionM());
+				if (s != null) meta.cutoff_elapsed_s = s;
+			} else {
+				meta.cutoff_clock = raw;
+			}
+		} else {
+			// Not a cutoff kind any more — the whole cutoff concept goes,
+			// including the elapsed form the editor can't edit.
+			delete meta.cutoff_clock;
+			delete meta.cutoff_elapsed_s;
+		}
+		const targetRaw = draftTargetText.trim();
+		delete meta[draftTargetClock ? 'target_elapsed_s' : 'target_clock'];
+		if (!targetRaw) {
+			delete meta[draftTargetClock ? 'target_clock' : 'target_elapsed_s'];
+		} else if (draftTargetClock) {
+			meta.target_clock = targetRaw;
+		} else {
+			const targetS = parseElapsedText(targetRaw, editingPositionM());
 			if (targetS != null) meta.target_elapsed_s = targetS;
 		}
 		if ((draftKind === 'note' || draftKind === 'hazard') && draftNote.trim()) {
 			meta.note = draftNote.trim();
+		} else {
+			delete meta.note;
 		}
 		return meta;
 	}
@@ -398,7 +448,11 @@
 			showToast(m('routeMarker.placeRequired'), 'info');
 			return;
 		}
-		if (draftTargetText.trim() && parseElapsedText(draftTargetText, editingPositionM()) == null) {
+		if (
+			!draftTargetClock &&
+			draftTargetText.trim() &&
+			parseElapsedText(draftTargetText, editingPositionM()) == null
+		) {
 			showToast(m('routeMarker.targetInvalid'), 'error');
 			return;
 		}
@@ -640,20 +694,85 @@
 			{/if}
 
 			{#if kindSpec(draftKind).hasCutoff}
+				<div class="time-mode-row" role="radiogroup" aria-label={m('routeMarker.timeMode')}>
+						<label class="toggle-row">
+							<input
+								type="radio"
+								name="cutoff-mode"
+								checked={!draftCutoffElapsed}
+								onchange={() => {
+									draftCutoffElapsed = false;
+									draftCutoffClock = '';
+								}}
+							/>
+							{m('routeMarker.timeClock')}
+						</label>
+						<label class="toggle-row">
+							<input
+								type="radio"
+								name="cutoff-mode"
+								checked={draftCutoffElapsed}
+								onchange={() => {
+									draftCutoffElapsed = true;
+									draftCutoffClock = '';
+								}}
+							/>
+						{m('routeMarker.timeElapsed')}
+					</label>
+				</div>
 				<label>
 					{m('routeMarker.cutoffLabel')}
-					<input type="time" bind:value={draftCutoffClock} />
+					{#if draftCutoffElapsed}
+						<input
+							type="text"
+							bind:value={draftCutoffClock}
+							placeholder="h:mm:ss"
+							inputmode="numeric"
+						/>
+					{:else}
+						<input type="time" bind:value={draftCutoffClock} />
+					{/if}
 				</label>
 			{/if}
 
-			<label>
-				{m('routeMarker.targetLabel')}
-				<input
-					type="text"
-					bind:value={draftTargetText}
-					placeholder="h:mm:ss"
-					inputmode="numeric"
-				/>
+			<div class="time-mode-row" role="radiogroup" aria-label={m('routeMarker.timeMode')}>
+					<label class="toggle-row">
+						<input
+							type="radio"
+							name="target-mode"
+							checked={!draftTargetClock}
+							onchange={() => {
+								draftTargetClock = false;
+								draftTargetText = '';
+							}}
+						/>
+						{m('routeMarker.timeElapsed')}
+					</label>
+					<label class="toggle-row">
+						<input
+							type="radio"
+							name="target-mode"
+							checked={draftTargetClock}
+							onchange={() => {
+								draftTargetClock = true;
+								draftTargetText = '';
+							}}
+						/>
+						{m('routeMarker.timeClock')}
+					</label>
+				</div>
+				<label>
+					{m('routeMarker.targetLabel')}
+					{#if draftTargetClock}
+					<input type="time" bind:value={draftTargetText} />
+				{:else}
+					<input
+						type="text"
+						bind:value={draftTargetText}
+						placeholder="h:mm:ss"
+						inputmode="numeric"
+					/>
+				{/if}
 			</label>
 
 			{#if draftKind === 'note' || draftKind === 'hazard'}
@@ -686,6 +805,15 @@
 />
 
 <style>
+	/* The clock-vs-elapsed switch sits OUTSIDE its field's <label>: a nested
+	   label makes the outer one label the radio, which breaks both the
+	   accessible name and getByLabel in the e2e suite. */
+	.time-mode-row {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 0.25rem;
+		font-size: 0.85rem;
+	}
 	.markers-panel {
 		display: flex;
 		flex-direction: column;

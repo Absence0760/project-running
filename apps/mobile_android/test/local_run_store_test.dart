@@ -34,6 +34,106 @@ void main() {
     );
   }
 
+  group('a local edit is durably unsynced', () {
+    test('update() survives a cold reload as unsynced', () async {
+      // H1: update() flipped the run unsynced in memory + in index.json but
+      // never wrote synced_ids.json, and cold-load treats that sidecar as
+      // authoritative — so an offline edit was silently re-marked synced on
+      // the next launch and could never drain.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'R'));
+      await store.markSynced('R');
+
+      final second = LocalRunStore();
+      await second.init(overrideDirectory: tempDir);
+      await second.update(makeRun(id: 'R', distance: 9999));
+
+      final third = LocalRunStore();
+      await third.init(overrideDirectory: tempDir);
+      expect(third.unsyncedRuns.map((r) => r.id), ['R']);
+    });
+
+    test('update() on a windowed-out run restores its residency', () async {
+      // The other half of H1: `unsyncedRuns` reads `_runs`, not `_summaries`,
+      // so an edit to a run outside the resident window was invisible to the
+      // drain even inside the same session.
+      final seed = LocalRunStore();
+      await seed.init(overrideDirectory: tempDir);
+      await seed.save(Run(
+        id: 'older',
+        startedAt: DateTime(2026, 4, 1, 8),
+        duration: const Duration(minutes: 20),
+        distanceMetres: 4000,
+        track: const [],
+        source: RunSource.app,
+      ));
+      await seed.save(Run(
+        id: 'newer',
+        startedAt: DateTime(2026, 4, 20, 8),
+        duration: const Duration(minutes: 20),
+        distanceMetres: 4000,
+        track: const [],
+        source: RunSource.app,
+      ));
+      await seed.markManySynced(['older', 'newer']);
+
+      final store = LocalRunStore();
+      store.residentWindow = 1;
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.map((r) => r.id), ['newer'],
+          reason: 'precondition: `older` is outside the resident window');
+
+      await store.update(Run(
+        id: 'older',
+        startedAt: DateTime(2026, 4, 1, 8),
+        duration: const Duration(minutes: 20),
+        distanceMetres: 4321,
+        track: const [],
+        source: RunSource.app,
+      ));
+      expect(store.unsyncedRuns.map((r) => r.id), ['older']);
+    });
+
+    test('re-saving a synced id survives a cold reload as unsynced', () async {
+      // M4: save() overwrote the file and stamped the summary unsynced but
+      // left the id in `_syncedIds` and never wrote the sidecar, so an
+      // offline backup restore over an existing library produced a run that
+      // read as synced and never re-pushed.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'R'));
+      await store.markSynced('R');
+      await store.save(makeRun(id: 'R', distance: 7777));
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRuns.map((r) => r.id), ['R']);
+    });
+  });
+
+  group('atomic-write orphans', () {
+    test('a stale .tmp sibling is swept on cold load, a fresh one is kept',
+        () async {
+      // L3: writeStringAtomic leaves `<id>.json.<n>.tmp` when the process dies
+      // between flush and rename. Every listing filters on `.json`, so the
+      // orphan — a full GPS track — was invisible and never pruned.
+      final stale = File('${tempDir.path}/abc.json.0.tmp')
+        ..writeAsStringSync('{"run":{}}');
+      stale.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 3)));
+      final fresh = File('${tempDir.path}/def.json.1.tmp')
+        ..writeAsStringSync('{"run":{}}');
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(stale.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue,
+          reason: 'a concurrent writer\'s in-flight temp must survive');
+    });
+  });
+
   group('schema version (_v)', () {
     test('a saved run record carries the current schema version', () async {
       final store = LocalRunStore();
@@ -209,6 +309,46 @@ void main() {
   });
 
   group('in-progress save', () {
+    test('clearInProgress drains an in-flight append instead of racing it',
+        () async {
+      // L1: the append opens in FileMode.writeOnlyAppend, which RECREATES the
+      // file. A tick still inside its compute() hop when the user taps Stop
+      // therefore resurrected in_progress.json for a run that had just been
+      // saved — and the next launch offered Resume/Finish for it, whose save
+      // overwrites the completed run's file with the ~10-waypoint partial.
+      // Looped over growing tracks because the losing interleave is a timing
+      // window: pre-fix this reproduces on roughly half the iterations, and
+      // the fix makes zero recreations structural.
+      for (var iter = 0; iter < 20; iter++) {
+        final dir = Directory.systemTemp.createTempSync('in_progress_race_');
+        try {
+          Run mk(int points) => Run(
+                id: 'live',
+                startedAt: DateTime(2026, 4, 10, 8),
+                duration: const Duration(minutes: 25),
+                distanceMetres: 5000,
+                track: [
+                  for (var i = 0; i < points; i++)
+                    Waypoint(lat: 1.0 + i / 1000, lng: 2.0),
+                ],
+                source: RunSource.app,
+              );
+          final store = LocalRunStore();
+          await store.init(overrideDirectory: dir);
+          await store.saveInProgress(mk(3));
+          final tick = store.saveInProgress(mk(3 + iter * 120));
+          await store.clearInProgress();
+          await tick;
+
+          expect(File('${dir.path}/in_progress.json').existsSync(), isFalse,
+              reason: 'iteration $iter resurrected the in-progress file');
+          expect(await store.loadInProgress(), isNull);
+        } finally {
+          if (dir.existsSync()) dir.deleteSync(recursive: true);
+        }
+      }
+    });
+
     test('saveInProgress creates the file', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
@@ -231,6 +371,61 @@ void main() {
       expect(loaded!.id, 'live');
       expect(loaded.distanceMetres, 1234);
       expect(loaded.duration, const Duration(minutes: 7, seconds: 30));
+    });
+
+    test('overlapping saves never append the same waypoints twice', () async {
+      // The driver is a fire-and-forget Timer.periodic: the cursor is read
+      // before the isolate hop and written after it, so a tick whose write
+      // outlasts the interval used to let the next tick re-append the same
+      // slice and the recovered polyline doubled back on itself.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      final track = [
+        for (var i = 0; i < 4; i++)
+          Waypoint(
+            lat: 51.5 + i * 0.001,
+            lng: -0.1,
+            timestamp: DateTime(2026, 4, 10, 8, 0, i),
+          ),
+      ];
+      // Establish the file first, so the overlapping pair are incremental
+      // appends rather than two full snapshots (a snapshot restarts the
+      // loader's accumulation and would hide the double-append).
+      await store.saveInProgress(makeRun(id: 'live', track: track.sublist(0, 2)));
+
+      final live = makeRun(id: 'live', track: track);
+      await Future.wait([store.saveInProgress(live), store.saveInProgress(live)]);
+
+      final loaded = await store.loadInProgress();
+      expect(loaded!.track, hasLength(track.length));
+      expect(
+        loaded.track.map((w) => w.lat).toList(),
+        track.map((w) => w.lat).toList(),
+      );
+    });
+
+    test('a save skipped while one is in flight goes out on the next tick',
+        () async {
+      // Skipping must not drop data: the cursor only advances for waypoints
+      // actually written, so the next call carries the whole backlog.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      Waypoint wp(int i) => Waypoint(
+            lat: 51.5 + i * 0.001,
+            lng: -0.1,
+            timestamp: DateTime(2026, 4, 10, 8, 0, i),
+          );
+
+      final first = store.saveInProgress(makeRun(id: 'live', track: [wp(0)]));
+      // Contends with the in-flight write and is dropped.
+      final dropped =
+          store.saveInProgress(makeRun(id: 'live', track: [wp(0), wp(1)]));
+      await Future.wait([first, dropped]);
+      await store.saveInProgress(
+          makeRun(id: 'live', track: [wp(0), wp(1), wp(2)]));
+
+      final loaded = await store.loadInProgress();
+      expect(loaded!.track.map((w) => w.timestamp?.second).toList(), [0, 1, 2]);
     });
 
     test('loadInProgress returns null when no file', () async {
@@ -537,6 +732,182 @@ void main() {
           .toSet();
       expect(ids, {'run-live', 'run-2'});
       expect(ids.contains('ghost-deleted-server-side'), isFalse);
+    });
+
+    // A damaged sidecar used to be indistinguishable from an absent one, so the
+    // loader fell through to the legacy per-run `synced` flag — which
+    // markSynced stopped writing. Every already-synced run then read as
+    // unsynced and the whole library re-uploaded its tracks.
+    for (final corrupt in const <String, String>{
+      'truncated JSON': '{"ids": ["run-a"',
+      'zero bytes': '',
+      'wrong shape': '{"ids": {"run-a": true}}',
+      'a bare list': '["run-a","run-b"]',
+      'not JSON at all': 'not json',
+    }.entries)
+      test(
+          'a ${corrupt.key} sidecar falls back to the index, not a full re-upload',
+          () async {
+        final s1 = LocalRunStore();
+        await s1.init(overrideDirectory: tempDir);
+        await s1.save(makeRun(id: 'run-a'));
+        await s1.save(makeRun(id: 'run-b'));
+        await s1.markSynced('run-a');
+        await s1.markSynced('run-b');
+        // A mutation after the markSynced calls refreshes the index's cached
+        // `synced` flags from the authoritative set.
+        await s1.save(makeRun(id: 'run-c'));
+        await s1.markSynced('run-c');
+        await s1.save(makeRun(id: 'run-d'));
+
+        File('${tempDir.path}/synced_ids.json').writeAsStringSync(corrupt.value);
+        // Plant an unindexed run file so the id-set drifts and the loader takes
+        // the full-walk slow path, where the legacy flag used to be consulted.
+        File('${tempDir.path}/run-planted.json').writeAsStringSync(jsonEncode({
+          'run': makeRun(id: 'run-planted').toJson(),
+          'synced': true,
+        }));
+
+        final s2 = LocalRunStore();
+        await s2.init(overrideDirectory: tempDir);
+
+        expect(s2.runs, hasLength(5));
+        expect(
+          s2.unsyncedRuns.map((r) => r.id).toSet(),
+          {'run-d', 'run-planted'},
+          reason: 'only runs no record calls synced may be re-uploaded',
+        );
+      });
+
+    test('a damaged sidecar with no index never presumes a run synced', () async {
+      // The deliberate asymmetry with LocalRouteStore: with no surviving record
+      // of what was pushed, a run re-uploads rather than risk never draining
+      // the only copy of a recorded run.
+      final s1 = LocalRunStore();
+      await s1.init(overrideDirectory: tempDir);
+      await s1.save(makeRun(id: 'run-a'));
+      await s1.markSynced('run-a');
+
+      File('${tempDir.path}/synced_ids.json').writeAsStringSync('not json');
+      File('${tempDir.path}/index.json').deleteSync();
+
+      final s2 = LocalRunStore();
+      await s2.init(overrideDirectory: tempDir);
+
+      expect(s2.unsyncedRuns.map((r) => r.id), ['run-a']);
+    });
+
+    test('an absent sidecar still migrates from the legacy per-run flag', () async {
+      // Pre-sidecar install: the per-run flag is the only record, and a real
+      // one — the damaged-sidecar path must not have disabled this.
+      File('${tempDir.path}/legacy-synced.json').writeAsStringSync(jsonEncode({
+        'run': makeRun(id: 'legacy-synced').toJson(),
+        'synced': true,
+      }));
+      File('${tempDir.path}/legacy-pending.json').writeAsStringSync(jsonEncode({
+        'run': makeRun(id: 'legacy-pending').toJson(),
+        'synced': false,
+      }));
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.unsyncedRuns.map((r) => r.id), ['legacy-pending']);
+    });
+
+    // background_sync.dart builds its OWN LocalRunStore over the same
+    // directory in the WorkManager isolate, so both sidecars are written by
+    // two processes from independent snapshots. A whole-file replace silently
+    // discarded the other's work.
+    group('two stores over one directory', () {
+      test('a background drain cannot wipe a remote-delete queued in the '
+          'foreground', () async {
+        // The worst shape: the background store loaded while the queue was
+        // empty, and an empty map used to DELETE the file outright — so the
+        // run stayed on the server with nothing left to retry it.
+        final foreground = LocalRunStore();
+        await foreground.init(overrideDirectory: tempDir);
+        final background = LocalRunStore();
+        await background.init(overrideDirectory: tempDir);
+
+        await foreground.markPendingRemoteDelete('orphan-fg');
+        // The background store queues and drains its own delete. Its map is
+        // now empty — and an empty map used to delete the whole file.
+        await background.markPendingRemoteDelete('orphan-bg');
+        await background.clearPendingRemoteDelete('orphan-bg');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.pendingRemoteDeleteIds, contains('orphan-fg'),
+            reason: 'a queued remote delete is unrecoverable if it is lost');
+        expect(reloaded.pendingRemoteDeleteIds, isNot(contains('orphan-bg')),
+            reason: 'the background drain\'s own clear must still stick');
+      });
+
+      test('a clear from the store that queued it still takes effect',
+          () async {
+        // The other direction — the merge must not make removal impossible.
+        final store = LocalRunStore();
+        await store.init(overrideDirectory: tempDir);
+        await store.markPendingRemoteDelete('orphan-2');
+        await store.clearPendingRemoteDelete('orphan-2');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.pendingRemoteDeleteIds, isEmpty);
+      });
+
+      test('a foreground content edit survives a background index write',
+          () async {
+        // M1: index.json was a whole-file replace from a per-process snapshot,
+        // and the cold-load gate only compares the ID SET — so the background
+        // isolate's stale copy of an edited run passed the gate and every
+        // all-history consumer read the wrong distance forever.
+        final foreground = LocalRunStore();
+        await foreground.init(overrideDirectory: tempDir);
+        await foreground.save(makeRun(id: 'R5', distance: 10000));
+        await foreground.save(makeRun(id: 'R3', distance: 3000));
+        await foreground.markManySynced(['R5', 'R3']);
+
+        final background = LocalRunStore();
+        await background.init(overrideDirectory: tempDir);
+
+        await foreground.update(makeRun(id: 'R5', distance: 12500));
+        // The background isolate's own work (a drained remote delete) rewrites
+        // the index from its pre-edit snapshot.
+        await background.delete('R3');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(
+          reloaded.summaries.firstWhere((s) => s.id == 'R5').distanceMetres,
+          12500,
+          reason: 'the newer per-id summary must win the index merge',
+        );
+        expect(reloaded.summaries.any((s) => s.id == 'R3'), isFalse,
+            reason: "the background's delete must still stick");
+      });
+
+      test('a background markSynced cannot cost the foreground a re-upload',
+          () async {
+        final foreground = LocalRunStore();
+        await foreground.init(overrideDirectory: tempDir);
+        await foreground.save(makeRun(id: 'run-fg'));
+
+        final background = LocalRunStore();
+        await background.init(overrideDirectory: tempDir);
+        await background.save(makeRun(id: 'run-bg'));
+        await background.markSynced('run-bg');
+
+        // The foreground's snapshot predates run-bg; its own write must not
+        // drop run-bg's synced flag and re-upload that whole track.
+        await foreground.markSynced('run-fg');
+
+        final reloaded = LocalRunStore();
+        await reloaded.init(overrideDirectory: tempDir);
+        expect(reloaded.unsyncedRuns, isEmpty,
+            reason: 'both stores marked their own run synced');
+      });
     });
 
     test('markPendingRemoteDelete persists across reload and is idempotent', () async {
@@ -999,6 +1370,66 @@ void main() {
       expect(store.summaries.map((s) => s.id), ['newer', 'old']);
     });
 
+    // runs_screen reads `summaries.last` as "the oldest local run" to drive the
+    // cloud load-more cursor (`getRuns(before: cursor)`) and the show-more gate.
+    // Newest-first therefore has to survive EVERY mutation path, not just the
+    // two that happened to call the private re-sort.
+    Run runAt(String id, DateTime startedAt) => Run(
+          id: id,
+          startedAt: startedAt,
+          duration: const Duration(minutes: 20),
+          distanceMetres: 3000,
+          source: RunSource.app,
+        );
+
+    test('update() keeps the index newest-first', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('oldest', DateTime(2025, 1, 1, 8)));
+      await store.saveFromRemote(runAt('middle', DateTime(2026, 1, 1, 8)));
+      await store.saveFromRemote(runAt('newest', DateTime(2026, 7, 20, 8)));
+      expect(store.summaries.map((s) => s.id), ['newest', 'middle', 'oldest']);
+
+      // Editing the newest run's title used to append it to the TAIL, so the
+      // load-more cursor became the newest run's start and every "load more"
+      // re-fetched the page already on disk — older cloud history unreachable.
+      await store.update(runAt('newest', DateTime(2026, 7, 20, 8)));
+      expect(store.summaries.map((s) => s.id), ['newest', 'middle', 'oldest']);
+      expect(store.summaries.last.startedAt, DateTime(2025, 1, 1, 8));
+    });
+
+    test('a back-dated save() lands in order, not at the front', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('recent', DateTime(2026, 7, 1, 8)));
+      // A CSV / Strava import of history older than everything local.
+      await store.save(runAt('imported-2024', DateTime(2024, 3, 3, 8)));
+      expect(store.summaries.map((s) => s.id), ['recent', 'imported-2024']);
+      expect(store.summaries.last.id, 'imported-2024',
+          reason: 'the cursor must reach past the imported range');
+    });
+
+    test('a freshly recorded run still lands at the front', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveFromRemote(runAt('older', DateTime(2026, 1, 1, 8)));
+      await store.save(runAt('just-now', DateTime(2026, 7, 24, 8)));
+      expect(store.summaries.first.id, 'just-now');
+    });
+
+    test('interleaved saves and updates stay sorted', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(runAt('c', DateTime(2026, 3, 1, 8)));
+      await store.save(runAt('a', DateTime(2026, 5, 1, 8)));
+      await store.save(runAt('e', DateTime(2026, 1, 1, 8)));
+      await store.update(runAt('a', DateTime(2026, 5, 1, 8)));
+      await store.save(runAt('d', DateTime(2026, 2, 1, 8)));
+      await store.update(runAt('e', DateTime(2026, 1, 1, 8)));
+      await store.save(runAt('b', DateTime(2026, 4, 1, 8)));
+      expect(store.summaries.map((s) => s.id), ['a', 'b', 'c', 'd', 'e']);
+    });
+
     test('delete drops the summary from the index', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
@@ -1148,18 +1579,25 @@ void main() {
       expect(await store.hydrateOlder(10), 0);
     });
 
-    test('iterateAllRuns yields every run on disk', () async {
+    test('hasRun sees the whole history, not just the resident window',
+        () async {
+      // The backup restore's do-not-clobber check: `contains` only sees
+      // `_runs`, so a windowed-out run would read as absent and be
+      // overwritten by the archive's (possibly track-less) copy.
       final store = LocalRunStore();
+      store.residentWindow = 1;
       await store.init(overrideDirectory: tempDir);
       await store.saveManyFromRemote([
         mk('a', DateTime(2026, 1, 1)),
         mk('b', DateTime(2026, 2, 1)),
       ]);
-      final ids = <String>[];
-      await for (final r in store.iterateAllRuns()) {
-        ids.add(r.id);
-      }
-      expect(ids.toSet(), {'a', 'b'});
+      final reloaded = LocalRunStore();
+      reloaded.residentWindow = 1;
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.contains('a'), isFalse,
+          reason: 'precondition: `a` is outside the resident window');
+      expect(reloaded.hasRun('a'), isTrue);
+      expect(reloaded.hasRun('nope'), isFalse);
     });
   });
 
@@ -1313,8 +1751,6 @@ void main() {
       expect(store.unsyncedCount, 0);
       expect(await store.runById('r-a'), isNull,
           reason: 'run detail must not hydrate another account\'s track');
-      expect(await store.iterateAllRuns().toList(), isEmpty,
-          reason: "the backup export must not carry A's history under B");
 
       uid = 'user-a';
       expect(store.runs, hasLength(1),

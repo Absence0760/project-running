@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:api_client/api_client.dart';
 import 'package:archive/archive.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -433,6 +434,64 @@ void main() {
 
       expect(result.runsImported, 1);
       expect(result.warnings.any((w) => w.contains('broken')), isTrue);
+    });
+
+    // The id read used to sit OUTSIDE the per-row guard its sibling casts are
+    // inside, so a hand-edited or third-party archive aborted the whole restore
+    // mid-way: earlier rows were already committed, the caller got a bare
+    // TypeError instead of a RestoreResult, and a re-run died at the same row.
+    test('a run row with no id is skipped, later rows still land', () async {
+      final bytes = buildBackupZip(runs: [
+        runRow(id: 'r-before'),
+        <String, dynamic>{'started_at': '2026-04-10T08:00:00Z', 'distance_m': 5000},
+        runRow(id: 'r-after'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 2);
+      expect(runStore.runs.map((r) => r.id),
+          containsAll(<String>['r-before', 'r-after']));
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('a run row with a null id is skipped, later rows still land', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': null, 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-null'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-null');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('a run row with a non-string id is skipped', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': 42, 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-int'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-int');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
+    });
+
+    test('an empty-string run id is skipped rather than written', () async {
+      final bytes = buildBackupZip(runs: [
+        <String, dynamic>{'id': '', 'started_at': '2026-04-10T08:00:00Z'},
+        runRow(id: 'r-after-empty'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.id, 'r-after-empty');
+      expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
     });
   });
 
@@ -1305,6 +1364,230 @@ void main() {
       expect(first.gymWorkoutsImported, 1);
       expect(second.gymWorkoutsImported, 0);
       expect(dstGym.workouts, hasLength(1));
+    });
+  
+
+    test('generateNewIds re-keys gym + food rows so a foreign archive can land',
+        () async {
+      // The flag exists to restore SOMEONE ELSE's archive. It re-minted run
+      // and route ids but was never plumbed into the gym/food path, so those
+      // rows kept the archive's id and were queued as pendingCreate — an
+      // INSERT that can never succeed against an id the server already has.
+      // pushCreate fails on the PK/RLS, the error is swallowed, hasPending
+      // never clears, and every refresh re-runs the drain.
+      final workout = await srcGym.createLocal(
+        title: 'Foreign push day',
+        startedAt: DateTime.utc(2026, 6, 5, 7),
+      );
+      final entry = await srcFood.createLocal(
+        startedAt: DateTime.utc(2026, 6, 5, 12),
+        itemName: 'Foreign banana',
+        calories: 90,
+      );
+
+      final out = File('${tempDir.path}/gymfood4.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: srcFood.backupRecords,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(
+        zipFile: out,
+        gymStore: dstGym,
+        foodStore: dstFood,
+        generateNewIds: true,
+      );
+
+      expect(res.gymWorkoutsImported, 1);
+      expect(res.foodLogImported, 1);
+      expect(dstGym.byId(workout.id), isNull,
+          reason: "the archive's id must not be reused");
+      expect(dstGym.workouts.single.workout.title, 'Foreign push day');
+      expect(dstFood.rows.where((r) => r['id'] == entry.id), isEmpty);
+      expect(dstFood.rows.single['item_name'], 'Foreign banana');
+    });
+
+    test('generateNewIds lets the same archive restore twice, side by side',
+        () async {
+      // The other half: with fresh ids there is no id collision to skip on,
+      // so a second restore lands as a second row rather than being dropped
+      // by the idempotence check.
+      await srcGym.createLocal(
+        title: 'Twice',
+        startedAt: DateTime.utc(2026, 6, 6, 7),
+      );
+      final out = File('${tempDir.path}/gymfood5.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: const [],
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      await svc.restore(zipFile: out, gymStore: dstGym, generateNewIds: true);
+      await svc.restore(zipFile: out, gymStore: dstGym, generateNewIds: true);
+
+      expect(dstGym.workouts, hasLength(2));
+      expect(dstGym.workouts.map((w) => w.id).toSet(), hasLength(2));
+    });
+  });
+
+  // ---- M5: undrained runs must be in the archive ----
+  group('local-only runs in the archive', () {
+    test('rawRunRowForBackup emits the raw column shape restore upserts',
+        () async {
+      final run = cm.Run(
+        id: 'local-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [],
+        source: cm.RunSource.app,
+        metadata: const {
+          'activity_type': 'trail_run',
+          'is_dnf': true,
+          'fastest_5k_s': 1200,
+          'title': 'Ridge loop',
+        },
+      );
+      final row = BackupService.rawRunRowForBackup(run);
+
+      expect(row['id'], 'local-1');
+      expect(row.containsKey('user_id'), isFalse,
+          reason: 'the archive is re-homeable; restore stamps the new owner');
+      expect(row.containsKey('track_url'), isFalse,
+          reason: 'the blob rides in tracks/<id>.json.gz, not a storage path');
+      expect(row['started_at'], '2026-04-10T08:00:00.000Z');
+      expect(row['duration_s'], 1500);
+      expect(row['distance_m'], 5000);
+      // Promoted columns are lifted out of the bag, exactly as saveRun does.
+      expect(row['activity_type'], 'trail_run');
+      expect(row['is_dnf'], isTrue);
+      expect(row['fastest_5k_s'], 1200);
+      expect(row['metadata'], {'title': 'Ridge loop'});
+    });
+
+    test('an undrained run round-trips through the archive with its track',
+        () async {
+      final localRun = cm.Run(
+        id: 'local-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [
+          cm.Waypoint(lat: 47.37, lng: 8.54),
+          cm.Waypoint(lat: 47.371, lng: 8.541),
+          cm.Waypoint(lat: 47.372, lng: 8.542),
+        ],
+        source: cm.RunSource.app,
+      );
+      final localTracks = <String, Uint8List>{
+        'local-1': Uint8List.fromList(GZipEncoder().encode(utf8.encode(
+            jsonEncode(const [
+          {'lat': 47.37, 'lng': 8.54},
+          {'lat': 47.371, 'lng': 8.541},
+          {'lat': 47.372, 'lng': 8.542},
+        ])))),
+      };
+
+      final out = File('${tempDir.path}/localonly.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [BackupService.rawRunRowForBackup(localRun)],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        localTracks: localTracks,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final archive = ZipDecoder().decodeBytes(out.readAsBytesSync());
+      final manifest = jsonDecode(
+              utf8.decode(archive.findFile('manifest.json')!.content as List<int>))
+          as Map<String, dynamic>;
+      expect((manifest['counts'] as Map)['runs'], 1);
+      expect((manifest['counts'] as Map)['tracks'], 1,
+          reason: 'a device-only track must be counted like a downloaded one');
+
+      final dstDir = Directory('${tempDir.path}/restored')..createSync();
+      final dst = LocalRunStore();
+      await dst.init(overrideDirectory: dstDir);
+      final res = await BackupService(api: _OfflineApi())
+          .restore(zipFile: out, runStore: dst);
+
+      expect(res.runsImported, 1);
+      expect((await dst.runById('local-1'))!.track, hasLength(3));
+    });
+  });
+
+  // ---- M4: the offline restore is additive ----
+  group('offline restore never clobbers a local run', () {
+    test('a track-less archive entry leaves the richer local copy alone',
+        () async {
+      final local = cm.Run(
+        id: 'r-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [
+          cm.Waypoint(lat: 47.37, lng: 8.54),
+          cm.Waypoint(lat: 47.371, lng: 8.541),
+          cm.Waypoint(lat: 47.372, lng: 8.542),
+        ],
+        source: cm.RunSource.app,
+      );
+      await runStore.save(local);
+      await runStore.markSynced('r-1');
+
+      // createBackup only LOGS a failed track download, so an archive can
+      // carry the row with no tracks/ entry at all.
+      final res = await restoreFromBytes(buildBackupZip(runs: [runRow(id: 'r-1')]));
+
+      expect(res.runsImported, 0);
+      expect((await runStore.runById('r-1'))!.track, hasLength(3),
+          reason: 'the on-device GPS trace is the only copy of what happened');
+      expect(res.warnings.any((w) => w.contains('already present locally')),
+          isTrue);
+    });
+
+    test('generateNewIds still imports the archive copy alongside', () async {
+      await runStore.save(cm.Run(
+        id: 'r-1',
+        startedAt: DateTime.utc(2026, 4, 10, 8),
+        duration: const Duration(seconds: 1500),
+        distanceMetres: 5000,
+        track: const [],
+        source: cm.RunSource.app,
+      ));
+
+      final res = await restoreFromBytes(
+        buildBackupZip(runs: [runRow(id: 'r-1')]),
+        generateNewIds: true,
+      );
+
+      expect(res.runsImported, 1);
+      expect(runStore.summaries, hasLength(2));
     });
   });
 }

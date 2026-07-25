@@ -2,6 +2,34 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/preferences.dart';
 
 void main() {
+  group('ActivityType.splitIntervalMetresFor', () {
+    test('an imperial runner gets mile splits by default', () {
+      // The default used to be a flat 1 km whatever the preference, so an
+      // imperial runner was told about 0.6 mi, 1.2 mi, 1.9 mi … The settings
+      // screen has always offered a "1 mi" preset; only the DEFAULT ignored
+      // the unit.
+      expect(ActivityType.run.splitIntervalMetresFor(DistanceUnit.mi),
+          kMetresPerMile);
+      expect(ActivityType.run.splitIntervalMetresFor(DistanceUnit.km), 1000);
+    });
+
+    test('cycling keeps its wider interval in both units', () {
+      expect(ActivityType.cycle.splitIntervalMetresFor(DistanceUnit.km), 5000);
+      expect(ActivityType.cycle.splitIntervalMetresFor(DistanceUnit.mi),
+          5 * kMetresPerMile);
+    });
+
+    test('the defaults are presets the settings screen already offers', () {
+      // 805 / 1609 / 3219 / 8047 m are the mile presets; 500 / 1000 / 2000 /
+      // 5000 the metric ones. A default outside that set would be a number
+      // the user can never get back to after changing it.
+      expect(
+          ActivityType.run.splitIntervalMetresFor(DistanceUnit.mi).round(), 1609);
+      expect(
+          ActivityType.cycle.splitIntervalMetresFor(DistanceUnit.mi).round(), 8047);
+    });
+  });
+
   group('UnitFormat.distance', () {
     test('km branch divides metres by 1000 with two decimals', () {
       expect(UnitFormat.distance(5000, DistanceUnit.km), '5.00 km');
@@ -177,11 +205,11 @@ void main() {
       expect(ActivityType.cycle.kcalPerKgPerKm, 0.4);
     });
 
-    test('splitIntervalMetres is 5km for cycle, 1km otherwise', () {
-      expect(ActivityType.cycle.splitIntervalMetres, 5000);
-      expect(ActivityType.run.splitIntervalMetres, 1000);
-      expect(ActivityType.walk.splitIntervalMetres, 1000);
-      expect(ActivityType.hike.splitIntervalMetres, 1000);
+    test('splitIntervalMetresFor is 5km for cycle, 1km otherwise (metric)', () {
+      expect(ActivityType.cycle.splitIntervalMetresFor(DistanceUnit.km), 5000);
+      expect(ActivityType.run.splitIntervalMetresFor(DistanceUnit.km), 1000);
+      expect(ActivityType.walk.splitIntervalMetresFor(DistanceUnit.km), 1000);
+      expect(ActivityType.hike.splitIntervalMetresFor(DistanceUnit.km), 1000);
     });
 
     test('gpsDistanceFilter is 5 m for cycle, 3 m otherwise', () {

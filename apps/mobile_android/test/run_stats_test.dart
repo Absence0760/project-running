@@ -253,6 +253,80 @@ void main() {
           timestamp: start.add(Duration(seconds: seconds)),
         );
 
+    /// A waypoint with NO timestamp — what gpx_parser emits for a `<trkpt>`
+    /// that carries no `<time>`, which strava_importer copies straight onto the
+    /// saved run track.
+    Waypoint untimed(double metres) =>
+        Waypoint(lat: 0, lng: metres / mPerDeg);
+
+    test('an untimestamped mid-track point never yields a negative split', () {
+      // Substituting startedAt for the missing timestamp made
+      // bTime.difference(aTime) ≈ -50 min, so the interpolated crossing landed
+      // before tickStart and split 10 came out negative — which then poisoned
+      // tickStart and every split after it.
+      final track = [
+        for (var m = 0; m <= 9500; m += 500) at(m.toDouble(), m * 6 ~/ 1000),
+        untimed(10200),
+        at(11000, 3960),
+      ];
+      final splits = computeSplitDurations(track, 1000, start);
+      expect(splits, isNotEmpty);
+      for (final s in splits) {
+        expect(s.duration, greaterThanOrEqualTo(Duration.zero),
+            reason: 'split ${s.tick} is negative: ${s.duration}');
+      }
+      expect(splits.map((s) => s.tick).toList(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    });
+
+    test('splits stay monotonic when a track has several untimed points', () {
+      final track = [
+        at(0, 0),
+        at(500, 150),
+        untimed(1200),
+        untimed(1800),
+        at(2400, 720),
+        at(3000, 900),
+      ];
+      final splits = computeSplitDurations(track, 1000, start);
+      for (final s in splits) {
+        expect(s.duration, greaterThanOrEqualTo(Duration.zero),
+            reason: 'split ${s.tick} is negative: ${s.duration}');
+      }
+      // Cumulative crossing times must be non-decreasing, so the summed splits
+      // can never exceed the run's own elapsed time.
+      final total = splits.fold(Duration.zero, (a, s) => a + s.duration);
+      expect(total, lessThanOrEqualTo(const Duration(seconds: 900)));
+    });
+
+    test('a backwards timestamp clamps to 0:00 rather than going negative', () {
+      // Android batching queued fixes / an NTP correction can walk a timestamp
+      // backwards; the same clamp must absorb it.
+      final track = [
+        at(0, 0),
+        at(900, 270),
+        Waypoint(lat: 0, lng: 1100 / mPerDeg, timestamp: start),
+        at(2100, 600),
+      ];
+      final splits = computeSplitDurations(track, 1000, start);
+      for (final s in splits) {
+        expect(s.duration, greaterThanOrEqualTo(Duration.zero),
+            reason: 'split ${s.tick} is negative: ${s.duration}');
+      }
+    });
+
+    test('a fully-timestamped track is unaffected by the clamp', () {
+      // Even 300 s/km, overshooting each boundary so it is unambiguously
+      // crossed (see the group's float-equality note).
+      final splits = computeSplitDurations(
+        [at(0, 0), at(1050, 315), at(2100, 630)],
+        1000,
+        start,
+      );
+      expect(splits.length, 2);
+      expect(splits[0].duration.inSeconds, closeTo(300, 1));
+      expect(splits[1].duration.inSeconds, closeTo(300, 1));
+    });
+
     test('returns nothing for short tracks or a non-positive tick', () {
       expect(computeSplitDurations(const [], 1000, start), isEmpty);
       expect(computeSplitDurations([at(0, 0)], 1000, start), isEmpty);

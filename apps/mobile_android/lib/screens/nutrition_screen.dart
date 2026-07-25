@@ -60,6 +60,43 @@ Future<NutritionTargets?> loadNutritionTargets(
   }
 }
 
+/// Split the `activities` view rows falling inside `[start, end)` local time
+/// into the inputs the exercise-calorie and hydration add-ons consume.
+///
+/// Match on [ActivityRow.kindRun] / [ActivityRow.kindLift], never on a bare
+/// string: the view's gym branch emits `lift`, so a filter written against
+/// `'gym'` silently matched nothing and every strength session contributed
+/// zero calories and zero hydration minutes.
+///
+/// Pulled out of the screen so the day-window and kind selection are
+/// testable without booting Nutrition and signing a user in — the reason the
+/// original bug had no coverage.
+({List<RunForCalories> runs, List<GymSessionForCalories> gym, double seconds})
+    exerciseInputsForDay(
+  List<ActivityRow> activities,
+  DateTime start,
+  DateTime end,
+) {
+  var seconds = 0.0;
+  final runs = <RunForCalories>[];
+  final gym = <GymSessionForCalories>[];
+  for (final a in activities) {
+    if (a.kind != ActivityRow.kindRun && a.kind != ActivityRow.kindLift) {
+      continue;
+    }
+    final at = a.startedAt.toLocal();
+    if (at.isBefore(start) || !at.isBefore(end)) continue;
+    final durationS = (a.summary['duration_s'] as num?)?.toDouble();
+    seconds += durationS ?? 0;
+    if (a.kind == ActivityRow.kindRun) {
+      runs.add(RunForCalories((a.summary['distance_m'] as num?)?.toDouble()));
+    } else {
+      gym.add(GymSessionForCalories(durationS));
+    }
+  }
+  return (runs: runs, gym: gym, seconds: seconds);
+}
+
 /// Phase 4 multi-modal Nutrition (decisions §63, multi_modal.md § Nutrition).
 /// Mirrors web `/nutrition`: Mifflin-St Jeor macro rings vs targets (hidden
 /// when body metrics are absent — anti-clutter), a meal-slot daily view, a
@@ -213,29 +250,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
   ) async {
     try {
       final activities = await api.fetchActivities(limit: 50);
-      final start = _todayStart;
-      final end = _tomorrow;
-      var seconds = 0.0;
-      final runs = <RunForCalories>[];
-      final gym = <GymSessionForCalories>[];
-      for (final a in activities) {
-        if (a.kind != 'run' && a.kind != 'gym') continue;
-        final at = a.startedAt.toLocal();
-        if (at.isBefore(start) || !at.isBefore(end)) continue;
-        final durationS = (a.summary['duration_s'] as num?)?.toDouble();
-        seconds += durationS ?? 0;
-        if (a.kind == 'run') {
-          runs.add(RunForCalories((a.summary['distance_m'] as num?)?.toDouble()));
-        } else {
-          gym.add(GymSessionForCalories(durationS));
-        }
-      }
+      final day = exerciseInputsForDay(activities, _todayStart, _tomorrow);
       final kcal = exerciseCaloriesForDay(
-        runs: runs,
-        gymSessions: gym,
+        runs: day.runs,
+        gymSessions: day.gym,
         weightKg: weightKg,
       );
-      return (minutes: (seconds / 60).round(), kcal: kcal);
+      return (minutes: (day.seconds / 60).round(), kcal: kcal);
     } catch (e) {
       debugPrint('nutrition_screen: exercise fetch failed: $e');
       return (minutes: 0, kcal: 0);

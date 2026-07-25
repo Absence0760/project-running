@@ -21,9 +21,28 @@ cm.Route routeFromImportedFile({
   required String format,
   required String content,
 }) {
+  final all = routesFromImportedFile(format: format, content: content);
+  return all.isEmpty
+      ? (format == 'kml'
+          ? RouteParser.fromKml(content)
+          : RouteParser.fromGpx(content))
+      : all.first;
+}
+
+/// Every route a file contains — one per GPX `<trk>` / KML `<LineString>`.
+///
+/// A multi-track file used to import as ONE route whose polyline jumped
+/// between the tracks, so a file holding two city loops produced a route with
+/// a transatlantic leg. Callers that can present more than one route should
+/// use this; [routeFromImportedFile] keeps the first for the single-route
+/// callers.
+List<cm.Route> routesFromImportedFile({
+  required String format,
+  required String content,
+}) {
   return format == 'kml'
-      ? RouteParser.fromKml(content)
-      : RouteParser.fromGpx(content);
+      ? RouteParser.routesFromKml(content)
+      : RouteParser.routesFromGpx(content);
 }
 
 /// Resolve the route format from a filename extension, falling back to a

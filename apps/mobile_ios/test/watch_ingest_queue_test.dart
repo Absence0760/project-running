@@ -72,13 +72,16 @@ void main() {
       expect(run.metadata, isNull);
     });
 
-    test('empty id field falls back to "" (caller assigns id)', () {
-      // Watch senders that don't generate their own UUID let the
-      // pre-save path mint one. A regression that threw on missing
-      // id would break the watch-handoff path entirely.
-      final raw = baseline()..remove('id');
-      final run = runFromWatchPayload(raw);
-      expect(run.id, '');
+    test('a missing or blank id is a parse failure, not an empty id', () {
+      // Nothing downstream mints an id — `saveRun` upserts `run.id` verbatim
+      // and Postgres rejects '' as a uuid on every attempt. Decoding it
+      // "successfully" pushed the failure into drain's TRANSIENT branch, so
+      // the entry retried on every sign-in forever. Failing here routes it to
+      // the existing quarantine instead.
+      expect(() => runFromWatchPayload(baseline()..remove('id')),
+          throwsFormatException);
+      expect(() => runFromWatchPayload(baseline(id: '')),
+          throwsFormatException);
     });
 
     test('missing source field falls back to RunSource.watch', () {

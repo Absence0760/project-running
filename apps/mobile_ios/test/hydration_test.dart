@@ -63,4 +63,17 @@ void main() {
     expect(b.consumedMl, 0);
     expect(b.remainingMl, 2000);
   });
+
+  test('hydrationTargetMl: the exercise add-on stops scaling at four hours', () {
+    // A 12 h ultra and a 24 h effort must not read as 8 L and 14 L of water.
+    final capped = hydrationTargetMl(70, maxExerciseMinutes);
+    expect(capped, 4350); // 2450 baseline + 1920 add-on, rounded
+    expect(hydrationTargetMl(70, 720), capped);
+    expect(hydrationTargetMl(70, 1440), capped);
+  });
+
+  test('hydrationTargetMl: below the cap the add-on still scales linearly', () {
+    expect(hydrationTargetMl(70, 120), 3400); // 2450 + 960
+    expect(hydrationTargetMl(70, 0), 2450);
+  });
 }

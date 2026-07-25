@@ -150,6 +150,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   final GlobalKey<RouteMarkersPanelState> _markersPanelKey = GlobalKey();
   List<MapMarkerPin> _markerPins = const [];
   bool _markerPlacing = false;
+  // The map is the first list child and the markers panel sits far below the
+  // fold, so "tap the map to place" arrived with no map on screen.
+  final ScrollController _scrollController = ScrollController();
 
   /// 0.0 = start, 1.0 = finish. Drives the route-preview scrubber:
   /// dragging the slider feeds an interpolated lat/lng to the
@@ -187,7 +190,25 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   @override
   void dispose() {
     _tilePackStore?.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Scroll the map back into view. Course-marker placement is driven from
+  /// the panel below the fold but happens ON the map, so the instruction is
+  /// useless until the map is visible. L4: a scroll failure must not stop the
+  /// placement itself.
+  void _revealMap() {
+    if (!_scrollController.hasClients) return;
+    try {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } catch (e) {
+      debugPrint('route detail: reveal map for marker placement failed: $e');
+    }
   }
 
   Future<void> _resolveDisplayWaypoints() async {
@@ -925,6 +946,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       body: SafeArea(
         top: false,
         child: ListView(
+          controller: _scrollController,
           children: [
             // Keep the map alive across ListView scroll. A bare list child is
             // disposed once it scrolls past the cache extent, tearing down the
@@ -1178,7 +1200,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   if (mounted) setState(() => _markerPins = pins);
                 },
                 onPlacingChanged: (placing) {
-                  if (mounted) setState(() => _markerPlacing = placing);
+                  if (!mounted) return;
+                  setState(() => _markerPlacing = placing);
+                  if (placing) _revealMap();
                 },
               ),
             ),

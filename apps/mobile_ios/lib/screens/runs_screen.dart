@@ -337,7 +337,7 @@ class _RunsScreenState extends State<RunsScreen> {
       workouts: gym.workouts,
       foods: widget.foodStore?.rows ?? const <Map<String, dynamic>>[],
     );
-    _hasLift = _activities.any((a) => a.kind == 'lift');
+    _hasLift = _activities.any((a) => a.kind == ActivityRow.kindLift);
     _hasMeal = _activities.any((a) => a.kind == 'meal');
   }
 

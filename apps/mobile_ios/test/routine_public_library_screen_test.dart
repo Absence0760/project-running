@@ -41,6 +41,78 @@ class _LibraryApi extends ApiClient {
   }
 }
 
+class _AdoptApi extends ApiClient {
+  _AdoptApi(this.clonedId);
+  final String clonedId;
+
+  @override
+  String? get userId => 'u-viewer';
+
+  @override
+  Future<String> cloneGymRoutineTemplate(String templateId) async => clonedId;
+
+  @override
+  Future<GymRoutineRow> createGymRoutine({
+    String? id,
+    required String title,
+    String? notes,
+    DateTime? lastModifiedAt,
+    List<GymRoutineExerciseInput> exercises = const [],
+  }) async =>
+      throw Exception('offline');
+
+  @override
+  Future<({
+    GymRoutineRow routine,
+    List<({GymRoutineExerciseRow exercise, List<GymRoutineSetRow> sets})>
+        exercises,
+  })?> fetchGymRoutineDetail(String id) async => (
+        routine: _routine(id, 'Adopted'),
+        exercises: [
+          (
+            exercise: GymRoutineExerciseRow(
+              id: 'ex-$id',
+              routineId: id,
+              exerciseName: 'Squat',
+              exerciseKey: 'squat',
+              position: 0,
+              modality: 'weight_reps',
+              progression: 'none',
+              progressionParams: const <String, dynamic>{},
+            ),
+            sets: [
+              GymRoutineSetRow(
+                id: 'set-$id',
+                routineExerciseId: 'ex-$id',
+                setIndex: 0,
+                setType: 'working',
+                targetRepsMin: 5,
+                targetWeightKg: 100,
+              ),
+            ],
+          ),
+        ],
+      );
+}
+
+({Map<String, dynamic> routine, List<StoredRoutineExercise> exercises})
+    _stored(String id) => (
+          routine: <String, dynamic>{
+            'id': id,
+            'title': id,
+            'exercise_count': 1,
+            'last_modified_at': DateTime.utc(2026, 5, 1).toIso8601String(),
+            'created_at': DateTime.utc(2026, 5, 1).toIso8601String(),
+          },
+          exercises: [
+            StoredRoutineExercise(
+              exerciseName: 'Row',
+              exerciseKey: 'row',
+              sets: [StoredRoutineSet(targetRepsMin: 5)],
+            ),
+          ],
+        );
+
 Future<({LocalRoutineStore store, LocalGymStore gym, Directory dir})> _fixture(
     String tag) async {
   final dir = Directory.systemTemp.createTempSync('routine_pub_lib_$tag');
@@ -82,6 +154,47 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('No published routines yet.'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('adopting a public routine keeps the rest of the local library',
+      (tester) async {
+    final f = await _fixture('adopt');
+    try {
+      await tester.runAsync(() async {
+        await f.store.replaceFromServer(
+            [_stored('r-1'), _stored('r-2'), _stored('r-3')]);
+        final pending =
+            await f.store.createLocal(title: 'Offline', exercises: const []);
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RoutinePublicPreviewScreen(
+            api: _AdoptApi('r-adopted'),
+            store: f.store,
+            gymStore: f.gym,
+            entry: (routine: _routine('r-pub', 'Wendler'), authorHandle: null),
+          ),
+        ));
+        await tester.pump();
+        await Future<void>.delayed(Duration.zero);
+        await tester.pump();
+        // The extended FAB animates in; tap only once it is hit-testable.
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.byType(FloatingActionButton));
+        for (var i = 0; i < 8; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(
+          f.store.routines.map((r) => r.id),
+          unorderedEquals(['r-1', 'r-2', 'r-3', pending.id, 'r-adopted']),
+        );
+        expect(f.store.byId(pending.id)!.syncState,
+            RoutineSyncState.pendingCreate);
+      });
     } finally {
       f.dir.deleteSync(recursive: true);
     }

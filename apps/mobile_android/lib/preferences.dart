@@ -12,6 +12,11 @@ enum DistanceUnit { km, mi }
 
 enum WeightUnit { kg, lbs }
 
+/// Metres in one statute mile. The single definition — `UnitFormat` and the
+/// split-interval defaults both read it, and the course-marker panel used to
+/// keep a second copy of the same number.
+const double kMetresPerMile = 1609.344;
+
 enum ActivityType {
   run,
   walk,
@@ -81,14 +86,22 @@ enum ActivityType {
     }
   }
 
-  /// Distance interval (metres) for split notifications. Larger for cycling
-  /// so a 30 km ride doesn't fire 30 announcements.
-  double get splitIntervalMetres {
+  /// Distance interval (metres) for split notifications, in the runner's own
+  /// unit. Larger for cycling so a 30 km ride doesn't fire 30 announcements.
+  ///
+  /// Unit-aware because a split is a landmark, not a raw distance: an
+  /// imperial runner expects to be told when they pass a MILE. Defaulting
+  /// everyone to a kilometre gave them splits at 0.6 mi, 1.2 mi, 1.9 mi — the
+  /// settings screen has always offered a "1 mi" option, the default just
+  /// didn't follow the preference. The values match the presets that screen
+  /// lists, so the default is one of the choices rather than a fourth number.
+  double splitIntervalMetresFor(DistanceUnit unit) {
+    final imperial = unit == DistanceUnit.mi;
     switch (this) {
       case ActivityType.cycle:
-        return 5000;
+        return imperial ? 5 * kMetresPerMile : 5000;
       default:
-        return 1000;
+        return imperial ? kMetresPerMile : 1000;
     }
   }
 
@@ -970,7 +983,6 @@ class Preferences extends ChangeNotifier {
 
 /// Distance/pace formatting helpers that respect the user's unit preference.
 class UnitFormat {
-  static const _metresPerMile = 1609.344;
 
   /// Format distance: "5.23 km" or "3.25 mi" (decimal separator follows the
   /// active locale — "5,23 km" in de).
@@ -981,7 +993,7 @@ class UnitFormat {
   /// Format distance value only (no unit suffix), localised separator.
   static String distanceValue(double metres, DistanceUnit unit) {
     final value =
-        unit == DistanceUnit.mi ? metres / _metresPerMile : metres / 1000;
+        unit == DistanceUnit.mi ? metres / kMetresPerMile : metres / 1000;
     return formatFixed(value, 2, activeLocaleTag);
   }
 
@@ -993,7 +1005,7 @@ class UnitFormat {
   static String pace(double? secondsPerKm, DistanceUnit unit) {
     if (secondsPerKm == null || secondsPerKm <= 0) return '--:--';
     final secondsPerUnit = unit == DistanceUnit.mi
-        ? secondsPerKm * (_metresPerMile / 1000)
+        ? secondsPerKm * (kMetresPerMile / 1000)
         : secondsPerKm;
     // Round to whole seconds first, then split. Truncating the seconds field
     // in isolation diverged from web's formatPace (which rounds) on a
@@ -1013,7 +1025,7 @@ class UnitFormat {
   /// How many distance "ticks" (km or mi) the runner has hit so far.
   static int distanceTicks(double metres, DistanceUnit unit) {
     if (unit == DistanceUnit.mi) {
-      return (metres / _metresPerMile).floor();
+      return (metres / kMetresPerMile).floor();
     }
     return (metres / 1000).floor();
   }

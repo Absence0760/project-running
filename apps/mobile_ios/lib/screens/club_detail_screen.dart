@@ -897,7 +897,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   }
 
   Widget _buildEventsTab(ThemeData theme, ClubView c) {
-    final showCreate = c.isAdmin;
+    // event_organiser is exactly the role that exists to run events: the
+    // server's is_event_organiser RLS admits it and web's canManageEvents
+    // matches, so gating on isAdmin locked the role out on mobile only.
+    final showCreate = c.isEventOrganiser;
     if (_upcoming.isEmpty) {
       return Center(
         child: Padding(
@@ -1280,39 +1283,37 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       await store.syncWithServer(api);
       final detail = await api.fetchGymRoutineDetail(newId);
       if (detail != null) {
-        await store.replaceFromServer([
-          (
-            routine: detail.routine.toJson(),
-            exercises: [
-              for (final e in detail.exercises)
-                StoredRoutineExercise(
-                  exerciseName: e.exercise.exerciseName,
-                  exerciseKey: e.exercise.exerciseKey,
-                  supersetGroup: e.exercise.supersetGroup,
-                  supersetOrder: e.exercise.supersetOrder,
-                  modality: e.exercise.modality,
-                  progression: e.exercise.progression,
-                  progressionParams: e.exercise.progressionParams is Map
-                      ? Map<String, dynamic>.from(
-                          e.exercise.progressionParams as Map)
-                      : const <String, dynamic>{},
-                  sets: [
-                    for (final s in e.sets)
-                      StoredRoutineSet(
-                        setType: s.setType,
-                        targetRepsMin: s.targetRepsMin,
-                        targetRepsMax: s.targetRepsMax,
-                        targetWeightKg: s.targetWeightKg,
-                        targetRpe: s.targetRpe,
-                        restS: s.restS,
-                        targetDurationS: s.targetDurationS,
-                        targetDistanceM: s.targetDistanceM,
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ]);
+        await store.upsertFromServer(
+          detail.routine.toJson(),
+          [
+            for (final e in detail.exercises)
+              StoredRoutineExercise(
+                exerciseName: e.exercise.exerciseName,
+                exerciseKey: e.exercise.exerciseKey,
+                supersetGroup: e.exercise.supersetGroup,
+                supersetOrder: e.exercise.supersetOrder,
+                modality: e.exercise.modality,
+                progression: e.exercise.progression,
+                progressionParams: e.exercise.progressionParams is Map
+                    ? Map<String, dynamic>.from(
+                        e.exercise.progressionParams as Map)
+                    : const <String, dynamic>{},
+                sets: [
+                  for (final s in e.sets)
+                    StoredRoutineSet(
+                      setType: s.setType,
+                      targetRepsMin: s.targetRepsMin,
+                      targetRepsMax: s.targetRepsMax,
+                      targetWeightKg: s.targetWeightKg,
+                      targetRpe: s.targetRpe,
+                      restS: s.restS,
+                      targetDurationS: s.targetDurationS,
+                      targetDistanceM: s.targetDistanceM,
+                    ),
+                ],
+              ),
+          ],
+        );
       }
       if (!mounted) return;
       final gymStore = LocalGymStore();

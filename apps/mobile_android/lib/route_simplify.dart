@@ -88,19 +88,101 @@ double _perpDistanceMetres(Waypoint point, Waypoint a, Waypoint b) {
   return math.sqrt(fx * fx + fy * fy);
 }
 
-/// Total positive elevation change across the track, in metres. Waypoints
-/// without elevation readings are skipped, but the last valid elevation is
-/// carried forward across the gap so an intermittent altitude dropout (tree
-/// cover, tunnels, satellite reacquisition over a long ultra) doesn't silently
-/// zero out the real climb spanning the missing samples.
-double computeElevationGain(List<Waypoint> track) {
-  double gain = 0;
-  double? lastEle;
+/// Smallest elevation move that counts as real climb, in metres. Consumer GPS
+/// altitude is noisy at the 1-3 m level sample to sample, and a raw 1 Hz sum
+/// over a long run integrates that jitter into thousands of metres of vert that
+/// never happened. The reference height only moves once a change clears this
+/// band in either direction, so noise inside it contributes nothing while a
+/// genuine climb is counted in full.
+const double kElevationGainMinDeltaM = 3;
+
+/// Total positive elevation change across the track, in metres, over the RAW
+/// track — never a simplified one. Twin of `computeElevationGain` in
+/// `apps/web/src/lib/routes/route_simplify.ts`; keep in lockstep.
+///
+/// Two rules, both load-bearing:
+///
+/// 1. A waypoint with no elevation is skipped and the last valid reading is
+///    carried across the gap, so an intermittent dropout (tree cover, a tunnel,
+///    satellite reacquisition on a long ultra) doesn't silently erase the climb
+///    that spans the missing samples.
+/// 2. A change only counts once it clears [kElevationGainMinDeltaM].
+///
+/// Callers must pass the raw track. Running this over an RDP-simplified
+/// polyline reads a hill as flat: RDP measures perpendicular distance in 2-D
+/// only, so a straight road over a summit collapses to its endpoints and the
+/// climb between them disappears.
+/// Total elevation LOSS across the raw track, in metres — the exact mirror of
+/// [computeElevationGain], gate and dropout-carry included. Mobile-only: the
+/// run-detail screen shows the two side by side, and grading one through the
+/// noise band while summing the other raw would read as a bug (a flat road
+/// would report 0 m of climb next to hundreds of metres of descent).
+double computeElevationLoss(List<Waypoint> track) {
+  double loss = 0;
+  double? ref;
   for (final p in track) {
     final ele = p.elevationMetres;
     if (ele == null) continue;
-    if (lastEle != null && ele > lastEle) gain += ele - lastEle;
-    lastEle = ele;
+    if (ref == null) {
+      ref = ele;
+      continue;
+    }
+    final delta = ele - ref;
+    if (delta <= -kElevationGainMinDeltaM) {
+      loss += -delta;
+      ref = ele;
+    } else if (delta >= kElevationGainMinDeltaM) {
+      ref = ele;
+    }
   }
-  return gain;
+  return loss;
+}
+
+double computeElevationGain(List<Waypoint> track) {
+  final acc = ElevationGainAccumulator();
+  acc.addAll(track);
+  return acc.gainMetres;
+}
+
+/// Streaming form of [computeElevationGain] — the same gate and dropout-carry,
+/// fed one waypoint at a time. The live recording screen sees the track grow
+/// every GPS tick and cannot re-scan the whole thing per tick on a multi-hour
+/// run, so it holds an accumulator and appends the tail. [computeElevationGain]
+/// is this class run to completion, which is what keeps the live counter and
+/// the finished-run figure from ever disagreeing.
+class ElevationGainAccumulator {
+  double _gain = 0;
+  double? _ref;
+
+  double get gainMetres => _gain;
+
+  void reset() {
+    _gain = 0;
+    _ref = null;
+  }
+
+  void add(Waypoint point) {
+    final ele = point.elevationMetres;
+    if (ele == null) return;
+    final ref = _ref;
+    if (ref == null) {
+      _ref = ele;
+      return;
+    }
+    final delta = ele - ref;
+    if (delta >= kElevationGainMinDeltaM) {
+      _gain += delta;
+      _ref = ele;
+    } else if (delta <= -kElevationGainMinDeltaM) {
+      // A real descent — move the reference down so the next climb is measured
+      // from the valley, not from the previous summit.
+      _ref = ele;
+    }
+  }
+
+  void addAll(Iterable<Waypoint> points) {
+    for (final p in points) {
+      add(p);
+    }
+  }
 }

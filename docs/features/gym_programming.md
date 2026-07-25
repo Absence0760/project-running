@@ -367,6 +367,39 @@ The shipped engine collapses this to the flat single-session shape above: a 6-va
 
 The `GymWorkoutRunner` is the direct mirror of `WorkoutRunner`: a state machine that sits **on top of** the gym logging session (not inside it), consumes `expandRoutineSteps`, drives a set-by-set band, and persists prescribed-vs-actual.
 
+**An unmeasured axis logs null, never the target.** The mobile session screen
+originally had reps / load / RPE inputs only and reported a timed set's actual
+duration as `step.targetDurationS` — so every timed set persisted a
+`gym_sets.duration_s` exactly equal to plan, and the duration axis of
+`computeRoutineAdherence` graded green regardless of what happened. Timed
+steps now carry their own duration input (empty by default, matching web's
+`GymExecutionBand`), so an unrecorded hold logs null and is graded as such.
+Any future modality must add its input alongside the axis, not fall back to
+the prescription.
+
+**Distance closed the same way (2026-07-24).** A distance target was worse than
+the duration one: `GymRunnerStep` carried no `targetDistanceM` at all, so the
+session screen dropped it building the steps, `_metadataTrio` emitted no
+`target_distance_m`, and `computeRoutineAdherence` — with no distance target to
+see — fell off the end of its axis chain and graded every distance-modality set
+a flat `hit` whatever the athlete did. `GymRunnerStep.targetDistanceM` /
+`isDistanceBased` + `GymRunnerSetResult.actualDistanceM` now carry the axis, the
+session screen renders a distance input whenever the step has a target
+(**empty by default**, like duration — so an unrecorded carry logs null and
+grades `partial`, never the target), the band's target label shows the distance,
+and the metadata step-results carry `target_distance_m` / `actual_distance_m`.
+Distance has **no `gym_sets` column**, so a distance-only set writes no flat set
+row and is graded purely through the metadata trio — mirroring web's
+`GymSessionRunner.buildSets`; the finish counter counts it regardless.
+Web moved to match in the same pass: its `GymExecutionBand` had been prefilling
+the distance input from the target (as it does reps and load), so a web athlete
+who tapped Complete without touching the field logged the prescription as the
+actual — the same dishonesty one layer up. The rule is now stated positively and
+pinned by `gym_execution_band_seeding.test.ts`: **reps / load / RPE seed from
+the prescription** (a target the athlete confirms by completing the set),
+**distance and duration seed empty** (measurements — the app must not invent
+one). Any future axis has to pick a side of that line deliberately.
+
 - **Lives in `packages/run_recorder/`** (where `WorkoutRunner` lives, per `workout_runner.dart`) so iOS/watch can reuse it. The package name is a known smell — the gym runner has zero GPS/`RunRecorder` dependency — accepted for reuse symmetry rather than spinning a sibling package; noted so a future session doesn't trip on it.
 - **State machine** emits a `GymExecEvent` stream (`SetTransition`, `RestStarted` / `RestProgress` / `RestComplete`, `SetLogged`, `Complete`, `Abandoned`); idempotent `skipSet` / `rewindSet` (one deep) / `abandon`. Step transitions route through a `ValueNotifier` to avoid hot-path full-tree rebuilds, mirroring the run band.
 - **Supersets** run round-robin (Set 1 of A → Set 1 of B → rest → Set 2 of A …), not a linear list.
@@ -470,7 +503,7 @@ Weight display/entry stays kg-canonical via the Dart weight formatter (byte-for-
 
 ### Offline-first store
 
-- **New `LocalRoutineStore`** (sibling of `LocalGymStore` / `LocalGearStore`), extending `OfflineSyncStore<StoredRoutine>`: one JSON file per routine under `<appDocs>/routines/`, with `gym_routine_exercises` + their planned sets carried **inline** (a routine is never partially useful). `StoredRoutine implements SyncEntry`: client-minted v4 UUID = server id, client-stamped `last_modified_at`, `syncState` (`synced` / `pendingCreate` / `pendingUpdate` / `pendingDelete`), tombstones. Methods: `createLocal` / `updateLocal` / `deleteLocal` / `byId` / `entryFromJson` / `summaryOf` / `asSynced` / `asPendingCreate`.
+- **New `LocalRoutineStore`** (sibling of `LocalGymStore` / `LocalGearStore`), extending `OfflineSyncStore<StoredRoutine>`: one JSON file per routine under `<appDocs>/routines/`, with `gym_routine_exercises` + their planned sets carried **inline** (a routine is never partially useful). `StoredRoutine implements SyncEntry`: client-minted v4 UUID = server id, client-stamped `last_modified_at`, `syncState` (`synced` / `pendingCreate` / `pendingUpdate` / `pendingDelete`), tombstones. Methods: `createLocal` / `updateLocal` / `deleteLocal` / `byId` / `entryFromJson` / `summaryOf` / `asSynced` / `asPendingCreate`, plus the two server-ingest paths: `replaceFromServer` (a COMPLETE snapshot — it prunes every routine it wasn't handed, so the library refresh passes its `fetchLimit` and a full page preserves routines older than the oldest returned `last_modified_at`) and `upsertFromServer` (ONE routine fetched by id — the adopt flows, which must never prune).
 - **An instantiated session is a `StoredGymWorkout`, not a new type.** Starting a routine reads it from `LocalRoutineStore`, expands via `expandRoutineSteps`, and prefills a `pendingCreate` `StoredGymWorkout` in the existing `LocalGymStore` — planned targets + the metadata trio ride in workout `metadata`. The logged-history pipeline (`activities` view, PR triggers, `volume_kg` cache) is unchanged.
 
 ### Execute mode offline
@@ -481,7 +514,7 @@ Fully offline by construction — no GPS/recorder stream. Instantiation reads lo
 
 - **Byte-identical twin:** every `lib/` + `test/` file added to `mobile_android` is copied byte-for-byte to `mobile_ios` (decisions §39); platform branches dispatch via `Platform.isIOS` inside the shared file, never two divergent files. Run `/audit:twin-parity` before declaring done.
 - **Parity pairs:** after the web side lands, the three Dart pairs must match algorithm, edge cases, outputs, and **test count**; invoke `shared-library-syncer` after editing either side.
-- **Tests:** `packages/run_recorder/test/gym_workout_runner_test.dart` (superset round-robin expansion, rest-step countdown, check-off auto-advance, skip/rewind-one/abandon, per-axis adherence, dual-save crash trail — mirror the `workout_runner_test.dart` shape); `gym_progression_test.dart` / `gym_adherence_test.dart` / `gym_routine_test.dart` (equal counts to their TS twins); `local_routine_store_test.dart` (sync states, drain order, `replaceFromServer` preserve-pending + newer-wins, inline round-trip — store I/O needs `tester.runAsync`); widget tests (builder superset grouping + %1RM→kg, execute band rest countdown + hit pip with dialog-scoped finders, detail "Start"). Mind the mobile-test gotchas: `pumpAndSettle` hangs on running animations; banner timers leave pending work. Mobile/watch have **no e2e** by design.
+- **Tests:** `packages/run_recorder/test/gym_workout_runner_test.dart` (superset round-robin expansion, rest-step countdown, check-off auto-advance, skip/rewind-one/abandon, per-axis adherence, dual-save crash trail — mirror the `workout_runner_test.dart` shape); `gym_progression_test.dart` / `gym_adherence_test.dart` / `gym_routine_test.dart` (equal counts to their TS twins); `local_routine_store_test.dart` (sync states, drain order, `replaceFromServer` preserve-pending + newer-wins + `fetchLimit` window, `upsertFromServer` single-row adopt, inline round-trip — store I/O needs `tester.runAsync`); widget tests (builder superset grouping + %1RM→kg, execute band rest countdown + hit pip with dialog-scoped finders, detail "Start"). Mind the mobile-test gotchas: `pumpAndSettle` hangs on running animations; banner timers leave pending work. Mobile/watch have **no e2e** by design.
 
 ### Watch scope — defer the wrist follow-along
 
@@ -520,7 +553,7 @@ No per-day/per-event growth → **no retention purge / pg_cron** for the plannin
 |---|---|---|
 | Parity pairs (×3) | `gym_progression`, `gym_adherence`, `gym_routine` — TS (`npx tsx --test`) + Dart (`flutter test`), **equal counts** | scheme outcomes (hit/partial/deload/rep-climb/wave/rpe nudge), per-axis 80% cutoff, expansion + superset round-robin, plate rounding incl. bodyweight + micro-load, first-session seeding, non-finite guards, determinism fixture |
 | Runner | `packages/run_recorder/test/gym_workout_runner_test.dart` | expansion counts, auto-advance on check-off, rest countdown, skip/rewind/abandon idempotency, dual-save crash trail |
-| Store | `local_routine_store_test.dart` | sync states, drain order, `replaceFromServer` preserve-pending + newer-wins, inline children round-trip (`tester.runAsync`) |
+| Store | `local_routine_store_test.dart` | sync states, drain order, `replaceFromServer` preserve-pending + newer-wins + the `fetchLimit` count-window guard, `upsertFromServer` single-row adopt (leaves the rest of the library on disk), inline children round-trip (`tester.runAsync`) |
 | Web widget / flow | Playwright `apps/web/tests-e2e/gym/` | `routine_builder.spec.ts`, `routine_session.spec.ts` (incl. one under-target + one skip → assert log created), `routine_review.spec.ts` (assert `partial` + per-set hit/miss AND ad-hoc workout shows **no** panel), `repeat_workout.spec.ts`, self-hide regression in `gym.spec.ts` |
 | Backend | pgtap (`apps/backend/supabase/tests/`) | RLS author-only on all three tables + cascade-from-`auth.users`; `export-data` completeness includes the three tables; adherence-from-metadata math if any moves server-side |
 

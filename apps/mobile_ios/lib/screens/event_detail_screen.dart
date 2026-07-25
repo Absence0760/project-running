@@ -108,6 +108,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   RaceSessionRow? _raceSession;
   DateTime? _activeInstance;
   List<DateTime> _instances = const [];
+  // Instance starts cancelled via `event_exceptions`. Filtered out of the
+  // picker and banner-flagged when the active one is cancelled, so a member
+  // can't RSVP to an occurrence that was called off.
+  Set<DateTime> _cancelled = const {};
   /// Members-only meetup coordinates via get_event_meet_point (null for
   /// non-members / no point set). Persona-hunt social-group #10.
   ({double lat, double lng})? _meetPoint;
@@ -261,6 +265,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         widget.social.fetchEventResults(event.row.id, _activeInstance!),
         widget.social.fetchRaceSession(event.row.id, _activeInstance!),
         widget.social.fetchEventMeetPoint(event.row.id),
+        widget.social.fetchCancelledInstances(event.row.id),
       ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
@@ -270,7 +275,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _results = bodyResults[1] as List<EventResultView>;
         _raceSession = bodyResults[2] as RaceSessionRow?;
         _meetPoint = bodyResults[3] as ({double lat, double lng})?;
-        _instances = instances;
+        _cancelled = bodyResults[4] as Set<DateTime>;
+        _instances = [
+          for (final d in instances)
+            if (!_cancelled.contains(d.toUtc())) d,
+        ];
         _loading = false;
       });
       unawaited(_maybeLoadSessionPlan(event));
@@ -795,7 +804,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 16),
           ],
-          _buildRsvpRow(theme, e),
+          if (_activeInstance != null &&
+              _cancelled.contains(_activeInstance!.toUtc()))
+            // A cancelled occurrence reached by a direct link (the picker
+            // already hides it): say so and withhold the RSVP controls rather
+            // than letting a member sign up for a run that isn't happening.
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event_busy,
+                      size: 18, color: theme.colorScheme.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.eventOccurrenceCancelled,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onErrorContainer),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            _buildRsvpRow(theme, e),
           if (athletic &&
               (e.row.distanceM != null || e.row.paceTargetSec != null)) ...[
             const SizedBox(height: 16),
@@ -1011,11 +1047,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
 
     final l10n = AppLocalizations.of(context);
-    return Row(
+    // `enforce_event_capacity` (20261018_001) silently demotes a `going` RSVP
+    // to `waitlisted` when the event is full. Matching that against the three
+    // chips selects none of them, so a waitlisted runner saw exactly what a
+    // runner who never responded sees — surface the real status instead.
+    final waitlisted = current == 'waitlisted';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        chip('going', l10n.eventRsvpGoing),
-        chip('maybe', l10n.eventRsvpMaybe),
-        chip('declined', l10n.eventRsvpDeclined),
+        Row(
+          children: [
+            chip('going', l10n.eventRsvpGoing),
+            chip('maybe', l10n.eventRsvpMaybe),
+            chip('declined', l10n.eventRsvpDeclined),
+          ],
+        ),
+        if (waitlisted)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Icon(Icons.hourglass_bottom,
+                    size: 16, color: theme.colorScheme.tertiary),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.eventRsvpWaitlisted,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.tertiary),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

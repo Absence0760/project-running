@@ -98,6 +98,61 @@ void main() {
       expect(isCrossSourceDuplicate(hc, existing), isFalse);
     });
 
+    test('two Health Connect rows for the same run ARE compared', () {
+      // Health Connect is an aggregator: Garmin Connect and Samsung Health can
+      // each write the same physical run into it. Both arrive tagged
+      // `healthconnect` with DIFFERENT record uuids, so the external_id index
+      // never sees them as the same row — skipping the comparison doubled the
+      // runner's mileage, PRs and heatmap.
+      final fromHealthConnect = [
+        _run(
+          source: RunSource.healthconnect,
+          startedAt: DateTime.utc(2026, 4, 15, 7),
+          distanceM: 10000,
+        ),
+      ];
+      final secondWriter = _run(
+        source: RunSource.healthconnect,
+        startedAt: DateTime.utc(2026, 4, 15, 7, 0, 30),
+        distanceM: 10120,
+      );
+      expect(isCrossSourceDuplicate(secondWriter, fromHealthConnect), isTrue);
+    });
+
+    test('HealthKit is an aggregator too', () {
+      final fromHealthKit = [
+        _run(
+          source: RunSource.healthkit,
+          startedAt: DateTime.utc(2026, 4, 15, 7),
+          distanceM: 10000,
+        ),
+      ];
+      final other = _run(
+        source: RunSource.healthkit,
+        startedAt: DateTime.utc(2026, 4, 15, 7, 1),
+        distanceM: 10100,
+      );
+      expect(isCrossSourceDuplicate(other, fromHealthKit), isTrue);
+    });
+
+    test('two genuinely separate aggregator runs are still both kept', () {
+      // Widening the comparison must not suppress a real second run: these
+      // are two hours apart, so neither axis matches.
+      final morning = [
+        _run(
+          source: RunSource.healthconnect,
+          startedAt: DateTime.utc(2026, 4, 15, 7),
+          distanceM: 10000,
+        ),
+      ];
+      final evening = _run(
+        source: RunSource.healthconnect,
+        startedAt: DateTime.utc(2026, 4, 15, 18),
+        distanceM: 10000,
+      );
+      expect(isCrossSourceDuplicate(evening, morning), isFalse);
+    });
+
     test('same source → NEVER a cross-source duplicate (DB unique guards it)',
         () {
       final dupStrava = _run(

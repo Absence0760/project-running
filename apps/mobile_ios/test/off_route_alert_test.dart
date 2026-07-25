@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_android/off_route_alert.dart';
 
@@ -74,5 +76,48 @@ void main() {
     for (final v in [null, '', '0', 'false', 'off', 'no', 'maybe']) {
       expect(offRouteEscalationEnabled(v), false, reason: '$v should stay off');
     }
+  });
+
+  group('run-screen wiring', () {
+    // The detector latches once per run INSIDE update(), so any
+    // can't-deliver condition checked after the call has already spent the
+    // runner's one escalation for that run: a later, genuinely lost
+    // departure — with the live share now on and every gate satisfied —
+    // can never notify the contact. Reaching the fire path in a widget test
+    // needs a real beginLiveBroadcast round-trip, so the ordering is pinned
+    // at the source, the same way the run-screen hot-path invariants are.
+    late String source;
+    setUpAll(() {
+      source = File('lib/screens/run_screen.dart').readAsStringSync();
+    });
+
+    test('deliverability is checked before the detector spends its latch', () {
+      final gate = RegExp(
+        r'if \(detector != null &&[^)]*\)\s*\{',
+      ).firstMatch(source);
+      expect(gate, isNotNull,
+          reason: 'could not find the detector gate in _onSnapshot — if it '
+              'was renamed, update this guard');
+      expect(
+        gate!.group(0),
+        contains('_offRouteEscalationDeliverable'),
+        reason: 'the sustain clock must only run while an escalation can '
+            'actually reach the contact',
+      );
+    });
+
+    test('_escalateOffRoute holds no post-latch bail-out', () {
+      final body = RegExp(
+        r'void _escalateOffRoute\(\)\s*\{[\s\S]*?\n  \}',
+      ).firstMatch(source);
+      expect(body, isNotNull);
+      expect(
+        body!.group(0)!.contains('isActive'),
+        isFalse,
+        reason: 'a broadcast check here runs after detector.update() has '
+            'already latched — it belongs in the gate that feeds the '
+            'detector',
+      );
+    });
   });
 }

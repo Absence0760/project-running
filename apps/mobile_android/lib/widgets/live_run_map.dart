@@ -1060,7 +1060,15 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                       point: LatLng(m.lat, m.lng),
                       width: 120,
                       height: 44,
-                      alignment: Alignment.topCenter,
+                      // Centre the coloured dot on the coordinate (the label
+                      // hangs below). flutter_map anchors the point at the
+                      // given fraction of the marker box; the dot sits ~8 px
+                      // down in the 44 px top-packed box, so the point must
+                      // land at 1 - 2*8/44 ≈ 0.64. The old Alignment.topCenter
+                      // put the box's BOTTOM on the point, floating the whole
+                      // pin ~30 px ABOVE the line — a marker placed exactly on
+                      // the route (e.g. by distance-along) then read as off it.
+                      alignment: const Alignment(0, 0.64),
                       child: MergeSemantics(
                         child: Semantics(
                           button: widget.onMarkerTap != null,

@@ -124,7 +124,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       // last ping went stale (signal loss), not a terminal outcome.
       final run = await widget.api.fetchPublicRunById(widget.runId);
       if (!mounted) return;
-      await _loadCutoffLegs(run?.routeId);
+      await _loadCutoffLegs(run?.routeId, run?.startedAt);
       if (!mounted) return;
       final rows = await widget.api.fetchLiveRunPings(widget.runId);
       if (!mounted) return;
@@ -173,7 +173,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   /// staleness badge are the always-works baseline and must never break on a
   /// route-fetch error. `public_runs` nulls `route_id` when the joined route
   /// isn't itself public, so a null id here also cleanly hides the card.
-  Future<void> _loadCutoffLegs(String? routeId) async {
+  Future<void> _loadCutoffLegs(String? routeId, DateTime? startedAt) async {
     if (routeId == null || routeId.isEmpty) return;
     try {
       final result = await widget.api.fetchRouteById(routeId);
@@ -194,17 +194,26 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
               meta: m.meta,
             ),
         ],
-        // Cutoff limits are goal-independent (they're absolute clock/elapsed
-        // times on the markers), so a nominal goal is fine — it only shapes
-        // the projected-arrival column, which the card doesn't use.
+        // A cutoff clock resolves to an elapsed limit only against the start's
+        // time of day (local, as the web /live page reads it) — without this
+        // every `cutoff_clock` marker, the only kind either editor can
+        // author, yields no cutoff and the card never appears.
+        startClockMin: startedAt == null
+            ? null
+            : (startedAt.toLocal().hour * 60 + startedAt.toLocal().minute)
+                .toDouble(),
+        // The nominal goal doesn't reach the card (the projection comes from
+        // the runner's own pace) but it does pick which DAY a cutoff clock
+        // lands on for a race that runs past midnight.
         goalSeconds: polylineLengthMetres(waypoints),
         model: PacingModel.even,
       ).legs;
       if (!legs.any((l) => l.cutoff != null)) return;
       _cutoffLegs = legs;
       _routeWaypoints = waypoints;
-    } catch (_) {
+    } catch (e) {
       // Fail closed: keep the card hidden on any route/marker fetch error.
+      debugPrint('spectator cutoff-leg load failed: $e');
     }
   }
 

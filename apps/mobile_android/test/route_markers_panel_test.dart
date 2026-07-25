@@ -45,9 +45,11 @@ const _routeLine = <Waypoint>[
 class _MarkersApi extends ApiClient {
   double? addedLat;
   double? addedLng;
+  Map<String, dynamic>? addedMeta;
   int addCalls = 0;
   double? updatedLat;
   double? updatedLng;
+  Map<String, dynamic>? updatedMeta;
   int updateCalls = 0;
 
   @override
@@ -69,6 +71,7 @@ class _MarkersApi extends ApiClient {
     addCalls++;
     addedLat = lat;
     addedLng = lng;
+    addedMeta = meta;
     return _marker(id: 'new', kind: kind, label: label);
   }
 
@@ -84,6 +87,7 @@ class _MarkersApi extends ApiClient {
     updateCalls++;
     updatedLat = lat;
     updatedLng = lng;
+    updatedMeta = meta;
   }
 }
 
@@ -334,7 +338,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid');
     await tester.enterText(
@@ -373,7 +377,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -407,7 +411,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Bad');
@@ -516,7 +520,7 @@ void main() {
 
     await tester.tap(find.text('Add marker'));
     await tester.pump();
-    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.tap(find.text('Enter location instead'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -538,6 +542,451 @@ void main() {
 
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'a cut-off the readers would reject blocks the save instead of being '
+      'silently dropped', (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(id: 'm1', kind: 'cutoff', label: 'Gate', positionM: 300),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // 25:00 is not a wall-clock hour. Saved verbatim it lands in meta and
+    // then vanishes from the schedule, roadbook, GPX, and live cut-off ETA,
+    // because they all read it back through parseCutoff.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '2500');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 0);
+    expect(find.text('Enter the cut-off as HH:MM (24-hour)'), findsOneWidget);
+
+    // Correcting it saves the value the readers accept.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '930');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['cutoff_clock'], '09:30');
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('placing mode can be cancelled', (tester) async {
+    final placing = <bool>[];
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: RouteMarkersPanel(
+            api: _MarkersApi(),
+            routeId: 'route-1',
+            isOwner: true,
+            viewerId: 'owner-1',
+            routeOwnerId: 'owner-1',
+            routeLine: _routeLine,
+            initialMarkers: const [],
+            onPinsChanged: (_) {},
+            onPlacingChanged: placing.add,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    expect(placing, [true]);
+    expect(find.text('Add marker'), findsNothing);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+
+    // The host stops routing map taps into placement, and the entry point is
+    // back — a placement is no longer one-way.
+    expect(placing, [true, false]);
+    expect(find.text('Add marker'), findsOneWidget);
+    // The whole placing block (snap toggle, hint, cancel) is torn down.
+    expect(find.byType(Checkbox), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('tapping an existing pin while placing places there instead of '
+      'opening that marker and wedging placing mode', (tester) async {
+    final api = _MarkersApi();
+    final key = GlobalKey<RouteMarkersPanelState>();
+    final placing = <bool>[];
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: RouteMarkersPanel(
+            key: key,
+            api: api,
+            routeId: 'route-1',
+            isOwner: true,
+            viewerId: 'owner-1',
+            routeOwnerId: 'owner-1',
+            routeLine: _routeLine,
+            initialMarkers: [
+              _marker(id: 'm1', kind: 'aid_station', label: 'Aid 1'),
+            ],
+            onPinsChanged: (_) {},
+            onPlacingChanged: placing.add,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+
+    key.currentState!.selectMarker('m1');
+    await tester.pumpAndSettle();
+
+    // Placing ended and the sheet is a NEW marker at the tapped point, not
+    // Aid 1's editor.
+    expect(placing, [true, false]);
+    expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
+            .controller!
+            .text,
+        '');
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid 2');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    expect(api.updateCalls, 0);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'a target time on a marker placed by distance reads as h:mm, not mm:ss',
+      (tester) async {
+    // ~78 km of due-east line at this latitude, so a marker at 60 km makes
+    // the h:mm reading of "4:30" the plausible one (270 s/km).
+    const longLine = <Waypoint>[
+      Waypoint(lat: 51.5, lng: -0.12),
+      Waypoint(lat: 51.5, lng: 1.0),
+    ];
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: const [],
+      routeLine: longLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter location instead'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Aid 5');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Distance along route'), '60');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target time'), '430');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    // 4 h 30, not 4 min 30 — the sheet knows the distance it just placed at.
+    expect(api.addedMeta!['target_elapsed_s'], 16200);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'a malformed services entry does not take the whole schedule down',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'aid_station',
+          label: 'Aid 1',
+          positionM: 500,
+          // meta is schemaless jsonb — a non-string in the list used to throw
+          // out of build and blank the route-detail screen.
+          meta: {
+            'services': ['water', 7, null, 'food']
+          },
+        ),
+        _marker(id: 'm2', kind: 'note', label: 'Gate', positionM: 800),
+      ],
+    ));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Aid 1'), findsOneWidget);
+    expect(find.text('Gate'), findsOneWidget);
+    expect(find.textContaining('Water · Food'), findsOneWidget);
+  });
+
+  test('sortMarkerRows delegates to the route_markers twin ordering', () {
+    // Position asc, nulls last, ties + null-vs-null stable by created_at —
+    // the panel used to repeat this comparator inline, so a change to the
+    // shared rule reached web but not the mobile schedule list.
+    RouteMarkerRow row(String id, double? pos, String created) => RouteMarkerRow(
+          id: id,
+          routeId: 'route-1',
+          userId: 'owner-1',
+          kind: 'note',
+          label: id,
+          lat: 51.5,
+          lng: -0.12,
+          positionM: pos,
+          meta: const {},
+          createdAt: DateTime.parse(created),
+          updatedAt: DateTime.parse(created),
+        );
+    final rows = [
+      row('d', null, '2026-01-02T00:00:00Z'),
+      row('c', null, '2026-01-01T00:00:00Z'),
+      row('b', 500, '2026-01-02T00:00:00Z'),
+      row('a', 500, '2026-01-01T00:00:00Z'),
+      row('e', 100, '2026-01-01T00:00:00Z'),
+    ];
+    expect(sortMarkerRows(rows).map((m) => m.id).toList(),
+        ['e', 'a', 'b', 'c', 'd']);
+    // Input untouched, and an unmodifiable source (the api's empty/error
+    // path) must not throw.
+    expect(rows.first.id, 'd');
+    expect(sortMarkerRows(const <RouteMarkerRow>[]), isEmpty);
+  });
+
+  testWidgets('editing a marker keeps the meta keys the sheet cannot author',
+      (tester) async {
+    // Regression: the sheet rebuilt meta from scratch, so any edit destroyed
+    // cutoff_elapsed_s / target_clock (no input on either platform) and any
+    // key a later version adds.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {
+            'cutoff_clock': '14:30',
+            'target_clock': '13:45',
+            'future_key': 'keep me',
+          },
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Gate 1');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    final meta = api.updatedMeta!;
+    expect(meta['cutoff_clock'], '14:30');
+    expect(meta['target_clock'], '13:45');
+    expect(meta['future_key'], 'keep me',
+        reason: 'a key no version of the sheet knows about must survive');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a marker carrying BOTH cut-off forms normalises to one',
+      (tester) async {
+    // The two forms are alternatives and the roadbook silently prefers the
+    // elapsed one, so a marker holding both is already contradictory. The
+    // sheet opens in the mode that is actually in force and saves just that
+    // form — no reader loses a value it was honouring.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {'cutoff_clock': '14:30', 'cutoff_elapsed_s': 7200},
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final meta = api.updatedMeta!;
+    expect(meta['cutoff_elapsed_s'], 7200);
+    expect(meta.containsKey('cutoff_clock'), isFalse);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('changing away from cutoff drops the whole cutoff concept',
+      (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {
+            'cutoff_clock': '14:30',
+            'cutoff_elapsed_s': 7200,
+            'target_clock': '13:45',
+          },
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cut-off').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Note').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    final meta = api.updatedMeta!;
+    expect(meta.containsKey('cutoff_clock'), isFalse);
+    expect(meta.containsKey('cutoff_elapsed_s'), isFalse,
+        reason: 'a note cannot carry a cut-off in either form');
+    // A target is kind-agnostic, so it stays.
+    expect(meta['target_clock'], '13:45');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a cut-off can be entered as elapsed, not only as a clock',
+      (tester) async {
+    // cutoff_elapsed_s and target_clock are in the meta registry but neither
+    // editor could author them, so an ultra whose cut-offs are "22 hours in"
+    // could not be described at all.
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [_marker(id: 'm1', kind: 'cutoff', label: 'Gate')],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // Cut-off → Elapsed, then 22:00:00.
+    await tester.tap(find.text('Elapsed').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Cut-off time'), '220000');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['cutoff_elapsed_s'], 22 * 3600);
+    expect(api.updatedMeta!.containsKey('cutoff_clock'), isFalse,
+        reason: 'the two forms are alternatives — only the chosen one is kept');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a target can be entered as a wall clock', (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      api: api,
+      markers: [_marker(id: 'm1', kind: 'aid_station', label: 'Aid 1')],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    // The target toggle is the second one on an aid station (no cut-off row).
+    await tester.tap(find.text('Clock').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target time'), '1430');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect(api.updatedMeta!['target_clock'], '14:30');
+    expect(api.updatedMeta!.containsKey('target_elapsed_s'), isFalse);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the schedule shows whichever time form was saved',
+      (tester) async {
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(
+          id: 'm1',
+          kind: 'cutoff',
+          label: 'Gate',
+          positionM: 300,
+          meta: {'cutoff_elapsed_s': 22 * 3600},
+        ),
+        _marker(
+          id: 'm2',
+          kind: 'aid_station',
+          label: 'Aid 1',
+          positionM: 500,
+          meta: {'target_clock': '14:30'},
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.textContaining('Cut-off 22:00:00'), findsOneWidget);
+    expect(find.textContaining('14:30'), findsOneWidget);
   });
 
   group('parseDistanceAlong', () {
@@ -624,6 +1073,70 @@ void main() {
       expect(formatMarkerElapsed(1500), '25:00');
       expect(parseMarkerElapsed(formatMarkerElapsed(6300)), 6300);
       expect(parseMarkerElapsed(formatMarkerElapsed(1500)), 1500);
+    });
+  });
+
+  group('formatElapsedDigits (target-time input mask)', () {
+    test('fills from the right into m:ss / h:mm:ss', () {
+      expect(formatElapsedDigits(''), '');
+      expect(formatElapsedDigits('4'), '0:04');
+      expect(formatElapsedDigits('43'), '0:43');
+      expect(formatElapsedDigits('430'), '4:30');
+      expect(formatElapsedDigits('2500'), '25:00');
+      expect(formatElapsedDigits('14500'), '1:45:00');
+      expect(formatElapsedDigits('430000'), '43:00:00');
+    });
+
+    test('strips non-digits so an already-formatted value re-masks cleanly', () {
+      expect(formatElapsedDigits('abc'), '');
+      // The prefill (formatMarkerElapsed output) round-trips unchanged.
+      expect(formatElapsedDigits('1:45:00'), '1:45:00');
+      expect(formatElapsedDigits('25:00'), '25:00');
+      expect(formatElapsedDigits('0:43'), '0:43');
+    });
+
+    test('caps at six digits (drops the oldest) so hours stay two-digit', () {
+      expect(formatElapsedDigits('12345678'), '34:56:78');
+    });
+
+    test('the masked value parses back to the intended seconds', () {
+      expect(parseMarkerElapsed(formatElapsedDigits('2500')), 1500);
+      expect(parseMarkerElapsed(formatElapsedDigits('14500')), 6300);
+    });
+  });
+
+  group('formatClockDigits (cut-off HH:MM input mask)', () {
+    test('fills from the left, inserting the colon after two digits', () {
+      expect(formatClockDigits(''), '');
+      expect(formatClockDigits('1'), '1');
+      expect(formatClockDigits('14'), '14');
+      expect(formatClockDigits('143'), '14:3');
+      expect(formatClockDigits('1430'), '14:30');
+    });
+
+    test('strips non-digits and caps at four digits', () {
+      expect(formatClockDigits('14:30'), '14:30');
+      expect(formatClockDigits('091530'), '15:30');
+    });
+
+    test('pads a leading digit that cannot start an hour', () {
+      // "930" for 09:30 used to mask to the invalid "93:0", which every
+      // reader's parseCutoff then dropped.
+      expect(formatClockDigits('9'), '09');
+      expect(formatClockDigits('93'), '09:3');
+      expect(formatClockDigits('930'), '09:30');
+      expect(isValidMarkerClock(formatClockDigits('930')), isTrue);
+    });
+
+    test('the masked value is the one parseCutoff accepts', () {
+      for (final digits in ['0000', '0930', '1430', '2359']) {
+        expect(isValidMarkerClock(formatClockDigits(digits)), isTrue,
+            reason: digits);
+      }
+      // Out of range stays invalid — the save gate is what catches it.
+      expect(isValidMarkerClock(formatClockDigits('2500')), isFalse);
+      expect(isValidMarkerClock(formatClockDigits('1470')), isFalse);
+      expect(isValidMarkerClock('14'), isFalse);
     });
   });
 

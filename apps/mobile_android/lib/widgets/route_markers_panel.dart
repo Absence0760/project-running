@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -103,18 +104,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       debugPrint('route markers load failed for ${widget.routeId}: $e');
       fetched = const [];
     }
-    // Own a growable copy before sorting: fetchRouteMarkers returns an
-    // unmodifiable `const []` on its empty/error paths, and sort() mutates
-    // in place — sorting the borrowed list directly throws UnsupportedError.
-    final markers = [...fetched];
-    markers.sort((a, b) {
-      final ap = a.positionM, bp = b.positionM;
-      if (ap == null && bp == null) return a.createdAt.compareTo(b.createdAt);
-      if (ap == null) return 1;
-      if (bp == null) return -1;
-      if (ap != bp) return ap.compareTo(bp);
-      return a.createdAt.compareTo(b.createdAt);
-    });
+    final markers = sortMarkerRows(fetched);
     if (!mounted) return;
     setState(() {
       _markers = markers;
@@ -184,10 +174,19 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
 
   /// Called by the host when a course-marker pin is tapped. Only the viewer's
   /// own markers open the editor; an owner's official marker is read-only.
+  ///
+  /// While placing, a pin is just another point on the map: the tap places
+  /// there rather than opening that marker's editor. The pin's hit box would
+  /// otherwise be a dead zone the placement tap can't reach, and opening an
+  /// unrelated editor left placing mode stuck on behind it.
   void selectMarker(String id) {
     for (final row in _markers) {
       if (row.id == id) {
-        if (_canEditMarker(row)) _openEditor(existing: row);
+        if (_placing) {
+          placeAt(Waypoint(lat: row.lat, lng: row.lng));
+        } else if (_canEditMarker(row)) {
+          _openEditor(existing: row);
+        }
         return;
       }
     }
@@ -312,13 +311,21 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     final spec = kindSpec(m.kind);
     final parts = <String>[];
     if (spec.hasServices && meta is Map && meta['services'] is List) {
-      final services = (meta['services'] as List).cast<String>();
+      // whereType, not cast: meta is a schemaless jsonb bag, and a cast that
+      // throws mid-build takes the whole route-detail list down with it (L4
+      // breaking L1) over one malformed marker.
+      final services = (meta['services'] as List).whereType<String>().toList();
       if (services.isNotEmpty) {
         parts.add(services.map((s) => serviceLabel(l10n, s)).join(' · '));
       }
     } else if (spec.hasCutoff) {
       final cutoff = parseCutoff(meta);
-      if (cutoff?.clock != null) {
+      // Either form is authorable, so show whichever is set — the elapsed one
+      // wins, matching the roadbook's own preference.
+      if (cutoff?.elapsedS != null) {
+        parts.add(
+            l10n.routeMarkerCutoffAt(formatMarkerElapsed(cutoff!.elapsedS!)));
+      } else if (cutoff?.clock != null) {
         parts.add(l10n.routeMarkerCutoffAt(cutoff!.clock!));
       }
     } else if (meta is Map && meta['note'] is String) {
@@ -328,6 +335,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     if (target?.elapsedS != null) {
       parts.add(
           l10n.routeMarkerTargetChip(formatMarkerElapsed(target!.elapsedS!)));
+    } else if (target?.clock != null) {
+      parts.add(l10n.routeMarkerTargetChip(target!.clock!));
     }
     return parts.join(' · ');
   }
@@ -400,16 +409,25 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               ],
             ),
           ),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () {
-                _setPlacing(false);
-                _openEditor();
-              },
-              icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
-              label: Text(l10n.routeMarkerEnterCoords),
-            ),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  _setPlacing(false);
+                  _openEditor();
+                },
+                icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+                label: Text(l10n.routeMarkerEnterCoords),
+              ),
+              // Without this, starting a placement is one-way: the Add button
+              // hides while placing, so a viewer who changes their mind is
+              // left with a map that eats every tap.
+              TextButton(
+                onPressed: () => _setPlacing(false),
+                child: Text(l10n.routeMarkerCancel),
+              ),
+            ],
           ),
         ],
         if (_loaded && _markers.isEmpty && !_placing)
@@ -538,6 +556,30 @@ Color _hexColor(String hex) {
   return Color(0xFF000000 | v);
 }
 
+/// Adapts a `RouteMarkerRow` to the twin helper's [MarkerLike] interface.
+/// `route_markers.dart` stays free of a `core_models` dependency, and Dart
+/// has no structural typing, so the row can't satisfy it directly.
+class _SortableMarker implements MarkerLike {
+  final RouteMarkerRow row;
+  const _SortableMarker(this.row);
+
+  @override
+  double? get positionM => row.positionM;
+
+  @override
+  DateTime get createdAt => row.createdAt;
+}
+
+/// Course-schedule order for a fetched page of rows, delegating to the
+/// `route_markers` twin's [sortMarkers] rather than repeating its comparator
+/// — a change to the shared ordering rule has to reach this list too.
+/// Returns a fresh growable list: `fetchRouteMarkers` hands back an
+/// unmodifiable `const []` on its empty / error paths.
+List<RouteMarkerRow> sortMarkerRows(List<RouteMarkerRow> rows) => [
+      for (final s in sortMarkers([for (final r in rows) _SortableMarker(r)]))
+        s.row,
+    ];
+
 double? parseMarkerCoordinate(String text, double max) {
   final v = double.tryParse(text.trim());
   if (v == null || v.isNaN || v.abs() > max) return null;
@@ -550,9 +592,6 @@ String formatMarkerCoordinate(double v) {
       .replaceFirst(RegExp(r'0+$'), '')
       .replaceFirst(RegExp(r'\.$'), '');
 }
-
-/// Metres in one statute mile (matches `UnitFormat`'s private constant).
-const double kMetresPerMile = 1609.344;
 
 /// Parse a "distance along the route" the user typed (in [unit]) into metres.
 /// Returns null for non-numeric / non-finite / negative input. Does NOT clamp
@@ -605,6 +644,102 @@ String formatMarkerElapsed(int s) {
   return h > 0 ? '$h:${two(m)}:${two(sec)}' : '$m:${two(sec)}';
 }
 
+/// Live-format raw digit entry into an elapsed `h:mm:ss` / `m:ss` string so a
+/// marker target time can be typed on a numeric keyboard that offers no `:`
+/// separator (the datetime keyboard hides it on many Android IMEs). Digits
+/// fill from the right — seconds, then minutes, then hours — and the value
+/// always carries at least `m:ss`, so [parseMarkerElapsed] reads it back the
+/// same way it round-trips [formatMarkerElapsed] output.
+String formatElapsedDigits(String raw) {
+  var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.length > 6) digits = digits.substring(digits.length - 6);
+  final padded = digits.padLeft(3, '0');
+  final sec = padded.substring(padded.length - 2);
+  final rest = padded.substring(0, padded.length - 2);
+  if (rest.length <= 2) {
+    // Drop a leading zero on the minutes ('04' → '4') but keep a lone '0'.
+    final min = rest.length == 2 && rest.startsWith('0') ? rest.substring(1) : rest;
+    return '$min:$sec';
+  }
+  final min = rest.substring(rest.length - 2);
+  final hrs = rest.substring(0, rest.length - 2);
+  return '$hrs:$min:$sec';
+}
+
+/// Live-format raw digit entry into a 24-hour `HH:MM` clock for a marker
+/// cut-off, so it too can be typed without a `:` key. Digits fill from the
+/// left (hours first).
+String formatClockDigits(String raw) {
+  var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  // A leading digit above 2 cannot start a 24-hour hour, so it is the hour's
+  // ones place — pad it. Without this the natural "930" for 09:30 masks to
+  // "93:0", which every reader's parseCutoff then rejects.
+  if (digits.codeUnitAt(0) > '2'.codeUnitAt(0)) digits = '0$digits';
+  if (digits.length > 4) digits = digits.substring(digits.length - 4);
+  if (digits.length <= 2) return digits;
+  return '${digits.substring(0, 2)}:${digits.substring(2)}';
+}
+
+/// Whether [clock] is a cut-off the readers will accept. Asks [parseCutoff]
+/// rather than re-deriving the rule, so the editor can never write a clock
+/// string the course-schedule list, roadbook, GPX export, and live cut-off
+/// ETA all silently drop.
+bool isValidMarkerClock(String clock) =>
+    parseCutoff({'cutoff_clock': clock})?.clock != null;
+
+/// A [TextInputFormatter] that live-formats digit entry through [format]
+/// (e.g. [formatElapsedDigits] / [formatClockDigits]) and pins the caret at
+/// the end, so a time field auto-inserts its `:` separators as the user types
+/// digits — no separator key required.
+class _MaskedTimeFormatter extends TextInputFormatter {
+  final String Function(String) format;
+  const _MaskedTimeFormatter(this.format);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = format(newValue.text);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+/// Clock-vs-elapsed selector for a marker time field. Both `meta` time
+/// concepts accept either form, so one field plus this beats four fields.
+class _TimeModeToggle extends StatelessWidget {
+  final bool elapsed;
+  final String clockLabel;
+  final String elapsedLabel;
+  final ValueChanged<bool> onChanged;
+  const _TimeModeToggle({
+    required this.elapsed,
+    required this.clockLabel,
+    required this.elapsedLabel,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        segments: [
+          ButtonSegment(value: false, label: Text(clockLabel)),
+          ButtonSegment(value: true, label: Text(elapsedLabel)),
+        ],
+        selected: {elapsed},
+        onSelectionChanged: (sel) => onChanged(sel.first),
+      ),
+    );
+  }
+}
+
 class _MarkerDraft {
   final String kind;
   final String label;
@@ -640,6 +775,13 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
   late TextEditingController _lng;
   late TextEditingController _distanceAlong;
   Set<String> _services = {};
+  // Each of the two time concepts stores EITHER a wall clock or an
+  // elapsed-from-start value — `parseCutoff` / `parseTarget` read both, and
+  // the roadbook prefers the elapsed form. One field per concept with a mode
+  // toggle beats four fields, and writing only the selected form keeps the
+  // two alternatives from disagreeing.
+  bool _cutoffElapsed = false;
+  bool _targetClock = false;
 
   /// The distance-along-route input needs a line with real geometry.
   bool get _canPlaceByDistance => widget.routeLine.length >= 2;
@@ -655,15 +797,25 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
             ? (e.meta as Map)['note'] as String
             : '');
     if (e?.meta is Map && (e!.meta as Map)['services'] is List) {
-      _services = ((e.meta as Map)['services'] as List).cast<String>().toSet();
+      _services =
+          ((e.meta as Map)['services'] as List).whereType<String>().toSet();
     }
     final cutoff = parseCutoff(e?.meta);
-    _cutoff = TextEditingController(text: cutoff?.clock ?? '');
+    // An existing elapsed value selects that mode, so opening a marker shows
+    // the form it was actually saved in.
+    _cutoffElapsed = cutoff?.elapsedS != null;
+    _cutoff = TextEditingController(
+        text: _cutoffElapsed
+            ? formatMarkerElapsed(cutoff!.elapsedS!)
+            : (cutoff?.clock ?? ''));
     final target = parseTarget(e?.meta);
+    _targetClock = target?.elapsedS == null && target?.clock != null;
     _target = TextEditingController(
-        text: target?.elapsedS == null
-            ? ''
-            : formatMarkerElapsed(target!.elapsedS!));
+        text: _targetClock
+            ? target!.clock!
+            : (target?.elapsedS == null
+                ? ''
+                : formatMarkerElapsed(target!.elapsedS!)));
     final lat = widget.lat ?? e?.lat;
     final lng = widget.lng ?? e?.lng;
     _lat = TextEditingController(
@@ -718,6 +870,11 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     // the map-tap / typed-coordinate path so both stay working.
     final double lat;
     final double lng;
+    // How far into the route the marker sits decides the h:mm-vs-mm:ss
+    // reading of a two-part target time. A marker placed by distance already
+    // knows that, ahead of the server deriving position_m — without it an
+    // 80 km aid station's "4:30" saves as 4½ minutes on the first save.
+    double? positionM = widget.existing?.positionM;
     final distText = _distanceAlong.text.trim();
     if (distText.isNotEmpty) {
       final metres = parseDistanceAlong(distText, unit: activeDistanceUnit);
@@ -729,6 +886,7 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       }
       lat = wp.lat;
       lng = wp.lng;
+      positionM = metres;
     } else {
       final typedLat = parseMarkerCoordinate(_lat.text, 90);
       final typedLng = parseMarkerCoordinate(_lng.text, 180);
@@ -744,16 +902,60 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       lng = typedLng;
     }
     final spec = kindSpec(_kind);
-    final meta = <String, dynamic>{};
+    // Start from the marker's existing bag rather than a blank one: the sheet
+    // owns four keys, but `meta` is a schemaless registry that also holds
+    // `cutoff_elapsed_s` and `target_clock` (no input on either platform) and
+    // whatever a later version adds. Rebuilding from scratch silently deleted
+    // all of them on any edit. Each owned key is explicitly set or removed
+    // below, so switching kind still drops the fields that kind can't carry.
+    final existing = widget.existing?.meta;
+    final meta = <String, dynamic>{
+      if (existing is Map) ...existing.cast<String, dynamic>(),
+    };
     if (spec.hasServices && _services.isNotEmpty) {
       meta['services'] = _services.toList();
+    } else {
+      meta.remove('services');
     }
-    if (spec.hasCutoff && _cutoff.text.trim().isNotEmpty) {
-      meta['cutoff_clock'] = _cutoff.text.trim();
+    if (spec.hasCutoff) {
+      final raw = _cutoff.text.trim();
+      // The two forms are alternatives, so the unselected one is cleared —
+      // leaving both would let them disagree, and the roadbook silently
+      // prefers the elapsed one.
+      meta.remove(_cutoffElapsed ? 'cutoff_clock' : 'cutoff_elapsed_s');
+      if (raw.isEmpty) {
+        meta.remove(_cutoffElapsed ? 'cutoff_elapsed_s' : 'cutoff_clock');
+      } else if (_cutoffElapsed) {
+        final s = parseMarkerElapsed(raw, positionM: positionM);
+        if (s == null) {
+          showTopBanner(context, l10n.routeMarkerTargetInvalid);
+          return;
+        }
+        meta['cutoff_elapsed_s'] = s;
+      } else if (!isValidMarkerClock(raw)) {
+        showTopBanner(context, l10n.routeMarkerCutoffInvalid);
+        return;
+      } else {
+        meta['cutoff_clock'] = raw;
+      }
+    } else {
+      // Not a cutoff kind any more — the whole cutoff concept goes, including
+      // the elapsed form the sheet can't edit.
+      meta.remove('cutoff_clock');
+      meta.remove('cutoff_elapsed_s');
     }
-    if (_target.text.trim().isNotEmpty) {
-      final targetS = parseMarkerElapsed(_target.text,
-          positionM: widget.existing?.positionM);
+    final targetRaw = _target.text.trim();
+    meta.remove(_targetClock ? 'target_elapsed_s' : 'target_clock');
+    if (targetRaw.isEmpty) {
+      meta.remove(_targetClock ? 'target_clock' : 'target_elapsed_s');
+    } else if (_targetClock) {
+      if (!isValidMarkerClock(targetRaw)) {
+        showTopBanner(context, l10n.routeMarkerCutoffInvalid);
+        return;
+      }
+      meta['target_clock'] = targetRaw;
+    } else {
+      final targetS = parseMarkerElapsed(targetRaw, positionM: positionM);
       if (targetS == null) {
         showTopBanner(context, l10n.routeMarkerTargetInvalid);
         return;
@@ -762,6 +964,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     }
     if ((_kind == 'note' || _kind == 'hazard') && _note.text.trim().isNotEmpty) {
       meta['note'] = _note.text.trim();
+    } else {
+      meta.remove('note');
     }
     Navigator.of(context).pop(
         _MarkerDraft(_kind, _label.text.trim(), lat, lng, meta));
@@ -867,23 +1071,56 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
             ],
             if (spec.hasCutoff) ...[
               const SizedBox(height: 12),
+              _TimeModeToggle(
+                elapsed: _cutoffElapsed,
+                clockLabel: l10n.routeMarkerTimeClock,
+                elapsedLabel: l10n.routeMarkerTimeElapsed,
+                onChanged: (v) => setState(() {
+                  _cutoffElapsed = v;
+                  // The masks are different shapes; carrying the old digits
+                  // across would reinterpret them as a different time.
+                  _cutoff.clear();
+                }),
+              ),
               TextField(
                 controller: _cutoff,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  _MaskedTimeFormatter(_cutoffElapsed
+                      ? formatElapsedDigits
+                      : formatClockDigits)
+                ],
                 decoration: InputDecoration(
                   labelText: l10n.routeMarkerCutoffLabel,
-                  hintText: 'HH:MM',
+                  hintText: _cutoffElapsed ? 'h:mm:ss' : 'HH:MM',
+                  helperText:
+                      _cutoffElapsed ? l10n.routeMarkerTargetHelper : null,
                 ),
-                keyboardType: TextInputType.datetime,
               ),
             ],
             const SizedBox(height: 12),
+            _TimeModeToggle(
+              elapsed: !_targetClock,
+              clockLabel: l10n.routeMarkerTimeClock,
+              elapsedLabel: l10n.routeMarkerTimeElapsed,
+              onChanged: (v) => setState(() {
+                _targetClock = !v;
+                _target.clear();
+              }),
+            ),
             TextField(
               controller: _target,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                _MaskedTimeFormatter(
+                    _targetClock ? formatClockDigits : formatElapsedDigits)
+              ],
               decoration: InputDecoration(
                 labelText: l10n.routeMarkerTargetLabel,
-                hintText: 'h:mm:ss',
+                hintText: _targetClock ? 'HH:MM' : 'h:mm:ss',
+                helperText:
+                    _targetClock ? null : l10n.routeMarkerTargetHelper,
               ),
-              keyboardType: TextInputType.datetime,
             ),
             if (_kind == 'note' || _kind == 'hazard') ...[
               const SizedBox(height: 12),

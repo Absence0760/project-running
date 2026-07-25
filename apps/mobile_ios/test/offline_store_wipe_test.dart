@@ -81,4 +81,29 @@ void main() {
               'store failed');
     }
   });
+
+  test('an atomic-write temp orphan does not survive sign-out', () async {
+    // writeStringAtomic leaves `<name>.json.<n>.tmp` behind when the process
+    // dies between its flush and its rename, and every listing in this layer
+    // filters on `.json` — so the orphan was invisible to the store and
+    // outlived the wipe still holding a full row (a LocalCrossingsStore one
+    // carries a bib number and weigh-in fields).
+    final root = Directory.systemTemp.createTempSync('wipe_tmp_test');
+    addTearDown(() => root.deleteSync(recursive: true));
+    Directory dirFor(String subdir) => Directory('${root.path}/$subdir');
+
+    for (final store in buildScreenOwnedOfflineStores()) {
+      final d = dirFor(store.storeSubdir)..createSync(recursive: true);
+      File('${d.path}/prior-user-row.json').writeAsStringSync('{}');
+      File('${d.path}/prior-user-row.json.0.tmp')
+          .writeAsStringSync('{"bib":"1234"}');
+    }
+
+    await wipeScreenOwnedOfflineStores(dirFor: dirFor);
+
+    for (final store in buildScreenOwnedOfflineStores()) {
+      expect(dirFor(store.storeSubdir).listSync().whereType<File>(), isEmpty,
+          reason: 'nothing of ${store.debugLabel} may survive sign-out');
+    }
+  });
 }

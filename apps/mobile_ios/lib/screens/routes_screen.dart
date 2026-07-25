@@ -13,7 +13,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
-import '../shared_file_import.dart' show routeFromImportedFile;
+import '../shared_file_import.dart' show routesFromImportedFile;
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -666,11 +666,30 @@ class RoutesScreenState extends State<RoutesScreen> {
       }
       final ext = result.files.first.extension?.toLowerCase();
       final content = await File(path).readAsString();
-      final route = await compute(_parseRouteFile, _RouteParseRequest(ext, content));
-      await widget.routeStore.save(route);
+      final routes =
+          await compute(_parseRouteFile, _RouteParseRequest(ext, content));
+      // A route needs two points to have a line, a distance, or a map. Saving
+      // a degenerate one and reporting success is how a silently-dropped
+      // track became "Route imported!".
+      final usable =
+          routes.where((r) => r.waypoints.length >= 2).toList(growable: false);
+      if (usable.isEmpty) {
+        if (mounted) {
+          showTopBanner(context,
+              AppLocalizations.of(context).routesImportFailedLocalOnly);
+        }
+        return;
+      }
+      for (final route in usable) {
+        await widget.routeStore.save(route);
+      }
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         showTopBanner(
-            context, AppLocalizations.of(context).routesImported(route.name));
+            context,
+            usable.length == 1
+                ? l10n.routesImported(usable.first.name)
+                : l10n.routesImportedMany(usable.length));
       }
     } catch (e) {
       debugPrint('routes import failed: $e');
@@ -1250,7 +1269,8 @@ class _RouteParseRequest {
   const _RouteParseRequest(this.ext, this.content);
 }
 
-cm.Route _parseRouteFile(_RouteParseRequest req) => routeFromImportedFile(
+List<cm.Route> _parseRouteFile(_RouteParseRequest req) =>
+    routesFromImportedFile(
       format: req.ext == 'kml' ? 'kml' : 'gpx',
       content: req.content,
     );

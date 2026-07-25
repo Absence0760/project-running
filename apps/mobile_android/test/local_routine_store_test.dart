@@ -11,6 +11,24 @@ Future<({LocalRoutineStore store, Directory dir})> _store(String tag) async {
   return (store: store, dir: dir);
 }
 
+({Map<String, dynamic> routine, List<StoredRoutineExercise> exercises}) _server(
+  String id, {
+  String title = 'Server',
+  DateTime? lastModifiedAt,
+}) {
+  final ts = (lastModifiedAt ?? DateTime.utc(2026, 5, 1)).toIso8601String();
+  return (
+    routine: <String, dynamic>{
+      'id': id,
+      'title': title,
+      'exercise_count': 1,
+      'last_modified_at': ts,
+      'created_at': ts,
+    },
+    exercises: [_ex('Pull')],
+  );
+}
+
 StoredRoutineExercise _ex(String name, {List<StoredRoutineSet>? sets}) =>
     StoredRoutineExercise(
       exerciseName: name,
@@ -158,6 +176,115 @@ void main() {
       expect(f.store.byId(pending.id), isNotNull,
           reason: 'pendingCreate preserved across replaceFromServer');
       expect(f.store.byId('r-server'), isNotNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('upsertFromServer installs one routine and leaves the rest of the '
+      'library on disk', () async {
+    final f = await _store('upsert_one');
+    try {
+      await f.store.replaceFromServer([
+        _server('r-1', title: 'One'),
+        _server('r-2', title: 'Two'),
+        _server('r-3', title: 'Three'),
+      ]);
+      final adopted = _server('r-adopted', title: 'Adopted');
+      await f.store.upsertFromServer(adopted.routine, adopted.exercises);
+      expect(f.store.routines.map((r) => r.id),
+          unorderedEquals(['r-1', 'r-2', 'r-3', 'r-adopted']));
+      // The on-disk state must agree: four routine files plus the index.
+      final files = f.dir
+          .listSync()
+          .whereType<File>()
+          .where((e) => e.path.endsWith('.json'))
+          .length;
+      expect(files, 5);
+      final reopened = LocalRoutineStore();
+      await reopened.init(overrideDirectory: f.dir);
+      expect(reopened.routines.map((r) => r.id),
+          unorderedEquals(['r-1', 'r-2', 'r-3', 'r-adopted']));
+      expect(reopened.byId('r-adopted')!.syncState, RoutineSyncState.synced);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('upsertFromServer keeps an offline pendingCreate routine', () async {
+    final f = await _store('upsert_pending');
+    try {
+      final pending =
+          await f.store.createLocal(title: 'Local', exercises: [_ex('Curl')]);
+      final adopted = _server('r-adopted', title: 'Adopted');
+      await f.store.upsertFromServer(adopted.routine, adopted.exercises);
+      expect(f.store.byId(pending.id), isNotNull);
+      expect(f.store.byId(pending.id)!.syncState,
+          RoutineSyncState.pendingCreate);
+      expect(f.store.hasPending, isTrue);
+      final reopened = LocalRoutineStore();
+      await reopened.init(overrideDirectory: f.dir);
+      expect(reopened.byId(pending.id)!.syncState,
+          RoutineSyncState.pendingCreate);
+      expect(reopened.byId('r-adopted'), isNotNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('upsertFromServer leaves a locally-newer synced copy alone', () async {
+    final f = await _store('upsert_newer_wins');
+    try {
+      await f.store.replaceFromServer(
+          [_server('r-1', title: 'Recent', lastModifiedAt: DateTime.utc(2026, 6, 2))]);
+      final stale =
+          _server('r-1', title: 'Stale', lastModifiedAt: DateTime.utc(2026, 6, 1));
+      await f.store.upsertFromServer(stale.routine, stale.exercises);
+      expect(f.store.byId('r-1')!.title, 'Recent');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('a count-windowed fetch (fetchLimit) preserves synced routines older '
+      'than the returned page', () async {
+    final f = await _store('fetch_limit');
+    try {
+      await f.store.replaceFromServer([
+        _server('old', title: 'January', lastModifiedAt: DateTime.utc(2026, 1, 1)),
+        _server('new', title: 'June', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      // A later "newest N" hydrate returns a FULL page (limit 1) of only the
+      // newest routine — the older one is outside the fetch window.
+      await f.store.replaceFromServer(
+        [_server('new', title: 'June', lastModifiedAt: DateTime.utc(2026, 6, 1))],
+        fetchLimit: 1,
+      );
+      expect(f.store.byId('old'), isNotNull);
+      expect(f.store.byId('new'), isNotNull);
+      final reopened = LocalRoutineStore();
+      await reopened.init(overrideDirectory: f.dir);
+      expect(reopened.byId('old'), isNotNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('a partial page (count below fetchLimit) is still a full replace',
+      () async {
+    final f = await _store('partial_page');
+    try {
+      await f.store.replaceFromServer([
+        _server('old', lastModifiedAt: DateTime.utc(2026, 1, 1)),
+        _server('new', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      await f.store.replaceFromServer(
+        [_server('new', lastModifiedAt: DateTime.utc(2026, 6, 1))],
+        fetchLimit: 100,
+      );
+      expect(f.store.byId('old'), isNull,
+          reason: 'a sub-limit page is the full set; deletion propagates');
+      expect(f.store.byId('new'), isNotNull);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

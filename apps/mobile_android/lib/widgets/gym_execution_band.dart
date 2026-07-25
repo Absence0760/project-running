@@ -262,12 +262,23 @@ class _Band extends StatelessWidget {
       parts.add(WeightFormat.format(kg, activeWeightUnit));
     }
     final repWeight = parts.join(' × ');
+    final extras = <String>[];
     final dur = step.targetDurationS;
-    if (dur != null && dur > 0) {
-      final durLabel = l10n.gymDurationValue('$dur');
-      return repWeight.isEmpty ? durLabel : '$repWeight · $durLabel';
+    if (dur != null && dur > 0) extras.add(l10n.gymDurationValue('$dur'));
+    final dist = step.targetDistanceM;
+    if (dist != null && dist > 0) {
+      extras.add(l10n.gymDistanceValue(_numStr(dist)));
+    }
+    final tail = extras.join(' · ');
+    if (tail.isNotEmpty) {
+      return repWeight.isEmpty ? tail : '$repWeight · $tail';
     }
     return repWeight.isEmpty ? l10n.gymSessionTarget : repWeight;
+  }
+
+  String _numStr(double v) {
+    if (v == v.truncateToDouble()) return '${v.truncate()}';
+    return '$v';
   }
 }
 

@@ -44,6 +44,64 @@ StoredRoutine _routine({String title = 'Bench routine'}) => StoredRoutine(
       syncState: RoutineSyncState.synced,
     );
 
+/// A single timed hold (plank) — the modality that used to log its target as
+/// though it were the measured actual.
+StoredRoutine _timedRoutine() => StoredRoutine(
+      row: {'id': 'routine-2', 'title': 'Core', 'exercise_count': 1},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Plank',
+          exerciseKey: 'plank',
+          sets: [StoredRoutineSet(targetDurationS: 60, targetRpe: 8, restS: 0)],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
+/// A single distance carry — the modality whose target never reached the
+/// runner, so the set had no input and graded as an unconditional `hit`.
+StoredRoutine _distanceRoutine() => StoredRoutine(
+      row: {'id': 'routine-3', 'title': 'Carries', 'exercise_count': 1},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Farmer carry',
+          exerciseKey: 'farmer_carry',
+          sets: [StoredRoutineSet(targetDistanceM: 500, restS: 0)],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
+/// Three distinct one-set exercises — the smallest routine that can show a
+/// rewind past a *skipped* step disturbing an earlier step's logged set.
+StoredRoutine _tripleRoutine() => StoredRoutine(
+      row: {'id': 'routine-4', 'title': 'Full body', 'exercise_count': 3},
+      exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Bench',
+          exerciseKey: 'bench',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 10, targetWeightKg: 100, restS: 0),
+          ],
+        ),
+        StoredRoutineExercise(
+          exerciseName: 'Squat',
+          exerciseKey: 'squat',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 8, targetWeightKg: 60, restS: 0),
+          ],
+        ),
+        StoredRoutineExercise(
+          exerciseName: 'Row',
+          exerciseKey: 'row',
+          sets: [
+            StoredRoutineSet(targetRepsMin: 12, targetWeightKg: 40, restS: 0),
+          ],
+        ),
+      ],
+      syncState: RoutineSyncState.synced,
+    );
+
 Future<({LocalGymStore store, Directory dir})> _gymStore(
     WidgetTester tester) async {
   late LocalGymStore store;
@@ -86,6 +144,155 @@ void main() {
     expect(find.widgetWithText(TextField, 'RPE'), findsOneWidget);
     // The band's Complete-set control on the active step.
     expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+  });
+
+  testWidgets('a timed set logs what was entered, not the target',
+      (tester) async {
+    // Regression: _entered() returned `durationS: step.targetDurationS`, so
+    // every timed set persisted an actual duration exactly equal to plan —
+    // fabricated data that also made the duration axis of adherence
+    // unconditionally green. There was no way to enter a real one.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _timedRoutine()));
+    await tester.pump();
+
+    final field = find.widgetWithText(TextField, 'Time (s)');
+    expect(field, findsOneWidget,
+        reason: 'a timed step needs a way to record the real duration');
+    // Nothing typed yet → nothing to log, not a silent full-credit hit.
+    expect(tester.widget<TextField>(field).controller!.text, '');
+
+    await tester.enterText(field, '45');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    // Finish writes the file; let the (api == null) save path settle.
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final sets = g.store.workouts.single.sets;
+    expect(sets.length, 1);
+    expect(sets.single['duration_s'], 45,
+        reason: 'the logged duration must be the 45 s entered, not the 60 s '
+            'target');
+  });
+
+  testWidgets('a whole-number target RPE prefills as "8", not "8.0"',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _timedRoutine()));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'RPE'))
+          .controller!
+          .text,
+      '8',
+      reason: 'the routine composer already formats RPE this way; the same '
+          'routine must not read 8.0 here and 8 there',
+    );
+  });
+
+  testWidgets('an untimed set shows no duration field', (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _routine()));
+    await tester.pump();
+
+    expect(find.widgetWithText(TextField, 'Time (s)'), findsNothing);
+  });
+
+  testWidgets('a distance set logs what was entered, not the target',
+      (tester) async {
+    // Regression: GymRunnerStep carried no targetDistanceM, so the target never
+    // reached the runner, there was no way to record an actual distance, and
+    // computeRoutineAdherence fell through its axis chain to grade the set a
+    // flat `hit` no matter what the athlete did.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _distanceRoutine()));
+    await tester.pump();
+
+    // The band surfaces the target the step now carries.
+    expect(find.text('500 m'), findsOneWidget);
+
+    final field = find.widgetWithText(TextField, 'Distance (m)');
+    expect(field, findsOneWidget,
+        reason: 'a distance step needs a way to record the real distance');
+    // Nothing typed yet → nothing to log, not a silent full-credit hit.
+    expect(tester.widget<TextField>(field).controller!.text, '');
+
+    await tester.enterText(field, '380');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    // Distance has no gym_sets column, so the flat set list stays empty — the
+    // real distance travels in the metadata step-results instead.
+    final workout = g.store.workouts.single;
+    expect(workout.sets, isEmpty);
+    final results =
+        (workout.row['metadata'] as Map)['gym_step_results'] as List;
+    expect(results.single['actual_distance_m'], 380,
+        reason: 'the logged distance must be the 380 m entered, not the 500 m '
+            'target');
+    expect(results.single['target_distance_m'], 500);
+    expect(results.single['status'], 'partial',
+        reason: '380 m is under 80% of the 500 m target');
+  });
+
+  testWidgets('an unrecorded distance logs null and is graded unrecorded',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _distanceRoutine()));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final results = ((g.store.workouts.single.row['metadata']
+        as Map)['gym_step_results'] as List);
+    expect(results.single['actual_distance_m'], isNull);
+    expect(results.single['status'], 'partial',
+        reason: 'an unlogged distance target is partial, never a hit');
+  });
+
+  testWidgets('a set with no distance target shows no distance field',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _routine()));
+    await tester.pump();
+
+    expect(find.widgetWithText(TextField, 'Distance (m)'), findsNothing);
   });
 
   testWidgets('Complete on the last step finishes the session', (tester) async {
@@ -157,6 +364,106 @@ void main() {
     expect(w.row['title'], 'Bench routine');
     expect(w.sets.length, 2);
     expect(w.row['metadata']?['routine_id'], 'routine-1');
+  });
+
+  testWidgets('Previous after a skipped step keeps the earlier logged set',
+      (tester) async {
+    // Regression: the screen kept an append-only `_loggedSets` list but only
+    // appended on a Complete, so rewinding past a Skip popped an *earlier*
+    // exercise's row — and the metadata step-results, read from the runner,
+    // then claimed a set the flat gym_sets rows no longer had.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _tripleRoutine()));
+    await tester.pump();
+
+    // Bench: log the prefilled 10 × 100 target.
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    // Squat: skipped by mistake.
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+
+    // On Row now; go back to redo the squat.
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Previous'));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final w = g.store.workouts.single;
+    expect(
+      w.sets.map((s) => s['exercise_name']).toList(),
+      ['Bench', 'Squat', 'Row'],
+      reason: 'rewinding past the skipped squat must not delete the bench row',
+    );
+
+    // The two writes have to agree: every step-result carrying an actual needs
+    // a matching flat set row, or every gym_sets consumer under-counts while
+    // the review panel shows a full session.
+    final results = (w.row['metadata'] as Map)['gym_step_results'] as List;
+    final logged = results
+        .cast<Map>()
+        .where((r) => r['actual_reps'] != null)
+        .toList();
+    expect(logged.map((r) => r['exercise_key']).toList(),
+        ['bench', 'squat', 'row']);
+    expect(logged.length, w.sets.length);
+  });
+
+  testWidgets('Previous re-seeds the entered actuals, not the plan targets',
+      (tester) async {
+    // Regression: the step-transition handler re-seeded from the step's
+    // targets, so a rewind replaced the athlete's 8 × 90 with the prescribed
+    // 10 × 100 and a re-Complete persisted the plan as the fact.
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(g.store, _tripleRoutine()));
+    await tester.pump();
+
+    final reps = find.widgetWithText(TextField, 'Reps');
+    final weight = find.widgetWithText(TextField, 'kg');
+    await tester.enterText(reps, '8');
+    await tester.enterText(weight, '90');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Previous'));
+    await tester.pump();
+
+    expect(tester.widget<TextField>(reps).controller!.text, '8',
+        reason: 'the rewound step must show what was lifted, not the target');
+    expect(tester.widget<TextField>(weight).controller!.text, '90.0');
+
+    // Re-Complete without editing, then skip out to the finish view.
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Finish'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    final set = g.store.workouts.single.sets.single;
+    expect(set['reps'], 8);
+    expect(set['weight_kg'], 90);
   });
 
   testWidgets('an empty-titled routine falls back to a generic AppBar title',

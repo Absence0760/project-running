@@ -2348,6 +2348,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Importadas $count rotas';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Falha na importação: $error';
   }
@@ -4310,6 +4315,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get eventRsvpMaybe => 'Talvez';
+
+  @override
+  String get eventOccurrenceCancelled => 'Esta ocorrência foi cancelada.';
+
+  @override
+  String get eventRsvpWaitlisted => 'Na lista de espera';
 
   @override
   String get eventRsvpDeclined => 'Não posso ir';
@@ -9024,6 +9035,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distância (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Série $n';
   }
@@ -10447,6 +10466,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Horário de corte';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Introduz o corte como HH:MM (24 horas)';
+
+  @override
+  String get routeMarkerTimeClock => 'Relógio';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Decorrido';
+
+  @override
   String get routeMarkerNoteLabel => 'Nota';
 
   @override
@@ -10483,7 +10512,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Inserir coordenadas';
+  String get routeMarkerEnterCoords => 'Inserir localização';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11765,6 +11794,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo objetivo';
+
+  @override
+  String get routeMarkerTargetHelper => 'Horas : minutos : segundos';
 
   @override
   String get routeMarkerTargetInvalid =>
@@ -14124,6 +14156,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return 'Importadas $count rotas';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Falha na importação: $error';
   }
@@ -16086,6 +16123,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventRsvpMaybe => 'Talvez';
+
+  @override
+  String get eventOccurrenceCancelled => 'Esta ocorrência foi cancelada.';
+
+  @override
+  String get eventRsvpWaitlisted => 'Na lista de espera';
 
   @override
   String get eventRsvpDeclined => 'Não posso ir';
@@ -20799,6 +20842,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get gymDistance => 'Distância (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Série $n';
   }
@@ -22222,6 +22273,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get routeMarkerCutoffLabel => 'Horário de corte';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Informe o horário de corte como HH:MM (24 horas)';
+
+  @override
+  String get routeMarkerTimeClock => 'Relógio';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Decorrido';
+
+  @override
   String get routeMarkerNoteLabel => 'Nota';
 
   @override
@@ -22258,7 +22319,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Inserir coordenadas';
+  String get routeMarkerEnterCoords => 'Inserir localização';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -23540,6 +23601,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeMarkerTargetLabel => 'Tempo alvo';
+
+  @override
+  String get routeMarkerTargetHelper => 'Horas : minutos : segundos';
 
   @override
   String get routeMarkerTargetInvalid => 'Informe o tempo alvo como h:mm:ss';

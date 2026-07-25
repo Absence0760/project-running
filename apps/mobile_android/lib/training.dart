@@ -347,7 +347,7 @@ PlanPhase phaseFor(int weekIndex, int totalWeeks) {
 /// time, which skews by an hour across a spring/fall transition and rolls
 /// the calendar day). Mirrors web `addDays` (`c.setDate(c.getDate() + n)`)
 /// in training.ts — every plan `scheduled_date` steps through this.
-DateTime _addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+DateTime addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
 
 class WorkoutStructure {
   final Map<String, dynamic>? warmup;
@@ -511,7 +511,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
             (input.recent5kSec != null && input.recent5kSec! > 0));
     final frac = mileageFraction(i, totalWeeks, phase, masters);
     final weeklyKm = (peakKm * frac).round();
-    final weekStart = _addDays(input.startDate, i * 7);
+    final weekStart = addDays(input.startDate, i * 7);
     final workouts = _generateWeek(
       weekIndex: i,
       phase: phase,
@@ -545,7 +545,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     weeks: weeks,
     paces: paces,
     vdot: vdot,
-    endDate: _addDays(input.startDate, totalWeeks * 7 - 1),
+    endDate: addDays(input.startDate, totalWeeks * 7 - 1),
     goalDistanceM: goalDistance,
     pacesAreFallback: pacesAreFallback,
   );
@@ -627,10 +627,10 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
   final runSet = dayOffsets.toSet();
   final weeks = <GeneratedWeek>[];
   for (var i = 0; i < totalWeeks; i++) {
-    final weekStart = _addDays(input.startDate, i * 7);
+    final weekStart = addDays(input.startDate, i * 7);
     final workouts = <GeneratedWorkout>[];
     for (var d = 0; d < 7; d++) {
-      final date = _addDays(weekStart, d);
+      final date = addDays(weekStart, d);
       if (runSet.contains(d)) {
         workouts.add(_walkRunWorkout(date, i, paces.easy));
       } else {
@@ -655,7 +655,7 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
     weeks: weeks,
     paces: paces,
     vdot: vdot,
-    endDate: _addDays(input.startDate, totalWeeks * 7 - 1),
+    endDate: addDays(input.startDate, totalWeeks * 7 - 1),
     goalDistanceM: goalDistanceM,
     pacesAreFallback: pacesAreFallback,
   );
@@ -767,7 +767,7 @@ List<GeneratedWorkout> _generateWeek({
 
   var easyEmitted = 0;
   for (var dow = 0; dow < 7; dow++) {
-    final date = _addDays(weekStart, dow);
+    final date = addDays(weekStart, dow);
     if (dow == restDow) {
       workouts.add(GeneratedWorkout(
         scheduledDate: date,

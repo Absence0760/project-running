@@ -92,7 +92,8 @@ class ApiClient {
       Supabase.instance.client;
       _initialized = true;
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('ApiClient.isInitialized probe failed: ${safeErrorLabel(e)}');
       return false;
     }
   }
@@ -252,8 +253,9 @@ class ApiClient {
           lng: (r['lng'] as num).toDouble(),
         );
       }).toList();
-    } catch (_) {
+    } catch (e) {
       // Caller's map layer stays blank on RPC failure.
+      debugPrint('fetchHeatmapPoints failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -308,8 +310,9 @@ class ApiClient {
     // re-runs the stamp via confirmAgeAndTerms().
     try {
       await _client.rpc('confirm_age_and_terms');
-    } catch (_) {
+    } catch (e) {
       // Tolerated — sign-in path retries.
+      debugPrint('signUp: confirm_age_and_terms failed: ${safeErrorLabel(e)}');
     }
     return (
       userId: response.user!.id,
@@ -433,7 +436,8 @@ class ApiClient {
   String? get userId {
     try {
       return _client.auth.currentUser?.id;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('ApiClient.userId read failed: ${safeErrorLabel(e)}');
       return null;
     }
   }
@@ -446,7 +450,9 @@ class ApiClient {
   String? get currentAccessToken {
     try {
       return _client.auth.currentSession?.accessToken;
-    } catch (_) {
+    } catch (e) {
+      debugPrint(
+          'ApiClient.currentAccessToken read failed: ${safeErrorLabel(e)}');
       return null;
     }
   }
@@ -457,7 +463,8 @@ class ApiClient {
   String? get userEmail {
     try {
       return _client.auth.currentUser?.email;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('ApiClient.userEmail read failed: ${safeErrorLabel(e)}');
       return null;
     }
   }
@@ -476,7 +483,8 @@ class ApiClient {
     try {
       return _client.auth.onAuthStateChange
           .map((state) => state.session?.user.id);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('ApiClient.authUserChanges failed: ${safeErrorLabel(e)}');
       return const Stream<String?>.empty();
     }
   }
@@ -512,7 +520,8 @@ class ApiClient {
     try {
       await signIn(email: email, password: currentPassword);
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('verifyCurrentPassword failed: ${safeErrorLabel(e)}');
       return false;
     }
   }
@@ -1065,6 +1074,7 @@ class ApiClient {
       }
     } catch (e) {
       // Best-effort — the row delete matters more than the file cleanup.
+      debugPrint('deleteRoute: photo cleanup failed: ${safeErrorLabel(e)}');
     }
     await _client.from(RouteRow.table).delete().eq(RouteRow.colId, routeId);
   }
@@ -1084,7 +1094,8 @@ class ApiClient {
           .whereType<Map>()
           .map((m) => RouteMarkerRow.fromJson(m.cast<String, dynamic>()))
           .toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('fetchRouteMarkers failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -1157,7 +1168,8 @@ class ApiClient {
           .whereType<Map>()
           .map((m) => RouteConditionRow.fromJson(m.cast<String, dynamic>()))
           .toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('fetchRouteConditions failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -1842,7 +1854,8 @@ class ApiClient {
           lng: (r['lng'] as num).toDouble(),
         );
       }).toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('fetchDiscoverableRoutesInBbox failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -1878,7 +1891,8 @@ class ApiClient {
           lng: (r['lng'] as num).toDouble(),
         );
       }).toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('fetchClubsInBbox failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -2447,7 +2461,8 @@ class ApiClient {
               })
               .toList() ??
           const [];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('_clipRouteForViewer failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -4078,7 +4093,8 @@ class ApiClient {
         return data.cast<Map<String, dynamic>>();
       }
       return const [];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('clipTrackForUser failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -4108,7 +4124,8 @@ class ApiClient {
           .whereType<Map>()
           .map((p) => _waypointFromJson(p.cast<String, dynamic>()))
           .toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('clipRouteForViewer failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -5605,7 +5622,8 @@ class ApiClient {
           .select()
           .single();
       return ExerciseRow.fromJson(row);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('createCustomExercise failed: ${safeErrorLabel(e)}');
       return null;
     }
   }
@@ -7347,6 +7365,14 @@ typedef SessionPlanItemInput = ({
 /// web `ActivityRow` (core/data.ts); `kind` stays a raw string ('run' |
 /// 'lift' | 'meal') like the web union.
 class ActivityRow {
+  /// The `kind` discriminator, one literal per UNION branch of the view.
+  /// Named because a consumer comparing against a string the view never
+  /// emits matches nothing and fails silently — `'gym'` (instead of `lift`)
+  /// dropped every strength session out of the nutrition exercise add-on.
+  static const kindRun = 'run';
+  static const kindLift = 'lift';
+  static const kindMeal = 'meal';
+
   final String id;
   final String kind;
   final DateTime startedAt;

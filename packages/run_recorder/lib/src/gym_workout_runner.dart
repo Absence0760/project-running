@@ -15,6 +15,7 @@ class GymRunnerStep {
   final double? targetRpe;
   final int? restS;
   final int? targetDurationS;
+  final double? targetDistanceM;
   final int? supersetGroup;
 
   const GymRunnerStep({
@@ -28,10 +29,13 @@ class GymRunnerStep {
     this.targetRpe,
     this.restS,
     this.targetDurationS,
+    this.targetDistanceM,
     this.supersetGroup,
   });
 
   bool get isDurationBased => targetDurationS != null && targetDurationS! > 0;
+
+  bool get isDistanceBased => targetDistanceM != null && targetDistanceM! > 0;
 }
 
 class GymRunnerSetResult {
@@ -41,6 +45,7 @@ class GymRunnerSetResult {
   final double? actualWeightKg;
   final double? actualRpe;
   final int? actualDurationS;
+  final double? actualDistanceM;
   final GymRunnerStepStatus status;
 
   const GymRunnerSetResult({
@@ -50,6 +55,7 @@ class GymRunnerSetResult {
     required this.actualWeightKg,
     required this.actualRpe,
     required this.actualDurationS,
+    required this.actualDistanceM,
     required this.status,
   });
 
@@ -67,6 +73,7 @@ class GymRunnerSetResult {
       'actual_weight_kg': actualWeightKg,
       'actual_rpe': actualRpe,
       'actual_duration_s': actualDurationS,
+      'actual_distance_m': actualDistanceM,
       'status': switch (status) {
         GymRunnerStepStatus.pending => 'pending',
         GymRunnerStepStatus.completed => 'completed',
@@ -140,7 +147,13 @@ class GymWorkoutRunner {
     ));
   }
 
-  void completeSet({int? reps, double? weightKg, double? rpe, int? durationS}) {
+  void completeSet({
+    int? reps,
+    double? weightKg,
+    double? rpe,
+    int? durationS,
+    double? distanceM,
+  }) {
     if (isComplete) return;
     _results.add(GymRunnerSetResult(
       stepIndex: _idx,
@@ -149,6 +162,7 @@ class GymWorkoutRunner {
       actualWeightKg: weightKg,
       actualRpe: rpe,
       actualDurationS: durationS,
+      actualDistanceM: distanceM,
       status: GymRunnerStepStatus.completed,
     ));
     _advance();
@@ -163,6 +177,7 @@ class GymWorkoutRunner {
       actualWeightKg: null,
       actualRpe: null,
       actualDurationS: null,
+      actualDistanceM: null,
       status: GymRunnerStepStatus.skipped,
     ));
     // A skipped set isn't performed, so its trailing rest doesn't apply —
@@ -200,6 +215,7 @@ class GymWorkoutRunner {
         actualWeightKg: null,
         actualRpe: null,
         actualDurationS: null,
+        actualDistanceM: null,
         status: GymRunnerStepStatus.skipped,
       ));
     }
@@ -265,6 +281,11 @@ class GymWorkoutRunner {
       final actual = r.actualDurationS;
       if (actual == null) return false;
       return actual >= step.targetDurationS! * 0.8;
+    }
+    if (step.isDistanceBased) {
+      final actual = r.actualDistanceM;
+      if (actual == null) return false;
+      return actual >= step.targetDistanceM! * 0.8;
     }
     final min = step.targetRepsMin;
     if (min == null) return true;

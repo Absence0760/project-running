@@ -2360,6 +2360,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String routesImportedMany(int count) {
+    return '$count itinéraires importés';
+  }
+
+  @override
   String routesImportFailed(String error) {
     return 'Échec de l\'import : $error';
   }
@@ -4321,6 +4326,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get eventRsvpMaybe => 'Peut-être';
+
+  @override
+  String get eventOccurrenceCancelled => 'Cette occurrence a été annulée.';
+
+  @override
+  String get eventRsvpWaitlisted => 'En liste d\'attente';
 
   @override
   String get eventRsvpDeclined => 'Pas dispo';
@@ -9052,6 +9063,14 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get gymDistance => 'Distance (m)';
+
+  @override
+  String gymDistanceValue(String metres) {
+    return '$metres m';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Série $n';
   }
@@ -10478,6 +10497,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeMarkerCutoffLabel => 'Barrière horaire';
 
   @override
+  String get routeMarkerCutoffInvalid =>
+      'Saisis la barrière horaire au format HH:MM (24 h)';
+
+  @override
+  String get routeMarkerTimeClock => 'Horloge';
+
+  @override
+  String get routeMarkerTimeElapsed => 'Écoulé';
+
+  @override
   String get routeMarkerNoteLabel => 'Note';
 
   @override
@@ -10513,7 +10542,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez une latitude valide (-90 à 90) et une longitude valide (-180 à 180).';
 
   @override
-  String get routeMarkerEnterCoords => 'Saisir des coordonnées à la place';
+  String get routeMarkerEnterCoords => 'Saisir l\'emplacement à la place';
 
   @override
   String routeMarkerSaveFailed(String error) {
@@ -11798,6 +11827,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeMarkerTargetLabel => 'Temps visé';
+
+  @override
+  String get routeMarkerTargetHelper => 'Heures : minutes : secondes';
 
   @override
   String get routeMarkerTargetInvalid =>

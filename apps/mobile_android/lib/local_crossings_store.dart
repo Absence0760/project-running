@@ -174,28 +174,79 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
     return stored;
   }
 
+  /// How long a SYNCED crossing is kept in the local cache, measured from its
+  /// `recorded_at`. 90 days mirrors the server-side Art 9 scrub window on
+  /// `checkpoint_crossings.recorded_at` (migration `20270317_001`): by the time
+  /// the server has stripped the weigh-in fields, a phone-side copy of a
+  /// months-old race has no operational purpose left. Deliberately generous —
+  /// a crossing is race-day evidence, and a multi-day event plus its
+  /// incident-review tail must fit comfortably inside the window.
+  ///
+  /// A crossing that has NOT been pushed is never eligible: an unsynced stamp
+  /// is unsent data and is the only copy that exists, however long the
+  /// volunteer stays offline.
+  static const Duration kSyncedRetention = Duration(days: 90);
+
   /// Replace the in-memory state from a fresh server fetch (non-health
   /// columns). Pending rows are preserved as-is — only `synced` rows are
   /// overwritten so an offline stamp isn't clobbered by the server's copy.
-  Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
+  ///
+  /// This is also where [kSyncedRetention] is applied: the whole live set is
+  /// rebuilt here and written back by [rewriteAll], so dropping an expired
+  /// synced crossing during the rebuild both evicts it from memory and deletes
+  /// its file (it simply isn't in the keep-set). A crossing whose `recorded_at`
+  /// can't be parsed is kept — an undatable audit record is never assumed old.
+  ///
+  /// [eventId] / [instanceStart] scope the prune to the rows the fetch could
+  /// actually have returned — mirroring the `windowStart` / `fetchLimit` guard
+  /// [LocalGymStore.replaceFromServer] carries. A synced row outside that scope
+  /// is absent from [serverRows] because it was not asked for, NOT because the
+  /// server deleted it; pruning it strands the volunteer with an empty
+  /// "already stamped here" list for every other aid station, offline, which is
+  /// the entire reason this store exists. Both null = full replace, correct
+  /// only when the caller fetched the COMPLETE set.
+  Future<void> replaceFromServer(
+    List<Map<String, dynamic>> serverRows, {
+    String? eventId,
+    DateTime? instanceStart,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final iso = instanceStart?.toIso8601String();
+    bool outOfScope(Map<String, dynamic> row) =>
+        eventId != null &&
+        (row['event_id'] != eventId ||
+            (iso != null && row['instance_start'] != iso));
     final preserved = <String, StoredCrossing>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
+        continue;
       }
+      if (!outOfScope(entry.value.row)) continue;
+      // Retention still runs over the rows the fetch didn't cover, or the
+      // 90-day Art 9 mirror would silently stop expiring every other event.
+      if (_beyondRetention(entry.value.row['recorded_at'], now)) continue;
+      preserved[entry.key] = entry.value;
     }
     rowsById.clear();
     for (final row in serverRows) {
       final id = row['id'] as String;
       if (preserved.containsKey(id)) {
         rowsById[id] = preserved.remove(id)!;
-      } else {
-        rowsById[id] = StoredCrossing(row: row, syncState: SyncState.synced);
+        continue;
       }
+      if (_beyondRetention(row['recorded_at'], now)) continue;
+      rowsById[id] = StoredCrossing(row: row, syncState: SyncState.synced);
     }
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
+  }
+
+  static bool _beyondRetention(dynamic recordedAt, DateTime now) {
+    final at = _parseTime(recordedAt)?.toUtc();
+    if (at == null) return false;
+    return now.difference(at) > kSyncedRetention;
   }
 
   @override
