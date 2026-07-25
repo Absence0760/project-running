@@ -31,6 +31,9 @@
 //! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
 //!   (port of web `gear/gear_wear.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`gnss_cadence`] — the `gps` task's fix-publication cadence: which
+//!   interval is owed in the current record state + mode, the throttle gate,
+//!   and whether a published fix earns the receiver a nap
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
 //! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
@@ -214,6 +217,7 @@ pub mod flash_store;
 pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
+pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;
 pub mod goals;
