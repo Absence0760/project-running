@@ -25,7 +25,7 @@ Per the [§ 71 2026-05-28 amendment](../architecture/decisions.md#71-own-hardwar
 
 ### Per-step bring-up
 
-Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order:
+Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order. Each step's status below uses the four-rung verification ladder defined in [`quality_standards.md`](quality_standards.md) — *host-tested* → *build-verified* → *sim-verified* → *bench-verified* — whose per-step **bench-verification checklist** is what "bench verification pending parts" resolves to:
 
 - [ ] **Step 1 — Order parts.** See [`parts.md`](parts.md). ~$300 silicon + $200–900 bench tools.
 - [x] **Step 2 — Scaffold Cargo workspace.** DONE 2026-05-28. Embassy + nRF52840 stub.
@@ -39,9 +39,13 @@ Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order
 
 Per [decisions.md § 83](../architecture/decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem): a Nordic Power Profiler Kit II (PPK2, ~$120) is part of the tier-1 bench-tools kit. Used **per-subsystem** (bare-MCU sleep, GPS active/sleep, HR AFE sample, display refresh) rather than whole-device — the DK's onboard J-Link + LEDs burn ~30 mA at idle and make whole-device readings useless as a baseline. The per-subsystem numbers project to tier-2 / tier-3 power (see [`performance_path.md`](performance_path.md)). DoD doesn't require hitting any specific number; these measurements inform tier-2 planning, they don't gate tier-1 completion.
 
+The five rigs and their pass criterion ("a number exists, and it's within an order of magnitude of the datasheet figure — a >10× disagreement means the rig is wrong, not the datasheet") are itemised in [`quality_standards.md § Power instrumentation`](quality_standards.md#power-instrumentation-per--83), alongside the list of firmware figures that are **derivations, not measurements** and that these rigs exist to confirm or refute — most importantly the ~110/180/220 h GNSS-mode battery projections.
+
 ### Definition of Done
 
 Per [decisions.md § 82](../architecture/decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end.
+
+That stays the only completion bar. The [`quality_standards.md`](quality_standards.md) bench checklist ([§ 299](../architecture/decisions.md)) is **not** an additional gate — it's how bench verification gets conducted and claimed, so an open or failed item is a recorded finding and a tier-2 input, never an un-completion. Its [what tier 1 does not have to hit](quality_standards.md#what-tier-1-does-not-have-to-hit) section names the tier-2 targets (≥ 24 hr GPS battery, 100 % outdoor fix reliability) that must not leak into tier 1.
 
 ## Tier 2 — wearable prototype (gated)
 
@@ -93,7 +97,7 @@ Everything above sequences the *hardware* build-out. This section tracks the *so
 
 **Big lever.** Most on-run-guidance and training-metric items already have a pure-logic helper in the main app (the TS↔Dart parity pairs enumerated in [`CLAUDE.md`](../../CLAUDE.md)). For those, watch parity is a *firmware port* of an already-tested algorithm — the third language-level parity surface per [`firmware.md`](firmware.md) — not a fresh design; noted `(port: <helper>)` below. Items with no helper are new firmware design work.
 
-Nothing in this section is complete; the partial exceptions (auto-pause + laps, grade-adjusted pace, HR zones + in-zone time, on-run alerts, the even-pace virtual partner, breadcrumb course following + off-course alert, TrackBack / back-to-start, selectable GNSS modes, the race-time predictor, cut-off ETA alerts, companion-app sync) are annotated on their lines and stay unticked until bench-verified. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
+Nothing in this section is complete; the partial exceptions (auto-pause + laps, grade-adjusted pace, HR zones + in-zone time, on-run alerts, the even-pace virtual partner, breadcrumb course following + off-course alert, TrackBack / back-to-start, selectable GNSS modes, the race-time predictor, cut-off ETA alerts, companion-app sync) are annotated on their lines and stay unticked until **bench-verified** — the rung defined in [`quality_standards.md`](quality_standards.md#bench-verified), which is also what forbids ticking one off a sim pass. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
 
 ### Recording & on-run guidance
 
@@ -227,4 +231,5 @@ These are real but lower-leverage. Worth tracking; not blocking.
 - **Locked decisions:** [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) (deferral + amendment), [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (firmware stack), [§ 81](../architecture/decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen) (input).
 - **Active workspace:** [`apps/custom_watch/`](../../apps/custom_watch/README.md).
 - **Strategic / spec references:** [`vision.md`](vision.md), [`competitive_landscape.md`](competitive_landscape.md), [`bom.md`](bom.md), [`prototyping.md`](prototyping.md), [`performance_path.md`](performance_path.md), [`firmware.md`](firmware.md).
-- **Active checklist:** [`parts.md`](parts.md).
+- **Quality bar + verification vocabulary:** [`quality_standards.md`](quality_standards.md) ([§ 299](../architecture/decisions.md)) — the four rungs, the tier-1 bench checklist, and the derived-not-measured register.
+- **Active checklists:** [`parts.md`](parts.md) (order / receipt), [`quality_standards.md § Tier-1 bench-verification checklist`](quality_standards.md#tier-1-bench-verification-checklist) (day-the-parts-arrive).
