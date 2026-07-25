@@ -110,6 +110,51 @@ void main() {
       expect(s2.unsyncedRoutes, isEmpty);
       expect(s2.isOfflinePinned('r-1'), isTrue);
     });
+
+    // The absent-file branch defaults every route to SYNCED so an upgrade
+    // doesn't re-push the library. An unreadable sidecar used to fail the other
+    // way — empty set means "all unsynced", so drainUnsyncedRoutes pushes the
+    // whole library and tagRoutesOwner then stamps every route as the CURRENT
+    // user. On a shared device with untagged routes that copies user A's
+    // library into user B's account.
+    for (final corrupt in const <String, String>{
+      'truncated JSON': '{"ids": ["r-1"',
+      'zero bytes': '',
+      'wrong shape': '{"ids": {"r-1": true}}',
+      'a bare list': '["r-1","r-2"]',
+      'not JSON at all': 'not json',
+    }.entries)
+      test('a ${corrupt.key} synced sidecar fails closed to presumed-synced',
+          () async {
+        final s1 = LocalRouteStore();
+        await s1.init(overrideDirectory: tempDir);
+        await s1.save(makeRoute(id: 'r-1'), markSynced: true);
+        await s1.save(makeRoute(id: 'r-2'), markSynced: true);
+
+        File('${tempDir.path}/synced_route_ids.json')
+            .writeAsStringSync(corrupt.value);
+
+        final s2 = LocalRouteStore();
+        await s2.init(overrideDirectory: tempDir);
+
+        expect(s2.routes, hasLength(2));
+        expect(s2.unsyncedRoutes, isEmpty,
+            reason: 'a damaged sidecar must not re-push + re-own the library');
+        expect(s2.unsyncedCount, 0);
+      });
+
+    test('a valid sidecar still reports genuinely unsynced routes', () async {
+      // Guards the fail-closed default from swallowing real unsynced work.
+      final s1 = LocalRouteStore();
+      await s1.init(overrideDirectory: tempDir);
+      await s1.save(makeRoute(id: 'r-synced'), markSynced: true);
+      await s1.save(makeRoute(id: 'r-pending'));
+
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+
+      expect(s2.unsyncedRoutes.map((r) => r.id), ['r-pending']);
+    });
   });
 
   group('save', () {

@@ -425,10 +425,23 @@ class LocalRouteStore extends ChangeNotifier {
         for (final id in data['ids'] as List) {
           if (id is String) _syncedIds.add(id);
         }
+        return;
       }
+      debugPrint('Synced route ids sidecar has an unexpected shape');
     } catch (e) {
       debugPrint('Failed to load synced route ids sidecar: $e');
     }
+    // Fail CLOSED to the same presumed-synced default the absent-file branch
+    // uses. An empty set means "every route is unsynced", which makes
+    // drainUnsyncedRoutes push the entire library and then tagRoutesOwner stamp
+    // every pushed route as the CURRENT user — so on a shared device whose
+    // routes are still untagged, an unreadable sidecar silently copies user A's
+    // whole route library into user B's cloud account and drops it out of A's
+    // local view. A re-push we skipped is recoverable; a cross-account transfer
+    // is not.
+    _syncedIds
+      ..clear()
+      ..addAll(_routes.map((r) => r.id));
   }
 
   Future<void> _persistSyncedIds() async {
