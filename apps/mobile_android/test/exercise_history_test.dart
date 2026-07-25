@@ -177,4 +177,13 @@ void main() {
     expect(prev!.workoutId, 'w3');
     expect(prev.topWeightKg, 100);
   });
+
+  test('a fractional-rep set keeps its fraction in the e1RM estimate', () {
+    // Pins the non-truncation contract gym_prs declares: Epley reads reps as a
+    // real number, so 5.5 must not collapse to 5 (116.7) on either twin.
+    final p = exerciseProgress([s(workoutId: 'w1', reps: 5.5, weightKg: 100)], 'Bench Press');
+    expect(p, isNotNull);
+    expect(p!.sessions[0].bestEst1RmKg, 118.3);
+    expect(p.sessions[0].volumeKg, 550);
+  });
 }

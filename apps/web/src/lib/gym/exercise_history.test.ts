@@ -180,3 +180,15 @@ test('previousExerciseSession ignores other exercises and bodyweight-only sessio
 	assert.equal(prev.workoutId, 'w3');
 	assert.equal(prev.topWeightKg, 100);
 });
+
+test('a fractional-rep set keeps its fraction in the e1RM estimate', () => {
+	// Pins the non-truncation contract gym_prs declares: Epley reads reps as a
+	// real number, so 5.5 must not collapse to 5 (116.7) on either twin.
+	const p = exerciseProgress(
+		[s({ workout_id: 'w1', reps: 5.5, weight_kg: 100 })],
+		'Bench Press',
+	);
+	assert.ok(p);
+	assert.equal(p.sessions[0].bestEst1RmKg, 118.3);
+	assert.equal(p.sessions[0].volumeKg, 550);
+});
