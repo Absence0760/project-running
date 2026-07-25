@@ -46,6 +46,8 @@
 //!   `(prev, now]` tick dispatcher that fires each timed cue (port of web
 //!   `training/guided_runs.ts`; cue/title text carried as i18n key identifiers,
 //!   the TTS speaking + `GuidedTranslate` injection are web/mobile-only)
+//! - [`hr_drain`] — the `hr` task's FIFO drain: PPG / ambient / unknown slot
+//!   demux with the ambient latch, plus the between-window wait
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
@@ -223,6 +225,7 @@ pub mod gnss_power;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;
+pub mod hr_drain;
 pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
