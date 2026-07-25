@@ -333,6 +333,74 @@ void main() {
     });
   });
 
+  group('snapshot fix provenance', () {
+    // The snapshot stream is a broadcast controller: `add` delivers on a
+    // microtask, so a synchronous inject is not visible to the listener yet.
+    Future<void> pumpStream() => Future<void>.delayed(Duration.zero);
+
+    test('positionFixedAt does not advance on a timer-only emit', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      final received = <RunSnapshot>[];
+      final sub = r.snapshots.listen(received.add);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      await pumpStream();
+      final fixedAt = received.last.positionFixedAt;
+      expect(fixedAt, isNotNull,
+          reason: 'an accepted fix must stamp its acceptance time');
+      // No further fixes — only the 1 s timer emits from here.
+      await Future.delayed(const Duration(milliseconds: 1200));
+      await sub.cancel();
+      await r.stop();
+      expect(received.last.currentPosition, isNotNull,
+          reason: 'the last fix keeps driving the blue dot');
+      expect(received.last.positionFixedAt, fixedAt,
+          reason: 'a timer-driven emit re-carries the OLD fix — its age is '
+              'what tells a consumer the sensor has gone quiet');
+    });
+
+    test('positionFixedAt is null until the first fix lands', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      final received = <RunSnapshot>[];
+      final sub = r.snapshots.listen(received.add);
+      r.begin();
+      await Future.delayed(const Duration(milliseconds: 1200));
+      await sub.cancel();
+      await r.stop();
+      expect(received, isNotEmpty);
+      expect(received.last.positionFixedAt, isNull,
+          reason: 'no fix has arrived, so there is no fix age to report — '
+              'the GPS-lost banner must stay dormant during warmup');
+    });
+
+    test('a rejected teleport is published as an untrusted position',
+        () async {
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      final received = <RunSnapshot>[];
+      final sub = r.snapshots.listen(received.add);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      await pumpStream();
+      expect(received.last.positionTrusted, isTrue);
+      // 150 m in 5 s: over the 100 m one-hop cap and under the 10 s
+      // re-anchor window — a corrupt teleport the distance chain rejects.
+      r.debugInjectPosition(makePosition(metresEast: 150, secondsFromStart: 5));
+      await pumpStream();
+      expect(r.debugTrack.length, 1,
+          reason: 'the teleport must not enter the track');
+      expect(received.last.currentPosition, isNotNull,
+          reason: 'the rejected fix still drives the blue dot');
+      expect(received.last.positionTrusted, isFalse,
+          reason: 'route progress must be able to tell it was rejected');
+      // The next good fix restores trust.
+      r.debugInjectPosition(makePosition(metresEast: 8, secondsFromStart: 7));
+      await pumpStream();
+      expect(received.last.positionTrusted, isTrue);
+      await sub.cancel();
+      await r.stop();
+    });
+  });
+
   group('pause and resume', () {
     test('pause drops incoming positions completely', () {
       final r = RunRecorder()..debugPrepareWithoutStream();

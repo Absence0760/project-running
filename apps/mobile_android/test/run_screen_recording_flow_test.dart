@@ -22,6 +22,7 @@ import '../lib/race_controller.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
+import '../lib/turn_cues.dart';
 
 /// Drives the full RunScreen UI flow: tap START → countdown → recording.
 ///
@@ -107,6 +108,44 @@ class _CapturingRunStore extends LocalRunStore {
   }
 }
 
+/// Geolocator fake whose device-level location services are OFF, so
+/// `RunRecorder.prepare` throws `LocationServiceDisabledError` — the
+/// documented indoor / permission-denied start path.
+class _ServicesOffGeolocatorPlatform extends _FakeGeolocatorPlatform {
+  @override
+  Future<bool> isLocationServiceEnabled() async => false;
+}
+
+/// Records every spectator ping the run screen decides to send. The real
+/// controller throttles internally; overriding the whole method means the
+/// test counts the screen's DECISIONS, not the network calls.
+class _SpyRaceController extends RaceController {
+  _SpyRaceController(SocialService social) : super(social);
+
+  int pings = 0;
+
+  @override
+  Future<void> pushPing({
+    required double lat,
+    required double lng,
+    double? distanceM,
+    int? elapsedS,
+    int? bpm,
+  }) async {
+    pings++;
+  }
+}
+
+/// Captures the spoken turn cues without touching the TTS engine.
+class _SpyAudioCues extends AudioCues {
+  final List<String?> turnDistances = [];
+
+  @override
+  Future<void> announceTurn(TurnDirection direction, {String? distance}) async {
+    turnDistances.add(distance);
+  }
+}
+
 class _NoOpWakelock extends WakelockPlusPlatformInterface {
   bool _on = false;
 
@@ -141,6 +180,28 @@ Position _pos({
     headingAccuracy: 5,
     speed: 2.5,
     speedAccuracy: 1,
+  );
+}
+
+/// An L-shaped route: 500 m east, then 300 m north. `generateTurnCues`
+/// emits one left turn at 500 m along — far enough that a runner at 180 m
+/// is inside the 300 m announce band and nowhere near the corner.
+cm.Route _cornerRoute() {
+  const lat = 47.37;
+  const lngBase = 8.54;
+  const metrePerDegLng = 111320 * 0.6773;
+  const metrePerDegLat = 111320.0;
+  cm.Waypoint east(double m) =>
+      cm.Waypoint(lat: lat, lng: lngBase + m / metrePerDegLng);
+  cm.Waypoint north(double m) => cm.Waypoint(
+        lat: lat + m / metrePerDegLat,
+        lng: lngBase + 500 / metrePerDegLng,
+      );
+  return cm.Route(
+    id: 'corner-route-1',
+    name: 'Corner',
+    waypoints: [east(0), east(250), east(500), north(100), north(300)],
+    distanceMetres: 800,
   );
 }
 
@@ -673,6 +734,179 @@ void main() {
       }
       tester.takeException();
     });
+
+    testWidgets(
+        'a GPS blackout raises the lost banner and stops spectator pings',
+        (tester) async {
+      final s = await makeStores();
+      final race = _SpyRaceController(s.social);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: race,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // LiveRunMap tile-fetch noise
+
+      geolocator.emit(_pos(metresEast: 0, secondsFromStart: 0));
+      await tester.pump(const Duration(milliseconds: 50));
+      geolocator.emit(_pos(metresEast: 12, secondsFromStart: 2));
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException();
+
+      expect(find.text('GPS signal lost — move to open sky'), findsNothing,
+          reason: 'fixes are flowing');
+      final pingsWhileLive = race.pings;
+      expect(pingsWhileLive, greaterThan(0),
+          reason: 'a fresh fix is broadcast to spectators');
+
+      // Fix age is measured on the wall clock — a GPS-reported timestamp
+      // can be skewed — and tester.pump does not advance it, so the
+      // blackout has to be real time. The recorder's 1 s snapshot timer is
+      // on the fake clock, so no fix lands during it: exactly the tunnel /
+      // torn-down-stream case.
+      await tester
+          .runAsync(() => Future<void>.delayed(const Duration(seconds: 11)));
+      // Now let the 1 s snapshot timer re-emit the frozen fix and the 2 s
+      // GPS-health timer read it.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 2));
+      tester.takeException();
+
+      expect(find.text('GPS signal lost — move to open sky'), findsOneWidget,
+          reason: 'the recorder re-emits the LAST fix every second, so a '
+              'non-null position must never be read as a live sensor');
+      expect(race.pings, pingsWhileLive,
+          reason: 'a spectator must not see a frozen coordinate re-pinged '
+              'as a fresh, stationary runner');
+
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
+
+    testWidgets('a rejected GPS teleport does not fire a turn cue',
+        (tester) async {
+      final s = await makeStores();
+      final cues = _SpyAudioCues();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: cues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+            initialRoute: _cornerRoute(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException();
+
+      // Run up the first leg towards the 500 m corner.
+      for (var i = 0; i < 3; i++) {
+        geolocator.emit(
+            _pos(metresEast: 150 + i * 16.0, secondsFromStart: i * 2));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+      expect(cues.turnDistances, hasLength(1),
+          reason: 'the far band announces once on the approach');
+
+      // A multipath fix 300 m up the course in 2 s: the recorder rejects it
+      // for distance, so it must not advance route progress either.
+      geolocator.emit(_pos(metresEast: 480, secondsFromStart: 6));
+      await tester.pump(const Duration(milliseconds: 50));
+      geolocator.emit(_pos(metresEast: 482, secondsFromStart: 8));
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException();
+
+      expect(cues.turnDistances, hasLength(1),
+          reason: 'a fix the distance filter rejected must not announce the '
+              'turn the runner has not reached');
+
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
+
+    testWidgets('a GPS-unavailable start reports no uncaught async error',
+        (tester) async {
+      final off = _ServicesOffGeolocatorPlatform();
+      GeolocatorPlatform.instance = off;
+      await pumpRunScreen(tester);
+
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      // prepare() rejects here, ~3 s before _begin awaits it.
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.takeException(), isNull,
+          reason: 'a future that completes with an error while it has no '
+              'listener is reported to the zone as uncaught');
+
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // LiveRunMap tile-fetch noise
+
+      expect(
+        find.text('No GPS — tracking will start when Location is on.'),
+        findsOneWidget,
+        reason: 'the indoor fallback still tells the runner why',
+      );
+
+      // Drain the 6 s notice banner before teardown.
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+      await off.dispose();
+    });
   });
 
   group('RunScreen — resume a process-killed partial', () {
@@ -775,6 +1009,38 @@ void main() {
       expect(runStore.clearInProgressCalls, greaterThanOrEqualTo(1));
       // Never entered recording — still idle.
       expect(find.text('START'), findsOneWidget);
+    });
+
+    testWidgets('Resume does not re-announce the distance already banked',
+        (tester) async {
+      final bridgeCalls = <MethodCall>[];
+      mockMethodChannel('run_app/run_notification', (call) async {
+        bridgeCalls.add(call);
+        return null;
+      });
+
+      await pumpResume(tester);
+      await tester.tap(find.text('Resume'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException();
+
+      // Let the recorder's 1 s timer land the first post-resume snapshots.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      tester.takeException();
+
+      expect(bridgeCalls.where((c) => c.method == 'update_split'), isEmpty,
+          reason: '187 km of restored distance is not a split just crossed — '
+              'the resumed run must not announce one');
+
+      // Drain the 3 s resumed banner before teardown.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
     });
 
     testWidgets('Resume continues the SAME run — hold-Finish saves partial id',

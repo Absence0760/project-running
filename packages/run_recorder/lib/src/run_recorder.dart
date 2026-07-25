@@ -177,6 +177,10 @@ class RunRecorder {
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
   /// on every fix, independent of the track-append threshold.
   Waypoint? _currentWaypoint;
+  /// Wall-clock time [_currentWaypoint] was accepted from the sensor. The
+  /// 1-second timer re-emits the same fix forever, so this — not the
+  /// snapshot's arrival — is the only honest measure of GPS liveness.
+  DateTime? _currentWaypointAt;
   /// Last position that was appended to [_track]. Used to gate the next
   /// track append + distance accumulation on real movement.
   Position? _lastTrackedPosition;
@@ -346,6 +350,7 @@ class RunRecorder {
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
+    _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
     _lastRouteCalcFor = null;
@@ -699,6 +704,7 @@ class RunRecorder {
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
+    _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
     _lastRouteCalcFor = null;
@@ -974,6 +980,7 @@ class RunRecorder {
       timestamp: pos.timestamp,
       bpm: _currentBpm,
     );
+    _currentWaypointAt = DateTime.now();
 
     // Only append to the track and accumulate distance once the run has
     // officially started (post-[begin]).
@@ -1102,6 +1109,8 @@ class RunRecorder {
       distanceMetres: _reportedDistanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: current,
+      positionFixedAt: _currentWaypointAt,
+      positionTrusted: _currentWaypointTrusted,
       track: _trackView,
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,

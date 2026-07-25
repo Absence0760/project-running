@@ -7,11 +7,22 @@ const List<double> kTurnAnnounceThresholdsM = [300, 100, 0];
 /// A single decided cue: the turn to announce plus the threshold band it was
 /// fired for (the distance ahead, or 0 for "now").
 class TurnAnnouncement {
-  const TurnAnnouncement({required this.cue, required this.thresholdM});
+  const TurnAnnouncement({
+    required this.cue,
+    required this.thresholdM,
+    required this.aheadM,
+  });
   final TurnCue cue;
 
-  /// Which announce band fired this (300 / 100 / 0). 0 = "turn now".
+  /// Which announce band fired this (300 / 100 / 0). 0 = "turn now". A slot
+  /// identifier for the once-per-band bookkeeping — NOT a distance to speak.
   final double thresholdM;
+
+  /// The runner's REAL distance ahead of the turn when this fired. This is
+  /// what a spoken cue must state: the band is a coarse trigger and can be
+  /// several times the true distance (a route whose first turn is 120 m out
+  /// used to be announced as "in 300 metres").
+  final double aheadM;
 
   /// True when this is the at-the-turn ("now") announcement.
   bool get isNow => thresholdM == 0;
@@ -46,6 +57,13 @@ class TurnCueAnnouncer {
   /// null when nothing should be said this snapshot. Marks the chosen band as
   /// fired so it won't repeat. Only the NEAREST upcoming turn is considered,
   /// so two close turns don't talk over each other.
+  ///
+  /// When the runner is inside several unfired bands at once — a route whose
+  /// first turn is 120 m from the start, or an along-route value that jumped
+  /// a band's width after a GPS gap — only the TIGHTEST of them speaks; the
+  /// looser ones are retired silently. Firing them in turn produced three
+  /// announcements in three seconds, each stating a distance the runner was
+  /// nowhere near.
   TurnAnnouncement? announcementFor(double distanceAlongRouteM) {
     for (var i = 0; i < _cues.length; i++) {
       final cue = _cues[i];
@@ -54,18 +72,22 @@ class TurnCueAnnouncer {
       if (aheadM < -_bandWindowM) continue;
       // This is the nearest still-upcoming (or just-reached) turn.
       final firedBands = _fired.putIfAbsent(i, () => <double>{});
+      double? tightest;
       for (final band in kTurnAnnounceThresholdsM) {
         if (firedBands.contains(band)) continue;
-        // Fire a band once the runner is at/inside its distance-ahead. The
-        // 0 ("now") band fires when within the window of the turn itself.
-        if (aheadM <= band + _bandWindowM) {
-          firedBands.add(band);
-          return TurnAnnouncement(cue: cue, thresholdM: band);
-        }
+        // A band applies once the runner is at/inside its distance-ahead.
+        // The 0 ("now") band applies within the window of the turn itself.
+        if (aheadM > band + _bandWindowM) continue;
+        if (tightest != null) firedBands.add(tightest);
+        tightest = band;
       }
-      // Nearest turn has no unfired band left this snapshot — stop (don't
-      // skip ahead to a farther turn).
-      return null;
+      if (tightest == null) {
+        // Nearest turn has no applicable unfired band this snapshot — stop
+        // (don't skip ahead to a farther turn).
+        return null;
+      }
+      firedBands.add(tightest);
+      return TurnAnnouncement(cue: cue, thresholdM: tightest, aheadM: aheadM);
     }
     return null;
   }

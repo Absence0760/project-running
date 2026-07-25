@@ -367,7 +367,7 @@ class _RunScreenState extends State<RunScreen> {
   /// [LiveCutoffStatus.unknown]) rather than fabricating an ETA off an old fix.
   LiveCutoffEta? _cutoffEta(_LiveStats stats, bool stale) {
     if (_cutoffLegs.isEmpty) return null;
-    final pos = stats.currentPosition;
+    final pos = stats.routePosition;
     final route = _selectedRoute;
     if (pos == null || route == null) return null;
     try {
@@ -414,6 +414,11 @@ class _RunScreenState extends State<RunScreen> {
   double? _pace;
   List<cm.Waypoint> _track = [];
   cm.Waypoint? _currentPosition;
+  // Last fix the recorder's distance chain accepted. Everything that maps a
+  // position onto the followed route (turn cues, marker-target cues, the
+  // cut-off ETA) reads this rather than the raw `_currentPosition`, which
+  // deliberately carries rejected fixes so the blue dot keeps up.
+  cm.Waypoint? _routePosition;
   int _lastTickNotified = 0;
   final ValueNotifier<_LiveStats> _statsNotifier =
       ValueNotifier(_LiveStats.empty);
@@ -589,6 +594,9 @@ class _RunScreenState extends State<RunScreen> {
   // are warmed up at the start of the countdown so begin() is instant when
   // the 3 seconds are up.
   Future<void>? _prepareFuture;
+  // Error from the in-flight [prepare], held (not swallowed) so _begin can
+  // surface the typed error object through _notifyGpsUnavailable.
+  Object? _prepareError;
 
   // Finished run
   cm.Run? _finishedRun;
@@ -1180,18 +1188,28 @@ class _RunScreenState extends State<RunScreen> {
 
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
-    // but don't accumulate into the track or distance. Errors propagate on
-    // _prepareFuture so _begin can surface them via _notifyGpsUnavailable
-    // (non-blocking snackbar) and proceed in time-only indoor mode — the
-    // recorder's retry loop self-heals once services come back.
+    // but don't accumulate into the track or distance. A failure is HELD in
+    // _prepareError, not swallowed: _begin surfaces it via
+    // _notifyGpsUnavailable (non-blocking snackbar) and proceeds in
+    // time-only indoor mode — the recorder's retry loop self-heals once
+    // services come back. The handler is attached here rather than at
+    // _begin's await three seconds later because Dart reports an error that
+    // completes on a listener-less future to the zone as uncaught, so the
+    // documented indoor-fallback path was emitting a spurious error report
+    // on every occurrence.
     final adv = widget.preferences.advancedGps;
-    _prepareFuture = _recorder!.prepare(
+    _prepareError = null;
+    _prepareFuture = _recorder!
+        .prepare(
       route: _selectedRoute,
       distanceFilterMetres: adv ? 2 : _activityType.gpsDistanceFilter,
       minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
       maxSpeedMps: _activityType.maxSpeedMps,
       accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
-    );
+    )
+        .catchError((Object e) {
+      _prepareError = e;
+    });
   }
 
   /// Subscribe to the pedometer stream. On error, wait a bit and retry —
@@ -1404,17 +1422,24 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// Whether an off-route escalation could actually reach the contact right
+  /// now: a backend to call, a run to name, and an active live broadcast so
+  /// the `/live` link the contact receives works. Checked BEFORE the
+  /// detector's sustain clock is advanced — see the call site in
+  /// [_onSnapshot].
+  bool get _offRouteEscalationDeliverable =>
+      widget.apiClient != null &&
+      _runId != null &&
+      (_liveBroadcaster?.isActive ?? false);
+
   /// Fire the off-route trusted-contact escalation once (docs/features/safety.md).
-  /// Requires an active live broadcast so the `/live` link the contact
-  /// receives actually works; the RPC re-checks every server-side gate (owner,
-  /// opt-in, confirmed contact, once-per-run). L4 — best-effort, its own catch
-  /// path; a failure must never touch the recording.
+  /// The RPC re-checks every server-side gate (owner, opt-in, confirmed
+  /// contact, once-per-run). L4 — best-effort, its own catch path; a failure
+  /// must never touch the recording.
   void _escalateOffRoute() {
     final api = widget.apiClient;
     final runId = _runId;
     if (api == null || runId == null) return;
-    // No live broadcast → the contact would get a dead link; skip.
-    if (!(_liveBroadcaster?.isActive ?? false)) return;
     _offRouteAlertFiring = true;
     unawaited(api.escalateRunOffRoute(runId).then((escalated) {
       if (escalated && mounted) {
@@ -1515,11 +1540,9 @@ class _RunScreenState extends State<RunScreen> {
     // still marked prepared and we proceed into an indoor/time-only run —
     // the stopwatch ticks, distance stays 0, and the live map shows its
     // "Waiting for GPS..." placeholder until a fix arrives (if ever).
-    try {
-      await _prepareFuture;
-    } catch (e) {
-      _notifyGpsUnavailable(e);
-    }
+    await _prepareFuture;
+    final prepareError = _prepareError;
+    if (prepareError != null) _notifyGpsUnavailable(prepareError);
 
     if (!mounted || _recorder == null) return;
 
@@ -1873,6 +1896,14 @@ class _RunScreenState extends State<RunScreen> {
     _lapCount = restoredLaps.length;
     _steps = restoredSteps;
     _everHadGpsFix = partial.track.isNotEmpty;
+    // Splits already announced before the process was killed must not
+    // re-announce on the first post-resume snapshot: a fresh State starts at
+    // tick 0, so 42 km of restored distance reads as a just-crossed split.
+    final resumeTickInterval = widget.preferences.splitIntervalMetres > 0
+        ? widget.preferences.splitIntervalMetres.toDouble()
+        : _activityType.splitIntervalMetresFor(widget.preferences.unit);
+    _lastTickNotified = UnitFormat.activityTicks(
+        _displayDistanceMetres, resumeTickInterval);
 
     _recorder = RunRecorder();
     _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
@@ -2070,13 +2101,26 @@ class _RunScreenState extends State<RunScreen> {
   void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
 
-      // Only count GPS-backed snapshots as evidence that the sensor is
-      // alive. Timer-driven snapshots without a fix (indoor run, warmup)
-      // don't mask a real GPS outage mid-run. Also latch _everHadGpsFix
-      // so we know whether to fall back to the pedometer for distance.
-      if (snapshot.currentPosition != null) {
-        _lastSnapshotAt = DateTime.now();
+      // Sensor liveness comes from the fix's own acceptance time, never
+      // from `currentPosition != null`: the recorder re-emits the LAST fix
+      // on every 1 s tick, so a non-null position outlives the sensor and
+      // a total GPS blackout would otherwise look permanently healthy.
+      // Also latch _everHadGpsFix so we know whether to fall back to the
+      // pedometer for distance.
+      final fixedAt = snapshot.positionFixedAt;
+      if (fixedAt != null) {
+        _lastSnapshotAt = fixedAt;
         if (!_everHadGpsFix) _everHadGpsFix = true;
+      }
+      final positionFresh = fixedAt != null &&
+          DateTime.now().difference(fixedAt) <= _gpsLostThreshold;
+      // Route progress must only ever advance on a fix the recorder's
+      // distance chain ACCEPTED. A rejected teleport still drives the blue
+      // dot, but feeding it to distanceAlongRoute latches every course
+      // marker it skipped over — permanently, since the announced set is
+      // never un-latched.
+      if (snapshot.currentPosition != null && snapshot.positionTrusted) {
+        _routePosition = snapshot.currentPosition;
       }
 
       // Extend the elevation-gain accumulator with any new waypoints. The
@@ -2117,6 +2161,7 @@ class _RunScreenState extends State<RunScreen> {
         pace: _pace,
         track: _track,
         currentPosition: _currentPosition,
+        routePosition: _routePosition,
         offRouteDistance: _offRouteDistance,
         routeRemaining: _routeRemaining,
       );
@@ -2155,12 +2200,12 @@ class _RunScreenState extends State<RunScreen> {
         debugPrint('workout runner snapshot failed: $e');
       }
 
-      // L4 — Live race spectator ping. Requires a real GPS fix; cadence
-      // throttled inside RaceController. Network / Supabase realtime can
-      // throw; swallow and keep going.
+      // L4 — Live race spectator ping. Requires a real, FRESH GPS fix;
+      // cadence throttled inside RaceController. Network / Supabase realtime
+      // can throw; swallow and keep going.
       try {
         final pos = snapshot.currentPosition;
-        if (pos != null) {
+        if (pos != null && positionFresh) {
           widget.raceController?.pushPing(
             lat: pos.lat,
             lng: pos.lng,
@@ -2176,9 +2221,12 @@ class _RunScreenState extends State<RunScreen> {
       // L4 — Live spectator broadcast (separate from race-mode pings).
       // Active only when the user has tapped "Share live link"; throttled
       // inside the broadcaster. Same swallow-on-fail rule as race pings.
+      // Gated on freshness so the spectator's live_freshness reads an
+      // honest "updated N min ago" during a signal blackout instead of a
+      // fresh, stationary runner re-pinged off a frozen coordinate.
       try {
         final pos = snapshot.currentPosition;
-        if (pos != null) {
+        if (pos != null && positionFresh) {
           _liveBroadcaster?.pushPing(
             lat: pos.lat,
             lng: pos.lng,
@@ -2219,7 +2267,14 @@ class _RunScreenState extends State<RunScreen> {
       // core stats above.
       try {
         final detector = _offRouteAlertDetector;
-        if (detector != null && !_offRouteAlertFiring) {
+        // Deliverability is part of the gate, not a post-hoc check: the
+        // detector fires ONCE per run, so letting the sustain clock run
+        // while the escalation cannot be delivered (no live broadcast → the
+        // contact gets a dead link) spends the latch and leaves the runner
+        // with a silently-dead safety net for the rest of the run.
+        if (detector != null &&
+            !_offRouteAlertFiring &&
+            _offRouteEscalationDeliverable) {
           final fired = detector.update(
             snapshot.offRouteDistanceMetres,
             DateTime.now().millisecondsSinceEpoch,
@@ -2236,7 +2291,7 @@ class _RunScreenState extends State<RunScreen> {
       // disturbs the recording (decisions §169).
       try {
         final announcer = _turnAnnouncer;
-        final pos = snapshot.currentPosition;
+        final pos = _routePosition;
         final route = _selectedRoute;
         if (announcer != null &&
             pos != null &&
@@ -2250,8 +2305,10 @@ class _RunScreenState extends State<RunScreen> {
           if (along != null) {
             final a = announcer.announcementFor(along);
             if (a != null) {
+              // The runner's real distance to the turn, not the band that
+              // triggered the cue — the band is a coarse trigger.
               final distanceStr =
-                  a.isNow ? null : UnitFormat.distance(a.thresholdM, unit);
+                  a.isNow ? null : UnitFormat.distance(a.aheadM, unit);
               _ttsCue(
                 'announceTurn',
                 () => widget.audioCues.announceTurn(
@@ -2426,7 +2483,7 @@ class _RunScreenState extends State<RunScreen> {
       // burst-announce every marker passed while it was off.
       try {
         final route = _selectedRoute;
-        final pos = snapshot.currentPosition;
+        final pos = _routePosition;
         if (_targetMarkers.isNotEmpty && route != null && pos != null) {
           final along = distanceAlongRoute(
             (lat: pos.lat, lng: pos.lng),
@@ -2643,8 +2700,12 @@ class _RunScreenState extends State<RunScreen> {
   void _checkGpsHealth() {
     if (_state != _ScreenState.recording) return;
     final last = _lastSnapshotAt;
-    final lost =
-        last != null && DateTime.now().difference(last) > _gpsLostThreshold;
+    // The recorder drops every fix while paused, so the fix age says
+    // nothing about the sensor — a paused runner at an aid station has not
+    // lost signal.
+    final lost = last != null &&
+        !_manualPaused &&
+        DateTime.now().difference(last) > _gpsLostThreshold;
     // Weak-GPS only matters while the signal is still live; a full GPS-lost
     // state supersedes it (and carries its own, louder banner).
     final weak = _weakGpsLatest && !lost;
@@ -3090,6 +3151,7 @@ class _RunScreenState extends State<RunScreen> {
     _recorder?.dispose();
     _recorder = null;
     _prepareFuture = null;
+    _prepareError = null;
     _stepSamples.clear();
     _lastSnapshotAt = null;
     _startRequested = false;
@@ -3130,6 +3192,7 @@ class _RunScreenState extends State<RunScreen> {
       _pace = null;
       _track = [];
       _currentPosition = null;
+      _routePosition = null;
       _lastTickNotified = 0;
       _steps = 0;
       _startSteps = 0;
@@ -4890,6 +4953,10 @@ class _LiveStats {
   final double? pace;
   final List<cm.Waypoint> track;
   final cm.Waypoint? currentPosition;
+
+  /// Last fix the recorder ACCEPTED — the only position route-relative math
+  /// may use. [currentPosition] can be a rejected teleport.
+  final cm.Waypoint? routePosition;
   final double? offRouteDistance;
   final double? routeRemaining;
 
@@ -4899,6 +4966,7 @@ class _LiveStats {
     required this.pace,
     required this.track,
     required this.currentPosition,
+    required this.routePosition,
     required this.offRouteDistance,
     required this.routeRemaining,
   });
@@ -4909,6 +4977,7 @@ class _LiveStats {
     pace: null,
     track: [],
     currentPosition: null,
+    routePosition: null,
     offRouteDistance: null,
     routeRemaining: null,
   );
