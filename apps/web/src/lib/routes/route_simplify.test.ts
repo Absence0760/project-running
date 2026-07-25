@@ -99,15 +99,63 @@ test('computeElevationGain — tracks without elevation return 0', () => {
 	assert.equal(computeElevationGain(track), 0);
 });
 
-test('computeElevationGain — null elevations are skipped', () => {
+test('computeElevationGain — a dropout carries the last reading across the gap', () => {
 	const track: LatLng[] = [
 		{ lat: 0, lng: 0, ele: 100 },
 		{ lat: 0, lng: 0.001, ele: null },
 		{ lat: 0, lng: 0.002, ele: 110 },
 	];
-	// The middle null breaks the chain — neither pair (100→null, null→110)
-	// contributes, so gain stays 0.
+	// A missing sample is a dropout, not a plateau. Breaking the chain on it
+	// erased the climb that spans the gap — on a tree-covered or tunnelled
+	// section of a long run, most of the real vert.
+	assert.equal(computeElevationGain(track), 10);
+	// Multiple consecutive dropouts behave the same.
+	assert.equal(
+		computeElevationGain([
+			{ lat: 0, lng: 0, ele: 100 },
+			{ lat: 0, lng: 0.001, ele: null },
+			{ lat: 0, lng: 0.002, ele: null },
+			{ lat: 0, lng: 0.003, ele: 130 },
+			{ lat: 0, lng: 0.004, ele: 120 },
+			{ lat: 0, lng: 0.005, ele: 125 },
+		]),
+		35,
+	);
+});
+
+test('computeElevationGain — jitter inside the noise band is not climb', () => {
+	// A 1 Hz sawtooth of ±1 m around a flat road. Summing every positive pair
+	// turned this into metres of phantom vert per minute; over a long run it
+	// integrated into thousands.
+	const track: LatLng[] = [];
+	for (let i = 0; i < 200; i++) {
+		track.push({ lat: 0, lng: i * 0.0001, ele: 100 + (i % 2) });
+	}
 	assert.equal(computeElevationGain(track), 0);
+});
+
+test('computeElevationGain — a real climb through jitter is counted in full', () => {
+	// 100 m of climb delivered in 4 m steps with ±1 m noise on top.
+	const track: LatLng[] = [];
+	for (let i = 0; i <= 25; i++) {
+		track.push({ lat: 0, lng: i * 0.0001, ele: 100 + i * 4 + (i % 2) });
+	}
+	const gain = computeElevationGain(track);
+	assert.ok(gain >= 98 && gain <= 102, `expected ~100 m, got ${gain}`);
+});
+
+test('computeElevationGain — a descent resets the reference to the valley', () => {
+	// Up 50, down 50, up 50 = 100 m of gain, not 50: the second climb must be
+	// measured from the bottom, not from the first summit.
+	assert.equal(
+		computeElevationGain([
+			{ lat: 0, lng: 0, ele: 100 },
+			{ lat: 0, lng: 0.001, ele: 150 },
+			{ lat: 0, lng: 0.002, ele: 100 },
+			{ lat: 0, lng: 0.003, ele: 150 },
+		]),
+		100,
+	);
 });
 
 test('computeElevationGain — empty / single-point track returns 0', () => {
@@ -135,15 +183,24 @@ test('summarizeRouteFromTrack: produces waypoints + distance + elevation', () =>
 		Math.abs(out.distance_m - 1000) < 10,
 		`expected ~1000 m, got ${out.distance_m}`,
 	);
-	// Monotonic gain of 0.5 m per sample × 100 samples = 50 m, but
-	// simplification keeps only endpoints + a few intermediates. The
-	// rising endpoint pair (whichever points survive) must sum to the
-	// full delta because the simplifier preserves the polyline shape
-	// from end to end, and elevation gain is computed over kept points.
-	assert.ok(
-		out.elevation_m >= 40 && out.elevation_m <= 50,
-		`expected ~50 m gain, got ${out.elevation_m}`,
-	);
+	// Monotonic gain of 0.5 m per sample × 100 samples = 50 m of real climb.
+	// Gain is taken over the RAW track, so simplification can't shrink it —
+	// but the noise gate books climb in whole 3 m steps, so the final 2 m
+	// sitting inside the band is not yet counted. 48, deterministically.
+	assert.equal(out.elevation_m, 48);
+});
+
+test('summarizeRouteFromTrack: a hill that simplifies away still reports its climb', () => {
+	// A dead-straight road over a summit. RDP measures perpendicular distance
+	// in 2-D only, so every intermediate point collapses — and computing gain
+	// over the simplified polyline reported this 50 m climb as 0.
+	const track: LatLng[] = [];
+	for (let i = 0; i <= 20; i++) {
+		track.push({ lat: 0, lng: i * 0.0001, ele: 100 + (i <= 10 ? i * 5 : (20 - i) * 5) });
+	}
+	const out = summarizeRouteFromTrack(track, 10);
+	assert.equal(out.waypoints.length, 2, 'a straight line collapses to its endpoints');
+	assert.equal(out.elevation_m, 50);
 });
 
 test('summarizeRouteFromTrack: passes ele through when present, drops when absent', () => {

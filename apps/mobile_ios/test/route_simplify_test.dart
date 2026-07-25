@@ -121,5 +121,71 @@ void main() {
       ];
       expect(computeElevationGain(track), 35);
     });
+
+    test('jitter inside the noise band is not climb', () {
+      // A 1 Hz sawtooth of ±1 m around a flat road. Summing every positive
+      // pair turned this into metres of phantom vert per minute; over a long
+      // run it integrated into thousands.
+      final track = [
+        for (var i = 0; i < 200; i++)
+          wp(0, i * 0.0001, ele: 100 + (i % 2).toDouble()),
+      ];
+      expect(computeElevationGain(track), 0);
+    });
+
+    test('a real climb through jitter is counted in full', () {
+      // 100 m of climb delivered in 4 m steps with ±1 m noise on top.
+      final track = [
+        for (var i = 0; i <= 25; i++)
+          wp(0, i * 0.0001, ele: 100 + i * 4 + (i % 2).toDouble()),
+      ];
+      expect(computeElevationGain(track), inInclusiveRange(98, 102));
+    });
+
+    test('a descent resets the reference to the valley', () {
+      // Up 50, down 50, up 50 = 100 m of gain, not 50: the second climb must
+      // be measured from the bottom, not from the first summit.
+      final track = [
+        wp(0, 0, ele: 100),
+        wp(0, 0.001, ele: 150),
+        wp(0, 0.002, ele: 100),
+        wp(0, 0.003, ele: 150),
+      ];
+      expect(computeElevationGain(track), 100);
+    });
+
+    test('loss mirrors gain — same gate, same dropout carry', () {
+      // The run-detail screen shows the two side by side, so they must be
+      // graded the same way: a flat road reading 0 m of climb next to
+      // hundreds of metres of descent would read as a bug.
+      final jitter = [
+        for (var i = 0; i < 200; i++)
+          wp(0, i * 0.0001, ele: 100 + (i % 2).toDouble()),
+      ];
+      expect(computeElevationLoss(jitter), 0);
+
+      final hill = [
+        wp(0, 0, ele: 100),
+        wp(0, 0.001, ele: 150),
+        wp(0, 0.002), // dropout
+        wp(0, 0.003, ele: 100),
+      ];
+      expect(computeElevationGain(hill), 50);
+      expect(computeElevationLoss(hill), 50);
+    });
+
+    test('a save-as-route hill that simplifies away keeps its climb', () {
+      // The mobile save-as-route path calls simplifyTrack and
+      // computeElevationGain separately, and the gain call must take the RAW
+      // track: RDP works in 2-D, so a dead-straight road over a summit
+      // collapses to its endpoints and grading the simplified line reads 0.
+      final track = [
+        for (var i = 0; i <= 20; i++)
+          wp(0, i * 0.0001,
+              ele: 100 + (i <= 10 ? i * 5 : (20 - i) * 5).toDouble()),
+      ];
+      expect(simplifyTrack(track, epsilonMetres: 10).length, 2);
+      expect(computeElevationGain(track), 50);
+    });
   });
 }

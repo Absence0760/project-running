@@ -1496,30 +1496,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return _cachedElevationGain ??= _computeElevationGain();
   }
 
-  double _computeElevationGain() {
-    double gain = 0;
-    for (int i = 1; i < run.track.length; i++) {
-      final prev = run.track[i - 1].elevationMetres;
-      final curr = run.track[i].elevationMetres;
-      if (prev != null && curr != null && curr > prev) gain += curr - prev;
-    }
-    return gain;
-  }
+  // The shared helper, not a third copy of the arithmetic: it carries the last
+  // reading across an altitude dropout and gates on the noise band, so the
+  // number here matches what save-as-route writes and what web reports.
+  double _computeElevationGain() => computeElevationGain(run.track);
 
   double get _elevationLoss {
     _resetStatsCacheIfStale();
     return _cachedElevationLoss ??= _computeElevationLoss();
   }
 
-  double _computeElevationLoss() {
-    double loss = 0;
-    for (int i = 1; i < run.track.length; i++) {
-      final prev = run.track[i - 1].elevationMetres;
-      final curr = run.track[i].elevationMetres;
-      if (prev != null && curr != null && curr < prev) loss += prev - curr;
-    }
-    return loss;
-  }
+  // The shared helper, gated the same way as the gain shown beside it.
+  double _computeElevationLoss() => computeElevationLoss(run.track);
 
   // Calorie estimate routes through the shared pure helper in
   // `lib/calories.dart` (mirrored byte-for-byte to web's

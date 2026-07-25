@@ -4122,3 +4122,19 @@ The match identity is now `stepIndex`: the ref's ordinal position in the expande
 Two alternatives were rejected. **Consume-in-order matching** (each planned ref takes the first unclaimed actual with its key) needs no new field, but it mis-pairs the moment a set is skipped — and a skipped set is precisely what adherence exists to measure. **Renumbering `setIndex` to be routine-global** would fix the key but overload a field whose per-block meaning the editor, the DB rows, and the display all depend on.
 
 Test factories on both sides default `stepIndex` to `setIndex`, which is exactly true for the single-block routines every pre-existing case uses — so the 24 existing cases are unchanged and the new two-block case passes the ordinal explicitly.
+
+---
+
+## 305. Elevation gain is one contract: the raw track, a 3 m noise gate, and a dropout that carries rather than breaks
+
+**Decided (2026-07-25).** `computeElevationGain` existed three times with three behaviours, and each suite pinned its own.
+
+- **Null handling diverged across the twin.** Dart carried the last valid reading across an altitude dropout (its doc comment declared this intentional); TS required both members of a pair to be non-null, so any dropout broke the chain. For `ele = [100, null, null, 130, 120, 125]` Dart returned 35 and TS returned 5 — and `route_simplify.test.ts` asserted the TS value with a comment enshrining it, so both suites passed side by side forever while both files' doc comments claimed they were kept in sync.
+- **The input diverged too.** Web's `summarizeRouteFromTrack` measured gain over the **2-D-simplified** polyline. RDP ignores elevation, so a dead-straight road over a summit collapses to its endpoints and 50 m of real climb saved as 0. Mobile measured over the **raw** track with no hysteresis, so a ±5 m sawtooth at 1 Hz wrote thousands of metres of phantom vert.
+- **A third inline copy** lived in `run_detail_screen`, with the adjacent-pair null rule Dart's own helper had already rejected.
+
+One contract now, on both platforms: **gain is taken over the raw track**, a missing sample is a dropout that carries the last reading rather than a plateau that breaks the chain, and a change only counts once it clears a 3 m band in either direction (`ELEVATION_GAIN_MIN_DELTA_M` / `kElevationGainMinDeltaM`). The gate is a hysteresis reference, not a per-sample filter, so a long shallow climb is still counted in full while sample-to-sample jitter contributes nothing; the cost is that up to 3 m of a climb's final partial step is unbooked, which the tests pin explicitly rather than hide behind a tolerance.
+
+`computeElevationLoss` moved into the same module with the same gate. It is mobile-only, but it had to move: run-detail shows loss directly beside gain, and grading one through the noise band while summing the other raw would make a flat road report 0 m of climb next to hundreds of metres of descent — a fix that reads as a bug.
+
+`route_simplify` is now a declared parity pair in `CLAUDE.md` and in the `shared-library-syncer` agent, which is what the two doc comments had been asserting without enforcement. The pair's scope is `simplifyTrack` + `computeElevationGain` + the constant; `summarizeRouteFromTrack` stays web-only and `computeElevationLoss` mobile-only.

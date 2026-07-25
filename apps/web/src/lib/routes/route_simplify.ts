@@ -88,17 +88,51 @@ function perpDistanceMetres(p: LatLng, a: LatLng, b: LatLng): number {
 }
 
 /**
- * Total positive elevation change across the polyline, in metres.
- * Waypoints without elevation readings are skipped. Mirrors the Dart
- * `computeElevationGain` in `route_simplify.dart`.
+ * Smallest elevation move that counts as real climb, in metres. Consumer GPS
+ * altitude is noisy at the 1-3 m level sample to sample, and a raw 1 Hz sum
+ * over a long run integrates that jitter into thousands of metres of vert that
+ * never happened. The reference height only moves once a change clears this
+ * band in either direction, so noise inside it contributes nothing while a
+ * genuine climb is counted in full.
+ */
+export const ELEVATION_GAIN_MIN_DELTA_M = 3;
+
+/**
+ * Total positive elevation change across the polyline, in metres, over the
+ * RAW track — never a simplified one. Twin of the Dart `computeElevationGain`
+ * in `apps/mobile_android/lib/route_simplify.dart`; keep in lockstep.
+ *
+ * Two rules, both load-bearing:
+ *
+ * 1. A waypoint with no elevation is skipped and the last valid reading is
+ *    carried across the gap, so an intermittent dropout (tree cover, a tunnel,
+ *    satellite reacquisition on a long ultra) doesn't silently erase the climb
+ *    that spans the missing samples.
+ * 2. A change only counts once it clears [ELEVATION_GAIN_MIN_DELTA_M].
+ *
+ * Callers must pass the raw track. Running this over an RDP-simplified
+ * polyline reads a hill as flat: RDP measures perpendicular distance in 2-D
+ * only, so a straight road over a summit collapses to its endpoints and the
+ * climb between them disappears.
  */
 export function computeElevationGain(track: LatLng[]): number {
 	let gain = 0;
-	for (let i = 1; i < track.length; i++) {
-		const prev = track[i - 1].ele;
-		const curr = track[i].ele;
-		if (prev != null && curr != null && curr > prev) {
-			gain += curr - prev;
+	let ref: number | null = null;
+	for (const p of track) {
+		const ele = p.ele;
+		if (ele == null) continue;
+		if (ref == null) {
+			ref = ele;
+			continue;
+		}
+		const delta = ele - ref;
+		if (delta >= ELEVATION_GAIN_MIN_DELTA_M) {
+			gain += delta;
+			ref = ele;
+		} else if (delta <= -ELEVATION_GAIN_MIN_DELTA_M) {
+			// A real descent — move the reference down so the next climb is
+			// measured from the valley, not from the previous summit.
+			ref = ele;
 		}
 	}
 	return gain;
@@ -109,7 +143,7 @@ export interface RouteSummary {
 	waypoints: LatLng[];
 	/** Equirectangular distance summed over the simplified polyline. */
 	distance_m: number;
-	/** Positive elevation change over the simplified polyline. */
+	/** Positive elevation change over the RAW track — see computeElevationGain. */
 	elevation_m: number;
 }
 
@@ -146,6 +180,9 @@ export function summarizeRouteFromTrack(
 	return {
 		waypoints,
 		distance_m: distance,
-		elevation_m: computeElevationGain(simplified),
+		// Gain comes off the RAW track. Measuring it over `simplified` read a
+		// hill as flat — RDP works in 2-D, so a straight road over a summit
+		// collapses to its endpoints and the climb between them vanished.
+		elevation_m: computeElevationGain(track),
 	};
 }
