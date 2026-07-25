@@ -179,15 +179,28 @@ List<RunSplit> computeSplitDurations(
     final segDist = haversineMetres(a.lat, a.lng, b.lat, b.lng);
     cumulative += segDist;
     final aTime = a.timestamp;
-    final bTime = b.timestamp ?? startedAt;
+    // Fall back to the segment's own start, never to the run start. A GPX
+    // import can leave a mid-track point untimestamped (route_parser sets
+    // timestamp: null when a <trkpt> has no <time>), and substituting
+    // startedAt there made bTime.difference(aTime) hugely NEGATIVE — the
+    // interpolated crossing landed before tickStart, so that split reported a
+    // negative duration and, because tickStart is then advanced to it, every
+    // later split was garbage too.
+    final bTime = b.timestamp ?? aTime ?? startedAt;
 
     while (segDist > 0 && cumulative >= nextTick * tickLengthM) {
       final boundaryDist = nextTick * tickLengthM;
       final f = (boundaryDist - segStart) / segDist;
-      final crossTime = aTime != null
+      final interpolated = aTime != null
           ? aTime.add(Duration(
               milliseconds: (bTime.difference(aTime).inMilliseconds * f).round()))
           : bTime;
+      // Crossing times are monotonic by construction: a split can be 0:00 but
+      // never negative. Also absorbs a genuinely backwards timestamp, which
+      // Android produces when it batches queued fixes or after an NTP
+      // correction.
+      final crossTime =
+          interpolated.isBefore(tickStart) ? tickStart : interpolated;
       splits.add(RunSplit(nextTick, crossTime.difference(tickStart)));
       tickStart = crossTime;
       nextTick++;
