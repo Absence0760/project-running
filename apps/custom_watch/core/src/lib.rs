@@ -84,6 +84,10 @@
 //!   write range it implies, where a chunk request reads from, and the boot
 //!   recovery scan over a [`flash_plan::SlotReader`] (the pure decisions the
 //!   `app/src/run_flash.rs` driver wraps around [`flash_store`])
+//! - [`ble_sync`] — `run_manifest` value framing, the `run_chunk` notify bound,
+//!   and the `course` write's offset header (the pure half of the GATT
+//!   characteristics `app/src/tasks/ble.rs` serves, which the Renode sim cannot
+//!   exercise at all)
 //! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
 //!   estimate (port of web `training/training_load.ts`)
 //! - [`age_grade`] — age-graded performance % for a standard-distance effort
@@ -197,6 +201,7 @@ pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
 pub mod battery;
+pub mod ble_sync;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
