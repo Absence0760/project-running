@@ -259,6 +259,37 @@ The `ble` and sim feature sets are gated because the default-only job let them r
 
 All of those run on a stock Ubuntu CI runner with no hardware, with Cargo registry + `target/` cached across PRs via `actions/cache` keyed on the `Cargo.toml` + `rust-toolchain.toml` hashes (uncached cold builds are ~3-5 min; cached re-runs are seconds). On-target tests stay manual / local until tier 2+ where we'd connect a HIL (hardware-in-the-loop) rig to a self-hosted runner.
 
+### The Renode sim in CI
+
+`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); a second job, **`sim-firmware`** ("Simulate custom_watch firmware (Renode)"), defends **sim-verified**. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
+
+```
+# on ubuntu-latest, timeout-minutes: 25
+curl … renode-1.16.1.linux-portable-dotnet.tar.gz   # sha256-pinned
+cargo install defmt-print --locked --version '^1.1' # cached between runs
+DEFMT_LOG=debug cargo build --release --bin app \
+  --features sim-autostart,sim-buttons,sim-course,dev-blink
+python3 apps/custom_watch/sim/ci_smoke.py           # boot + assert
+```
+
+`sim/ci_smoke.py` is the harness — runnable locally too (it needs `renode` + `defmt-print` on PATH, so a Linux dev box, not a Mac). It drives `watch-sim.sh` on the `bench_jog` fixture and fails with a named expectation if any of these doesn't happen:
+
+| Assertion | Log / artifact it waits on |
+|---|---|
+| flash run store arms at boot | `run_flash: run store armed at 0x…` |
+| the canned NMEA parses into a fix with ≥ 4 satellites | `gps: fix lat=… sats=N` |
+| that first fix starts a recording | `record: sim-autostart on first fix` |
+| distance accumulates past 20 m | `record: recording dist=<m>` (DEBUG — hence `DEFMT_LOG=debug`) |
+| the run face renders on the panel | monitor `DumpFrame` → a PPM with ≥ 200 dark **and** ≥ 200 light pixels (all-light = nothing drawn, all-dark = a broken decode) |
+| two BTN2 presses stop the run and commit it | `button: BTN2 armed` then `run_flash: stored run N (M B) in slot S`, M > 0 |
+| nothing panicked | no `panicked` line in the decoded stream |
+
+Every wait is on a specific log line with a per-assertion deadline rather than a fixed sleep, and the fixture + sensor models are virtual-time driven with no randomness (see [`sim/verification-2026-07-19/README.md`](sim/verification-2026-07-19/README.md)), so the run replays identically. The one exception is the ~1.5 s gap between the two BTN2 presses, which has to land inside the firmware's 4 s stop-confirm window and so can't wait on the "armed" line; a missed injected press is retried up to three times. On failure the job uploads the decoded stream, `renode.log`, the raw defmt capture, the monitor transcript, and the panel dump as the `custom-watch-sim-logs` artifact.
+
+**What this job does not prove.** It is a smoke test of the *pipeline*, not evidence about silicon. BLE / the S140 SoftDevice cannot run under Renode at all; power draw is not modelled in any form; the sensor models answer what the drivers *believe* about the parts (register maps, retention-across-shutdown, contact/AGC constants are all pinned to the driver, not to a datasheet), and the waveforms are clean synthetic shapes, not analog behaviour. A green `sim-firmware` means the firmware is self-consistent end to end under the emulator — the bench-verify list in `sim/verification-2026-07-19/README.md § Model limitations` is untouched by it.
+
+**Not in the `CI gate` aggregator yet.** The job is deliberately absent from `ci-gate`'s `needs:` list, so it reports but does not block merges. Promoting it is a follow-up once it has been observed green on a few real runs — Renode is not installable on every contributor machine, so its first hosted-runner execution is its first execution.
+
 ## Common errors
 
 **"No debug probes found"** — the board isn't plugged in, the USB cable is power-only (try a different cable), udev rules aren't installed (Linux), or the J-Link firmware on the DK has wedged. For the last one, power-cycle the board while holding the reset button — that triggers the [J-Link On-Board recovery procedure](https://www.segger.com/products/debug-probes/j-link/).
