@@ -17,5 +17,11 @@ defmt   = ["dep:defmt", "ublox_nmea/defmt"]
 # Host-testable, so no embedded dev-deps. `cargo test --target <host>` works.
 # serde_json only compiles into host test builds — link.rs uses it to prove
 # every emitted frame is real JSON, not to produce frames.
+#
+# proptest backs the wire-format property suites under `tests/`. `default-
+# features = false` drops its fork / rusty-fork / tempfile / regex machinery:
+# the suites use none of it, and the fork harness would spawn a process per
+# failing case in CI.
 [dev-dependencies]
 serde_json = "1"
+proptest = { version = "1.11", default-features = false, features = ["std"] }
