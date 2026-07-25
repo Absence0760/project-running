@@ -18,6 +18,7 @@ import '../plan_adherence.dart';
 import '../plan_progress.dart';
 import '../plan_replan.dart';
 import '../plan_adaptive_replan.dart';
+import '../plan_week.dart';
 import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
@@ -193,12 +194,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 
   int _currentWeekIndex(TrainingPlanRow plan) {
-    // Dart's clamp throws when the range is empty, unlike the web twin's
-    // Math.min — so a plan whose weeks failed to load (or never landed) would
-    // take the whole screen down rather than render an empty one.
+    // A plan whose weeks failed to load (or never landed) has no valid index:
+    // the shared helper would return -1 here, as the web twin's Math.min does,
+    // and the screen renders empty rather than indexing off the end.
     if (_weeks.isEmpty) return 0;
-    final dayIndex = DateTime.now().difference(plan.startDate).inDays;
-    return dayIndex < 0 ? 0 : (dayIndex ~/ 7).clamp(0, _weeks.length - 1);
+    return currentPlanWeekIndex(
+      toIsoDate(plan.startDate),
+      toIsoDate(DateTime.now()),
+      _weeks.length,
+    );
   }
 
   /// Summed actual run mileage dated inside `[weekIndex]`'s 7-day window.
@@ -289,7 +293,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final todayD = DateTime.now();
     return _weeks.map((w) {
       final weekStart = addDays(plan.startDate, w.weekIndex * 7);
-      final weekEnd = weekStart.add(const Duration(days: 7));
+      final weekEnd = addDays(weekStart, 7);
       return ReplanWeek(
         weekIndex: w.weekIndex,
         phase: w.phase,
