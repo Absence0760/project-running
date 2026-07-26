@@ -286,15 +286,15 @@ impl RunStore {
     }
 
     /// Persist a finished run's staged blob. Best-effort: any failure warns,
-    /// forgets the slot so the manifest can't advertise a half-written run, and
+    /// drops the slot so the manifest can't advertise a half-written run, and
     /// returns — the caller ignores the outcome (L4).
     pub async fn commit(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
         if !self.available {
             return;
         }
         // The plan takes the slot NOT holding this run's freshest checkpoint, so
-        // a torn commit leaves that checkpoint recoverable at the next boot; the
-        // superseded slot is released from the directory on the way.
+        // a torn commit leaves that checkpoint recoverable — and the directory
+        // keeps claiming that checkpoint until these bytes are actually down.
         let Some(plan) = flash_plan::plan_slot_write(
             &mut self.dir,
             REGION_OFFSET,
@@ -311,14 +311,15 @@ impl RunStore {
         };
         if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!("run_flash: erase slot {=usize} failed {:?}", plan.slot, e);
-            self.dir.forget(plan.slot);
+            self.dir.commit_failed(plan.slot);
             return;
         }
         if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!("run_flash: write run {=u32} failed {:?}", run_seq, e);
-            self.dir.forget(plan.slot);
+            self.dir.commit_failed(plan.slot);
             return;
         }
+        self.dir.commit_written(plan.slot);
         info!(
             "run_flash: stored run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,

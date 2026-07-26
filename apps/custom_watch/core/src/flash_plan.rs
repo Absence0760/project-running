@@ -42,9 +42,14 @@ pub struct SlotWrite {
 ///
 /// The target is the slot NOT holding the run's freshest mid-run checkpoint (see
 /// [`plan_checkpoint_write`]), so a torn commit leaves that checkpoint's bytes
-/// intact for the next boot's scan to recover. The run's superseded slot is
-/// released from the directory — its bytes stay put, unerased, precisely so the
-/// torn-commit case still has something to recover.
+/// intact for the next boot's scan to recover.
+///
+/// **Reserving is not committing.** The superseded checkpoint keeps its directory
+/// entry until the caller confirms the write landed with
+/// [`SlotDir::commit_written`]; a write that failed calls
+/// [`SlotDir::commit_failed`], which hands the run back to that checkpoint. Until
+/// the new bytes are durable the checkpoint is the run's only copy, so the
+/// directory must not stop claiming it.
 ///
 /// `None` when the blob is larger than one slot: the run is dropped whole rather
 /// than truncated into a slot, and the directory is left untouched so an
@@ -388,6 +393,7 @@ mod tests {
             committed.erase_from, third.erase_from,
             "the commit must not erase the freshest checkpoint either"
         );
+        dir.commit_written(committed.slot);
         assert_eq!(dir.run_count(), 1, "the checkpoint slot is released");
         assert_eq!(dir.find(7), Some((committed.slot, 900)));
     }
@@ -912,6 +918,12 @@ mod tests {
         let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
         flash.erase(plan.erase_from, plan.erase_to);
         flash.write(plan.erase_from, &final_blob[..64]);
+        dir.commit_failed(plan.slot);
+
+        // The LIVE directory already falls back — the superseded checkpoint's
+        // entry outlived the write, so the run is servable without a reboot.
+        let (live, _) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(&live[..], &a_checkpoint(7, 41, 20, 200)[..]);
 
         let dir = recover_dir(&mut flash);
         assert_eq!(dir.run_count(), 1);
@@ -922,6 +934,35 @@ mod tests {
             "the newest checkpoint the commit deliberately did not erase"
         );
         assert!(verify_blob(&pulled));
+    }
+
+    #[test]
+    fn a_failed_commit_serves_the_surviving_checkpoint_without_waiting_for_a_reboot() {
+        // Seal-then-drop, end to end over the flash model: the commit's erase
+        // blanks its own page and then the write never happens, so the run's only
+        // bytes are the checkpoint's. Because the superseded entry outlived the
+        // write, the live directory already resolves the run to those bytes —
+        // byte-identically to what the next boot's scan would rebuild.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        let ckpt = a_checkpoint(7, 41, 20, 200);
+        let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, ckpt.len()).expect("fits");
+        flash.apply(plan, &ckpt);
+
+        let final_blob = a_blob(7, 41, 40);
+        let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
+        flash.erase(plan.erase_from, plan.erase_to);
+        dir.commit_failed(plan.slot);
+
+        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(
+            &pulled[..],
+            &ckpt[..],
+            "the checkpoint is served in its place"
+        );
+        assert!(verify_blob(&pulled));
+        assert!(chunk_completes_run(&dir, 7, cursor));
+        assert_eq!(recover_dir(&mut flash).find(7), dir.find(7));
     }
 
     #[test]
@@ -941,6 +982,7 @@ mod tests {
         let final_blob = a_blob(7, 41, 10);
         let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
         flash.apply(plan, &final_blob);
+        dir.commit_written(plan.slot);
         assert!(
             final_blob.len() < blob_len(20) as usize,
             "shorter than a checkpoint"
@@ -994,6 +1036,7 @@ mod tests {
         let final_blob = a_blob(7, 41, 40);
         let plan = plan_slot_write(&mut dir, BASE, 7, 41, final_blob.len()).expect("fits");
         flash.apply(plan, &final_blob);
+        dir.commit_written(plan.slot);
         assert_eq!(dir.manifest_at(1_000).len(), 2, "now the run appears, once");
         let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
         assert_eq!(&pulled[..], &final_blob[..]);
