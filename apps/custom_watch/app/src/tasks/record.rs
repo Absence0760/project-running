@@ -258,7 +258,6 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
-    let mut settings_rx = unwrap!(state::SETTINGS.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -380,10 +379,12 @@ pub async fn run(store: &'static SharedStore) {
             });
         }
 
-        // A pushed settings frame (from the ble task; the sim seeds one above)
-        // applies each present field to the recorder + alert engine. Config, not
-        // run data — L4, applied before the event mutates run totals.
-        if let Some(Some(s)) = settings_rx.try_changed() {
+        // Pushed settings frames (from the ble task; the sim seeds one above)
+        // apply each present field to the recorder + alert engine. Config, not
+        // run data — L4, applied before the event mutates run totals. Every
+        // queued frame is drained in arrival order: each is a delta, so applying
+        // only the newest would silently drop whatever an earlier push carried.
+        while let Ok(s) = state::SETTINGS.try_receive() {
             apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
         }
 

@@ -54,14 +54,13 @@ pub async fn run(mut tx: UarteTx<'static>) {
 
 const FRAME_GAP: Duration = Duration::from_millis(FRAME_GAP_MS);
 
-/// Decode settings frames off the phone link's receive side and publish them
-/// to `state::SETTINGS` — the same seam the BLE settings characteristic feeds,
+/// Decode settings frames off the phone link's receive side and queue them on
+/// `state::SETTINGS` — the same seam the BLE settings characteristic feeds,
 /// so a sim push exercises the real `apply_settings` path. Every framing
 /// decision lives in [`watch_core::settings_frame`]; this drives it, waiting
 /// for the next byte with no gap timer armed while no frame is open.
 #[embassy_executor::task]
 pub async fn settings_rx(mut rx: UarteRx<'static>) {
-    let sender = state::SETTINGS.sender();
     let mut framer = SettingsFramer::new();
     info!("phone: settings frames accepted on UARTE1 rx");
     loop {
@@ -86,7 +85,9 @@ pub async fn settings_rx(mut rx: UarteRx<'static>) {
                 }
                 SettingsPush::Applied { settings, len } => {
                     info!("phone: settings frame applied ({=usize} bytes)", len);
-                    sender.send(Some(settings));
+                    if state::SETTINGS.try_send(settings).is_err() {
+                        warn!("phone: settings queue full, push refused");
+                    }
                 }
             },
         }

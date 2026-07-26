@@ -111,6 +111,9 @@
 //! - [`settings_apply`] — the fan-out that frame drives: each present field
 //!   routed to its sink as one typed effect, exhaustive by construction so a
 //!   newly-added field cannot be silently dropped
+//! - [`settings_queue`] — the depth of the frame queue between that decode and
+//!   that fan-out, and why a delta-carrying frame may never be coalesced into a
+//!   latest-value slot
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
 //! - [`flash_plan`] — which slot a commit / checkpoint lands in and the erase +
 //!   write range it implies, where a chunk request reads from, and the boot
@@ -303,6 +306,7 @@ pub mod segments;
 pub mod settings;
 pub mod settings_apply;
 pub mod settings_frame;
+pub mod settings_queue;
 pub mod statusbar;
 pub mod streaks;
 pub mod track_projection;

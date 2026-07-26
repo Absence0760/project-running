@@ -18,6 +18,7 @@ use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
 use watch_core::settings::WatchSettings;
+use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
 
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
@@ -129,11 +130,17 @@ pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling / QNH /
 /// fuel cadences / page curation / timezone offset): the `ble` task decodes a
 /// phone characteristic write (the sim decodes the same frames off the
-/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and
-/// publishes; the `record` task applies each present field to the recorder +
-/// alert engine through their settings-sync setters. `None` means nothing
-/// pushed yet. One receiver (the `record` task).
-pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
+/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and sends;
+/// the `record` task drains every queued frame and applies each present field
+/// to the recorder + alert engine through their settings-sync setters.
+///
+/// A queue rather than a latest-value slot because each frame is a *delta* —
+/// an absent field means "leave it alone", so two frames arriving between two
+/// record-task wakes must both be applied, and coalescing them would drop the
+/// earlier push's fields entirely. Depth + reasoning in
+/// `watch_core::settings_queue`.
+pub static SETTINGS: Channel<CriticalSectionRawMutex, WatchSettings, SETTINGS_QUEUE_DEPTH> =
+    Channel::new();
 
 /// Latest battery percent estimate. `None` means no plausible reading — an
 /// absent battery, a bench/USB regulator rail, or a mid-stream reading that
