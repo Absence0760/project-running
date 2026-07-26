@@ -15,7 +15,9 @@
 //! minutes ago. Every outcome is explicit — a refusal is reported, never a
 //! silent no-op, so the face's transient banner can always say what happened.
 
-use crate::elevation::{rezero_reference, RezeroStatus, VertAccumulator, REZERO_MAX_FIX_AGE_S};
+use crate::elevation::{
+    rezero_reference, Reading, RezeroStatus, VertAccumulator, REZERO_MAX_FIX_AGE_S,
+};
 use crate::fix::Fix;
 
 /// The most recent barometric altitude and the uptime it was sampled at — what
@@ -60,9 +62,26 @@ pub fn rezero(
     }
 }
 
+/// The elevation reading a resolved re-zero owes its consumers, or `None` when
+/// nothing was applied.
+///
+/// An [`RezeroStatus::Applied`] snap always yields one, deliberately bypassing
+/// [`crate::elevation::should_publish`]: the runner asked for this and the
+/// face's banner announces it, so the ALT row must move with the banner even
+/// when the snap lands inside the gate's quantum — a snap against a barometer
+/// that was already nearly right would otherwise say `SET 1610M` over an
+/// unchanged row.
+pub fn published_reading(vert: &VertAccumulator, status: RezeroStatus) -> Option<Reading> {
+    match status {
+        RezeroStatus::Applied(snapped) => Some(vert.reading(snapped)),
+        RezeroStatus::NoGps | RezeroStatus::NoBaro => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elevation::should_publish;
 
     fn fix_at(alt_m: Option<f32>, uptime_s: u32) -> Fix {
         Fix {
@@ -167,6 +186,39 @@ mod tests {
                 RezeroStatus::NoGps
             );
         }
+    }
+
+    #[test]
+    fn a_refusal_publishes_nothing() {
+        let vert = VertAccumulator::new();
+        assert_eq!(published_reading(&vert, RezeroStatus::NoBaro), None);
+        assert_eq!(published_reading(&vert, RezeroStatus::NoGps), None);
+    }
+
+    #[test]
+    fn an_applied_snap_publishes_even_when_the_gate_would_suppress_it() {
+        // The barometer was already within the publication gate's quantum of
+        // GPS, so `should_publish` sees no news — but the runner pressed the
+        // button and the banner will say SET, so the reading goes out anyway.
+        let mut vert = VertAccumulator::new();
+        let raw = vert.push(1_000.0, true, None);
+        let before = vert.reading(raw);
+        let sample = BaroSample {
+            alt_m: 1_000.0,
+            at_s: 100,
+        };
+        let status = rezero(
+            &mut vert,
+            Some(sample),
+            Some(&fix_at(Some(1_000.4), 100)),
+            100,
+        );
+        assert_eq!(status, RezeroStatus::Applied(1_000.4));
+        let after = published_reading(&vert, status).expect("an applied snap publishes");
+        assert!(
+            !should_publish(Some(before), after),
+            "pick a snap the gate really would have suppressed"
+        );
     }
 
     #[test]

@@ -16,6 +16,15 @@
 //! and the two distinct refusals — is the host-tested
 //! `watch_core::baro_rezero::rezero`. The outcome is published to
 //! `state::QNH_REZERO` for the face's transient banner.
+//!
+//! Publication is **gated on a change worth waking for**
+//! (`watch_core::elevation::should_publish`). `Watch::send` wakes every
+//! receiver whatever the value, and the screen task waits on this watch, so
+//! sending each 1 Hz sample made a present barometer re-render the face every
+//! second forever — the free-running waker the README's power discipline rules
+//! out. A manual re-zero snap is the one publication that bypasses the gate
+//! (`baro_rezero::published_reading`), so the ALT row always moves with the
+//! banner announcing it.
 
 use bmp581::{Bmp581, I2C_ADDR};
 use defmt::*;
@@ -24,7 +33,9 @@ use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Instant, Ticker};
 use embedded_hal::i2c::Operation;
 use watch_core::baro_rezero::{self, BaroSample};
-use watch_core::elevation::{altitude_m, RezeroStatus, VertAccumulator, STANDARD_SEA_LEVEL_PA};
+use watch_core::elevation::{
+    altitude_m, should_publish, Reading, RezeroStatus, VertAccumulator, STANDARD_SEA_LEVEL_PA,
+};
 use watch_core::fix::Fix;
 
 use crate::state;
@@ -82,6 +93,7 @@ pub async fn run(mut twim: Twim<'static>) {
     // supply alone.
     let mut last_fix: Option<Fix> = None;
     let mut last_alt: Option<BaroSample> = None;
+    let mut published: Option<Reading> = None;
     // QNH reference for the altitude conversion. Defaults to the ISA standard
     // until a phone settings push recalibrates it (state::SEA_LEVEL_PA) — the
     // weather-front case where the fixed standard drifts the whole altitude.
@@ -100,10 +112,9 @@ pub async fn run(mut twim: Twim<'static>) {
             }
             let now_s = Instant::now().as_secs() as u32;
             let status = baro_rezero::rezero(&mut vert, last_alt, last_fix.as_ref(), now_s);
-            if let RezeroStatus::Applied(snapped) = status {
-                // Publish immediately so the face's ALT row snaps with the
-                // banner rather than a sample later.
-                elevation_tx.send(vert.reading(snapped));
+            if let Some(reading) = baro_rezero::published_reading(&vert, status) {
+                elevation_tx.send(reading);
+                published = Some(reading);
             }
             info!("baro: qnh re-zero -> {}", status);
             rezero_status_tx.send((status, now_s));
@@ -147,7 +158,10 @@ pub async fn run(mut twim: Twim<'static>) {
                     "baro: alt={}m gain={}m loss={}m",
                     reading.alt_m, reading.gain_m, reading.loss_m
                 );
-                elevation_tx.send(reading);
+                if should_publish(published, reading) {
+                    elevation_tx.send(reading);
+                    published = Some(reading);
+                }
             }
             Ok(None) => {}
             Err(e) => warn!("baro: read error {:?}", e),
