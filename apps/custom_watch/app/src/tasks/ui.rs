@@ -152,6 +152,7 @@ pub async fn screen_task(
     let mut signal: Option<SignalSample> = None;
     let mut battery: Option<u8> = None;
     let mut page = Page::default();
+    let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
@@ -239,6 +240,16 @@ pub async fn screen_task(
         }
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
+        }
+        // Change-gated, not per-render: the loop also runs for every fix,
+        // snapshot, alert and heartbeat tick, and an unconditional log would put
+        // a standing per-second reason to emit back into a task whose whole
+        // design is to sleep between events. `sim/ci_smoke.py` matches this line
+        // to know a BTN3 press reached the panel, so its shape is a contract
+        // with the harness.
+        if logged_page != Some(page) {
+            debug!("ui: page {}", page);
+            logged_page = Some(page);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady

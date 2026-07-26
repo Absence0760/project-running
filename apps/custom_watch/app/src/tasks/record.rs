@@ -307,10 +307,25 @@ pub async fn run(store: &'static SharedStore) {
     // separate hardcoded seam: a 1 km / 5:00 pacer goal (a partner slightly
     // faster than the ~5:33/km bench_jog fixture, so the Pacer page reads a live
     // BEHIND) and a 700 km / 800 km shoe (a live DUE the run's mileage pushes on).
+    //
+    // The race-phase plan and the guided run are here for the same reason and
+    // with values picked so their pages are not merely non-empty but *move*
+    // under bench_jog. 1 km is `RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M`, the
+    // shortest plan the setter accepts, and `TenTenTen` has the earliest first
+    // boundary any preset offers (381.4 m, the generalised 10-mile fraction) —
+    // so the Pacer page's phase row walks HOLD 5:06 -> SETTLE 5:00 -> RACE 4:50
+    // as the run accrues rather than sitting in phase 1. The goal time matches
+    // the pacer goal so both rows on that page describe one race.
+    // `first-timer-15` is the library run with the densest early cues (0 s,
+    // 180 s, then every 60 s), so the GuidedRun page's cue index advances inside
+    // the first few minutes; the other two wait 240 s / 300 s for their second.
     // Hardware stays unset until a real push over the settings characteristic.
     #[cfg(feature = "sim-autostart")]
     {
-        use watch_core::settings::{GearCfg, PacerGoalCfg};
+        use watch_core::race_phases::RacePhasePreset;
+        use watch_core::settings::{
+            race_phase_preset_to_wire, GearCfg, GuidedRunId, PacerGoalCfg, RacePhasesCfg,
+        };
         let demo = WatchSettings {
             pacer: Some(PacerGoalCfg {
                 distance_m: 1_000,
@@ -320,6 +335,12 @@ pub async fn run(store: &'static SharedStore) {
                 baseline_m: 700_000.0,
                 target_m: Some(800_000.0),
             }),
+            race_phases: Some(RacePhasesCfg {
+                distance_m: Some(1_000),
+                goal_time_s: Some(300),
+                preset: race_phase_preset_to_wire(RacePhasePreset::TenTenTen),
+            }),
+            guided_run: Some(GuidedRunId::new("first-timer-15")),
             ..WatchSettings::default()
         };
         apply_settings(
@@ -329,7 +350,9 @@ pub async fn run(store: &'static SharedStore) {
             &sea_level_tx,
             &tz_offset_tx,
         );
-        info!("record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km)");
+        info!(
+            "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15)"
+        );
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");

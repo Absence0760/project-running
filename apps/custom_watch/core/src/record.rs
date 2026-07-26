@@ -3389,7 +3389,58 @@ mod tests {
         assert!(r.snapshot().race_phase.is_none());
     }
 
+    /// The sim's demo arming (`app/src/tasks/record.rs`, `sim-autostart`) picks
+    /// the shortest plan the setter will take and the preset with the earliest
+    /// first boundary, so a canned run of a few hundred metres actually crosses a
+    /// phase instead of holding phase 1 for the whole fixture. Both halves of
+    /// that claim are checked here, because nothing in `app/` is host-testable.
+    #[test]
+    fn the_shortest_plausible_ten_ten_ten_plan_changes_phase_inside_400_m() {
+        let mut r = Recorder::new();
+        r.set_race_phases(
+            Some(RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M),
+            Some(300.0),
+            RacePhasePreset::TenTenTen,
+        );
+        let p = r.snapshot().race_phase.expect("1 km is plausible");
+        assert_eq!((p.index, p.total), (1, 3));
+        assert_eq!(p.intent, RacePhaseIntent::HoldBack);
+        assert_eq!(p.target_pace_s_per_km, Some(306));
+
+        r.set_fix_interval_s(60);
+        r.start(0);
+        // The first fix anchors, then two 200 m hops: 400 m clears the
+        // generalised ten-mile boundary at 381.4 m, which no other preset
+        // reaches before its own halfway.
+        let d = 200.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=3 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let p = r.snapshot().race_phase.expect("still active mid-run");
+        assert_eq!((p.index, p.intent), (2, RacePhaseIntent::Settle));
+        assert_eq!(p.target_pace_s_per_km, Some(300));
+    }
+
     // --- The guided-run page ----------------------------------------------
+
+    /// The other half of the sim demo: the armed run has to put a cue inside the
+    /// canned fixture's few minutes, or the page renders a schedule that never
+    /// advances. `first-timer-15` is the library's densest opener.
+    #[test]
+    fn the_sim_demo_guided_run_advances_a_cue_within_the_first_four_minutes() {
+        let mut r = Recorder::new();
+        r.set_guided_run(Some("first-timer-15"));
+        r.start(0);
+        let v = r.snapshot().guided_run.expect("library id arms");
+        assert_eq!(v.duration_s, 900);
+        assert_eq!((v.cue_index, v.next_cue_in_s), (1, Some(180)));
+
+        r.tick(180);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index, 2, "the 3:00 cue has fired");
+        assert_eq!(v.next_cue_in_s, Some(60), "then one a minute");
+        assert_eq!(v.remaining_s, 720);
+    }
 
     #[test]
     fn an_unarmed_guided_run_page_is_honestly_inactive() {
