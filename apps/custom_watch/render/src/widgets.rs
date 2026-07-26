@@ -474,19 +474,26 @@ fn clip_to_panel(
         }
         // The endpoint being pulled in is outside on the axis its outcode
         // names, and the other endpoint is not (the shared-side case returned
-        // above), so the divisor below is never zero.
+        // above), so the divisor below is never zero and the ratio is in
+        // [0, 1] — the clipped point always lands between the two endpoints.
+        // The intermediate product does NOT fit i32 though: an auto-zoom fit is
+        // ~8400 px per degree of latitude, so a wild GPS fix (a cold-start
+        // position on the far side of the planet) projects the course hundreds
+        // of thousands of pixels away, and a wrapped multiply would put a
+        // garbage line back inside the panel.
         let out = if c0 != 0 { c0 } else { c1 };
+        let (dx, dy) = ((x1 - x0) as i64, (y1 - y0) as i64);
+        let lerp = |num: i32, den: i64, along: i64, from: i32| {
+            (from as i64 + along * num as i64 / den) as i32
+        };
         let (x, y) = if out & OUT_BELOW != 0 {
-            (x0 + (x1 - x0) * (PANEL_Y_MAX - y0) / (y1 - y0), PANEL_Y_MAX)
+            (lerp(PANEL_Y_MAX - y0, dy, dx, x0), PANEL_Y_MAX)
         } else if out & OUT_ABOVE != 0 {
-            (
-                x0 + (x1 - x0) * (PANEL_TOP_PX - y0) / (y1 - y0),
-                PANEL_TOP_PX,
-            )
+            (lerp(PANEL_TOP_PX - y0, dy, dx, x0), PANEL_TOP_PX)
         } else if out & OUT_RIGHT != 0 {
-            (PANEL_X_MAX, y0 + (y1 - y0) * (PANEL_X_MAX - x0) / (x1 - x0))
+            (PANEL_X_MAX, lerp(PANEL_X_MAX - x0, dx, dy, y0))
         } else {
-            (0, y0 + (y1 - y0) * -x0 / (x1 - x0))
+            (0, lerp(-x0, dx, dy, y0))
         };
         if out == c0 {
             x0 = x;
@@ -1671,6 +1678,41 @@ mod tests {
         let banner_top = face::NAV_ALERT_ROW * CELL_H;
         assert!(banner_top >= PANEL_TOP_PX as usize);
         assert!(banner_top + 2 * CELL_H <= (PANEL_TOP_PX + PANEL_H_PX as i32) as usize);
+    }
+
+    #[test]
+    fn nav_panel_survives_a_wild_fix_without_wrapping_a_line_back_in() {
+        // A cold-start GPS reporting a position on the far side of the planet
+        // auto-zooms a window there, projecting the real course hundreds of
+        // thousands of pixels away. The clip's interpolation must not wrap and
+        // put a garbage line back inside the panel — the marker at the window's
+        // centre is all that's left to draw.
+        let course = long_course();
+        let panel = nav_map::nav_panel(&course, Some((-40.0, 75.0)), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let (mx, my) = panel.marker.expect("the window centres on the runner");
+        let mut marker_only = Framebuffer::new();
+        marker_only.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        marker_only.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+        assert!(fb_eq(&fb, &marker_only), "a course leg came back into view");
+    }
+
+    #[test]
+    fn nav_panel_clip_interpolates_a_far_off_panel_endpoint() {
+        // Both ends beyond i32's product range for the naive multiply, crossing
+        // the panel diagonally: the clipped span stays on the panel boundary.
+        let ((cx0, cy0), (cx1, cy1)) = clip_to_panel(
+            -600_000,
+            PANEL_TOP_PX - 600_000,
+            600_000,
+            PANEL_Y_MAX + 600_000,
+        )
+        .unwrap();
+        for (x, y) in [(cx0, cy0), (cx1, cy1)] {
+            assert!((0..=PANEL_X_MAX).contains(&x), "x {x}");
+            assert!((PANEL_TOP_PX..=PANEL_Y_MAX).contains(&y), "y {y}");
+        }
     }
 
     #[test]
