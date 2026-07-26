@@ -172,9 +172,12 @@ pub fn banner(alert: Alert) -> Banner {
                 (f64::from(milestone_m) / 1000.0).min(999.9)
             )
         }
+        // The trailing H is what separates a 30-minute milestone from a 30-second
+        // one: every other banner is a word or a unit-tagged number, so a bare
+        // `0:30` is the only one a glance can read on the wrong scale.
         Alert::Time(milestone_s) => write!(
             b,
-            "! {}:{:02}",
+            "! {}:{:02} H",
             (milestone_s / 3600).min(999),
             milestone_s / 60 % 60
         ),
@@ -1375,14 +1378,14 @@ mod tests {
         assert_eq!(banner(Alert::ZoneAbove(5)).as_str(), "! ZONE 5");
         assert_eq!(banner(Alert::Distance(5_000)).as_str(), "! 5.0 KM");
         assert_eq!(banner(Alert::Distance(1_609)).as_str(), "! 1.6 KM");
-        assert_eq!(banner(Alert::Time(1_800)).as_str(), "! 0:30");
-        assert_eq!(banner(Alert::Time(3 * 3600 + 45 * 60)).as_str(), "! 3:45");
+        assert_eq!(banner(Alert::Time(1_800)).as_str(), "! 0:30 H");
+        assert_eq!(banner(Alert::Time(3 * 3600 + 45 * 60)).as_str(), "! 3:45 H");
         assert_eq!(banner(Alert::PaceFast).as_str(), "! TOO FAST");
         assert_eq!(banner(Alert::PaceSlow).as_str(), "! TOO SLOW");
         // A corrupt zone / milestone clamps instead of overflowing the banner.
         assert_eq!(banner(Alert::ZoneAbove(200)).as_str(), "! ZONE 9");
         assert_eq!(banner(Alert::Distance(u32::MAX)).as_str(), "! 999.9 KM");
-        assert_eq!(banner(Alert::Time(u32::MAX)).as_str(), "! 999:28");
+        assert_eq!(banner(Alert::Time(u32::MAX)).as_str(), "! 999:28 H");
         // At 2x every banner must fit the 21-cell panel row, worst case included.
         for a in [
             Alert::Drink,
