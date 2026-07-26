@@ -445,9 +445,51 @@ jobs:
       - name: Build the sim feature set
         working-directory: apps/custom_watch
         run: cargo build --release --bin app --features sim-autostart,sim-buttons,sim-course,dev-blink
-      - name: Boot the firmware under Renode and assert on its output
-        run: python3 apps/custom_watch/sim/ci_smoke.py
-      - name: Upload sim logs + panel dump on failure
+      # One step per scenario rather than a single `--scenario all`. A sim
+      # failure is the hardest kind to diagnose remotely — Renode is not
+      # installable on every contributor machine, so CI is usually the only
+      # executor — and a named red step says which surface broke before anyone
+      # opens a log. Keeping `smoke` its own step matters most: it is the only
+      # sequence with a manual verification pass behind it
+      # (sim/verification-2026-07-19/), so a red `smoke` beside a green `pages`
+      # points at the pipeline while the reverse points at the new scenario
+      # code. Ordered most-proven first, so a broken pipeline fails before two
+      # more emulator boots are spent on it.
+      #
+      # Cost: each step boots its own emulator, so the budgets are what keeps
+      # this inside the cap. 3 x 300 s is 15 min against `timeout-minutes: 25`,
+      # leaving ~10 min for the Renode fetch, the toolchain and a cold cargo
+      # build. Deliberately BELOW the cap: overrunning the budget makes the
+      # harness exit with its own last-40-lines + renode.log dump, where the job
+      # timeout would kill it bare with nothing to read.
+      #
+      # A scenario added to the harness needs a step added here — the harness's
+      # `--scenario all` default is not what runs.
+      #
+      # No --fixture: each scenario's own default is the one it was written
+      # against (the sim-course breadcrumb only lines up under bench_jog).
+      - name: Renode sim — smoke scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario smoke
+          --out-dir "${{ runner.temp }}/watch-sim-ci/smoke"
+          --budget 300
+      - name: Renode sim — pages scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario pages
+          --out-dir "${{ runner.temp }}/watch-sim-ci/pages"
+          --budget 300
+      - name: Renode sim — alerts scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario alerts
+          --out-dir "${{ runner.temp }}/watch-sim-ci/alerts"
+          --budget 300
+      # Every scenario writes into its own subdirectory of this path, so one
+      # upload still carries all of them — and they can't overwrite each other's
+      # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
+      - name: Upload sim logs + panel dumps on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
