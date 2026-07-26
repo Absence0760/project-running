@@ -4333,3 +4333,25 @@ Don't re-litigate by:
 What it does **not** prove, and what the docs must not claim it does: nothing about BLE (Renode cannot run the proprietary S140 SoftDevice at all), nothing about power in any form, and nothing about real silicon — the peripheral models are pinned to what the drivers *believe* about the parts (register maps, retention across shutdown, contact and AGC constants) and the waveforms are clean synthetic shapes. Green means the firmware is self-consistent under the emulator. The bench-verify list is untouched by it.
 
 One coupling to respect: the harness keys on exact defmt strings (`run_flash: run store armed at`, `gps: fix lat=… sats=`, `record: sim-autostart on first fix`, `record: recording dist=`, `button: BTN2 armed`, `run_flash: stored run N (M B) in slot S`). Renaming any of them requires the matching change in `sim/ci_smoke.py`.
+
+---
+
+## 320. The BLE chunk-request queue's depth and semantics live in `watch_core`, and `embassy-sync` is a dev-dependency to test them
+
+**Decided (2026-07-25).** § 316 replaced the `run_chunk` request `Signal` with a depth-8 `Channel`, because a `Signal` keeps only the newest value: a phone that pipelines pulls lost every request but the last and then waited on notifications it was never owed. That fix landed as a `const CHUNK_QUEUE_DEPTH` inside `app/src/tasks/ble.rs` — and `app/` is excluded from the host test job (`--exclude app`, § 314), so nothing proved the FIFO ordering or the overflow behaviour the fix exists for. It was compile-verified only, which for the one protocol that can never be sim-verified either (no S140 SoftDevice under Renode, § 318) is the whole of its evidence.
+
+The constant now lives in `watch_core::ble_sync` beside the rest of the run-sync framing — the manifest encoder, the notify-length clamp, the course-chunk parser — and `app/` consumes it from there. One definition, in the crate that already owns every other decision this transport makes.
+
+**`embassy-sync` is a `[dev-dependencies]` entry of `watch_core`, and must stay one.** A real dependency would put an embedded async runtime inside the crate whose stated contract is "pure logic over plain data: no peripherals, no Embassy, no allocator" — the property that makes the whole core host-testable and portable to tier-2 silicon (§ 90). As a dev-dep it compiles into the test binary only, so the tests can instantiate the *same* `Channel<CriticalSectionRawMutex, ChunkRequest, CHUNK_QUEUE_DEPTH>` the radio task builds and check the depth against the type that consumes it, rather than asserting about it in prose. The version is pinned to what `app/Cargo.toml` declares (0.8): testing a different `Channel` than the firmware links would be worse than no test. `critical-section` with its `std` feature rides along because `CriticalSectionRawMutex` is an extern call the firmware resolves against the SoftDevice and nothing provides on the host — without an impl to bind to, the test binary does not link. Both are dev-deps of one leaf crate, so neither reaches any of the three firmware feature sets; all three were rebuilt and clippy-gated to confirm.
+
+Three tests carry it: pipelined requests are served oldest-first, the queue holds exactly `CHUNK_QUEUE_DEPTH` and serving one frees exactly one slot, and an overflowing `try_send` is refused while every queued request survives — that last one instantiating a `Signal` alongside the `Channel` so the defect and its fix are stated side by side rather than described.
+
+**The overflow-warn logic stayed in `app/`.** `if queue.try_send(req).is_err() { warn!(…) }` is the `Channel`'s own API plus a log line; wrapping it in a `watch_core` function with one caller would add a name and no decision. The rule the rest of the § 314 batch follows is "pure logic in `watch_core`, thin async drivers in `app/`", and by that rule there is no logic here to move — the decision was the depth, and the depth moved.
+
+Rung: **host-tested** for the queue semantics, **build-verified** for the task that consumes them. Not sim-verified and not bench-verified, and BLE can never be the former (§ 314).
+
+Don't re-litigate by:
+
+- **Promoting `embassy-sync` to a real dependency** so some other core module can use a channel. The core's no-Embassy contract is what keeps it host-testable; a module that needs a channel belongs in `app/`.
+- **Dropping `critical-section` and switching the tests to `NoopRawMutex`.** It links, but it tests a different type than the firmware runs.
+- **Extracting the `try_send`-failed branch into a core helper** for symmetry with the rest of the batch. One caller, no decision.
