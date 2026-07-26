@@ -16,9 +16,11 @@
 use sharp_mip::{Framebuffer, RowRules, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
 use watch_core::battery;
+use watch_core::course::Course;
 use watch_core::face;
 use watch_core::fix::Fix;
 use watch_core::gauge;
+use watch_core::nav_map::{NavPanel, NavPanelGeom};
 use watch_core::page_grid;
 use watch_core::record::Snapshot;
 use watch_core::statusbar::{self, PageIndicator};
@@ -370,6 +372,132 @@ pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
         profile.samples,
         (min, max),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Nav map panel (course polyline + position marker + off-course banner)
+// ---------------------------------------------------------------------------
+
+/// The Nav page's map panel in panel pixels: full display width, the
+/// face-declared text rows tall. `watch_core::face` speaks rows; only the
+/// render layer knows the panel's 16-px cell height.
+const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
+const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
+
+/// Half-length of the position marker's 5-px cross.
+const MARKER_ARM_PX: i32 = 2;
+
+/// The panel geometry the host-tested `nav_map` decisions are taken against.
+/// The ui task hands it straight to [`watch_core::nav_map::nav_panel`], so the
+/// transform, the marker's on-panel test and the pixels drawn here can't
+/// disagree.
+pub const NAV_PANEL_GEOM: NavPanelGeom = NavPanelGeom {
+    w_px: WIDTH as u32,
+    top_px: PANEL_TOP_PX,
+    h_px: PANEL_H_PX,
+    marker_arm_px: MARKER_ARM_PX,
+};
+
+const PANEL_X_MAX: i32 = WIDTH as i32 - 1;
+const PANEL_Y_MAX: i32 = PANEL_TOP_PX + PANEL_H_PX as i32 - 1;
+
+const OUT_LEFT: u8 = 1;
+const OUT_RIGHT: u8 = 2;
+const OUT_ABOVE: u8 = 4;
+const OUT_BELOW: u8 = 8;
+
+fn panel_outcode(x: i32, y: i32) -> u8 {
+    let mut code = 0;
+    if x < 0 {
+        code |= OUT_LEFT;
+    } else if x > PANEL_X_MAX {
+        code |= OUT_RIGHT;
+    }
+    if y < PANEL_TOP_PX {
+        code |= OUT_ABOVE;
+    } else if y > PANEL_Y_MAX {
+        code |= OUT_BELOW;
+    }
+    code
+}
+
+/// Cohen-Sutherland clip of one course segment to the panel rect, or `None`
+/// when the segment misses the panel entirely. [`Framebuffer::draw_line`] only
+/// clips at the *display* edge, and the panel is a band inside it: on the
+/// auto-zoom window a course point a few hundred metres outside the window
+/// projects a handful of pixels past the panel, which is still on-screen — it
+/// would scribble the NAV title row above the panel or the along-course / GPS
+/// rows below it, and those rows are painted *before* this one.
+fn clip_to_panel(
+    mut x0: i32,
+    mut y0: i32,
+    mut x1: i32,
+    mut y1: i32,
+) -> Option<((i32, i32), (i32, i32))> {
+    let mut c0 = panel_outcode(x0, y0);
+    let mut c1 = panel_outcode(x1, y1);
+    loop {
+        if c0 | c1 == 0 {
+            return Some(((x0, y0), (x1, y1)));
+        }
+        if c0 & c1 != 0 {
+            return None;
+        }
+        // The endpoint being pulled in is outside on the axis its outcode
+        // names, and the other endpoint is not (the shared-side case returned
+        // above), so the divisor below is never zero.
+        let out = if c0 != 0 { c0 } else { c1 };
+        let (x, y) = if out & OUT_BELOW != 0 {
+            (x0 + (x1 - x0) * (PANEL_Y_MAX - y0) / (y1 - y0), PANEL_Y_MAX)
+        } else if out & OUT_ABOVE != 0 {
+            (
+                x0 + (x1 - x0) * (PANEL_TOP_PX - y0) / (y1 - y0),
+                PANEL_TOP_PX,
+            )
+        } else if out & OUT_RIGHT != 0 {
+            (PANEL_X_MAX, y0 + (y1 - y0) * (PANEL_X_MAX - x0) / (x1 - x0))
+        } else {
+            (0, y0 + (y1 - y0) * -x0 / (x1 - x0))
+        };
+        if out == c0 {
+            x0 = x;
+            y0 = y;
+            c0 = panel_outcode(x0, y0);
+        } else {
+            x1 = x;
+            y1 = y;
+            c1 = panel_outcode(x1, y1);
+        }
+    }
+}
+
+/// Draw one frame of the Nav page's map panel: the course polyline, the
+/// position-marker cross, and — last, so it wins the panel pixels — the
+/// off-course banner. Everything decided (which transform, whether the marker
+/// is on-panel at all) comes in via [`watch_core::nav_map::nav_panel`]; this is
+/// the pixels.
+pub fn draw_nav_panel(
+    fb: &mut Framebuffer,
+    course: &Course,
+    panel: &NavPanel,
+    alert: Option<&str>,
+) {
+    for w in course.points().windows(2) {
+        let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+        let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+        if let Some(((cx0, cy0), (cx1, cy1))) =
+            clip_to_panel(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX)
+        {
+            fb.draw_line(cx0, cy0, cx1, cy1, true);
+        }
+    }
+    if let Some(&(mx, my)) = panel.marker.as_ref() {
+        fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+    }
+    if let Some(text) = alert {
+        fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1266,6 +1394,173 @@ mod tests {
 
     fn fb_eq(a: &Framebuffer, b: &Framebuffer) -> bool {
         (0..HEIGHT).all(|y| (0..WIDTH).all(|x| a.pixel(x, y) == b.pixel(x, y)))
+    }
+
+    use watch_core::course::CoursePoint;
+    use watch_core::nav_map;
+
+    fn cp(lat_deg: f64, lon_deg: f64) -> CoursePoint {
+        CoursePoint { lat_deg, lon_deg }
+    }
+
+    /// A course far larger than one auto-zoom window on both axes — the shape
+    /// every real ultra course has, so the panel windows around the runner and
+    /// most of the polyline projects off-panel.
+    fn long_course() -> Course {
+        Course::from_points(&[
+            cp(40.00, -105.00),
+            cp(40.05, -105.02),
+            cp(40.10, -105.00),
+            cp(40.15, -105.03),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn nav_panel_never_paints_outside_its_own_rows() {
+        // An auto-zoomed long course projects its far points tens of pixels
+        // above and below the window. The framebuffer only clips at the display
+        // edge, so an unclipped polyline scribbles the NAV title row above the
+        // panel and the along-course / GPS rows below it.
+        let course = long_course();
+        let runner = (40.05, -105.02);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let top = PANEL_TOP_PX as usize;
+        let h = PANEL_H_PX as usize;
+        assert!(ink_in(&fb, 0, top, WIDTH, h) > 0, "the panel drew nothing");
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, top), 0, "ink above the panel");
+        assert_eq!(
+            ink_in(&fb, 0, top + h, WIDTH, HEIGHT - top - h),
+            0,
+            "ink below the panel"
+        );
+    }
+
+    /// A course comfortably inside one auto-zoom window, so the panel keeps
+    /// the whole-course overview.
+    fn short_course() -> Course {
+        Course::from_points(&[
+            cp(40.000, -105.000),
+            cp(40.001, -105.002),
+            cp(40.002, -105.000),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn nav_panel_clipping_leaves_a_fitted_course_untouched() {
+        // A course that fits whole projects inside the panel by construction,
+        // so the clip must be a no-op there — the fix can't cost the common
+        // case a pixel.
+        let course = short_course();
+        let runner = (40.001, -105.001);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut clipped = Framebuffer::new();
+        draw_nav_panel(&mut clipped, &course, &panel, None);
+        let mut raw = Framebuffer::new();
+        for w in course.points().windows(2) {
+            let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+            let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+            raw.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
+        }
+        let (mx, my) = panel.marker.unwrap();
+        raw.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        raw.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+        assert!(fb_eq(&clipped, &raw));
+    }
+
+    #[test]
+    fn nav_panel_marker_cross_stays_whole_inside_the_panel() {
+        let course = short_course();
+        let runner = (40.001, -105.001);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let (mx, my) = panel.marker.expect("an on-panel runner has a marker");
+        // The whole 5-px cross fits: `marker_px` refuses a marker whose arms
+        // would reach past an edge, so no arm may be clipped or wrap.
+        assert!(mx - MARKER_ARM_PX >= 0 && mx + MARKER_ARM_PX <= PANEL_X_MAX);
+        assert!(my - MARKER_ARM_PX >= PANEL_TOP_PX && my + MARKER_ARM_PX <= PANEL_Y_MAX);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        for arm in -MARKER_ARM_PX..=MARKER_ARM_PX {
+            assert!(fb.pixel((mx + arm) as usize, my as usize), "h arm {arm}");
+            assert!(fb.pixel(mx as usize, (my + arm) as usize), "v arm {arm}");
+        }
+    }
+
+    #[test]
+    fn nav_panel_off_panel_runner_draws_no_marker() {
+        // Far north of a whole-course fit: the cross would land on the rows
+        // above the panel, so `nav_map` withholds it and the banner is the
+        // source of truth. Compare against the courseless frame to prove no
+        // marker ink appears anywhere.
+        let course = short_course();
+        let panel = nav_map::nav_panel(&course, Some((41.0, -105.0)), NAV_PANEL_GEOM);
+        assert_eq!(panel.marker, None);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let mut line_only = Framebuffer::new();
+        for w in course.points().windows(2) {
+            let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+            let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+            line_only.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
+        }
+        assert!(fb_eq(&fb, &line_only));
+    }
+
+    #[test]
+    fn nav_panel_all_identical_points_draw_a_dot_not_garbage() {
+        // A degenerate course (every point coincident) makes `PanelFit`'s scale
+        // zero. It must collapse to the panel centre rather than dividing by
+        // zero or smearing the whole band.
+        let course =
+            Course::from_points(&[cp(40.0, -105.0), cp(40.0, -105.0), cp(40.0, -105.0)]).unwrap();
+        let panel = nav_map::nav_panel(&course, Some((40.0, -105.0)), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let top = PANEL_TOP_PX as usize;
+        let h = PANEL_H_PX as usize;
+        let ink = ink_in(&fb, 0, top, WIDTH, h);
+        assert!(ink > 0, "a degenerate course still shows where it is");
+        assert!(ink <= 10, "and stays a dot + cross, not a smear: {ink}");
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, top), 0);
+        assert_eq!(ink_in(&fb, 0, top + h, WIDTH, HEIGHT - top - h), 0);
+    }
+
+    #[test]
+    fn nav_panel_off_course_banner_is_drawn_last_and_wins_the_panel() {
+        // Z-order: the inverse-video banner must survive the polyline and the
+        // marker underneath it, so a lost runner can't read a crumb through
+        // the alert. Drawing the same frame with the banner alone on top of the
+        // same underlay must land identically.
+        let course = long_course();
+        let runner = (40.05, -105.02);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut composed = Framebuffer::new();
+        draw_nav_panel(&mut composed, &course, &panel, Some("OFF COURSE"));
+        let mut layered = Framebuffer::new();
+        draw_nav_panel(&mut layered, &course, &panel, None);
+        layered.draw_banner_2x(face::NAV_ALERT_ROW, "OFF COURSE");
+        assert!(fb_eq(&composed, &layered));
+        // The banner's two rows sit inside the panel, so it can't cover the
+        // rows the face owns.
+        let banner_top = face::NAV_ALERT_ROW * CELL_H;
+        assert!(banner_top >= PANEL_TOP_PX as usize);
+        assert!(banner_top + 2 * CELL_H <= (PANEL_TOP_PX + PANEL_H_PX as i32) as usize);
+    }
+
+    #[test]
+    fn nav_panel_segment_wholly_off_panel_is_dropped_not_wrapped() {
+        assert_eq!(clip_to_panel(10, 0, 100, PANEL_TOP_PX - 1), None);
+        assert_eq!(clip_to_panel(10, PANEL_Y_MAX + 1, 100, HEIGHT as i32), None);
+        assert_eq!(clip_to_panel(-40, 20, -1, 60), None);
+        assert_eq!(clip_to_panel(WIDTH as i32, 20, 400, 60), None);
+        // A segment crossing the panel keeps both ends on the boundary.
+        let ((cx0, cy0), (cx1, cy1)) =
+            clip_to_panel(84, PANEL_TOP_PX - 40, 84, PANEL_Y_MAX + 40).unwrap();
+        assert_eq!((cx0, cy0), (84, PANEL_TOP_PX));
+        assert_eq!((cx1, cy1), (84, PANEL_Y_MAX));
     }
 
     /// A trackback view walked `steps` hops of `step_m` due east from an

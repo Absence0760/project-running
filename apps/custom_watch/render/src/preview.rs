@@ -416,6 +416,84 @@ fn preview_mini_profile() {
     show("mini-profile: elevation climb + descent", &fb);
 }
 
+/// A course whose bounding box is far larger than one auto-zoom window — the
+/// shape every real ultra course has, so the panel windows around the runner
+/// and most of the polyline falls outside the panel rows.
+fn long_course() -> watch_core::course::Course {
+    use watch_core::course::CoursePoint;
+    let pt = |lat_deg, lon_deg| CoursePoint { lat_deg, lon_deg };
+    watch_core::course::Course::from_points(&[
+        pt(40.080, -105.215),
+        pt(40.094, -105.204),
+        pt(40.100, -105.198),
+        pt(40.104, -105.186),
+        pt(40.118, -105.180),
+    ])
+    .unwrap()
+}
+
+fn draw_nav_page(fb: &mut Framebuffer, nav: NavView, alert: Option<&str>) {
+    let course = long_course();
+    let snap = base_snapshot();
+    let fix = sample_fix();
+    let rows = face::page_rows(
+        Page::Nav,
+        Some(&fix),
+        None,
+        Some(&snap),
+        None,
+        nav,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    widgets::draw_page_indicator(
+        fb,
+        watch_core::statusbar::page_indicator(Page::Nav, u32::MAX),
+    );
+    let panel = watch_core::nav_map::nav_panel(
+        &course,
+        Some((fix.lat_deg, fix.lon_deg)),
+        widgets::NAV_PANEL_GEOM,
+    );
+    widgets::draw_nav_panel(fb, &course, &panel, alert);
+}
+
+#[test]
+fn preview_nav_map_panel() {
+    // An auto-zoomed long course: the window keeps the runner mid-panel and the
+    // legs running off it are clipped at the panel rows, so the NAV title row
+    // above and the along-course / GPS rows below stay legible.
+    let status = watch_core::course::NavStatus {
+        along_m: 18_400.0,
+        off_m: 12.0,
+        alerting: false,
+        next_turn: None,
+    };
+    let mut fb = Framebuffer::new();
+    draw_nav_page(&mut fb, NavView::Status(status), None);
+    show("nav: auto-zoomed course + position marker", &fb);
+
+    let off_course = NavView::Status(watch_core::course::NavStatus {
+        off_m: 180.0,
+        alerting: true,
+        ..status
+    });
+    let mut fb2 = Framebuffer::new();
+    draw_nav_page(
+        &mut fb2,
+        off_course,
+        face::nav_alert_row(off_course).as_deref(),
+    );
+    show("nav: off-course banner over the breadcrumb", &fb2);
+}
+
 /// A trackback view walked north-east away from its start, one accepted fix a
 /// second — a crumb with a real shape, a bearing back to the start and a fresh
 /// heading, so the preview shows the map and the arrow together.

@@ -23,7 +23,7 @@ use watch_core::face::{self, FaceIcon, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
-use watch_core::nav_map::{self, NavPanelGeom, PanelCache, PanelKey};
+use watch_core::nav_map::{self, PanelCache, PanelKey};
 use watch_core::page::Page;
 use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
@@ -47,22 +47,7 @@ const _: () = core::assert!(face::ROWS == sharp_mip::TEXT_ROWS);
 const TICK_ACTIVE: Duration = Duration::from_secs(1);
 const TICK_IDLE: Duration = Duration::from_secs(30);
 
-// The Nav page's map panel in panel pixels: full display width, the
-// face-declared text rows tall. `core` speaks rows; only this task knows the
-// panel's 16-px cell height.
 const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
-const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
-const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
-
-// Half-length of the position marker's 5-px cross — the panel geometry the
-// host-tested `nav_map` decisions are taken against.
-const MARKER_ARM_PX: i32 = 2;
-const NAV_PANEL_GEOM: NavPanelGeom = NavPanelGeom {
-    w_px: sharp_mip::WIDTH as u32,
-    top_px: PANEL_TOP_PX,
-    h_px: PANEL_H_PX,
-    marker_arm_px: MARKER_ARM_PX,
-};
 
 // The ElevationProfile page's mini-profile sparkline: the rows the face leaves
 // blank below its vert-totals context row (rows 3..8), full width with a small
@@ -326,7 +311,7 @@ pub async fn screen_task(
             // Prefer a phone-pushed course over the boot/sim one for the drawn map.
             pushed_course.as_ref().or(course).map(|c| {
                 let runner = latest.as_ref().map(|f| (f.lat_deg, f.lon_deg));
-                (c, nav_map::nav_panel(c, runner, NAV_PANEL_GEOM))
+                (c, nav_map::nav_panel(c, runner, widgets::NAV_PANEL_GEOM))
             })
         } else {
             None
@@ -356,20 +341,7 @@ pub async fn screen_task(
         }
         if panel_repaint {
             let (course, panel) = unwrap!(nav_draw.as_ref());
-            for w in course.points().windows(2) {
-                let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
-                let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
-                fb.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
-            }
-            if let Some(&(mx, my)) = panel.marker.as_ref() {
-                fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
-                fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
-            }
-            // The off-course treatment: a steady inverse-video banner across
-            // the breadcrumb, drawn last so it wins the panel pixels.
-            if let Some(text) = &nav_alert {
-                fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
-            }
+            widgets::draw_nav_panel(&mut fb, course, panel, nav_alert.as_deref());
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
