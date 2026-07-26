@@ -17,6 +17,8 @@
 //!   feeds the track, the flash store, and the phone link. Rows keep a fixed
 //!   position with a `--` placeholder when a metric is not yet available, so a
 //!   glance always finds a value in the same spot rather than a jumping grid.
+//!   A page with no body at all takes its wording from [`crate::unfed`] — the
+//!   one vocabulary for empty states, so no page invents its own phrase.
 //! - **Status face** (idle) — the bench / acquisition view: uptime clock, GPS
 //!   status, last-known position, speed, altitude, HR, and vert. This is what
 //!   shows before a run starts and while the first fix is being acquired.
@@ -39,6 +41,7 @@ use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RacePhaseView, RecordState, Snapshot};
 use crate::roadbook::CutoffStatus;
 use crate::trackback::{self, TrackbackView};
+use crate::unfed::Unfed;
 
 pub const COLS: usize = 21;
 pub const ROWS: usize = 9;
@@ -733,6 +736,24 @@ fn trackback_distance(tb: Option<&TrackbackView>) -> Option<f32> {
     tb.filter(|n| n.active()).map(|n| n.distance_to_start_m)
 }
 
+/// The row a glance page's empty-body reason rides, and the row its remedy
+/// follows on. Fixed across every page so the wording is always in the same
+/// place — the Nav page is the one exception, its map panel owns these rows and
+/// it writes the same reason into its own info row.
+const UNFED_REASON_ROW: usize = 4;
+const UNFED_HINT_ROW: usize = 5;
+
+/// Write a page's empty body: the headline label with the absent-value marker,
+/// then the reason and its remedy taken from the one sanctioned vocabulary
+/// ([`crate::unfed`]) rather than spelled per page.
+fn write_unfed(rows: &mut [Row; ROWS], label: &str, why: Unfed) {
+    let _ = write!(rows[2], "{label} --");
+    let _ = write!(rows[UNFED_REASON_ROW], "{}", why.reason());
+    if let Some(hint) = why.hint() {
+        let _ = write!(rows[UNFED_HINT_ROW], "{hint}");
+    }
+}
+
 #[derive(Clone, Copy)]
 enum GlanceMetric {
     Distance,
@@ -945,8 +966,8 @@ fn zones_glance(
 /// phase in force ([`write_phase_row`]), the goal distance + target time, the
 /// projected finish at the current whole-run average (the actual crossing time
 /// once finished), the distance delta in metres, and the GPS glance. With no goal
-/// configured the page is honestly inactive — `PACER --` and a how-to-set hint,
-/// never zeros pretending to be on pace.
+/// configured the page is honestly unfed — never zeros pretending to be on
+/// pace.
 #[allow(clippy::too_many_arguments)]
 fn pacer_glance(
     fix: Option<&Fix>,
@@ -966,11 +987,7 @@ fn pacer_glance(
     }
 
     match snap.pacer {
-        None => {
-            let _ = write!(rows[2], "PACER --");
-            let _ = write!(rows[4], "NO GOAL SET");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "PACER", Unfed::NotSynced),
         Some(status) => {
             let verdict = match status.verdict {
                 PaceVerdict::Ahead => "AHEAD",
@@ -1075,11 +1092,7 @@ fn guided_run_glance(
     }
 
     match snap.guided_run {
-        None => {
-            let _ = write!(rows[2], "GUIDED --");
-            let _ = write!(rows[4], "NOT SYNCED");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "GUIDED", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(
                 rows[2],
@@ -1151,10 +1164,7 @@ fn race_predictor_glance(
     }
 
     match &snap.race_prediction {
-        None => {
-            let _ = write!(rows[2], "PREDICT --");
-            let _ = write!(rows[4], "NEED 1 KM");
-        }
+        None => write_unfed(&mut rows, "PREDICT", Unfed::NeedOneKm),
         Some(pred) => {
             let from_km = (pred.anchor.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[2], "{:<9}{:.2} KM", "FROM", from_km);
@@ -1173,10 +1183,10 @@ fn race_predictor_glance(
 /// rows-0-1 hero (drawn by [`page_hero`] via [`signed_split`] — `+` slack, `-`
 /// over the limit), then the verdict word, the distance to the cut-off, and the
 /// projected arrival clock, then the flat pace still needed to make it. Honest
-/// inactive states: "NO CUTOFFS" when the course carries none, "NO CUTOFF
-/// AHEAD" once past the last one, a `--` ETA when the fix is too stale (or the
-/// pace too uncertain) to project, and a `--` NEED when the cutoff is under
-/// 50 m out or its limit has already passed.
+/// inactive states: unfed when no course cut-offs are loaded, "NO CUTOFF AHEAD"
+/// once past the last one, a `--` ETA when the fix is too stale (or the pace too
+/// uncertain) to project, and a `--` NEED when the cutoff is under 50 m out or
+/// its limit has already passed.
 #[allow(clippy::too_many_arguments)]
 fn cutoff_glance(
     fix: Option<&Fix>,
@@ -1196,15 +1206,8 @@ fn cutoff_glance(
     }
 
     match snap.cutoff {
-        None => {
-            let _ = write!(rows[2], "CUTOFF --");
-            let _ = write!(rows[4], "NO CUTOFFS");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
-        Some(eta) if !eta.has_cutoff => {
-            let _ = write!(rows[2], "CUTOFF --");
-            let _ = write!(rows[4], "NO CUTOFF AHEAD");
-        }
+        None => write_unfed(&mut rows, "CUTOFF", Unfed::NotSynced),
+        Some(eta) if !eta.has_cutoff => write_unfed(&mut rows, "CUTOFF", Unfed::NoCutoffAhead),
         Some(eta) => {
             let verdict = match eta.status {
                 CutoffEtaStatus::On => "ON",
@@ -1275,8 +1278,9 @@ fn splits_glance(
 /// The training-load glance: this run's single-run stress up large in the hero
 /// (drawn by [`page_hero`]), with the distance + moving time it is derived
 /// from. The rolling CTL/ATL/TSB needs multi-day history the watch doesn't
-/// hold, so it reads an honest "ROLLING: SYNC" rather than a fabricated trend.
-/// "LOAD --" until the run accrues distance.
+/// hold, so the ROLLING row carries the same unfed wording as a whole unfed
+/// page rather than a fabricated trend. "NEED DISTANCE" until the run accrues
+/// some.
 #[allow(clippy::too_many_arguments)]
 fn training_load_glance(
     fix: Option<&Fix>,
@@ -1294,17 +1298,14 @@ fn training_load_glance(
     }
 
     match snap.training_stress {
-        None => {
-            let _ = write!(rows[2], "LOAD --");
-            let _ = write!(rows[4], "NEED DISTANCE");
-        }
+        None => write_unfed(&mut rows, "LOAD", Unfed::NeedDistance),
         Some(_) => {
             let _ = write!(rows[2], "LOAD  POINTS");
             let km = (snap.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<7}{:.2} KM", "DIST", km);
             let (h, m, s) = hms(snap.moving_s);
             let _ = write!(rows[5], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
-            let _ = write!(rows[6], "{:<7}SYNC", "ROLLING");
+            let _ = write!(rows[6], "{:<8}{}", "ROLLING", Unfed::NotSynced.reason());
         }
     }
 
@@ -1334,8 +1335,7 @@ fn distance_band_glance(
     let km = (snap.distance_m / 1000.0).min(9999.99);
     match snap.band {
         None => {
-            let _ = write!(rows[2], "BAND --");
-            let _ = write!(rows[4], "NO RACE BAND");
+            write_unfed(&mut rows, "BAND", Unfed::NoRaceBand);
             let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
         }
         Some(b) => {
@@ -1371,7 +1371,7 @@ fn cutoff_flag(status: Option<CutoffStatus>) -> char {
 /// The roadbook glance: the total checkpoint count beside the label, then the
 /// next few checkpoints ahead of the current position — each its distance,
 /// projected arrival clock, and safe/tight/miss cutoff flag. The next
-/// checkpoint's distance rides the hero. "NO ROADBOOK" when none is loaded.
+/// checkpoint's distance rides the hero. Unfed until a roadbook is pushed.
 #[allow(clippy::too_many_arguments)]
 fn roadbook_glance(
     fix: Option<&Fix>,
@@ -1389,11 +1389,7 @@ fn roadbook_glance(
     }
 
     match &snap.roadbook {
-        None => {
-            let _ = write!(rows[2], "ROADBOOK --");
-            let _ = write!(rows[4], "NO ROADBOOK");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "ROADBOOK", Unfed::NotSynced),
         Some(rb) => {
             let _ = write!(rows[2], "{:<11}{} CP", "ROADBOOK", rb.total.min(99));
             for i in 0..(rb.upcoming_len as usize).min(rb.upcoming.len()) {
@@ -1418,8 +1414,8 @@ fn roadbook_glance(
 }
 
 /// The fuel glance: the carbs to carry to the next aid up large in the hero,
-/// with the fluid to carry and the whole-plan totals. "NO FUEL PLAN" without a
-/// roadbook; "LAST AID PASSED" once past the final refill.
+/// with the fluid to carry and the whole-plan totals. Unfed without a roadbook;
+/// "LAST AID PASSED" once past the final refill.
 #[allow(clippy::too_many_arguments)]
 fn fuel_glance(
     fix: Option<&Fix>,
@@ -1437,11 +1433,7 @@ fn fuel_glance(
     }
 
     match &snap.fuel {
-        None => {
-            let _ = write!(rows[2], "FUEL --");
-            let _ = write!(rows[4], "NO FUEL PLAN");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "FUEL", Unfed::NotSynced),
         Some(f) => {
             let _ = write!(rows[2], "FUEL  TO NEXT AID");
             match f.carry {
@@ -1451,7 +1443,7 @@ fn fuel_glance(
                 }
                 None => {
                     let _ = write!(rows[4], "{:<7}--", "CARB");
-                    let _ = write!(rows[5], "LAST AID PASSED");
+                    let _ = write!(rows[5], "{}", Unfed::LastAidPassed.reason());
                 }
             }
             let _ = write!(
@@ -1470,7 +1462,7 @@ fn fuel_glance(
 
 /// The gear-wear glance: the active shoe's wear percent up large in the hero,
 /// the OK/DUE/WORN verdict beside the label, and the accumulated distance vs
-/// its target. "NO GEAR SYNCED" when no gear is configured.
+/// its target. Unfed until the phone pushes the active shoe.
 #[allow(clippy::too_many_arguments)]
 fn gear_wear_glance(
     fix: Option<&Fix>,
@@ -1488,10 +1480,7 @@ fn gear_wear_glance(
     }
 
     match snap.gear {
-        None => {
-            let _ = write!(rows[2], "GEAR --");
-            let _ = write!(rows[4], "NO GEAR SYNCED");
-        }
+        None => write_unfed(&mut rows, "GEAR", Unfed::NotSynced),
         Some(g) => {
             let word = match g.status {
                 GearWearStatus::Untracked => "UNTRACKED",
@@ -1526,7 +1515,7 @@ fn write_zone_pace(row: &mut Row, label: &str, pace_s_per_km: u32) {
 /// The training-paces glance: the five Daniels intensity-zone paces derived from
 /// the synced goal-race pace — easy / marathon / tempo / interval / repetition,
 /// one per row with the source goal on the header. The easy pace rides the hero.
-/// "PACES --" / "NO GOAL SET" until a goal pace is synced.
+/// Unfed until a goal pace is synced.
 #[allow(clippy::too_many_arguments)]
 fn training_paces_glance(
     fix: Option<&Fix>,
@@ -1544,11 +1533,7 @@ fn training_paces_glance(
     }
 
     match snap.training_paces {
-        None => {
-            let _ = write!(rows[2], "PACES --");
-            let _ = write!(rows[4], "NO GOAL SET");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "PACES", Unfed::NotSynced),
         Some(tp) => {
             let (gm, gs) = (
                 (tp.goal_pace_s_per_km / 60).min(99),
@@ -1586,7 +1571,7 @@ fn recovery_word(advice: RecoveryAdvice) -> &'static str {
 /// recovery-advice verdict beside the label and the VO2 number on its own row.
 /// Only what a single synced snapshot honestly holds — the rolling CTL/ATL/TSB
 /// needs multi-day history the watch doesn't keep, so it is deliberately absent.
-/// "FITNESS --" / "NOT SYNCED" until the phone pushes a snapshot.
+/// Unfed until the phone pushes a snapshot.
 #[allow(clippy::too_many_arguments)]
 fn fitness_glance(
     fix: Option<&Fix>,
@@ -1604,11 +1589,7 @@ fn fitness_glance(
     }
 
     match snap.fitness {
-        None => {
-            let _ = write!(rows[2], "FITNESS --");
-            let _ = write!(rows[4], "NOT SYNCED");
-            let _ = write!(rows[5], "SET VIA PHONE SYNC");
-        }
+        None => write_unfed(&mut rows, "FITNESS", Unfed::NotSynced),
         Some(f) => {
             let word = f.recovery.map(recovery_word).unwrap_or("--");
             let _ = write!(rows[2], "{:<11}{}", "FITNESS", word);
@@ -1631,10 +1612,10 @@ fn fitness_glance(
 /// a mini-profile sparkline the app paints (`render::widgets::draw_mini_profile`)
 /// into rows 3..8, with the total ascent / descent from the baro task's
 /// [`elevation::Reading`] as the context row and the current altitude on the
-/// hero. "ELEV --" / "NO ELEVATION" until the first altitude sample lands, so a
-/// baro-less (or pre-fix) run reads honestly rather than as a flat sea-level
-/// line. The vert totals come from the authoritative accumulator, not the lossy
-/// decimated series, so a between-samples peak is never dropped from D+.
+/// hero. "AWAITING BARO" until the first altitude sample lands, so a baro-less
+/// (or pre-fix) run reads honestly rather than as a flat sea-level line. The
+/// vert totals come from the authoritative accumulator, not the lossy decimated
+/// series, so a between-samples peak is never dropped from D+.
 #[allow(clippy::too_many_arguments)]
 fn elevation_profile_glance(
     fix: Option<&Fix>,
@@ -1653,9 +1634,7 @@ fn elevation_profile_glance(
     }
 
     if snap.elev_profile.len == 0 {
-        let _ = write!(rows[2], "ELEV --");
-        let _ = write!(rows[4], "NO ELEVATION");
-        let _ = write!(rows[5], "AWAITING BARO");
+        write_unfed(&mut rows, "ELEV", Unfed::AwaitingBaro);
     } else {
         // rows 3..8 are the sparkline cell the app draws into.
         match elev {
@@ -1694,8 +1673,8 @@ fn summary_frame(
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
 }
 
-/// The Recap glance: the synced Year/Month-in-Running totals. "RECAP --" /
-/// "NOT SYNCED" until the phone pushes a summary.
+/// The Recap glance: the synced Year/Month-in-Running totals. Unfed until the
+/// phone pushes a summary.
 #[allow(clippy::too_many_arguments)]
 fn recap_glance(
     fix: Option<&Fix>,
@@ -1708,10 +1687,7 @@ fn recap_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.recap {
-        None => {
-            let _ = write!(rows[2], "RECAP --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "RECAP", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{} RUNS", "RECAP", v.runs.min(9999));
             let _ = write!(rows[4], "{:<7}{} KM", "DIST", v.distance_km);
@@ -1735,10 +1711,7 @@ fn streaks_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.streaks {
-        None => {
-            let _ = write!(rows[2], "STREAK --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "STREAK", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{}D", "CURRENT", v.current_days.min(9999));
             let _ = write!(rows[4], "{:<7}{}D", "BEST", v.best_days.min(9999));
@@ -1760,10 +1733,7 @@ fn run_stats_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.run_stats {
-        None => {
-            let _ = write!(rows[2], "STATS --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "STATS", Unfed::NotSynced),
         Some(v) => {
             let (h, m, s) = hms(v.moving_s);
             let _ = write!(rows[2], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
@@ -1788,10 +1758,7 @@ fn pr_recency_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.pr_recency {
-        None => {
-            let _ = write!(rows[2], "PR AGE --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "PR AGE", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "PR AGE");
             let d = v.days_ago;
@@ -1825,10 +1792,7 @@ fn plan_replan_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.plan_replan {
-        None => {
-            let _ = write!(rows[2], "REPLAN --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "REPLAN", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<8}{}", "REPLAN", v.changes);
             let _ = write!(rows[4], "{:<8}{}", "MAKE-UP", v.make_ups);
@@ -1853,10 +1817,7 @@ fn plan_adaptive_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.plan_adaptive {
-        None => {
-            let _ = write!(rows[2], "ADAPT --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "ADAPT", Unfed::NotSynced),
         Some(v) => {
             let trend = match v.trend {
                 0 => "ON TRACK",
@@ -1898,10 +1859,7 @@ fn readiness_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.readiness {
-        None => {
-            let _ = write!(rows[2], "READY --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "READY", Unfed::NotSynced),
         Some(v) => {
             let band = match v.band {
                 0 => "LOW",
@@ -1928,10 +1886,7 @@ fn goals_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.goals {
-        None => {
-            let _ = write!(rows[2], "GOAL --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "GOAL", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{}%", "GOAL", v.percent.min(100));
             let _ = write!(
@@ -1949,7 +1904,7 @@ fn goals_glance(
 }
 
 /// The TurnCue glance: the next turn on the loaded course — direction, distance
-/// to it, and how many cues remain. "NO COURSE" until one is synced.
+/// to it, and how many cues remain. Unfed until a course is synced.
 #[allow(clippy::too_many_arguments)]
 fn turn_cue_glance(
     fix: Option<&Fix>,
@@ -1962,10 +1917,7 @@ fn turn_cue_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.turn_cue {
-        None => {
-            let _ = write!(rows[2], "TURN --");
-            let _ = write!(rows[4], "NO COURSE");
-        }
+        None => write_unfed(&mut rows, "TURN", Unfed::NotSynced),
         Some(v) => {
             let dir = match v.direction {
                 0 => "STRAIGHT",
@@ -1998,10 +1950,7 @@ fn route_simplify_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.route_simplify {
-        None => {
-            let _ = write!(rows[2], "COURSE --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "COURSE", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{} PTS", "COURSE", v.points);
             let _ = write!(rows[4], "{:<7}{} KM", "LENGTH", v.distance_km);
@@ -2023,10 +1972,7 @@ fn auto_effort_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.auto_effort {
-        None => {
-            let _ = write!(rows[2], "SEGMENTS --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "SEGMENTS", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "SEGMENTS");
             let _ = write!(rows[4], "{:<7}{}/{}", "MATCH", v.matched, v.considered);
@@ -2038,9 +1984,10 @@ fn auto_effort_glance(
 /// The RouteElev glance: the loaded course's climb profile, drawn as a shape the
 /// app paints (`render::widgets::draw_route_elev_overlay`) into rows 3..8 with
 /// the runner's along-course position marked on it, and the total gain / loss as
-/// the context row. Three honest states: "NOT SYNCED" with no course loaded,
-/// the course's geometry rows with no shape when a course was pushed *without*
-/// elevation (never a flat line at zero), and the profile once it carries one.
+/// the context row. Three honest states: unfed with no course loaded,
+/// "NO COURSE ELEV" plus the geometry rows and no shape when a course was pushed
+/// *without* elevation (never a flat line at zero), and the profile once it
+/// carries one.
 #[allow(clippy::too_many_arguments)]
 fn route_elev_glance(
     fix: Option<&Fix>,
@@ -2053,13 +2000,9 @@ fn route_elev_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.route_elev.as_ref() {
-        None => {
-            let _ = write!(rows[2], "CRS ELEV --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "CRS ELEV", Unfed::NotSynced),
         Some(v) if v.len == 0 => {
-            let _ = write!(rows[2], "CRS ELEV --");
-            let _ = write!(rows[4], "NO ELEVATION");
+            write_unfed(&mut rows, "CRS ELEV", Unfed::NoCourseElevation);
             let _ = write!(
                 rows[5],
                 "{} PTS {}.{} KM",
@@ -2089,10 +2032,7 @@ fn race_day_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.race_day {
-        None => {
-            let _ = write!(rows[2], "RACE --");
-            let _ = write!(rows[4], "NOT SYNCED");
-        }
+        None => write_unfed(&mut rows, "RACE", Unfed::NotSynced),
         Some(v) => {
             let d = v.days_until;
             let _ = write!(rows[2], "RACE DAY");
@@ -2144,10 +2084,10 @@ fn nav_page(
     let info = &mut rows[NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS];
     match nav {
         NavView::NoCourse => {
-            let _ = write!(info, "NO COURSE LOADED");
+            let _ = write!(info, "{}", Unfed::NotSynced.reason());
         }
         NavView::NoFix => {
-            let _ = write!(info, "AWAITING FIX");
+            let _ = write!(info, "{}", Unfed::AwaitingFix.reason());
         }
         NavView::Status(s) => {
             // Clamps keep the row inside COLS at any input: 999.99 km along +
@@ -4416,7 +4356,7 @@ mod tests {
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
         assert_eq!(rows[2].as_str(), "PACER --");
-        assert_eq!(rows[4].as_str(), "NO GOAL SET");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
         assert_eq!(rows[7].as_str(), "");
@@ -4850,7 +4790,7 @@ mod tests {
             2,
             true,
         );
-        assert_eq!(rows[7].as_str(), "NO COURSE LOADED");
+        assert_eq!(rows[7].as_str(), "NOT SYNCED");
         let rows = page_rows(
             Page::Nav,
             None,
@@ -5124,7 +5064,9 @@ mod tests {
 
     #[test]
     fn cutoff_glance_honest_inactive_states() {
-        // No legs loaded: honest "no cutoffs" with the how-to hint.
+        // No legs loaded: honestly unfed with the how-to hint. The watch cannot
+        // tell "this course has no cut-offs" from "no course was pushed" — it
+        // sees one absent field — so it claims neither.
         let rec = snapshot(RecordState::Recording, 500.0);
         let rows = page_rows(
             Page::CutoffEta,
@@ -5138,7 +5080,7 @@ mod tests {
             true,
         );
         assert_eq!(rows[2].as_str(), "CUTOFF --");
-        assert_eq!(rows[4].as_str(), "NO CUTOFFS");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
             page_hero(Page::CutoffEta, None, Some(&rec), None)
@@ -5331,7 +5273,7 @@ mod tests {
             true,
         );
         assert_eq!(rows[2].as_str(), "PACES --");
-        assert_eq!(rows[4].as_str(), "NO GOAL SET");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
             page_hero(Page::TrainingPaces, None, Some(&rec), None)
@@ -5522,8 +5464,10 @@ mod tests {
             true,
         );
         assert_eq!(rows[2].as_str(), "ELEV --");
-        assert_eq!(rows[4].as_str(), "NO ELEVATION");
-        assert_eq!(rows[5].as_str(), "AWAITING BARO");
+        assert_eq!(rows[4].as_str(), "AWAITING BARO");
+        // A sensor the runner is waiting on carries no phone-sync remedy: there
+        // is nothing to do but let the barometer produce its first sample.
+        assert_eq!(rows[5].as_str(), "");
         assert_eq!(
             page_hero(Page::ElevationProfile, None, Some(&rec), None)
                 .unwrap()
@@ -5549,6 +5493,7 @@ mod tests {
         );
         assert_eq!(rows[2].as_str(), "RECAP --");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
 
         // Populated recap.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
@@ -5646,7 +5591,9 @@ mod tests {
         });
         let rows = rows_for(&rec);
         assert_eq!(rows[2].as_str(), "CRS ELEV --");
-        assert_eq!(rows[4].as_str(), "NO ELEVATION");
+        assert_eq!(rows[4].as_str(), "NO COURSE ELEV");
+        // Settled, not unfed: the course IS synced, so no sync remedy displaces
+        // the geometry row.
         assert_eq!(rows[5].as_str(), "48 PTS 42.1 KM");
 
         // With a profile: the vert totals ride row 2 and rows 3..8 are left to
@@ -5736,5 +5683,171 @@ mod tests {
         assert_eq!(rows[2].as_str(), "ADAPT   ON TRACK");
         assert_eq!(rows[4].as_str(), "WEEKS   3/3");
         assert_eq!(rows[6].as_str(), "HELD FATIGUE");
+    }
+
+    /// The row a page writes its empty-body reason on: [`UNFED_REASON_ROW`] for
+    /// every glance, and the Nav page's info row (its map panel owns rows 1-6).
+    fn reason_row(page: Page) -> usize {
+        if matches!(page, Page::Nav) {
+            NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS
+        } else {
+            UNFED_REASON_ROW
+        }
+    }
+
+    /// What each page says when nothing has fed it — exhaustive over [`Page`] on
+    /// purpose, so adding a page is a compile error until its empty state has
+    /// been classified. `None` is the live-metric pages, whose numbers are
+    /// legitimately zero at the start of a run and owe no reason line.
+    fn declared_unfed(page: Page) -> Option<Unfed> {
+        match page {
+            Page::Dashboard
+            | Page::Distance
+            | Page::Pace
+            | Page::Lap
+            | Page::Zones
+            | Page::Splits
+            | Page::BackToStart => None,
+            Page::Pacer
+            | Page::GuidedRun
+            | Page::Nav
+            | Page::TurnCue
+            | Page::CutoffEta
+            | Page::Roadbook
+            | Page::Fuel
+            | Page::GearWear
+            | Page::TrainingPaces
+            | Page::Fitness
+            | Page::Readiness
+            | Page::Goals
+            | Page::RaceDay
+            | Page::PlanReplan
+            | Page::PlanAdaptive
+            | Page::Recap
+            | Page::Streaks
+            | Page::RunStats
+            | Page::PrRecency
+            | Page::RouteSimplify
+            | Page::RouteElev
+            | Page::AutoEffort => Some(Unfed::NotSynced),
+            Page::ElevationProfile => Some(Unfed::AwaitingBaro),
+            Page::RacePredictor => Some(Unfed::NeedOneKm),
+            Page::TrainingLoad => Some(Unfed::NeedDistance),
+            Page::DistanceBand => Some(Unfed::NoRaceBand),
+        }
+    }
+
+    /// The drift guard for the empty-state vocabulary: every page's unfed body
+    /// must use a reason from [`crate::unfed`] and no page may invent its own
+    /// phrasing. This is the assertion that fails when a new page reaches for
+    /// `NO WIDGET` — the per-page string tests above pin one page each, this
+    /// pins that they all speak the same language.
+    #[test]
+    fn every_page_unfed_body_speaks_one_vocabulary() {
+        let reasons = Unfed::ALL.map(|u| u.reason());
+        let sanctioned =
+            |text: &str| reasons.contains(&text) || text == crate::unfed::PHONE_SYNC_HINT;
+
+        // A 15 km run so the live-metric pages have real numbers to render and
+        // the distance band is genuinely between windows; nothing pushed, no
+        // baro, no course.
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let mut p = Page::default();
+        loop {
+            let rows = page_rows(
+                p,
+                Some(&fix()),
+                Some(140),
+                Some(&unfed),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+
+            match declared_unfed(p) {
+                Some(why) => {
+                    assert_eq!(
+                        rows[reason_row(p)].as_str(),
+                        why.reason(),
+                        "page {p:?} does not render its declared unfed reason"
+                    );
+                    let hint = rows[UNFED_HINT_ROW].as_str();
+                    match why.hint() {
+                        // The Nav page has no row to spare under its map panel,
+                        // so it carries the reason without the remedy.
+                        Some(h) if !matches!(p, Page::Nav) => {
+                            assert_eq!(hint, h, "page {p:?} drops the remedy its class owes")
+                        }
+                        Some(_) => {}
+                        None => assert_ne!(
+                            hint,
+                            crate::unfed::PHONE_SYNC_HINT,
+                            "page {p:?} offers a phone-sync remedy for a state the phone \
+                             cannot fix"
+                        ),
+                    }
+                }
+                None => {
+                    for row in &rows {
+                        assert!(
+                            !sanctioned(row.as_str()),
+                            "page {p:?} claims an unfed state it did not declare: {row:?}"
+                        );
+                    }
+                }
+            }
+
+            // Nothing anywhere may reach for empty-state-shaped wording that is
+            // not in the vocabulary. A row carrying `--` is exempt: that marker
+            // is the sanctioned way to say one VALUE is absent (`NEED --`,
+            // `WEAR --`), and is not a reason line.
+            for row in &rows {
+                let text = row.as_str();
+                if text.contains("--") {
+                    continue;
+                }
+                if ["NO ", "NOT ", "AWAITING ", "NEED "]
+                    .iter()
+                    .any(|prefix| text.starts_with(prefix))
+                {
+                    assert!(
+                        sanctioned(text),
+                        "page {p:?} invents empty-state wording: {row:?}"
+                    );
+                }
+            }
+
+            p = p.next();
+            if p == Page::default() {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn training_load_rolling_row_names_the_phone_in_the_shared_vocabulary() {
+        // The rolling CTL/ATL/TSB trend lives on the phone, and the row saying so
+        // used to run its label into its value ("ROLLINGSYNC" — `{:<7}` pads a
+        // seven-character label to nothing).
+        let mut rec = snapshot(RecordState::Recording, 12_000.0);
+        rec.training_stress = Some(84.0);
+        rec.moving_s = 3_725;
+        let rows = page_rows(
+            Page::TrainingLoad,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "LOAD  POINTS");
+        assert_eq!(rows[4].as_str(), "DIST   12.00 KM");
+        assert_eq!(rows[5].as_str(), "MOVING 1:02:05");
+        assert_eq!(rows[6].as_str(), "ROLLING NOT SYNCED");
     }
 }
