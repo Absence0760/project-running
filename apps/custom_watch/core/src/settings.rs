@@ -12,19 +12,31 @@
 //! parser, and the run-sync side already speaks fixed-layout little-endian
 //! frames (`run_store`), so this matches that discipline: a 4-byte magic, a
 //! version byte, a presence-bitfield (two of them from v2), then only the
-//! present fields in bit order. Every field is optional so the phone can push
-//! a partial update (just a new max HR) without disturbing the rest. Decoding
-//! only *parses* — the plausibility guards stay in the setters it feeds, so a
-//! garbage value is rejected by the same rule whether it arrives over BLE or
-//! the sim link.
+//! present fields in bit order, then (from v3) a CRC32 trailer. Every field is
+//! optional so the phone can push a partial update (just a new max HR) without
+//! disturbing the rest. Decoding only *parses* — the plausibility guards stay
+//! in the setters it feeds, so a garbage value is rejected by the same rule
+//! whether it arrives over BLE or the sim link.
+
+use crate::run_store::crc32;
 
 pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
 
+/// Version 3 (2026-07-25): the frame gained a CRC32 trailer. Its only integrity
+/// check had been that the byte count accounts for the fields the presence
+/// bitfield claims, which catches any single-*bit* flip but not a single-*byte*
+/// corruption that flips two bits across equal-width fields — the length is
+/// unchanged, so it decodes as a fully valid but *different* update (one byte
+/// turns `flags` `0xB8` into `0xE8` and the four bytes the phone sent as the
+/// QNH sea-level pressure are applied as the run-view page mask). `decode`
+/// accepts v1 (no `flags2`, no offset) and v2 (no CRC) alongside v3, so an old
+/// phone's push keeps working; the encoder always emits v3.
+pub const SETTINGS_VERSION: u8 = 3;
+
 /// Version 2 (2026-07-22): v1's flag byte was saturated, so the ninth field
-/// (`tz_offset_min`) rode the promised version bump — a v2 frame carries a
-/// second presence byte (`flags2`) after the first. `decode` still accepts
-/// v1 frames (no `flags2`, no offset), so an old phone's push keeps working.
-pub const SETTINGS_VERSION: u8 = 2;
+/// (`tz_offset_min`) rode that version bump into a second presence byte
+/// (`flags2`) after the first.
+const SETTINGS_VERSION_V2: u8 = 2;
 
 /// Presence bits, in the order the fields are laid out after the header.
 pub const FLAG_MAX_HR: u8 = 1 << 0;
@@ -64,10 +76,13 @@ const KNOWN_FLAGS2: u8 = FLAG2_TZ_OFFSET;
 const V1_HEADER_LEN: usize = 6;
 const HEADER_LEN: usize = V1_HEADER_LEN + 1;
 
+/// The v3 CRC32 trailer, little-endian, over every byte before it.
+const CRC_LEN: usize = 4;
+
 /// Largest a fully-populated frame can be — every field present: v2 header +
 /// max_hr(2) + pacer(8) + gear(8) + zone_ceiling(1) + sea_level_pa(4) + fuel(8)
-/// + pages(4) + hide_empty(1) + tz_offset(2).
-pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8 + 4 + 1 + 2;
+/// + pages(4) + hide_empty(1) + tz_offset(2) + the v3 CRC trailer.
+pub const MAX_SETTINGS_LEN: usize = HEADER_LEN + 2 + 8 + 8 + 1 + 4 + 8 + 4 + 1 + 2 + CRC_LEN;
 
 /// Widest plausible UTC offset (minutes): no real zone sits outside ±14 h.
 pub const TZ_OFFSET_LIMIT_MIN: i16 = 14 * 60;
@@ -152,10 +167,11 @@ impl WatchSettings {
     }
 
     /// Decode a settings frame. Returns `None` on a bad magic, an unknown
-    /// version, an unknown presence bit, a buffer too short for the fields the
-    /// flags claim, or trailing bytes past the declared fields — never a partial
-    /// or off-frame struct. Accepts version 1 (no `flags2`, so no tz offset —
-    /// an old phone's push keeps working) alongside the current version 2.
+    /// version, a failed CRC, an unknown presence bit, a buffer too short for
+    /// the fields the flags claim, or trailing bytes past the declared fields —
+    /// never a partial or off-frame struct. Accepts version 1 (no `flags2`, so
+    /// no tz offset) and version 2 (no CRC) alongside the current version 3, so
+    /// an old phone's push keeps working.
     pub fn decode(b: &[u8]) -> Option<Self> {
         if b.len() < V1_HEADER_LEN || b[0..4] != SETTINGS_MAGIC {
             return None;
@@ -166,9 +182,20 @@ impl WatchSettings {
         // assert turns the first over-saturating flag into a compile error
         // instead of a silently-accepted frame.
         const _: () = assert!(KNOWN_FLAGS == u8::MAX);
-        let (flags2, mut off) = match b[4] {
-            1 => (0u8, V1_HEADER_LEN),
-            SETTINGS_VERSION => (*b.get(6)?, HEADER_LEN),
+        let (b, flags2, mut off) = match b[4] {
+            1 => (b, 0u8, V1_HEADER_LEN),
+            SETTINGS_VERSION_V2 => (b, *b.get(6)?, HEADER_LEN),
+            SETTINGS_VERSION => {
+                let end = b.len().checked_sub(CRC_LEN)?;
+                if end < HEADER_LEN {
+                    return None;
+                }
+                let want = u32::from_le_bytes([b[end], b[end + 1], b[end + 2], b[end + 3]]);
+                if crc32(&b[..end]) != want {
+                    return None;
+                }
+                (&b[..end], b[6], HEADER_LEN)
+            }
             _ => return None,
         };
         if flags2 & !KNOWN_FLAGS2 != 0 {
@@ -248,9 +275,10 @@ impl WatchSettings {
         Some(out)
     }
 
-    /// Encode into `out`, returning the byte length written, or `None` if `out`
-    /// is smaller than the frame needs. Only present fields are written, in flag
-    /// order — the mirror the phone encoder pins to.
+    /// Encode a version-3 frame into `out`, returning the byte length written,
+    /// or `None` if `out` is smaller than the frame needs. Only present fields
+    /// are written, in flag order, then the CRC32 trailer over everything
+    /// before it — the mirror the phone encoder pins to.
     pub fn encode(&self, out: &mut [u8]) -> Option<usize> {
         let mut flags = 0u8;
         if self.max_hr.is_some() {
@@ -283,6 +311,7 @@ impl WatchSettings {
         }
 
         let len = HEADER_LEN
+            + CRC_LEN
             + self.max_hr.map_or(0, |_| 2)
             + self.pacer.map_or(0, |_| 8)
             + self.gear.map_or(0, |_| 8)
@@ -343,7 +372,9 @@ impl WatchSettings {
             out[off..off + 2].copy_from_slice(&m.to_le_bytes());
             off += 2;
         }
-        Some(off)
+        let crc = crc32(&out[..off]).to_le_bytes();
+        out[off..off + CRC_LEN].copy_from_slice(&crc);
+        Some(off + CRC_LEN)
     }
 }
 
@@ -362,7 +393,7 @@ mod tests {
         let s = WatchSettings::default();
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
-        assert_eq!(n, HEADER_LEN, "no fields => header only");
+        assert_eq!(n, HEADER_LEN + CRC_LEN, "no fields => header + crc");
         assert_eq!(buf[4], SETTINGS_VERSION);
         assert_eq!(buf[5], 0, "no flags set");
         assert_eq!(buf[6], 0, "no flags2 set");
@@ -530,21 +561,31 @@ mod tests {
         bad_magic[0] = b'X';
         assert_eq!(WatchSettings::decode(&bad_magic), None);
         let mut bad_ver = buf;
-        bad_ver[4] = 3;
+        bad_ver[4] = 4;
         assert_eq!(WatchSettings::decode(&bad_ver), None);
         assert_eq!(WatchSettings::decode(&[]), None);
         assert_eq!(WatchSettings::decode(b"SE"), None);
     }
 
+    /// Build a v3 frame around `body` (header + fields) by appending the CRC
+    /// the decoder will check, so a test can exercise a rejection *past* the
+    /// checksum rather than tripping on it.
+    fn sealed(body: &[u8]) -> Vec<u8> {
+        let mut frame = body.to_vec();
+        frame.extend_from_slice(&crc32(body).to_le_bytes());
+        frame
+    }
+
     #[test]
     fn unknown_flags2_bit_is_rejected() {
-        let mut frame = [0u8; HEADER_LEN];
-        frame[0..4].copy_from_slice(&SETTINGS_MAGIC);
-        frame[4] = SETTINGS_VERSION;
-        frame[5] = 0;
-        frame[6] = 0x02; // bit 1: no v2 field defines it
+        let mut header = [0u8; HEADER_LEN];
+        header[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        header[4] = SETTINGS_VERSION;
+        header[5] = 0;
+        header[6] = 0x02; // bit 1: no v2 field defines it
+        let frame = sealed(&header);
         assert_eq!(WatchSettings::decode(&frame), None);
-        // A v2 header cut short of its flags2 byte is a short buffer, not a
+        // A v3 header cut short of its flags2 byte is a short buffer, not a
         // zero flags2.
         assert_eq!(WatchSettings::decode(&frame[..V1_HEADER_LEN]), None);
     }
@@ -579,6 +620,76 @@ mod tests {
     }
 
     #[test]
+    fn trailing_bytes_are_rejected_even_when_the_crc_covers_them() {
+        // Appending to a frame invalidates its checksum, so the CRC alone
+        // rejects the naive case. Re-sealing the longer frame proves the
+        // exact-length check is still doing its own job underneath.
+        let s = WatchSettings {
+            max_hr: Some(150),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        let mut body = buf[..n - CRC_LEN].to_vec();
+        body.push(0x00);
+        assert_eq!(WatchSettings::decode(&sealed(&body)), None);
+    }
+
+    #[test]
+    fn a_frame_whose_crc_does_not_match_is_rejected() {
+        let s = WatchSettings {
+            max_hr: Some(190),
+            sea_level_pa: Some(101_325.0),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert!(WatchSettings::decode(&buf[..n]).is_some());
+        for at in 0..CRC_LEN {
+            let mut bad = buf;
+            bad[n - CRC_LEN + at] ^= 0x01;
+            assert_eq!(
+                WatchSettings::decode(&bad[..n]),
+                None,
+                "a flipped crc byte {at} decoded"
+            );
+        }
+        // A v3 frame with no room for the trailer at all is short, not v2.
+        assert_eq!(WatchSettings::decode(&buf[..HEADER_LEN + 2]), None);
+    }
+
+    /// The reproducer the v3 bump exists for: one byte of the flags, two bits
+    /// (`^ 0x50`), and the QNH sea-level pressure the phone sent is applied as
+    /// the run-view page mask instead while the QNH silently vanishes — same
+    /// length, same plausibility, different settings. Every equal-width pair is
+    /// confusable this way (`pacer` <-> `gear` <-> `fuel`, `zone_ceiling` <->
+    /// `hide_empty_pages`); the CRC turns all of them into a rejection.
+    #[test]
+    fn a_single_byte_flags_corruption_cannot_re_frame_qnh_as_the_page_mask() {
+        let s = WatchSettings {
+            sea_level_pa: Some(101_325.0),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(buf[5], FLAG_SEA_LEVEL);
+
+        // Re-sealed, the corruption is still a perfectly well-formed frame —
+        // the length check has nothing to catch, which is the whole defect.
+        let mut body = buf[..n - CRC_LEN].to_vec();
+        body[5] ^= 0x50;
+        let re_framed = WatchSettings::decode(&sealed(&body)).expect("length-valid under its crc");
+        assert_eq!(re_framed.sea_level_pa, None);
+        assert_eq!(re_framed.pages, Some(101_325.0f32.to_bits()));
+
+        // Over the wire the sender's CRC travels with the frame, so the same
+        // flip is rejected outright rather than applied as different config.
+        let mut corrupt = buf;
+        corrupt[5] ^= 0x50;
+        assert_eq!(WatchSettings::decode(&corrupt[..n]), None);
+    }
+
+    #[test]
     fn flag_byte_is_saturated_so_the_next_field_is_a_version_bump() {
         // pages + hide_empty consumed bits 6 + 7: every bit of the first flag
         // byte is a known field, so the unknown-bit rejection only polices
@@ -586,12 +697,13 @@ mod tests {
         // into flags2 — and the next saturation repeats the drill: whoever
         // fills flags2's bit 7 bumps to v3.
         assert_eq!(KNOWN_FLAGS, u8::MAX);
-        // A full flag byte with too few bytes for what it claims still rejects.
-        let mut frame = [0u8; HEADER_LEN + 2];
-        frame[0..4].copy_from_slice(&SETTINGS_MAGIC);
-        frame[4] = SETTINGS_VERSION;
-        frame[5] = u8::MAX;
-        assert_eq!(WatchSettings::decode(&frame), None);
+        // A full flag byte with too few bytes for what it claims still rejects,
+        // even when the checksum over those too-few bytes is correct.
+        let mut body = [0u8; HEADER_LEN + 2];
+        body[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        body[4] = SETTINGS_VERSION;
+        body[5] = u8::MAX;
+        assert_eq!(WatchSettings::decode(&sealed(&body)), None);
     }
 
     #[test]
@@ -733,7 +845,7 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
-            0x02, // version
+            0x03, // version
             0xff, // flags: every version-1 field
             0x01, // flags2: tz_offset
             0xbe, 0x00, // max_hr = 190
@@ -748,6 +860,7 @@ mod tests {
             0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
             0x01, // hide_empty_pages = true
             0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+            0xf4, 0x68, 0x74, 0xf1, // crc32 over every byte above (u32 LE)
         ];
         assert_eq!(n, MAX_SETTINGS_LEN);
         assert_eq!(buf, expected);
@@ -766,8 +879,61 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x02, 0x00, 0x01, 0xc6, 0xfd]
+            &[0x53, 0x45, 0x54, 0x31, 0x03, 0x00, 0x01, 0xc6, 0xfd, 0xb6, 0x52, 0xd9, 0xcc]
         );
+    }
+
+    /// The frozen v2 golden vector (every field, version byte 0x02, no CRC)
+    /// must keep decoding into exactly what it decoded into before the v3
+    /// bump: a phone that hasn't shipped the checksummed encoder yet still
+    /// configures the watch.
+    #[test]
+    fn v2_golden_vector_still_decodes() {
+        let v2: [u8; 45] = [
+            0x53, 0x45, 0x54, 0x31, // "SET1"
+            0x02, // version 2
+            0xff, // flags: every version-1 field
+            0x01, // flags2: tz_offset
+            0xbe, 0x00, // max_hr = 190
+            0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
+            0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
+            0x00, 0x24, 0xf4, 0x48, // gear baseline_m = 500000.0 (f32 LE)
+            0x00, 0x50, 0x43, 0x49, // gear target_m = 800000.0 (f32 LE)
+            0x03, // zone_ceiling = 3
+            0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
+            0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
+            0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
+            0x01, // hide_empty_pages = true
+            0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+        ];
+        assert_eq!(
+            WatchSettings::decode(&v2),
+            Some(WatchSettings {
+                max_hr: Some(190),
+                pacer: Some(PacerGoalCfg {
+                    distance_m: 42_195,
+                    time_s: 14_400,
+                }),
+                gear: Some(GearCfg {
+                    baseline_m: 500_000.0,
+                    target_m: Some(800_000.0),
+                }),
+                zone_ceiling: Some(Some(3)),
+                sea_level_pa: Some(101_325.0),
+                fuel: Some(FuelCfg {
+                    drink_interval_s: 900,
+                    eat_interval_s: 1_500,
+                }),
+                pages: Some(0x0000_c0ff),
+                hide_empty_pages: Some(true),
+                tz_offset_min: Some(345),
+            })
+        );
+        // A v2 frame carrying a v3-shaped trailer is trailing bytes, not a crc.
+        let mut with_trailer = v2.to_vec();
+        with_trailer.extend_from_slice(&crc32(&v2).to_le_bytes());
+        assert_eq!(WatchSettings::decode(&with_trailer), None);
     }
 
     /// The frozen v1 golden vector (every v1 field, version byte 0x01, no

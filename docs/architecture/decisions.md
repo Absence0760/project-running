@@ -4336,6 +4336,26 @@ One coupling to respect: the harness keys on exact defmt strings (`run_flash: ru
 
 ---
 
+## 319. The `SET1` settings frame bumps to v3 with a CRC32 trailer, closing the only wire format in the firmware without an integrity check
+
+**Decided (2026-07-25).** § 317's property suite found that `watch_core::settings` was the last decoder here with no checksum: its sole validation was that the byte count accounts for the fields the presence bitfield claims. That catches any single-*bit* flip, because flipping a presence bit changes the length the flags claim — but not a single-*byte* corruption that flips two bits across equal-width fields. `flags` `^ 0x50` leaves the length untouched and applies the four bytes the phone sent as the QNH sea-level reference (`sea_level_pa`, bit 4) as the run-view page mask (`pages`, bit 6) instead, with the QNH silently gone. The apply-side plausibility guards cannot help: a valid pressure and a valid page mask occupy the same four bytes. Every equal-width pair is confusable the same way — `pacer` ↔ `gear` ↔ `fuel`, `zone_ceiling` ↔ `hide_empty_pages`.
+
+The frame is now version 3 and carries a four-byte little-endian CRC32 trailer over every byte before it. It **reuses `run_store::crc32`** rather than growing a second implementation, which is what `flash_store`'s config and bond records already do; the Dart encoder likewise reuses the `crc32` the run-store decoder in `sim_watch_sync.dart` implements. A mismatch is rejected outright, exactly like an unknown flag bit or a short buffer — no partial apply, the same fail-closed discipline as the rest of `decode`.
+
+Version compatibility follows the v1→v2 precedent set in § 293: `decode` accepts v1 (no `flags2`, no timezone offset) and v2 (no CRC) alongside v3, so a phone that has not shipped the new encoder still configures the watch. Neither legacy version was retro-fitted with a checksum and neither frozen golden vector moved — a v1 or v2 frame means an old sender, and inventing a guarantee its bytes do not carry would be a lie in the decoder. The encoder is v3-only, so every new push is checked. A fully populated frame grows 45 → 49 bytes; `MAX_SETTINGS_LEN` (which sizes the GATT characteristic and the sim-link read buffer) carries the growth.
+
+Three things worth naming about how it was verified. The `#[ignore]`d property from § 317 is un-ignored and passes rather than being deleted — it was the defect's only executable record and it is now the fix's. A host test builds the QNH→pages corruption *and re-seals it under its own correct CRC*, asserting the re-framed frame still decodes, so the record shows the length check genuinely cannot catch this and the CRC is doing real work; the same flip carrying the sender's CRC is then rejected. And the raw-frame property generator seals v3 frames with their real checksum whatever their length, so the CRC never shadows the exact-length check underneath it.
+
+This is **host-tested + build-verified only** per § 314. Nothing here has run on silicon or under the simulator: BLE can never be sim-verified (no SoftDevice in Renode), and the on-device leg — a corrupted push refused over the real radio, a 49-byte write surviving a real GATT MTU — is a bench-checklist item in `quality_standards.md`, not a claim.
+
+Don't re-litigate by:
+
+- **Adding a second CRC implementation** on either side. One per language is the point.
+- **Retro-fitting a checksum onto v1 or v2**, or editing their golden vectors. Old senders do not emit one.
+- **Falling back to a length-only parse** when the CRC fails. A failed checksum is a rejected frame.
+
+---
+
 ## 320. The BLE chunk-request queue's depth and semantics live in `watch_core`, and `embassy-sync` is a dev-dependency to test them
 
 **Decided (2026-07-25).** § 316 replaced the `run_chunk` request `Signal` with a depth-8 `Channel`, because a `Signal` keeps only the newest value: a phone that pipelines pulls lost every request but the last and then waited on notifications it was never owed. That fix landed as a `const CHUNK_QUEUE_DEPTH` inside `app/src/tasks/ble.rs` — and `app/` is excluded from the host test job (`--exclude app`, § 314), so nothing proved the FIFO ordering or the overflow behaviour the fix exists for. It was compile-verified only, which for the one protocol that can never be sim-verified either (no S140 SoftDevice under Renode, § 318) is the whole of its evidence.

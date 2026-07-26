@@ -8,10 +8,19 @@ mod support;
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
+use watch_core::run_store::crc32;
 use watch_core::settings::{
     FuelCfg, GearCfg, PacerGoalCfg, WatchSettings, MAX_SETTINGS_LEN, SETTINGS_VERSION,
     TZ_OFFSET_LIMIT_MIN,
 };
+
+/// The two legacy versions `decode` still accepts: v1 (no `flags2`) and v2
+/// (no CRC trailer). Neither is emitted any more — the encoder is v3-only.
+const V1: u8 = 1;
+const V2: u8 = 2;
+
+/// Width of the v3 CRC32 trailer.
+const CRC_WIDTH: usize = 4;
 
 /// The legal domain of a settings frame — every field the encoder can carry
 /// without a sentinel collapsing it. `target_m` is strictly positive (`0.0` is
@@ -162,7 +171,7 @@ fn a_frame_with_bytes_past_the_fields_the_flags_claim_is_rejected() {
 #[test]
 fn an_unknown_version_byte_is_rejected() {
     check(512, (a_settings(), any::<u8>()), |(s, version)| {
-        prop_assume!(version != 1 && version != SETTINGS_VERSION);
+        prop_assume!(!matches!(version, V1 | V2 | SETTINGS_VERSION));
         let mut frame = encoded(&s);
         frame[4] = version;
         prop_assert_eq!(
@@ -220,20 +229,22 @@ const TZ_WIDTH: usize = 2;
 
 /// A frame assembled from raw header bytes rather than from [`WatchSettings`],
 /// so the presence bytes and the payload length vary independently — the shape
-/// a corrupt or hostile push actually has.
+/// a corrupt or hostile push actually has. A v3 frame is sealed with its real
+/// checksum whatever its length, so the CRC never shadows the length check.
 fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
     (
-        prop_oneof![Just(1u8), Just(SETTINGS_VERSION), any::<u8>()],
+        prop_oneof![Just(V1), Just(V2), Just(SETTINGS_VERSION), any::<u8>()],
         any::<u8>(),
         prop_oneof![Just(0u8), Just(1u8), any::<u8>()],
         prop::collection::vec(any::<u8>(), 0..=40),
         any::<bool>(),
     )
         .prop_map(|(version, flags, flags2, tail, exact)| {
+            let two_presence_bytes = version == V2 || version == SETTINGS_VERSION;
             let mut frame = b"SET1".to_vec();
             frame.push(version);
             frame.push(flags);
-            if version == SETTINGS_VERSION {
+            if two_presence_bytes {
                 frame.push(flags2);
             }
             if exact {
@@ -243,7 +254,7 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
                     .filter(|i| flags & (1 << i) != 0)
                     .map(|i| WIDTHS[i])
                     .sum();
-                if version == SETTINGS_VERSION && flags2 & 1 != 0 {
+                if two_presence_bytes && flags2 & 1 != 0 {
                     want += TZ_WIDTH;
                 }
                 let mut payload = tail.clone();
@@ -251,6 +262,10 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
                 frame.extend_from_slice(&payload);
             } else {
                 frame.extend_from_slice(&tail);
+            }
+            if version == SETTINGS_VERSION {
+                let crc = crc32(&frame);
+                frame.extend_from_slice(&crc.to_le_bytes());
             }
             frame
         })
@@ -267,13 +282,9 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
             return Ok(());
         };
         let version = frame[4];
-        prop_assert!(version == 1 || version == SETTINGS_VERSION);
+        prop_assert!(matches!(version, V1 | V2 | SETTINGS_VERSION));
         let flags = frame[5];
-        let (flags2, header_len) = if version == SETTINGS_VERSION {
-            (frame[6], 7)
-        } else {
-            (0, 6)
-        };
+        let (flags2, header_len) = if version == V1 { (0, 6) } else { (frame[6], 7) };
 
         let present = [
             got.max_hr.is_some(),
@@ -296,6 +307,9 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
         if got.tz_offset_min.is_some() {
             want += TZ_WIDTH;
         }
+        if version == SETTINGS_VERSION {
+            want += CRC_WIDTH;
+        }
         prop_assert_eq!(
             frame.len(),
             want,
@@ -310,8 +324,8 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
 #[test]
 fn a_single_bit_flip_of_a_presence_byte_is_always_caught() {
     // Flipping one presence bit changes the length the flags claim, so the
-    // exact-length check rejects the frame. This is the whole integrity story
-    // the format has — see the ignored property below for where it runs out.
+    // exact-length check rejects the frame on its own — before the v3 CRC the
+    // property below relies on ever gets a say.
     check(1024, (a_settings(), 5usize..=6, 0u32..8), |(s, at, bit)| {
         let mut frame = encoded(&s);
         frame[at] ^= 1 << bit;
@@ -327,20 +341,15 @@ fn a_single_bit_flip_of_a_presence_byte_is_always_caught() {
 }
 
 #[test]
-#[ignore = "known gap: the settings frame carries no checksum, so a two-bit \
-            corruption of the presence byte can swap two equal-width fields \
-            and still pass the exact-length check"]
 fn a_single_byte_corruption_never_yields_a_frame_claiming_different_fields() {
-    // Fails today, and the failure is the point: `flags` 0xB8 -> 0xE8 (one
-    // byte, two bits) turns a 21-byte frame carrying zone_ceiling +
-    // sea_level_pa + fuel + hide_empty into an equally-valid 21-byte frame
-    // where the four QNH bytes are applied as the run-view `pages` mask and
-    // sea_level_pa vanishes. Every equal-width pair within `flags` is
-    // confusable this way: sea_level <-> pages, pacer <-> gear <-> fuel,
-    // zone_ceiling <-> hide_empty. Every other wire format in the firmware
-    // (run_store, the flash config record, the BLE bond record) covers itself
-    // with the crc32 already in `run_store`; this one does not. Un-ignore this
-    // when it does.
+    // The exact-length check catches any single-*bit* flip, but not a
+    // single-*byte* one that flips two bits across equal-width fields: `flags`
+    // 0x10 ^ 0x50 -> 0x40 leaves the length untouched and applies the four
+    // bytes the phone sent as the QNH sea-level pressure as the run-view
+    // `pages` mask instead. Every equal-width pair is confusable this way
+    // (sea_level <-> pages, pacer <-> gear <-> fuel, zone_ceiling <->
+    // hide_empty), which is why v3 carries the same crc32 the rest of the
+    // firmware's wire formats do.
     check(
         1024,
         (a_settings(), any::<Index>(), 1u8..=u8::MAX),
