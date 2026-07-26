@@ -133,6 +133,29 @@ predate both the 33rd page and the row-scrolling window; an independent BFS repr
 row exactly but not those two, so they are flagged for re-measurement rather than re-derived from
 a model that does not match.
 
+## 2026-07-26 (second batch) — the wire formats hardened, and the owed items closed
+
+A three-worktree pass taking the previous batch's named debt rather than new features. Host tests
+**1883 -> 1903**; three feature sets build, `clippy -D warnings` and `cargo fmt --check` clean,
+both Dart twins byte-identical. **Host-tested + build-verified only** (§ 314).
+
+`CRS1` v3 seals the course push with a mandatory CRC32 (§ 335) — and unlike the settings frame its
+pre-CRC versions stop decoding, because a course has no plausibility guard that could catch a
+displaced polyline and because an accepted un-checksummed version is a bypass. `SET1` v4 carries
+the five settings the firmware honoured but the phone could not reach (§ 336), so the alert
+cadences, pace band, race-phase plan and guided-run selection are now armable on real hardware
+rather than only in the sim. And `navigation.md`'s press-cost table is re-derived at 33 pages after
+the missing term was found: the grid is additive, so a page costs `min(walk, 1 + grid moves)` — the
+model then reproduces the pre-page-33 table exactly, which is what licensed publishing new figures.
+
+**Process note worth keeping.** Three agents ran in parallel worktrees; two fast-forwarded onto the
+working branch, the third forked from `origin/main` and correctly reported that the sinks its wire
+fields needed did not exist — because the batch that built them was not yet merged. It declined to
+add fields with no sink, which is the right instinct and exactly what the `settings_apply` seam
+exists to enforce, but it also rebuilt work already landed. The lesson is a briefing one: an agent
+whose worktree may fork from stale main must be told to fast-forward onto the working branch first
+and to verify the premises it was handed before building on them.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
