@@ -141,6 +141,7 @@ pub async fn screen_task(
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut signal_rx = unwrap!(state::SIGNAL.receiver());
     let mut battery_rx = unwrap!(state::BATTERY.receiver());
+    let mut pending_runs_rx = unwrap!(state::PENDING_RUNS.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
@@ -151,6 +152,7 @@ pub async fn screen_task(
     let mut tb: Option<TrackbackView> = None;
     let mut signal: Option<SignalSample> = None;
     let mut battery: Option<u8> = None;
+    let mut pending_runs: u8 = 0;
     let mut page = Page::default();
     let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
@@ -232,6 +234,9 @@ pub async fn screen_task(
         if let Some(b) = battery_rx.try_changed() {
             battery = b;
         }
+        if let Some(n) = pending_runs_rx.try_changed() {
+            pending_runs = n;
+        }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
         }
@@ -286,6 +291,10 @@ pub async fn screen_task(
         // is a widget below, and run views carry neither.
         if !face::run_view(rec.as_ref()) {
             face::apply_battery_row(&mut rows, idle_view, battery);
+            // A run interrupted by a reset (or a failed commit) is on flash and
+            // pullable, but nothing else on the idle face distinguishes that boot
+            // from any other — so say so, standing, until the phone has it.
+            face::apply_pending_run_marker(&mut rows, idle_view, pending_runs);
         }
         let icons = face::page_icons(
             page,
@@ -542,9 +551,10 @@ pub async fn screen_task(
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
                     stop_armed_rx.changed(),
-                    select3(
+                    select4(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
+                        pending_runs_rx.changed(),
                         Timer::after(tick),
                     ),
                 ),
@@ -566,11 +576,12 @@ pub async fn screen_task(
             Either3::Third(Either4::Fourth(Either4::First(r))) => rezero = Some(r),
             Either3::Third(Either4::Fourth(Either4::Second(g))) => grid = g,
             Either3::Third(Either4::Fourth(Either4::Third(v))) => stop_armed = v,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::First(m)))) => {
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::First(m)))) => {
                 tz_offset_min = Some(m)
             }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Second(b)))) => battery = b,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Third(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
         }
     }
 }

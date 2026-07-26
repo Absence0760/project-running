@@ -179,6 +179,15 @@ pub static TZ_OFFSET_MIN: Watch<CriticalSectionRawMutex, i16, 1> = Watch::new();
 /// pending has nothing extra to ask for.
 pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::new();
 
+/// How many runs on flash are a mid-run checkpoint the phone has not pulled —
+/// the runs whose recording ended with the power rather than with a stop. The
+/// `run_flash` store publishes it (from its boot scan, and again whenever an
+/// eviction, a failed commit, or a completed phone pull moves the count); the
+/// `ui` task shows it as a standing marker on the home face, so a runner whose
+/// watch rebooted mid-ultra can see the run survived and needs syncing. No value
+/// published means none. One receiver (the `ui` task).
+pub static PENDING_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
 /// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
 /// was decided: the `baro` task publishes it (honest refusals included — no
 /// fresh GPS, no barometer); the `ui` task shows it as a transient idle-face

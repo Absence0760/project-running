@@ -59,6 +59,8 @@ use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::run_store::ManifestEntry;
 
+use crate::state;
+
 /// Absolute flash offset of the run-store region: the top `REGION_LEN` bytes of
 /// the chip's flash, carved out of both `memory.x` and `memory-ble.x`.
 pub const REGION_OFFSET: u32 = (nvmc::FLASH_SIZE - flash_store::REGION_LEN) as u32;
@@ -101,6 +103,10 @@ pub struct RunStore {
     flash: FlashBackend,
     dir: SlotDir,
     available: bool,
+    /// Last value published to [`state::PENDING_RUNS`], so a mutation that leaves
+    /// the count alone (the common case — every chunk served, every checkpoint
+    /// that evicts nothing) wakes the ui task not at all.
+    pending_published: u8,
 }
 
 impl RunStore {
@@ -122,19 +128,40 @@ impl RunStore {
         };
         if available {
             info!(
-                "run_flash: run store armed at {=u32:#x}, {=u8} run(s) recovered",
+                "run_flash: run store armed at {=u32:#x}, {=u8} run(s) recovered ({=u8} interrupted)",
                 REGION_OFFSET,
-                dir.run_count()
+                dir.run_count(),
+                dir.pending_partial_count()
             );
         } else {
             warn!(
                 "run_flash: no NVMC controller (sim?) — run store disabled, recording unaffected"
             );
         }
-        Self {
+        let mut store = Self {
             flash,
             dir,
             available,
+            pending_published: 0,
+        };
+        store.publish_pending();
+        store
+    }
+
+    /// Publish the count of interrupted-and-unpulled runs for the ui task's
+    /// home-face marker, on change only.
+    ///
+    /// The store owns this fact and every path that can move it lives in this
+    /// file — the boot scan, an eviction taken by a commit or a checkpoint, a
+    /// failed commit, and a completed phone pull — so publishing here is what
+    /// keeps the wrist from drifting out of step with flash. Best-effort / L4 like
+    /// the rest of the store: a `Watch` send cannot fail, and nothing about
+    /// recording depends on the marker.
+    fn publish_pending(&mut self) {
+        let pending = self.dir.pending_partial_count();
+        if pending != self.pending_published {
+            self.pending_published = pending;
+            state::PENDING_RUNS.sender().send(pending);
         }
     }
 
@@ -312,14 +339,17 @@ impl RunStore {
         if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!("run_flash: erase slot {=usize} failed {:?}", plan.slot, e);
             self.dir.commit_failed(plan.slot);
+            self.publish_pending();
             return;
         }
         if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!("run_flash: write run {=u32} failed {:?}", run_seq, e);
             self.dir.commit_failed(plan.slot);
+            self.publish_pending();
             return;
         }
         self.dir.commit_written(plan.slot);
+        self.publish_pending();
         info!(
             "run_flash: stored run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,
@@ -367,6 +397,7 @@ impl RunStore {
                 plan.slot, e
             );
             self.dir.forget(plan.slot);
+            self.publish_pending();
             return;
         }
         if let Err(e) = self.flash_write(plan.erase_from, blob).await {
@@ -375,8 +406,10 @@ impl RunStore {
                 run_seq, e
             );
             self.dir.forget(plan.slot);
+            self.publish_pending();
             return;
         }
+        self.publish_pending();
         debug!(
             "run_flash: checkpointed run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,
@@ -404,6 +437,7 @@ impl RunStore {
     pub fn mark_synced_if_complete(&mut self, run_seq: u32, next_offset: u32) {
         if flash_plan::chunk_completes_run(&self.dir, run_seq, next_offset) {
             self.dir.mark_synced(run_seq);
+            self.publish_pending();
         }
     }
 

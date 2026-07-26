@@ -259,6 +259,48 @@ pub fn apply_battery_row(rows: &mut [Row; ROWS], view: IdleView, percent: Option
     let _ = write!(row, "{:>width$}", tag, width = COLS - row.len());
 }
 
+/// The home face row the recovered-run marker rides: the blank breathing row
+/// directly under the clock hero band (rows 2-4), so the marker reads as a
+/// footnote to the clock and collides with neither the hero nor the HR/ALT
+/// summary below it.
+pub const PENDING_RUN_ROW: usize = CLOCK_HERO_TOP_ROW + CLOCK_HERO_ROWS;
+
+const _: () = assert!(PENDING_RUN_ROW < ROWS);
+const _: () = assert!(PENDING_RUN_ROW != FUEL_MARKER_ROW && PENDING_RUN_ROW != BATTERY_ROW);
+
+/// Overlay the home face's recovered-run marker — right-anchored onto
+/// [`PENDING_RUN_ROW`], a post-pass like [`apply_fuel_marker`]. `pending` is how
+/// many runs on flash are a mid-run checkpoint the phone has not pulled
+/// ([`crate::flash_store::SlotDir::pending_partial_count`]): a brown-out or
+/// battery swap mid-ultra leaves the run-so-far on flash, and without this the
+/// idle face after one looks exactly like a normal boot, so the runner has no way
+/// to know the interrupted run is there to be synced.
+///
+/// A standing 1x tag, deliberately not a modal or a banner — it must not stand
+/// between the runner and the next start. It retires itself as the phone pulls
+/// each run. No-op at zero, off the home view (the diagnostics face's rows are
+/// all claimed, and it is the bench readout, not the runner's face), and when the
+/// row is already occupied, so it can only ever add a glance.
+pub fn apply_pending_run_marker(rows: &mut [Row; ROWS], view: IdleView, pending: u8) {
+    if view != IdleView::Home || pending == 0 {
+        return;
+    }
+    let row = &mut rows[PENDING_RUN_ROW];
+    if !row.is_empty() {
+        return;
+    }
+    // Sized for the widest a u8 count can render (`255 RUNS RECOVERED`, 18
+    // cells): a `heapless` write that overruns leaves the piece it managed
+    // behind, so a bare count with no label is the failure mode to design out.
+    let mut tag: heapless::String<18> = heapless::String::new();
+    if pending == 1 {
+        let _ = write!(tag, "1 RUN RECOVERED");
+    } else {
+        let _ = write!(tag, "{} RUNS RECOVERED", pending);
+    }
+    let _ = write!(row, "{:>width$}", tag, width = COLS);
+}
+
 /// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
 /// rather than the idle status face. The app keys page-specific drawing (the
 /// Nav page's map panel) off the same predicate the layout selection uses.
@@ -2846,6 +2888,63 @@ mod tests {
         let before = rows.clone();
         apply_fuel_marker(&mut rows, FuelOverdue::Drink, Page::Dashboard);
         assert_eq!(rows, before);
+    }
+
+    #[test]
+    fn the_home_face_says_when_an_interrupted_run_is_waiting() {
+        // After a brown-out mid-run the idle face was indistinguishable from a
+        // normal boot, so the recovered run sat on flash with nothing on the wrist
+        // to say so. One standing tag, right-anchored under the clock.
+        let base = face_rows(Some(&fix()), Some(150), None, None, 10);
+
+        let mut rows = base.clone();
+        apply_pending_run_marker(&mut rows, IdleView::Home, 0);
+        assert_eq!(rows, base, "nothing pending -> the face is untouched");
+
+        let mut rows = base.clone();
+        apply_pending_run_marker(&mut rows, IdleView::Home, 1);
+        assert_eq!(rows[PENDING_RUN_ROW].as_str().trim(), "1 RUN RECOVERED");
+        assert!(rows[PENDING_RUN_ROW].as_str().starts_with(' '));
+        assert!(rows[PENDING_RUN_ROW].len() <= COLS);
+        for r in 0..ROWS {
+            if r != PENDING_RUN_ROW {
+                assert_eq!(rows[r], base[r], "row {r} changed");
+            }
+        }
+
+        let mut rows = base.clone();
+        apply_pending_run_marker(&mut rows, IdleView::Home, 3);
+        assert_eq!(rows[PENDING_RUN_ROW].as_str().trim(), "3 RUNS RECOVERED");
+        assert!(rows[PENDING_RUN_ROW].len() <= COLS);
+    }
+
+    #[test]
+    fn the_pending_run_marker_never_clobbers_a_row_it_does_not_own() {
+        // Off the home view (the diagnostics rows are all claimed) and over an
+        // occupied row it does nothing — the same add-a-glance-only contract the
+        // fuel and battery post-passes keep. Every count a u8 can hold still fits
+        // the row, so a wide count can never render as a bare number.
+        let diag = diag_rows(Some(&fix()), Some(150), None, 10);
+        let mut rows = diag.clone();
+        apply_pending_run_marker(&mut rows, IdleView::Diagnostics, 2);
+        assert_eq!(rows, diag);
+
+        let mut rows: [Row; ROWS] = Default::default();
+        let _ = write!(rows[PENDING_RUN_ROW], "BUSY");
+        let before = rows.clone();
+        apply_pending_run_marker(&mut rows, IdleView::Home, 1);
+        assert_eq!(rows, before);
+
+        for pending in [2u8, 9, 99, u8::MAX] {
+            let mut rows: [Row; ROWS] = Default::default();
+            apply_pending_run_marker(&mut rows, IdleView::Home, pending);
+            assert!(rows[PENDING_RUN_ROW].len() <= COLS, "count {pending}");
+            assert!(
+                rows[PENDING_RUN_ROW].as_str().ends_with("RUNS RECOVERED"),
+                "count {pending} rendered as {:?}",
+                rows[PENDING_RUN_ROW].as_str()
+            );
+        }
     }
 
     #[test]
