@@ -10,12 +10,13 @@
 //! cadence, track-point shaping and pushed-QNH guard in
 //! `watch_core::record_cadence`; and which sink each pushed settings field
 //! feeds in `watch_core::settings_apply`. This task selects over incoming
-//! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
-//! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
-//! the wall clock between fixes. Idle and Finished have no clock to advance, so
-//! the tick is dropped there and the task waits purely on events. It publishes
-//! a snapshot only when it actually changed, so a resting recorder wakes no
-//! downstream consumer (the ui face, the button task) on a heartbeat.
+//! fixes (fed to the recorder), commands (drive start/pause/resume/stop/lap),
+//! and a pushed settings frame waiting to be drained, plus — only while a run
+//! is Recording or Paused — a 1 Hz tick that advances the wall clock between
+//! fixes. Idle and Finished have no clock to advance, so the tick is dropped
+//! there and the task waits purely on events. It publishes a snapshot only when
+//! it actually changed, so a resting recorder wakes no downstream consumer (the
+//! ui face, the button task) on a heartbeat.
 //!
 //! It also drives the `watch_core::alerts` engine (drink / eat reminders on
 //! the fuel_plan moving-time cadence + the HR-zone ceiling alert) off the same
@@ -36,7 +37,7 @@
 //! `apps/custom_watch/local_testing.md § Simulating without a board`.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, Either, Either3};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
@@ -335,16 +336,36 @@ pub async fn run(store: &'static SharedStore) {
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
         // Finished don't, so drop the ticker there and wait purely on events.
+        // The settings arm is `ready_to_receive`, not `receive`: it wakes on a
+        // pushed frame without taking it, so the drain below stays the sole
+        // consumer and keeps every queued frame in one FIFO order. It is last so
+        // it can never pre-empt a fix or a command, and it wakes only when a
+        // publisher actually sends — nothing polls.
         let event = if run_active(recorder.state()) {
-            match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
-                Either3::First(()) => Event::Tick,
-                Either3::Second(fix) => Event::Fix(fix),
-                Either3::Third(cmd) => Event::Cmd(cmd),
+            match select4(
+                ticker.next(),
+                fix_rx.changed(),
+                state::RECORD_CMD.receive(),
+                state::SETTINGS.ready_to_receive(),
+            )
+            .await
+            {
+                Either4::First(()) => Event::Tick,
+                Either4::Second(fix) => Event::Fix(fix),
+                Either4::Third(cmd) => Event::Cmd(cmd),
+                Either4::Fourth(()) => Event::Settings,
             }
         } else {
-            match select(fix_rx.changed(), state::RECORD_CMD.receive()).await {
-                Either::First(fix) => Event::Fix(fix),
-                Either::Second(cmd) => Event::Cmd(cmd),
+            match select3(
+                fix_rx.changed(),
+                state::RECORD_CMD.receive(),
+                state::SETTINGS.ready_to_receive(),
+            )
+            .await
+            {
+                Either3::First(fix) => Event::Fix(fix),
+                Either3::Second(cmd) => Event::Cmd(cmd),
+                Either3::Third(()) => Event::Settings,
             }
         };
 
@@ -381,9 +402,11 @@ pub async fn run(store: &'static SharedStore) {
 
         // Pushed settings frames (from the ble task; the sim seeds one above)
         // apply each present field to the recorder + alert engine. Config, not
-        // run data — L4, applied before the event mutates run totals. Every
-        // queued frame is drained in arrival order: each is a delta, so applying
-        // only the newest would silently drop whatever an earlier push carried.
+        // run data — L4, applied before the event mutates run totals, so a frame
+        // that arrived alongside a Start lands before that command reaches the
+        // recorder. Every queued frame is drained in arrival order: each is a
+        // delta, so applying only the newest would silently drop whatever an
+        // earlier push carried.
         while let Ok(s) = state::SETTINGS.try_receive() {
             apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
         }
@@ -475,6 +498,9 @@ pub async fn run(store: &'static SharedStore) {
                 }
                 info!("record: command {} -> {}", cmd, state_str(now));
             }
+            // The drain above already consumed and applied the frame this wake
+            // was for; the loop tail republishes whatever it changed.
+            Event::Settings => {}
         }
 
         // Persist any laps this event closed (manual, auto, or a throttled
@@ -582,4 +608,5 @@ enum Event {
     Tick,
     Fix(Fix),
     Cmd(RecordCommand),
+    Settings,
 }

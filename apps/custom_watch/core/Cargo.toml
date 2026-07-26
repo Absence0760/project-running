@@ -33,8 +33,15 @@ defmt   = ["dep:defmt", "ublox_nmea/defmt"]
 # `critical-section/std` comes with it: `CriticalSectionRawMutex` is an extern
 # call the firmware resolves against the SoftDevice, and nothing provides it on
 # the host, so the test binary would not link without an impl to bind to.
+#
+# embassy-futures joins them on the same terms and for the same reason: the
+# `settings_queue` wake tests assemble the record task's `select3`/`select4`
+# wait out of the real combinators and the real channels, so the arm ordering
+# and the "a pushed frame is its own wake source" property are checked against
+# what the firmware links rather than against a hand-rolled stand-in.
 [dev-dependencies]
 serde_json = "1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 embassy-sync = "0.8"
+embassy-futures = "0.1"
 critical-section = { version = "1", features = ["std"] }
