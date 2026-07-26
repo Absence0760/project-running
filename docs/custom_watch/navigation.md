@@ -151,6 +151,15 @@ removes.
 - **§286's safety contract stands**: Back-to-start is one long-press from
   the Dashboard, grid or no grid.
 - **Dashboard is always enabled** — no mask can empty the cycle or the grid.
+- **The page-position thumb partitions the top edge.** `statusbar::page_thumb`
+  gives the active page the half-open segment
+  `[active * 168 / total, (active + 1) * 168 / total)`, so the enabled pages own
+  every track column between them exactly once: the Dashboard's thumb is flush
+  left and the ring's last page flush right at *every* page count, which is the
+  glanceable "the next tap wraps". Deriving the width from a separately
+  truncated `168 / total` stranded the remainder columns — at 33 pages that was
+  55, 111 and 167, so the last page fell a pixel short of the edge while every
+  count dividing 168 (12, 3, 2) tiled correctly and hid it.
 - **Auto-select, not auto-cancel**: an abandoned grid jumps to its cursor
   (the one-handed flow); the worst outcome is landing on a page you were
   looking at.

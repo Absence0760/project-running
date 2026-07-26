@@ -146,6 +146,20 @@ fn show(name: &str, fb: &Framebuffer) {
     );
 }
 
+/// The four-pixel indicator band at 1:1, undownsampled — [`ascii_dump`]'s 2x
+/// halving hides exactly the single-pixel seams and edge gaps this band is
+/// made of, so it cannot be used to judge the indicator.
+fn show_indicator_band(name: &str, fb: &Framebuffer) {
+    let mut out = String::new();
+    for y in 0..4 {
+        for x in 0..WIDTH {
+            out.push(if fb.pixel(x, y) { '#' } else { '.' });
+        }
+        out.push('\n');
+    }
+    println!("\n== {name} ==\n{out}");
+}
+
 #[test]
 fn preview_idle_home_face_with_clock_hero() {
     let mut fb = Framebuffer::new();
@@ -616,4 +630,59 @@ fn preview_dial_and_compass() {
     widgets::draw_dial(&mut fb, cx, cy, 56, 12, 0.66);
     widgets::draw_compass(&mut fb, cx, cy, 34, 300);
     show("dial + compass: fuel ring + bearing-to-start", &fb);
+}
+
+fn indicator_thumb_row(fb: &Framebuffer) -> String {
+    (0..WIDTH)
+        .map(|x| if fb.pixel(x, 0) { '#' } else { '.' })
+        .collect()
+}
+
+fn preview_indicator_over_mask(label: &str, mask: u64) {
+    let total = watch_core::statusbar::page_indicator(Page::Dashboard, mask).total;
+    println!("\n== page indicator: {label} ({total} enabled pages), thumb row at 1:1 ==");
+    let mut union = [false; WIDTH];
+    let mut page = Page::Dashboard;
+    for _ in 0..total {
+        let mut fb = Framebuffer::new();
+        widgets::draw_page_indicator(&mut fb, watch_core::statusbar::page_indicator(page, mask));
+        println!("{:>4} {}", page.code(), indicator_thumb_row(&fb));
+        for (x, seen) in union.iter_mut().enumerate() {
+            *seen |= fb.pixel(x, 0);
+        }
+        page = page.next_in(mask);
+    }
+    let covered: String = union.iter().map(|&s| if s { '#' } else { '.' }).collect();
+    println!("  U: {covered}");
+    println!(
+        "     union of every thumb covers {}/{WIDTH} track columns",
+        union.iter().filter(|&&s| s).count()
+    );
+}
+
+#[test]
+fn preview_page_indicator_at_three_mask_sizes() {
+    preview_indicator_over_mask("full cycle", u64::MAX);
+    let typical = Page::Dashboard.bit()
+        | Page::Distance.bit()
+        | Page::Pace.bit()
+        | Page::Lap.bit()
+        | Page::Zones.bit()
+        | Page::Splits.bit()
+        | Page::ElevationProfile.bit()
+        | Page::RacePredictor.bit()
+        | Page::TrainingLoad.bit()
+        | Page::DistanceBand.bit()
+        | Page::GearWear.bit()
+        | Page::BackToStart.bit();
+    preview_indicator_over_mask("typical unsynced run", typical);
+    let minimal = Page::Dashboard.bit() | Page::Pace.bit() | Page::BackToStart.bit();
+    preview_indicator_over_mask("minimal curated", minimal);
+
+    let mut fb = Framebuffer::new();
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::BackToStart, u64::MAX),
+    );
+    show_indicator_band("last page of the full cycle, all four band rows", &fb);
 }

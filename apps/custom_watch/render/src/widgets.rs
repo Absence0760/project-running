@@ -162,19 +162,22 @@ pub fn draw_idle_battery(fb: &mut Framebuffer, percent: Option<u8>, title_busy: 
 // Page-position indicator (run view, top edge)
 // ---------------------------------------------------------------------------
 
+/// Thumb rows, above the 1-px track on row 3.
+const THUMB_H: usize = 3;
+
 /// The run-view page-position indicator: a full-width track along the top edge
 /// with a filled thumb over the active page's segment, so paging is a thumb
 /// sliding left-to-right. Sits in the top 4 px — blank on every page because the
 /// 2x hero's ink starts well below it and the state tag rides row 0's right cells.
+/// The span comes from `statusbar::page_thumb`, so the rounding that decides
+/// which columns the segment owns is host-tested arithmetic rather than a
+/// division inlined here.
 pub fn draw_page_indicator(fb: &mut Framebuffer, indicator: PageIndicator) {
-    if indicator.total == 0 {
+    let Some(thumb) = statusbar::page_thumb(indicator, WIDTH) else {
         return;
-    }
+    };
     fb.hline(0, 3, WIDTH, true);
-    let seg = WIDTH / indicator.total;
-    let thumb_w = seg.max(2);
-    let x = (indicator.active * WIDTH / indicator.total).min(WIDTH - thumb_w);
-    fb.fill_rect(x, 0, thumb_w, 3, true);
+    fb.fill_rect(thumb.x, 0, thumb.w, THUMB_H, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,6 +1024,45 @@ mod tests {
         assert_eq!(ink_in(&late, 0, 0, 12, 3), 0);
         // Both draw the full-width track on row 3.
         assert_eq!(ink_in(&late, 0, 3, WIDTH, 1), WIDTH);
+    }
+
+    #[test]
+    fn page_indicator_thumbs_tile_the_track_at_the_live_page_count() {
+        // The pixel counterpart of statusbar's partition test: walking the full
+        // 33-page cycle must light every track column exactly once, which is
+        // what makes the first page's thumb touch the left edge and the last
+        // page's touch the right. Before the geometry moved into `page_thumb`
+        // this failed on three columns (55, 111, 167) because the width was a
+        // separately-truncated WIDTH / total.
+        let mut lit_by = [0u8; WIDTH];
+        for active in 0..33 {
+            let mut fb = Framebuffer::new();
+            draw_page_indicator(&mut fb, PageIndicator { active, total: 33 });
+            for (x, count) in lit_by.iter_mut().enumerate() {
+                if fb.pixel(x, 0) {
+                    *count += 1;
+                }
+            }
+        }
+        for (x, count) in lit_by.iter().enumerate() {
+            assert_eq!(*count, 1, "track column {x} is owned by {count} pages");
+        }
+    }
+
+    #[test]
+    fn page_indicator_thumb_height_clears_the_track_row() {
+        let mut fb = Framebuffer::new();
+        draw_page_indicator(
+            &mut fb,
+            PageIndicator {
+                active: 4,
+                total: 33,
+            },
+        );
+        // Rows 0..3 are the thumb, row 3 the track, row 4 belongs to the face.
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, THUMB_H), 5 * THUMB_H);
+        assert_eq!(ink_in(&fb, 0, 3, WIDTH, 1), WIDTH);
+        assert_eq!(ink_in(&fb, 0, 4, WIDTH, CELL_H - 4), 0);
     }
 
     #[test]

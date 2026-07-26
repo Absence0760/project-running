@@ -112,6 +112,51 @@ pub fn page_indicator(page: Page, pages_mask: u64) -> PageIndicator {
     PageIndicator { active, total }
 }
 
+/// Pixel columns the thumb never drops below, so a cycle long enough to make
+/// its share of the track sub-visible still leaves something to find.
+pub const MIN_THUMB_W: usize = 2;
+
+/// Where the active page's thumb sits on the indicator track: `x` columns from
+/// the left edge, `w` columns wide.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PageThumb {
+    pub x: usize,
+    pub w: usize,
+}
+
+/// The thumb span for `indicator` on a `track_w`-wide track — the half-open
+/// segment `[active * track_w / total, (active + 1) * track_w / total)`, so the
+/// `total` segments partition the track: every column belongs to exactly one
+/// page, the first thumb is flush left and the last flush right at every count.
+///
+/// Taking the width from the SAME division as the position is what buys that.
+/// Truncating a shared `track_w / total` width instead leaves
+/// `track_w - total * (track_w / total)` columns owned by no page, and one of
+/// them is always the rightmost: at the live 33-page cycle on the 168-px panel
+/// that stranded columns 55, 111 and 167, so the LAST page's thumb stopped a
+/// pixel short of the right edge and "the next tap wraps" — the one thing a
+/// position bar says better than any label — read the same as the page before
+/// it. The bug was invisible at every count that divides 168 (12, 3, 2 all
+/// tile exactly), which is to say at every count anyone had previewed.
+///
+/// `None` for an empty cycle or a zero-width track. Pure in `(active, total,
+/// track_w)`, so an unchanged page redraws identical pixels and the
+/// framebuffer's per-line compare still flushes nothing.
+pub fn page_thumb(indicator: PageIndicator, track_w: usize) -> Option<PageThumb> {
+    if indicator.total == 0 || track_w == 0 {
+        return None;
+    }
+    let active = indicator.active.min(indicator.total - 1);
+    let lo = active * track_w / indicator.total;
+    let hi = (active + 1) * track_w / indicator.total;
+    let w = (hi - lo).max(MIN_THUMB_W).min(track_w);
+    Some(PageThumb {
+        x: lo.min(track_w - w),
+        w,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,6 +342,117 @@ mod tests {
             p = p.next_in(mask);
             assert_eq!(page_indicator(p, mask).active, expect);
         }
+    }
+
+    /// The panel the tier-1 firmware draws on; the thumb geometry is pinned at
+    /// this width because that is the one that ships.
+    const PANEL_W: usize = 168;
+
+    fn thumbs(total: usize, track_w: usize) -> impl Iterator<Item = PageThumb> {
+        (0..total).map(move |active| page_thumb(PageIndicator { active, total }, track_w).unwrap())
+    }
+
+    #[test]
+    fn thumbs_partition_the_track_at_every_reachable_page_count() {
+        // `Page::bit` is a u64, so 64 is the mask's headroom; the cycle can grow
+        // to any count under it without the row silently degrading.
+        for total in 1..=64 {
+            let spans: heapless::Vec<PageThumb, 64> = thumbs(total, PANEL_W).collect();
+            assert_eq!(
+                spans[0].x, 0,
+                "total {total}: first thumb is not flush left"
+            );
+            let last = spans[total - 1];
+            assert_eq!(
+                last.x + last.w,
+                PANEL_W,
+                "total {total}: last thumb is not flush right"
+            );
+            for pair in spans.windows(2) {
+                assert_eq!(
+                    pair[0].x + pair[0].w,
+                    pair[1].x,
+                    "total {total}: a gap or overlap between adjacent thumbs"
+                );
+                assert!(pair[0].x < pair[1].x, "total {total}: thumbs collide");
+            }
+            for span in &spans {
+                assert!(
+                    span.w >= MIN_THUMB_W,
+                    "total {total}: thumb below the floor"
+                );
+                assert!(span.x + span.w <= PANEL_W, "total {total}: thumb overruns");
+            }
+        }
+    }
+
+    #[test]
+    fn thumb_geometry_at_the_live_page_count() {
+        // 33 does not divide 168 (168 = 2^3*3*7), so three of the segments carry
+        // the 3-column remainder rather than leaving it unowned — the last of
+        // them is the final page, which is what puts it against the right edge.
+        let spans: heapless::Vec<PageThumb, 64> = thumbs(33, PANEL_W).collect();
+        let wide: heapless::Vec<usize, 8> = (0..33).filter(|&i| spans[i].w == 6).collect();
+        assert_eq!(wide.as_slice(), [10, 21, 32]);
+        assert!(spans.iter().all(|s| s.w == 5 || s.w == 6));
+        assert_eq!(spans[0], PageThumb { x: 0, w: 5 });
+        assert_eq!(spans[32], PageThumb { x: 162, w: 6 });
+    }
+
+    #[test]
+    fn a_cycle_too_long_to_tile_still_leaves_a_findable_thumb() {
+        // Above `track_w / MIN_THUMB_W` pages the floor takes over from the
+        // partition: thumbs start overlapping rather than vanishing.
+        for span in thumbs(100, PANEL_W) {
+            assert_eq!(span.w, MIN_THUMB_W);
+            assert!(span.x + span.w <= PANEL_W);
+        }
+    }
+
+    #[test]
+    fn thumb_is_absent_for_an_empty_cycle_or_track() {
+        assert_eq!(
+            page_thumb(
+                PageIndicator {
+                    active: 0,
+                    total: 0
+                },
+                PANEL_W
+            ),
+            None
+        );
+        assert_eq!(
+            page_thumb(
+                PageIndicator {
+                    active: 0,
+                    total: 8
+                },
+                0
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn thumb_clamps_an_out_of_range_active() {
+        // Nothing produces this today, but an out-of-range rank must land on the
+        // last segment rather than off the end of the track.
+        assert_eq!(
+            page_thumb(
+                PageIndicator {
+                    active: 99,
+                    total: 33
+                },
+                PANEL_W
+            ),
+            page_thumb(
+                PageIndicator {
+                    active: 32,
+                    total: 33
+                },
+                PANEL_W
+            )
+        );
     }
 
     #[test]
