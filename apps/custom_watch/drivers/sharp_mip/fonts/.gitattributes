@@ -1,0 +1,6 @@
+# Verbatim upstream artifacts whose SHA256s README.md documents and
+# scripts/pinned_face.py enforces: line-ending normalisation would change the
+# licence text's digest and make the documented hash unverifiable.
+* -text
+README.md text
+.gitattributes text
