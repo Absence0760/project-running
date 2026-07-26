@@ -320,7 +320,8 @@ mod tests {
         // `run_chunk` must either decode to a request or be dropped. A decode
         // failure must not fall through to a read.
         let mut dir = SlotDir::new();
-        plan_slot_write(&mut dir, BASE, 7, 0, 500).expect("fits");
+        let plan = plan_slot_write(&mut dir, BASE, 7, 0, 500).expect("fits");
+        dir.commit_written(plan.slot);
 
         for len in 0..CHUNK_REQUEST_LEN {
             let short = [0xABu8; CHUNK_REQUEST_LEN];
@@ -382,6 +383,7 @@ mod tests {
                 plan_slot_write(&mut dir, BASE, seq, seq * 60, blob.len()).expect("fits");
             let at = (plan.erase_from - BASE) as usize;
             region[at..at + blob.len()].copy_from_slice(&blob);
+            dir.commit_written(plan.slot);
             blobs.push((seq, blob)).expect("fits");
         }
 
@@ -420,7 +422,8 @@ mod tests {
         // the same slot, or the phone would reassemble a neighbour's bytes.
         let mut dir = SlotDir::new();
         for seq in 0..SLOT_COUNT as u32 {
-            plan_slot_write(&mut dir, BASE, seq, 0, 1000 + seq as usize).expect("fits");
+            let plan = plan_slot_write(&mut dir, BASE, seq, 0, 1000 + seq as usize).expect("fits");
+            dir.commit_written(plan.slot);
         }
         let manifest = encode_manifest(&dir.manifest(), 500);
         let (_, entries) = decode_manifest(&manifest).expect("decodes");

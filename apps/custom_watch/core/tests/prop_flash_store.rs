@@ -8,9 +8,10 @@ mod support;
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
+use watch_core::flash_plan::{plan_checkpoint_write, plan_slot_write};
 use watch_core::flash_store::{
-    chunk_len, decode_config, encode_config, recover_slot, BondRecord, BOND_RECORD_LEN,
-    CONFIG_RECORD_LEN, MAX_POINTS_PER_RUN, SLOT_LEN,
+    chunk_len, decode_config, encode_config, recover_slot, BondRecord, SlotDir, BOND_RECORD_LEN,
+    CONFIG_RECORD_LEN, MAX_POINTS_PER_RUN, SLOT_COUNT, SLOT_LEN,
 };
 use watch_core::run_store::{
     blob_len, point_count, RunWriter, TrackPoint, FOOTER_LEN, HEADER_LEN, POINT_LEN,
@@ -217,6 +218,81 @@ fn a_truncated_slot_never_recovers_a_shorter_run() {
             Ok(())
         },
     );
+}
+
+/// One run-store driver operation: a mid-run checkpoint or a finished-run
+/// commit, whose flash write either lands or fails after the erase has already
+/// blanked the target page.
+#[derive(Clone, Copy, Debug)]
+struct SlotOp {
+    commit: bool,
+    run_seq: u32,
+    blob_len: usize,
+    write_ok: bool,
+}
+
+fn a_slot_op() -> impl Strategy<Value = SlotOp> {
+    (any::<bool>(), 0u32..4, 1usize..=SLOT_LEN, any::<bool>()).prop_map(
+        |(commit, run_seq, blob_len, write_ok)| SlotOp {
+            commit,
+            run_seq,
+            blob_len,
+            write_ok,
+        },
+    )
+}
+
+#[test]
+fn the_directory_never_advertises_a_run_that_is_not_durable_on_flash() {
+    // The seal-then-drop invariant, over arbitrary interleavings of checkpoints,
+    // commits, and torn writes: every run the directory advertises must be
+    // physically present, at the slot and size it claims. Holding a superseded
+    // entry until the replacement write lands is what keeps the directory from
+    // under-reporting; this is the other side of it — the late release must never
+    // let the directory OVER-report, nor advertise one run twice.
+    check(256, prop::collection::vec(a_slot_op(), 0..24), |ops| {
+        let mut dir = SlotDir::new();
+        // What each page physically holds, as (run_seq, blob length).
+        let mut durable: [Option<(u32, u32)>; SLOT_COUNT] = [None; SLOT_COUNT];
+        for op in ops {
+            let planned = if op.commit {
+                plan_slot_write(&mut dir, 0, op.run_seq, 0, op.blob_len)
+            } else {
+                plan_checkpoint_write(&mut dir, 0, op.run_seq, 0, op.blob_len)
+            };
+            let Some(plan) = planned else { continue };
+            // The erase always happens first, so whatever the page held is gone
+            // whether or not the write behind it lands.
+            durable[plan.slot] = op.write_ok.then_some((op.run_seq, op.blob_len as u32));
+            match (op.commit, op.write_ok) {
+                (true, true) => dir.commit_written(plan.slot),
+                (true, false) => dir.commit_failed(plan.slot),
+                (false, true) => {}
+                (false, false) => dir.forget(plan.slot),
+            }
+
+            let mut seen: heapless::Vec<u32, SLOT_COUNT> = heapless::Vec::new();
+            for entry in dir.manifest().iter() {
+                prop_assert!(
+                    !seen.contains(&entry.run_seq),
+                    "run {} advertised twice",
+                    entry.run_seq
+                );
+                seen.push(entry.run_seq)
+                    .expect("at most one entry per slot");
+                let (slot, size) = dir.find(entry.run_seq).expect("an advertised run resolves");
+                prop_assert_eq!(
+                    durable[slot],
+                    Some((entry.run_seq, size)),
+                    "run {} claims slot {}, which holds {:?}",
+                    entry.run_seq,
+                    slot,
+                    durable[slot]
+                );
+            }
+        }
+        Ok(())
+    });
 }
 
 #[test]

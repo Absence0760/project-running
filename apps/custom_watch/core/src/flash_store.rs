@@ -424,20 +424,18 @@ impl SlotDir {
 
     /// Reserve the slot a finished run's commit writes into — again the slot NOT
     /// holding the run's freshest copy, so a torn commit leaves the newest
-    /// checkpoint intact — mark it finished, and drop any other slot this run
-    /// held, since the commit supersedes every checkpoint of it.
+    /// checkpoint intact — and mark it finished.
     ///
-    /// The superseded slot's *bytes* are left alone (its page is not the one
-    /// being written), so if this commit tears and the caller
-    /// [`forget`](Self::forget)s the target, the next boot's scan still recovers
-    /// the checkpoint from flash.
+    /// The checkpoint this commit supersedes keeps its directory entry: the
+    /// caller releases it with [`commit_written`](Self::commit_written) once the
+    /// blob is actually on flash. Between the reservation and that confirmation
+    /// the checkpoint's bytes are the run's only durable copy, so dropping its
+    /// entry up front would leave the directory claiming less than flash holds —
+    /// and a commit that then failed would lose the run from RAM entirely until
+    /// the next boot rescanned for it. A failed commit calls
+    /// [`commit_failed`](Self::commit_failed) instead.
     pub fn reserve_commit(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
         let (slot, write_no) = self.next_write(run_seq);
-        for (i, s) in self.slots.iter_mut().enumerate() {
-            if i != slot && s.is_some_and(|m| m.run_seq == run_seq) {
-                *s = None;
-            }
-        }
         self.slots[slot] = Some(SlotMeta {
             run_seq,
             size,
@@ -447,6 +445,42 @@ impl SlotDir {
             write_no,
         });
         slot
+    }
+
+    /// Release the slots a landed commit superseded, leaving the run held only by
+    /// the slot the commit wrote. Called once those bytes are durable — the seal
+    /// half of the seal-then-drop ordering [`reserve_commit`](Self::reserve_commit)
+    /// sets up. The superseded bytes themselves are left alone; the next
+    /// reservation erases that page when it takes it.
+    pub fn commit_written(&mut self, slot: usize) {
+        let Some(run_seq) = self.slots.get(slot).copied().flatten().map(|m| m.run_seq) else {
+            return;
+        };
+        for (i, s) in self.slots.iter_mut().enumerate() {
+            if i != slot && s.is_some_and(|m| m.run_seq == run_seq) {
+                *s = None;
+            }
+        }
+    }
+
+    /// Drop a failed commit's reservation and hand the run back to the copy of it
+    /// still on flash.
+    ///
+    /// The commit ended the recording, so — exactly as the boot scan treats a
+    /// survivor ([`from_recovered`](Self::from_recovered)) — a surviving
+    /// checkpoint is as complete as the watch will ever know and becomes
+    /// advertisable. Merely [`forget`](Self::forget)ting the target would leave
+    /// that checkpoint unreachable until a reboot rediscovered it, even though
+    /// its bytes never moved.
+    pub fn commit_failed(&mut self, slot: usize) {
+        let run_seq = self.slots.get(slot).copied().flatten().map(|m| m.run_seq);
+        self.forget(slot);
+        let Some(run_seq) = run_seq else { return };
+        for s in self.slots.iter_mut().flatten() {
+            if s.run_seq == run_seq {
+                s.finished = true;
+            }
+        }
     }
 
     /// Mark a finished run as fully pulled by the phone, so a later reservation
@@ -527,8 +561,10 @@ impl SlotDir {
         synced_victim.or(oldest).map_or(0, |(i, _)| i)
     }
 
-    /// Drop a slot's record — used when the flash write for it failed, so the
-    /// manifest never advertises a run that is not actually on flash.
+    /// Drop a slot's record — used when a checkpoint's flash write failed, so the
+    /// directory never claims a slot that is now an erased page. A failed *commit*
+    /// uses [`commit_failed`](Self::commit_failed), which additionally hands the
+    /// run back to the checkpoint that survived it.
     pub fn forget(&mut self, slot: usize) {
         if slot < SLOT_COUNT {
             self.slots[slot] = None;
@@ -722,8 +758,99 @@ mod tests {
             Some((committed, 400)),
             "the committed blob is what gets served"
         );
-        assert_eq!(dir.run_count(), 1, "the superseded slot is released");
+        assert_eq!(dir.run_count(), 1, "the checkpoints are not advertised");
         assert_eq!(dir.manifest().len(), 1, "and the run is advertised once");
+        dir.commit_written(committed);
+        assert_eq!(
+            dir.find(7),
+            Some((committed, 400)),
+            "confirming the write changes nothing about what is served"
+        );
+        assert_eq!(dir.run_count(), 1);
+    }
+
+    #[test]
+    fn a_commit_keeps_the_superseded_slot_until_the_write_is_confirmed() {
+        // Seal, then drop. Between reserving the commit's slot and its bytes
+        // landing, the superseded checkpoint is the run's only durable copy, so
+        // the directory must go on owning that slot — releasing it up front made
+        // the directory claim less than flash actually held for the whole window.
+        let mut dir = SlotDir::new();
+        dir.reserve_checkpoint(7, 100, 41);
+        let fresh = dir.reserve_checkpoint(7, 260, 41);
+        let committed = dir.reserve_commit(7, 400, 41);
+        assert_ne!(committed, fresh);
+        assert_ne!(
+            dir.reserve_commit(8, 100, 50),
+            fresh,
+            "an unconfirmed commit has not freed the superseded slot"
+        );
+    }
+
+    #[test]
+    fn a_confirmed_commit_releases_exactly_the_superseded_slot() {
+        let mut dir = SlotDir::new();
+        dir.reserve_checkpoint(7, 100, 41);
+        let fresh = dir.reserve_checkpoint(7, 260, 41);
+        let committed = dir.reserve_commit(7, 400, 41);
+        dir.commit_written(committed);
+        assert_eq!(dir.find(7), Some((committed, 400)));
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(
+            dir.reserve_commit(8, 100, 50),
+            fresh,
+            "the one released slot is the first free one the next run takes"
+        );
+        assert_eq!(dir.find(7), Some((committed, 400)), "and only that one");
+    }
+
+    #[test]
+    fn a_failed_commit_hands_the_run_back_to_the_checkpoint_still_on_flash() {
+        // The commit's erase or write failed, so its slot is now a blank page —
+        // but the checkpoint it superseded never moved. The run ended with that
+        // commit, so the surviving snapshot is as complete as the watch will ever
+        // know and must be servable now, not only after a reboot rescans flash.
+        let mut dir = SlotDir::new();
+        dir.reserve_checkpoint(7, 100, 41);
+        let fresh = dir.reserve_checkpoint(7, 260, 41);
+        let committed = dir.reserve_commit(7, 400, 41);
+        dir.commit_failed(committed);
+        assert_eq!(
+            dir.find(7),
+            Some((fresh, 260)),
+            "the surviving checkpoint is what the phone may pull"
+        );
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(dir.manifest().len(), 1);
+        assert_eq!(dir.manifest()[0].size, 260);
+    }
+
+    #[test]
+    fn a_failed_commit_of_a_checkpoint_free_run_leaves_nothing_behind() {
+        // No checkpoint ever fired, so a failed commit really did lose the run:
+        // nothing of it is on flash and nothing may be advertised.
+        let mut dir = SlotDir::new();
+        let slot = dir.reserve_commit(7, 400, 41);
+        dir.commit_failed(slot);
+        assert_eq!(dir.find(7), None);
+        assert_eq!(dir.run_count(), 0);
+        assert_eq!(
+            dir.reserve_commit(8, 100, 50),
+            slot,
+            "and the slot is free again"
+        );
+    }
+
+    #[test]
+    fn confirming_a_slot_the_directory_does_not_hold_is_a_no_op() {
+        let mut dir = SlotDir::new();
+        let slot = dir.reserve_commit(7, 100, 41);
+        dir.commit_written(SLOT_COUNT);
+        dir.commit_failed(SLOT_COUNT + 3);
+        dir.commit_written(slot + 1);
+        dir.commit_failed(slot + 1);
+        assert_eq!(dir.find(7), Some((slot, 100)), "the held run is untouched");
+        assert_eq!(dir.run_count(), 1);
     }
 
     #[test]
