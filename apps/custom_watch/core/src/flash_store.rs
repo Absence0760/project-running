@@ -21,8 +21,8 @@
 use heapless::Vec;
 
 use crate::run_store::{
-    crc32, ManifestEntry, RunFooter, RunHeader, FLAG_FINISHED, FOOTER_LEN, FORMAT_VERSION,
-    HEADER_LEN, MIN_FORMAT_VERSION, POINT_LEN,
+    crc32, ManifestEntry, RunFooter, RunHeader, FLAG_FINISHED, FOOTER_CRC_OFFSET, FOOTER_LEN,
+    FORMAT_VERSION, HEADER_LEN, MIN_FORMAT_VERSION, POINT_LEN,
 };
 
 /// One nRF52840 erase page (4 KiB) per run slot, so evicting a run is a single
@@ -239,10 +239,12 @@ pub struct RecoveredRun {
 ///
 /// The blob does not store its own length, so the footer position is found by
 /// scanning each point-aligned offset for the footer magic *and* a CRC32 that
-/// verifies the header+points prefix. The CRC is what makes this safe: a byte
-/// sequence inside the track data that happens to equal the footer magic fails
-/// the CRC check, so the scan reads past it to the real footer. (A false early
-/// stop would need a genuine CRC32 collision at a point boundary.)
+/// verifies everything up to that candidate footer's own CRC field. The CRC is
+/// what makes this safe: a byte sequence inside the track data that happens to
+/// equal the footer magic fails the CRC check, so the scan reads past it to the
+/// real footer. (A false early stop would need a genuine CRC32 collision at a
+/// point boundary — and since v3 the colliding window includes the decoy's own
+/// would-be totals, so the scan is strictly harder to fool than it was.)
 pub fn recover_slot(bytes: &[u8]) -> Option<RecoveredRun> {
     let header = RunHeader::decode(bytes)?;
     // v1 blobs already on flash (all-point, untagged) still recover; anything
@@ -256,7 +258,7 @@ pub fn recover_slot(bytes: &[u8]) -> Option<RecoveredRun> {
             break;
         }
         if let Some(footer) = RunFooter::decode(&bytes[footer_at..]) {
-            if crc32(&bytes[..footer_at]) == footer.crc32 {
+            if crc32(&bytes[..footer_at + FOOTER_CRC_OFFSET]) == footer.crc32 {
                 return Some(RecoveredRun {
                     run_seq: header.run_seq,
                     size: (footer_at + FOOTER_LEN) as u32,
@@ -1145,7 +1147,7 @@ mod tests {
             .extend_from_slice(
                 &RunHeader {
                     version,
-                    flags: if version >= 2 { FLAG_FINISHED } else { 0 },
+                    flags: FLAG_FINISHED,
                     run_seq,
                     start_uptime_s,
                 }
@@ -1155,13 +1157,18 @@ mod tests {
         for p in points {
             prefix.extend_from_slice(&p.encode()).unwrap();
         }
-        let footer = RunFooter {
+        let mut footer = RunFooter {
             distance_m: 1234,
             moving_s: 600,
             elapsed_s: 620,
-            crc32: crc32(&prefix),
+            crc32: 0,
         }
         .encode();
+        prefix
+            .extend_from_slice(&footer[..FOOTER_CRC_OFFSET])
+            .unwrap();
+        footer[FOOTER_CRC_OFFSET..].copy_from_slice(&crc32(&prefix).to_le_bytes());
+        prefix.truncate(prefix.len() - FOOTER_CRC_OFFSET);
         let mut slot = [0xFFu8; SLOT_LEN];
         slot[..prefix.len()].copy_from_slice(&prefix);
         slot[prefix.len()..prefix.len() + FOOTER_LEN].copy_from_slice(&footer);
@@ -1216,14 +1223,14 @@ mod tests {
 
     #[test]
     fn recover_slot_rejects_a_crc_valid_newer_version_blob() {
-        // A future firmware writes a v2 blob with an internally-correct CRC. The
+        // A future firmware writes a blob with an internally-correct CRC. The
         // version gate must reject it BEFORE the footer scan — the CRC being
         // valid is exactly why this can't lean on CRC failure to filter it.
         let pts = [a_point(0), a_point(1)];
         let newer = slot_image_version(FORMAT_VERSION + 1, 7, 41, &pts);
         assert!(
             verify_blob(&newer[..blob_len(2) as usize]),
-            "the v2 CRC is valid"
+            "the newer blob's CRC is valid"
         );
         assert_eq!(recover_slot(&newer), None, "rejected by the version gate");
 
@@ -1294,29 +1301,17 @@ mod tests {
     }
 
     #[test]
-    fn recover_slot_still_reads_a_v1_blob_from_a_prior_firmware() {
-        // A run committed by the v1 (pre-lap, pre-decimation) firmware sits on
-        // flash across the upgrade: an all-point untagged blob at version 1.
-        // The version range gate must keep recovering it — a v1 blob cannot
-        // prove it was finished (byte 5 was reserved), so it reports unfinished
-        // and loses any tiebreak to a v2 commit of the same run, but it is still
-        // recovered and still advertised rather than being thrown away.
+    fn recover_slot_rejects_a_pre_v3_blob() {
+        // A run committed by the v1/v2 firmware sits on a bench board's flash
+        // across the upgrade. v3 moved the CRC window to take in the footer
+        // totals, so those blobs cannot be re-checked without re-opening the
+        // hole v3 closed: the version gate rejects them, the slot reads as
+        // free, and the next run overwrites it (decisions §321).
         let pts = [a_point(0), a_point(1), a_point(2)];
-        let v1 = slot_image_version(MIN_FORMAT_VERSION, 9, 17, &pts);
-        assert_eq!(
-            recover_slot(&v1),
-            Some(RecoveredRun {
-                run_seq: 9,
-                size: blob_len(3),
-                start_uptime_s: 17,
-                finished: false,
-                elapsed_s: 620,
-            })
-        );
-        let mut slots = [None; SLOT_COUNT];
-        slots[0] = recover_slot(&v1);
-        let dir = SlotDir::from_recovered(slots);
-        assert_eq!(dir.find(9), Some((0, blob_len(3))), "still advertisable");
+        for version in 1..MIN_FORMAT_VERSION {
+            let old = slot_image_version(version, 9, 17, &pts);
+            assert_eq!(recover_slot(&old), None, "v{version} must not recover");
+        }
     }
 
     #[test]

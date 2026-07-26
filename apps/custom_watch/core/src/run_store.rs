@@ -13,19 +13,25 @@
 //! a Rust-encode ↔ Dart-decode drift is caught at CI on both sides.
 //!
 //! Blob layout: `header (16) | record[N] (16 each) | footer (20)`. Version 1
-//! records are all track points; version 2 (2026-07-21, issue #599) makes the
-//! point's reserved byte 15 a **record tag** — `0` = track point (so every v1
-//! blob is also a valid stream of tagged records), `1` = a closed lap — and
-//! lap records interleave with points in recording order. The header version
-//! byte is what keeps an old reader honest: a v1 decoder would misparse a lap
-//! record as a garbage GPS point, so v2 blobs carry version 2 and a v1-only
-//! reader rejects them outright instead of corrupting a track.
+//! records were all track points; version 2 (2026-07-21, issue #599) made the
+//! point's reserved byte 15 a **record tag** — `0` = track point, `1` = a
+//! closed lap — with lap records interleaved in recording order, and let the
+//! slot-bounded writer **decimate instead of truncate**: when the staging sink
+//! fills, every second stored point is dropped (laps never are) and the
+//! incoming stream is thinned to match, so a full slot holds the WHOLE run at
+//! coarser resolution rather than only its first minutes
+//! ([`RunWriter::push_point_bounded`]).
 //!
-//! Version 2 also lets the slot-bounded writer **decimate instead of
-//! truncate**: when the staging sink fills, every second stored point is
-//! dropped (laps are never dropped) and the incoming stream is thinned to
-//! match, so a full slot always holds the WHOLE run at coarser resolution
-//! rather than only its first minutes ([`RunWriter::push_point_bounded`]).
+//! **Version 3 (2026-07-25) puts the footer's totals under the CRC.** Through
+//! v2 the checksum covered only the header+records prefix, so the run's
+//! summary — distance, moving time, elapsed time — sat outside it: bit-rot
+//! there produced a blob that verified and synced as a valid run carrying
+//! silently wrong numbers, which is worse than one that is rejected. From v3
+//! the CRC covers every byte of the blob except the four it occupies itself
+//! ([`FOOTER_CRC_OFFSET`]), so there is no unprotected region left. v1 and v2
+//! blobs are **not** decodable by a v3 reader: their stored CRC is over a
+//! narrower window and cannot match, and [`MIN_FORMAT_VERSION`] rejects them
+//! explicitly rather than letting them read as corrupt (decisions §321).
 //!
 //! Manifest + chunk-request wire formats live here too so both ends agree.
 
@@ -37,10 +43,14 @@ pub const FOOTER_MAGIC: [u8; 4] = *b"END1";
 pub const MANIFEST_MAGIC: [u8; 4] = *b"MAN1";
 
 /// What the writer emits today.
-pub const FORMAT_VERSION: u8 = 2;
-/// The oldest version a reader still decodes (v1 = untagged all-point blobs
-/// already on flash; a v1 record's byte 15 is always zero = the point tag).
-pub const MIN_FORMAT_VERSION: u8 = 1;
+pub const FORMAT_VERSION: u8 = 3;
+/// The oldest version a reader still decodes. Equal to [`FORMAT_VERSION`]
+/// because v3 redefined what the CRC covers: a v1/v2 blob's checksum is over a
+/// narrower window and cannot be re-checked without also re-admitting the
+/// unprotected-totals hole v3 closed. Keeping the range explicit means an old
+/// blob left on a bench board is rejected by version rather than reported as
+/// corrupt bytes.
+pub const MIN_FORMAT_VERSION: u8 = 3;
 
 pub const HEADER_LEN: usize = 16;
 pub const POINT_LEN: usize = 16;
@@ -48,6 +58,12 @@ pub const POINT_LEN: usize = 16;
 /// [`crate::flash_store::recover_slot`] stays record-aligned across versions.
 pub const RECORD_LEN: usize = POINT_LEN;
 pub const FOOTER_LEN: usize = 20;
+
+/// Where the CRC field starts inside the footer, and therefore how much of the
+/// footer the CRC itself covers: the magic plus all three totals. A blob's
+/// checksum is taken over `blob[..blob.len() - 4]` — everything but the four
+/// bytes holding it.
+pub const FOOTER_CRC_OFFSET: usize = FOOTER_LEN - 4;
 
 /// Record tags, at byte 15 of every record.
 pub const RECORD_TAG_POINT: u8 = 0;
@@ -62,9 +78,7 @@ pub const RECORD_TAG_LAP: u8 = 1;
 /// ([`crate::flash_store::SlotDir::from_recovered`]).
 ///
 /// It sits inside the CRC-covered header prefix, so a bit-rotted flag fails
-/// verification rather than promoting a checkpoint. Version 1 blobs predate the
-/// flag (their writer left byte 5 zero even on a commit), so a v1 blob can
-/// never prove it was finished.
+/// verification rather than promoting a checkpoint.
 pub const FLAG_FINISHED: u8 = 0x01;
 
 /// Altitude sentinel meaning "no barometric/GPS altitude for this point".
@@ -294,6 +308,30 @@ impl RunFooter {
     }
 }
 
+/// Build the footer for a blob whose header+records prefix has already been
+/// hashed into `prefix_crc`, continuing that hash across the footer's own magic
+/// and totals so the stamped CRC covers them. Both blob-emitting paths
+/// ([`RunWriter::finalize`] and [`RunWriter::checkpoint_blob`]) go through here
+/// — they differ only in the prefix they hand in, and a second hand-rolled copy
+/// is exactly how the two CRC domains would drift apart again.
+fn stamped_footer(
+    mut prefix_crc: Crc32,
+    distance_m: u32,
+    moving_s: u32,
+    elapsed_s: u32,
+) -> [u8; FOOTER_LEN] {
+    let mut footer = RunFooter {
+        distance_m,
+        moving_s,
+        elapsed_s,
+        crc32: 0,
+    }
+    .encode();
+    prefix_crc.update(&footer[..FOOTER_CRC_OFFSET]);
+    footer[FOOTER_CRC_OFFSET..].copy_from_slice(&prefix_crc.finish().to_le_bytes());
+    footer
+}
+
 // ---- Streaming writer -----------------------------------------------------
 
 /// A byte destination the run writer streams into — the flash driver on the
@@ -430,13 +468,9 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
         if let Some(flags) = self.sink.get_mut(5) {
             *flags |= FLAG_FINISHED;
         }
-        let footer = RunFooter {
-            distance_m,
-            moving_s,
-            elapsed_s,
-            crc32: crc32(&self.sink),
-        }
-        .encode();
+        let mut prefix_crc = Crc32::new();
+        prefix_crc.update(&self.sink);
+        let footer = stamped_footer(prefix_crc, distance_m, moving_s, elapsed_s);
         self.sink.write(&footer)?;
         Ok(self.sink)
     }
@@ -540,21 +574,20 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
     ) -> Option<heapless::Vec<u8, N>> {
         let mut out = heapless::Vec::<u8, N>::new();
         out.extend_from_slice(&self.sink).ok()?;
-        let footer = RunFooter {
-            distance_m,
-            moving_s,
-            elapsed_s,
-            crc32: self.crc.finish(),
-        }
-        .encode();
+        let footer = stamped_footer(self.crc, distance_m, moving_s, elapsed_s);
         out.extend_from_slice(&footer).ok()?;
         Some(out)
     }
 }
 
 /// Verify a reassembled blob: magics present, length a whole number of points,
-/// and the stored CRC matches a recompute over header + points. The phone
-/// calls this before trusting a synced run.
+/// and the stored CRC matches a recompute over every byte the CRC covers —
+/// header, records, and the footer's magic + totals. The phone calls this
+/// before trusting a synced run.
+///
+/// Because the totals are inside the window, a blob either checks out whole or
+/// is rejected whole; there is no state where the track is trusted but the
+/// summary quietly is not.
 pub fn verify_blob(blob: &[u8]) -> bool {
     let Some(n) = point_count(blob.len() as u32) else {
         return false;
@@ -566,7 +599,7 @@ pub fn verify_blob(blob: &[u8]) -> bool {
     let Some(footer) = RunFooter::decode(&blob[footer_at..]) else {
         return false;
     };
-    crc32(&blob[..footer_at]) == footer.crc32
+    crc32(&blob[..footer_at + FOOTER_CRC_OFFSET]) == footer.crc32
 }
 
 // ---- Manifest + chunk request ---------------------------------------------
@@ -922,9 +955,10 @@ mod tests {
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
     }
 
-    /// Golden vector: the exact bytes a fixed run produces. Byte 5 is
-    /// [`FLAG_FINISHED`] — set, because this is a committed run — and the trailing
-    /// CRC covers it.
+    /// Golden vector: the exact bytes a fixed run produces. Byte 4 is the
+    /// format version, byte 5 is [`FLAG_FINISHED`] — set, because this is a
+    /// committed run — and the trailing CRC covers both, every record, and the
+    /// footer's totals.
     #[test]
     fn golden_blob_is_stable() {
         let blob = build();
@@ -936,17 +970,17 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31020100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c020000566db750",
+            "54524b31030100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000039e3c091",
             "wire format changed — update this vector, and the Dart mirror in \
              apps/mobile_android/test/sim_watch_sync_test.dart if the layout moved"
         );
     }
 
-    /// Golden vector for a v2 blob carrying a lap record between its points —
-    /// pinned byte-for-byte in the Dart mirror's test so the two v2 codecs
-    /// can't drift, exactly like the point-only golden above.
+    /// Golden vector for a blob carrying a lap record between its points —
+    /// pinned byte-for-byte in the Dart mirror's test so the two codecs can't
+    /// drift, exactly like the point-only golden above.
     #[test]
-    fn golden_v2_blob_with_a_lap_is_stable() {
+    fn golden_blob_with_a_lap_is_stable() {
         let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w = RunWriter::start(sink, 7, 41).expect("start");
         let pts = sample_points();
@@ -969,33 +1003,43 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31020100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c020000dda6c90d",
+            "54524b31030100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c0200008d2b643c",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/test/sim_watch_sync_test.dart"
         );
     }
 
-    /// A v1 blob (all-point, untagged, version byte 1) as a prior firmware
-    /// wrote it — the exact pre-v2 golden vector. Readers must keep decoding
-    /// it: verification is version-agnostic and every record carries the
-    /// point tag (v1's reserved zero byte).
-    #[test]
-    fn v1_golden_blob_still_verifies_and_decodes() {
-        const V1_HEX: &str = "54524b31010000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000077fdfebd";
-        let mut blob: heapless::Vec<u8, 256> = heapless::Vec::new();
-        let bytes = V1_HEX.as_bytes();
+    fn from_hex(hex: &str) -> heapless::Vec<u8, 256> {
+        let mut out: heapless::Vec<u8, 256> = heapless::Vec::new();
+        let bytes = hex.as_bytes();
         for i in (0..bytes.len()).step_by(2) {
             let hi = (bytes[i] as char).to_digit(16).unwrap() as u8;
             let lo = (bytes[i + 1] as char).to_digit(16).unwrap() as u8;
-            blob.push((hi << 4) | lo).unwrap();
+            out.push((hi << 4) | lo).unwrap();
         }
-        assert!(verify_blob(&blob));
-        let header = RunHeader::decode(&blob).unwrap();
-        assert_eq!(header.version, MIN_FORMAT_VERSION);
-        for (i, expected) in sample_points().iter().enumerate() {
-            let at = HEADER_LEN + i * POINT_LEN;
-            assert_eq!(record_tag(&blob[at..]), Some(RECORD_TAG_POINT));
-            assert_eq!(&TrackPoint::decode(&blob[at..]).unwrap(), expected);
+        out
+    }
+
+    /// The v1 and v2 golden vectors as prior firmware wrote them. v3 moved the
+    /// CRC window to include the footer totals, so their stored checksums no
+    /// longer describe the bytes they precede: both are rejected. That is the
+    /// compat decision, pinned — a v3 reader must not accept a blob whose
+    /// summary is unprotected, and the version gate must name the reason.
+    #[test]
+    fn pre_v3_golden_blobs_are_rejected() {
+        const V1_HEX: &str = "54524b31010000000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000077fdfebd";
+        const V2_HEX: &str = "54524b31020100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c020000566db750";
+        for (label, hex) in [("v1", V1_HEX), ("v2", V2_HEX)] {
+            let blob = from_hex(hex);
+            assert!(
+                !verify_blob(&blob),
+                "{label}: a pre-v3 CRC covers a narrower window and must not check out"
+            );
+            let header = RunHeader::decode(&blob).unwrap();
+            assert!(
+                header.version < MIN_FORMAT_VERSION,
+                "{label}: below the decodable range"
+            );
         }
     }
 
@@ -1251,6 +1295,33 @@ mod tests {
         let last = blob.len() - 1;
         blob[last] ^= 0xFF;
         assert!(!verify_blob(&blob));
+    }
+
+    #[test]
+    fn verify_rejects_a_corrupted_footer_total() {
+        // The v3 reason for existing: through v2 the summary sat outside the
+        // CRC, so bit-rot in distance / moving / elapsed produced a blob that
+        // verified and synced as a real run with wrong numbers — a worse
+        // outcome than a rejected run, because nothing tells the runner.
+        let footer_totals = HEADER_LEN + 3 * RECORD_LEN + 4..HEADER_LEN + 3 * RECORD_LEN + 16;
+        for at in footer_totals {
+            let mut blob = build();
+            blob[at] ^= 0x01;
+            assert!(!verify_blob(&blob), "flip at byte {at} must be caught");
+        }
+    }
+
+    #[test]
+    fn no_byte_of_a_blob_is_outside_the_integrity_check() {
+        // Exhaustive over the golden blob: there is no unprotected region left
+        // anywhere — magic, version, flags, records, totals, and the stored CRC
+        // itself all fail verification when disturbed.
+        let clean = build();
+        for at in 0..clean.len() {
+            let mut blob = build();
+            blob[at] ^= 0x01;
+            assert!(!verify_blob(&blob), "byte {at} is unprotected");
+        }
     }
 
     #[test]
