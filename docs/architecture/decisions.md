@@ -4430,3 +4430,101 @@ Don't re-litigate by:
 - **Deriving it from `duration_s` vs the point timestamps** instead of the flag. The checkpoint's footer is internally consistent — nothing in the blob's *numbers* betrays that the run was cut short. Only the header flag knows.
 
 Pinning: `packages/core_models/lib/src/metadata_keys.dart`, `apps/mobile_*/lib/{sim_watch_sync,watch_ingest_queue}.dart` + `lib/screens/run_detail_screen.dart` (both twins), `apps/web/src/lib/core/schema.ts` + `src/routes/runs/[id]/+page.svelte`, `docs/backend/metadata.md`, and the tests in `test/{sim_watch_sync,watch_ingest_queue_helpers,run_detail_screen}_test.dart` + `apps/web/tests-e2e/runs/recovered-unfinished.spec.ts`.
+
+---
+
+## 324. The phone→watch settings fan-out is a plan of typed effects, exhaustive by construction
+
+**Decided (2026-07-25).** The § 314 batch moved eleven task decisions into `watch_core` and left `record.rs`'s `apply_settings` behind: nine `if let Some(x) = s.field { sink.set_x(x) }` arms inside an async task body, in the one crate CI excludes from the host-test job. Each field's plausibility guard was host-tested at its setter; the *routing* — which field feeds which sink — was tested by nothing. That is the wrong half to leave uncovered on this seam. The `SET1` frame took two wire bumps in one week (§ 319's CRC trailer, the v2 timezone field before it), § 317's property suite had already found one fail-open bug in the same area, and the failure mode is silent: a field routed to the wrong setter, or a tenth field added to `WatchSettings` and never wired, still decodes cleanly and the watch simply ignores what the phone sent. No log line, no error, no test.
+
+`watch_core::settings_apply::plan_apply` now owns the decision, returning one ordered `SettingsEffect` per present field; `record.rs` is a `match` that owns only the sinks. An effects list rather than an applier trait, because effects are comparable values: a test asserts a whole plan in one line, where a trait needs a recording mock and reads as a *description* of the routing rather than the routing itself. The two guards with no setter to live in — the QNH sea-level reference, whose sink is a `state` watch, and the home-clock offset — run in the planner, so an implausible value yields no effect rather than a clamped one.
+
+**The point of the module is that the next field cannot be dropped silently.** `plan_apply` destructures `WatchSettings` with no `..` rest pattern, so a new field is `E0027`; binding it without emitting an effect is `unused_variables`, which the workspace clippy gate denies; a new `SettingsEffect` variant is a compile error in both `kind()` and `EffectKind::next`; and `MAX_SETTINGS_EFFECTS` is computed from that chain in a `const` block, so capacity grows by linking a variant in rather than by remembering a number. The load-bearing test then counts the plan against the frame's **own presence bitfields**, read out of `encode`'s output — a field cannot reach the watch without a presence bit, so the expected count grows with the wire format and is independent of both the test and `EffectKind`. A property extends that equality across all 2^9 presence combinations. `plausible_tz_offset_min` became a free function over `Option<i16>` as part of this: as a method it forced the planner to write `tz_offset_min: _`, and a wildcard in that pattern is precisely how a field goes missing.
+
+**The extraction found no routing defect.** All nine fields already reached the sink `settings.rs` documents for them, so unlike the rest of the § 316 batch nothing was pinned-and-flipped — this one is a pure coverage change, and saying so is the honest report. The one sink without a guard of its own, `Recorder::set_gear`, is defended downstream: `gear_wear` treats a non-finite or negative distance as untracked, so a corrupt baseline degrades honestly instead of rendering a wrong number.
+
+Don't re-litigate by:
+
+- **Adding a `..` rest pattern** because a new field "obviously doesn't need routing". If it is on the wire the phone can send it, and a field the watch accepts and ignores is worse than one it rejects.
+- **Replacing the presence-bit oracle with a constant.** A number in a test is a number someone must remember to change — the exact failure class the module exists to remove.
+- **Moving the QNH or timezone guard back into the task** for symmetry with the setters. Neither has a setter to live in, and in the planner they are covered by the same suite as the routing.
+
+Rung: **host-tested** for the fan-out, **build-verified** for the driver (§ 314).
+
+---
+
+## 325. The LED auto-gain *cadence* moves to `watch_core`, and the post-wake hold turns out to rest on the counter, not on the DC estimates
+
+**Decided (2026-07-25).** The `hr` task's extraction moved the FIFO tag demux into `watch_core::hr_drain` and left the LED auto-gain cadence inlined in the async drain loop — an `agc_samples >= AGC_PERIOD_SAMPLES` gate, a `(Some(raw), Some(corrected))` guard, and a counter reset on duty-cycle wake, none of them reachable from the host-test job. The driver's `agc_next_pa_ambient` was well tested for *by how much* the drive steps; nothing tested *when* it was allowed to. `hr_drain::AgcCadence` now owns the cadence and the task keeps the I²C.
+
+The extraction was worth doing for what it found in the **comment** rather than in the code. The task documented its post-wake hold as coming from `PeakDetector::reset` leaving both DC estimates `None`, "so the loop naturally holds until the baseline re-converges". It does not: `raw_dc()` / `corrected_dc()` gate on `initialized`, which the first `push_ambient` after a reset sets, so both read `Some` one sample into a new window. The counter reset is the *only* thing standing between a freshly-woken part and a gain step taken off a one-sample-old baseline — and a comment naming the wrong mechanism is exactly how that reset gets deleted as redundant during the next reorder. A test now passes `Some` DC estimates throughout the wake so the counter is proven to be what holds the loop.
+
+The inlined version also zeroed the counter *before* testing the DC pair, discarding an elapsed period spent without a baseline and waiting a full second more. That arm is unreachable as the code stands — `agc_samples` is incremented only by the branch that also pushes to the detector, so `samples >= 1` implies `initialized` — so it is recorded as a **latent** ordering defect, not a live one, and nothing visible on the bench changes. It is still fixed: `due` consumes the period only when it authorises a step, which is what the surrounding comments already claimed and what becomes load-bearing the moment the DC estimate needs real convergence (the post-tier-1 licensed Maxim algorithm). Nine tests carry it, including one driving `FifoDemux` and `AgcCadence` together exactly as the drain loop does — four periods of ambient and stray-tag words advance nothing — and one composing the cadence with `hr_duty::shown_bpm` to pin that a reading is *held* across an off-window inside its budget rather than re-sampled or blanked.
+
+**The AGC's step, hysteresis, `raw_ceiling` and PA clamps were not touched.** They are flagged conservative pre-calibration values and they move on the bench, not in a refactor.
+
+Don't re-litigate by:
+
+- **Restoring the reset-before-check ordering** on the grounds that the absent-DC arm is unreachable. It is unreachable *today*, by a coupling between two crates that nothing enforces.
+- **Dropping `agc.reset()` on wake** because the detector reset "already" holds the loop. It does not, for exactly one sample — which is the whole window that matters.
+- **Retuning the cadence period off a sim run.** Renode models no optical path and no power; the period is a settling-time derivation and its confirmation is bench work.
+
+---
+
+## 326. A generated table that an invariant test sweeps must publish its own membership list
+
+**Decided (2026-07-25).** `drivers/sharp_mip`'s font had a real defect — `gen_font.py` packed `'+'` identical to `'-'` and `'|'` identical to space — and the fix was a `tests/font.rs` sweep asserting every glyph non-blank and all pairs distinct. `tests/bignum.rs` carries the same guard. The 16×16 icon table, off the same Inkscape → ImageMagick rasteriser, had none, and its `Heart`/`HeartSmall` and `SatSearch0`/`SatSearch1`/`Satellite` pairs are *deliberately* similar, so a collision there is a silently dead animation — the same failure mode that took two sim passes to notice in the font.
+
+The sweep now exists, and the decision worth recording is where the enumeration lives. The icon table published only per-variant statics behind an `Icon` enum, so the equivalent test would have had to hard-code the nine variants — a list that goes stale the first time someone drops an SVG into `icons/`, and goes stale **silently**, because a shorter list still passes. `gen_icons.py` therefore emits `Icon::ALL` from the same `ICONS` sequence that produces the enum variants, the dispatcher arms and the tables, so the four cannot disagree by construction. The general rule: when a generator produces a set of things and a test needs a property of *all* of them, the generator owns the enumeration; a test-side list is a guard that quietly narrows itself.
+
+**No collision existed.** All nine icons carry ink and all thirty-six pairs differ, and the two animation families' ink counts are monotonic, which the tests also pin. The guard was verified to bite by temporarily aliasing `HEART_SMALL` to `HEART` and confirming two tests fail, and the regenerated `icons.rs` was diffed byte-for-byte against the committed file with the rasteriser stubbed (Inkscape and ImageMagick are not installed here).
+
+---
+
+## 327. Pixel drawing lives in `watch_render`, not in the screen task — and the move found an unclipped polyline
+
+**Decided (2026-07-25).** `watch_render` exists so widget geometry is host-testable with an ASCII-preview harness, but three pixel jobs stayed inline in the `ui` task's async loop — the Nav map panel, the back-to-start overlay, and the elevation mini-profile's rect — where `app/`'s board-only build put them beyond `cargo test`. § 314's batch had already extracted the *decisions* behind them (`nav_map`, `trackback::project_track`, `arrow_lines`) without the drawing. All three are now widgets with pinned bounds and preview cases; `app/src` drops 4,561 → 4,466 lines.
+
+The move paid for itself on the first test written. `Framebuffer` clips at the **display** edge, but the Nav panel is a band inside it (rows 1-6), and the polyline is painted *after* the text rows. On the runner-centred auto-zoom window — roughly 8,400 px per degree of latitude — a course leg a few hundred metres outside the window projects a handful of pixels above the panel, still on-screen, and scribbles the NAV title row. A realistic four-point ultra course with the runner mid-course put **16 pixels of breadcrumb on the title row**. The fix is a Cohen-Sutherland clip to the panel rect, with the interpolation carried in `i64`: the naive `i32` product overflows when a cold-start fix projects the course hundreds of thousands of pixels away, and firmware ships `--release`, where a wrapped multiply puts a *garbage line back inside the panel* on the one page a lost runner is reading. The clip is a proven no-op for a whole-course fit, so the common case renders byte-identically.
+
+The other two widgets moved clean, and that is recorded rather than dressed up as a finding. In particular the trackback start-box's ±2 px reach fits `project_track`'s 2 px inset with **zero slack** at all four extremes — a coupling that was invisible and is now a test.
+
+Don't re-litigate by:
+
+- **Drawing pixels in the `ui` task again** because "it's only a few lines". Those few lines are the ones no test can reach; the task owns cadence and peripherals, `watch_render` owns geometry.
+- **Trusting `Framebuffer`'s clipping to keep a widget in its rect.** It only guarantees you will not panic or wrap *off the display*. Any widget owning a sub-rect must clip to that rect itself and prove it, because the failure mode is silent overdraw of a row another layer already painted.
+- **Doing signed pixel interpolation in `i32`.** Release overflow wraps rather than panicking, so the bug surfaces as plausible-looking wrong pixels.
+- **Reading "the preview looks right" as verification.** The ASCII harness is host-tested evidence of layout and nothing more; § 314's ladder still applies.
+
+---
+
+## 328. A sensor channel publishes only what a consumer can distinguish, and the quantum is set by the finest consumer, not the loudest
+
+**Decided (2026-07-25).** The 2026-07-19 pass fixed the HR task waking the UI far more often than its value changed, with `hr_duty::should_publish` — a byte-equality dedup. Two sibling channels had the same defect and could not use the same remedy. `embassy_sync::Watch::send` wakes every receiver whether or not the value moved, and the screen task waits on both, so each was a standing per-second reason for the CPU to wake and the face to fully re-render — directly against README § Power discipline's "a truly idle wrist wakes the CPU seconds apart".
+
+The barometer's `Reading` is three `f32`s off a real sensor, so consecutive samples on a motionless wrist are never equal and equality dedupes nothing. The GSV channel carries genuinely *different* values every second, because `ublox_nmea` emits one sentence-level `Gsv` per GSV **sentence** rather than per group and strips the talker prefix, so a multi-sentence group and a multi-constellation receiver both land distinct counts on one channel — 3-6 sends per second, plus GSA. Every sim NMEA fixture is single-constellation GPS-only, which is exactly why this never surfaced under Renode.
+
+Both are now gated on the coarsest thing still lossless for every consumer, and **the choice of quantum is the whole decision**. For the signal channel that is the drawn bar count (`statusbar::bars_for_fix`): the idle meter is the only consumer and cannot represent anything finer. The two watches were merged into one `state::SIGNAL` because the bars are a function of both fields, and gating them independently lets a suppressed satellite drop resurface later through a fix-mode change and draw bars for a sky that has already gone. For the barometer the face's whole-metre rendering quantum was tried first and was **wrong**: `record.rs` feeds the same channel's altitude into `Recorder::set_baro_altitude`, and the GAP estimator reads a grade off ~5 m segments, so a metre-coarse altitude puts tens of percent onto a single segment's grade — paying for the power win with a visibly bouncing GAP row, i.e. fixing a waker by degrading a sim-verified feature. `PUBLISH_STEP_M` is therefore 0.1 m: the finest quantum anything downstream can represent at all (`link`'s `{:.1}`, `TrackPoint::ele_dm`), still an order of magnitude above the BMP581's noise at the driver's configured 16× OSR + IIR coeff-7, and a thirtieth of `DEADBAND_M`. The gate anchors on the last *published* altitude, not the previous sample, so a slow climb of sub-threshold steps still publishes once per step it gains.
+
+An explicit manual QNH re-zero bypasses the gate entirely, via `baro_rezero::published_reading`, so the ALT row can never disagree with the `SET …M` banner the runner just triggered.
+
+Don't re-litigate by:
+
+- **Setting the baro step from the face's rendering quantum.** The face is the loudest consumer, not the finest; the recorder is on the same channel.
+- **Gating the satellite count and the fix mode as separate channels.** They compose into one drawn artifact, and separate gates let a stale value resurface through the other field.
+- **Calling the 0.1 m step measured.** It is a datasheet-class derivation, now registered as such in `quality_standards.md`.
+- **Sizing an explicit user action around a throttle.** A gate exists to suppress what nobody asked for; a re-zero the runner pressed is not that.
+
+---
+
+## 329. The pushed-settings seam is a queue, because a `SET1` frame is a delta and deltas do not coalesce
+
+**Decided (2026-07-25).** `state::SETTINGS` was a `Watch<…, Option<WatchSettings>, 1>` — one latest-value slot — read with `try_changed()` only after an unrelated wake. Two settings frames arriving between two wakes therefore coalesced and the earlier one was lost outright; in Expedition GNSS mode that window is up to 60 s, so the two pushes need not be close together to collide. The `SET1` frame's whole design premise is the *partial* push: every field carries a presence bit precisely so the phone can set a new max HR without disturbing the eight settings it did not mention. A phone that pushed max HR and then a page mask lost the max HR — the frame decoded, its CRC checked (§ 319), its fan-out routed correctly (§ 324), and the value still never reached the recorder. This is § 320's defect wearing different clothes: a single-value holder carrying a *stream*.
+
+The fix is § 320's fix. `SETTINGS` is a depth-4 `Channel` matching the neighbouring `RECORD_CMD` — these are operator-paced pushes off a settings screen, not a pipeline, so a handful of buffered deltas covers a burst while the task is between wakes. Both publishers `try_send` and `warn!` on a full queue rather than dropping in silence, and the record loop drains with `while let Ok(s) = state::SETTINGS.try_receive()`, applying each frame through § 324's fan-out in arrival order. The `Option` wrapper went with the `Watch`: an empty queue *is* "nothing pushed yet". `SETTINGS_QUEUE_DEPTH` lives in `watch_core::settings_queue`, with tests over the same `Channel` type the firmware links (`embassy-sync` stays a `watch_core` dev-dependency per § 320) — two pushes queued between drains delivered in order, a drain of N frames composed through `plan_apply` into N plans with the right values, exact-depth and one-drain-frees-one-slot, an overflow refused with every queued frame surviving, and a single-slot `Watch` instantiated beside the `Channel` so the defect and its fix are stated rather than described.
+
+Don't re-litigate by:
+
+- **Merging successive frames into one cumulative latest value.** It looks like it preserves everything, and it destroys the delta: every accumulated field is re-applied on every push, which is what the presence bits exist to avoid.
+- **Dropping the depth back to a literal in `app/`.** The depth *is* the decision, and `app/` is excluded from the host-test job, so a number living there is asserted about in prose and nowhere else.
+- **Restoring the `Option` wrapper** for symmetry with the surrounding watches. A `Channel`'s emptiness already carries "nothing pushed yet"; a `None` on the wire would be a frame that means nothing.
