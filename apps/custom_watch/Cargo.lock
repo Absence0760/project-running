@@ -1431,7 +1431,9 @@ dependencies = [
 name = "watch_core"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "defmt 1.1.0",
+ "embassy-sync",
  "heapless",
  "libm",
  "proptest",
