@@ -22,6 +22,7 @@ stateDiagram-v2
     Run: Run view
     Run: 33 pages (filtered mask)
     Grid: Page grid (modal)
+    Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
 
     [*] --> Idle
@@ -96,10 +97,23 @@ flowchart LR
 
 The page grid (hold BTN3) shows this same ring as a 4-column map — codes in
 cycle order, cursor box on the current page — and moves over it with
-`±1` (taps) and `±4` (holds). The body seats `GRID_CAPACITY` = 4 × 8 = 32 cells,
-one short of the full 33-page ring, so it is a **window** that scrolls in whole
-rows to keep the cursor's row on screen rather than truncating the tail (§333).
-Under the everyday filtered mask the whole enabled set fits and nothing scrolls.
+`±1` (taps) and `±4` (holds). Above the map sit two chrome rows: row 0 is the
+**button legend** (`B2 EXIT` … `B4 GO`) and row 1 the **cursor page's full
+name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 33-page ring, so it
+is a **window** that scrolls in whole rows to keep the cursor's row on screen
+rather than truncating the tail (§333) — scroll depth 2 at the full mask. Under
+the everyday filtered mask (~12 pages, 3 rows) the whole enabled set fits and
+nothing scrolls.
+
+The chrome is what makes the modal honest about itself. 33 codes need
+`ceil(33/4)` = 9 rows and the panel has exactly 9 (144 px / 16 px), so there was
+never a spare row — every chrome row is bought from body capacity, which only
+§333's window makes affordable (before it the body was a hard 32-cell `const`
+assert). Row 0 names BTN2 and BTN4 and deliberately **not** BTN1/BTN3: a BTN1 or
+BTN3 press moves the visible cursor and commits nothing, so it is discovered for
+free, whereas BTN2 — which arms the stop everywhere else and cancels in here —
+is a *safety* remap the closing grid cannot reveal (§337).
 
 ## Press cost — computed, from the Dashboard, full 33-page mask
 
@@ -148,6 +162,19 @@ removes.
 - **The grid modal swallows every button.** No press inside it can pause,
   stop-arm, or lap the recording; BTN2 cancels, BTN4 confirms, BTN1/BTN3
   move the cursor. The recorder is unreachable from the modal.
+- **The grid states its own button map** (§337). Row 0 carries `B2 EXIT` and
+  `B4 GO` — the two presses that leave the modal — so BTN2's loss of the stop is
+  read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
+  the other side. The legend is static, so it can never dirty a panel line.
+- **No jump commits off a code alone** (§337). Row 1 spells out the cursor
+  page's full name, because four glyphs cannot separate 33 pages: `LOAD`/`ROAD`
+  and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
+  `PACR`/`RCAP` are transpositions (computed over all 528 code pairs; 24 more sit
+  at distance 2). Both the 3 s auto-select and BTN4 therefore commit on
+  something the runner has read.
+- **No cell can land on the chrome rows** — the cursor box is drawn from
+  `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
+  spending a row on chrome shortens the window and never displaces the cursor.
 - **§286's safety contract stands**: Back-to-start is one long-press from
   the Dashboard, grid or no grid.
 - **Dashboard is always enabled** — no mask can empty the cycle or the grid.

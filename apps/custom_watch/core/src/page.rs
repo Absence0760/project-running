@@ -149,6 +149,12 @@ impl Page {
     /// The page's short code for the [`crate::page_grid`] overview — at most
     /// four glyphs so four columns of codes fit the 21-cell text grid, unique
     /// so no two cells read the same (both test-pinned).
+    ///
+    /// Four glyphs cannot carry 33 distinct meanings unambiguously: `LOAD` /
+    /// `ROAD` and `PACE` / `PACR` are one edit apart, and `REDY` / `RDAY` and
+    /// `PACR` / `RCAP` are transpositions of each other. The code is therefore
+    /// a *position marker* on the grid map, never the thing the runner commits
+    /// on — [`Page::name`] is what the grid shows for the cursor.
     pub fn code(self) -> &'static str {
         match self {
             Page::Dashboard => "DASH",
@@ -184,6 +190,48 @@ impl Page {
             Page::RouteElev => "RELV",
             Page::AutoEffort => "AEFF",
             Page::BackToStart => "BACK",
+        }
+    }
+
+    /// The page's full name, for the [`crate::page_grid`] cursor row — what the
+    /// runner reads to confirm the cell the box is on before the jump commits.
+    /// Every name fits the 21-cell text row (the longest, `ELEVATION PROFILE`,
+    /// is 17) and is unique; both are test-pinned.
+    pub fn name(self) -> &'static str {
+        match self {
+            Page::Dashboard => "DASHBOARD",
+            Page::Distance => "DISTANCE",
+            Page::Pace => "PACE",
+            Page::Lap => "LAP TIME",
+            Page::Zones => "HR ZONES",
+            Page::Splits => "PACE SPLITS",
+            Page::Pacer => "VIRTUAL PARTNER",
+            Page::GuidedRun => "GUIDED RUN",
+            Page::Nav => "COURSE MAP",
+            Page::TurnCue => "NEXT TURN",
+            Page::CutoffEta => "CUT-OFF ETA",
+            Page::Roadbook => "ROADBOOK",
+            Page::Fuel => "FUEL PLAN",
+            Page::ElevationProfile => "ELEVATION PROFILE",
+            Page::RacePredictor => "RACE PREDICTOR",
+            Page::TrainingLoad => "TRAINING LOAD",
+            Page::DistanceBand => "DISTANCE BANDS",
+            Page::GearWear => "GEAR WEAR",
+            Page::TrainingPaces => "TRAINING PACES",
+            Page::Fitness => "FITNESS",
+            Page::Readiness => "READINESS",
+            Page::Goals => "GOALS",
+            Page::RaceDay => "RACE DAY",
+            Page::PlanReplan => "PLAN RE-PLAN",
+            Page::PlanAdaptive => "ADAPTIVE RE-PLAN",
+            Page::Recap => "YEAR RECAP",
+            Page::Streaks => "STREAKS",
+            Page::RunStats => "RUN STATS",
+            Page::PrRecency => "PR RECENCY",
+            Page::RouteSimplify => "ROUTE SIMPLIFY",
+            Page::RouteElev => "ROUTE ELEVATION",
+            Page::AutoEffort => "AUTO EFFORT",
+            Page::BackToStart => "BACK TO START",
         }
     }
 
@@ -408,6 +456,48 @@ mod tests {
             for &b in ALL.iter().skip(i + 1) {
                 assert_ne!(a.code(), b.code(), "{a:?} and {b:?} share a code");
             }
+        }
+    }
+
+    #[test]
+    fn names_fit_one_text_row_and_are_unique() {
+        for &p in ALL.iter() {
+            assert!(
+                p.name().len() <= crate::face::COLS,
+                "{p:?} name {:?} overflows the {}-cell grid name row",
+                p.name(),
+                crate::face::COLS
+            );
+            assert!(!p.name().is_empty());
+        }
+        for (i, &a) in ALL.iter().enumerate() {
+            for &b in ALL.iter().skip(i + 1) {
+                assert_ne!(a.name(), b.name(), "{a:?} and {b:?} share a name");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_says_more_than_its_code() {
+        // The three code pairs the persona review found confusable: LOAD/ROAD
+        // and PACE/PACR are one edit apart, REDY/RDAY a transposition. Their
+        // names must not merely re-stage that — they diverge within the first
+        // two glyphs, which is what a brief glance reads.
+        for (a, b) in [
+            (Page::TrainingLoad, Page::Roadbook),
+            (Page::Pace, Page::Pacer),
+            (Page::Readiness, Page::RaceDay),
+        ] {
+            let shared = a
+                .name()
+                .bytes()
+                .zip(b.name().bytes())
+                .take_while(|(x, y)| x == y)
+                .count();
+            assert!(
+                shared <= 1,
+                "{a:?}/{b:?} names open alike for {shared} glyphs"
+            );
         }
     }
 

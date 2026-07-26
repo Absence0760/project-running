@@ -11,6 +11,12 @@
 //! needs one finger and no confirm press. BTN2 cancels; every in-grid press
 //! is swallowed — a navigation modal must never pause or stop the recording.
 //!
+//! Because the modal remaps buttons, it **states its own map**: row 0 is the
+//! button legend and row 1 the cursor page's full name, so no jump commits off
+//! a four-glyph code alone and BTN2's loss of the stop is on screen rather than
+//! discovered. Both rows cost body capacity, which §333's scrolling window
+//! makes affordable — before it, the body was a hard 32-cell assert.
+//!
 //! Pure state + layout, like the rest of `core`: the app's button task owns
 //! the press timing and the deadline timer, the ui task draws the rows this
 //! module lays out (`grid_rows`) plus the cursor box (`grid_cell` → pixels in
@@ -25,14 +31,18 @@ use crate::page::Page;
 /// span 20 of the 21 text columns.
 pub const GRID_COLS: usize = 4;
 
-/// First text row of the grid body; row 0 is the title + BTN4 hint.
-pub const GRID_TOP_ROW: usize = 1;
+/// Text row carrying the cursor page's full name.
+pub const GRID_NAME_ROW: usize = 1;
+
+/// First text row of the grid body; row 0 is the button legend, row 1 the
+/// cursor's name.
+pub const GRID_TOP_ROW: usize = 2;
 
 /// Body rows available to cells.
 pub const GRID_BODY_ROWS: usize = ROWS - GRID_TOP_ROW;
 
 /// Cells one screenful of grid shows. The enabled set can exceed it (33 pages
-/// need nine rows of four and the body has eight), so the body is a window onto
+/// need nine rows of four and the body has seven), so the body is a window onto
 /// the cycle anchored on the cursor rather than a silent truncation of the
 /// tail — see [`window_origin_row`].
 pub const GRID_CAPACITY: usize = GRID_COLS * GRID_BODY_ROWS;
@@ -157,15 +167,26 @@ fn windowed_row(i: usize, origin: usize) -> Option<usize> {
     row.checked_sub(origin).filter(|r| *r < GRID_BODY_ROWS)
 }
 
-/// The grid's text rows: the title row, then the enabled pages' codes in
-/// cycle order, [`GRID_COLS`] per row. The ui task draws these exactly like
-/// face rows; the cursor box is pixel work ([`grid_cell`] + the widget).
+/// The grid's text rows: the button legend, the cursor page's full name, then
+/// the enabled pages' codes in cycle order, [`GRID_COLS`] per row. The ui task
+/// draws these exactly like face rows; the cursor box is pixel work
+/// ([`grid_cell`] + the widget).
 ///
 /// The body shows [`GRID_CAPACITY`] cells; a wider enabled set scrolls in whole
 /// rows around `cursor` so the cursor's row is always on screen.
+///
+/// Row 0 names BTN2 and BTN4 — the two buttons whose in-grid meaning is not
+/// self-revealing, because pressing them leaves the modal. BTN1/BTN3 are
+/// deliberately unlabelled: a press moves the visible cursor one cell and
+/// commits nothing, so the runner learns them for free. BTN2 is the one whose
+/// remap is a *safety* surprise — outside the grid it arms the stop, in here it
+/// cancels, and a runner who mashes it cannot tell from the closing grid
+/// whether the stop armed (it did not). `B2 EXIT` names the way back to where
+/// BTN2 stops, and the run view's own `STOP? BTN2` banner takes it from there.
 pub fn grid_rows(mask: u64, cursor: Page) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
-    let _ = write!(rows[0], "{:<16}B4 GO", "PAGES");
+    let _ = write!(rows[0], "{:<16}B4 GO", "B2 EXIT");
+    let _ = rows[GRID_NAME_ROW].push_str(cursor.name());
     let (index, count) = cursor_index(mask, cursor);
     let origin = window_origin_row(index, count);
     for_each_enabled(mask, |i, p| {
@@ -258,7 +279,7 @@ mod tests {
     #[test]
     fn full_mask_seats_a_screenful_and_scrolls_to_the_rest() {
         let rows = grid_rows(u64::MAX, Page::Dashboard);
-        assert_eq!(rows[0].as_str(), "PAGES           B4 GO");
+        assert_eq!(rows[0].as_str(), "B2 EXIT         B4 GO");
         // A cursor at the top shows the first GRID_CAPACITY cells, four per
         // body row, none truncated.
         for row in rows.iter().skip(GRID_TOP_ROW) {
@@ -305,7 +326,12 @@ mod tests {
         }
         let from_top = grid_rows(mask, Page::Dashboard);
         for cursor in [Page::Dashboard, p.prev(), Page::Pace] {
-            assert_eq!(grid_rows(mask, cursor), from_top, "{cursor:?} scrolled");
+            // Only the body: the name row tracks the cursor by design.
+            assert_eq!(
+                grid_rows(mask, cursor)[GRID_TOP_ROW..],
+                from_top[GRID_TOP_ROW..],
+                "{cursor:?} scrolled"
+            );
         }
     }
 
@@ -317,9 +343,9 @@ mod tests {
             | Page::Fuel.bit()
             | Page::BackToStart.bit();
         let rows = grid_rows(mask, Page::Dashboard);
-        assert_eq!(rows[1].as_str(), "DASH PACE NAV  FUEL");
-        assert_eq!(rows[2].as_str(), "BACK");
-        for row in rows.iter().skip(3) {
+        assert_eq!(rows[GRID_TOP_ROW].as_str(), "DASH PACE NAV  FUEL");
+        assert_eq!(rows[GRID_TOP_ROW + 1].as_str(), "BACK");
+        for row in rows.iter().skip(GRID_TOP_ROW + 2) {
             assert!(row.is_empty(), "no cells past the enabled set: {row:?}");
         }
         assert_eq!(
@@ -336,6 +362,94 @@ mod tests {
             None,
             "disabled page"
         );
+    }
+
+    #[test]
+    fn the_legend_names_the_two_buttons_that_leave_the_modal() {
+        // BTN2's remap is the one that is not self-revealing: outside the grid
+        // it arms the stop, in here it cancels, and the closing grid looks the
+        // same either way. BTN1/BTN3 move a visible cursor and commit nothing.
+        let legend = grid_rows(u64::MAX, Page::Dashboard)[0].clone();
+        assert!(legend.contains("B2"), "no stop-path hint: {legend:?}");
+        assert!(
+            legend.contains("EXIT"),
+            "BTN2's meaning unnamed: {legend:?}"
+        );
+        assert!(
+            legend.contains("B4 GO"),
+            "the jump hint was lost: {legend:?}"
+        );
+        assert_eq!(legend.len(), COLS, "the legend should fill the row exactly");
+        // Static: it can never redraw, whatever the cursor or mask.
+        for (mask, cursor) in [(u64::MAX, Page::BackToStart), (0, Page::Dashboard)] {
+            assert_eq!(grid_rows(mask, cursor)[0], legend);
+        }
+    }
+
+    #[test]
+    fn the_name_row_shows_the_cursor_page_in_full() {
+        // The confusable pair the persona review hit: LOAD / ROAD are one edit
+        // apart in the cells, so the jump must not commit off the code alone.
+        let mask = u64::MAX;
+        let load = grid_rows(mask, Page::TrainingLoad)[GRID_NAME_ROW].clone();
+        let road = grid_rows(mask, Page::Roadbook)[GRID_NAME_ROW].clone();
+        assert_eq!(load.as_str(), "TRAINING LOAD");
+        assert_eq!(road.as_str(), "ROADBOOK");
+        assert_ne!(load, road);
+        // It tracks every move, so what the box sits on is always spelled out.
+        let mut g = PageGrid::open(Page::Dashboard, mask);
+        assert_eq!(
+            grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
+            "DASHBOARD"
+        );
+        g.tap(mask);
+        assert_eq!(
+            grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
+            "DISTANCE"
+        );
+        g.row_down(mask);
+        assert_eq!(
+            grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
+            g.cursor().name()
+        );
+    }
+
+    #[test]
+    fn the_chrome_rows_never_take_a_cell() {
+        // The legend and the name row sit above the body, so no cell can land
+        // on them and no cursor box can be drawn over them — whatever the mask
+        // and wherever the window scrolled to.
+        for cursor in [Page::Dashboard, Page::Roadbook, Page::BackToStart] {
+            for mask in [u64::MAX, 0, Page::Dashboard.bit() | Page::Fuel.bit()] {
+                let mut p = Page::Dashboard;
+                loop {
+                    if let Some((_, row)) = grid_cell(mask, p, cursor) {
+                        assert!(row < GRID_BODY_ROWS, "{p:?} outside the body");
+                    }
+                    p = p.next();
+                    if p == Page::Dashboard {
+                        break;
+                    }
+                }
+                assert_eq!(
+                    grid_rows(mask, cursor)[GRID_NAME_ROW].as_str(),
+                    cursor.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_rows_are_a_pure_function_of_mask_and_cursor() {
+        // A resting grid must flush zero SPI: the ui task redraws these rows
+        // every frame and the framebuffer only dirties lines that changed, so
+        // nothing here may vary on anything but an input.
+        for cursor in [Page::Dashboard, Page::Fuel, Page::BackToStart] {
+            let first = grid_rows(u64::MAX, cursor);
+            for _ in 0..3 {
+                assert_eq!(grid_rows(u64::MAX, cursor), first, "{cursor:?} redrew");
+            }
+        }
     }
 
     #[test]
