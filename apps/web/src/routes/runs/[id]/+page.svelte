@@ -313,6 +313,15 @@
 	let disciplineLabel = $derived(
 		subSport ? subSport.charAt(0).toUpperCase() + subSport.slice(1) : null,
 	);
+	/// The custom watch reset mid-run and this run was recovered from its last
+	/// flash checkpoint, so every total on this page is a total-so-far
+	/// (decisions §316(c) / §323). Shown as a header chip because the numbers
+	/// are otherwise indistinguishable from a complete run's.
+	let recoveredUnfinished = $derived(
+		(run?.metadata as Record<string, unknown> | null)?.[
+			METADATA_KEYS.recovered_unfinished
+		] === true,
+	);
 	/// Garmin Running Dynamics off the imported session (round-5 F2).
 	let runningDynamics = $derived(
 		((run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.running_dynamics] as {
@@ -1277,6 +1286,16 @@
 							<span class="meta-item dnf-chip" data-testid="dnf-chip">
 								<span class="material-symbols">flag</span>
 								{m('runDetail.dnf')}
+							</span>
+						{/if}
+						{#if recoveredUnfinished}
+							<span
+								class="meta-item incomplete-chip"
+								data-testid="incomplete-chip"
+								title={m('runDetail.incompleteHint')}
+							>
+								<span class="material-symbols">hourglass_disabled</span>
+								{m('runDetail.incomplete')}
 							</span>
 						{/if}
 					</div>
@@ -2477,6 +2496,20 @@
 
 	.dnf-chip .material-symbols {
 		color: var(--color-danger);
+	}
+
+	.incomplete-chip {
+		padding: 0.2rem 0.55rem;
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+		color: var(--color-warning-text);
+		font-weight: 600;
+		font-size: 0.72rem;
+	}
+
+	.incomplete-chip .material-symbols {
+		color: var(--color-warning-text);
 	}
 
 	.discipline-chip {

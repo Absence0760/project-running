@@ -1037,6 +1037,9 @@ export const messages = {
 	"runDetail.public": "Öffentlich",
 	"runDetail.private": "Privat",
 	"runDetail.dnf": "DNF",
+	"runDetail.incomplete": "Unvollständig",
+	"runDetail.incompleteHint":
+		"Deine Uhr wurde mitten im Lauf neu gestartet. Diese Werte umfassen nur, was bis dahin aufgezeichnet war, nicht die gesamte Aktivität.",
 	"runDetail.runActions": "Lauf-Aktionen",
 	"runDetail.editAria": "Titel und Notizen bearbeiten",
 	"runDetail.edit": "Bearbeiten",

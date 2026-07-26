@@ -1037,6 +1037,9 @@ export const messages = {
 	"runDetail.public": "Público",
 	"runDetail.private": "Privado",
 	"runDetail.dnf": "DNF",
+	"runDetail.incomplete": "Incompleta",
+	"runDetail.incompleteHint":
+		"Tu reloj se reinició a mitad de la carrera. Estos totales son solo lo que había registrado hasta ese momento, no la actividad completa.",
 	"runDetail.runActions": "Acciones de la carrera",
 	"runDetail.editAria": "Editar título y notas",
 	"runDetail.edit": "Editar",
