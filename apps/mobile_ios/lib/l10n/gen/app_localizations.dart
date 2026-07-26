@@ -3407,6 +3407,18 @@ abstract class AppLocalizations {
   /// **'DNF'**
   String get runDetailDnfBadge;
 
+  /// Badge in the run-detail AppBar title for a run recovered after the watch reset mid-run — its totals are only what was recorded up to that point
+  ///
+  /// In en, this message translates to:
+  /// **'Incomplete'**
+  String get runDetailIncompleteBadge;
+
+  /// Long-press tooltip explaining the Incomplete badge on run detail
+  ///
+  /// In en, this message translates to:
+  /// **'Your watch restarted mid-run. These totals are only what it had recorded up to that point, not the whole activity.'**
+  String get runDetailIncompleteTooltip;
+
   /// Tooltip on the edit-run button in the run-detail AppBar
   ///
   /// In en, this message translates to:

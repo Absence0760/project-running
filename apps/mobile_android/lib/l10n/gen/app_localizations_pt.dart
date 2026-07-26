@@ -1987,6 +1987,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => 'Incompleta';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'O teu relógio reiniciou a meio da corrida. Estes totais são apenas o que tinha registado até esse momento, não a atividade inteira.';
+
+  @override
   String get runDetailEditTooltip => 'Editar corrida';
 
   @override
@@ -13793,6 +13800,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailDnfBadge => 'DNF';
+
+  @override
+  String get runDetailIncompleteBadge => 'Incompleta';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'Seu relógio reiniciou no meio da corrida. Estes totais são apenas o que ele havia registrado até aquele ponto, não a atividade inteira.';
 
   @override
   String get runDetailEditTooltip => 'Editar corrida';

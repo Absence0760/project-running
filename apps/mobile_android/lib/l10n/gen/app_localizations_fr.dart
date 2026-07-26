@@ -1996,6 +1996,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => 'Incomplète';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'Ta montre a redémarré en pleine course. Ces totaux ne correspondent qu\'à ce qu\'elle avait enregistré jusque-là, pas à toute l\'activité.';
+
+  @override
   String get runDetailEditTooltip => 'Modifier la course';
 
   @override

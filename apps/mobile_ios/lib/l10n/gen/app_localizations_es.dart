@@ -1990,6 +1990,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => 'Incompleta';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'Tu reloj se reinició a mitad de la carrera. Estos totales son solo lo que había registrado hasta ese momento, no la actividad completa.';
+
+  @override
   String get runDetailEditTooltip => 'Editar carrera';
 
   @override

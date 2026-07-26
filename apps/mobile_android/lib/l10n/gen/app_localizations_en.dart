@@ -1972,6 +1972,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => 'Incomplete';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'Your watch restarted mid-run. These totals are only what it had recorded up to that point, not the whole activity.';
+
+  @override
   String get runDetailEditTooltip => 'Edit run';
 
   @override

@@ -549,6 +549,8 @@
   "addRunPickerNoMatch": "Keine Routen passen zu \"{query}\"",
   "addRunPickerNoRoute": "Keine Route",
   "runDetailDnfBadge": "DNF",
+  "runDetailIncompleteBadge": "Unvollständig",
+  "runDetailIncompleteTooltip": "Deine Uhr wurde mitten im Lauf neu gestartet. Diese Werte umfassen nur, was bis dahin aufgezeichnet war, nicht die gesamte Aktivität.",
   "runDetailEditTooltip": "Lauf bearbeiten",
   "runDetailShareTooltip": "Lauf teilen",
   "runDetailMoreTooltip": "Mehr",

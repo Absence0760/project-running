@@ -1993,6 +1993,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => 'Unvollständig';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'Deine Uhr wurde mitten im Lauf neu gestartet. Diese Werte umfassen nur, was bis dahin aufgezeichnet war, nicht die gesamte Aktivität.';
+
+  @override
   String get runDetailEditTooltip => 'Lauf bearbeiten';
 
   @override

@@ -508,6 +508,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   bool get _isDnf => run.metadata?[MetadataKeys.isDnf] == true;
 
+  /// The custom watch reset mid-run and this run was recovered from its last
+  /// flash checkpoint, so every total on this screen is a total-so-far
+  /// (decisions §316(c) / §323) — otherwise indistinguishable from a
+  /// complete run.
+  bool get _isRecoveredUnfinished =>
+      run.metadata?[MetadataKeys.recoveredUnfinished] == true;
+
   Future<void> _editDetails() async {
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
@@ -776,6 +783,29 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                             Theme.of(context).colorScheme.onErrorContainer,
                         fontWeight: FontWeight.w700,
                       ),
+                ),
+              ),
+            ],
+            if (_isRecoveredUnfinished) ...[
+              const SizedBox(width: 8),
+              Tooltip(
+                message: l10n.runDetailIncompleteTooltip,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    l10n.runDetailIncompleteBadge,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onTertiaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
                 ),
               ),
             ],
