@@ -54,7 +54,7 @@ use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
 use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
-use watch_core::settings::WatchSettings;
+use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
 use watch_core::trackback::Trackback;
 
@@ -615,6 +615,17 @@ fn apply_settings(
             SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
             SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
             SettingsEffect::TzOffsetMin(m) => tz_offset_tx.send(m),
+            SettingsEffect::DistanceInterval(m) => alerts.set_distance_interval(m),
+            SettingsEffect::TimeInterval(s) => alerts.set_time_interval(s),
+            SettingsEffect::PaceBand(band) => alerts.set_pace_band(band),
+            SettingsEffect::RacePhases {
+                distance_m,
+                goal_time_s,
+                preset,
+            } => recorder.set_race_phases(distance_m, goal_time_s, preset),
+            SettingsEffect::GuidedRun(id) => {
+                recorder.set_guided_run(id.as_ref().map(GuidedRunId::as_str))
+            }
         }
     }
 }

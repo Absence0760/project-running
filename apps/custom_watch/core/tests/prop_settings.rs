@@ -12,17 +12,20 @@ use support::check;
 use watch_core::record_cadence::plausible_sea_level_pa;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
-    plausible_tz_offset_min, FuelCfg, GearCfg, PacerGoalCfg, WatchSettings, MAX_SETTINGS_LEN,
+    plausible_tz_offset_min, race_phase_preset_from_wire, FuelCfg, GearCfg, GuidedRunId,
+    PaceBandCfg, PacerGoalCfg, RacePhasesCfg, WatchSettings, GUIDED_RUN_ID_LEN, MAX_SETTINGS_LEN,
     SETTINGS_VERSION, TZ_OFFSET_LIMIT_MIN,
 };
 use watch_core::settings_apply::{plan_apply, EffectKind};
 
-/// The two legacy versions `decode` still accepts: v1 (no `flags2`) and v2
-/// (no CRC trailer). Neither is emitted any more — the encoder is v3-only.
+/// The three legacy versions `decode` still accepts: v1 (no `flags2`), v2 (no
+/// CRC trailer) and v3 (32-bit page mask). None is emitted any more — the
+/// encoder is v4-only.
 const V1: u8 = 1;
 const V2: u8 = 2;
+const V3: u8 = 3;
 
-/// Width of the v3 CRC32 trailer.
+/// Width of the CRC32 trailer, present from v3.
 const CRC_WIDTH: usize = 4;
 
 /// The legal domain of a settings frame — every field the encoder can carry
@@ -31,19 +34,33 @@ const CRC_WIDTH: usize = 4;
 /// (`0` is its "clear the ceiling" sentinel), and floats are finite (a NaN is
 /// not equal to itself, so it has no round-trip to assert).
 fn a_settings() -> impl Strategy<Value = WatchSettings> {
-    (
+    let v3_fields = (
         prop::option::of(any::<u16>()),
         prop::option::of((any::<u32>(), any::<u32>())),
         prop::option::of((-1e9f32..1e9f32, prop::option::of(1e-3f32..1e9f32))),
         prop::option::of(prop::option::of(1u8..=u8::MAX)),
         prop::option::of(-1e9f32..1e9f32),
         prop::option::of((any::<u32>(), any::<u32>())),
-        prop::option::of(any::<u32>()),
+        prop::option::of(any::<u64>()),
         prop::option::of(any::<bool>()),
         prop::option::of(any::<i16>()),
-    )
-        .prop_map(
-            |(
+    );
+    // proptest implements `Strategy` for tuples up to 12 wide, so v4's five
+    // fields ride a nested tuple rather than widening the flat one past that.
+    let v4_fields = (
+        prop::option::of(prop::option::of(1u32..=u32::MAX)),
+        prop::option::of(prop::option::of(1u32..=u32::MAX)),
+        prop::option::of(prop::option::of((any::<u16>(), 1u16..=u16::MAX))),
+        prop::option::of((
+            prop::option::of(1u32..=u32::MAX),
+            prop::option::of(1u32..=u32::MAX),
+            any::<u8>(),
+        )),
+        prop::option::of(prop::option::of(a_guided_run_id())),
+    );
+    (v3_fields, v4_fields).prop_map(
+        |(
+            (
                 max_hr,
                 pacer,
                 gear,
@@ -53,24 +70,49 @@ fn a_settings() -> impl Strategy<Value = WatchSettings> {
                 pages,
                 hide_empty_pages,
                 tz_offset_min,
-            )| WatchSettings {
-                max_hr,
-                pacer: pacer.map(|(distance_m, time_s)| PacerGoalCfg { distance_m, time_s }),
-                gear: gear.map(|(baseline_m, target_m)| GearCfg {
-                    baseline_m,
-                    target_m,
-                }),
-                zone_ceiling,
-                sea_level_pa,
-                fuel: fuel.map(|(drink_interval_s, eat_interval_s)| FuelCfg {
-                    drink_interval_s,
-                    eat_interval_s,
-                }),
-                pages,
-                hide_empty_pages,
-                tz_offset_min,
-            },
-        )
+            ),
+            (distance_interval_m, time_interval_s, pace_band, race_phases, guided_run),
+        )| WatchSettings {
+            max_hr,
+            pacer: pacer.map(|(distance_m, time_s)| PacerGoalCfg { distance_m, time_s }),
+            gear: gear.map(|(baseline_m, target_m)| GearCfg {
+                baseline_m,
+                target_m,
+            }),
+            zone_ceiling,
+            sea_level_pa,
+            fuel: fuel.map(|(drink_interval_s, eat_interval_s)| FuelCfg {
+                drink_interval_s,
+                eat_interval_s,
+            }),
+            pages,
+            hide_empty_pages,
+            tz_offset_min,
+            distance_interval_m,
+            time_interval_s,
+            pace_band: pace_band.map(|b| {
+                b.map(|(fast_s_per_km, slow_s_per_km)| PaceBandCfg {
+                    fast_s_per_km,
+                    slow_s_per_km,
+                })
+            }),
+            race_phases: race_phases.map(|(distance_m, goal_time_s, preset)| RacePhasesCfg {
+                distance_m,
+                goal_time_s,
+                preset,
+            }),
+            guided_run,
+        },
+    )
+}
+
+/// A non-empty id that fits the field — the domain the encoder can carry without
+/// the all-zero "deselect" sentinel collapsing it.
+fn a_guided_run_id() -> impl Strategy<Value = GuidedRunId> {
+    prop::collection::vec(prop::char::range('a', 'z'), 1..=GUIDED_RUN_ID_LEN).prop_map(|cs| {
+        let s: String = cs.into_iter().collect();
+        GuidedRunId::new(&s).expect("an id inside the field")
+    })
 }
 
 fn encoded(s: &WatchSettings) -> Vec<u8> {
@@ -174,7 +216,7 @@ fn a_frame_with_bytes_past_the_fields_the_flags_claim_is_rejected() {
 #[test]
 fn an_unknown_version_byte_is_rejected() {
     check(512, (a_settings(), any::<u8>()), |(s, version)| {
-        prop_assume!(!matches!(version, V1 | V2 | SETTINGS_VERSION));
+        prop_assume!(!matches!(version, V1 | V2 | V3 | SETTINGS_VERSION));
         let mut frame = encoded(&s);
         frame[4] = version;
         prop_assert_eq!(
@@ -210,10 +252,11 @@ fn a_corrupt_magic_is_rejected() {
 fn an_unknown_presence_bit_in_flags2_is_rejected() {
     // A new field always rides a version bump, so a set bit `flags2` doesn't
     // define can only be corruption — decoding past it would apply a frame
-    // shifted by however many bytes the sender meant to carry.
-    check(512, (a_settings(), 1u8..=0x7F), |(s, extra)| {
+    // shifted by however many bytes the sender meant to carry. v4 defines bits
+    // 0-5, so the two above them are the unknown ones.
+    check(512, (a_settings(), 1u8..=0x03), |(s, extra)| {
         let mut frame = encoded(&s);
-        frame[6] |= extra << 1;
+        frame[6] |= extra << 6;
         prop_assert_eq!(
             WatchSettings::decode(&frame),
             None,
@@ -224,26 +267,41 @@ fn an_unknown_presence_bit_in_flags2_is_rejected() {
     });
 }
 
-/// Field widths in presence-bit order: `max_hr`, `pacer`, `gear`,
-/// `zone_ceiling`, `sea_level_pa`, `fuel`, `pages`, `hide_empty_pages`, then
-/// `flags2`'s `tz_offset_min`.
-const WIDTHS: [usize; 8] = [2, 8, 8, 1, 4, 8, 4, 1];
-const TZ_WIDTH: usize = 2;
+/// Field widths in `flags` bit order: `max_hr`, `pacer`, `gear`,
+/// `zone_ceiling`, `sea_level_pa`, `fuel`, `pages`, `hide_empty_pages`. The page
+/// mask is the one field whose width depends on the version (4 bytes before v4),
+/// so [`widths`] takes it.
+fn widths(version: u8) -> [usize; 8] {
+    let pages = if version == SETTINGS_VERSION { 8 } else { 4 };
+    [2, 8, 8, 1, 4, 8, pages, 1]
+}
+
+/// Widths of the `flags2` fields, in bit order: `tz_offset_min`,
+/// `distance_interval_m`, `time_interval_s`, `pace_band`, `race_phases`,
+/// `guided_run`.
+const WIDTHS2: [usize; 6] = [2, 4, 4, 4, 9, GUIDED_RUN_ID_LEN];
 
 /// A frame assembled from raw header bytes rather than from [`WatchSettings`],
 /// so the presence bytes and the payload length vary independently — the shape
-/// a corrupt or hostile push actually has. A v3 frame is sealed with its real
-/// checksum whatever its length, so the CRC never shadows the length check.
+/// a corrupt or hostile push actually has. A checksummed frame is sealed with its
+/// real checksum whatever its length, so the CRC never shadows the length check.
 fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
     (
-        prop_oneof![Just(V1), Just(V2), Just(SETTINGS_VERSION), any::<u8>()],
+        prop_oneof![
+            Just(V1),
+            Just(V2),
+            Just(V3),
+            Just(SETTINGS_VERSION),
+            any::<u8>()
+        ],
         any::<u8>(),
-        prop_oneof![Just(0u8), Just(1u8), any::<u8>()],
-        prop::collection::vec(any::<u8>(), 0..=40),
+        prop_oneof![Just(0u8), Just(1u8), Just(0x3Fu8), any::<u8>()],
+        prop::collection::vec(any::<u8>(), 0..=90),
         any::<bool>(),
     )
         .prop_map(|(version, flags, flags2, tail, exact)| {
-            let two_presence_bytes = version == V2 || version == SETTINGS_VERSION;
+            let two_presence_bytes = matches!(version, V2 | V3 | SETTINGS_VERSION);
+            let checksummed = matches!(version, V3 | SETTINGS_VERSION);
             let mut frame = b"SET1".to_vec();
             frame.push(version);
             frame.push(flags);
@@ -253,12 +311,13 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
             if exact {
                 // Bias toward the length the flags claim, so decode succeeds
                 // often enough for the success-side assertions to bite.
-                let mut want: usize = (0..8)
-                    .filter(|i| flags & (1 << i) != 0)
-                    .map(|i| WIDTHS[i])
-                    .sum();
-                if two_presence_bytes && flags2 & 1 != 0 {
-                    want += TZ_WIDTH;
+                let w = widths(version);
+                let mut want: usize = (0..8).filter(|i| flags & (1 << i) != 0).map(|i| w[i]).sum();
+                if two_presence_bytes {
+                    want += (0..WIDTHS2.len())
+                        .filter(|i| flags2 & (1 << i) != 0)
+                        .map(|i| WIDTHS2[i])
+                        .sum::<usize>();
                 }
                 let mut payload = tail.clone();
                 payload.resize(want, 0);
@@ -266,7 +325,7 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
             } else {
                 frame.extend_from_slice(&tail);
             }
-            if version == SETTINGS_VERSION {
+            if checksummed {
                 let crc = crc32(&frame);
                 frame.extend_from_slice(&crc.to_le_bytes());
             }
@@ -285,7 +344,7 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
             return Ok(());
         };
         let version = frame[4];
-        prop_assert!(matches!(version, V1 | V2 | SETTINGS_VERSION));
+        prop_assert!(matches!(version, V1 | V2 | V3 | SETTINGS_VERSION));
         let flags = frame[5];
         let (flags2, header_len) = if version == V1 { (0, 6) } else { (frame[6], 7) };
 
@@ -299,18 +358,29 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
             got.pages.is_some(),
             got.hide_empty_pages.is_some(),
         ];
+        let w = widths(version);
         let mut want = header_len;
         for (i, p) in present.iter().enumerate() {
             prop_assert_eq!(*p, flags & (1 << i) != 0, "field {} presence", i);
             if *p {
-                want += WIDTHS[i];
+                want += w[i];
             }
         }
-        prop_assert_eq!(got.tz_offset_min.is_some(), flags2 & 1 != 0);
-        if got.tz_offset_min.is_some() {
-            want += TZ_WIDTH;
+        let present2 = [
+            got.tz_offset_min.is_some(),
+            got.distance_interval_m.is_some(),
+            got.time_interval_s.is_some(),
+            got.pace_band.is_some(),
+            got.race_phases.is_some(),
+            got.guided_run.is_some(),
+        ];
+        for (i, p) in present2.iter().enumerate() {
+            prop_assert_eq!(*p, flags2 & (1 << i) != 0, "flags2 field {} presence", i);
+            if *p {
+                want += WIDTHS2[i];
+            }
         }
-        if version == SETTINGS_VERSION {
+        if matches!(version, V3 | SETTINGS_VERSION) {
             want += CRC_WIDTH;
         }
         prop_assert_eq!(
@@ -372,6 +442,14 @@ fn a_single_byte_corruption_never_yields_a_frame_claiming_different_fields() {
             prop_assert_eq!(got.pages.is_some(), s.pages.is_some());
             prop_assert_eq!(got.hide_empty_pages.is_some(), s.hide_empty_pages.is_some());
             prop_assert_eq!(got.tz_offset_min.is_some(), s.tz_offset_min.is_some());
+            prop_assert_eq!(
+                got.distance_interval_m.is_some(),
+                s.distance_interval_m.is_some()
+            );
+            prop_assert_eq!(got.time_interval_s.is_some(), s.time_interval_s.is_some());
+            prop_assert_eq!(got.pace_band.is_some(), s.pace_band.is_some());
+            prop_assert_eq!(got.race_phases.is_some(), s.race_phases.is_some());
+            prop_assert_eq!(got.guided_run.is_some(), s.guided_run.is_some());
             Ok(())
         },
     );
@@ -398,8 +476,8 @@ fn chain_index(kind: EffectKind) -> usize {
 
 #[test]
 fn every_present_field_routes_to_exactly_one_effect() {
-    // The unit suite pins the fully-populated frame; this pins all 2^9 presence
-    // combinations over the whole value domain, including the two guards that
+    // The unit suite pins the fully-populated frame; this pins all 2^14 presence
+    // combinations over the whole value domain, including the three guards that
     // reject rather than clamp. A field the fan-out forgets is invisible at
     // runtime — the frame decodes and the watch just ignores it — so the count
     // is taken from the presence bits the encoder itself set.
@@ -407,6 +485,10 @@ fn every_present_field_routes_to_exactly_one_effect() {
         let rejected = usize::from(s.sea_level_pa.is_some_and(|pa| !plausible_sea_level_pa(pa)))
             + usize::from(
                 s.tz_offset_min.is_some() && plausible_tz_offset_min(s.tz_offset_min).is_none(),
+            )
+            + usize::from(
+                s.race_phases
+                    .is_some_and(|c| race_phase_preset_from_wire(c.preset).is_none()),
             );
         prop_assert_eq!(
             plan_apply(&s).len(),
