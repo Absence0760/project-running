@@ -416,6 +416,60 @@ fn preview_mini_profile() {
     show("mini-profile: elevation climb + descent", &fb);
 }
 
+/// A trackback view walked north-east away from its start, one accepted fix a
+/// second — a crumb with a real shape, a bearing back to the start and a fresh
+/// heading, so the preview shows the map and the arrow together.
+fn sample_trackback() -> watch_core::trackback::TrackbackView {
+    use watch_core::record::METRES_PER_DEGREE_LAT;
+    let (lat0, lon0): (f64, f64) = (40.1, -105.2);
+    let lon_per_m = 1.0 / (METRES_PER_DEGREE_LAT * lat0.to_radians().cos());
+    let mut tb = watch_core::trackback::Trackback::new();
+    for i in 0..=60u32 {
+        let along = i as f64 * 12.0;
+        // An outbound east leg that turns north halfway, so the crumb is a dog-leg.
+        let (e, n) = if along < 360.0 {
+            (along, 0.0)
+        } else {
+            (360.0, along - 360.0)
+        };
+        tb.on_point(lat0 + n / METRES_PER_DEGREE_LAT, lon0 + e * lon_per_m, i);
+    }
+    tb.view()
+}
+
+#[test]
+fn preview_back_to_start_page() {
+    let snap = base_snapshot();
+    let view = sample_trackback();
+    let mut fb = Framebuffer::new();
+    let rows = face::page_rows(
+        Page::BackToStart,
+        Some(&sample_fix()),
+        None,
+        Some(&snap),
+        None,
+        NavView::NoCourse,
+        Some(&view),
+        60,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    if let Some(hero) = face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)) {
+        fb.draw_text_2x(0, 0, &hero);
+    }
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::BackToStart, u32::MAX),
+    );
+    widgets::draw_trackback_overlay(&mut fb, &view, 60);
+    show("back to start: breadcrumb map + relative arrow", &fb);
+}
+
 #[test]
 fn preview_dial_and_compass() {
     // The navigation-glance shape a future page would show: a fuel-fraction ring

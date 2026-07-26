@@ -28,7 +28,7 @@ use watch_core::page::Page;
 use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
-use watch_core::trackback::{self, TrackbackView};
+use watch_core::trackback::TrackbackView;
 use watch_core::ui_frame::{self, FrameLayout, HeroBand, HeroFrame, RowPaint};
 use watch_render::widgets;
 
@@ -51,7 +51,6 @@ const TICK_IDLE: Duration = Duration::from_secs(30);
 // face-declared text rows tall. `core` speaks rows; only this task knows the
 // panel's 16-px cell height.
 const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
-const CELL_W: usize = sharp_mip::WIDTH / sharp_mip::TEXT_COLS;
 const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
 const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
 
@@ -483,7 +482,7 @@ pub async fn screen_task(
             .is_some_and(|snap| snap.state != RecordState::Idle);
         if page == Page::BackToStart && run_active {
             if let Some(view) = tb.as_ref() {
-                draw_trackback_overlay(&mut fb, view, uptime_s);
+                widgets::draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
         // The armed-stop prompt: the direct answer to a BTN2 press, so for its
@@ -609,50 +608,6 @@ pub async fn screen_task(
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(b)))) => battery = b,
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
-        }
-    }
-}
-
-/// Draw the BackToStart page's pixel layer: the north-up TrackBack breadcrumb
-/// map (right of the reserved text columns, rows 3-7) with a hollow-box start
-/// marker + filled-dot current position, and the relative back-to-start arrow
-/// (left, rows 5-7) whenever a fresh heading makes it meaningful — the face's
-/// text layer shows `--` in the arrow's spot otherwise, so the two never
-/// overlap.
-fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: u32) {
-    const MAP_X: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W) as i32;
-    const MAP_Y: i32 = (3 * CELL_H) as i32;
-    const MAP_W: u16 = (sharp_mip::WIDTH - face::TRACKBACK_TEXT_COLS * CELL_W) as u16;
-    const MAP_H: u16 = (5 * CELL_H) as u16;
-
-    let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
-    if let Some(map) = trackback::project_track(view, MAP_W, MAP_H, &mut pts) {
-        for pair in pts[..map.len].windows(2) {
-            fb.draw_line(
-                MAP_X + pair[0].0 as i32,
-                MAP_Y + pair[0].1 as i32,
-                MAP_X + pair[1].0 as i32,
-                MAP_Y + pair[1].1 as i32,
-                true,
-            );
-        }
-        let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
-        fb.draw_line(sx - 2, sy - 2, sx + 2, sy - 2, true);
-        fb.draw_line(sx + 2, sy - 2, sx + 2, sy + 2, true);
-        fb.draw_line(sx + 2, sy + 2, sx - 2, sy + 2, true);
-        fb.draw_line(sx - 2, sy + 2, sx - 2, sy - 2, true);
-        let (cx, cy) = (MAP_X + map.current.0 as i32, MAP_Y + map.current.1 as i32);
-        for dy in -1..=1 {
-            fb.draw_line(cx - 1, cy + dy, cx + 1, cy + dy, true);
-        }
-    }
-
-    if let Some(sector) = view.arrow_sector(uptime_s) {
-        const ARROW_CX: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W / 2) as i32;
-        const ARROW_CY: i32 = (13 * CELL_H / 2) as i32; // centre of rows 5-7
-        const ARROW_R: i32 = (3 * CELL_H) as i32 / 2 - 6;
-        for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
-            fb.draw_line(x0, y0, x1, y1, true);
         }
     }
 }

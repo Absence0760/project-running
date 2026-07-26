@@ -22,6 +22,7 @@ use watch_core::gauge;
 use watch_core::page_grid;
 use watch_core::record::Snapshot;
 use watch_core::statusbar::{self, PageIndicator};
+use watch_core::trackback::{self, TrackbackView};
 
 const CELL_W: usize = WIDTH / TEXT_COLS; // 8
 const CELL_H: usize = HEIGHT / TEXT_ROWS; // 16
@@ -369,6 +370,90 @@ pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
         profile.samples,
         (min, max),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Back-to-start overlay (breadcrumb map + relative direction arrow)
+// ---------------------------------------------------------------------------
+
+/// The TrackBack breadcrumb map's pixel rect: right of the text cells the face
+/// reserves ([`face::TRACKBACK_TEXT_COLS`]), rows 3-7.
+const MAP_X: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W) as i32;
+const MAP_Y: i32 = (TB_MAP_TOP_ROW * CELL_H) as i32;
+const MAP_W: u16 = (WIDTH - face::TRACKBACK_TEXT_COLS * CELL_W) as u16;
+const MAP_H: u16 = (TB_MAP_ROWS * CELL_H) as u16;
+const TB_MAP_TOP_ROW: usize = 3;
+const TB_MAP_ROWS: usize = 5;
+
+/// Half-side of the hollow start-marker box. `project_track` insets its
+/// projection by the same margin, which is what keeps the box inside the map
+/// rect when the start lands on the polyline's extreme.
+const START_MARK_ARM: i32 = 2;
+
+/// Relative direction arrow: centred in the reserved text cells over rows 5-7,
+/// the band the face blanks whenever a fresh heading makes the arrow meaningful
+/// (it writes `--` there otherwise, so the two never overlap).
+const ARROW_CX: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W / 2) as i32;
+const ARROW_CY: i32 = (13 * CELL_H / 2) as i32;
+const ARROW_R: i32 = (3 * CELL_H) as i32 / 2 - 6;
+
+/// Draw the BackToStart page's pixel layer: the north-up TrackBack breadcrumb
+/// map with a hollow-box start marker + a filled current-position dot, and the
+/// relative back-to-start arrow whenever a fresh heading makes it meaningful.
+/// An inactive view (no accepted fix yet) draws no map, so the page reads as
+/// honestly empty rather than showing a crumb of nowhere.
+pub fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: u32) {
+    let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+    if let Some(map) = trackback::project_track(view, MAP_W, MAP_H, &mut pts) {
+        for pair in pts[..map.len].windows(2) {
+            fb.draw_line(
+                MAP_X + pair[0].0 as i32,
+                MAP_Y + pair[0].1 as i32,
+                MAP_X + pair[1].0 as i32,
+                MAP_Y + pair[1].1 as i32,
+                true,
+            );
+        }
+        let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
+        fb.draw_line(
+            sx - START_MARK_ARM,
+            sy - START_MARK_ARM,
+            sx + START_MARK_ARM,
+            sy - START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx + START_MARK_ARM,
+            sy - START_MARK_ARM,
+            sx + START_MARK_ARM,
+            sy + START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx + START_MARK_ARM,
+            sy + START_MARK_ARM,
+            sx - START_MARK_ARM,
+            sy + START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx - START_MARK_ARM,
+            sy + START_MARK_ARM,
+            sx - START_MARK_ARM,
+            sy - START_MARK_ARM,
+            true,
+        );
+        let (cx, cy) = (MAP_X + map.current.0 as i32, MAP_Y + map.current.1 as i32);
+        for dy in -1..=1 {
+            fb.draw_line(cx - 1, cy + dy, cx + 1, cy + dy, true);
+        }
+    }
+
+    if let Some(sector) = view.arrow_sector(uptime_s) {
+        for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
+            fb.draw_line(x0, y0, x1, y1, true);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1181,5 +1266,153 @@ mod tests {
 
     fn fb_eq(a: &Framebuffer, b: &Framebuffer) -> bool {
         (0..HEIGHT).all(|y| (0..WIDTH).all(|x| a.pixel(x, y) == b.pixel(x, y)))
+    }
+
+    /// A trackback view walked `steps` hops of `step_m` due east from an
+    /// arbitrary origin, one second apart — enough movement to bank a
+    /// breadcrumb, a bearing back to the start and a fresh heading.
+    fn trackback_east(steps: u32, step_m: f64) -> TrackbackView {
+        const LAT0: f64 = 40.0;
+        const LON0: f64 = -105.0;
+        let lon_per_m = 1.0 / (watch_core::record::METRES_PER_DEGREE_LAT * LAT0.to_radians().cos());
+        let mut tb = trackback::Trackback::new();
+        for i in 0..=steps {
+            tb.on_point(LAT0, LON0 + i as f64 * step_m * lon_per_m, i);
+        }
+        tb.view()
+    }
+
+    #[test]
+    fn trackback_overlay_stays_inside_the_map_rect_and_the_arrow_band() {
+        let view = trackback_east(40, 6.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 40);
+        let (mx, my) = (MAP_X as usize, MAP_Y as usize);
+        assert!(
+            ink_in(&fb, mx, my, MAP_W as usize, MAP_H as usize) > 0,
+            "map"
+        );
+        // Nothing above the map rows, and nothing on the bottom GPS row.
+        assert_eq!(ink_in(&fb, mx, 0, MAP_W as usize, my), 0, "above the map");
+        assert_eq!(
+            ink_in(
+                &fb,
+                mx,
+                my + MAP_H as usize,
+                MAP_W as usize,
+                HEIGHT - my - MAP_H as usize
+            ),
+            0,
+            "below the map"
+        );
+        // The arrow keeps to the reserved text cells over rows 5-7 — clear of
+        // the map, and clear of the HDG / BRG rows the face writes above it.
+        assert!(ink_in(&fb, 0, 5 * CELL_H, mx, 3 * CELL_H) > 0, "arrow");
+        assert_eq!(ink_in(&fb, 0, 0, mx, 5 * CELL_H), 0, "arrow band only");
+        assert_eq!(ink_in(&fb, 0, 8 * CELL_H, mx, CELL_H), 0, "clear of row 8");
+    }
+
+    #[test]
+    fn trackback_start_marker_box_clears_the_map_edge_at_every_extreme() {
+        // The start box reaches START_MARK_ARM px past the projected start, and
+        // `project_track` insets by exactly that margin — so a start that lands
+        // on the polyline's extreme still frames inside the rect rather than
+        // clipping half away or bleeding into the reserved text cells. Walk each
+        // cardinal direction so the start takes each edge in turn.
+        for (bearing_e, bearing_n) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+            const LAT0: f64 = 40.0;
+            const LON0: f64 = -105.0;
+            let m_per_deg = watch_core::record::METRES_PER_DEGREE_LAT;
+            let lon_per_m = 1.0 / (m_per_deg * LAT0.to_radians().cos());
+            let mut tb = trackback::Trackback::new();
+            for i in 0..=40u32 {
+                tb.on_point(
+                    LAT0 + i as f64 * 6.0 * bearing_n / m_per_deg,
+                    LON0 + i as f64 * 6.0 * bearing_e * lon_per_m,
+                    i,
+                );
+            }
+            let view = tb.view();
+            let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+            let map = trackback::project_track(&view, MAP_W, MAP_H, &mut pts).unwrap();
+            let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
+            assert!(sx - START_MARK_ARM >= MAP_X, "box left of the map rect");
+            assert!(sx + START_MARK_ARM < MAP_X + MAP_W as i32, "box right");
+            assert!(sy - START_MARK_ARM >= MAP_Y, "box above the map rect");
+            assert!(sy + START_MARK_ARM < MAP_Y + MAP_H as i32, "box below");
+        }
+    }
+
+    #[test]
+    fn trackback_start_and_current_markers_are_distinguishable() {
+        let view = trackback_east(40, 6.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 40);
+        let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+        let map = trackback::project_track(&view, MAP_W, MAP_H, &mut pts).unwrap();
+        let (sx, sy) = (
+            (MAP_X + map.start.0 as i32) as usize,
+            (MAP_Y + map.start.1 as i32) as usize,
+        );
+        let (cx, cy) = (
+            (MAP_X + map.current.0 as i32) as usize,
+            (MAP_Y + map.current.1 as i32) as usize,
+        );
+        assert!(sx < cx, "start west of the runner on an east walk");
+        // The start is a hollow box (frame inked, one-in interior blank on the
+        // rows above/below the polyline); the current position is a solid dot.
+        assert!(
+            fb.pixel(sx - 2, sy - 2) && fb.pixel(sx + 2, sy + 2),
+            "box frame"
+        );
+        assert!(!fb.pixel(sx - 1, sy - 1), "box interior is hollow");
+        assert!(fb.pixel(cx, cy) && fb.pixel(cx - 1, cy - 1), "dot is solid");
+    }
+
+    #[test]
+    fn trackback_inactive_view_draws_nothing() {
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &TrackbackView::empty(), 100);
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
+    fn trackback_single_point_draws_a_map_without_an_arrow() {
+        // One accepted fix: the whole track is one point, which must still
+        // render the start + current markers at the map centre rather than
+        // panicking on the degenerate span — and no heading exists yet, so the
+        // arrow band stays blank (the face writes `--` there).
+        let view = trackback_east(0, 0.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 0);
+        assert!(
+            ink_in(
+                &fb,
+                MAP_X as usize,
+                MAP_Y as usize,
+                MAP_W as usize,
+                MAP_H as usize
+            ) > 0
+        );
+        assert_eq!(ink_in(&fb, 0, 5 * CELL_H, MAP_X as usize, 3 * CELL_H), 0);
+    }
+
+    #[test]
+    fn trackback_stale_heading_drops_the_arrow_but_keeps_the_map() {
+        let view = trackback_east(40, 6.0);
+        let stale = 40 + trackback::HEADING_STALE_S + 1;
+        assert!(view.arrow_sector(stale).is_none());
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, stale);
+        assert_eq!(ink_in(&fb, 0, 5 * CELL_H, MAP_X as usize, 3 * CELL_H), 0);
+        assert!(
+            ink_in(
+                &fb,
+                MAP_X as usize,
+                MAP_Y as usize,
+                MAP_W as usize,
+                MAP_H as usize
+            ) > 0
+        );
     }
 }
