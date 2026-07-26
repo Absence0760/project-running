@@ -1,18 +1,21 @@
 //! Property tests for the phone→watch settings frame. The frame is a presence
 //! bitfield followed by only the fields the bits claim, which is exactly the
 //! shape that silently mis-parses when a byte goes missing — so the properties
-//! here are about the frame either decoding whole or not at all.
+//! here are about the frame either decoding whole or not at all, and then about
+//! the fan-out (`settings_apply`) routing every field the bits did claim.
 
 mod support;
 
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
+use watch_core::record_cadence::plausible_sea_level_pa;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
     plausible_tz_offset_min, FuelCfg, GearCfg, PacerGoalCfg, WatchSettings, MAX_SETTINGS_LEN,
     SETTINGS_VERSION, TZ_OFFSET_LIMIT_MIN,
 };
+use watch_core::settings_apply::{plan_apply, EffectKind};
 
 /// The two legacy versions `decode` still accepts: v1 (no `flags2`) and v2
 /// (no CRC trailer). Neither is emitted any more — the encoder is v3-only.
@@ -372,4 +375,66 @@ fn a_single_byte_corruption_never_yields_a_frame_claiming_different_fields() {
             Ok(())
         },
     );
+}
+
+/// How many fields the frame carries, counted off the wire's own presence
+/// bitfields rather than off a list kept here — an oracle that grows with the
+/// format, since a new field cannot reach the watch without a presence bit.
+fn present_field_count(s: &WatchSettings) -> usize {
+    let frame = encoded(s);
+    (frame[5].count_ones() + frame[6].count_ones()) as usize
+}
+
+/// Where a kind sits in the [`EffectKind`] chain.
+fn chain_index(kind: EffectKind) -> usize {
+    let mut at = EffectKind::FIRST;
+    let mut i = 0;
+    while at != kind {
+        at = at.next().expect("every kind is on the chain");
+        i += 1;
+    }
+    i
+}
+
+#[test]
+fn every_present_field_routes_to_exactly_one_effect() {
+    // The unit suite pins the fully-populated frame; this pins all 2^9 presence
+    // combinations over the whole value domain, including the two guards that
+    // reject rather than clamp. A field the fan-out forgets is invisible at
+    // runtime — the frame decodes and the watch just ignores it — so the count
+    // is taken from the presence bits the encoder itself set.
+    check(1024, a_settings(), |s| {
+        let rejected = usize::from(s.sea_level_pa.is_some_and(|pa| !plausible_sea_level_pa(pa)))
+            + usize::from(
+                s.tz_offset_min.is_some() && plausible_tz_offset_min(s.tz_offset_min).is_none(),
+            );
+        prop_assert_eq!(
+            plan_apply(&s).len(),
+            present_field_count(&s) - rejected,
+            "{:?}",
+            s
+        );
+        Ok(())
+    });
+}
+
+#[test]
+fn a_plan_feeds_each_sink_at_most_once_and_in_field_order() {
+    // Two effects for one sink would mean the later silently overwrote the
+    // earlier; out-of-order ones would mean the plan no longer reads like the
+    // bytes that produced it.
+    check(1024, a_settings(), |s| {
+        let mut last: Option<usize> = None;
+        for effect in plan_apply(&s) {
+            let at = chain_index(effect.kind());
+            prop_assert!(
+                last.is_none_or(|prev| prev < at),
+                "{:?} follows chain index {:?}",
+                effect,
+                last
+            );
+            last = Some(at);
+        }
+        Ok(())
+    });
 }
