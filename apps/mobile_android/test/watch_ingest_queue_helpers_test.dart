@@ -175,6 +175,37 @@ void main() {
       expect(run.metadata!['laps'][1]['distance_m'], 1200.0);
     });
 
+    test('finished:false stamps metadata.recovered_unfinished', () {
+      // Reason: a run recovered from a mid-run checkpoint after the watch
+      // reset carries totals-so-far, not final totals. Without the stamp it
+      // is indistinguishable from a complete run in the runner's history.
+      final raw = _basePayload()..['finished'] = false;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata?[MetadataKeys.recoveredUnfinished], isTrue);
+    });
+
+    test('finished:true leaves the key off entirely', () {
+      // Not `false` on every watch row — absence is the normal case, so a
+      // reader tests presence and no ordinary run carries the key.
+      final raw = _basePayload()..['finished'] = true;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNull);
+    });
+
+    test('a sender that omits finished leaves the key off', () {
+      // Every other watch bridge (WCSession, Wear OS) only ever produces
+      // finished runs and says nothing, so silence must not read as partial.
+      final run = runFromWatchPayload(_basePayload());
+      expect(run.metadata?.containsKey(MetadataKeys.recoveredUnfinished),
+          isNot(isTrue));
+    });
+
+    test('a non-bool finished is ignored', () {
+      final raw = _basePayload()..['finished'] = 0;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNull);
+    });
+
     test('a non-list laps payload is ignored (no metadata.laps key)', () {
       // Defensive: if the watch ever ships laps as a Map (or anything
       // else) by mistake, drop it rather than crashing the decoder.

@@ -401,6 +401,7 @@ Map<String, dynamic> payloadFromBlob(
     'source': 'watch',
     'track': track,
     'activity_type': 'run',
+    'finished': header.finished,
     if (laps.isNotEmpty) 'laps': laps,
   };
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/sim_watch_sync.dart';
@@ -44,6 +45,18 @@ Uint8List _hex(String s) {
 
 Uint8List _goldenBlob() => _hex(_goldenHex);
 Uint8List _goldenV2Blob() => _hex(_goldenV2Hex);
+
+/// The v2 golden as the firmware's `checkpoint_blob` would have written it
+/// mid-run: [kRunFlagFinished] clear, and the footer CRC recomputed over the
+/// changed prefix so the blob still verifies. This is what boot recovery
+/// serves after a reset interrupted the run.
+Uint8List _checkpointV2Blob() {
+  final blob = _goldenV2Blob();
+  blob[5] = 0;
+  final crc = crc32(blob.sublist(0, blob.length - 20));
+  ByteData.sublistView(blob).setUint32(blob.length - 4, crc, Endian.little);
+  return blob;
+}
 
 /// MAN1 manifest describing exactly the golden run: watch uptime 700 s,
 /// one entry run_seq=7 size=84 start_uptime=41 — a same-boot run whose
@@ -265,6 +278,44 @@ void main() {
       final tampered = Uint8List.fromList(blob);
       tampered[5] = 0;
       expect(verifyBlob(tampered), isFalse);
+    });
+
+    test('a finished blob ingests with no recovered_unfinished key', () {
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+        _goldenV2Blob(),
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12),
+      );
+      expect(payload['finished'], isTrue);
+
+      final run = runFromWatchPayload(payload);
+      expect(run.metadata?.containsKey(MetadataKeys.recoveredUnfinished),
+          isNot(isTrue),
+          reason: 'a normal finished run must not carry the key at all');
+    });
+
+    test('a boot-recovered checkpoint ingests flagged recovered_unfinished',
+        () {
+      final blob = _checkpointV2Blob();
+      expect(verifyBlob(blob), isTrue,
+          reason: 'the recomputed CRC must still verify');
+      expect(decodeHeader(blob).finished, isFalse);
+
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+        blob,
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12),
+      );
+      expect(payload['finished'], isFalse);
+
+      // The totals are the checkpoint's totals-so-far, and the run says so.
+      final run = runFromWatchPayload(payload);
+      expect(run.metadata?[MetadataKeys.recoveredUnfinished], isTrue);
+      expect(run.duration, const Duration(seconds: 620));
     });
 
     test('a v2 blob with a lap yields the registered metadata.laps shape', () {

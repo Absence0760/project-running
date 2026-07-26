@@ -295,6 +295,17 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   if (lastModified is String) {
     metadata[cm.MetadataKeys.lastModifiedAt] = lastModified;
   }
+  // A watch run recovered from its last mid-run checkpoint after a reset
+  // carries `finished: false` (the run_store header's FLAG_FINISHED is clear).
+  // Its footer totals are its totals-so-far, so without this stamp it lands in
+  // the runner's history looking like a complete run — a reboot at mile 60
+  // silently presents 60 miles as the whole day. Only the explicit false is
+  // recorded: a sender that says nothing (every WCSession / Wear OS bridge)
+  // only ever produces finished runs, and stamping every one of them `false`
+  // would put a meaningless key on every watch row.
+  if (raw['finished'] == false) {
+    metadata[cm.MetadataKeys.recoveredUnfinished] = true;
+  }
   // Lap splits: registered shape per `docs/backend/metadata.md` § laps —
   // `[{ index, start_offset_s, distance_m, duration_s }]`. Forward
   // verbatim so a watch sender that follows the registry survives a
