@@ -55,12 +55,21 @@ pub const DEADBAND_M: f32 = 3.0;
 
 /// Smallest altitude move worth waking every consumer of a [`Reading`] for.
 ///
-/// One metre is the finest thing any consumer renders — the face writes
-/// `ALT {:.0} M` and truncates GAIN / LOSS through `as u32` — so a sub-metre
-/// step cannot move a pixel. It is also a third of [`DEADBAND_M`], the noise
-/// floor this module already declares, so it can never withhold a change the
-/// accumulator would bank as vert.
-pub const PUBLISH_STEP_M: f32 = 1.0;
+/// The decimetre is the finest quantum anything downstream can *represent* —
+/// the phone-link frame prints `{:.1}`, a stored track point's elevation field
+/// is decimetres, and the face is coarser still at whole metres — so no
+/// consumer can tell a smaller step from no step at all. It sits an order of
+/// magnitude above the BMP581's own noise at the configured 16x oversampling
+/// plus coefficient-7 IIR (single-digit centimetres of altitude), which is what
+/// makes it enough to silence a resting wrist, and a thirtieth of
+/// [`DEADBAND_M`], so it can never withhold a change the accumulator banks as
+/// vert.
+///
+/// Deliberately *not* the face's whole-metre rendering quantum: the recorder
+/// feeds this altitude to the live grade-adjusted-pace estimator, which reads a
+/// grade off ~5 m segments, so a metre-coarse altitude would swing a segment's
+/// grade by tens of percent and make the GAP row bounce on a climb.
+pub const PUBLISH_STEP_M: f32 = 0.1;
 
 /// Whether a freshly computed [`Reading`] is worth publishing on the elevation
 /// watch, given the last one published.
@@ -78,7 +87,7 @@ pub const PUBLISH_STEP_M: f32 = 1.0;
 /// move a whole [`PUBLISH_STEP_M`] from the last *published* value — anchored
 /// there rather than to the previous sample, the same trick
 /// [`VertAccumulator`]'s deadband uses, so a slow real climb of sub-threshold
-/// steps still publishes once per metre it gains and loses nothing. Either
+/// steps still publishes once per step it gains and loses nothing. Either
 /// cumulative total moving publishes at once; they only move when
 /// [`VertAccumulator::push`] commits real vertical past [`DEADBAND_M`].
 pub fn should_publish(last: Option<Reading>, next: Reading) -> bool {
@@ -799,9 +808,14 @@ mod tests {
     }
 
     #[test]
-    fn the_publish_step_sits_under_the_deadband() {
-        // The gate must never be coarser than the noise floor the accumulator
-        // banks vert at, or a committed climb could go unpublished.
+    fn the_publish_step_is_the_finest_quantum_a_consumer_can_represent() {
+        // A decimetre: the phone-link frame's `{:.1}` and the stored track
+        // point's decimetre elevation field. Coarsening it past this would
+        // start withholding altitude the wire format can actually carry — and
+        // that the live GAP estimator reads its grade from.
+        assert_eq!(PUBLISH_STEP_M, 0.1);
+        // It must also stay well under the noise floor the accumulator banks
+        // vert at, or a committed climb could go unpublished.
         assert!(PUBLISH_STEP_M < DEADBAND_M);
     }
 
@@ -816,12 +830,14 @@ mod tests {
     }
 
     #[test]
-    fn sub_metre_sensor_noise_never_wakes_a_consumer_twice() {
+    fn sensor_noise_never_wakes_a_consumer_twice() {
         // The defect this gate closes: a motionless wrist with a present BMP581
         // used to publish (and so re-render the whole face) once a second
         // forever, because two f32 samples off a real sensor are never equal.
+        // The jitter here is the configured 16x-OSR + IIR-7 noise floor, low
+        // centimetres.
         let jitter = (0..600u32).map(|n| Reading {
-            alt_m: 1_000.0 + (((n * 7 % 11) as f32) - 5.0) * 0.05,
+            alt_m: 1_000.0 + (((n * 7 % 11) as f32) - 5.0) * 0.005,
             gain_m: 0.0,
             loss_m: 0.0,
         });
@@ -829,7 +845,10 @@ mod tests {
     }
 
     #[test]
-    fn a_real_climb_publishes_every_metre_it_gains() {
+    fn a_real_climb_publishes_every_sample() {
+        // Metre-a-second steps dwarf the step, so the gate is transparent —
+        // altitude, and the grade the GAP estimator reads off it, arrive at
+        // full sample rate exactly as before.
         let mut acc = VertAccumulator::new();
         let climb = (0..=100).map(|step| {
             let corrected = acc.push(step as f32, true, None);
@@ -840,14 +859,14 @@ mod tests {
 
     #[test]
     fn a_slow_climb_is_throttled_but_never_starved() {
-        // 0.3 m a second is a hard real climb, well under the step: the gate
-        // must still publish on the metre and the shown altitude must never
-        // trail the real one by a whole step.
+        // 4 cm a second — a gentle grade at a hiking pace, under the step. The
+        // gate must still publish on the step, and the published altitude must
+        // never trail the sample by a whole one.
         let mut acc = VertAccumulator::new();
         let mut published: Option<Reading> = None;
         let mut n = 0;
         for step in 0..=100 {
-            let corrected = acc.push(step as f32 * 0.3, true, None);
+            let corrected = acc.push(step as f32 * 0.04, true, None);
             let r = acc.reading(corrected);
             if should_publish(published, r) {
                 published = Some(r);
@@ -858,7 +877,7 @@ mod tests {
                 "the published altitude fell a whole step behind the sample"
             );
         }
-        assert!((25..=30).contains(&n), "one publish per metre climbed: {n}");
+        assert!((30..=40).contains(&n), "one publish per step climbed: {n}");
     }
 
     #[test]

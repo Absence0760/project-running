@@ -210,10 +210,10 @@ mod tests {
         let status = rezero(
             &mut vert,
             Some(sample),
-            Some(&fix_at(Some(1_000.4), 100)),
+            Some(&fix_at(Some(1_000.05), 100)),
             100,
         );
-        assert_eq!(status, RezeroStatus::Applied(1_000.4));
+        assert_eq!(status, RezeroStatus::Applied(1_000.05));
         let after = published_reading(&vert, status).expect("an applied snap publishes");
         assert!(
             !should_publish(Some(before), after),
