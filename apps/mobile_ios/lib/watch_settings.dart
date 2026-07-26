@@ -1,26 +1,37 @@
 import 'dart:typed_data';
 
+import 'sim_watch_sync.dart' show crc32;
+
 /// Pure Dart mirror of the custom watch's `watch_core::settings` wire format.
 ///
 /// The phone pushes the user's config to the watch as a fixed little-endian
 /// frame the firmware decodes:
 ///
-///   magic("SET1", 4) | version(1) | flags(1) | flags2(1) | present fields...
+///   magic("SET1", 4) | version(1) | flags(1) | flags2(1) | fields | crc32(4)
 ///
 /// `flags` is a bitfield of which optional fields follow, in bit order:
 /// bit0 max_hr, bit1 pacer, bit2 gear, bit3 zone_ceiling, bit4 sea_level_pa,
 /// bit5 fuel, bit6 pages, bit7 hide_empty_pages. Version 2 (2026-07-22)
 /// saturated that byte, so it appends a second presence byte `flags2` —
 /// bit0 tz_offset_min — with its fields laid out after the first byte's.
-/// Only the present fields are written, so a partial update is a shorter
-/// frame; a fully populated frame is 45 bytes. The firmware still decodes
-/// v1 frames, but the phone always encodes the current version.
+/// Version 3 (2026-07-25) appends a CRC32 trailer over every byte before it:
+/// the length check alone could not tell a single-byte corruption that swaps
+/// two equal-width fields from a legitimate push, so the watch would apply
+/// the QNH sea-level pressure as the run-view page mask. Only the present
+/// fields are written, so a partial update is a shorter frame; a fully
+/// populated frame is 49 bytes. The firmware still decodes v1 and v2 frames,
+/// but the phone always encodes the current version.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.
 /// The phone only ever encodes (the watch decodes), mirroring how the
-/// run-sync path (`sim_watch_sync.dart`) is the phone's decode side.
-const int _settingsVersion = 0x02;
+/// run-sync path (`sim_watch_sync.dart`) is the phone's decode side — and it
+/// reuses that module's [crc32], the same checksum the firmware shares
+/// between `run_store` and `settings`.
+const int _settingsVersion = 0x03;
+
+/// Width of the v3 CRC32 trailer.
+const int _crcLen = 4;
 
 const int _flagMaxHr = 0x01;
 const int _flagPacer = 0x02;
@@ -79,7 +90,7 @@ class WatchSettings {
   });
 
   Uint8List encode() {
-    var len = 7;
+    var len = 7 + _crcLen;
     if (maxHr != null) len += 2;
     if (pacer != null) len += 8;
     if (gear != null) len += 8;
@@ -153,6 +164,8 @@ class WatchSettings {
       off += 2;
     }
 
-    return out.buffer.asUint8List();
+    final frame = out.buffer.asUint8List();
+    out.setUint32(off, crc32(frame.sublist(0, off)), Endian.little);
+    return frame;
   }
 }

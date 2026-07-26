@@ -289,13 +289,18 @@ void main() {
       await tester.pump();
 
       expect(transport.settingsWrites, hasLength(1));
-      expect(transport.settingsWrites.single, hasLength(28));
+      expect(transport.settingsWrites.single, hasLength(32));
       expect(transport.settingsWrites.single.sublist(0, 7),
-          [0x53, 0x45, 0x54, 0x31, 0x02, 0x0f, 0x01]);
-      // The injected +5:45 phone zone rides the frame's tail as i16 LE 345.
+          [0x53, 0x45, 0x54, 0x31, 0x03, 0x0f, 0x01]);
+      // The injected +5:45 phone zone rides as i16 LE 345, ahead of the v3
+      // crc32 trailer.
       expect(
-        transport.settingsWrites.single.sublist(26),
+        transport.settingsWrites.single.sublist(26, 28),
         [0x59, 0x01],
+      );
+      expect(
+        transport.settingsWrites.single.sublist(28),
+        [0xcd, 0x42, 0xf9, 0x05],
       );
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });
