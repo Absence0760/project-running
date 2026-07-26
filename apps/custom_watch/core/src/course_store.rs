@@ -5,7 +5,7 @@
 //! task already consumes:
 //!
 //!   magic("CRS1", 4) | version(1) | point_count(2, u16 LE) | flags(1) |
-//!   point[N] | elev_m[N]?
+//!   point[N] | elev_m[N]? | crc32(4, u32 LE)
 //!
 //! where each point is `lat_e7(i32 LE) | lon_e7(i32 LE)` — the same 1e-7-degree
 //! integer scaling `run_store` uses for track points, so a route simplified
@@ -19,34 +19,47 @@
 //! is chunked: the phone writes `offset(2, u16 LE) | payload` chunks in order and
 //! the watch's [`CourseAssembler`] rebuilds the frame, then [`decode`] turns it
 //! into a `Course`. Decoding only *parses* + fails closed — a bad magic, version,
-//! count, length, or an over-cap course is rejected rather than half-applied, so
-//! a corrupt push can never load a truncated course mid-race.
+//! count, length, unknown flag bit, or a failed checksum is rejected rather than
+//! half-applied, so a corrupt push can never load a truncated or displaced
+//! course mid-race.
 //!
 //! Host-tested (encode/decode round-trip, overflow rejection, chunk reassembly,
-//! a golden byte vector per version) against the Dart encoder
+//! a golden byte vector per shape) against the Dart encoder
 //! (`watch_course.dart`), which pins the SAME golden vectors, so the two wire
 //! codecs can't drift.
 //!
-//! The frame carries no integrity trailer. A single-byte corruption inside the
-//! point array decodes as a valid but *displaced* course — the same class of
-//! hole `settings` closed with its v3 CRC32 — and closing it here is a sibling
-//! concern, not part of the elevation field.
+//! **The checksum is mandatory, and v1 / v2 no longer decode.** The settings
+//! frame kept its pre-CRC versions decodable so an old phone's push still
+//! configures the watch; that trade does not carry over here, for two reasons.
+//! A rejected *settings* push leaves the previous config in place and every
+//! field it carries is range-checked on the apply side, so corruption has a
+//! second net; a course has no plausibility guard at all — any lat/lon on the
+//! 1e-7 grid is a legal course, so a displaced polyline is indistinguishable
+//! from a real one, and it is the polyline the off-course alert calibrates
+//! against and the nav page draws. Silently following a subtly wrong breadcrumb
+//! in the backcountry is materially worse than loading no course and saying so.
+//! And an accepted un-checksummed version is a bypass: any frame that fails the
+//! CRC can claim to be v2 instead, which would leave the check decorative. The
+//! encoder here and the phone encoder are the same repo and version together;
+//! an older phone build pushing v2 gets an honest "no course loaded" rather
+//! than a plausible wrong one.
 
 use heapless::Vec;
 
 use crate::course::{Course, CoursePoint, MAX_COURSE_POINTS};
+use crate::run_store::crc32;
 
 /// Course frame magic — "CRS1".
 pub const COURSE_MAGIC: [u8; 4] = *b"CRS1";
 
-/// Version 2 (2026-07-26): the frame gained a flags byte and, behind it, the
-/// per-point elevation series the RouteElev page draws as a climb profile. v1
-/// carried the polyline only, so it has no place to say "no elevation" —
-/// `decode` still accepts it (an old phone's push keeps working, elevation-less)
-/// while the encoder always emits v2, with the flag clear when the phone has no
-/// elevation for the route.
-pub const COURSE_FORMAT_VERSION: u8 = 2;
-const COURSE_FORMAT_VERSION_V1: u8 = 1;
+/// Version 3 (2026-07-26): the frame gained a CRC32 trailer. Its only integrity
+/// check had been that the byte count accounts for the declared point count and
+/// flags, which catches a truncation but not a flipped byte inside the point
+/// array — that decodes as a perfectly valid course displaced by up to a
+/// continent, and the off-course alert then calibrates against the wrong line.
+/// Unlike [`crate::settings`], the pre-CRC versions are **not** still accepted
+/// (module docs carry the reasoning); the encoder emits v3 only.
+pub const COURSE_FORMAT_VERSION: u8 = 3;
 
 /// Presence bit: the frame ends with one `i16 LE` metre elevation per point.
 pub const COURSE_FLAG_ELEV: u8 = 1 << 0;
@@ -58,17 +71,18 @@ pub const COURSE_FLAG_ELEV: u8 = 1 << 0;
 /// whatever the sender meant by it (the `settings::KNOWN_FLAGS` rule).
 const KNOWN_COURSE_FLAGS: u8 = COURSE_FLAG_ELEV;
 
-/// v1 header: magic(4) + version(1) + point_count(2). v2 appends `flags`.
-const COURSE_HEADER_V1_LEN: usize = 7;
-pub const COURSE_HEADER_LEN: usize = COURSE_HEADER_V1_LEN + 1;
+/// Header: magic(4) + version(1) + point_count(2) + flags(1).
+pub const COURSE_HEADER_LEN: usize = 8;
 /// One point: lat_e7(4) + lon_e7(4).
 pub const COURSE_POINT_LEN: usize = 8;
 /// One elevation sample: metres as `i16 LE`. Metres, not decimetres — a
 /// decimetre i16 tops out at 3276.7 m, below Mont Blanc.
 pub const COURSE_ELEV_LEN: usize = 2;
+/// The CRC32 trailer, little-endian, over every byte before it.
+const COURSE_CRC_LEN: usize = 4;
 
-/// Largest a full frame can be — a v2 header plus [`MAX_COURSE_POINTS`] points
-/// and their elevations.
+/// Largest a full frame can be — a header plus [`MAX_COURSE_POINTS`] points,
+/// their elevations, and the CRC trailer.
 pub const MAX_COURSE_FRAME_LEN: usize = course_frame_len(MAX_COURSE_POINTS, true);
 
 /// The BLE `course` write characteristic's value cap: one chunk is
@@ -76,7 +90,7 @@ pub const MAX_COURSE_FRAME_LEN: usize = course_frame_len(MAX_COURSE_POINTS, true
 /// (mirrors `run_store`'s `FRAME_CAP`).
 pub const COURSE_CHUNK_CAP: usize = 244;
 
-/// v2 frame length for a course of `point_count` points, with or without the
+/// Frame length for a course of `point_count` points, with or without the
 /// elevation series.
 pub const fn course_frame_len(point_count: usize, with_elevation: bool) -> usize {
     COURSE_HEADER_LEN
@@ -86,21 +100,17 @@ pub const fn course_frame_len(point_count: usize, with_elevation: bool) -> usize
         } else {
             0
         }
-}
-
-/// v1 frame length — the legacy layout [`decode`] still accepts.
-pub const fn course_frame_len_v1(point_count: usize) -> usize {
-    COURSE_HEADER_V1_LEN + point_count * COURSE_POINT_LEN
+        + COURSE_CRC_LEN
 }
 
 /// Encode a course polyline — and, when the phone has one, its per-point
-/// elevation in metres — into `out` as a CRS1 v2 frame, returning the byte
+/// elevation in metres — into `out` as a CRS1 v3 frame, returning the byte
 /// length written. `None` when the course is too short (< 2) or over the tier-1
 /// capacity (> [`MAX_COURSE_POINTS`]) — fail-closed, matching
 /// [`Course::from_points`] — when `elev_m` is present but doesn't carry exactly
 /// one sample per point, or when `out` is smaller than the frame needs. lat/lon
 /// are quantised to 1e-7 degrees (round half away from zero, matching the Dart
-/// encoder).
+/// encoder), then the CRC32 trailer seals everything before it.
 pub fn encode(points: &[CoursePoint], elev_m: Option<&[i16]>, out: &mut [u8]) -> Option<usize> {
     if points.len() < 2 || points.len() > MAX_COURSE_POINTS {
         return None;
@@ -134,45 +144,53 @@ pub fn encode(points: &[CoursePoint], elev_m: Option<&[i16]>, out: &mut [u8]) ->
         out[off..off + COURSE_ELEV_LEN].copy_from_slice(&e.to_le_bytes());
         off += COURSE_ELEV_LEN;
     }
+    let crc = crc32(&out[..off]).to_le_bytes();
+    out[off..off + COURSE_CRC_LEN].copy_from_slice(&crc);
     Some(len)
 }
 
-/// Decode a CRS1 frame into a [`Course`]. Accepts v1 (polyline only) and v2
-/// (flags byte, optional elevation). `None` on a bad magic, an unknown version,
-/// an unknown flag bit, a point count outside `2..=MAX_COURSE_POINTS`
-/// (fail-closed overflow rejection), a length that doesn't match the declared
-/// count + flags (trailing / short bytes), or a non-finite point.
+/// Whether the frame's trailing CRC32 matches the bytes it covers. Callers have
+/// already established that the frame is exactly as long as its header claims,
+/// so splitting off the trailer can't underflow.
+fn crc_matches(frame: &[u8]) -> bool {
+    let body = frame.len() - COURSE_CRC_LEN;
+    let want = u32::from_le_bytes([
+        frame[body],
+        frame[body + 1],
+        frame[body + 2],
+        frame[body + 3],
+    ]);
+    crc32(&frame[..body]) == want
+}
+
+/// Decode a CRS1 v3 frame into a [`Course`]. `None` on a bad magic, any version
+/// but the current one, an unknown flag bit, a point count outside
+/// `2..=MAX_COURSE_POINTS` (fail-closed overflow rejection), a length that
+/// doesn't match the declared count + flags (trailing / short bytes), or a CRC
+/// that doesn't match the bytes it covers.
 pub fn decode(frame: &[u8]) -> Option<Course> {
-    if frame.len() < COURSE_HEADER_V1_LEN || frame[0..4] != COURSE_MAGIC {
-        return None;
-    }
-    let version = frame[4];
-    if version != COURSE_FORMAT_VERSION && version != COURSE_FORMAT_VERSION_V1 {
+    if frame.len() < COURSE_HEADER_LEN
+        || frame[0..4] != COURSE_MAGIC
+        || frame[4] != COURSE_FORMAT_VERSION
+    {
         return None;
     }
     let count = u16::from_le_bytes([frame[5], frame[6]]) as usize;
     if !(2..=MAX_COURSE_POINTS).contains(&count) {
         return None;
     }
-    let (mut off, with_elev) = if version == COURSE_FORMAT_VERSION_V1 {
-        if frame.len() != course_frame_len_v1(count) {
-            return None;
-        }
-        (COURSE_HEADER_V1_LEN, false)
-    } else {
-        if frame.len() < COURSE_HEADER_LEN {
-            return None;
-        }
-        let flags = frame[7];
-        if flags & !KNOWN_COURSE_FLAGS != 0 {
-            return None;
-        }
-        let with_elev = flags & COURSE_FLAG_ELEV != 0;
-        if frame.len() != course_frame_len(count, with_elev) {
-            return None;
-        }
-        (COURSE_HEADER_LEN, with_elev)
-    };
+    let flags = frame[7];
+    if flags & !KNOWN_COURSE_FLAGS != 0 {
+        return None;
+    }
+    let with_elev = flags & COURSE_FLAG_ELEV != 0;
+    if frame.len() != course_frame_len(count, with_elev) {
+        return None;
+    }
+    if !crc_matches(frame) {
+        return None;
+    }
+    let mut off = COURSE_HEADER_LEN;
     let mut points: Vec<CoursePoint, MAX_COURSE_POINTS> = Vec::new();
     for _ in 0..count {
         let lat_e7 =
@@ -248,9 +266,11 @@ impl CourseAssembler {
     }
 
     /// Feed one chunk written at `offset`. Returns [`CoursePush::Complete`] when
-    /// the frame is now whole, [`CoursePush::More`] when more chunks are needed,
-    /// or [`CoursePush::Rejected`] on a malformed / out-of-order / overflowing
-    /// chunk (buffer reset). An `offset` of 0 restarts a fresh push.
+    /// the frame is now whole *and* passes its checksum, [`CoursePush::More`]
+    /// when more chunks are needed, or [`CoursePush::Rejected`] on a malformed /
+    /// out-of-order / overflowing chunk or a failed CRC (buffer reset). An
+    /// `offset` of 0 restarts a fresh push, so a rejected stream self-heals on
+    /// the phone's next attempt.
     pub fn push(&mut self, offset: usize, payload: &[u8]) -> CoursePush {
         if offset == 0 {
             self.buf.clear();
@@ -263,15 +283,12 @@ impl CourseAssembler {
             self.buf.clear();
             return CoursePush::Rejected;
         }
-        if self.buf.len() < COURSE_HEADER_V1_LEN {
+        if self.buf.len() < COURSE_HEADER_LEN {
             return CoursePush::More;
         }
         // The header is in: validate it early so a bad stream fails fast instead
         // of accreting bytes toward a frame that can never decode.
-        let version = self.buf[4];
-        if self.buf[0..4] != COURSE_MAGIC
-            || (version != COURSE_FORMAT_VERSION && version != COURSE_FORMAT_VERSION_V1)
-        {
+        if self.buf[0..4] != COURSE_MAGIC || self.buf[4] != COURSE_FORMAT_VERSION {
             self.buf.clear();
             return CoursePush::Rejected;
         }
@@ -280,27 +297,26 @@ impl CourseAssembler {
             self.buf.clear();
             return CoursePush::Rejected;
         }
-        let want = if version == COURSE_FORMAT_VERSION_V1 {
-            course_frame_len_v1(count)
-        } else {
-            if self.buf.len() < COURSE_HEADER_LEN {
-                return CoursePush::More;
-            }
-            let flags = self.buf[7];
-            if flags & !KNOWN_COURSE_FLAGS != 0 {
-                self.buf.clear();
-                return CoursePush::Rejected;
-            }
-            course_frame_len(count, flags & COURSE_FLAG_ELEV != 0)
-        };
-        if self.buf.len() < want {
-            CoursePush::More
-        } else if self.buf.len() == want {
-            CoursePush::Complete
-        } else {
+        let flags = self.buf[7];
+        if flags & !KNOWN_COURSE_FLAGS != 0 {
             self.buf.clear();
-            CoursePush::Rejected
+            return CoursePush::Rejected;
         }
+        let want = course_frame_len(count, flags & COURSE_FLAG_ELEV != 0);
+        if self.buf.len() < want {
+            return CoursePush::More;
+        }
+        if self.buf.len() > want {
+            self.buf.clear();
+            return CoursePush::Rejected;
+        }
+        // The checksum is the last gate, so `Complete` means the frame will
+        // decode — the nav task never sees a whole-but-corrupt course.
+        if !crc_matches(&self.buf) {
+            self.buf.clear();
+            return CoursePush::Rejected;
+        }
+        CoursePush::Complete
     }
 }
 
@@ -345,12 +361,26 @@ mod tests {
             })
     }
 
-    /// A v1 frame (no flags byte, no elevation) as an old phone would send it.
-    fn v1_frame(points: &[CoursePoint]) -> std::vec::Vec<u8> {
+    /// Build a v3 frame around `body` (header + points + elevation) by appending
+    /// the CRC the decoder will check, so a test can exercise a rejection *past*
+    /// the checksum rather than tripping on it.
+    fn sealed(body: &[u8]) -> std::vec::Vec<u8> {
+        let mut frame = body.to_vec();
+        frame.extend_from_slice(&crc32(body).to_le_bytes());
+        frame
+    }
+
+    /// A pre-CRC frame as an older phone build would send it: `version` 1 with a
+    /// 7-byte header (no flags byte), or `version` 2 with the flags byte, neither
+    /// carrying a trailer.
+    fn legacy_frame(version: u8, points: &[CoursePoint]) -> std::vec::Vec<u8> {
         let mut out = std::vec::Vec::new();
         out.extend_from_slice(&COURSE_MAGIC);
-        out.push(COURSE_FORMAT_VERSION_V1);
+        out.push(version);
         out.extend_from_slice(&(points.len() as u16).to_le_bytes());
+        if version == 2 {
+            out.push(0);
+        }
         for p in points {
             out.extend_from_slice(&(libm::round(p.lat_deg * 1e7) as i32).to_le_bytes());
             out.extend_from_slice(&(libm::round(p.lon_deg * 1e7) as i32).to_le_bytes());
@@ -391,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn an_elevation_less_v2_frame_decodes_to_a_course_without_a_profile() {
+    fn an_elevation_less_frame_decodes_to_a_course_without_a_profile() {
         let course = decode(&encode_vec(&sim_points())).expect("decodes");
         assert!(course.elevations().is_none());
     }
@@ -401,11 +431,24 @@ mod tests {
     /// fails a test rather than silently corrupting a pushed course.
     #[test]
     fn golden_frame_is_stable() {
+        let frame = encode_vec(&sim_points());
         assert_eq!(
-            hex_of(&encode_vec(&sim_points())).as_str(),
-            "435253310203000083edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1",
+            hex_of(&frame).as_str(),
+            "435253310303000083edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c114996437",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/lib/watch_course.dart"
+        );
+        // The trailer is the derived checksum of everything before it, not just
+        // the literal pinned above.
+        let body = frame.len() - COURSE_CRC_LEN;
+        assert_eq!(
+            u32::from_le_bytes([
+                frame[body],
+                frame[body + 1],
+                frame[body + 2],
+                frame[body + 3]
+            ]),
+            crc32(&frame[..body])
         );
     }
 
@@ -415,7 +458,8 @@ mod tests {
     fn golden_elevation_frame_is_stable() {
         assert_eq!(
             hex_of(&encode_vec_with(&sim_points(), Some(&SIM_ELEV_M))).as_str(),
-            "435253310203000183edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1720677066806",
+            "435253310303000183edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1\
+             720677066806b8269c11",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/lib/watch_course.dart"
         );
@@ -462,12 +506,21 @@ mod tests {
         assert!(encode(&sim_points(), Some(&SIM_ELEV_M), &mut no_room_for_elev).is_none());
     }
 
+    /// The pre-CRC layouts are refused outright. Accepting them would leave the
+    /// checksum decorative — a frame that fails it could simply claim to be v2 —
+    /// and a displaced course is worse than no course (see the module docs).
     #[test]
-    fn decode_still_accepts_a_v1_frame() {
-        let frame = v1_frame(&sim_points());
-        let course = decode(&frame).expect("v1 decodes");
-        assert_eq!(course.points().len(), 3);
-        assert!(course.elevations().is_none());
+    fn decode_rejects_the_pre_crc_versions() {
+        for version in [1u8, 2] {
+            let frame = legacy_frame(version, &sim_points());
+            assert!(decode(&frame).is_none(), "v{version} frame decoded");
+            // Nor does bolting a valid trailer onto the legacy body rescue it —
+            // the version byte is what's checked.
+            assert!(
+                decode(&sealed(&frame)).is_none(),
+                "sealed v{version} decoded"
+            );
+        }
     }
 
     #[test]
@@ -475,13 +528,16 @@ mod tests {
         let mut future = encode_vec(&sim_points());
         future[4] = COURSE_FORMAT_VERSION + 1;
         assert!(decode(&future).is_none());
-        let mut odd_flag = encode_vec(&sim_points());
+        // Re-sealed, so the rejection is the flag check rather than the CRC.
+        let body = encode_vec(&sim_points());
+        let body = &body[..body.len() - COURSE_CRC_LEN];
+        let mut odd_flag = body.to_vec();
         odd_flag[7] = 1 << 1;
-        assert!(decode(&odd_flag).is_none());
+        assert!(decode(&sealed(&odd_flag)).is_none());
         // A frame whose flags claim elevation but whose length doesn't carry it.
-        let mut lying_flag = encode_vec(&sim_points());
+        let mut lying_flag = body.to_vec();
         lying_flag[7] = COURSE_FLAG_ELEV;
-        assert!(decode(&lying_flag).is_none());
+        assert!(decode(&sealed(&lying_flag)).is_none());
     }
 
     #[test]
@@ -492,6 +548,13 @@ mod tests {
         long.push(0x00);
         long.push(0x00);
         assert!(decode(&long).is_none());
+        // Re-sealed at each wrong length, so the length check is doing its own
+        // job underneath the checksum.
+        let body = &frame[..frame.len() - COURSE_CRC_LEN];
+        assert!(decode(&sealed(&body[..body.len() - 2])).is_none());
+        let mut over = body.to_vec();
+        over.extend_from_slice(&[0x00, 0x00]);
+        assert!(decode(&sealed(&over)).is_none());
     }
 
     #[test]
@@ -505,12 +568,14 @@ mod tests {
         let mut bad_ver = frame.clone();
         bad_ver[4] = COURSE_FORMAT_VERSION + 1;
         assert!(decode(&bad_ver).is_none());
+        // A header with no room for the trailer at all is short, not v2.
+        assert!(decode(&frame[..COURSE_HEADER_LEN + COURSE_POINT_LEN]).is_none());
     }
 
     #[test]
     fn decode_rejects_a_length_that_disagrees_with_the_count() {
         let frame = encode_vec(&sim_points());
-        // One byte short: flags claim 3 points, bytes lack the last.
+        // One byte short: the count claims 3 points, bytes lack the last.
         assert!(decode(&frame[..frame.len() - 1]).is_none());
         // Trailing byte past the declared points.
         let mut long = frame.clone();
@@ -518,16 +583,74 @@ mod tests {
         assert!(decode(&long).is_none());
     }
 
+    /// Appending to a frame invalidates its checksum, so the CRC alone rejects
+    /// the naive case. Re-sealing the longer frame proves the exact-length check
+    /// still stands on its own.
+    #[test]
+    fn trailing_bytes_are_rejected_even_when_the_crc_covers_them() {
+        let frame = encode_vec(&sim_points());
+        let mut body = frame[..frame.len() - COURSE_CRC_LEN].to_vec();
+        body.push(0x00);
+        assert!(decode(&sealed(&body)).is_none());
+    }
+
+    /// The reproducer the v3 bump exists for: one byte of the point array, and
+    /// the course the watch follows is displaced — the polyline is still legal
+    /// (every lat/lon on the 1e-7 grid is), the length still agrees, and there is
+    /// no plausibility guard downstream, so the off-course alert would calibrate
+    /// against the wrong line. The CRC turns it into a rejection.
+    #[test]
+    fn a_single_byte_corruption_of_a_point_cannot_displace_the_course() {
+        let frame = encode_vec(&sim_points());
+        let body = &frame[..frame.len() - COURSE_CRC_LEN];
+
+        // Re-sealed, the corruption is a perfectly well-formed frame — the
+        // length check has nothing to catch, which is the whole defect.
+        let mut displaced = body.to_vec();
+        displaced[COURSE_HEADER_LEN + 3] ^= 0x04;
+        let course = decode(&sealed(&displaced)).expect("length-valid under its crc");
+        let honest = decode(&frame).expect("decodes");
+        let off_deg = (course.points()[0].lat_deg - honest.points()[0].lat_deg).abs();
+        assert!(
+            off_deg > 0.5,
+            "corruption moved the point only {off_deg} deg"
+        );
+
+        // Over the wire the sender's CRC travels with the frame, so the same
+        // flip is rejected outright rather than followed as a different course.
+        let mut corrupt = frame.clone();
+        corrupt[COURSE_HEADER_LEN + 3] ^= 0x04;
+        assert!(decode(&corrupt).is_none());
+    }
+
+    #[test]
+    fn a_frame_whose_crc_does_not_match_is_rejected() {
+        for frame in [
+            encode_vec(&sim_points()),
+            encode_vec_with(&sim_points(), Some(&SIM_ELEV_M)),
+        ] {
+            assert!(decode(&frame).is_some());
+            for at in 0..COURSE_CRC_LEN {
+                let mut bad = frame.clone();
+                bad[frame.len() - COURSE_CRC_LEN + at] ^= 0x01;
+                assert!(decode(&bad).is_none(), "a flipped crc byte {at} decoded");
+            }
+        }
+    }
+
     #[test]
     fn decode_rejects_an_over_cap_or_too_small_count() {
-        let mut frame = encode_vec(&sim_points());
-        // Claim 257 points (over MAX_COURSE_POINTS) — rejected before any read.
-        frame[5..7].copy_from_slice(&((MAX_COURSE_POINTS as u16) + 1).to_le_bytes());
-        assert!(decode(&frame).is_none());
+        let frame = encode_vec(&sim_points());
+        let body = &frame[..frame.len() - COURSE_CRC_LEN];
+        // Claim 257 points (over MAX_COURSE_POINTS) — rejected before any read,
+        // re-sealed so the count check fires rather than the CRC.
+        let mut over = body.to_vec();
+        over[5..7].copy_from_slice(&((MAX_COURSE_POINTS as u16) + 1).to_le_bytes());
+        assert!(decode(&sealed(&over)).is_none());
         // Claim 1 point — a course must have >= 2.
-        let mut one = encode_vec(&sim_points());
+        let mut one = body.to_vec();
         one[5..7].copy_from_slice(&1u16.to_le_bytes());
-        assert!(decode(&one).is_none());
+        assert!(decode(&sealed(&one)).is_none());
     }
 
     fn chunks(frame: &[u8], payload_len: usize) -> std::vec::Vec<(usize, std::vec::Vec<u8>)> {
@@ -601,13 +724,58 @@ mod tests {
         assert_eq!(course.elevations(), Some(&SIM_ELEV_M[..]));
     }
 
+    /// A whole-but-corrupt frame must never reach `Complete`: the nav task
+    /// decodes whatever the assembler calls complete, so the checksum is the
+    /// assembler's last gate too, and a rejection clears the buffer so the
+    /// phone's next offset-0 write recovers.
+    #[test]
+    fn assembler_rejects_a_whole_frame_whose_crc_fails() {
+        let mut frame = encode_vec(&sim_points());
+        frame[COURSE_HEADER_LEN] ^= 0x01;
+        let mut asm = CourseAssembler::new();
+        let parts = chunks(&frame, 8);
+        for (i, (off, payload)) in parts.iter().enumerate() {
+            let outcome = asm.push(*off, payload);
+            if i < parts.len() - 1 {
+                assert_eq!(outcome, CoursePush::More, "at chunk {i}");
+            } else {
+                assert_eq!(outcome, CoursePush::Rejected, "corrupt frame completed");
+            }
+        }
+        assert!(asm.frame().is_empty());
+        // The buffer is clean, so an honest re-push lands.
+        let honest = encode_vec(&sim_points());
+        let mut last = CoursePush::More;
+        for (off, payload) in chunks(&honest, 8) {
+            last = asm.push(off, &payload);
+        }
+        assert_eq!(last, CoursePush::Complete);
+    }
+
     #[test]
     fn assembler_rejects_a_bad_header_stream() {
         let mut asm = CourseAssembler::new();
         // A full header with the wrong magic fails as soon as it's in.
-        let bad = [b'X', b'X', b'X', b'X', COURSE_FORMAT_VERSION, 0x03, 0x00];
+        let bad = [
+            b'X',
+            b'X',
+            b'X',
+            b'X',
+            COURSE_FORMAT_VERSION,
+            0x03,
+            0x00,
+            0x00,
+        ];
         assert_eq!(asm.push(0, &bad), CoursePush::Rejected);
         assert!(asm.frame().is_empty());
+        // A pre-CRC version fails on the version byte, same as `decode`.
+        for version in [1u8, 2] {
+            let mut legacy = [0u8; COURSE_HEADER_LEN];
+            legacy[0..4].copy_from_slice(&COURSE_MAGIC);
+            legacy[4] = version;
+            legacy[5..7].copy_from_slice(&3u16.to_le_bytes());
+            assert_eq!(asm.push(0, &legacy), CoursePush::Rejected, "v{version}");
+        }
         // A header declaring an over-cap count fails too.
         let mut over = [0u8; COURSE_HEADER_LEN];
         over[0..4].copy_from_slice(&COURSE_MAGIC);
