@@ -109,6 +109,23 @@ pub enum Btn3Press {
 /// task owns the timing mechanics (hardware: nested selects; sim: level
 /// polling) but the boundaries live here, host-tested, so the two task
 /// variants and the tests can't drift.
+///
+/// Both values are deliberately conventional rather than tuned. 500 ms is the
+/// long-press default of both phone platforms — Android's
+/// `ViewConfiguration.DEFAULT_LONG_PRESS_TIMEOUT` and iOS's
+/// `UILongPressGestureRecognizer.minimumPressDuration` (0.5 s) — so a gloved
+/// thumb arrives already trained on it, and it is 25x the button task's 20 ms
+/// contact debounce, which is what keeps bounce from ever promoting a tap. The
+/// grid tier then sits a further full second on, three times the first
+/// threshold, so the gap between the tiers dwarfs the jitter a cold hand adds
+/// to a press duration.
+///
+/// What the pair could not offer was any way to *feel* where the boundary
+/// between them is — see [`BTN3_HOLD_BANNER`]. With the escalation window
+/// announced on screen the grid hold becomes a feedback-controlled gesture
+/// instead of an open-loop timed one, so the precision these numbers demand of
+/// the runner drops to "see the prompt, then decide"; that is the reason to
+/// keep them rather than guess at wider ones.
 pub const BTN3_LONG_PRESS_MS: u32 = 500;
 pub const BTN3_GRID_HOLD_MS: u32 = 1500;
 // The hardware task times the grid tier as a second select leg of
@@ -200,6 +217,28 @@ pub const STOP_ARMED_BANNER: &str = "STOP? BTN2";
 /// the prompt can never outlive (or undercut) the press that would confirm.
 pub fn stop_arm_pending(armed_at_s: u32, now_s: u32) -> bool {
     now_s.saturating_sub(armed_at_s) <= STOP_CONFIRM_WINDOW_S
+}
+
+/// The 2x banner shown while a BTN3 hold sits *between* the two press tiers —
+/// past [`BTN3_LONG_PRESS_MS`], so releasing now is the page back, and still one
+/// continued hold from [`BTN3_GRID_HOLD_MS`] and the page grid.
+///
+/// Same `<outcome>? <how>` grammar as [`STOP_ARMED_BANNER`], and for the same
+/// reason: a timed boundary a cold, gloved hand cannot feel is indistinguishable
+/// from a dead button, and a runner who over-holds learns it only once the grid
+/// modal has already taken pause off BTN1 and stop off BTN2. It names the *next*
+/// tier rather than the current one because that is the half the runner can still
+/// act on — the tier they have already earned is what letting go gives them.
+pub const BTN3_HOLD_BANNER: &str = "GRID? HOLD";
+
+/// Whether a BTN3 hold past [`BTN3_LONG_PRESS_MS`] still has a tier to escalate
+/// into, i.e. whether [`BTN3_HOLD_BANNER`] has anything true to say. Derived from
+/// [`btn3_action`] rather than from the state directly, so the prompt can never
+/// advertise a grid on a surface that has none: an idle hold is duration-stable
+/// (any length is the QNH re-zero, decisions §290), and inside the grid the
+/// cursor jumping a row under the thumb is already its own feedback.
+pub fn btn3_hold_prompt(state: RecordState, grid_open: bool) -> bool {
+    !grid_open && btn3_action(state, Btn3Press::GridHold) == Btn3Action::OpenGrid
 }
 
 /// The outcome of feeding a BTN2 press to the [`StopGuard`].
@@ -432,6 +471,51 @@ mod tests {
         // Clock skew (a stamp from the future) reads as pending, not as a
         // wrapped-around expiry.
         assert!(stop_arm_pending(10, 9));
+    }
+
+    #[test]
+    fn the_hold_prompt_shows_exactly_where_a_hold_has_a_third_tier() {
+        use crate::input_flow::{btn3_after_long_press, Btn3Stage};
+
+        for state in [
+            RecordState::Idle,
+            RecordState::Recording,
+            RecordState::Paused,
+            RecordState::Finished,
+        ] {
+            // The prompt promises an escalation, so it must show exactly where
+            // the task actually keeps timing towards the grid — otherwise it
+            // either lies to an idle runner or leaves a run view silent.
+            assert_eq!(
+                btn3_hold_prompt(state, false),
+                btn3_after_long_press(state, true) == Btn3Stage::AwaitGridHold,
+                "{state:?}"
+            );
+            // Inside the grid the cursor is the feedback; the prompt stands down
+            // whatever the state.
+            assert!(!btn3_hold_prompt(state, true), "{state:?}");
+        }
+        assert!(!btn3_hold_prompt(RecordState::Idle, false));
+        assert!(btn3_hold_prompt(RecordState::Recording, false));
+    }
+
+    #[test]
+    fn the_hold_banner_fits_the_hero_band() {
+        // 2x glyphs are two cells wide; the banner must fit the 21-cell grid,
+        // the same budget STOP_ARMED_BANNER is held to.
+        assert!(BTN3_HOLD_BANNER.chars().count() * 2 <= crate::face::COLS);
+    }
+
+    #[test]
+    fn the_hold_tiers_stay_far_apart_enough_to_aim_at_with_a_gloved_hand() {
+        // Pinned so a future change has to argue with the doc comment above:
+        // 500 ms is the platform long-press default (Android
+        // ViewConfiguration / iOS UILongPressGestureRecognizer), and the
+        // escalation window is a further 2x that — the runner reacts to the
+        // on-screen prompt inside it rather than timing the hold blind.
+        assert_eq!(BTN3_LONG_PRESS_MS, 500);
+        assert_eq!(BTN3_GRID_HOLD_MS, 3 * BTN3_LONG_PRESS_MS);
+        assert!(BTN3_GRID_HOLD_MS - BTN3_LONG_PRESS_MS >= BTN3_LONG_PRESS_MS);
     }
 
     #[test]

@@ -80,6 +80,17 @@ pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::n
 /// rendering). One receiver (the `ui` task).
 pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::new();
 
+/// Whether a BTN3 hold is currently sitting between the two press tiers — past
+/// the page-back threshold, one continued hold from the page grid. The `button`
+/// task raises it as the hold crosses `button::BTN3_LONG_PRESS_MS` and lowers it
+/// the moment the escalation leg resolves (release, or the grid opening), so the
+/// *press* is the only clock the prompt has: unlike `STOP_ARMED` it carries no
+/// timestamp and has no TTL to expire, which is what keeps it out of the `ui`
+/// task's `owes_timed_refresh` decision and off any standing wake. Two sends per
+/// hold that reaches the tier, none at all for a tap. One receiver (the `ui`
+/// task, which additionally gates it on `button::btn3_hold_prompt`).
+pub static BTN3_HOLD: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the
