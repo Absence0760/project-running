@@ -149,6 +149,22 @@ pub fn tall_hero_fits(text: &str) -> bool {
     tall_hero_cells(text) <= face::COLS
 }
 
+/// Cells of [`face::RUN_MARKER_ROW`] the hero band covers this frame — what a
+/// standing marker on that row has to clear ([`face::apply_run_marker`]).
+///
+/// The hero is drawn after the text rows and composes its span from scratch, so
+/// its span is destructive. A banner owns the whole band, which is the point of
+/// a banner; a hero owns exactly its glyphs; no hero owns nothing.
+pub fn hero_row_cells(band: HeroBand, hero: &str) -> usize {
+    match band {
+        HeroBand::AlertBanner | HeroBand::RezeroBanner => face::COLS,
+        HeroBand::BigNumHero => tall_hero_cells(hero),
+        // Both draw one doubled cell per character, over rows 0-1.
+        HeroBand::MedNumHero | HeroBand::TextHero => hero.len() * NUMERAL_MED_CELLS,
+        HeroBand::None => 0,
+    }
+}
+
 /// The frame inputs the hero band is decided from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HeroFrame {

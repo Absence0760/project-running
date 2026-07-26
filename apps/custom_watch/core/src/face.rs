@@ -26,6 +26,7 @@
 use core::fmt::Write;
 
 use crate::alerts::FuelOverdue;
+use crate::battery;
 use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::elevation;
@@ -177,11 +178,10 @@ const _: () = assert!(NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS <= ROWS - 2);
 const _: () = assert!(NAV_ALERT_ROW >= NAV_PANEL_TOP_ROW);
 const _: () = assert!(NAV_ALERT_ROW + 2 <= NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS);
 
-/// The row the compact persistent fuel-overdue marker rides — the blank lower
-/// half of the 2x hero band. Row 1 keeps it clear of the row-0 state tag and
-/// every metric row (2..8), and the hero digits sit to its left, so the small
-/// right-anchored tag never collides with them at glanceable elapsed times.
-pub const FUEL_MARKER_ROW: usize = 1;
+/// The row a run view's standing markers ride — the blank lower half of the
+/// hero band. Row 1 keeps them clear of the row-0 state tag and of every metric
+/// row (2..8), and the hero digits sit to their left.
+pub const RUN_MARKER_ROW: usize = 1;
 
 /// The short right-anchored tag for a standing [`FuelOverdue`], or `None` when
 /// nothing is overdue. A plain 1x tag — deliberately NOT the transient 2x
@@ -198,22 +198,79 @@ pub fn fuel_overdue_tag(overdue: FuelOverdue) -> Option<&'static str> {
     }
 }
 
-/// Overlay the compact fuel-overdue marker onto an already-rendered page by
-/// writing it right-anchored into [`FUEL_MARKER_ROW`]. Writing it into the row
+/// The standing marker a run view carries this frame, or `None` for none.
+///
+/// Two conditions want the one marker row, so the precedence is stated rather
+/// than left to call order: **a critical cell outranks a fuel reminder, and a
+/// fuel reminder outranks a merely low one.** A sip can wait a kilometre; a
+/// watch that dies ends the recording, and the runner's remedy (drop to
+/// Expedition at the next stop, reach the power bank in the drop bag) needs
+/// lead time. Below [`battery::LOW_PCT`] but above critical the fuel state is
+/// the more actionable of the two, and the battery tag returns the moment the
+/// reminder is acknowledged.
+///
+/// A `None` percent — no plausible cell, the honest absent state the battery
+/// task publishes on the USB-powered DK — contributes nothing, exactly as it
+/// does on the idle faces.
+///
+/// The battery form is a bare `12%`, not `BAT 12%`. Three cells is what
+/// survives the hero this marker most needs to sit beside: an elapsed time past
+/// 100 hours is nine glyphs, eighteen of the panel's twenty-one cells, and a
+/// seven-cell tag would be refused for clearance exactly on the multi-day runs
+/// where the cell is the thing at stake. Unambiguous where it sits — the only
+/// other tenants of this row are words.
+pub fn run_marker(overdue: FuelOverdue, battery: Option<u8>) -> Option<Row> {
+    let mut row = Row::new();
+    let battery_tag = |pct: u8, row: &mut Row| {
+        let _ = write!(row, "{}%", pct.min(100));
+    };
+    match (battery, fuel_overdue_tag(overdue)) {
+        (Some(pct), _) if battery::is_critical(pct) => battery_tag(pct, &mut row),
+        (_, Some(tag)) => {
+            let _ = write!(row, "{tag}");
+        }
+        (Some(pct), None) if battery::is_low(pct) => battery_tag(pct, &mut row),
+        _ => return None,
+    }
+    Some(row)
+}
+
+/// Overlay the run view's standing marker onto an already-rendered page by
+/// writing it right-anchored into [`RUN_MARKER_ROW`]. Writing it into the row
 /// text (rather than a separate framebuffer blit) keeps the dirty-line flush
 /// honest — a steady marker re-emits identical bytes, so a resting page still
-/// flushes zero SPI. No-op when nothing is overdue, on the Nav page (whose map
-/// panel owns that row), or if the row is already occupied — so it can only ever
-/// add a glance, never clobber a metric or the map.
-pub fn apply_fuel_marker(rows: &mut [Row; ROWS], overdue: FuelOverdue, page: Page) {
+/// flushes zero SPI.
+///
+/// `hero_cells` is how far across the marker row the hero band's pixels reach
+/// this frame ([`crate::ui_frame::hero_row_cells`]). The hero is drawn *after*
+/// the text rows and composes its span from scratch, so anything it overlaps is
+/// erased — and a marker half-eaten from the left is worse than none: `DRINK`
+/// clipped to `INK` reads as neither a word nor an absence. So the marker
+/// refuses when it would not clear the hero, the same refuse-rather-than-
+/// truncate rule [`write_tag`] follows. That case is real, not theoretical: a
+/// 100-hour dashboard hero is nine glyphs, eighteen of the twenty-one cells,
+/// which the three-cell battery form clears and the five-cell fuel tag does not
+/// — the fuel reminder still gets its transient banner, and this row is only
+/// its standing backstop.
+///
+/// Also a no-op on the Nav page (whose map panel owns that row) or when the row
+/// is already occupied, so it can only ever add a glance, never clobber a metric
+/// or the map.
+pub fn apply_run_marker(
+    rows: &mut [Row; ROWS],
+    page: Page,
+    overdue: FuelOverdue,
+    battery: Option<u8>,
+    hero_cells: usize,
+) {
     if page == Page::Nav {
         return;
     }
-    let Some(tag) = fuel_overdue_tag(overdue) else {
+    let Some(tag) = run_marker(overdue, battery) else {
         return;
     };
-    let row = &mut rows[FUEL_MARKER_ROW];
-    if !row.is_empty() {
+    let row = &mut rows[RUN_MARKER_ROW];
+    if !row.is_empty() || hero_cells + tag.len() > COLS {
         return;
     }
     let _ = write!(row, "{:>width$}", tag, width = COLS);
@@ -335,7 +392,7 @@ pub const DASH_SPLIT_COL: usize = 10;
 pub const BATTERY_ROW: usize = 7;
 
 /// Overlay the diagnostics face's `BAT n%` read-out right-anchored onto
-/// [`BATTERY_ROW`] — a post-pass like [`apply_fuel_marker`], so the battery
+/// [`BATTERY_ROW`] — a post-pass like [`apply_run_marker`], so the battery
 /// doesn't thread a parameter through every layout that ignores it. Only the
 /// diagnostics view carries the number; the home face (and the run views,
 /// which the app gates before calling) get the icon widget the render layer
@@ -365,10 +422,10 @@ pub fn apply_battery_row(rows: &mut [Row; ROWS], view: IdleView, percent: Option
 pub const PENDING_RUN_ROW: usize = CLOCK_HERO_TOP_ROW + CLOCK_HERO_ROWS;
 
 const _: () = assert!(PENDING_RUN_ROW < ROWS);
-const _: () = assert!(PENDING_RUN_ROW != FUEL_MARKER_ROW && PENDING_RUN_ROW != BATTERY_ROW);
+const _: () = assert!(PENDING_RUN_ROW != RUN_MARKER_ROW && PENDING_RUN_ROW != BATTERY_ROW);
 
 /// Overlay the home face's recovered-run marker — right-anchored onto
-/// [`PENDING_RUN_ROW`], a post-pass like [`apply_fuel_marker`]. `pending` is how
+/// [`PENDING_RUN_ROW`], a post-pass like [`apply_run_marker`]. `pending` is how
 /// many runs on flash are a mid-run checkpoint the phone has not pulled
 /// ([`crate::flash_store::SlotDir::pending_partial_count`]): a brown-out or
 /// battery swap mid-ultra leaves the run-so-far on flash, and without this the
@@ -2926,7 +2983,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_fuel_marker_shows_the_tag_only_when_overdue() {
+    fn the_run_marker_shows_the_fuel_tag_only_when_overdue() {
         let snap = snapshot(RecordState::Recording, 4200.0);
         let base = page_rows(
             Page::Dashboard,
@@ -2942,25 +2999,25 @@ mod tests {
 
         // Nothing overdue -> the page is untouched.
         let mut rows = base.clone();
-        apply_fuel_marker(&mut rows, FuelOverdue::None, Page::Dashboard);
+        apply_run_marker(&mut rows, Page::Dashboard, FuelOverdue::None, None, 0);
         assert_eq!(rows, base);
 
         // Overdue -> the compact tag lands right-anchored on the marker row and
         // no other row (hero digits, metrics) is disturbed.
         let mut rows = base.clone();
-        apply_fuel_marker(&mut rows, FuelOverdue::Drink, Page::Dashboard);
-        assert!(rows[FUEL_MARKER_ROW].as_str().ends_with("DRINK"));
-        assert!(rows[FUEL_MARKER_ROW].as_str().starts_with(' '));
-        assert!(rows[FUEL_MARKER_ROW].len() <= COLS);
+        apply_run_marker(&mut rows, Page::Dashboard, FuelOverdue::Drink, None, 0);
+        assert!(rows[RUN_MARKER_ROW].as_str().ends_with("DRINK"));
+        assert!(rows[RUN_MARKER_ROW].as_str().starts_with(' '));
+        assert!(rows[RUN_MARKER_ROW].len() <= COLS);
         for r in 0..ROWS {
-            if r != FUEL_MARKER_ROW {
+            if r != RUN_MARKER_ROW {
                 assert_eq!(rows[r], base[r], "row {r} changed");
             }
         }
     }
 
     #[test]
-    fn apply_fuel_marker_is_a_noop_on_nav_and_over_occupied_rows() {
+    fn the_run_marker_is_a_noop_on_nav_and_over_occupied_rows() {
         let snap = snapshot(RecordState::Recording, 4200.0);
         // Nav page: its map panel owns the marker row, so the marker is skipped.
         let nav = page_rows(
@@ -2975,15 +3032,92 @@ mod tests {
             false,
         );
         let mut rows = nav.clone();
-        apply_fuel_marker(&mut rows, FuelOverdue::Both, Page::Nav);
+        apply_run_marker(&mut rows, Page::Nav, FuelOverdue::Both, Some(5), 0);
         assert_eq!(rows, nav);
 
         // An occupied marker row is never overwritten.
         let mut rows: [Row; ROWS] = Default::default();
-        let _ = write!(rows[FUEL_MARKER_ROW], "BUSY");
+        let _ = write!(rows[RUN_MARKER_ROW], "BUSY");
         let before = rows.clone();
-        apply_fuel_marker(&mut rows, FuelOverdue::Drink, Page::Dashboard);
+        apply_run_marker(&mut rows, Page::Dashboard, FuelOverdue::Drink, None, 0);
         assert_eq!(rows, before);
+    }
+
+    /// A run view carries no battery icon and no BAT row, so before this the
+    /// runner could not learn the cell was going without stopping the run.
+    #[test]
+    fn the_run_marker_states_a_low_battery_and_ranks_a_critical_one_first() {
+        let tag = |overdue, battery| {
+            run_marker(overdue, battery)
+                .map(|r| r.as_str().to_owned())
+                .unwrap_or_default()
+        };
+        // Healthy cell, nothing overdue: no marker at all.
+        assert_eq!(tag(FuelOverdue::None, Some(80)), "");
+        // No plausible cell (the USB-powered DK) contributes nothing, so the
+        // fuel tag still stands alone.
+        assert_eq!(tag(FuelOverdue::None, None), "");
+        assert_eq!(tag(FuelOverdue::Drink, None), "DRINK");
+
+        assert_eq!(tag(FuelOverdue::None, Some(battery::LOW_PCT)), "20%");
+        assert_eq!(tag(FuelOverdue::None, Some(battery::LOW_PCT + 1)), "");
+
+        // A sip can wait a kilometre, so the fuel reminder outranks a low cell —
+        // and the battery tag returns as soon as the reminder is acknowledged.
+        assert_eq!(tag(FuelOverdue::Eat, Some(battery::LOW_PCT)), "EAT");
+        // A dead watch ends the recording, so a critical cell outranks the sip.
+        assert_eq!(tag(FuelOverdue::Eat, Some(battery::CRITICAL_PCT)), "10%");
+        assert_eq!(tag(FuelOverdue::Both, Some(0)), "0%");
+
+        // The battery form is three cells at its widest, which is what lets it
+        // clear a nine-glyph hero. Shown only at or below LOW_PCT, so it can
+        // never widen past two digits and a sign.
+        for pct in 0..=battery::LOW_PCT {
+            assert!(tag(FuelOverdue::None, Some(pct)).len() <= 3, "{pct}");
+        }
+    }
+
+    /// The hero is drawn over the marker row after the text, composing its span
+    /// from scratch — so a marker it overlaps is erased from the left, and
+    /// `DRINK` clipped to `INK` is worse than no tag at all. Real at ultra
+    /// distances: a 100-hour elapsed hero is nine glyphs, eighteen cells.
+    #[test]
+    fn the_run_marker_refuses_rather_than_let_the_hero_clip_it() {
+        let fits = |overdue, battery, hero_cells| {
+            let mut rows: [Row; ROWS] = Default::default();
+            apply_run_marker(&mut rows, Page::Dashboard, overdue, battery, hero_cells);
+            !rows[RUN_MARKER_ROW].is_empty()
+        };
+        // "5%" is 2 cells; the hero may run right up to it, since a numeral
+        // glyph carries its own side bearing where two text cells would not.
+        assert!(fits(FuelOverdue::None, Some(5), COLS - 2));
+        assert!(!fits(FuelOverdue::None, Some(5), COLS - 1));
+        assert!(!fits(FuelOverdue::None, Some(5), COLS));
+
+        // The case the three-cell battery form exists for: past 100 hours the
+        // elapsed hero leaves three cells, which the battery tag clears and the
+        // five-cell `DRINK` does not. The fuel reminder still gets its transient
+        // banner — this row is only its standing backstop.
+        let wide =
+            crate::ui_frame::hero_row_cells(crate::ui_frame::HeroBand::MedNumHero, "100:05:30");
+        assert_eq!(wide, 18);
+        assert!(fits(FuelOverdue::None, Some(12), wide));
+        assert!(!fits(FuelOverdue::Drink, None, wide));
+    }
+
+    #[test]
+    fn the_hero_row_span_follows_the_face_the_band_chose() {
+        use crate::ui_frame::{hero_row_cells, HeroBand};
+        // A banner owns the whole band, which is the point of a banner.
+        assert_eq!(hero_row_cells(HeroBand::AlertBanner, ""), COLS);
+        assert_eq!(hero_row_cells(HeroBand::RezeroBanner, ""), COLS);
+        assert_eq!(hero_row_cells(HeroBand::None, "3:12:05"), 0);
+        // Two cells per doubled character, four per tall-face leading digit.
+        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "3:12:05"), 14);
+        assert_eq!(hero_row_cells(HeroBand::TextHero, "3:12:05"), 14);
+        assert_eq!(hero_row_cells(HeroBand::BigNumHero, "32.40"), 14);
+        // The 100-hour dashboard hero that motivated the clearance rule.
+        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "100:05:30"), 18);
     }
 
     #[test]

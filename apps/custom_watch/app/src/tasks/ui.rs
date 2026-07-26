@@ -286,18 +286,67 @@ pub async fn screen_task(
             idle_view,
             tz_offset_min,
         );
+        // The hero band is decided here rather than at its `match` below,
+        // because the standing marker shares row 1 with it and has to know how
+        // far its pixels reach before the text rows are committed.
+        //
+        // The manual QNH re-zero's transient feedback: an inverse banner over
+        // the idle face's title band for its TTL. Idle-only — the gesture only
+        // exists on the idle face, and a run view's hero band belongs to the
+        // run's own alerts.
+        let rezero_banner =
+            ui_frame::rezero_banner_status(rezero, uptime_s, face::run_view(rec.as_ref()))
+                .map(elevation::rezero_banner);
+        let stop_pending =
+            ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
+        // The mid-hold grid prompt, re-gated here on this task's own view of the
+        // state: the published flag says a hold is between the tiers, and only
+        // this side knows whether the surface under it still has a grid to
+        // escalate into by the time the frame composes.
+        let hold_prompt = btn3_hold
+            && button::btn3_hold_prompt(ui_frame::record_state(rec.as_ref()), grid.is_some());
+        // `hero_band`'s `stop_pending` input is really "a two-row banner is about
+        // to cover the band", which is what suppresses the three-row numeral hero
+        // whose bottom third would otherwise peek out below it. Both banners span
+        // the same two rows, so both owe it.
+        let band_covered = stop_pending || hold_prompt;
+        // The pages whose body spares row 2 headline their number in the 32x48 +
+        // 16x32 numeral faces over rows 0-2, with the label and state tag on row
+        // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
+        // and so does a value too wide to render whole at the taller size.
+        let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
+        let band = ui_frame::hero_band(HeroFrame {
+            alert: alert.is_some(),
+            rezero_banner: rezero_banner.is_some(),
+            hero: hero.is_some(),
+            numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
+            fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
+            stop_pending: band_covered,
+            page,
+        });
         // Persist the fuel reminder past its transient banner: latch the standing
-        // overdue state off the same `alert` value and paint a compact marker.
-        // The Fuel glance page being open is the acknowledgement.
+        // overdue state off the same `alert` value. The Fuel glance page being
+        // open is the acknowledgement.
         let overdue = fuel_overdue.observe(
             alert,
             ui_frame::alerts_run_active(rec.as_ref()),
             page == Page::Fuel,
         );
-        face::apply_fuel_marker(&mut rows, overdue, page);
-        // The diagnostics face's numeric battery read-out; the idle-face icon
-        // is a widget below, and run views carry neither.
-        if !face::run_view(rec.as_ref()) {
+        if face::run_view(rec.as_ref()) {
+            // A run view carries neither the idle battery icon nor the
+            // diagnostics BAT row, so this marker is the only place a runner can
+            // learn the cell is going — on a device whose mode picker exists to
+            // trade fixes for hours, and whose runs last days.
+            face::apply_run_marker(
+                &mut rows,
+                page,
+                overdue,
+                battery,
+                ui_frame::hero_row_cells(band, hero.as_deref().unwrap_or("")),
+            );
+        } else {
+            // The diagnostics face's numeric battery read-out; the idle-face
+            // icon is a widget below.
             face::apply_battery_row(&mut rows, idle_view, battery);
             // A run interrupted by a reset (or a failed commit) is on flash and
             // pullable, but nothing else on the idle face distinguishes that boot
@@ -359,50 +408,14 @@ pub async fn screen_task(
             let (course, panel) = unwrap!(nav_draw.as_ref());
             widgets::draw_nav_panel(&mut fb, course, panel, nav_alert.as_deref());
         }
-        // The 2x hero (elapsed time, or the glance page's headline metric)
-        // overlays rows 0-1 (drawn after them so it wins); the state tag in
-        // row 0 sits top-right, clear of the digits. An active on-run alert
-        // takes the hero band over for its TTL — an inverse-video banner
-        // ("! DRINK" light on a dark band) is the most unmissable treatment
-        // the panel gives, and the alert engine only emits during a run, so
-        // the idle face never loses its title. The manual QNH re-zero's
-        // transient feedback: the same inverse banner over the idle face's
-        // title band for its TTL. Idle-only — the gesture only exists on the
-        // idle face, and a run view's hero band belongs to the run's own
-        // alerts.
-        let rezero_banner =
-            ui_frame::rezero_banner_status(rezero, uptime_s, face::run_view(rec.as_ref()))
-                .map(elevation::rezero_banner);
-        // Computed ahead of the hero: the armed-stop banner spans two rows,
-        // and the glance pages' three-row numeral hero would otherwise peek
-        // out under it (a two-row hero is covered outright).
-        let stop_pending =
-            ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
-        // The mid-hold grid prompt, re-gated here on this task's own view of the
-        // state: the published flag says a hold is between the tiers, and only
-        // this side knows whether the surface under it still has a grid to
-        // escalate into by the time the frame composes.
-        let hold_prompt = btn3_hold
-            && button::btn3_hold_prompt(ui_frame::record_state(rec.as_ref()), grid.is_some());
-        // `hero_band`'s `stop_pending` input is really "a two-row banner is about
-        // to cover the band", which is what suppresses the three-row numeral hero
-        // whose bottom third would otherwise peek out below it. Both banners span
-        // the same two rows, so both owe it.
-        let band_covered = stop_pending || hold_prompt;
-        // The pages whose body spares row 2 headline their number in the 32x48 +
-        // 16x32 numeral faces over rows 0-2, with the label and state tag on row
-        // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
-        // and so does a value too wide to render whole at the taller size.
-        let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
-        match ui_frame::hero_band(HeroFrame {
-            alert: alert.is_some(),
-            rezero_banner: rezero_banner.is_some(),
-            hero: hero.is_some(),
-            numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
-            fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
-            stop_pending: band_covered,
-            page,
-        }) {
+        // The hero (elapsed time, or the glance page's headline metric) overlays
+        // the top rows, drawn after them so it wins; the state tag sits
+        // top-right, clear of the digits. An active on-run alert takes the band
+        // over for its TTL — an inverse-video banner ("! DRINK" light on a dark
+        // band) is the most unmissable treatment the panel gives, and the alert
+        // engine only emits during a run, so the idle face never loses its
+        // title. Which band this is was decided above, with the row layout.
+        match band {
             HeroBand::AlertBanner => {
                 if let Some(a) = alert {
                     fb.draw_banner_2x(0, &alerts::banner(a));

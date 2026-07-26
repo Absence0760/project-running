@@ -302,6 +302,52 @@ fn preview_run_dashboard() {
 }
 
 #[test]
+fn preview_run_view_low_battery_marker() {
+    // The only battery signal a run view has: a standing right-anchored tag on
+    // the hero band's blank lower row, clear of the elapsed digits.
+    use watch_core::alerts::FuelOverdue;
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    let mut rows = face::page_rows(
+        Page::Dashboard,
+        Some(&sample_fix()),
+        Some(150),
+        Some(&snap),
+        None,
+        NavView::NoCourse,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    let hero = face::page_hero(Page::Dashboard, Some(150), Some(&snap), None);
+    face::apply_run_marker(
+        &mut rows,
+        Page::Dashboard,
+        FuelOverdue::None,
+        Some(12),
+        ui_frame::hero_row_cells(
+            ui_frame::HeroBand::MedNumHero,
+            hero.as_deref().unwrap_or(""),
+        ),
+    );
+    for (r, row) in rows.iter().enumerate() {
+        widgets::ruled_dashboard_row(&mut fb, r, row);
+    }
+    draw_hero(&mut fb, Page::Dashboard, hero.as_deref());
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Dashboard, u64::MAX),
+    );
+    show(
+        "run dashboard: standing 12% battery marker beside the hero",
+        &fb,
+    );
+}
+
+#[test]
 fn preview_inverse_alert_banner() {
     // An on-run alert takes the hero band over as an inverse-video banner —
     // light text knocked out of a solid band, the loudest treatment the 1-bit
