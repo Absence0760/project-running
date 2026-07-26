@@ -389,16 +389,17 @@ pub async fn screen_task(
         // whose bottom third would otherwise peek out below it. Both banners span
         // the same two rows, so both owe it.
         let band_covered = stop_pending || hold_prompt;
-        // The Distance / Pace glance pages headline their number in the 32x48 +
-        // 16x32 numeral faces (their face reserves rows 0-2 + puts the label and
-        // state tag on row 3); every other numeral hero takes the 16x32 medium
-        // face over rows 0-1, where a label on row 2 rules the taller band out.
+        // The pages whose body spares row 2 headline their number in the 32x48 +
+        // 16x32 numeral faces over rows 0-2, with the label and state tag on row
+        // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
+        // and so does a value too wide to render whole at the taller size.
         let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
         match ui_frame::hero_band(HeroFrame {
             alert: alert.is_some(),
             rezero_banner: rezero_banner.is_some(),
             hero: hero.is_some(),
             numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
+            fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
             stop_pending: band_covered,
             page,
         }) {

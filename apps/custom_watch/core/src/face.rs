@@ -219,6 +219,105 @@ pub fn apply_fuel_marker(rows: &mut [Row; ROWS], overdue: FuelOverdue, page: Pag
     let _ = write!(row, "{:>width$}", tag, width = COLS);
 }
 
+/// Rows the hero band covers on a page whose body needs row 2 — the 16x32
+/// medium numeral face, the same cell size as the doubled text font.
+pub const HERO_BAND_ROWS: usize = 2;
+
+/// Rows the hero band covers on a page whose body leaves row 2 free — the
+/// 32x48 numeral face, half again as tall.
+pub const TALL_HERO_BAND_ROWS: usize = 3;
+
+/// The first row `page`'s own text may write: everything above it belongs to
+/// the hero band (or, on [`Page::Nav`], to nothing — that page owns its whole
+/// grid and draws its title on row 0).
+///
+/// Three rows buys the 32x48 numeral face over the 16x32 medium one, which is
+/// the difference between a number a rested runner reads and one a runner at
+/// hour 60 reads by headlamp. Which pages can afford it is a property of their
+/// layout, not a preference: the zones / splits / roadbook / predictor /
+/// training-paces pages fill rows 3..7 with a ladder, the pacer and
+/// back-to-start pages label row 3, and the fuel / gear / elevation pages hand
+/// row 3 (or rows 3..8) to a `watch_render` overlay — so on all of those, row 2
+/// is the only row their header can have. The rest give it up, and their
+/// header moves down to row 3 alongside the state tag, which is where the
+/// Distance / Pace glances have carried theirs since § 292.
+///
+/// Matched exhaustively so a new page cannot compile until it is classified,
+/// and pinned against the builders by `every_page_leaves_its_hero_band_blank`
+/// — a page cannot claim three rows and then write into them.
+pub fn body_top_row(page: Page) -> usize {
+    match page {
+        // The map panel owns rows 1..6 and the title rides row 0.
+        Page::Nav => 0,
+        Page::Distance
+        | Page::Pace
+        | Page::Lap
+        | Page::GuidedRun
+        | Page::CutoffEta
+        | Page::TrainingLoad
+        | Page::DistanceBand
+        | Page::GearWear
+        | Page::Fitness => TALL_HERO_BAND_ROWS,
+        Page::Dashboard
+        | Page::Zones
+        | Page::Splits
+        | Page::Pacer
+        | Page::RacePredictor
+        | Page::Roadbook
+        | Page::Fuel
+        | Page::ElevationProfile
+        | Page::TrainingPaces
+        | Page::BackToStart
+        | Page::Recap
+        | Page::Streaks
+        | Page::RunStats
+        | Page::PrRecency
+        | Page::PlanReplan
+        | Page::PlanAdaptive
+        | Page::Readiness
+        | Page::Goals
+        | Page::TurnCue
+        | Page::RouteSimplify
+        | Page::AutoEffort
+        | Page::RouteElev
+        | Page::RaceDay => HERO_BAND_ROWS,
+    }
+}
+
+/// Whether `page` gives its hero the three-row band (and therefore the 32x48
+/// numeral face, if the value fits it — see [`crate::ui_frame::hero_band`]).
+pub fn tall_hero(page: Page) -> bool {
+    body_top_row(page) == TALL_HERO_BAND_ROWS
+}
+
+/// Cells the widest run-state tag needs. `AUTO` — a genuinely stationary
+/// stretch — is the long one; see [`rec_tag`].
+pub const TAG_COLS: usize = 4;
+
+/// Whether the run-state tag is drawn this frame: `REC` blinks at ~1 Hz while
+/// the face is animating, so a live recording is unmistakable, and every other
+/// tag holds steady (an animation the runner cannot act on is a per-second
+/// redraw for nothing).
+fn tag_shown(tag: &str, uptime_s: u32, animate: bool) -> bool {
+    tag != "REC" || !animate || uptime_s.is_multiple_of(2)
+}
+
+/// Right-anchor the run-state tag onto `row`, padding out from whatever the
+/// row already holds.
+///
+/// Refuses rather than truncates when the row's own text has taken the cells
+/// the tag needs — the [`apply_battery_row`] rule, and here it matters more: a
+/// half-written `RE` is not a degraded `REC`, it is a tag that reads as some
+/// other state. `the_state_tag_survives_on_every_page` asserts no page ever
+/// hits the refusal, so a header that grows into the tag's cells fails the
+/// suite instead of silently dropping the recording indicator.
+fn write_tag(row: &mut Row, tag: &str) {
+    if row.len() + 1 + tag.len() > COLS {
+        return;
+    }
+    let _ = write!(row, "{:>width$}", tag, width = COLS - row.len());
+}
+
 /// The run dashboard's field grid, for the hairline dividers `watch_render`
 /// rules between its rows: fields start at [`DASH_FIELD_TOP_ROW`] (the rows
 /// above are the hero band), the NOW / GAP pace pair shares
@@ -788,11 +887,13 @@ fn trackback_distance(tb: Option<&TrackbackView>) -> Option<f32> {
 const UNFED_REASON_ROW: usize = 4;
 const UNFED_HINT_ROW: usize = 5;
 
-/// Write a page's empty body: the headline label with the absent-value marker,
-/// then the reason and its remedy taken from the one sanctioned vocabulary
-/// ([`crate::unfed`]) rather than spelled per page.
-fn write_unfed(rows: &mut [Row; ROWS], label: &str, why: Unfed) {
-    let _ = write!(rows[2], "{label} --");
+/// Write a page's empty body: the headline label with the absent-value marker
+/// on the page's own header row ([`body_top_row`] — a three-row hero band still
+/// owns rows 0-2 when the value is an honest `--`), then the reason and its
+/// remedy taken from the one sanctioned vocabulary ([`crate::unfed`]) rather
+/// than spelled per page.
+fn write_unfed(rows: &mut [Row; ROWS], page: Page, label: &str, why: Unfed) {
+    let _ = write!(rows[body_top_row(page)], "{label} --");
     let _ = write!(rows[UNFED_REASON_ROW], "{}", why.reason());
     if let Some(hint) = why.hint() {
         let _ = write!(rows[UNFED_HINT_ROW], "{hint}");
@@ -827,20 +928,14 @@ fn glance(
     // Rows 0-2 hold the numeral-face hero band (the app draws the single-metric
     // pages' headline from the generated 32x48/16x32 bignum faces — the glance a
     // runner takes at arm's length); the state tag rides the label row's right
-    // cells instead, clear of the digits, blinking for REC while `animate` is on
-    // and steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-
+    // cells instead, clear of the digits.
     let label = match metric {
         GlanceMetric::Distance => "DISTANCE  KM",
         GlanceMetric::Pace => "AVG PACE  /KM",
     };
     let _ = write!(rows[3], "{}", label);
-    if tag_shown {
-        while rows[3].len() < COLS - tag.len() {
-            let _ = rows[3].push(' ');
-        }
-        let _ = write!(rows[3], "{}", tag);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[3], tag);
     }
 
     let (h, m, s) = hms(snap.elapsed_s);
@@ -904,11 +999,11 @@ fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
     row
 }
 
-/// The lap glance page: the current lap's running time up large in the rows-0-1
-/// hero (drawn by the app from [`page_hero`] via [`split_row`]), the lap number
-/// as the label, then last-lap split / lap distance / HR / GPS as 1x context —
-/// what a runner checks right after pressing Lap (or hearing the 1 km auto-lap
-/// tick over): which lap am I on, and what did the last one take.
+/// The lap glance page: the current lap's running time up large in the
+/// rows-0-2 hero (drawn by the app from [`page_hero`] via [`split_row`]), the
+/// lap number as the label, then last-lap split / lap distance / HR / GPS as 1x
+/// context — what a runner checks right after pressing Lap (or hearing the 1 km
+/// auto-lap tick over): which lap am I on, and what did the last one take.
 #[allow(clippy::too_many_arguments)]
 fn lap_glance(
     fix: Option<&Fix>,
@@ -921,14 +1016,10 @@ fn lap_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
-    // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    let _ = write!(rows[3], "LAP {}", snap.lap.min(9999));
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[3], tag);
     }
-
-    let _ = write!(rows[2], "LAP {}", snap.lap.min(9999));
 
     match snap.last_lap {
         Some(lap) => {
@@ -977,9 +1068,8 @@ fn zones_glance(
 
     // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
     // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match hr_bpm {
@@ -1026,13 +1116,12 @@ fn pacer_glance(
 
     // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
     // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match snap.pacer {
-        None => write_unfed(&mut rows, "PACER", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Pacer, "PACER", Unfed::NotSynced),
         Some(status) => {
             let verdict = match status.verdict {
                 PaceVerdict::Ahead => "AHEAD",
@@ -1130,17 +1219,11 @@ fn guided_run_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-1 hold the 2x hero; only the state tag rides row 0.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     match snap.guided_run {
-        None => write_unfed(&mut rows, "GUIDED", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::GuidedRun, "GUIDED", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(
-                rows[2],
+                rows[3],
                 "{:<8}{} MIN",
                 "GUIDED",
                 (v.duration_s / 60).min(999)
@@ -1161,6 +1244,9 @@ fn guided_run_glance(
                 split_row(v.remaining_s).as_str()
             );
         }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::GuidedRun)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -1203,13 +1289,12 @@ fn race_predictor_glance(
 
     // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
     // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match &snap.race_prediction {
-        None => write_unfed(&mut rows, "PREDICT", Unfed::NeedOneKm),
+        None => write_unfed(&mut rows, Page::RacePredictor, "PREDICT", Unfed::NeedOneKm),
         Some(pred) => {
             let from_km = (pred.anchor.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[2], "{:<9}{:.2} KM", "FROM", from_km);
@@ -1225,7 +1310,7 @@ fn race_predictor_glance(
 }
 
 /// The cut-off ETA glance page: the margin to the next cut-off up large in the
-/// rows-0-1 hero (drawn by [`page_hero`] via [`signed_split`] — `+` slack, `-`
+/// rows-0-2 hero (drawn by [`page_hero`] via [`signed_split`] — `+` slack, `-`
 /// over the limit), then the verdict word, the distance to the cut-off, and the
 /// projected arrival clock, then the flat pace still needed to make it. Honest
 /// inactive states: unfed when no course cut-offs are loaded, "NO CUTOFF AHEAD"
@@ -1243,16 +1328,11 @@ fn cutoff_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
-    // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     match snap.cutoff {
-        None => write_unfed(&mut rows, "CUTOFF", Unfed::NotSynced),
-        Some(eta) if !eta.has_cutoff => write_unfed(&mut rows, "CUTOFF", Unfed::NoCutoffAhead),
+        None => write_unfed(&mut rows, Page::CutoffEta, "CUTOFF", Unfed::NotSynced),
+        Some(eta) if !eta.has_cutoff => {
+            write_unfed(&mut rows, Page::CutoffEta, "CUTOFF", Unfed::NoCutoffAhead)
+        }
         Some(eta) => {
             let verdict = match eta.status {
                 CutoffEtaStatus::On => "ON",
@@ -1260,7 +1340,9 @@ fn cutoff_glance(
                 CutoffEtaStatus::Behind => "BEHIND",
                 CutoffEtaStatus::Unknown => "--",
             };
-            let _ = write!(rows[2], "{:<14}{}", "CUTOFF", verdict);
+            // The verdict sits one gap past the label rather than out at column
+            // 14: the header row now shares its right cells with the state tag.
+            let _ = write!(rows[3], "{:<8}{}", "CUTOFF", verdict);
 
             if eta.distance_to_m < 1000.0 {
                 let _ = write!(rows[4], "{:<5}{:.0} M", "TO", eta.distance_to_m.max(0.0));
@@ -1288,6 +1370,9 @@ fn cutoff_glance(
             );
         }
     }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::CutoffEta)], tag);
+    }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
@@ -1306,9 +1391,8 @@ fn splits_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     // The pace-distribution histogram fills rows 3..8 as pixel bars the app
@@ -1337,21 +1421,19 @@ fn training_load_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     match snap.training_stress {
-        None => write_unfed(&mut rows, "LOAD", Unfed::NeedDistance),
+        None => write_unfed(&mut rows, Page::TrainingLoad, "LOAD", Unfed::NeedDistance),
         Some(_) => {
-            let _ = write!(rows[2], "LOAD  POINTS");
+            let _ = write!(rows[3], "LOAD  POINTS");
             let km = (snap.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<7}{:.2} KM", "DIST", km);
             let (h, m, s) = hms(snap.moving_s);
             let _ = write!(rows[5], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
             let _ = write!(rows[6], "{:<8}{}", "ROLLING", Unfed::NotSynced.reason());
         }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::TrainingLoad)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -1372,19 +1454,20 @@ fn distance_band_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     let km = (snap.distance_m / 1000.0).min(9999.99);
     match snap.band {
         None => {
-            write_unfed(&mut rows, "BAND", Unfed::NoRaceBand);
+            write_unfed(&mut rows, Page::DistanceBand, "BAND", Unfed::NoRaceBand);
             let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
         }
         Some(b) => {
-            let _ = write!(rows[2], "{:<11}{}", "BAND", b.label);
+            // The ported catalogue spells its labels for the web ("Marathon");
+            // every other word on this panel is upper case, so the face raises
+            // them here rather than diverging the shared table.
+            let _ = write!(rows[3], "{:<6}", "BAND");
+            for c in b.label.chars() {
+                let _ = rows[3].push(c.to_ascii_uppercase());
+            }
             let lo = (b.min_m / 1000.0) as u32;
             match b.max_m {
                 Some(max) => {
@@ -1396,6 +1479,9 @@ fn distance_band_glance(
             }
             let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
         }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::DistanceBand)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -1428,13 +1514,12 @@ fn roadbook_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match &snap.roadbook {
-        None => write_unfed(&mut rows, "ROADBOOK", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Roadbook, "ROADBOOK", Unfed::NotSynced),
         Some(rb) => {
             let _ = write!(rows[2], "{:<11}{} CP", "ROADBOOK", rb.total.min(99));
             for i in 0..(rb.upcoming_len as usize).min(rb.upcoming.len()) {
@@ -1472,13 +1557,12 @@ fn fuel_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match &snap.fuel {
-        None => write_unfed(&mut rows, "FUEL", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Fuel, "FUEL", Unfed::NotSynced),
         Some(f) => {
             let _ = write!(rows[2], "FUEL  TO NEXT AID");
             match f.carry {
@@ -1519,13 +1603,8 @@ fn gear_wear_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     match snap.gear {
-        None => write_unfed(&mut rows, "GEAR", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::GearWear, "GEAR", Unfed::NotSynced),
         Some(g) => {
             let word = match g.status {
                 GearWearStatus::Untracked => "UNTRACKED",
@@ -1533,7 +1612,9 @@ fn gear_wear_glance(
                 GearWearStatus::Due => "DUE",
                 GearWearStatus::Worn => "WORN",
             };
-            let _ = write!(rows[2], "{:<11}{}", "GEAR", word);
+            // One gap past the label, not out at column 11: the header row now
+            // shares its right cells with the state tag.
+            let _ = write!(rows[3], "{:<6}{}", "GEAR", word);
             match g.fraction {
                 Some(fr) => {
                     let _ = write!(rows[4], "{:<6}{} %", "WEAR", ((fr * 100.0) as u32).min(999));
@@ -1543,6 +1624,9 @@ fn gear_wear_glance(
                 }
             }
         }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::GearWear)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -1572,13 +1656,12 @@ fn training_paces_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match snap.training_paces {
-        None => write_unfed(&mut rows, "PACES", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::TrainingPaces, "PACES", Unfed::NotSynced),
         Some(tp) => {
             let (gm, gs) = (
                 (tp.goal_pace_s_per_km / 60).min(99),
@@ -1628,16 +1711,13 @@ fn fitness_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
-    }
-
     match snap.fitness {
-        None => write_unfed(&mut rows, "FITNESS", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Fitness, "FITNESS", Unfed::NotSynced),
         Some(f) => {
             let word = f.recovery.map(recovery_word).unwrap_or("--");
-            let _ = write!(rows[2], "{:<11}{}", "FITNESS", word);
+            // One gap past the label, not out at column 11: the header row now
+            // shares its right cells with the state tag.
+            let _ = write!(rows[3], "{:<8}{}", "FITNESS", word);
             match f.vo2_max {
                 Some(v) => {
                     let _ = write!(rows[4], "{:<9}{}", "VO2 MAX", (v as u32).min(999));
@@ -1647,6 +1727,9 @@ fn fitness_glance(
                 }
             }
         }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::Fitness)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -1673,13 +1756,17 @@ fn elevation_profile_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     if snap.elev_profile.len == 0 {
-        write_unfed(&mut rows, "ELEV", Unfed::AwaitingBaro);
+        write_unfed(
+            &mut rows,
+            Page::ElevationProfile,
+            "ELEV",
+            Unfed::AwaitingBaro,
+        );
     } else {
         // rows 3..8 are the sparkline cell the app draws into.
         match elev {
@@ -1711,9 +1798,8 @@ fn summary_frame(
     animate: bool,
     mode: GnssMode,
 ) {
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
 }
@@ -1732,7 +1818,7 @@ fn recap_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.recap {
-        None => write_unfed(&mut rows, "RECAP", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Recap, "RECAP", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{} RUNS", "RECAP", v.runs.min(9999));
             let _ = write!(rows[4], "{:<7}{} KM", "DIST", v.distance_km);
@@ -1756,7 +1842,7 @@ fn streaks_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.streaks {
-        None => write_unfed(&mut rows, "STREAK", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Streaks, "STREAK", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{}D", "CURRENT", v.current_days.min(9999));
             let _ = write!(rows[4], "{:<7}{}D", "BEST", v.best_days.min(9999));
@@ -1778,7 +1864,7 @@ fn run_stats_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.run_stats {
-        None => write_unfed(&mut rows, "STATS", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::RunStats, "STATS", Unfed::NotSynced),
         Some(v) => {
             let (h, m, s) = hms(v.moving_s);
             let _ = write!(rows[2], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
@@ -1803,7 +1889,7 @@ fn pr_recency_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.pr_recency {
-        None => write_unfed(&mut rows, "PR AGE", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::PrRecency, "PR AGE", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "PR AGE");
             let d = v.days_ago;
@@ -1837,7 +1923,7 @@ fn plan_replan_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.plan_replan {
-        None => write_unfed(&mut rows, "REPLAN", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::PlanReplan, "REPLAN", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<8}{}", "REPLAN", v.changes);
             let _ = write!(rows[4], "{:<8}{}", "MAKE-UP", v.make_ups);
@@ -1862,7 +1948,7 @@ fn plan_adaptive_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.plan_adaptive {
-        None => write_unfed(&mut rows, "ADAPT", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::PlanAdaptive, "ADAPT", Unfed::NotSynced),
         Some(v) => {
             let trend = match v.trend {
                 0 => "ON TRACK",
@@ -1904,7 +1990,7 @@ fn readiness_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.readiness {
-        None => write_unfed(&mut rows, "READY", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Readiness, "READY", Unfed::NotSynced),
         Some(v) => {
             let band = match v.band {
                 0 => "LOW",
@@ -1931,7 +2017,7 @@ fn goals_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.goals {
-        None => write_unfed(&mut rows, "GOAL", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::Goals, "GOAL", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{}%", "GOAL", v.percent.min(100));
             let _ = write!(
@@ -1962,7 +2048,7 @@ fn turn_cue_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.turn_cue {
-        None => write_unfed(&mut rows, "TURN", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::TurnCue, "TURN", Unfed::NotSynced),
         Some(v) => {
             let dir = match v.direction {
                 0 => "STRAIGHT",
@@ -1995,7 +2081,7 @@ fn route_simplify_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.route_simplify {
-        None => write_unfed(&mut rows, "COURSE", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::RouteSimplify, "COURSE", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{} PTS", "COURSE", v.points);
             let _ = write!(rows[4], "{:<7}{} KM", "LENGTH", v.distance_km);
@@ -2017,7 +2103,7 @@ fn auto_effort_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.auto_effort {
-        None => write_unfed(&mut rows, "SEGMENTS", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::AutoEffort, "SEGMENTS", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "SEGMENTS");
             let _ = write!(rows[4], "{:<7}{}/{}", "MATCH", v.matched, v.considered);
@@ -2045,9 +2131,14 @@ fn route_elev_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.route_elev.as_ref() {
-        None => write_unfed(&mut rows, "CRS ELEV", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::RouteElev, "CRS ELEV", Unfed::NotSynced),
         Some(v) if v.len == 0 => {
-            write_unfed(&mut rows, "CRS ELEV", Unfed::NoCourseElevation);
+            write_unfed(
+                &mut rows,
+                Page::RouteElev,
+                "CRS ELEV",
+                Unfed::NoCourseElevation,
+            );
             let _ = write!(
                 rows[5],
                 "{} PTS {}.{} KM",
@@ -2077,7 +2168,7 @@ fn race_day_glance(
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
     match snap.race_day {
-        None => write_unfed(&mut rows, "RACE", Unfed::NotSynced),
+        None => write_unfed(&mut rows, Page::RaceDay, "RACE", Unfed::NotSynced),
         Some(v) => {
             let d = v.days_until;
             let _ = write!(rows[2], "RACE DAY");
@@ -2119,11 +2210,9 @@ fn nav_page(
 
     // Row 0: the page label left, the state tag right — blinking for REC while
     // `animate` is on like every other run page. No hero: the panel owns rows 1+.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "NAV{:>width$}", tag, width = COLS - 3);
-    } else {
-        let _ = write!(rows[0], "NAV");
+    let _ = write!(rows[0], "NAV");
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     let info = &mut rows[NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS];
@@ -2185,9 +2274,8 @@ fn back_to_start_glance(
 
     // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
     // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     match trackback_distance(tb) {
@@ -2314,9 +2402,8 @@ fn dashboard(
     // recording-state tag lives here, pinned top-right clear of the hero digits.
     // Blink it at ~1 Hz for REC so a live recording is unmistakable; PAU / FIN
     // (and any state once `animate` is off) stay steady-on.
-    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
-    if tag_shown {
-        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
     }
 
     let km = (snap.distance_m / 1000.0).min(9999.99);
@@ -2682,6 +2769,15 @@ mod tests {
         super::face_icons(fix, hr_bpm, rec, uptime_s, GnssMode::Performance)
     }
 
+    /// The header row a three-row-hero page renders: its label, then the state
+    /// tag right-anchored at the panel edge. Spelled here rather than as a
+    /// literal per assertion so the padding can't be miscounted by hand.
+    fn header(label: &str, tag: &str) -> Row {
+        let mut row = Row::new();
+        let _ = write!(row, "{}{:>width$}", label, tag, width = COLS - label.len());
+        row
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn page_rows(
         page: Page,
@@ -2947,8 +3043,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_page_fits_the_grid_active_and_inactive() {
+    /// An active run with every page's data present, at extreme values — the
+    /// widest each row and hero can render.
+    fn fed_snapshot() -> Snapshot {
         use crate::record::{
             AutoEffortView, ElevProfileView, FitnessView, FuelCarryView, FuelView, GoalsView,
             GuidedRunView, PlanAdaptiveView, PlanReplanView, PrRecencyView, RaceDayView,
@@ -2956,7 +3053,6 @@ mod tests {
             RouteSimplifyView, RunStatsView, StreaksView, TrainingPacesView, TurnCueView,
             ELEV_PROFILE_CAP,
         };
-        // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.moving_s = 999 * 3600 + 59 * 60 + 59;
@@ -3075,6 +3171,12 @@ mod tests {
             days_until: -9999,
             feasible: 1,
         });
+        rec
+    }
+
+    #[test]
+    fn every_page_fits_the_grid_active_and_inactive() {
+        let rec = fed_snapshot();
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
@@ -3134,6 +3236,95 @@ mod tests {
                 );
             }
             p = p.next();
+        }
+    }
+
+    /// The guard that makes [`body_top_row`] a contract rather than a comment.
+    /// A page that claims the three-row band and then writes a header on row 2
+    /// would have that header erased by the hero the app draws over rows 0-2 —
+    /// invisibly, since nothing else reads those cells. Walked over the fed and
+    /// the unfed body of every page, and over an animating and a steady frame,
+    /// because the state tag moves with the header.
+    #[test]
+    fn every_page_leaves_its_hero_band_blank() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let e = elev(99_999.0, 99_999.0, 99_999.0);
+        for rec in [&fed, &unfed] {
+            for animate in [true, false] {
+                let mut p = Page::default();
+                loop {
+                    let rows = page_rows(
+                        p,
+                        Some(&fix()),
+                        Some(150),
+                        Some(rec),
+                        Some(&e),
+                        NavView::NoCourse,
+                        None,
+                        42,
+                        animate,
+                    );
+                    for (r, row) in rows.iter().take(body_top_row(p)).enumerate() {
+                        let text = row.as_str().trim();
+                        if tall_hero(p) {
+                            // A tall page moved its tag down to the header row,
+                            // so nothing at all may ride the band.
+                            assert_eq!(
+                                text, "",
+                                "page {p:?} writes into its own hero band (animate {animate})"
+                            );
+                        } else {
+                            assert!(
+                                text.is_empty() || (r == 0 && rec_tag(rec) == Some(text)),
+                                "page {p:?} row {r} holds more than the state tag: {text:?} \
+                                 (animate {animate})"
+                            );
+                        }
+                    }
+                    p = p.next();
+                    if p == Page::default() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`write_tag`] refuses rather than truncates, so a header that grew into
+    /// the tag's cells would drop the recording indicator instead of corrupting
+    /// it. Silent either way on the wrist — so it is asserted here, on the
+    /// widest body every page can render.
+    #[test]
+    fn the_state_tag_survives_on_every_page() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let e = elev(99_999.0, 99_999.0, 99_999.0);
+        for rec in [&fed, &unfed] {
+            let mut p = Page::default();
+            loop {
+                let rows = page_rows(
+                    p,
+                    Some(&fix()),
+                    Some(150),
+                    Some(rec),
+                    Some(&e),
+                    NavView::NoCourse,
+                    None,
+                    // An even second, so the blinking REC tag is in its shown
+                    // half of the cycle.
+                    42,
+                    true,
+                );
+                assert!(
+                    rows.iter().any(|r| r.as_str().ends_with("REC")),
+                    "page {p:?} dropped the run-state tag"
+                );
+                p = p.next();
+                if p == Page::default() {
+                    break;
+                }
+            }
         }
     }
 
@@ -3893,8 +4084,9 @@ mod tests {
                 .as_str(),
             "2:05"
         );
-        assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "LAP 4");
+        // Rows 0-2 are the tall hero band; the label row carries the tag.
+        assert_eq!(rows[0].as_str(), "");
+        assert_eq!(rows[3], header("LAP 4", "REC"));
         assert_eq!(rows[4].as_str(), "LAST 4:58");
         assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
@@ -3921,7 +4113,7 @@ mod tests {
             2,
             true,
         );
-        assert_eq!(rows[2].as_str(), "LAP 1");
+        assert_eq!(rows[3], header("LAP 1", "REC"));
         assert_eq!(rows[4].as_str(), "LAST --");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(
@@ -4509,8 +4701,8 @@ mod tests {
                 .as_str(),
             "12:45"
         );
-        assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "GUIDED  30 MIN");
+        assert_eq!(rows[0].as_str(), "");
+        assert_eq!(rows[3], header("GUIDED  30 MIN", "REC"));
         assert_eq!(rows[4].as_str(), "CUE     3/8");
         assert_eq!(rows[5].as_str(), "NEXT    2:30");
         assert_eq!(rows[6].as_str(), "LEFT    12:45");
@@ -4575,7 +4767,7 @@ mod tests {
                 .as_str(),
             "--"
         );
-        assert_eq!(rows[2].as_str(), "GUIDED --");
+        assert_eq!(rows[3], header("GUIDED --", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
@@ -5151,8 +5343,8 @@ mod tests {
                 .as_str(),
             "+30:00"
         );
-        assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "CUTOFF        ON");
+        assert_eq!(rows[0].as_str(), "");
+        assert_eq!(rows[3], header("CUTOFF  ON", "REC"));
         assert_eq!(rows[4].as_str(), "TO   10.00 KM");
         assert_eq!(rows[5].as_str(), "ETA  1:30:00");
         assert_eq!(rows[6].as_str(), "NEED 6:00 /KM");
@@ -5181,7 +5373,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "CUTOFF --");
+        assert_eq!(rows[3], header("CUTOFF --", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
@@ -5238,7 +5430,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "CUTOFF        BEHIND");
+        assert_eq!(rows[3], header("CUTOFF  BEHIND", "REC"));
         assert_eq!(rows[6].as_str(), "NEED --");
     }
 
@@ -5404,8 +5596,8 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "FITNESS    SWEET");
+        assert_eq!(rows[0].as_str(), "");
+        assert_eq!(rows[3], header("FITNESS SWEET", "REC"));
         assert_eq!(rows[4].as_str(), "VO2 MAX  52");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         assert_eq!(
@@ -5442,7 +5634,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "FITNESS    REST");
+        assert_eq!(rows[3], header("FITNESS REST", "REC"));
         assert_eq!(rows[4].as_str(), "VO2 MAX  --");
         assert_eq!(
             page_hero(Page::Fitness, None, Some(&rec), None)
@@ -5466,7 +5658,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "FITNESS --");
+        assert_eq!(rows[3], header("FITNESS --", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
@@ -5947,7 +6139,7 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[2].as_str(), "LOAD  POINTS");
+        assert_eq!(rows[3], header("LOAD  POINTS", "REC"));
         assert_eq!(rows[4].as_str(), "DIST   12.00 KM");
         assert_eq!(rows[5].as_str(), "MOVING 1:02:05");
         assert_eq!(rows[6].as_str(), "ROLLING NOT SYNCED");

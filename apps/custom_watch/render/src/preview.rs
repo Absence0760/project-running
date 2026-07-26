@@ -141,6 +141,7 @@ fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>) {
         rezero_banner: false,
         hero: hero.is_some(),
         numeral: hero.is_some_and(ui_frame::numeral_hero),
+        fits_tall: hero.is_some_and(ui_frame::tall_hero_fits),
         stop_pending: false,
         page,
     }) {
@@ -164,6 +165,26 @@ fn the_numeral_glyph_set_matches_the_generated_tables() {
         watch_core::ui_frame::NUMERAL_GLYPHS,
         sharp_mip::bignum::BIGNUM_GLYPHS.as_slice()
     );
+}
+
+/// The other half of that pin. `ui_frame` budgets the three-row hero in text
+/// cells so it need not know the panel's pixel width, which only works while a
+/// cell really is one glyph's width divided by the font cell — the same split
+/// this crate can see both sides of. A regenerated face at a different cell
+/// size would otherwise let an over-wide hero back through the fit rule and
+/// truncate on the panel.
+#[test]
+fn the_numeral_cell_widths_match_the_generated_faces() {
+    let cell_w = WIDTH / sharp_mip::TEXT_COLS;
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_CELLS,
+        sharp_mip::bignum::BIGNUM_WIDTH / cell_w
+    );
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_MED_CELLS,
+        sharp_mip::bignum::BIGNUM_MED_WIDTH / cell_w
+    );
+    assert_eq!(watch_core::face::COLS, sharp_mip::TEXT_COLS);
 }
 
 fn show(name: &str, fb: &Framebuffer) {
@@ -316,9 +337,9 @@ fn preview_distance_and_pace_bignum_heroes() {
 }
 
 #[test]
-fn preview_lap_page_medium_numeral_hero() {
-    // The two-row band: the lap time in the 16x32 medium face, with the lap
-    // number's label on row 2 the taller band would have erased.
+fn preview_lap_page_tall_numeral_hero() {
+    // The lap page gave row 2 up to the hero band, so its split renders in the
+    // three-row treatment with the lap number + state tag on row 3.
     let snap = base_snapshot();
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::Lap, Some(&snap), Some(132));
@@ -326,7 +347,32 @@ fn preview_lap_page_medium_numeral_hero() {
         &mut fb,
         watch_core::statusbar::page_indicator(Page::Lap, u64::MAX),
     );
-    show("lap glance: 2:30 in the medium numeral face", &fb);
+    show("lap glance: 2:30 in the tall numeral hero", &fb);
+}
+
+#[test]
+fn preview_a_hero_too_wide_for_the_tall_face() {
+    // The fallback the fit rule buys: a multi-day guided run's remaining time
+    // needs 24 of the panel's 21 cells at the tall size, so it drops to the
+    // medium face and shows the number whole rather than losing its last digit
+    // off the right edge.
+    let mut snap = base_snapshot();
+    snap.guided_run = Some(watch_core::record::GuidedRunView {
+        cue_index: 12,
+        cue_count: 40,
+        next_cue_in_s: Some(300),
+        duration_s: 200 * 3600,
+        remaining_s: 100 * 3600 + 5 * 60 + 30,
+    });
+    let hero = face::page_hero(Page::GuidedRun, None, Some(&snap), None).unwrap();
+    assert!(!ui_frame::tall_hero_fits(&hero), "{hero}");
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::GuidedRun, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::GuidedRun, u64::MAX),
+    );
+    show("guided run: 100:05:30 falls back to the medium face", &fb);
 }
 
 #[test]
@@ -377,10 +423,7 @@ fn preview_cutoff_eta_page() {
         &mut fb,
         watch_core::statusbar::page_indicator(Page::CutoffEta, u64::MAX),
     );
-    show(
-        "cut-off eta: +1:05:30 margin in the medium numeral face",
-        &fb,
-    );
+    show("cut-off eta: +1:05:30 margin in the tall numeral hero", &fb);
 }
 
 #[test]
