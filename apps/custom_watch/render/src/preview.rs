@@ -445,7 +445,7 @@ fn preview_route_elev_page() {
     draw_face(&mut fb, Page::RouteElev, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::RouteElev, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::RouteElev, u64::MAX),
     );
     widgets::draw_route_elev_overlay(&mut fb, &snap);
     show("route elevation: course profile + position marker", &fb);
