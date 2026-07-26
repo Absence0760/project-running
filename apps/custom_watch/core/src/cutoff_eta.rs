@@ -118,7 +118,7 @@ pub fn next_cutoff_eta(
     };
 
     let pace = match recent_pace_s_per_km {
-        Some(p) if p > 0.0 && !stale => p,
+        Some(p) if p.is_finite() && p > 0.0 && !stale => p,
         _ => {
             return CutoffEta {
                 has_cutoff: true,
@@ -281,14 +281,29 @@ mod tests {
 
     #[test]
     fn nan_pace_is_unknown() {
-        // The `p > 0.0` guard rejects NaN (NaN > 0.0 is false), so a corrupt pace
-        // withholds the ETA rather than fabricating a NaN "on pace" arrival.
+        // A corrupt pace withholds the ETA rather than fabricating a NaN
+        // "on pace" arrival.
         let legs = [HALFWAY, FINISH_GATE];
         let e = eta(10000.0, Some(f64::NAN), false, &legs);
         assert_eq!(e.status, CutoffEtaStatus::Unknown);
         assert_eq!(e.projected_arrival_elapsed_s, None);
         assert_eq!(e.margin_s, None);
         assert!(e.has_cutoff);
+    }
+
+    #[test]
+    fn infinite_pace_is_unknown() {
+        // The canonical web helper gates on `Number.isFinite`, which rejects both
+        // infinities; a bare `p > 0.0` would have let `+inf` through to saturate
+        // the projected arrival into a plausible-looking integer.
+        let legs = [HALFWAY, FINISH_GATE];
+        for p in [f64::INFINITY, f64::NEG_INFINITY] {
+            let e = eta(10000.0, Some(p), false, &legs);
+            assert_eq!(e.status, CutoffEtaStatus::Unknown);
+            assert_eq!(e.projected_arrival_elapsed_s, None);
+            assert_eq!(e.margin_s, None);
+            assert!(e.has_cutoff);
+        }
     }
 
     #[test]
