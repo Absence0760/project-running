@@ -152,20 +152,20 @@ pub struct WatchSettings {
     /// auto-sources it from its own zone on every push. Present = the home
     /// clock renders local time (its label flips UTC → LOCAL); absent = the
     /// clock stays honestly UTC-labelled. Plausibility guard:
-    /// [`WatchSettings::plausible_tz_offset_min`].
+    /// [`plausible_tz_offset_min`].
     pub tz_offset_min: Option<i16>,
 }
 
-impl WatchSettings {
-    /// The pushed timezone offset when it is a plausible UTC offset, `None`
-    /// when absent or out of range — ignored, never clamped, the same
-    /// reject-don't-repair discipline as the QNH guard: a clamped clock would
-    /// be confidently wrong, an unshifted one is honestly UTC-labelled.
-    pub fn plausible_tz_offset_min(&self) -> Option<i16> {
-        self.tz_offset_min
-            .filter(|m| (-TZ_OFFSET_LIMIT_MIN..=TZ_OFFSET_LIMIT_MIN).contains(m))
-    }
+/// The pushed timezone offset when it is a plausible UTC offset, `None` when
+/// absent or out of range — ignored, never clamped, the same
+/// reject-don't-repair discipline as the QNH guard
+/// ([`crate::record_cadence::plausible_sea_level_pa`]): a clamped clock would
+/// be confidently wrong, an unshifted one is honestly UTC-labelled.
+pub fn plausible_tz_offset_min(tz_offset_min: Option<i16>) -> Option<i16> {
+    tz_offset_min.filter(|m| (-TZ_OFFSET_LIMIT_MIN..=TZ_OFFSET_LIMIT_MIN).contains(m))
+}
 
+impl WatchSettings {
     /// Decode a settings frame. Returns `None` on a bad magic, an unknown
     /// version, a failed CRC, an unknown presence bit, a buffer too short for
     /// the fields the flags claim, or trailing bytes past the declared fields —
@@ -1006,11 +1006,7 @@ mod tests {
     #[test]
     fn out_of_range_tz_offset_is_ignored_not_clamped() {
         for ok in [0i16, 345, -570, TZ_OFFSET_LIMIT_MIN, -TZ_OFFSET_LIMIT_MIN] {
-            let s = WatchSettings {
-                tz_offset_min: Some(ok),
-                ..Default::default()
-            };
-            assert_eq!(s.plausible_tz_offset_min(), Some(ok));
+            assert_eq!(plausible_tz_offset_min(Some(ok)), Some(ok));
         }
         for bad in [
             TZ_OFFSET_LIMIT_MIN + 1,
@@ -1018,12 +1014,12 @@ mod tests {
             i16::MAX,
             i16::MIN,
         ] {
-            let s = WatchSettings {
-                tz_offset_min: Some(bad),
-                ..Default::default()
-            };
-            assert_eq!(s.plausible_tz_offset_min(), None, "must ignore {bad}");
+            assert_eq!(
+                plausible_tz_offset_min(Some(bad)),
+                None,
+                "must ignore {bad}"
+            );
         }
-        assert_eq!(WatchSettings::default().plausible_tz_offset_min(), None);
+        assert_eq!(plausible_tz_offset_min(None), None);
     }
 }
