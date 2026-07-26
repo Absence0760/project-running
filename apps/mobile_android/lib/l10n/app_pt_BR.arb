@@ -549,6 +549,8 @@
   "addRunPickerNoMatch": "Nenhuma rota corresponde a \"{query}\"",
   "addRunPickerNoRoute": "Sem rota",
   "runDetailDnfBadge": "DNF",
+  "runDetailIncompleteBadge": "Incompleta",
+  "runDetailIncompleteTooltip": "Seu relógio reiniciou no meio da corrida. Estes totais são apenas o que ele havia registrado até aquele ponto, não a atividade inteira.",
   "runDetailEditTooltip": "Editar corrida",
   "runDetailShareTooltip": "Compartilhar corrida",
   "runDetailMoreTooltip": "Mais",

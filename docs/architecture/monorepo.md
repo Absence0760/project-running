@@ -403,7 +403,7 @@ Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every
 | `build-web` | ubuntu-latest | `npm run build --workspace=apps/web` — SvelteKit compile check, no deploy |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` — keeps `docs/product/parity.md` honest |
 | `build-watch-wear` | ubuntu-latest | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
-| `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`) |
+| `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`); build + `clippy -D warnings` run over three feature sets — default, `ble` (`--no-default-features`), and the sim set — so the off-by-default builds can't rot |
 | `build-mobile-android` | ubuntu-latest | `flutter build appbundle` |
 | `twin-parity` | ubuntu-latest | `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` + `test/` |
 | `schema-codegen-drift` | ubuntu-latest | re-run `gen_dart_models.dart` (regenerates `db_rows.dart` + `DbRows.kt`), fail if working tree dirty |

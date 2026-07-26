@@ -25,6 +25,21 @@ pub enum Icon {
 }
 
 impl Icon {
+    /// Every icon, in table order. Generated with the table so the invariant
+    /// tests in `tests/icons.rs` sweep a new SVG the moment it is added here
+    /// rather than a hand-kept list that can silently fall behind.
+    pub const ALL: [Icon; 9] = [
+        Icon::Stopwatch,
+        Icon::Footsteps,
+        Icon::Heart,
+        Icon::HeartSmall,
+        Icon::Mountain,
+        Icon::Vert,
+        Icon::Satellite,
+        Icon::SatSearch0,
+        Icon::SatSearch1,
+    ];
+
     /// The packed 16x16 bitmap for this icon.
     pub fn bitmap(self) -> &'static [[u8; ICON_BYTES_PER_ROW]; ICON_SIZE] {
         match self {

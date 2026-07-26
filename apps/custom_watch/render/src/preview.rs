@@ -394,6 +394,30 @@ fn preview_page_grid() {
 }
 
 #[test]
+fn preview_elevation_profile_page() {
+    // The recorder's banked altitude series over its own glance page, so the
+    // sparkline is shown against the vert-totals context row it sits under.
+    let elevation: [i32; 18] = [
+        1600, 1612, 1648, 1705, 1782, 1851, 1884, 1902, 1868, 1801, 1744, 1712, 1690, 1701, 1748,
+        1690, 1632, 1604,
+    ];
+    let mut snap = base_snapshot();
+    let mut view = watch_core::record::ElevProfileView::empty();
+    view.samples[..elevation.len()].copy_from_slice(&elevation);
+    view.len = elevation.len();
+    snap.elev_profile = view;
+
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::ElevationProfile, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::ElevationProfile, u32::MAX),
+    );
+    widgets::draw_elev_profile_overlay(&mut fb, &snap);
+    show("elevation profile: banked altitude sparkline", &fb);
+}
+
+#[test]
 fn preview_mini_profile() {
     // A synthetic climb-then-descend altitude series — the shape a future glance
     // page would show for a route's elevation profile, auto-scaled to the cell.
@@ -414,6 +438,138 @@ fn preview_mini_profile() {
         },
     );
     show("mini-profile: elevation climb + descent", &fb);
+}
+
+/// A course whose bounding box is far larger than one auto-zoom window — the
+/// shape every real ultra course has, so the panel windows around the runner
+/// and most of the polyline falls outside the panel rows.
+fn long_course() -> watch_core::course::Course {
+    use watch_core::course::CoursePoint;
+    let pt = |lat_deg, lon_deg| CoursePoint { lat_deg, lon_deg };
+    watch_core::course::Course::from_points(&[
+        pt(40.080, -105.215),
+        pt(40.094, -105.204),
+        pt(40.100, -105.198),
+        pt(40.104, -105.186),
+        pt(40.118, -105.180),
+    ])
+    .unwrap()
+}
+
+fn draw_nav_page(fb: &mut Framebuffer, nav: NavView, alert: Option<&str>) {
+    let course = long_course();
+    let snap = base_snapshot();
+    let fix = sample_fix();
+    let rows = face::page_rows(
+        Page::Nav,
+        Some(&fix),
+        None,
+        Some(&snap),
+        None,
+        nav,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    widgets::draw_page_indicator(
+        fb,
+        watch_core::statusbar::page_indicator(Page::Nav, u32::MAX),
+    );
+    let panel = watch_core::nav_map::nav_panel(
+        &course,
+        Some((fix.lat_deg, fix.lon_deg)),
+        widgets::NAV_PANEL_GEOM,
+    );
+    widgets::draw_nav_panel(fb, &course, &panel, alert);
+}
+
+#[test]
+fn preview_nav_map_panel() {
+    // An auto-zoomed long course: the window keeps the runner mid-panel and the
+    // legs running off it are clipped at the panel rows, so the NAV title row
+    // above and the along-course / GPS rows below stay legible.
+    let status = watch_core::course::NavStatus {
+        along_m: 18_400.0,
+        off_m: 12.0,
+        alerting: false,
+        next_turn: None,
+    };
+    let mut fb = Framebuffer::new();
+    draw_nav_page(&mut fb, NavView::Status(status), None);
+    show("nav: auto-zoomed course + position marker", &fb);
+
+    let off_course = NavView::Status(watch_core::course::NavStatus {
+        off_m: 180.0,
+        alerting: true,
+        ..status
+    });
+    let mut fb2 = Framebuffer::new();
+    draw_nav_page(
+        &mut fb2,
+        off_course,
+        face::nav_alert_row(off_course).as_deref(),
+    );
+    show("nav: off-course banner over the breadcrumb", &fb2);
+}
+
+/// A trackback view walked north-east away from its start, one accepted fix a
+/// second — a crumb with a real shape, a bearing back to the start and a fresh
+/// heading, so the preview shows the map and the arrow together.
+fn sample_trackback() -> watch_core::trackback::TrackbackView {
+    use watch_core::record::METRES_PER_DEGREE_LAT;
+    let (lat0, lon0): (f64, f64) = (40.1, -105.2);
+    let lon_per_m = 1.0 / (METRES_PER_DEGREE_LAT * lat0.to_radians().cos());
+    let mut tb = watch_core::trackback::Trackback::new();
+    for i in 0..=60u32 {
+        let along = i as f64 * 12.0;
+        // An outbound east leg that turns north halfway, so the crumb is a dog-leg.
+        let (e, n) = if along < 360.0 {
+            (along, 0.0)
+        } else {
+            (360.0, along - 360.0)
+        };
+        tb.on_point(lat0 + n / METRES_PER_DEGREE_LAT, lon0 + e * lon_per_m, i);
+    }
+    tb.view()
+}
+
+#[test]
+fn preview_back_to_start_page() {
+    let snap = base_snapshot();
+    let view = sample_trackback();
+    let mut fb = Framebuffer::new();
+    let rows = face::page_rows(
+        Page::BackToStart,
+        Some(&sample_fix()),
+        None,
+        Some(&snap),
+        None,
+        NavView::NoCourse,
+        Some(&view),
+        60,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    if let Some(hero) = face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)) {
+        fb.draw_text_2x(0, 0, &hero);
+    }
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::BackToStart, u32::MAX),
+    );
+    widgets::draw_trackback_overlay(&mut fb, &view, 60);
+    show("back to start: breadcrumb map + relative arrow", &fb);
 }
 
 #[test]

@@ -72,6 +72,7 @@ mod imp {
     use defmt::*;
     use embassy_futures::select::{select, Either};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
     use embassy_sync::signal::Signal;
     use embassy_time::{Duration, Instant, Ticker, Timer};
     use heapless::Vec;
@@ -85,13 +86,12 @@ mod imp {
         IdentityResolutionKey, MasterId, SecurityMode,
     };
     use nrf_softdevice::{raw, Softdevice};
+    use watch_core::ble_sync::{self, CHUNK_QUEUE_DEPTH, MANIFEST_CAP};
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
-    use watch_core::run_store::{
-        ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
-    };
+    use watch_core::link;
+    use watch_core::run_store::ChunkRequest;
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
-    use watch_core::{flash_store, link};
 
     use crate::run_flash::SharedStore;
     use crate::state;
@@ -109,10 +109,6 @@ mod imp {
     /// worst-case frame is ~160 bytes; see `link.rs`). Also the run-chunk
     /// notify payload cap — a chunk reply never exceeds one notification.
     const FRAME_CAP: usize = 244;
-
-    /// Manifest characteristic value: a `ManifestHeader` + one `ManifestEntry`
-    /// per slot. `flash_store::SLOT_COUNT` runs fit in one read/notify.
-    const MANIFEST_CAP: usize = MANIFEST_HEADER_LEN + flash_store::SLOT_COUNT * MANIFEST_ENTRY_LEN;
 
     // Every characteristic requires an encrypted (paired) link — issue #598.
     // `justworks` = Security Mode 1 Level 2: the SoftDevice rejects any read,
@@ -146,8 +142,8 @@ mod imp {
         )]
         run_chunk: Vec<u8, FRAME_CAP>,
         /// Settings push. The phone WRITES a `settings::WatchSettings` frame; the
-        /// watch decodes it and publishes to `state::SETTINGS`, which the record
-        /// task applies to the recorder + alert engine. Write-only — no readback.
+        /// watch decodes it and queues it on `state::SETTINGS`, which the record
+        /// task drains into the recorder + alert engine. Write-only — no readback.
         #[characteristic(
             uuid = "d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
             write,
@@ -392,23 +388,13 @@ mod imp {
         .services_128(ServiceList::Complete, &[LINK_SERVICE_UUID.to_le_bytes()])
         .build();
 
-    /// Build the manifest characteristic value: header (run count + the watch
-    /// uptime anchor) followed by one entry per finished run.
+    /// Build the manifest characteristic value from the store's current run list.
     async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
         // Clamp each run's start to the current uptime so a run recovered from a
         // prior power cycle can't advertise a start ahead of `uptime_s` and date
         // in the future on the phone (run_flash::manifest_at).
         let entries = store.lock().await.manifest_at(uptime_s);
-        let mut buf: Vec<u8, MANIFEST_CAP> = Vec::new();
-        let header = ManifestHeader {
-            run_count: entries.len() as u8,
-            watch_uptime_s: uptime_s,
-        };
-        let _ = buf.extend_from_slice(&header.encode());
-        for e in entries.iter() {
-            let _ = buf.extend_from_slice(&e.encode());
-        }
-        buf
+        ble_sync::encode_manifest(&entries, uptime_s)
     }
 
     /// Advertise → serve → re-advertise on disconnect, forever. While
@@ -430,7 +416,6 @@ mod imp {
         // persist across reconnects so a fresh connection sees last-known data.
         let mut fix_rx = unwrap!(state::FIX.receiver());
         let mut elev_rx = unwrap!(state::ELEVATION.receiver());
-        let settings_sender = state::SETTINGS.sender();
         let course_sender = state::COURSE.sender();
         let mut latest = None;
         let mut elev = None;
@@ -488,11 +473,12 @@ mod imp {
             }
 
             // Shared between the GATT event handler (sets them on CCCD write /
-            // signals a chunk request) and the serve loop (reads them). The
-            // executor is single-threaded, so a Cell + a Signal suffice.
+            // enqueues a chunk request) and the serve loop (reads them). The
+            // executor is single-threaded, so a Cell + a Channel suffice.
             let notifications = Cell::new(false);
             let manifest_notify = Cell::new(false);
-            let chunk_req: Signal<CriticalSectionRawMutex, ChunkRequest> = Signal::new();
+            let chunk_req: Channel<CriticalSectionRawMutex, ChunkRequest, CHUNK_QUEUE_DEPTH> =
+                Channel::new();
             // Reassembles a chunked course push over this connection. Interior
             // mutability (RefCell) keeps the GATT handler a plain `Fn`, like the
             // Cell/Signal above; the single-threaded executor makes it sound.
@@ -509,7 +495,14 @@ mod imp {
                         manifest_notify.set(on);
                     }
                     LinkServiceEvent::RunChunkWrite(bytes) => match ChunkRequest::decode(&bytes) {
-                        Some(req) => chunk_req.signal(req),
+                        Some(req) => {
+                            if chunk_req.try_send(req).is_err() {
+                                warn!(
+                                    "ble: chunk queue full, dropped run {=u32} @ {=u32}",
+                                    req.run_seq, req.offset
+                                );
+                            }
+                        }
                         None => warn!("ble: bad chunk request ({=usize} B)", bytes.len()),
                     },
                     LinkServiceEvent::RunChunkCccdWrite { notifications: on } => {
@@ -518,19 +511,18 @@ mod imp {
                     LinkServiceEvent::SettingsWrite(bytes) => match WatchSettings::decode(&bytes) {
                         Some(s) => {
                             info!("ble: settings push ({=usize} B)", bytes.len());
-                            settings_sender.send(Some(s));
+                            if state::SETTINGS.try_send(s).is_err() {
+                                warn!("ble: settings queue full, push refused");
+                            }
                         }
                         None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
                     },
                     LinkServiceEvent::CourseWrite(bytes) => {
-                        // Chunk framing: offset(2, u16 LE) | payload. Feed the
-                        // reassembler; on completion decode + publish the course.
-                        if bytes.len() < 2 {
-                            warn!("ble: short course chunk ({=usize} B)", bytes.len());
-                        } else {
-                            let offset = u16::from_le_bytes([bytes[0], bytes[1]]) as usize;
+                        // Feed the reassembler; on completion decode + publish
+                        // the course.
+                        if let Some((offset, payload)) = ble_sync::parse_course_chunk(&bytes) {
                             let mut asm = course_asm.borrow_mut();
-                            match asm.push(offset, &bytes[2..]) {
+                            match asm.push(offset, payload) {
                                 CoursePush::Complete => match course_store::decode(asm.frame()) {
                                     Some(course) => {
                                         info!(
@@ -551,6 +543,8 @@ mod imp {
                                     warn!("ble: bad course chunk @ {=usize}", offset)
                                 }
                             }
+                        } else {
+                            warn!("ble: short course chunk ({=usize} B)", bytes.len());
                         }
                     }
                 },
@@ -559,7 +553,7 @@ mod imp {
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
                 loop {
-                    match select(ticker.next(), chunk_req.wait()).await {
+                    match select(ticker.next(), chunk_req.receive()).await {
                         Either::First(()) => {
                             let now_s = Instant::now().as_secs() as u32;
                             if let Some(fix) = fix_rx.try_changed() {
@@ -600,7 +594,8 @@ mod imp {
                             // Clamp to the notify MTU; read_chunk further clamps
                             // to the blob end. An empty reply means unknown run
                             // or past-the-end, so the phone isn't left waiting.
-                            let want = (req.len as usize).min(FRAME_CAP);
+                            let want =
+                                ble_sync::chunk_notify_len(req.len, FRAME_CAP as u16) as usize;
                             let mut scratch = [0u8; FRAME_CAP];
                             let n = {
                                 let mut guard = store.lock().await;

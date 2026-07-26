@@ -17,9 +17,9 @@ import '../lib/sim_watch_sync.dart';
 /// `sim_watch_sync_test.dart`), served in chunks so the screen's Sync action
 /// can be exercised without a BLE radio.
 final _goldenBlob = _hex(
-  '54524b31010000000700000029000000b8ced91718ff40c100000000703f7800'
+  '54524b31030100000700000029000000b8ced91718ff40c100000000703f7800'
   'e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000'
-  '454e4431d2040000580200006c02000077fdfebd',
+  '454e4431d2040000580200006c02000039e3c091',
 );
 
 List<int> _hex(String s) => [
@@ -37,7 +37,7 @@ class _FakeSyncTransport implements WatchBleTransport {
   Stream<List<int>> get chunkStream => _chunks.stream;
   @override
   Future<List<int>> readManifest() async => [
-        0x4d, 0x41, 0x4e, 0x31, 0x01, 0x01, 0x00, 0x00, // MAN1 v1 count=1
+        0x4d, 0x41, 0x4e, 0x31, 0x03, 0x01, 0x00, 0x00, // MAN1 v3 count=1
         0x81, 0x02, 0x00, 0x00, // watch_uptime = 641
         0x07, 0x00, 0x00, 0x00, // run_seq 7
         0x54, 0x00, 0x00, 0x00, // size 84
@@ -289,13 +289,18 @@ void main() {
       await tester.pump();
 
       expect(transport.settingsWrites, hasLength(1));
-      expect(transport.settingsWrites.single, hasLength(28));
+      expect(transport.settingsWrites.single, hasLength(32));
       expect(transport.settingsWrites.single.sublist(0, 7),
-          [0x53, 0x45, 0x54, 0x31, 0x02, 0x0f, 0x01]);
-      // The injected +5:45 phone zone rides the frame's tail as i16 LE 345.
+          [0x53, 0x45, 0x54, 0x31, 0x03, 0x0f, 0x01]);
+      // The injected +5:45 phone zone rides as i16 LE 345, ahead of the v3
+      // crc32 trailer.
       expect(
-        transport.settingsWrites.single.sublist(26),
+        transport.settingsWrites.single.sublist(26, 28),
         [0x59, 0x01],
+      );
+      expect(
+        transport.settingsWrites.single.sublist(28),
+        [0xcd, 0x42, 0xf9, 0x05],
       );
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });

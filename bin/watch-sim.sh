@@ -32,6 +32,12 @@
 #
 # Requires: renode (workstation CLAUDE.md § Specific tool decisions) and
 # defmt-print (cargo install defmt-print --locked). No board, no probe-rs.
+#
+# For a non-interactive run that asserts on the output instead of streaming it
+# (what CI's sim-firmware job runs), see apps/custom_watch/sim/ci_smoke.py — it
+# drives this script and reads its combined output, so the contract it depends
+# on is the "Streaming defmt logs" line, the WATCH_SIM_LATEST pointer, and the
+# run dir's monitor.port / renode.log / defmt.raw.
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"

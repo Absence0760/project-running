@@ -16,6 +16,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`nav_project`] — the `nav` task's per-fix composition over [`course`] +
+//!   [`turn_cues`]: biased projection, the off-course latch's two edges, and
+//!   the next turn ahead
 //! - [`cutoff_eta`] — live next-cutoff ETA: on / tight / behind at the nearest
 //!   cutoff ahead from distance-along-route + recent pace, honest `Unknown` on
 //!   a stale fix (port of web `runs/live_cutoff_eta.ts`)
@@ -30,9 +33,21 @@
 //!   (port of web `routes/distance_bands.ts`)
 //! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
 //!   (port of web `gear/gear_wear.ts`)
-//! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`elevation`] — barometric altitude, the cumulative-vert accumulator, and
+//!   the quantised gate deciding which 1 Hz sample is worth waking a consumer
+//!   for ([`elevation::should_publish`])
+//! - [`baro_rezero`] — the `baro` task's manual QNH re-zero decision: the
+//!   barometer's own freshness gate over [`elevation::rezero_reference`], the
+//!   two distinct refusals, and the reading an applied snap publishes past the
+//!   gate
+//! - [`gnss_cadence`] — the `gps` task's fix-publication cadence: which
+//!   interval is owed in the current record state + mode, the throttle gate,
+//!   and whether a published fix earns the receiver a nap
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
+//! - [`gnss_signal`] — the GSV/GSA side channel: the satellites-in-view + fix
+//!   mode pair behind the idle signal meter, and the bar-count gate that stops
+//!   a repeated GSV group waking a consumer several times a second
 //! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
 //!   targets over a week or month window (port of web `training/goals.ts`; the
 //!   localStorage persistence + UUID id + i18n period label are web-only, dates
@@ -43,6 +58,8 @@
 //!   `(prev, now]` tick dispatcher that fires each timed cue (port of web
 //!   `training/guided_runs.ts`; cue/title text carried as i18n key identifiers,
 //!   the TTS speaking + `GuidedTranslate` injection are web/mobile-only)
+//! - [`hr_drain`] — the `hr` task's FIFO drain: PPG / ambient / unknown slot
+//!   demux with the ambient latch, plus the between-window wait
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
@@ -57,6 +74,9 @@
 //! - [`battery`] — 1S LiPo supply millivolts → percent (piecewise-linear
 //!   discharge curve + the plausibility band the battery task parks on), plus
 //!   the gauge icon's fill fraction and low-state threshold
+//! - [`battery_sense`] — the `battery` task's SAADC-counts → millivolts
+//!   conversion and the one gate that both parks the task at boot and blanks
+//!   the gauge mid-stream
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
@@ -73,13 +93,42 @@
 //!   around a 75 baseline + the dominant-contributor advice (port of web
 //!   `training/readiness.ts`; notes/advice carried as enums, not English)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
+//! - [`record_cadence`] — the `record` task's decisions around that machine:
+//!   the live-run tick gate, the mid-run flash-checkpoint cadence, the
+//!   fix → stored-track-point shaping, and the pushed-QNH plausibility guard
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping
+//! - [`input_flow`] — the rest of the button task's decisions: how a BTN3 hold
+//!   resolves tier by tier, the in-grid cursor step, the page a press lands on,
+//!   and where a dismissed run leaves the view
+//! - [`ui_frame`] — per-frame screen decisions: the animation window, the hero
+//!   band's precedence, which rows may be skipped, and whether a time-based
+//!   refresh is still owed
+//! - [`nav_map`] — the Nav page's map panel: whole-course fit vs the
+//!   runner-centred auto-zoom window, the position marker, and the repaint key
 //! - [`run_store`] — on-device run wire format + BLE sync framing
 //! - [`settings`] — phone→watch settings frame (max HR / pacer goal / gear /
 //!   HR-zone ceiling) decoded into the recorder's settings-sync hooks
+//! - [`settings_frame`] — where one pushed settings frame ends and the next
+//!   begins on the phone link's delimiter-less pipe: the idle-gap boundary, the
+//!   one-maximal-frame buffer, and the oversize latch (the pure half of
+//!   `app/src/tasks/phone.rs`'s `settings_rx`)
+//! - [`settings_apply`] — the fan-out that frame drives: each present field
+//!   routed to its sink as one typed effect, exhaustive by construction so a
+//!   newly-added field cannot be silently dropped
+//! - [`settings_queue`] — the depth of the frame queue between that decode and
+//!   that fan-out, and why a delta-carrying frame may never be coalesced into a
+//!   latest-value slot
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
+//! - [`flash_plan`] — which slot a commit / checkpoint lands in and the erase +
+//!   write range it implies, where a chunk request reads from, and the boot
+//!   recovery scan over a [`flash_plan::SlotReader`] (the pure decisions the
+//!   `app/src/run_flash.rs` driver wraps around [`flash_store`])
+//! - [`ble_sync`] — `run_manifest` value framing, the `run_chunk` notify bound
+//!   and request-queue depth, and the `course` write's offset header (the pure
+//!   half of the GATT characteristics `app/src/tasks/ble.rs` serves, which the
+//!   Renode sim cannot exercise at all)
 //! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
 //!   estimate (port of web `training/training_load.ts`)
 //! - [`age_grade`] — age-graded performance % for a standard-distance effort
@@ -192,7 +241,10 @@ pub mod alerts;
 pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
+pub mod baro_rezero;
 pub mod battery;
+pub mod battery_sense;
+pub mod ble_sync;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
@@ -207,21 +259,28 @@ pub mod face;
 pub mod finisher_certificate;
 pub mod fitness;
 pub mod fix;
+pub mod flash_plan;
 pub mod flash_store;
 pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
+pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;
+pub mod gnss_signal;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;
+pub mod hr_drain;
 pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
+pub mod input_flow;
 pub mod link;
 pub mod live_freshness;
 pub mod locale_defaults;
+pub mod nav_map;
+pub mod nav_project;
 pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
@@ -238,6 +297,7 @@ pub mod race_predictor;
 pub mod readiness;
 pub mod recap;
 pub mod record;
+pub mod record_cadence;
 pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;
@@ -251,6 +311,9 @@ pub mod run_stats;
 pub mod run_store;
 pub mod segments;
 pub mod settings;
+pub mod settings_apply;
+pub mod settings_frame;
+pub mod settings_queue;
 pub mod statusbar;
 pub mod streaks;
 pub mod track_projection;
@@ -258,3 +321,4 @@ pub mod trackback;
 pub mod training_load;
 pub mod training_paces;
 pub mod turn_cues;
+pub mod ui_frame;

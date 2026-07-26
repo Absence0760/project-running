@@ -4230,3 +4230,320 @@ Reported as suspected-timing; it reproduced on 32 of 60 iterations of a save-the
 **Decided (2026-07-25).** `writeStringAtomic` leaves `<file>.<n>.tmp` behind when the process dies between flush and rename. `OfflineSyncStore` grew a sweep for these; `LocalRunStore`, `LocalRouteStore` and `WatchIngestQueue` did not, and every listing in those three filters on `.json` — so an orphan holding a full GPS track, a route's full waypoint list, or a queued watch run was invisible, never pruned, and (unlike the per-row stores, which are cleared outright on sign-out) survived an account change.
 
 The sweep now lives in `core_models/atomic_io.dart`, next to the writer that creates the orphans, and all four cold-load paths call it. The one-hour age gate is load-bearing and must not be lowered: it is what keeps the sweep from deleting the temp file of a genuinely concurrent writer, since the background-sync isolate holds its own store instances over the same directories. For the same reason the sweep belongs at cold load, never in a write path. `atomic_io.dart` is a pure Dart package with no logger, so failures go out through an `onError` callback the Flutter callers wire to `debugPrint`.
+
+---
+
+## 314. The custom-watch verification ladder becomes a four-rung contract, and tier-1 bench verification gets a checklist — neither changes § 82's DoD
+
+**Decided (2026-07-25).** Two related gaps in the custom_watch research effort, closed together in [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md).
+
+**(a) The verification vocabulary is now defined.** The docs and `apps/custom_watch/README.md` have used an informal four-rung ladder — *host-tested* → *build-verified* → *sim-verified* → *bench-verified* — since the Renode sim landed, without ever defining it anywhere; the string "bench-verified" did not appear in the workspace README at all, despite being the rung 13 of the 43 [`roadmap.md`](../custom_watch/roadmap.md) parity-backlog items are explicitly waiting on. Each rung now states what evidence earns it, what it does **not** prove, and what may be claimed in docs at it, including the honesty limits that were previously scattered across per-batch notes: the Renode sim cannot run the proprietary S140 SoftDevice, so **BLE can never be sim-verified** and jumps build → bench directly ([§ 210](#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default)); the sim models no current at all, so every power figure in the workspace is a derivation; the sensor models are pinned to what the drivers *believe* about the parts, not to silicon, so they verify the path and not the register semantics; and the DK's ~30 mA idle from its onboard J-Link + LEDs makes whole-device power readings useless as a baseline ([§ 83](#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem)). Three rules ride along: a rung is **not inherited** (editing a bench-verified module drops it to whatever the new evidence supports), a rung claim must name its evidence, and a lower rung may never stand in for a higher one in a doc line.
+
+**(b) Tier-1 bench verification is now a checklist, not a vibe.** Before this, tier 1 had a completion bar (§ 82 — one outdoor run syncing end-to-end) and *no* falsifiable hardware-side standard: no fix-reliability threshold, no legibility check, no per-subsystem current criterion, no storage-boundary check. Tier 2 has real targets (≥ 24 hr GPS battery, 100 % outdoor fix reliability); tier 1 had none, so "did bring-up work?" would have been decided by feel the day the parts arrive. The new doc carries a per-bring-up-step checklist (steps 0 and 3–7 plus the five § 83 PPK2 rigs) where every item is a yes/no or a number. The concrete criteria are **derived from figures already in the docs**, not invented — the ≤ 60 s cold TTFF, the 1 Hz fix rate, the ~25 Hz HR sampling, the ≥ 8 h continuous-GPS soak and the printed-chassis deliverable all come from [`prototyping.md`](../custom_watch/prototyping.md)'s tier-1 "what working means"; the sync-row match, wrist-worn run and pace-on-panel items come from § 82 itself; the 253-point cap, 4 × 4 KiB slots, 256-point course cap, 40 m/20 m off-course latch, 0.5 m/s auto-pause and the press-timing tiers come from the firmware's own constants. Where no existing doc justified a number it is marked **(open value)** to be set from the first real measurement rather than invented — warm-start TTFF, acceptable dropout rate, HR accuracy tolerance, off-axis legibility, AGC convergence, and any tier-1 sleep-current target.
+
+**What this deliberately does not do.** **§ 82's Definition of Done is unchanged and remains the only tier-1 completion bar.** The checklist governs how bench verification is *conducted and claimed*, not whether tier 1 is done: one qualifying outdoor run completes tier 1 even with checklist items open, and an open or failed item is a recorded finding and a tier-2 input, not an un-completion. Nor does it import tier-2's targets, add kill criteria (§ 82 declined to set them and that holds), or expand scope past § 71's owner-personal boundary — the doc carries an explicit "what tier 1 does not have to hit" section naming the ≥ 24 hr battery, 100 % fix reliability, dual-band GNSS, in-case RF, IPX7, multi-run and OTA/maps/ANT+ exclusions so the checklist cannot be read as scope creep. A third section enumerates the figures the checklist exists to settle — the ~110/180/220 h GNSS-mode battery projections (derivations that already *assume* a receiver power-down never run on a receiver), the HR duty-cycle saving deliberately excluded from them, the battery-percent resting-discharge curve, the checkpoint flash-wear estimate, the bench-prototype capacity limits (253-point run cap, 256-point course cap, 64-lap budget), the sensor-tuning constants flagged for on-device calibration, and the one structural assumption that is not a number at all: that the MAX86177 retains its register file across `shutdown()`, which the firmware's wake path depends on and no silicon has confirmed.
+
+Don't re-litigate by:
+
+- **Treating a red checklist item as blocking tier-1 completion.** It isn't. § 82 is the gate; this is the instrumentation.
+- **Promoting a checklist item into the DoD** because it looks important. That is the goal-post drift § 82 was written to prevent — the same reason it pinned the bar at one run.
+- **Filling in an (open value) with a plausible-looking figure** rather than a measurement. An invented threshold is worse than an admitted gap: it reads as measured to the next person.
+- **Claiming a rung the evidence doesn't support** — in particular using "sim-verified" to tick a parity-backlog item, or reading "compile-verified" BLE as anything other than "the dependency stack links".
+
+Pinning: [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md) holds the rung definitions + the checklist; [`roadmap.md`](../custom_watch/roadmap.md) links it from the per-step bring-up, Definition-of-Done, power-instrumentation and parity-backlog sections; [`tier1_log.md`](../custom_watch/tier1_log.md) is where bench evidence lands. `apps/custom_watch/README.md` is the per-step status surface and should point at this doc for what its rung words mean.
+
+---
+
+## 315. custom_watch CI gates all three firmware feature sets, not just the default build
+
+**Decided (2026-07-25).** The `build-firmware` job built and clippy-gated only the **default** feature set, so two of the three real builds were defended by nothing but a per-batch manual run: the `ble` set (`--no-default-features --features ble`, the S140 SoftDevice build, mutually exclusive with the default `single-core-cs` per [§ 210](#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default)) and the sim set (`sim-autostart,sim-buttons,sim-course,dev-blink`, what `bin/watch-sim.sh` actually builds). The job now builds **and** runs `clippy -D warnings` against all three.
+
+This was not hypothetical: the `ble` build had already drifted. It emitted `warning: constant FRAME_GAP is never used`, which `-D warnings` would have failed had anything run it. The root cause was not dead code — `FRAME_GAP` *is* used by `settings_rx`, and deleting it would have broken the default build. `main` gates its whole phone-link spawn block on `#[cfg(not(feature = "ble"))]`, so under `ble` the entire `phone` module is unreachable and rustc happened to flag the const first (the `#[embassy_executor::task]`-generated items don't trip the lint). The fix is a module-inner `#![cfg(not(feature = "ble"))]` in `tasks/phone.rs`, matching the reachability that already existed in `main`. Per-item `#[cfg]` would have left six unused imports failing the same gate.
+
+The general rule this sets: **a feature set nobody builds in CI is not build-verified**, whatever a doc says about it. That matters more than usual here because [§ 314](#314-the-custom-watch-verification-ladder-becomes-a-four-rung-contract-and-tier-1-bench-verification-gets-a-checklist--neither-changes--82s-dod)'s ladder makes *build-verified* a claimable rung with named evidence, and the `ble` path can never climb higher than it before the dev kit exists — the Renode sim cannot run the proprietary SoftDevice. Build-verification is the only automated evidence that path will ever have, so it has to be real.
+
+Don't re-litigate by:
+
+- **Adding a feature to `app/Cargo.toml` without adding it to the CI matrix.** An ungated feature set rots silently, exactly as `ble` did.
+- **Silencing a feature-gated warning with `#[allow(dead_code)]` or an underscore rename.** Both were available for `FRAME_GAP` and both would have hidden the real finding, which was that a whole module is unreachable in that build.
+- **Reading a green default build as "the firmware compiles".** It compiles *one* of three ways.
+
+Pinning: `.github/workflows/ci.yml` § `build-firmware`; the canonical command list lives in [`apps/custom_watch/local_testing.md`](../../apps/custom_watch/local_testing.md) § CI parity.
+
+---
+
+## 316. The six recorded firmware defects are fixed, and three of the fixes are posture calls worth naming
+
+**Decided (2026-07-25).** The `app/`-logic extraction (§ 314's batch) found six defects and deliberately left each pinned by a test asserting the wrong behaviour rather than fixing them inside a refactor diff. All six are now fixed, each flipping its pinning test on purpose. Three of the fixes chose between defensible alternatives, so the reasoning is recorded here rather than left to be re-derived.
+
+**(a) An out-of-range barometric altitude now falls back to the fix's GPS altitude.** The old `baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m)` picked the preference *before* narrowing, so a wild baro reading stored **no** elevation even when the fix carried a good GPS one. The counter-argument for keeping that ("don't substitute a number the runner never saw") was rejected: the stored track's per-point elevation is not what the runner saw on the panel anyway, a wild baro value is a bad sensor reading rather than a measurement, and a real GPS altitude beats nothing. Barometric still wins whenever it is in range; the fallback fires only when baro is unusable and only when the GPS value is itself storable.
+
+**(b) A railed battery conversion now reads absent, not a confident low percent.** `FULL_SCALE_MV = 3600` on the DK's direct-VDD read means a full 4.2 V cell saturates the SAADC and mapped to roughly **8 %** — a wrong number presented with full confidence, which is the failure mode this project's `None`-means-absent posture exists to prevent (§ 294 built the gauge that way deliberately). A saturated conversion code now yields `None`: the boot path parks, the steady loop blanks the gauge and warns. **The visible consequence is accepted:** on the current wiring the gauge blanks across the 4.2→3.6 V stretch and reads honestly from 3.6→3.3 V, where before it showed a flat ~8 % lie across the whole range. A blank gauge is a smaller harm than telling an ultra runner their full battery is nearly dead. Recovering the top of the charge curve needs the VDDH/5 channel plus high-voltage mode and is a bench item, not a code fix — the physical input was deliberately **not** re-pointed, because no such change can be verified without the board.
+
+**(c) A boot-recovered *unfinished* blob is still advertised, by design.** `FLAG_FINISHED` is now stamped by `finalize`, left clear by `checkpoint_blob`, and the RAM `SlotDir` answers `manifest_at` / `find` / `run_count` only for finished slots — so a run in progress is neither advertised, served, nor markable as synced however the phone asks. But `recover_slot` deliberately does **not** gate recovery on the flag. After a reset an interrupted run will never grow again, and refusing to recover it would delete the only copy of it — which would disable checkpointing entirely and defeat the point of § 316(d) below. "Still recording" is knowable only in RAM, so that is where the gate lives; the on-flash flag is the boot-time tiebreaker (committed beats checkpoint) rather than an admission test. Consequence to keep in mind: such a run reaches the phone as an ordinary run whose totals are its totals-so-far. Flagging it phone-side (a `metadata` key) is an open follow-up.
+
+**(d) Checkpoints ping-pong across two slots.** `checkpoint()` used to erase its slot and rewrite the same page, so a brownout in that window lost the entire run-so-far — the exact failure checkpointing was added to prevent, recurring on every checkpoint. Each write now targets the staler of the run's two copies, and the commit alternates too, so a torn write always leaves an intact predecessor. Boot reconciliation keeps one copy per `run_seq` via `supersedes`: committed beats checkpoint, then **later `elapsed_s`**, then larger blob. Elapsed rather than size is load-bearing — track thinning makes a later blob *shorter* than an earlier one, so size alone would prefer stale bytes.
+
+**Cost of (d), accepted:** a run in progress reserves up to **2 of the 4** flash slots, so at most 2 finished runs are retained while recording and a starting run can evict two rather than one. Taken deliberately: an evicted finished run is preferentially one the phone already pulled, whereas the run in progress exists nowhere else. A completed run settles back to one slot, and a run whose checkpoint cadence never fired still costs exactly one. The real fix is tier-2 external QSPI flash, not a cleverer 4-slot policy.
+
+**Wire format:** unchanged. Byte 5 was already `flags` in both the Rust codec and the Dart `decodeHeader`, so only its value moved (`00` → `01`) plus the CRC that covers it. No version bump was needed; the golden vectors moved in lockstep on both sides and the **v1 golden is untouched** — a v1 blob leaves byte 5 reserved, reports unfinished, and is still recovered and advertised rather than dropped.
+
+Don't re-litigate by:
+
+- **"Restoring" a battery percent for the railed range.** Any number there is fabricated. Fix the input channel at the bench instead.
+- **Gating `recover_slot` on `FLAG_FINISHED`** because the flag "means finished". It does — but recovery is not admission, and gating it throws away interrupted runs.
+- **Preferring blob size over `elapsed_s`** in boot reconciliation. Thinning inverts that comparison.
+- **Reclaiming the second checkpoint slot** to retain a third finished run. The in-progress run is the only copy that exists.
+
+Pinning: `core/src/{run_store,flash_store,flash_plan,record_cadence,battery_sense}.rs`, `app/src/{run_flash.rs,tasks/ble.rs,tasks/battery.rs}`, and the Dart mirror `sim_watch_sync.dart` in both twins.
+
+---
+
+## 317. The firmware's untrusted-byte decoders get property-based tests, which immediately found that the settings frame has no integrity check
+
+**Decided (2026-07-25).** The workspace had no fuzz or property-test harness at all, while at least seven modules parse bytes arriving from flash (possibly corrupt or half-written), the BLE radio (possibly hostile or truncated), or the GNSS UART (possibly garbage). On this `no_std` target a **panic is a device reset** — mid-race, with the run staged in RAM — so "never panics" is a safety property, not a nicety. Hand-written adversarial cases were the only coverage, which is precisely the shape that misses the input nobody imagined.
+
+`proptest` now ships as a **dev-dependency** (`default-features = false`, `features = ["std"]`), so the properties run inside the existing host-test job with no new CI job and no nightly toolchain — `cargo-fuzz` was rejected for needing both. 45 properties cover `run_store`, `flash_store`, `course_store`, `settings`, `ble_sync`, `fix`, and the `ublox_nmea` parser + `ubx` encoder. The suite is configured `failure_persistence: None` with a fixed ChaCha RNG, so it is deterministic (verified identical across runs and under a forced `PROPTEST_CASES` / RNG-algorithm override), never writes a `proptest-regressions/` directory, and costs about +0.09 s.
+
+Because the properties had to survive concurrent behaviour changes in the same modules, they assert **invariants rather than values**: never panics, fail-closed, round-trip over the legal domain, every proper prefix rejected, single-byte corruption caught or provably harmless, and declared counts never exceeding the format's caps.
+
+**The finding: `WatchSettings::decode` is the only wire format in the firmware with no checksum.** Its sole integrity check is that the byte count exactly accounts for the fields the presence bitfield claims. That catches any single-*bit* flip, but not a single-*byte* corruption flipping two bits across equal-width fields — the frame length is unchanged, so it decodes as fully valid but **different** settings. Verified minimal case: one byte XOR `0x50` turns `flags` `0xB8` into `0xE8`, and the four bytes the phone sent as the **QNH sea-level reference pressure** are applied as the **run-view page mask** while the QNH silently vanishes. Every equal-width pair is confusable the same way (`sea_level_pa ↔ pages`, `pacer ↔ gear ↔ fuel`, `zone_ceiling ↔ hide_empty_pages`). The module doc's claim of "never a partial or off-frame struct" is exactly what this violates.
+
+Impact is bounded — the BLE link layer carries its own CRC-24 and the apply-side plausibility guards reject implausible values — but the QNH↔pages swap **passes those guards**, since a valid pressure and a valid page mask occupy the same four bytes. **The durable fix is a CRC32 over the frame** as a `SET1` v3 bump following the v1/v2 precedent (accept older versions, stay fail-closed), reusing the existing `run_store::crc32` that `flash_store`'s config and bond records already share. It is not done here: it is a wire-format change needing the Dart encoder and goldens moved in lockstep.
+
+The property was **not weakened to go green.** It ships `#[ignore]`d, carrying its reproducer and the intended fix in its doc comment, so it flips green the moment a checksum lands. Two achievable properties hold the neighbouring ground meanwhile: that a decoded frame carries exactly the fields its presence bytes declare, and that a single-bit flip of a presence byte is always caught — the second marking precisely where the format's integrity currently runs out.
+
+A second, smaller gap is recorded rather than fixed: `run_store`'s footer totals (`distance_m`, `moving_s`, `elapsed_s`) are **not** CRC-covered, so flash bit-rot in those 12 bytes yields a run that still passes `verify_blob` with wrong totals. The format's own doc says the CRC covers header + points, so the honest invariant was encoded (record count and records never move) rather than pinning a guarantee the format does not make.
+
+Don't re-litigate by:
+
+- **Deleting or un-ignoring the settings property** to get a clean run. It is the bug's only executable record.
+- **Weakening a property until it passes.** A failing property is a found defect; report it.
+- **Asserting concrete decoded values** in these files. Value-pinning fights legitimate behaviour changes; the invariants are the point.
+- **Adding `cargo-fuzz`** alongside this. It needs nightly and a separate job for the same class of coverage.
+
+---
+
+## 318. The Renode simulator runs in CI, but deliberately outside the required gate until it has been observed green
+
+**Decided (2026-07-25).** `apps/custom_watch/README.md` carried roughly 15 *sim-verified* claims while CI never ran the simulator — it was invoked by hand via `bin/watch-sim.sh`, so a change breaking the sim stayed invisible until someone ran it manually. § 314 made *sim-verified* a claimable rung whose claims must name their evidence, and CI already defends *build-verified* (§ 315). A new standalone `sim-firmware` job now defends the smoke-level slice of the sim rung: it installs a sha256-pinned Renode, builds the sim feature set with `DEFMT_LOG=debug` (the distance and fix lines are DEBUG-level and defmt filters at **compile** time), and drives `bin/watch-sim.sh` rather than reimplementing the boot sequence, so a launcher regression also fails CI. Seven assertions each wait on a specific defmt line — flash store arms, a canned-NMEA fix parses with satellites, autostart records, distance accumulates, the panel renders, two BTN2 presses commit a non-empty blob, and nothing panicked — with every expected string traced to the recorded evidence in `sim/verification-2026-07-19/`.
+
+**The job is deliberately NOT in the `ci-gate` aggregator's `needs:` list.** Renode is not installable on the authoring machine, so the job's first real execution is its first push; wiring an unvalidated job into the repo's single required status check would block every PR if it misbehaves. Promotion into the aggregator is an explicit follow-up once it has been seen green, and a comment in `ci.yml` says so, so the omission does not read as an oversight.
+
+What it does **not** prove, and what the docs must not claim it does: nothing about BLE (Renode cannot run the proprietary S140 SoftDevice at all), nothing about power in any form, and nothing about real silicon — the peripheral models are pinned to what the drivers *believe* about the parts (register maps, retention across shutdown, contact and AGC constants) and the waveforms are clean synthetic shapes. Green means the firmware is self-consistent under the emulator. The bench-verify list is untouched by it.
+
+One coupling to respect: the harness keys on exact defmt strings (`run_flash: run store armed at`, `gps: fix lat=… sats=`, `record: sim-autostart on first fix`, `record: recording dist=`, `button: BTN2 armed`, `run_flash: stored run N (M B) in slot S`). Renaming any of them requires the matching change in `sim/ci_smoke.py`.
+
+---
+
+## 319. The `SET1` settings frame bumps to v3 with a CRC32 trailer, closing the only wire format in the firmware without an integrity check
+
+**Decided (2026-07-25).** § 317's property suite found that `watch_core::settings` was the last decoder here with no checksum: its sole validation was that the byte count accounts for the fields the presence bitfield claims. That catches any single-*bit* flip, because flipping a presence bit changes the length the flags claim — but not a single-*byte* corruption that flips two bits across equal-width fields. `flags` `^ 0x50` leaves the length untouched and applies the four bytes the phone sent as the QNH sea-level reference (`sea_level_pa`, bit 4) as the run-view page mask (`pages`, bit 6) instead, with the QNH silently gone. The apply-side plausibility guards cannot help: a valid pressure and a valid page mask occupy the same four bytes. Every equal-width pair is confusable the same way — `pacer` ↔ `gear` ↔ `fuel`, `zone_ceiling` ↔ `hide_empty_pages`.
+
+The frame is now version 3 and carries a four-byte little-endian CRC32 trailer over every byte before it. It **reuses `run_store::crc32`** rather than growing a second implementation, which is what `flash_store`'s config and bond records already do; the Dart encoder likewise reuses the `crc32` the run-store decoder in `sim_watch_sync.dart` implements. A mismatch is rejected outright, exactly like an unknown flag bit or a short buffer — no partial apply, the same fail-closed discipline as the rest of `decode`.
+
+Version compatibility follows the v1→v2 precedent set in § 293: `decode` accepts v1 (no `flags2`, no timezone offset) and v2 (no CRC) alongside v3, so a phone that has not shipped the new encoder still configures the watch. Neither legacy version was retro-fitted with a checksum and neither frozen golden vector moved — a v1 or v2 frame means an old sender, and inventing a guarantee its bytes do not carry would be a lie in the decoder. The encoder is v3-only, so every new push is checked. A fully populated frame grows 45 → 49 bytes; `MAX_SETTINGS_LEN` (which sizes the GATT characteristic and the sim-link read buffer) carries the growth.
+
+Three things worth naming about how it was verified. The `#[ignore]`d property from § 317 is un-ignored and passes rather than being deleted — it was the defect's only executable record and it is now the fix's. A host test builds the QNH→pages corruption *and re-seals it under its own correct CRC*, asserting the re-framed frame still decodes, so the record shows the length check genuinely cannot catch this and the CRC is doing real work; the same flip carrying the sender's CRC is then rejected. And the raw-frame property generator seals v3 frames with their real checksum whatever their length, so the CRC never shadows the exact-length check underneath it.
+
+This is **host-tested + build-verified only** per § 314. Nothing here has run on silicon or under the simulator: BLE can never be sim-verified (no SoftDevice in Renode), and the on-device leg — a corrupted push refused over the real radio, a 49-byte write surviving a real GATT MTU — is a bench-checklist item in `quality_standards.md`, not a claim.
+
+Don't re-litigate by:
+
+- **Adding a second CRC implementation** on either side. One per language is the point.
+- **Retro-fitting a checksum onto v1 or v2**, or editing their golden vectors. Old senders do not emit one.
+- **Falling back to a length-only parse** when the CRC fails. A failed checksum is a rejected frame.
+
+---
+
+## 320. The BLE chunk-request queue's depth and semantics live in `watch_core`, and `embassy-sync` is a dev-dependency to test them
+
+**Decided (2026-07-25).** § 316 replaced the `run_chunk` request `Signal` with a depth-8 `Channel`, because a `Signal` keeps only the newest value: a phone that pipelines pulls lost every request but the last and then waited on notifications it was never owed. That fix landed as a `const CHUNK_QUEUE_DEPTH` inside `app/src/tasks/ble.rs` — and `app/` is excluded from the host test job (`--exclude app`, § 314), so nothing proved the FIFO ordering or the overflow behaviour the fix exists for. It was compile-verified only, which for the one protocol that can never be sim-verified either (no S140 SoftDevice under Renode, § 318) is the whole of its evidence.
+
+The constant now lives in `watch_core::ble_sync` beside the rest of the run-sync framing — the manifest encoder, the notify-length clamp, the course-chunk parser — and `app/` consumes it from there. One definition, in the crate that already owns every other decision this transport makes.
+
+**`embassy-sync` is a `[dev-dependencies]` entry of `watch_core`, and must stay one.** A real dependency would put an embedded async runtime inside the crate whose stated contract is "pure logic over plain data: no peripherals, no Embassy, no allocator" — the property that makes the whole core host-testable and portable to tier-2 silicon (§ 90). As a dev-dep it compiles into the test binary only, so the tests can instantiate the *same* `Channel<CriticalSectionRawMutex, ChunkRequest, CHUNK_QUEUE_DEPTH>` the radio task builds and check the depth against the type that consumes it, rather than asserting about it in prose. The version is pinned to what `app/Cargo.toml` declares (0.8): testing a different `Channel` than the firmware links would be worse than no test. `critical-section` with its `std` feature rides along because `CriticalSectionRawMutex` is an extern call the firmware resolves against the SoftDevice and nothing provides on the host — without an impl to bind to, the test binary does not link. Both are dev-deps of one leaf crate, so neither reaches any of the three firmware feature sets; all three were rebuilt and clippy-gated to confirm.
+
+Three tests carry it: pipelined requests are served oldest-first, the queue holds exactly `CHUNK_QUEUE_DEPTH` and serving one frees exactly one slot, and an overflowing `try_send` is refused while every queued request survives — that last one instantiating a `Signal` alongside the `Channel` so the defect and its fix are stated side by side rather than described.
+
+**The overflow-warn logic stayed in `app/`.** `if queue.try_send(req).is_err() { warn!(…) }` is the `Channel`'s own API plus a log line; wrapping it in a `watch_core` function with one caller would add a name and no decision. The rule the rest of the § 314 batch follows is "pure logic in `watch_core`, thin async drivers in `app/`", and by that rule there is no logic here to move — the decision was the depth, and the depth moved.
+
+Rung: **host-tested** for the queue semantics, **build-verified** for the task that consumes them. Not sim-verified and not bench-verified, and BLE can never be the former (§ 314).
+
+Don't re-litigate by:
+
+- **Promoting `embassy-sync` to a real dependency** so some other core module can use a channel. The core's no-Embassy contract is what keeps it host-testable; a module that needs a channel belongs in `app/`.
+- **Dropping `critical-section` and switching the tests to `NoopRawMutex`.** It links, but it tests a different type than the firmware runs.
+- **Extracting the `try_send`-failed branch into a core helper** for symmetry with the rest of the batch. One caller, no decision.
+
+---
+
+## 321. The run blob's footer totals come under the CRC, and pre-v3 blobs stop being decodable
+
+**Decided (2026-07-25). Reverses § 212(b) and closes the gap § 317 recorded.** Through wire-format v2 the `run_store` blob's CRC32 covered only the `header | records` prefix — the footer's three totals (`distance_m`, `moving_s`, `elapsed_s`) sat outside the window, and the Dart mirror's test suite had that written down as the *frozen wire spec*, with a case asserting that a flip there **must** still verify. It was a defect described as a contract. A single rotted bit in those twelve bytes produced a blob that passed `verify_blob`, passed `recover_slot`, and synced to Supabase as a perfectly ordinary run with silently wrong numbers. That is strictly worse than a rejected run: a rejected run tells the runner something went wrong, a quietly wrong one becomes their history, their PR table, and their training load.
+
+§ 212(b) called the exclusion "acceptable and deliberate" on the grounds that the totals are recomputable from the points. On a v2 blob they are not: a slot that decimated (§ 285) holds a thinned track whose summed distance is not the run's distance, and the whole point of a checkpoint blob is totals-so-far for a track that was never complete. Even where recomputation is possible, nothing in the pipeline does it — the phone reads the footer's numbers and saves them. The premise was wrong, so the conclusion goes with it.
+
+Version 3 takes the CRC over `blob[..len - 4]` — every byte except the four the checksum itself occupies (`FOOTER_CRC_OFFSET`). No layout moved, no field changed size, and the blob is still `header(16) | record[N](16) | footer(20)`; only the hashed window widened. Both emitting paths (`RunWriter::finalize` and `checkpoint_blob`) route through one `stamped_footer` helper, because the way two CRC domains drift apart is a second hand-rolled copy of the stamping. `flash_store::recover_slot`'s footer scan widens with them: a decoy `END1` planted inside track data now has to collide over its own would-be totals as well, so the boot-time slot scan is strictly harder to fool than it was, not weaker.
+
+**Pre-v3 blobs are deliberately not decodable, and `MIN_FORMAT_VERSION` rises to 3.** The alternative — dispatching the CRC window on the header's version byte — would keep v1/v2 readable at the cost of preserving the unprotected-totals hole in perpetuity for anything claiming to be an old version, which is the exact defect being closed. There are no deployed devices: this is a research-tier bench prototype (§ 71 amendment) whose parts have not arrived, so the only v1/v2 blobs that can exist are on the owner's dev kit. An old blob there is now rejected on the version gate, its slot reads free, and the next run reuses it. Rejecting by version rather than letting the CRC fail is the point: the reason is named in the log rather than showing up as unexplained corruption.
+
+Both goldens move on purpose (version byte `02` → `03`, new trailing CRC) and stay pinned byte-for-byte across the Rust tests and `sim_watch_sync.dart`. The v1/v2 vectors are kept as **rejection** fixtures on both sides. The Dart test that pinned the totals as uncovered is inverted into an exhaustive sweep — every byte of the golden blob, every flip, must fail — and the property suite's single-byte-corruption case strengthens from "flips before the footer are caught" to "no flip anywhere survives", with a second property aimed at the twelve summary bytes so the regression is named rather than inferred.
+
+Host-tested and build-verified only, per the § 314 ladder: the three firmware feature sets compile clean under `clippy -D warnings`, the host suite and both property suites pass, and the Dart twins agree. Nothing here is sim-verified (the sim exercises the commit path but this is a decode-domain change) or bench-verified (no hardware). The related settings-frame integrity gap (§ 317) is a separate `SET1` v3 bump and is still open.
+
+---
+
+## 322. A run-store commit seals before it drops: the superseded checkpoint keeps its directory entry until the new bytes are down
+
+**Decided (2026-07-25).** § 316(d) made a run's flash writes ping-pong across two slots so a torn write always leaves an intact predecessor, and recorded one loose end: `reserve_commit` released the superseded checkpoint's directory entry *before* the commit write rather than after. Not a regression — the code it replaced erased the sole copy outright — but the ordering was backwards. Between reserving the commit's slot and its blob actually landing, the superseded checkpoint's bytes were the run's **only** durable copy, and the in-RAM `SlotDir` had already stopped claiming them. If the erase or write then failed, the driver's `forget(slot)` dropped the target too and the run vanished from RAM entirely, even though a perfectly good checkpoint was still sitting on flash — recoverable only by rebooting the watch.
+
+`reserve_commit` now only *adds* the commit's slot. Two explicit settle calls close the seam: `SlotDir::commit_written(slot)` releases the superseded entries once the bytes are durable, and `SlotDir::commit_failed(slot)` drops the failed reservation and **promotes the surviving checkpoint to advertisable**. `app/src/run_flash.rs`'s `commit()` calls one or the other on every path. Promotion is the same reasoning `from_recovered` already applies to a boot survivor: the commit ended the recording, so a mid-run snapshot is as complete as the watch will ever know, and it should reach the phone now rather than after a power cycle rediscovers it.
+
+Nothing else moved. The slot eviction policy, `next_run_seq` resuming above the highest recovered seq, the § 316(c) "only finished slots are advertised" contract, and the ping-pong alternation are all unchanged — the superseded entry is an *unfinished* checkpoint, so holding it longer never adds a second manifest row for one `run_seq`.
+
+Don't re-litigate by:
+
+- **Folding the settle back into `reserve_commit`.** The whole point is that the directory cannot know the write landed at the moment it picks a slot.
+- **Reusing `forget` for a failed commit.** `forget` is the *checkpoint* failure path, where the run is still recording and promoting anything would advertise a live run — exactly what § 316(c) forbids. The two failures are not the same event.
+- **Leaving the superseded entry in place after a successful commit** so no confirmation call is needed. It would hold a slot that nothing can ever serve, and `victim` would protect it (unsynced) ahead of a real synced run.
+
+Pinning: `core/src/flash_store.rs` (`reserve_commit` / `commit_written` / `commit_failed`, +5 tests), `core/src/flash_plan.rs` (`plan_slot_write` doc + 1 new end-to-end failure test over the flash model), `core/src/ble_sync.rs` (three fixtures that drove a directory through `plan_slot_write` now confirm the write, so they stay a faithful model of the driver), and a new property in `core/tests/prop_flash_store.rs` that drives arbitrary interleavings of checkpoints, commits and torn writes and asserts every advertised run is physically present at the slot and size it claims, and is advertised at most once — the guard against the late release turning under-reporting into *over*-reporting. Host-tested and build-verified only (§ 314's ladder): the torn-write behaviour this protects is bench-verification territory, and `quality_standards.md`'s brownout item now covers it.
+
+---
+
+## 323. A boot-recovered unfinished watch run is flagged phone-side with a public-safe `recovered_unfinished` metadata key
+
+**Decided (2026-07-25).** § 316(c) settled the firmware half: a run interrupted by a reset is recovered from its last flash checkpoint and advertised over BLE, because refusing to would delete the only copy of it. It also named the consequence left open — such a run reaches the phone as an ordinary run whose footer totals are its **totals-so-far**. The phone had the signal (`RunHeader.finished`, backed by `FLAG_FINISHED`) and dropped it on the floor at ingest, so a reboot at mile 60 landed in the runner's history looking exactly like a finished 60-mile day. That is now carried through: `payloadFromBlob` emits the header's `finished` boolean on the watch-run payload, and `runFromWatchPayload` stamps `metadata.recovered_unfinished = true` when — and only when — the payload says `false`.
+
+**Only the explicit `false` stamps the key.** A sender that says nothing (the Apple-Watch WCSession bridge, Wear OS) only ever produces finished runs, so silence must not read as partial; and writing `recovered_unfinished: false` onto every watch run would put a key with no information on every row in the bag. Absence is the normal case and presence is the whole signal, matching how `recovered_from_crash` / `manual_entry` / `indoor_estimated` already behave.
+
+**Classified public-safe, deliberately.** Every other recorder internal in the registry (`recovered_from_crash`, `in_progress`, `manual_entry`, `distance_source`) is stripped by the `public_runs` projection, so keeping this one is the exception and needs its reason recorded: the key carries no geographic or identity signal — it says a watch reset — and it is the one key whose entire purpose is to stop a set of totals being read as complete. Stripping it would make the public share page repeat exactly the lie the key exists to prevent, for a viewer who has even less context than the owner. It is therefore left off the strip denylist and **no `public_runs` migration is needed**.
+
+**A read surface shipped with it, because a recorded-but-unread flag does not fix the harm.** Web run-detail gains an "Incomplete" header chip beside the existing DNF / discipline chips (the established pattern for rendering a metadata flag), with a hover/long-press explanation, mirrored to the mobile run-detail AppBar badge. Web-first per § 24 even though only mobile can *produce* the key — web is where a synced run is read.
+
+Don't re-litigate by:
+
+- **Refusing the run at ingest** because it is incomplete. § 316(c) already settled that recovery is not admission; dropping it destroys the only copy.
+- **Writing `false` on finished runs** "for symmetry". Presence is the signal; a universal key is noise on every row.
+- **Adding it to the `public_runs` strip list** because the neighbouring recorder internals are stripped. The neighbours leak device cadence or the owner's private plan; this one exists to keep a public number honest.
+- **Deriving it from `duration_s` vs the point timestamps** instead of the flag. The checkpoint's footer is internally consistent — nothing in the blob's *numbers* betrays that the run was cut short. Only the header flag knows.
+
+Pinning: `packages/core_models/lib/src/metadata_keys.dart`, `apps/mobile_*/lib/{sim_watch_sync,watch_ingest_queue}.dart` + `lib/screens/run_detail_screen.dart` (both twins), `apps/web/src/lib/core/schema.ts` + `src/routes/runs/[id]/+page.svelte`, `docs/backend/metadata.md`, and the tests in `test/{sim_watch_sync,watch_ingest_queue_helpers,run_detail_screen}_test.dart` + `apps/web/tests-e2e/runs/recovered-unfinished.spec.ts`.
+
+---
+
+## 324. The phone→watch settings fan-out is a plan of typed effects, exhaustive by construction
+
+**Decided (2026-07-25).** The § 314 batch moved eleven task decisions into `watch_core` and left `record.rs`'s `apply_settings` behind: nine `if let Some(x) = s.field { sink.set_x(x) }` arms inside an async task body, in the one crate CI excludes from the host-test job. Each field's plausibility guard was host-tested at its setter; the *routing* — which field feeds which sink — was tested by nothing. That is the wrong half to leave uncovered on this seam. The `SET1` frame took two wire bumps in one week (§ 319's CRC trailer, the v2 timezone field before it), § 317's property suite had already found one fail-open bug in the same area, and the failure mode is silent: a field routed to the wrong setter, or a tenth field added to `WatchSettings` and never wired, still decodes cleanly and the watch simply ignores what the phone sent. No log line, no error, no test.
+
+`watch_core::settings_apply::plan_apply` now owns the decision, returning one ordered `SettingsEffect` per present field; `record.rs` is a `match` that owns only the sinks. An effects list rather than an applier trait, because effects are comparable values: a test asserts a whole plan in one line, where a trait needs a recording mock and reads as a *description* of the routing rather than the routing itself. The two guards with no setter to live in — the QNH sea-level reference, whose sink is a `state` watch, and the home-clock offset — run in the planner, so an implausible value yields no effect rather than a clamped one.
+
+**The point of the module is that the next field cannot be dropped silently.** `plan_apply` destructures `WatchSettings` with no `..` rest pattern, so a new field is `E0027`; binding it without emitting an effect is `unused_variables`, which the workspace clippy gate denies; a new `SettingsEffect` variant is a compile error in both `kind()` and `EffectKind::next`; and `MAX_SETTINGS_EFFECTS` is computed from that chain in a `const` block, so capacity grows by linking a variant in rather than by remembering a number. The load-bearing test then counts the plan against the frame's **own presence bitfields**, read out of `encode`'s output — a field cannot reach the watch without a presence bit, so the expected count grows with the wire format and is independent of both the test and `EffectKind`. A property extends that equality across all 2^9 presence combinations. `plausible_tz_offset_min` became a free function over `Option<i16>` as part of this: as a method it forced the planner to write `tz_offset_min: _`, and a wildcard in that pattern is precisely how a field goes missing.
+
+**The extraction found no routing defect.** All nine fields already reached the sink `settings.rs` documents for them, so unlike the rest of the § 316 batch nothing was pinned-and-flipped — this one is a pure coverage change, and saying so is the honest report. The one sink without a guard of its own, `Recorder::set_gear`, is defended downstream: `gear_wear` treats a non-finite or negative distance as untracked, so a corrupt baseline degrades honestly instead of rendering a wrong number.
+
+Don't re-litigate by:
+
+- **Adding a `..` rest pattern** because a new field "obviously doesn't need routing". If it is on the wire the phone can send it, and a field the watch accepts and ignores is worse than one it rejects.
+- **Replacing the presence-bit oracle with a constant.** A number in a test is a number someone must remember to change — the exact failure class the module exists to remove.
+- **Moving the QNH or timezone guard back into the task** for symmetry with the setters. Neither has a setter to live in, and in the planner they are covered by the same suite as the routing.
+
+Rung: **host-tested** for the fan-out, **build-verified** for the driver (§ 314).
+
+---
+
+## 325. The LED auto-gain *cadence* moves to `watch_core`, and the post-wake hold turns out to rest on the counter, not on the DC estimates
+
+**Decided (2026-07-25).** The `hr` task's extraction moved the FIFO tag demux into `watch_core::hr_drain` and left the LED auto-gain cadence inlined in the async drain loop — an `agc_samples >= AGC_PERIOD_SAMPLES` gate, a `(Some(raw), Some(corrected))` guard, and a counter reset on duty-cycle wake, none of them reachable from the host-test job. The driver's `agc_next_pa_ambient` was well tested for *by how much* the drive steps; nothing tested *when* it was allowed to. `hr_drain::AgcCadence` now owns the cadence and the task keeps the I²C.
+
+The extraction was worth doing for what it found in the **comment** rather than in the code. The task documented its post-wake hold as coming from `PeakDetector::reset` leaving both DC estimates `None`, "so the loop naturally holds until the baseline re-converges". It does not: `raw_dc()` / `corrected_dc()` gate on `initialized`, which the first `push_ambient` after a reset sets, so both read `Some` one sample into a new window. The counter reset is the *only* thing standing between a freshly-woken part and a gain step taken off a one-sample-old baseline — and a comment naming the wrong mechanism is exactly how that reset gets deleted as redundant during the next reorder. A test now passes `Some` DC estimates throughout the wake so the counter is proven to be what holds the loop.
+
+The inlined version also zeroed the counter *before* testing the DC pair, discarding an elapsed period spent without a baseline and waiting a full second more. That arm is unreachable as the code stands — `agc_samples` is incremented only by the branch that also pushes to the detector, so `samples >= 1` implies `initialized` — so it is recorded as a **latent** ordering defect, not a live one, and nothing visible on the bench changes. It is still fixed: `due` consumes the period only when it authorises a step, which is what the surrounding comments already claimed and what becomes load-bearing the moment the DC estimate needs real convergence (the post-tier-1 licensed Maxim algorithm). Nine tests carry it, including one driving `FifoDemux` and `AgcCadence` together exactly as the drain loop does — four periods of ambient and stray-tag words advance nothing — and one composing the cadence with `hr_duty::shown_bpm` to pin that a reading is *held* across an off-window inside its budget rather than re-sampled or blanked.
+
+**The AGC's step, hysteresis, `raw_ceiling` and PA clamps were not touched.** They are flagged conservative pre-calibration values and they move on the bench, not in a refactor.
+
+Don't re-litigate by:
+
+- **Restoring the reset-before-check ordering** on the grounds that the absent-DC arm is unreachable. It is unreachable *today*, by a coupling between two crates that nothing enforces.
+- **Dropping `agc.reset()` on wake** because the detector reset "already" holds the loop. It does not, for exactly one sample — which is the whole window that matters.
+- **Retuning the cadence period off a sim run.** Renode models no optical path and no power; the period is a settling-time derivation and its confirmation is bench work.
+
+---
+
+## 326. A generated table that an invariant test sweeps must publish its own membership list
+
+**Decided (2026-07-25).** `drivers/sharp_mip`'s font had a real defect — `gen_font.py` packed `'+'` identical to `'-'` and `'|'` identical to space — and the fix was a `tests/font.rs` sweep asserting every glyph non-blank and all pairs distinct. `tests/bignum.rs` carries the same guard. The 16×16 icon table, off the same Inkscape → ImageMagick rasteriser, had none, and its `Heart`/`HeartSmall` and `SatSearch0`/`SatSearch1`/`Satellite` pairs are *deliberately* similar, so a collision there is a silently dead animation — the same failure mode that took two sim passes to notice in the font.
+
+The sweep now exists, and the decision worth recording is where the enumeration lives. The icon table published only per-variant statics behind an `Icon` enum, so the equivalent test would have had to hard-code the nine variants — a list that goes stale the first time someone drops an SVG into `icons/`, and goes stale **silently**, because a shorter list still passes. `gen_icons.py` therefore emits `Icon::ALL` from the same `ICONS` sequence that produces the enum variants, the dispatcher arms and the tables, so the four cannot disagree by construction. The general rule: when a generator produces a set of things and a test needs a property of *all* of them, the generator owns the enumeration; a test-side list is a guard that quietly narrows itself.
+
+**No collision existed.** All nine icons carry ink and all thirty-six pairs differ, and the two animation families' ink counts are monotonic, which the tests also pin. The guard was verified to bite by temporarily aliasing `HEART_SMALL` to `HEART` and confirming two tests fail, and the regenerated `icons.rs` was diffed byte-for-byte against the committed file with the rasteriser stubbed (Inkscape and ImageMagick are not installed here).
+
+---
+
+## 327. Pixel drawing lives in `watch_render`, not in the screen task — and the move found an unclipped polyline
+
+**Decided (2026-07-25).** `watch_render` exists so widget geometry is host-testable with an ASCII-preview harness, but three pixel jobs stayed inline in the `ui` task's async loop — the Nav map panel, the back-to-start overlay, and the elevation mini-profile's rect — where `app/`'s board-only build put them beyond `cargo test`. § 314's batch had already extracted the *decisions* behind them (`nav_map`, `trackback::project_track`, `arrow_lines`) without the drawing. All three are now widgets with pinned bounds and preview cases; `app/src` drops 4,561 → 4,466 lines.
+
+The move paid for itself on the first test written. `Framebuffer` clips at the **display** edge, but the Nav panel is a band inside it (rows 1-6), and the polyline is painted *after* the text rows. On the runner-centred auto-zoom window — roughly 8,400 px per degree of latitude — a course leg a few hundred metres outside the window projects a handful of pixels above the panel, still on-screen, and scribbles the NAV title row. A realistic four-point ultra course with the runner mid-course put **16 pixels of breadcrumb on the title row**. The fix is a Cohen-Sutherland clip to the panel rect, with the interpolation carried in `i64`: the naive `i32` product overflows when a cold-start fix projects the course hundreds of thousands of pixels away, and firmware ships `--release`, where a wrapped multiply puts a *garbage line back inside the panel* on the one page a lost runner is reading. The clip is a proven no-op for a whole-course fit, so the common case renders byte-identically.
+
+The other two widgets moved clean, and that is recorded rather than dressed up as a finding. In particular the trackback start-box's ±2 px reach fits `project_track`'s 2 px inset with **zero slack** at all four extremes — a coupling that was invisible and is now a test.
+
+Don't re-litigate by:
+
+- **Drawing pixels in the `ui` task again** because "it's only a few lines". Those few lines are the ones no test can reach; the task owns cadence and peripherals, `watch_render` owns geometry.
+- **Trusting `Framebuffer`'s clipping to keep a widget in its rect.** It only guarantees you will not panic or wrap *off the display*. Any widget owning a sub-rect must clip to that rect itself and prove it, because the failure mode is silent overdraw of a row another layer already painted.
+- **Doing signed pixel interpolation in `i32`.** Release overflow wraps rather than panicking, so the bug surfaces as plausible-looking wrong pixels.
+- **Reading "the preview looks right" as verification.** The ASCII harness is host-tested evidence of layout and nothing more; § 314's ladder still applies.
+
+---
+
+## 328. A sensor channel publishes only what a consumer can distinguish, and the quantum is set by the finest consumer, not the loudest
+
+**Decided (2026-07-25).** The 2026-07-19 pass fixed the HR task waking the UI far more often than its value changed, with `hr_duty::should_publish` — a byte-equality dedup. Two sibling channels had the same defect and could not use the same remedy. `embassy_sync::Watch::send` wakes every receiver whether or not the value moved, and the screen task waits on both, so each was a standing per-second reason for the CPU to wake and the face to fully re-render — directly against README § Power discipline's "a truly idle wrist wakes the CPU seconds apart".
+
+The barometer's `Reading` is three `f32`s off a real sensor, so consecutive samples on a motionless wrist are never equal and equality dedupes nothing. The GSV channel carries genuinely *different* values every second, because `ublox_nmea` emits one sentence-level `Gsv` per GSV **sentence** rather than per group and strips the talker prefix, so a multi-sentence group and a multi-constellation receiver both land distinct counts on one channel — 3-6 sends per second, plus GSA. Every sim NMEA fixture is single-constellation GPS-only, which is exactly why this never surfaced under Renode.
+
+Both are now gated on the coarsest thing still lossless for every consumer, and **the choice of quantum is the whole decision**. For the signal channel that is the drawn bar count (`statusbar::bars_for_fix`): the idle meter is the only consumer and cannot represent anything finer. The two watches were merged into one `state::SIGNAL` because the bars are a function of both fields, and gating them independently lets a suppressed satellite drop resurface later through a fix-mode change and draw bars for a sky that has already gone. For the barometer the face's whole-metre rendering quantum was tried first and was **wrong**: `record.rs` feeds the same channel's altitude into `Recorder::set_baro_altitude`, and the GAP estimator reads a grade off ~5 m segments, so a metre-coarse altitude puts tens of percent onto a single segment's grade — paying for the power win with a visibly bouncing GAP row, i.e. fixing a waker by degrading a sim-verified feature. `PUBLISH_STEP_M` is therefore 0.1 m: the finest quantum anything downstream can represent at all (`link`'s `{:.1}`, `TrackPoint::ele_dm`), still an order of magnitude above the BMP581's noise at the driver's configured 16× OSR + IIR coeff-7, and a thirtieth of `DEADBAND_M`. The gate anchors on the last *published* altitude, not the previous sample, so a slow climb of sub-threshold steps still publishes once per step it gains.
+
+An explicit manual QNH re-zero bypasses the gate entirely, via `baro_rezero::published_reading`, so the ALT row can never disagree with the `SET …M` banner the runner just triggered.
+
+Don't re-litigate by:
+
+- **Setting the baro step from the face's rendering quantum.** The face is the loudest consumer, not the finest; the recorder is on the same channel.
+- **Gating the satellite count and the fix mode as separate channels.** They compose into one drawn artifact, and separate gates let a stale value resurface through the other field.
+- **Calling the 0.1 m step measured.** It is a datasheet-class derivation, now registered as such in `quality_standards.md`.
+- **Sizing an explicit user action around a throttle.** A gate exists to suppress what nobody asked for; a re-zero the runner pressed is not that.
+
+---
+
+## 329. The pushed-settings seam is a queue, because a `SET1` frame is a delta and deltas do not coalesce
+
+**Decided (2026-07-25).** `state::SETTINGS` was a `Watch<…, Option<WatchSettings>, 1>` — one latest-value slot — read with `try_changed()` only after an unrelated wake. Two settings frames arriving between two wakes therefore coalesced and the earlier one was lost outright; in Expedition GNSS mode that window is up to 60 s, so the two pushes need not be close together to collide. The `SET1` frame's whole design premise is the *partial* push: every field carries a presence bit precisely so the phone can set a new max HR without disturbing the eight settings it did not mention. A phone that pushed max HR and then a page mask lost the max HR — the frame decoded, its CRC checked (§ 319), its fan-out routed correctly (§ 324), and the value still never reached the recorder. This is § 320's defect wearing different clothes: a single-value holder carrying a *stream*.
+
+The fix is § 320's fix. `SETTINGS` is a depth-4 `Channel` matching the neighbouring `RECORD_CMD` — these are operator-paced pushes off a settings screen, not a pipeline, so a handful of buffered deltas covers a burst while the task is between wakes. Both publishers `try_send` and `warn!` on a full queue rather than dropping in silence, and the record loop drains with `while let Ok(s) = state::SETTINGS.try_receive()`, applying each frame through § 324's fan-out in arrival order. The `Option` wrapper went with the `Watch`: an empty queue *is* "nothing pushed yet". `SETTINGS_QUEUE_DEPTH` lives in `watch_core::settings_queue`, with tests over the same `Channel` type the firmware links (`embassy-sync` stays a `watch_core` dev-dependency per § 320) — two pushes queued between drains delivered in order, a drain of N frames composed through `plan_apply` into N plans with the right values, exact-depth and one-drain-frees-one-slot, an overflow refused with every queued frame surviving, and a single-slot `Watch` instantiated beside the `Channel` so the defect and its fix are stated rather than described.
+
+Don't re-litigate by:
+
+- **Merging successive frames into one cumulative latest value.** It looks like it preserves everything, and it destroys the delta: every accumulated field is re-applied on every push, which is what the presence bits exist to avoid.
+- **Dropping the depth back to a literal in `app/`.** The depth *is* the decision, and `app/` is excluded from the host-test job, so a number living there is asserted about in prose and nowhere else.
+- **Restoring the `Option` wrapper** for symmetry with the surrounding watches. A `Channel`'s emptiness already carries "nothing pushed yet"; a `None` on the wire would be a frame that means nothing.
+
+---
+
+## 330. A pushed settings frame wakes the record task itself, via a non-consuming `select` arm
+
+**Decided (2026-07-25). Closes the half § 329 left open.** Making `state::SETTINGS` a depth-4 `Channel` stopped two partial phone pushes from coalescing, but it left the `record` task draining the queue *opportunistically* at the top of a loop whose only wake sources were a GNSS fix, a button command, and — only while a run is active — a 1 Hz tick. `SETTINGS` was not itself one. Indoors, before a treadmill session, none of those three arrive, so the wait was unbounded: § 329 had converted an unbounded-latency **loss** into an unbounded-latency **delay**. The right first move, not the fix. The two sinks that showed it are the ones the recorder does not own — `TZ_OFFSET_MIN`, leaving the home clock honestly but wrongly labelled UTC, and `SEA_LEVEL_PA`, leaving the idle baro altitude on a stale QNH — because those are exactly the fields a runner pushes while standing still.
+
+The wait grows a fourth arm on `SETTINGS.ready_to_receive()`: `select3` → `select4` while a run is active, `select` → `select3` while it is not, with a new `Event::Settings` whose match arm is empty. **`ready_to_receive` rather than `receive` is the whole design.** It reports that a frame is waiting without taking it, which leaves the existing top-of-loop drain the sole consumer — and that is what keeps one FIFO order (a woken frame goes through the same drain, behind whatever the drain already holds), what makes a double-apply impossible (only the drain pops), and what makes a skip impossible (the drain is unconditional on every iteration, so a frame taken on a fix's wake is still applied exactly once). The arm sits **last** so it can never pre-empt a fix or a command, and the drain still runs **before** the `match event`, so a frame that arrived alongside a `Start` reaches the recorder's setters before the `Start` opens the run. Note what orders that pair: `RECORD_CMD.receive()` is polled ahead of the settings arm and wins the race, so the ordering comes from the drain's position in the loop, not from the select.
+
+**It costs nothing at idle.** The arm registers the task's waker and parks; the only thing that fires it is a publisher's `try_send` from the `ble` or `phone` task. There is no timer and no poll interval — a periodic wake is precisely the free-running waker § 328's gates exist to remove. And because `WakerRegistration::wake()` takes the registered waker, a burst of pushes arriving while the task is asleep costs one wake, not one per frame.
+
+Pinning: seven host tests extend `core/src/settings_queue.rs`, assembling the record loop's wait out of the **real** embassy combinators over the real `Channel` / `Watch` types — `embassy-futures` joins `embassy-sync` and `critical-section` as a `watch_core` dev-dependency on § 320's exact terms, pinned to what `app/Cargo.toml` declares. The suite states the defect next to its fix (the two-arm wait stays asleep through a push, the three-arm wait does not), then pins the wake with no fix and no command, the run-active four-arm case, drain-before-command ordering, FIFO across a burst, and both no-double-apply and no-skip. Waker behaviour is observed through a counting waker and futures are polled by hand, so the negative control asserts `Pending` rather than hanging. **Host-tested** for the wake and ordering contract, **build-verified** for the task that consumes it — the same split § 320 accepted, since `app/` is excluded from the host job (§ 314).
+
+Don't re-litigate by:
+
+- **Shortening the run-active tick, or adding a poll interval, so the drain runs more often.** That is a free-running waker with a settings-shaped justification, and it costs battery on every runner whether or not a phone ever pushes.
+- **Swapping the arm to `receive()` so the event carries the frame.** Two consumers of one FIFO, and the arm's frame would then be applied ahead of anything the drain already held. The non-consuming poll is what makes the ordering argument hold.
+- **Reordering the arms so settings outranks the command.** The ordering that matters comes from the drain's position before the `match event`. Promoting the arm buys nothing and lets a settings push pre-empt a `Stop`.
+- **Dropping the `Event::Settings` variant** and letting the arm fall through to a shared no-op. The loop tail must still run after a settings apply, and an explicit variant is what makes the empty body read as deliberate rather than as a missing case.

@@ -14,10 +14,12 @@ use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
 use watch_core::face::{IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
+use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
 use watch_core::settings::WatchSettings;
+use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
 
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
@@ -44,9 +46,10 @@ pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 4> = Watch::new();
 /// pause then stop) is never dropped.
 pub static RECORD_CMD: Channel<CriticalSectionRawMutex, RecordCommand, 4> = Channel::new();
 
-/// Barometric elevation snapshot: `baro` publishes each sample; the `ui` face,
-/// the `phone`/`ble` link, and `record` (to stamp each stored track point's
-/// altitude) subscribe.
+/// Barometric elevation snapshot: `baro` publishes whenever
+/// `elevation::should_publish` says the reading moved enough to be worth a
+/// wake; the `ui` face, the `phone`/`ble` link, and `record` (to stamp each
+/// stored track point's altitude) subscribe.
 pub static ELEVATION: Watch<CriticalSectionRawMutex, ElevationReading, 3> = Watch::new();
 
 /// The on-run alert currently on screen (`None` when the slot is clear):
@@ -112,28 +115,29 @@ pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 4> = Watch::new()
 /// wrist stops paying the per-second animation redraw. One receiver (the `ui`).
 pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
 
-/// Latest GSV satellites-in-view count: the `gps` task publishes it best-effort
-/// per GSV group so the signal meter can show the real sat count instead of a
-/// placeholder. No value published means "unknown" (searching). The `ui` face
-/// combines it with `state::FIX_QUALITY` via `statusbar::bars_for_fix` to drive
-/// the idle signal meter.
-pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
-
-/// Latest GSA fix quality (NMEA fix type: 0 unknown/none, 2 = 2D, 3 = 3D): the
-/// `gps` task publishes it per GSA sentence so the idle signal meter gates its
-/// bars on a real position, not merely satellites in view — no fix reads as
-/// "searching" even under a full sky, and a 2D fix caps below a 3D lock. No
-/// value published means "unknown" (0). One receiver (the `ui` face's meter).
-pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+/// The idle signal meter's input pair — GSV satellites-in-view plus the GSA
+/// fix mode: the `gps` task publishes it best-effort whenever
+/// `gnss_signal::should_publish` says the bar count would move, so a repeated
+/// GSV group (one sentence each) cannot wake the face several times a second.
+/// The pair travels together because the bars are a function of both. No value
+/// published means "nothing acquired" (zero bars). One receiver (the `ui`
+/// face's meter).
+pub static SIGNAL: Watch<CriticalSectionRawMutex, SignalSample, 1> = Watch::new();
 
 /// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling / QNH /
 /// fuel cadences / page curation / timezone offset): the `ble` task decodes a
 /// phone characteristic write (the sim decodes the same frames off the
-/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and
-/// publishes; the `record` task applies each present field to the recorder +
-/// alert engine through their settings-sync setters. `None` means nothing
-/// pushed yet. One receiver (the `record` task).
-pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
+/// phone-link pipe via `phone::settings_rx`, and seeds a demo frame) and sends;
+/// the `record` task drains every queued frame and applies each present field
+/// to the recorder + alert engine through their settings-sync setters.
+///
+/// A queue rather than a latest-value slot because each frame is a *delta* —
+/// an absent field means "leave it alone", so two frames arriving between two
+/// record-task wakes must both be applied, and coalescing them would drop the
+/// earlier push's fields entirely. Depth + reasoning in
+/// `watch_core::settings_queue`.
+pub static SETTINGS: Channel<CriticalSectionRawMutex, WatchSettings, SETTINGS_QUEUE_DEPTH> =
+    Channel::new();
 
 /// Latest battery percent estimate. `None` means no plausible reading — an
 /// absent battery, a bench/USB regulator rail, or a mid-stream reading that

@@ -1,34 +1,56 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_settings.dart';
 
-/// The frozen v1 golden vector — one 3-point run blob as the pre-lap
-/// firmware wrote it (version byte 1, untagged records). Kept as the
-/// backward-compat pin: a v1 blob already on a watch's flash must keep
-/// decoding after the v2 upgrade.
+/// The frozen v3 golden vector — one 3-point run blob, byte-identical to
+/// the firmware's `golden_blob_is_stable` test vector so a wire-format
+/// drift on either side is caught here.
+///
+/// Header byte 4 is the format version (`03`) and byte 5 is `01` —
+/// [kRunFlagFinished], which the firmware stamps in `RunWriter::finalize`.
+/// The trailing CRC covers both, every record, AND the footer's totals
+/// (decisions §321); a mid-run checkpoint of the same points would be this
+/// blob with byte 5 zero and a different CRC.
 const _goldenHex =
+    '54524b31030100000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    'e4cfd9170c0141c101000000723f7a00'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c02000039e3c091';
+
+/// The frozen v3 golden vector with a closed lap (index 1, 1 km, 5:00
+/// split, 290 s moving) interleaved after point 2. Byte-identical to the
+/// firmware's `golden_blob_with_a_lap_is_stable`.
+const _goldenLapHex =
+    '54524b31030100000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    'e4cfd9170c0141c101000000723f7a00'
+    '0100102700002c010000220100000001'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c0200008d2b643c';
+
+/// The v1 and v2 goldens as prior firmware wrote them. v3 widened the CRC
+/// window to take in the footer totals, so their checksums no longer
+/// describe the bytes they precede — kept here to pin the compat decision:
+/// they are rejected, not decoded.
+const _v1GoldenHex =
     '54524b31010000000700000029000000'
     'b8ced91718ff40c100000000703f7800'
     'e4cfd9170c0141c101000000723f7a00'
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c02000077fdfebd';
-
-/// The frozen v2 golden vector — the same 3 points with a closed lap
-/// (index 1, 1 km, 5:00 split, 290 s moving) interleaved after point 2.
-/// Kept byte-identical to the firmware's `golden_v2_blob_with_a_lap_is_stable`
-/// test vector so a v2 wire-format drift on either side is caught here.
-const _goldenV2Hex =
-    '54524b31020000000700000029000000'
+const _v2GoldenHex =
+    '54524b31020100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
     'e4cfd9170c0141c101000000723f7a00'
-    '0100102700002c010000220100000001'
     '74d1d917000341c10200000000800000'
-    '454e4431d2040000580200006c020000406197f1';
+    '454e4431d2040000580200006c020000566db750';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -39,7 +61,19 @@ Uint8List _hex(String s) {
 }
 
 Uint8List _goldenBlob() => _hex(_goldenHex);
-Uint8List _goldenV2Blob() => _hex(_goldenV2Hex);
+Uint8List _goldenLapBlob() => _hex(_goldenLapHex);
+
+/// The golden as the firmware's `checkpoint_blob` would have written it
+/// mid-run: [kRunFlagFinished] clear, and the footer CRC recomputed over the
+/// changed prefix so the blob still verifies. This is what boot recovery
+/// serves after a reset interrupted the run.
+Uint8List _checkpointBlob() {
+  final blob = _goldenBlob();
+  blob[5] = 0;
+  final crc = crc32(blob.sublist(0, blob.length - 4));
+  ByteData.sublistView(blob).setUint32(blob.length - 4, crc, Endian.little);
+  return blob;
+}
 
 /// MAN1 manifest describing exactly the golden run: watch uptime 700 s,
 /// one entry run_seq=7 size=84 start_uptime=41 — a same-boot run whose
@@ -50,7 +84,7 @@ Uint8List _goldenManifest({int watchUptimeS = 700, int startUptimeS = 41}) {
   d.setUint8(1, 'A'.codeUnitAt(0));
   d.setUint8(2, 'N'.codeUnitAt(0));
   d.setUint8(3, '1'.codeUnitAt(0));
-  d.setUint8(4, 1); // version
+  d.setUint8(4, 3); // version
   d.setUint8(5, 1); // run_count
   d.setUint32(8, watchUptimeS, Endian.little); // watch_uptime_s
   d.setUint32(12, 7, Endian.little); // run_seq
@@ -122,8 +156,9 @@ void main() {
 
     test('header', () {
       final h = decodeHeader(blob);
-      expect(h.version, 1);
-      expect(h.flags, 0);
+      expect(h.version, 3);
+      expect(h.flags, kRunFlagFinished);
+      expect(h.finished, isTrue);
       expect(h.runSeq, 7);
       expect(h.startUptimeS, 41);
     });
@@ -156,25 +191,20 @@ void main() {
       expect(f.distanceM, 1234);
       expect(f.movingS, 600);
       expect(f.elapsedS, 620);
-      expect(f.crc32, 0xbdfefd77);
+      expect(f.crc32, 0x91c0e339);
     });
 
     test('verifyBlob is true for the untouched golden vector', () {
       expect(verifyBlob(blob), isTrue);
     });
 
-    // The footer CRC is defined over header+points only (bytes 0..64), plus
-    // this verifier also revalidates the TRK1/END1 magics and the crc field
-    // itself. The 12 footer summary bytes distance/moving/elapsed
-    // (offsets 68..80) are, by the frozen wire spec, NOT inside the CRC
-    // window, so a flip there is genuinely undetectable — pinned explicitly
-    // below so a future "tighten verifyBlob" change can't silently regress
-    // the wire contract.
-    const uncoveredStart = 84 - 20 + 4; // 68: first byte after END1 magic
-    const uncoveredEnd = 84 - 4; // 80: first byte of the crc field
-    test('flipping any CRC-covered / magic / crc-field byte fails verify', () {
+    // v3's whole point: the CRC covers every byte but the four it occupies,
+    // so no position in the blob is unprotected. Through v2 the 12 summary
+    // bytes at offsets 68..80 sat outside the window and a flip there was
+    // undetectable — a run that verified with wrong distance / moving /
+    // elapsed. This is exhaustive precisely so that hole cannot reappear.
+    test('flipping ANY byte of the blob fails verification', () {
       for (var i = 0; i < blob.length; i++) {
-        if (i >= uncoveredStart && i < uncoveredEnd) continue;
         final mutated = Uint8List.fromList(blob);
         mutated[i] ^= 0x01;
         expect(verifyBlob(mutated), isFalse,
@@ -182,12 +212,30 @@ void main() {
       }
     });
 
-    test('footer summary bytes are outside the CRC window (frozen spec)', () {
-      for (var i = uncoveredStart; i < uncoveredEnd; i++) {
+    test('the footer summary bytes are inside the CRC window', () {
+      // Named separately from the exhaustive sweep above so the regression
+      // this closes is stated, not inferred.
+      for (var i = 84 - 20 + 4; i < 84 - 4; i++) {
         final mutated = Uint8List.fromList(blob);
         mutated[i] ^= 0x01;
-        expect(verifyBlob(mutated), isTrue,
-            reason: 'byte $i is distance/moving/elapsed, not CRC-protected');
+        expect(verifyBlob(mutated), isFalse,
+            reason: 'byte $i is distance/moving/elapsed and must be covered');
+      }
+    });
+
+    test('a pre-v3 blob is rejected, never decoded', () {
+      // The compat decision (decisions §321): v1/v2 checksums cover a
+      // narrower window, so re-admitting them would re-open the unprotected
+      // totals hole. There are no deployed devices to migrate.
+      final m = decodeManifest(_goldenManifest());
+      for (final hex in [_v1GoldenHex, _v2GoldenHex]) {
+        final old = _hex(hex);
+        expect(verifyBlob(old), isFalse);
+        expect(
+          () => payloadFromBlob(
+              old, m.entries.single, m.header, DateTime.utc(2026, 7, 8)),
+          throwsFormatException,
+        );
       }
     });
   });
@@ -195,7 +243,7 @@ void main() {
   group('manifest + chunk request', () {
     test('decodeManifest', () {
       final m = decodeManifest(_goldenManifest());
-      expect(m.header.version, 1);
+      expect(m.header.version, 3);
       expect(m.header.runCount, 1);
       expect(m.header.watchUptimeS, 700);
       expect(m.entries, hasLength(1));
@@ -245,9 +293,62 @@ void main() {
       expect(track[2]['bpm'], isNull);
     });
 
-    test('a v2 blob with a lap yields the registered metadata.laps shape', () {
-      final blob = _goldenV2Blob();
-      expect(verifyBlob(blob), isTrue, reason: 'v2 golden must verify');
+    test('the lap golden carries the finished flag the firmware stamps', () {
+      // The one byte separating a committed run from a mid-run checkpoint of the
+      // same points. It sits inside the CRC-covered prefix, so clearing it
+      // without recomputing the CRC must fail verification — a checkpoint can
+      // never be promoted to "finished" by bit-rot in transit.
+      final blob = _goldenLapBlob();
+      final h = decodeHeader(blob);
+      expect(h.flags, kRunFlagFinished);
+      expect(h.finished, isTrue);
+
+      final tampered = Uint8List.fromList(blob);
+      tampered[5] = 0;
+      expect(verifyBlob(tampered), isFalse);
+    });
+
+    test('a finished blob ingests with no recovered_unfinished key', () {
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+        _goldenBlob(),
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12),
+      );
+      expect(payload['finished'], isTrue);
+
+      final run = runFromWatchPayload(payload);
+      expect(run.metadata?.containsKey(MetadataKeys.recoveredUnfinished),
+          isNot(isTrue),
+          reason: 'a normal finished run must not carry the key at all');
+    });
+
+    test('a boot-recovered checkpoint ingests flagged recovered_unfinished',
+        () {
+      final blob = _checkpointBlob();
+      expect(verifyBlob(blob), isTrue,
+          reason: 'the recomputed CRC must still verify');
+      expect(decodeHeader(blob).finished, isFalse);
+
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+        blob,
+        m.entries.single,
+        m.header,
+        DateTime.utc(2026, 7, 8, 12),
+      );
+      expect(payload['finished'], isFalse);
+
+      // The totals are the checkpoint's totals-so-far, and the run says so.
+      final run = runFromWatchPayload(payload);
+      expect(run.metadata?[MetadataKeys.recoveredUnfinished], isTrue);
+      expect(run.duration, const Duration(seconds: 620));
+    });
+
+    test('a blob with a lap yields the registered metadata.laps shape', () {
+      final blob = _goldenLapBlob();
+      expect(verifyBlob(blob), isTrue, reason: 'lap golden must verify');
       // The manifest advertises the blob's real size (4 records = 100 B).
       final m = decodeManifest(_goldenManifest());
       final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
@@ -277,7 +378,7 @@ void main() {
     });
 
     test('consecutive laps accumulate start_offset_s from prior splits', () {
-      // Hand-build a v2 blob: two laps back to back (no points needed for
+      // Hand-build a blob: two laps back to back (no points needed for
       // the offset math).
       final body = BytesBuilder();
       final header = ByteData(16);
@@ -285,7 +386,7 @@ void main() {
       header.setUint8(1, 0x52); // R
       header.setUint8(2, 0x4b); // K
       header.setUint8(3, 0x31); // 1
-      header.setUint8(4, 2); // version 2
+      header.setUint8(4, 3); // current format version
       header.setUint32(8, 9, Endian.little);
       header.setUint32(12, 0, Endian.little);
       body.add(header.buffer.asUint8List());
@@ -307,8 +408,12 @@ void main() {
       footer.setUint32(4, 2000, Endian.little);
       footer.setUint32(8, 700, Endian.little);
       footer.setUint32(12, 720, Endian.little);
-      footer.setUint32(16, crc32(prefix), Endian.little);
-      final blob = Uint8List.fromList([...prefix, ...footer.buffer.asUint8List()]);
+      // The CRC covers the prefix AND the footer's magic + totals — every
+      // byte but the four it lands in.
+      final footerBytes = footer.buffer.asUint8List();
+      footer.setUint32(
+          16, crc32([...prefix, ...footerBytes.sublist(0, 16)]), Endian.little);
+      final blob = Uint8List.fromList([...prefix, ...footerBytes]);
       expect(verifyBlob(blob), isTrue);
 
       final m = decodeManifest(_goldenManifest(watchUptimeS: 800, startUptimeS: 0));
@@ -322,12 +427,11 @@ void main() {
 
     test('a blob newer than the supported format is rejected, never misread',
         () {
-      final blob = Uint8List.fromList(_goldenV2Blob());
-      blob[4] = 3; // future version
+      final blob = Uint8List.fromList(_goldenLapBlob());
+      blob[4] = 4; // future version
       // Re-stamp the CRC so ONLY the version gate can reject it.
-      final n = (blob.length - 16 - 20) ~/ 16;
       final d = ByteData.sublistView(blob);
-      d.setUint32(blob.length - 4, crc32(blob.sublist(0, 16 + n * 16)),
+      d.setUint32(blob.length - 4, crc32(blob.sublist(0, blob.length - 4)),
           Endian.little);
       expect(verifyBlob(blob), isTrue, reason: 'structurally valid');
       final m = decodeManifest(_goldenManifest());
@@ -502,7 +606,7 @@ void main() {
       final frame = Uint8List.fromList(transport.settingsWrites.single);
       expect(
         frame,
-        _hex('53455431020f00be00d3a40000403800000024f4480050434903'),
+        _hex('53455431030f00be00d3a40000403800000024f4480050434903ecf085ac'),
       );
     });
   });

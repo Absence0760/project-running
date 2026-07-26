@@ -6,13 +6,17 @@
 //! Thin glue by design: distance, moving time, pace, the point-acceptance
 //! filter, and the auto-pause all live in `watch_core::record` (host-tested);
 //! the button-press → command mapping lives in `watch_core::button`; the flash
-//! slot layout in `watch_core::flash_store`. This task selects over incoming
-//! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
-//! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
-//! the wall clock between fixes. Idle and Finished have no clock to advance, so
-//! the tick is dropped there and the task waits purely on events. It publishes
-//! a snapshot only when it actually changed, so a resting recorder wakes no
-//! downstream consumer (the ui face, the button task) on a heartbeat.
+//! slot layout in `watch_core::flash_store`; the tick gate, flash-checkpoint
+//! cadence, track-point shaping and pushed-QNH guard in
+//! `watch_core::record_cadence`; and which sink each pushed settings field
+//! feeds in `watch_core::settings_apply`. This task selects over incoming
+//! fixes (fed to the recorder), commands (drive start/pause/resume/stop/lap),
+//! and a pushed settings frame waiting to be drained, plus — only while a run
+//! is Recording or Paused — a 1 Hz tick that advances the wall clock between
+//! fixes. Idle and Finished have no clock to advance, so the tick is dropped
+//! there and the task waits purely on events. It publishes a snapshot only when
+//! it actually changed, so a resting recorder wakes no downstream consumer (the
+//! ui face, the button task) on a heartbeat.
 //!
 //! It also drives the `watch_core::alerts` engine (drink / eat reminders on
 //! the fuel_plan moving-time cadence + the HR-zone ceiling alert) off the same
@@ -33,7 +37,7 @@
 //! `apps/custom_watch/local_testing.md § Simulating without a board`.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, Either, Either3};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
@@ -48,8 +52,10 @@ use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter, TrackPoint};
+use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
+use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
 use watch_core::settings::WatchSettings;
+use watch_core::settings_apply::{plan_apply, SettingsEffect};
 use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
@@ -70,12 +76,9 @@ struct OpenRun {
     writer: RunWriter<Vec<u8, SLOT_LEN>>,
     run_seq: u32,
     start_uptime_s: u32,
-    /// Snapshot `elapsed_s` at the last mid-run flash checkpoint — the time-based
-    /// checkpoint cadence measures against this.
-    last_ckpt_elapsed_s: u32,
-    /// Staged point count at the last mid-run checkpoint — the point-based
-    /// cadence measures against this.
-    last_ckpt_points: u32,
+    /// Where the last mid-run flash checkpoint left off — both checkpoint
+    /// triggers measure against it (`CheckpointMark::due`).
+    last_ckpt: CheckpointMark,
 }
 
 /// Open a fresh staging writer for a new run, assigning the next run id. Returns
@@ -89,8 +92,7 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
             writer,
             run_seq,
             start_uptime_s,
-            last_ckpt_elapsed_s: 0,
-            last_ckpt_points: 0,
+            last_ckpt: CheckpointMark::default(),
         }),
         Err(_) => {
             warn!("record: run writer start failed");
@@ -107,16 +109,10 @@ fn open_run(next_seq: &mut u32, start_uptime_s: u32) -> Option<OpenRun> {
 fn push_point(
     open: &mut OpenRun,
     fix: &Fix,
-    bpm: Option<u8>,
+    bpm: Option<u16>,
     baro_alt_m: Option<f32>,
 ) -> Option<u32> {
-    let point = TrackPoint {
-        lat_e7: (fix.lat_deg * 1e7) as i32,
-        lon_e7: (fix.lon_deg * 1e7) as i32,
-        t_offset_s: fix.uptime_s.saturating_sub(open.start_uptime_s),
-        ele_dm: baro_alt_m.or(fix.alt_m).and_then(ele_dm_from_m),
-        bpm,
-    };
+    let point = track_point(fix, open.start_uptime_s, bpm, baro_alt_m);
     match open.writer.push_point_bounded(&point) {
         PushOutcome::Thinned(k) => {
             warn!(
@@ -152,29 +148,6 @@ fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
         ),
     }
 }
-
-/// Mid-run flash-checkpoint cadence. The in-progress run is staged in RAM and
-/// only committed to flash at stop, so a battery swap or brown-out mid-run would
-/// otherwise lose the whole track. A periodic best-effort checkpoint writes a
-/// recoverable blob into the run's slot (`run_flash::RunStore::checkpoint`); the
-/// final `commit_run` at stop supersedes the last checkpoint (same slot).
-///
-/// Wear budget: each checkpoint erases one 4 KiB flash page, and the nRF52840's
-/// internal flash is rated ~10,000 erase cycles/page. At a 300 s cadence a
-/// 100-hour run erases 100·3600/300 = 1,200 times — ~12 % of one page's
-/// endurance in a single extreme run — and because a run keeps to a single slot
-/// while successive runs round-robin across all 4 slots, real multi-run wear
-/// spreads further; a typical sub-24 h ultra is ≤288 erases. A 60 s cadence
-/// would burn ~6,000 erases (>½ the page) in one 100 h run, so 300 s is the
-/// floor that keeps wear well within endurance.
-const CHECKPOINT_INTERVAL_S: u32 = 300;
-
-/// Also checkpoint every this many newly-accepted track points, so the early
-/// (still-growing) track reaches flash within minutes rather than waiting a full
-/// `CHECKPOINT_INTERVAL_S`. Bounded by `MAX_POINTS_PER_RUN` (253), so at most a
-/// handful of point-triggered checkpoints ever fire before the track is full and
-/// only the time trigger (refreshing the totals) remains.
-const CHECKPOINT_POINTS: u32 = 60;
 
 /// Persist a recoverable snapshot of the run-so-far to its flash slot WITHOUT
 /// consuming the staging writer (best-effort / L4). Mirrors [`commit_run`] but
@@ -233,23 +206,6 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
         .await;
 }
 
-/// Altitude in metres → wire-format decimetres, dropping values outside the
-/// `i16` decimetre range (about ±3276 m — a frozen `TrackPoint` limit; tier-2
-/// widens it) so an out-of-range reading stores `None`, never a wrong value.
-fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
-    let dm = alt_m * 10.0;
-    if dm.is_finite() && dm > i16::MIN as f32 && dm <= i16::MAX as f32 {
-        Some(dm as i16)
-    } else {
-        None
-    }
-}
-
-/// A held HR estimate → a track point's `bpm`, dropping out-of-`u8` values.
-fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
-    bpm.and_then(|b| ((1..=255).contains(&b)).then_some(b as u8))
-}
-
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
 /// distances along its NW->SW->SE polyline). Two aid-station-style cut-offs the
 /// bench_jog fixture sweeps past each lap, so the CutoffEta page shows a live
@@ -303,7 +259,6 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
-    let mut settings_rx = unwrap!(state::SETTINGS.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -381,16 +336,36 @@ pub async fn run(store: &'static SharedStore) {
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
         // Finished don't, so drop the ticker there and wait purely on events.
-        let event = if is_active(recorder.state()) {
-            match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
-                Either3::First(()) => Event::Tick,
-                Either3::Second(fix) => Event::Fix(fix),
-                Either3::Third(cmd) => Event::Cmd(cmd),
+        // The settings arm is `ready_to_receive`, not `receive`: it wakes on a
+        // pushed frame without taking it, so the drain below stays the sole
+        // consumer and keeps every queued frame in one FIFO order. It is last so
+        // it can never pre-empt a fix or a command, and it wakes only when a
+        // publisher actually sends — nothing polls.
+        let event = if run_active(recorder.state()) {
+            match select4(
+                ticker.next(),
+                fix_rx.changed(),
+                state::RECORD_CMD.receive(),
+                state::SETTINGS.ready_to_receive(),
+            )
+            .await
+            {
+                Either4::First(()) => Event::Tick,
+                Either4::Second(fix) => Event::Fix(fix),
+                Either4::Third(cmd) => Event::Cmd(cmd),
+                Either4::Fourth(()) => Event::Settings,
             }
         } else {
-            match select(fix_rx.changed(), state::RECORD_CMD.receive()).await {
-                Either::First(fix) => Event::Fix(fix),
-                Either::Second(cmd) => Event::Cmd(cmd),
+            match select3(
+                fix_rx.changed(),
+                state::RECORD_CMD.receive(),
+                state::SETTINGS.ready_to_receive(),
+            )
+            .await
+            {
+                Either3::First(fix) => Event::Fix(fix),
+                Either3::Second(cmd) => Event::Cmd(cmd),
+                Either3::Third(()) => Event::Settings,
             }
         };
 
@@ -425,10 +400,14 @@ pub async fn run(store: &'static SharedStore) {
             });
         }
 
-        // A pushed settings frame (from the ble task; the sim seeds one above)
-        // applies each present field to the recorder + alert engine. Config, not
-        // run data — L4, applied before the event mutates run totals.
-        if let Some(Some(s)) = settings_rx.try_changed() {
+        // Pushed settings frames (from the ble task; the sim seeds one above)
+        // apply each present field to the recorder + alert engine. Config, not
+        // run data — L4, applied before the event mutates run totals, so a frame
+        // that arrived alongside a Start lands before that command reaches the
+        // recorder. Every queued frame is drained in arrival order: each is a
+        // delta, so applying only the newest would silently drop whatever an
+        // earlier push carried.
+        while let Ok(s) = state::SETTINGS.try_receive() {
             apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
         }
 
@@ -465,7 +444,7 @@ pub async fn run(store: &'static SharedStore) {
                 recorder.on_fix(&fix);
                 if recorder.last_fix_stored() {
                     if let Some(o) = open.as_mut() {
-                        if let Some(k) = push_point(o, &fix, bpm_u8(held), latest_baro_alt_m) {
+                        if let Some(k) = push_point(o, &fix, held, latest_baro_alt_m) {
                             recorder.set_track_thinning(k);
                         }
                     }
@@ -519,6 +498,9 @@ pub async fn run(store: &'static SharedStore) {
                 }
                 info!("record: command {} -> {}", cmd, state_str(now));
             }
+            // The drain above already consumed and applied the frame this wake
+            // was for; the loop tail republishes whatever it changed.
+            Event::Settings => {}
         }
 
         // Persist any laps this event closed (manual, auto, or a throttled
@@ -539,18 +521,18 @@ pub async fn run(store: &'static SharedStore) {
         // run-so-far to its slot so a reset mid-run recovers a slightly-stale
         // partial run instead of the whole in-progress track (which only reaches
         // flash at stop otherwise). Cadence is wear-bounded — see
-        // CHECKPOINT_INTERVAL_S. Runs after the recorder updates and never in its
-        // way; the final commit_run at stop supersedes the last checkpoint.
+        // record_cadence::CHECKPOINT_INTERVAL_S. Runs after the recorder updates
+        // and never in its way; the final commit_run at stop supersedes the last
+        // checkpoint.
         if recorder.state() == RecordState::Recording {
             if let Some(o) = open.as_mut() {
                 let points = o.writer.point_count();
-                let due_time =
-                    snap.elapsed_s >= o.last_ckpt_elapsed_s.saturating_add(CHECKPOINT_INTERVAL_S);
-                let due_points = points >= o.last_ckpt_points.saturating_add(CHECKPOINT_POINTS);
-                if points > 0 && (due_time || due_points) {
+                if o.last_ckpt.due(points, snap.elapsed_s) {
                     checkpoint_run(store, o, &snap).await;
-                    o.last_ckpt_elapsed_s = snap.elapsed_s;
-                    o.last_ckpt_points = points;
+                    o.last_ckpt = CheckpointMark {
+                        points,
+                        elapsed_s: snap.elapsed_s,
+                    };
                 }
             }
         }
@@ -585,28 +567,13 @@ pub async fn run(store: &'static SharedStore) {
     }
 }
 
-/// A run advances its wall clock only while Recording or Paused; Idle and
-/// Finished are inert, so the 1 Hz tick is dropped in those states.
-fn is_active(state: RecordState) -> bool {
-    matches!(state, RecordState::Recording | RecordState::Paused)
-}
-
-/// Plausible QNH sea-level pressure window (Pa). A pushed `sea_level_pa` outside
-/// this is ignored — never published — the same "reject, don't clamp"
-/// discipline the recorder/alert setters keep for a garbage value. ~870–1080
-/// hPa spans every real weather system (record sea-level pressure extremes sit
-/// well inside it), so anything outside is a corrupt or misframed push.
-const MIN_SEA_LEVEL_PA: f32 = 87_000.0;
-const MAX_SEA_LEVEL_PA: f32 = 108_000.0;
-
-/// Apply a pushed settings frame: each present field feeds the recorder's (or
-/// alert engine's) existing settings-sync setter, which keeps its own
-/// plausibility guard, so a bad value is rejected the same way regardless of
-/// transport. The QNH sea-level reference has no setter (it is a `state` watch
-/// the baro task consumes), so its plausibility guard lives here — range-check,
-/// then publish; the timezone offset rides the same seam toward the ui task,
-/// its guard host-tested in `watch_core::settings`. Absent fields are left
-/// untouched — a partial push is a partial update, never a reset of the rest.
+/// Execute a pushed settings frame: `watch_core::settings_apply` decides which
+/// sink each present field feeds and hands back one typed effect per field
+/// (host-tested, exhaustive by construction), so this is only the seam that
+/// owns the sinks themselves — the two `state` watches the baro + ui tasks
+/// consume, and the recorder / alert-engine setters, each of which keeps its own
+/// plausibility guard so a bad value is rejected the same way regardless of
+/// transport.
 fn apply_settings(
     s: &WatchSettings,
     recorder: &mut Recorder,
@@ -614,34 +581,26 @@ fn apply_settings(
     sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
     tz_offset_tx: &Sender<'static, CriticalSectionRawMutex, i16, 1>,
 ) {
-    if let Some(hr) = s.max_hr {
-        recorder.set_max_hr(hr);
-    }
-    if let Some(p) = s.pacer {
-        recorder.set_pacer_goal(p.distance_m, p.time_s);
-    }
-    if let Some(g) = s.gear {
-        recorder.set_gear(Some(g.baseline_m as f64), g.target_m.map(f64::from));
-    }
-    if let Some(z) = s.zone_ceiling {
-        alerts.set_zone_ceiling(z);
-    }
-    if let Some(pa) = s.sea_level_pa {
-        if (MIN_SEA_LEVEL_PA..=MAX_SEA_LEVEL_PA).contains(&pa) {
-            sea_level_tx.send(pa);
+    for effect in plan_apply(s) {
+        match effect {
+            SettingsEffect::MaxHr(bpm) => recorder.set_max_hr(bpm),
+            SettingsEffect::PacerGoal { distance_m, time_s } => {
+                recorder.set_pacer_goal(distance_m, time_s)
+            }
+            SettingsEffect::Gear {
+                baseline_m,
+                target_m,
+            } => recorder.set_gear(Some(baseline_m), target_m),
+            SettingsEffect::ZoneCeiling(zone) => alerts.set_zone_ceiling(zone),
+            SettingsEffect::SeaLevelPa(pa) => sea_level_tx.send(pa),
+            SettingsEffect::FuelIntervals {
+                drink_interval_s,
+                eat_interval_s,
+            } => alerts.set_fuel_intervals(drink_interval_s, eat_interval_s),
+            SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
+            SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
+            SettingsEffect::TzOffsetMin(m) => tz_offset_tx.send(m),
         }
-    }
-    if let Some(f) = s.fuel {
-        alerts.set_fuel_intervals(f.drink_interval_s, f.eat_interval_s);
-    }
-    if let Some(mask) = s.pages {
-        recorder.set_pages_enabled(mask);
-    }
-    if let Some(hide) = s.hide_empty_pages {
-        recorder.set_hide_empty_pages(hide);
-    }
-    if let Some(m) = s.plausible_tz_offset_min() {
-        tz_offset_tx.send(m);
     }
 }
 
@@ -649,4 +608,5 @@ enum Event {
     Tick,
     Fix(Fix),
     Cmd(RecordCommand),
+    Settings,
 }

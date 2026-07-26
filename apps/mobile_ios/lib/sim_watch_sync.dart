@@ -12,12 +12,17 @@ import 'watch_settings.dart';
 ///
 ///   header(16) | record[N](16) | footer(20)
 ///
-/// Version 1 records are all track points. Version 2 makes each record's
-/// byte 15 a tag — 0 = track point (v1's reserved zero byte, so a v1 blob
-/// is also a valid tagged stream), 1 = a closed lap — and lap records
-/// interleave with points in recording order. Versions above
-/// [_maxSupportedVersion] are rejected outright: decoding an unknown
-/// record layout as GPS points would corrupt a track.
+/// Each record's byte 15 is a tag — 0 = track point, 1 = a closed lap —
+/// and lap records interleave with points in recording order.
+///
+/// Version 3 put the footer's totals under the CRC: the checksum covers
+/// every byte of the blob except the four it occupies itself, so a
+/// distance / moving / elapsed value cannot rot into a run that verifies
+/// with wrong numbers. Versions outside
+/// [_minSupportedVersion] .. [_maxSupportedVersion] are rejected
+/// outright — a v1/v2 blob's CRC covers a narrower window and re-admitting
+/// it would re-open exactly that hole, and an unknown newer record layout
+/// decoded as GPS points would corrupt a track (decisions §321).
 ///
 /// The watch exposes the set of runs over BLE as a manifest (a header +
 /// one entry per stored run). The phone pulls each blob in chunks,
@@ -33,12 +38,31 @@ const int _headerLen = 16;
 const int _pointLen = 16;
 const int _footerLen = 20;
 
-/// Record tags at byte 15 of every 16-byte record (version 2).
+/// Record tags at byte 15 of every 16-byte record.
 const int _recordTagPoint = 0;
 const int _recordTagLap = 1;
 
-/// The newest `run_store` format this decoder understands.
-const int _maxSupportedVersion = 2;
+/// The `run_store` formats this decoder understands. A single version by
+/// design: v3 redefined the CRC window, so v1/v2 blobs are not merely old,
+/// they carry a checksum that leaves their totals unprotected.
+const int _minSupportedVersion = 3;
+const int _maxSupportedVersion = 3;
+
+/// Bytes of the footer the CRC does not cover — the CRC field itself, which
+/// sits last. Everything before it is inside the window.
+const int _footerCrcLen = 4;
+
+/// Header `flags` bit (byte 5): the watch stamped this blob at commit, so it
+/// is a finished run rather than a mid-run checkpoint snapshot.
+///
+/// The watch does not advertise the checkpoints of a run it is still
+/// recording, so a synced blob normally carries this. It can legitimately be
+/// clear: a run interrupted by a reset is recovered from its last checkpoint
+/// and advertised then, because the recording ended with the power. Such a
+/// blob is a real run whose footer totals are its totals-so-far, so it is
+/// ingested rather than refused — refusing it would throw away the only copy
+/// of an interrupted run.
+const int kRunFlagFinished = 0x01;
 
 /// Sentinel written by the watch when a point has no barometric/GPS
 /// elevation fix. Decoded to a null `ele`.
@@ -48,7 +72,7 @@ const _uuid = Uuid();
 
 /// CRC-32 (IEEE / reflected, poly 0xEDB88320, init 0xFFFFFFFF, final
 /// XOR 0xFFFFFFFF) — the zlib/gzip CRC the firmware writes into the
-/// footer over `header + points`.
+/// footer over everything but the four bytes the CRC occupies.
 int crc32(List<int> bytes) {
   var crc = 0xFFFFFFFF;
   for (final b in bytes) {
@@ -73,6 +97,10 @@ class TrackHeader {
     required this.runSeq,
     required this.startUptimeS,
   });
+
+  /// Whether [kRunFlagFinished] is set — see that constant for why a clear
+  /// flag is still a run worth ingesting.
+  bool get finished => flags & kRunFlagFinished != 0;
 }
 
 class TrackPoint {
@@ -185,7 +213,7 @@ TrackPoint decodePoint(List<int> blob, int offset) {
   );
 }
 
-/// One closed lap persisted in the version-2 stream (tag 1 at byte 15):
+/// One closed lap persisted in the record stream (tag 1 at byte 15):
 /// 1-based index, the lap's own distance in decimetres, and the lap's
 /// elapsed + moving seconds.
 class LapRecord {
@@ -242,18 +270,24 @@ int _pointCount(int length) {
 }
 
 /// True iff [blob] is a structurally valid `run_store` blob whose footer
-/// CRC matches a fresh CRC-32 over its `header + points`. Any structural
-/// defect (short blob, bad magic, misaligned length, CRC mismatch)
-/// returns false rather than throwing, so a corrupt BLE transfer is
-/// dropped, never adopted as a run.
+/// CRC matches a fresh CRC-32 over every byte the CRC covers — header,
+/// records, and the footer's magic + totals. Any structural defect (short
+/// blob, bad magic, misaligned length, CRC mismatch) returns false rather
+/// than throwing, so a corrupt BLE transfer is dropped, never adopted as
+/// a run.
+///
+/// The totals being inside the window is what makes this all-or-nothing:
+/// a blob is trusted whole or refused whole, never trusted for its track
+/// while its summary is quietly wrong.
 bool verifyBlob(List<int> blob) {
   final n = _pointCount(blob.length);
   if (n < 0) return false;
   if (!_magicMatches(blob, 0, 'TRK1')) return false;
   final footerBase = blob.length - _footerLen;
   if (!_magicMatches(blob, footerBase, 'END1')) return false;
-  final expected = _view(blob).getUint32(footerBase + 16, Endian.little);
-  final actual = crc32(blob.sublist(0, _headerLen + n * _pointLen));
+  final expected =
+      _view(blob).getUint32(blob.length - _footerCrcLen, Endian.little);
+  final actual = crc32(blob.sublist(0, blob.length - _footerCrcLen));
   return expected == actual;
 }
 
@@ -325,9 +359,11 @@ Map<String, dynamic> payloadFromBlob(
   DateTime phoneNow,
 ) {
   final header = decodeHeader(blob);
-  if (header.version < 1 || header.version > _maxSupportedVersion) {
-    // Fail closed: an unknown record layout decoded as points would
-    // corrupt a track. A newer watch needs a newer app.
+  if (header.version < _minSupportedVersion ||
+      header.version > _maxSupportedVersion) {
+    // Fail closed at both ends: an unknown record layout decoded as points
+    // would corrupt a track, and a pre-v3 blob's CRC never covered its
+    // totals, so its summary is unverified even where its track checks out.
     throw FormatException(
         'unsupported run_store blob version ${header.version}');
   }
@@ -384,6 +420,7 @@ Map<String, dynamic> payloadFromBlob(
     'source': 'watch',
     'track': track,
     'activity_type': 'run',
+    'finished': header.finished,
     if (laps.isNotEmpty) 'laps': laps,
   };
 }

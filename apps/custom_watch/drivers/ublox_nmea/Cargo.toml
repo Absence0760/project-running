@@ -12,3 +12,8 @@ default = []
 defmt   = ["dep:defmt"]
 
 # Host-testable, so no embedded dev-deps. `cargo test --target <host>` works.
+#
+# proptest backs `tests/properties.rs`. `default-features = false` drops its
+# fork / rusty-fork / tempfile / regex machinery, which the suite doesn't use.
+[dev-dependencies]
+proptest = { version = "1.11", default-features = false, features = ["std"] }

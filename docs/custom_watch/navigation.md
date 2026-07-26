@@ -146,9 +146,12 @@ expensive on the whole grid (near-full lap), which the `±` grammar removes.
   (§293) — the watch has no zoneinfo of its own.
 - `FIN` retains the last run's stats until dismissed — there is no summary
   page beyond the frozen dashboard.
-- The home face carries no battery figure — tier 1 has no fuel gauge, so
-  the MODE row's projected hours are the only battery signal (§291 shipped
-  the clock-hero home face; the bench acquisition view moved behind BTN4).
+- The home face's battery icon is a rest-voltage estimate off the SAADC's
+  internal VDD channel (§294), not a fuel gauge: a loaded cell sags below the
+  curve anchors, and it yields the title row's mid-band to the post-press
+  BTN3 hint and the re-zero banner. The numeric `BAT n%` is diagnostics-only.
+  A rail the plausibility band can't read as a 1S LiPo — the USB-powered DK
+  at ~3.0 V — shows nothing at all rather than a confident 0 %.
 
 ## Driving it in the sim
 

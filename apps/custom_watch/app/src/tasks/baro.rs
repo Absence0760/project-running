@@ -12,9 +12,19 @@
 //!
 //! Also the consumer of the manual QNH re-zero (idle-face BTN3 long-press,
 //! `watch_core::button::btn3_action`): the task owns the vert accumulator, so
-//! the bias snap happens here, against the freshest GPS altitude
-//! (`watch_core::elevation::rezero_reference`), and the outcome is published
-//! to `state::QNH_REZERO` for the face's transient banner.
+//! the bias snap happens here, but the decision itself — both freshness gates
+//! and the two distinct refusals — is the host-tested
+//! `watch_core::baro_rezero::rezero`. The outcome is published to
+//! `state::QNH_REZERO` for the face's transient banner.
+//!
+//! Publication is **gated on a change worth waking for**
+//! (`watch_core::elevation::should_publish`). `Watch::send` wakes every
+//! receiver whatever the value, and the screen task waits on this watch, so
+//! sending each 1 Hz sample made a present barometer re-render the face every
+//! second forever — the free-running waker the README's power discipline rules
+//! out. A manual re-zero snap is the one publication that bypasses the gate
+//! (`baro_rezero::published_reading`), so the ALT row always moves with the
+//! banner announcing it.
 
 use bmp581::{Bmp581, I2C_ADDR};
 use defmt::*;
@@ -22,9 +32,9 @@ use embassy_futures::select::{select, Either};
 use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Instant, Ticker};
 use embedded_hal::i2c::Operation;
+use watch_core::baro_rezero::{self, BaroSample};
 use watch_core::elevation::{
-    altitude_m, rezero_reference, RezeroStatus, VertAccumulator, REZERO_MAX_FIX_AGE_S,
-    STANDARD_SEA_LEVEL_PA,
+    altitude_m, should_publish, Reading, RezeroStatus, VertAccumulator, STANDARD_SEA_LEVEL_PA,
 };
 use watch_core::fix::Fix;
 
@@ -82,7 +92,8 @@ pub async fn run(mut twim: Twim<'static>) {
     // (rezero_reference), neither of which a request-time sensor read could
     // supply alone.
     let mut last_fix: Option<Fix> = None;
-    let mut last_alt: Option<(f32, u32)> = None;
+    let mut last_alt: Option<BaroSample> = None;
+    let mut published: Option<Reading> = None;
     // QNH reference for the altitude conversion. Defaults to the ISA standard
     // until a phone settings push recalibrates it (state::SEA_LEVEL_PA) — the
     // weather-front case where the fixed standard drifts the whole altitude.
@@ -100,24 +111,11 @@ pub async fn run(mut twim: Twim<'static>) {
                 last_fix = Some(f);
             }
             let now_s = Instant::now().as_secs() as u32;
-            // The baro side gets the same freshness budget as the GPS side: a
-            // sensor that stopped answering must read as NO BARO, not re-base
-            // against its last good sample.
-            let fresh_alt = last_alt
-                .filter(|(_, at)| now_s.saturating_sub(*at) <= REZERO_MAX_FIX_AGE_S)
-                .map(|(alt, _)| alt);
-            let status = match fresh_alt {
-                None => RezeroStatus::NoBaro,
-                Some(alt) => match vert.rezero(alt, rezero_reference(last_fix.as_ref(), now_s)) {
-                    Some(snapped) => {
-                        // Publish immediately so the face's ALT row snaps with
-                        // the banner rather than a sample later.
-                        elevation_tx.send(vert.reading(snapped));
-                        RezeroStatus::Applied(snapped)
-                    }
-                    None => RezeroStatus::NoGps,
-                },
-            };
+            let status = baro_rezero::rezero(&mut vert, last_alt, last_fix.as_ref(), now_s);
+            if let Some(reading) = baro_rezero::published_reading(&vert, status) {
+                elevation_tx.send(reading);
+                published = Some(reading);
+            }
             info!("baro: qnh re-zero -> {}", status);
             rezero_status_tx.send((status, now_s));
             continue;
@@ -140,7 +138,10 @@ pub async fn run(mut twim: Twim<'static>) {
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
                 let alt = altitude_m(pa, sea_level_pa);
-                last_alt = Some((alt, Instant::now().as_secs() as u32));
+                last_alt = Some(BaroSample {
+                    alt_m: alt,
+                    at_s: Instant::now().as_secs() as u32,
+                });
                 // Fresh GPS altitude corroborates the barometer against weather
                 // drift (elevation's complementary filter): only a fresh fix
                 // slews the bias, so signal loss freezes it rather than dragging
@@ -157,7 +158,10 @@ pub async fn run(mut twim: Twim<'static>) {
                     "baro: alt={}m gain={}m loss={}m",
                     reading.alt_m, reading.gain_m, reading.loss_m
                 );
-                elevation_tx.send(reading);
+                if should_publish(published, reading) {
+                    elevation_tx.send(reading);
+                    published = Some(reading);
+                }
             }
             Ok(None) => {}
             Err(e) => warn!("baro: read error {:?}", e),

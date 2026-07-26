@@ -53,6 +53,7 @@ class MetadataKeys {
   static const String position = 'position';
   static const String raceName = 'race_name';
   static const String recoveredFromCrash = 'recovered_from_crash';
+  static const String recoveredUnfinished = 'recovered_unfinished';
   static const String routineId = 'routine_id';
   static const String runningDynamics = 'running_dynamics';
   static const String runNumber = 'run_number';

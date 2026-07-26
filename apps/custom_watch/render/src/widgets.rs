@@ -16,12 +16,15 @@
 use sharp_mip::{Framebuffer, RowRules, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
 use watch_core::battery;
+use watch_core::course::Course;
 use watch_core::face;
 use watch_core::fix::Fix;
 use watch_core::gauge;
+use watch_core::nav_map::{NavPanel, NavPanelGeom};
 use watch_core::page_grid;
 use watch_core::record::Snapshot;
 use watch_core::statusbar::{self, PageIndicator};
+use watch_core::trackback::{self, TrackbackView};
 
 const CELL_W: usize = WIDTH / TEXT_COLS; // 8
 const CELL_H: usize = HEIGHT / TEXT_ROWS; // 16
@@ -369,6 +372,252 @@ pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
         profile.samples,
         (min, max),
     );
+}
+
+/// The elevation-profile page's mini-profile: the rows the face leaves blank
+/// below its vert-totals context row, full width with a small margin — the same
+/// page-body rect the splits histogram uses.
+const ELEV_PROFILE_X: usize = HIST_X;
+const ELEV_PROFILE_Y: usize = HIST_TOP_ROW * CELL_H;
+const ELEV_PROFILE_W: usize = HIST_W;
+const ELEV_PROFILE_H: usize = HIST_H;
+
+/// The elevation-profile page's overlay: the run's banked altitude series as a
+/// sparkline across the page body. No-op until the recorder has banked a
+/// sample, so the face's own empty state stands alone rather than being
+/// underlined by a flat baseline that reads as "dead level".
+pub fn draw_elev_profile_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
+    let ep = &snap.elev_profile;
+    if ep.len == 0 {
+        return;
+    }
+    draw_mini_profile(
+        fb,
+        &MiniProfile {
+            x: ELEV_PROFILE_X,
+            y: ELEV_PROFILE_Y,
+            w: ELEV_PROFILE_W,
+            h: ELEV_PROFILE_H,
+            samples: &ep.samples[..ep.len],
+        },
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Nav map panel (course polyline + position marker + off-course banner)
+// ---------------------------------------------------------------------------
+
+/// The Nav page's map panel in panel pixels: full display width, the
+/// face-declared text rows tall. `watch_core::face` speaks rows; only the
+/// render layer knows the panel's 16-px cell height.
+const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
+const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
+
+/// Half-length of the position marker's 5-px cross.
+const MARKER_ARM_PX: i32 = 2;
+
+/// The panel geometry the host-tested `nav_map` decisions are taken against.
+/// The ui task hands it straight to [`watch_core::nav_map::nav_panel`], so the
+/// transform, the marker's on-panel test and the pixels drawn here can't
+/// disagree.
+pub const NAV_PANEL_GEOM: NavPanelGeom = NavPanelGeom {
+    w_px: WIDTH as u32,
+    top_px: PANEL_TOP_PX,
+    h_px: PANEL_H_PX,
+    marker_arm_px: MARKER_ARM_PX,
+};
+
+const PANEL_X_MAX: i32 = WIDTH as i32 - 1;
+const PANEL_Y_MAX: i32 = PANEL_TOP_PX + PANEL_H_PX as i32 - 1;
+
+const OUT_LEFT: u8 = 1;
+const OUT_RIGHT: u8 = 2;
+const OUT_ABOVE: u8 = 4;
+const OUT_BELOW: u8 = 8;
+
+fn panel_outcode(x: i32, y: i32) -> u8 {
+    let mut code = 0;
+    if x < 0 {
+        code |= OUT_LEFT;
+    } else if x > PANEL_X_MAX {
+        code |= OUT_RIGHT;
+    }
+    if y < PANEL_TOP_PX {
+        code |= OUT_ABOVE;
+    } else if y > PANEL_Y_MAX {
+        code |= OUT_BELOW;
+    }
+    code
+}
+
+/// Cohen-Sutherland clip of one course segment to the panel rect, or `None`
+/// when the segment misses the panel entirely. [`Framebuffer::draw_line`] only
+/// clips at the *display* edge, and the panel is a band inside it: on the
+/// auto-zoom window a course point a few hundred metres outside the window
+/// projects a handful of pixels past the panel, which is still on-screen — it
+/// would scribble the NAV title row above the panel or the along-course / GPS
+/// rows below it, and those rows are painted *before* this one.
+fn clip_to_panel(
+    mut x0: i32,
+    mut y0: i32,
+    mut x1: i32,
+    mut y1: i32,
+) -> Option<((i32, i32), (i32, i32))> {
+    let mut c0 = panel_outcode(x0, y0);
+    let mut c1 = panel_outcode(x1, y1);
+    loop {
+        if c0 | c1 == 0 {
+            return Some(((x0, y0), (x1, y1)));
+        }
+        if c0 & c1 != 0 {
+            return None;
+        }
+        // The endpoint being pulled in is outside on the axis its outcode
+        // names, and the other endpoint is not (the shared-side case returned
+        // above), so the divisor below is never zero and the ratio is in
+        // [0, 1] — the clipped point always lands between the two endpoints.
+        // The intermediate product does NOT fit i32 though: an auto-zoom fit is
+        // ~8400 px per degree of latitude, so a wild GPS fix (a cold-start
+        // position on the far side of the planet) projects the course hundreds
+        // of thousands of pixels away, and a wrapped multiply would put a
+        // garbage line back inside the panel.
+        let out = if c0 != 0 { c0 } else { c1 };
+        let (dx, dy) = ((x1 - x0) as i64, (y1 - y0) as i64);
+        let lerp = |num: i32, den: i64, along: i64, from: i32| {
+            (from as i64 + along * num as i64 / den) as i32
+        };
+        let (x, y) = if out & OUT_BELOW != 0 {
+            (lerp(PANEL_Y_MAX - y0, dy, dx, x0), PANEL_Y_MAX)
+        } else if out & OUT_ABOVE != 0 {
+            (lerp(PANEL_TOP_PX - y0, dy, dx, x0), PANEL_TOP_PX)
+        } else if out & OUT_RIGHT != 0 {
+            (PANEL_X_MAX, lerp(PANEL_X_MAX - x0, dx, dy, y0))
+        } else {
+            (0, lerp(-x0, dx, dy, y0))
+        };
+        if out == c0 {
+            x0 = x;
+            y0 = y;
+            c0 = panel_outcode(x0, y0);
+        } else {
+            x1 = x;
+            y1 = y;
+            c1 = panel_outcode(x1, y1);
+        }
+    }
+}
+
+/// Draw one frame of the Nav page's map panel: the course polyline, the
+/// position-marker cross, and — last, so it wins the panel pixels — the
+/// off-course banner. Everything decided (which transform, whether the marker
+/// is on-panel at all) comes in via [`watch_core::nav_map::nav_panel`]; this is
+/// the pixels.
+pub fn draw_nav_panel(
+    fb: &mut Framebuffer,
+    course: &Course,
+    panel: &NavPanel,
+    alert: Option<&str>,
+) {
+    for w in course.points().windows(2) {
+        let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+        let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+        if let Some(((cx0, cy0), (cx1, cy1))) =
+            clip_to_panel(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX)
+        {
+            fb.draw_line(cx0, cy0, cx1, cy1, true);
+        }
+    }
+    if let Some(&(mx, my)) = panel.marker.as_ref() {
+        fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+    }
+    if let Some(text) = alert {
+        fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Back-to-start overlay (breadcrumb map + relative direction arrow)
+// ---------------------------------------------------------------------------
+
+/// The TrackBack breadcrumb map's pixel rect: right of the text cells the face
+/// reserves ([`face::TRACKBACK_TEXT_COLS`]), rows 3-7.
+const MAP_X: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W) as i32;
+const MAP_Y: i32 = (TB_MAP_TOP_ROW * CELL_H) as i32;
+const MAP_W: u16 = (WIDTH - face::TRACKBACK_TEXT_COLS * CELL_W) as u16;
+const MAP_H: u16 = (TB_MAP_ROWS * CELL_H) as u16;
+const TB_MAP_TOP_ROW: usize = 3;
+const TB_MAP_ROWS: usize = 5;
+
+/// Half-side of the hollow start-marker box. `project_track` insets its
+/// projection by the same margin, which is what keeps the box inside the map
+/// rect when the start lands on the polyline's extreme.
+const START_MARK_ARM: i32 = 2;
+
+/// Relative direction arrow: centred in the reserved text cells over rows 5-7,
+/// the band the face blanks whenever a fresh heading makes the arrow meaningful
+/// (it writes `--` there otherwise, so the two never overlap).
+const ARROW_CX: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W / 2) as i32;
+const ARROW_CY: i32 = (13 * CELL_H / 2) as i32;
+const ARROW_R: i32 = (3 * CELL_H) as i32 / 2 - 6;
+
+/// Draw the BackToStart page's pixel layer: the north-up TrackBack breadcrumb
+/// map with a hollow-box start marker + a filled current-position dot, and the
+/// relative back-to-start arrow whenever a fresh heading makes it meaningful.
+/// An inactive view (no accepted fix yet) draws no map, so the page reads as
+/// honestly empty rather than showing a crumb of nowhere.
+pub fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: u32) {
+    let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+    if let Some(map) = trackback::project_track(view, MAP_W, MAP_H, &mut pts) {
+        for pair in pts[..map.len].windows(2) {
+            fb.draw_line(
+                MAP_X + pair[0].0 as i32,
+                MAP_Y + pair[0].1 as i32,
+                MAP_X + pair[1].0 as i32,
+                MAP_Y + pair[1].1 as i32,
+                true,
+            );
+        }
+        let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
+        fb.draw_line(
+            sx - START_MARK_ARM,
+            sy - START_MARK_ARM,
+            sx + START_MARK_ARM,
+            sy - START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx + START_MARK_ARM,
+            sy - START_MARK_ARM,
+            sx + START_MARK_ARM,
+            sy + START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx + START_MARK_ARM,
+            sy + START_MARK_ARM,
+            sx - START_MARK_ARM,
+            sy + START_MARK_ARM,
+            true,
+        );
+        fb.draw_line(
+            sx - START_MARK_ARM,
+            sy + START_MARK_ARM,
+            sx - START_MARK_ARM,
+            sy - START_MARK_ARM,
+            true,
+        );
+        let (cx, cy) = (MAP_X + map.current.0 as i32, MAP_Y + map.current.1 as i32);
+        for dy in -1..=1 {
+            fb.draw_line(cx - 1, cy + dy, cx + 1, cy + dy, true);
+        }
+    }
+
+    if let Some(sector) = view.arrow_sector(uptime_s) {
+        for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
+            fb.draw_line(x0, y0, x1, y1, true);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1181,5 +1430,449 @@ mod tests {
 
     fn fb_eq(a: &Framebuffer, b: &Framebuffer) -> bool {
         (0..HEIGHT).all(|y| (0..WIDTH).all(|x| a.pixel(x, y) == b.pixel(x, y)))
+    }
+
+    use watch_core::course::CoursePoint;
+    use watch_core::nav_map;
+    use watch_core::record::{ElevProfileView, ELEV_PROFILE_CAP};
+
+    fn elev_snapshot(series: &[i32]) -> Snapshot {
+        let mut snap = snapshot();
+        let mut view = ElevProfileView::empty();
+        view.samples[..series.len()].copy_from_slice(series);
+        view.len = series.len();
+        snap.elev_profile = view;
+        snap
+    }
+
+    #[test]
+    fn elev_profile_fills_the_page_body_and_spares_the_hero_and_baseline_rows() {
+        let series: [i32; 9] = [1600, 1660, 1740, 1830, 1880, 1810, 1720, 1655, 1602];
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&series));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0,
+            "the profile drew nothing"
+        );
+        // Rows 0-2 are the hero + the vert-totals context row the face owns.
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0, "hero rows");
+        // The bottom band the face keeps for its GPS row stays clear, as do the
+        // side margins.
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0, "below");
+        assert_eq!(ink_in(&fb, 0, 0, ELEV_PROFILE_X, HEIGHT), 0, "left margin");
+        let right = ELEV_PROFILE_X + ELEV_PROFILE_W;
+        assert_eq!(ink_in(&fb, right, 0, WIDTH - right, HEIGHT), 0, "right");
+    }
+
+    #[test]
+    fn elev_profile_shares_the_splits_histogram_panel() {
+        // Both glance pages plot into the same page-body rect below the context
+        // row; a drift between them would put one of the two over a face row.
+        assert_eq!(ELEV_PROFILE_X, HIST_X);
+        assert_eq!(ELEV_PROFILE_Y, HIST_TOP_ROW * CELL_H);
+        assert_eq!(ELEV_PROFILE_W, HIST_W);
+        assert_eq!(ELEV_PROFILE_H, HIST_H);
+    }
+
+    #[test]
+    fn elev_profile_empty_series_draws_nothing() {
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &snapshot());
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
+    fn elev_profile_flat_series_sits_on_the_baseline_not_mid_panel() {
+        // A dead-level treadmill leg auto-ranges to min == max; it must read as
+        // flat along the bottom rather than as a full-height climb.
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&[1500; 6]));
+        let baseline = ELEV_PROFILE_Y + ELEV_PROFILE_H - 1;
+        assert!(fb.pixel(ELEV_PROFILE_X, baseline));
+        assert_eq!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H - 1
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn elev_profile_a_full_buffer_stays_inside_the_panel() {
+        // The recorder's whole banked series at once — the multi-day ultra case,
+        // where a per-sample column is a fraction of a pixel wide.
+        let series: [i32; ELEV_PROFILE_CAP] = core::array::from_fn(|i| 1000 + (i as i32 % 37) * 25);
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&series));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0
+        );
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0);
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0);
+    }
+
+    fn cp(lat_deg: f64, lon_deg: f64) -> CoursePoint {
+        CoursePoint { lat_deg, lon_deg }
+    }
+
+    /// A course far larger than one auto-zoom window on both axes — the shape
+    /// every real ultra course has, so the panel windows around the runner and
+    /// most of the polyline projects off-panel.
+    fn long_course() -> Course {
+        Course::from_points(&[
+            cp(40.00, -105.00),
+            cp(40.05, -105.02),
+            cp(40.10, -105.00),
+            cp(40.15, -105.03),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn nav_panel_never_paints_outside_its_own_rows() {
+        // An auto-zoomed long course projects its far points tens of pixels
+        // above and below the window. The framebuffer only clips at the display
+        // edge, so an unclipped polyline scribbles the NAV title row above the
+        // panel and the along-course / GPS rows below it.
+        let course = long_course();
+        let runner = (40.05, -105.02);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let top = PANEL_TOP_PX as usize;
+        let h = PANEL_H_PX as usize;
+        assert!(ink_in(&fb, 0, top, WIDTH, h) > 0, "the panel drew nothing");
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, top), 0, "ink above the panel");
+        assert_eq!(
+            ink_in(&fb, 0, top + h, WIDTH, HEIGHT - top - h),
+            0,
+            "ink below the panel"
+        );
+    }
+
+    /// A course comfortably inside one auto-zoom window, so the panel keeps
+    /// the whole-course overview.
+    fn short_course() -> Course {
+        Course::from_points(&[
+            cp(40.000, -105.000),
+            cp(40.001, -105.002),
+            cp(40.002, -105.000),
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn nav_panel_clipping_leaves_a_fitted_course_untouched() {
+        // A course that fits whole projects inside the panel by construction,
+        // so the clip must be a no-op there — the fix can't cost the common
+        // case a pixel.
+        let course = short_course();
+        let runner = (40.001, -105.001);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut clipped = Framebuffer::new();
+        draw_nav_panel(&mut clipped, &course, &panel, None);
+        let mut raw = Framebuffer::new();
+        for w in course.points().windows(2) {
+            let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+            let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+            raw.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
+        }
+        let (mx, my) = panel.marker.unwrap();
+        raw.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        raw.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+        assert!(fb_eq(&clipped, &raw));
+    }
+
+    #[test]
+    fn nav_panel_marker_cross_stays_whole_inside_the_panel() {
+        let course = short_course();
+        let runner = (40.001, -105.001);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let (mx, my) = panel.marker.expect("an on-panel runner has a marker");
+        // The whole 5-px cross fits: `marker_px` refuses a marker whose arms
+        // would reach past an edge, so no arm may be clipped or wrap.
+        assert!(mx - MARKER_ARM_PX >= 0 && mx + MARKER_ARM_PX <= PANEL_X_MAX);
+        assert!(my - MARKER_ARM_PX >= PANEL_TOP_PX && my + MARKER_ARM_PX <= PANEL_Y_MAX);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        for arm in -MARKER_ARM_PX..=MARKER_ARM_PX {
+            assert!(fb.pixel((mx + arm) as usize, my as usize), "h arm {arm}");
+            assert!(fb.pixel(mx as usize, (my + arm) as usize), "v arm {arm}");
+        }
+    }
+
+    #[test]
+    fn nav_panel_off_panel_runner_draws_no_marker() {
+        // Far north of a whole-course fit: the cross would land on the rows
+        // above the panel, so `nav_map` withholds it and the banner is the
+        // source of truth. Compare against the courseless frame to prove no
+        // marker ink appears anywhere.
+        let course = short_course();
+        let panel = nav_map::nav_panel(&course, Some((41.0, -105.0)), NAV_PANEL_GEOM);
+        assert_eq!(panel.marker, None);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let mut line_only = Framebuffer::new();
+        for w in course.points().windows(2) {
+            let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
+            let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
+            line_only.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
+        }
+        assert!(fb_eq(&fb, &line_only));
+    }
+
+    #[test]
+    fn nav_panel_all_identical_points_draw_a_dot_not_garbage() {
+        // A degenerate course (every point coincident) makes `PanelFit`'s scale
+        // zero. It must collapse to the panel centre rather than dividing by
+        // zero or smearing the whole band.
+        let course =
+            Course::from_points(&[cp(40.0, -105.0), cp(40.0, -105.0), cp(40.0, -105.0)]).unwrap();
+        let panel = nav_map::nav_panel(&course, Some((40.0, -105.0)), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let top = PANEL_TOP_PX as usize;
+        let h = PANEL_H_PX as usize;
+        let ink = ink_in(&fb, 0, top, WIDTH, h);
+        assert!(ink > 0, "a degenerate course still shows where it is");
+        assert!(ink <= 10, "and stays a dot + cross, not a smear: {ink}");
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, top), 0);
+        assert_eq!(ink_in(&fb, 0, top + h, WIDTH, HEIGHT - top - h), 0);
+    }
+
+    #[test]
+    fn nav_panel_off_course_banner_is_drawn_last_and_wins_the_panel() {
+        // Z-order: the inverse-video banner must survive the polyline and the
+        // marker underneath it, so a lost runner can't read a crumb through
+        // the alert. Drawing the same frame with the banner alone on top of the
+        // same underlay must land identically.
+        let course = long_course();
+        let runner = (40.05, -105.02);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let mut composed = Framebuffer::new();
+        draw_nav_panel(&mut composed, &course, &panel, Some("OFF COURSE"));
+        let mut layered = Framebuffer::new();
+        draw_nav_panel(&mut layered, &course, &panel, None);
+        layered.draw_banner_2x(face::NAV_ALERT_ROW, "OFF COURSE");
+        assert!(fb_eq(&composed, &layered));
+        // The banner's two rows sit inside the panel, so it can't cover the
+        // rows the face owns.
+        let banner_top = face::NAV_ALERT_ROW * CELL_H;
+        assert!(banner_top >= PANEL_TOP_PX as usize);
+        assert!(banner_top + 2 * CELL_H <= (PANEL_TOP_PX + PANEL_H_PX as i32) as usize);
+    }
+
+    #[test]
+    fn nav_panel_survives_a_wild_fix_without_wrapping_a_line_back_in() {
+        // A cold-start GPS reporting a position on the far side of the planet
+        // auto-zooms a window there, projecting the real course hundreds of
+        // thousands of pixels away. The clip's interpolation must not wrap and
+        // put a garbage line back inside the panel — the marker at the window's
+        // centre is all that's left to draw.
+        let course = long_course();
+        let panel = nav_map::nav_panel(&course, Some((-40.0, 75.0)), NAV_PANEL_GEOM);
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        let (mx, my) = panel.marker.expect("the window centres on the runner");
+        let mut marker_only = Framebuffer::new();
+        marker_only.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+        marker_only.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+        assert!(fb_eq(&fb, &marker_only), "a course leg came back into view");
+    }
+
+    #[test]
+    fn nav_panel_clip_interpolates_a_far_off_panel_endpoint() {
+        // Both ends beyond i32's product range for the naive multiply, crossing
+        // the panel diagonally: the clipped span stays on the panel boundary.
+        let ((cx0, cy0), (cx1, cy1)) = clip_to_panel(
+            -600_000,
+            PANEL_TOP_PX - 600_000,
+            600_000,
+            PANEL_Y_MAX + 600_000,
+        )
+        .unwrap();
+        for (x, y) in [(cx0, cy0), (cx1, cy1)] {
+            assert!((0..=PANEL_X_MAX).contains(&x), "x {x}");
+            assert!((PANEL_TOP_PX..=PANEL_Y_MAX).contains(&y), "y {y}");
+        }
+    }
+
+    #[test]
+    fn nav_panel_segment_wholly_off_panel_is_dropped_not_wrapped() {
+        assert_eq!(clip_to_panel(10, 0, 100, PANEL_TOP_PX - 1), None);
+        assert_eq!(clip_to_panel(10, PANEL_Y_MAX + 1, 100, HEIGHT as i32), None);
+        assert_eq!(clip_to_panel(-40, 20, -1, 60), None);
+        assert_eq!(clip_to_panel(WIDTH as i32, 20, 400, 60), None);
+        // A segment crossing the panel keeps both ends on the boundary.
+        let ((cx0, cy0), (cx1, cy1)) =
+            clip_to_panel(84, PANEL_TOP_PX - 40, 84, PANEL_Y_MAX + 40).unwrap();
+        assert_eq!((cx0, cy0), (84, PANEL_TOP_PX));
+        assert_eq!((cx1, cy1), (84, PANEL_Y_MAX));
+    }
+
+    /// A trackback view walked `steps` hops of `step_m` due east from an
+    /// arbitrary origin, one second apart — enough movement to bank a
+    /// breadcrumb, a bearing back to the start and a fresh heading.
+    fn trackback_east(steps: u32, step_m: f64) -> TrackbackView {
+        const LAT0: f64 = 40.0;
+        const LON0: f64 = -105.0;
+        let lon_per_m = 1.0 / (watch_core::record::METRES_PER_DEGREE_LAT * LAT0.to_radians().cos());
+        let mut tb = trackback::Trackback::new();
+        for i in 0..=steps {
+            tb.on_point(LAT0, LON0 + i as f64 * step_m * lon_per_m, i);
+        }
+        tb.view()
+    }
+
+    #[test]
+    fn trackback_overlay_stays_inside_the_map_rect_and_the_arrow_band() {
+        let view = trackback_east(40, 6.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 40);
+        let (mx, my) = (MAP_X as usize, MAP_Y as usize);
+        assert!(
+            ink_in(&fb, mx, my, MAP_W as usize, MAP_H as usize) > 0,
+            "map"
+        );
+        // Nothing above the map rows, and nothing on the bottom GPS row.
+        assert_eq!(ink_in(&fb, mx, 0, MAP_W as usize, my), 0, "above the map");
+        assert_eq!(
+            ink_in(
+                &fb,
+                mx,
+                my + MAP_H as usize,
+                MAP_W as usize,
+                HEIGHT - my - MAP_H as usize
+            ),
+            0,
+            "below the map"
+        );
+        // The arrow keeps to the reserved text cells over rows 5-7 — clear of
+        // the map, and clear of the HDG / BRG rows the face writes above it.
+        assert!(ink_in(&fb, 0, 5 * CELL_H, mx, 3 * CELL_H) > 0, "arrow");
+        assert_eq!(ink_in(&fb, 0, 0, mx, 5 * CELL_H), 0, "arrow band only");
+        assert_eq!(ink_in(&fb, 0, 8 * CELL_H, mx, CELL_H), 0, "clear of row 8");
+    }
+
+    #[test]
+    fn trackback_start_marker_box_clears_the_map_edge_at_every_extreme() {
+        // The start box reaches START_MARK_ARM px past the projected start, and
+        // `project_track` insets by exactly that margin — so a start that lands
+        // on the polyline's extreme still frames inside the rect rather than
+        // clipping half away or bleeding into the reserved text cells. Walk each
+        // cardinal direction so the start takes each edge in turn.
+        for (bearing_e, bearing_n) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+            const LAT0: f64 = 40.0;
+            const LON0: f64 = -105.0;
+            let m_per_deg = watch_core::record::METRES_PER_DEGREE_LAT;
+            let lon_per_m = 1.0 / (m_per_deg * LAT0.to_radians().cos());
+            let mut tb = trackback::Trackback::new();
+            for i in 0..=40u32 {
+                tb.on_point(
+                    LAT0 + i as f64 * 6.0 * bearing_n / m_per_deg,
+                    LON0 + i as f64 * 6.0 * bearing_e * lon_per_m,
+                    i,
+                );
+            }
+            let view = tb.view();
+            let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+            let map = trackback::project_track(&view, MAP_W, MAP_H, &mut pts).unwrap();
+            let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
+            assert!(sx - START_MARK_ARM >= MAP_X, "box left of the map rect");
+            assert!(sx + START_MARK_ARM < MAP_X + MAP_W as i32, "box right");
+            assert!(sy - START_MARK_ARM >= MAP_Y, "box above the map rect");
+            assert!(sy + START_MARK_ARM < MAP_Y + MAP_H as i32, "box below");
+        }
+    }
+
+    #[test]
+    fn trackback_start_and_current_markers_are_distinguishable() {
+        let view = trackback_east(40, 6.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 40);
+        let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+        let map = trackback::project_track(&view, MAP_W, MAP_H, &mut pts).unwrap();
+        let (sx, sy) = (
+            (MAP_X + map.start.0 as i32) as usize,
+            (MAP_Y + map.start.1 as i32) as usize,
+        );
+        let (cx, cy) = (
+            (MAP_X + map.current.0 as i32) as usize,
+            (MAP_Y + map.current.1 as i32) as usize,
+        );
+        assert!(sx < cx, "start west of the runner on an east walk");
+        // The start is a hollow box (frame inked, one-in interior blank on the
+        // rows above/below the polyline); the current position is a solid dot.
+        assert!(
+            fb.pixel(sx - 2, sy - 2) && fb.pixel(sx + 2, sy + 2),
+            "box frame"
+        );
+        assert!(!fb.pixel(sx - 1, sy - 1), "box interior is hollow");
+        assert!(fb.pixel(cx, cy) && fb.pixel(cx - 1, cy - 1), "dot is solid");
+    }
+
+    #[test]
+    fn trackback_inactive_view_draws_nothing() {
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &TrackbackView::empty(), 100);
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
+    fn trackback_single_point_draws_a_map_without_an_arrow() {
+        // One accepted fix: the whole track is one point, which must still
+        // render the start + current markers at the map centre rather than
+        // panicking on the degenerate span — and no heading exists yet, so the
+        // arrow band stays blank (the face writes `--` there).
+        let view = trackback_east(0, 0.0);
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, 0);
+        assert!(
+            ink_in(
+                &fb,
+                MAP_X as usize,
+                MAP_Y as usize,
+                MAP_W as usize,
+                MAP_H as usize
+            ) > 0
+        );
+        assert_eq!(ink_in(&fb, 0, 5 * CELL_H, MAP_X as usize, 3 * CELL_H), 0);
+    }
+
+    #[test]
+    fn trackback_stale_heading_drops_the_arrow_but_keeps_the_map() {
+        let view = trackback_east(40, 6.0);
+        let stale = 40 + trackback::HEADING_STALE_S + 1;
+        assert!(view.arrow_sector(stale).is_none());
+        let mut fb = Framebuffer::new();
+        draw_trackback_overlay(&mut fb, &view, stale);
+        assert_eq!(ink_in(&fb, 0, 5 * CELL_H, MAP_X as usize, 3 * CELL_H), 0);
+        assert!(
+            ink_in(
+                &fb,
+                MAP_X as usize,
+                MAP_Y as usize,
+                MAP_W as usize,
+                MAP_H as usize
+            ) > 0
+        );
     }
 }
