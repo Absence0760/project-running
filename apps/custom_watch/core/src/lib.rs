@@ -33,15 +33,21 @@
 //!   (port of web `routes/distance_bands.ts`)
 //! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
 //!   (port of web `gear/gear_wear.ts`)
-//! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`elevation`] — barometric altitude, the cumulative-vert accumulator, and
+//!   the quantised gate deciding which 1 Hz sample is worth waking a consumer
+//!   for ([`elevation::should_publish`])
 //! - [`baro_rezero`] — the `baro` task's manual QNH re-zero decision: the
-//!   barometer's own freshness gate over [`elevation::rezero_reference`], and
-//!   the two distinct refusals
+//!   barometer's own freshness gate over [`elevation::rezero_reference`], the
+//!   two distinct refusals, and the reading an applied snap publishes past the
+//!   gate
 //! - [`gnss_cadence`] — the `gps` task's fix-publication cadence: which
 //!   interval is owed in the current record state + mode, the throttle gate,
 //!   and whether a published fix earns the receiver a nap
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
+//! - [`gnss_signal`] — the GSV/GSA side channel: the satellites-in-view + fix
+//!   mode pair behind the idle signal meter, and the bar-count gate that stops
+//!   a repeated GSV group waking a consumer several times a second
 //! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
 //!   targets over a week or month window (port of web `training/goals.ts`; the
 //!   localStorage persistence + UUID id + i18n period label are web-only, dates
@@ -258,6 +264,7 @@ pub mod gear_wear;
 pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;
+pub mod gnss_signal;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;

@@ -53,6 +53,50 @@ pub struct Reading {
 /// stretch produces, below the vertical of a real running step.
 pub const DEADBAND_M: f32 = 3.0;
 
+/// Smallest altitude move worth waking every consumer of a [`Reading`] for.
+///
+/// The decimetre is the finest quantum anything downstream can *represent* —
+/// the phone-link frame prints `{:.1}`, a stored track point's elevation field
+/// is decimetres, and the face is coarser still at whole metres — so no
+/// consumer can tell a smaller step from no step at all. It sits an order of
+/// magnitude above the BMP581's own noise at the configured 16x oversampling
+/// plus coefficient-7 IIR (single-digit centimetres of altitude), which is what
+/// makes it enough to silence a resting wrist, and a thirtieth of
+/// [`DEADBAND_M`], so it can never withhold a change the accumulator banks as
+/// vert.
+///
+/// Deliberately *not* the face's whole-metre rendering quantum: the recorder
+/// feeds this altitude to the live grade-adjusted-pace estimator, which reads a
+/// grade off ~5 m segments, so a metre-coarse altitude would swing a segment's
+/// grade by tens of percent and make the GAP row bounce on a climb.
+pub const PUBLISH_STEP_M: f32 = 0.1;
+
+/// Whether a freshly computed [`Reading`] is worth publishing on the elevation
+/// watch, given the last one published.
+///
+/// The barometer is sampled at 1 Hz and `embassy_sync::Watch::send` wakes every
+/// receiver whether or not the value moved, so an unconditional publish makes a
+/// present BMP581 a free-running 1 Hz waker: the screen task waits on that
+/// watch's `changed()` and re-renders the whole face once a second forever —
+/// exactly the standing reason to wake the CPU that hardware VCOM and the
+/// event-driven screen task removed from the display.
+///
+/// A quantised gate is what makes this work at all: a `Reading` is three `f32`s
+/// off a noisy sensor, so consecutive samples on a motionless wrist are almost
+/// never bit-identical and a plain `!=` would suppress nothing. Altitude must
+/// move a whole [`PUBLISH_STEP_M`] from the last *published* value — anchored
+/// there rather than to the previous sample, the same trick
+/// [`VertAccumulator`]'s deadband uses, so a slow real climb of sub-threshold
+/// steps still publishes once per step it gains and loses nothing. Either
+/// cumulative total moving publishes at once; they only move when
+/// [`VertAccumulator::push`] commits real vertical past [`DEADBAND_M`].
+pub fn should_publish(last: Option<Reading>, next: Reading) -> bool {
+    let Some(prev) = last else { return true };
+    prev.gain_m != next.gain_m
+        || prev.loss_m != next.loss_m
+        || libm::fabsf(next.alt_m - prev.alt_m) >= PUBLISH_STEP_M
+}
+
 /// Per-sample fraction the GPS reference pull slews the settled baro-vs-GPS
 /// bias by — the complementary filter's crossover. A first-order low-pass at
 /// this rate attenuates white GPS noise to `sqrt(GPS_PULL / (2 - GPS_PULL)) ≈
@@ -745,5 +789,138 @@ mod tests {
             "no gain banked while stopped, even with live GPS"
         );
         assert_eq!(acc.loss_m(), l0);
+    }
+
+    // --- Publication gate: what the 1 Hz barometer is allowed to wake ---
+
+    /// Drive `should_publish` the way the baro task does — anchored on the last
+    /// reading actually published — and count what got through.
+    fn publishes(readings: impl IntoIterator<Item = Reading>) -> usize {
+        let mut published: Option<Reading> = None;
+        let mut n = 0;
+        for r in readings {
+            if should_publish(published, r) {
+                published = Some(r);
+                n += 1;
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn the_publish_step_is_the_finest_quantum_a_consumer_can_represent() {
+        // A decimetre: the phone-link frame's `{:.1}` and the stored track
+        // point's decimetre elevation field. Coarsening it past this would
+        // start withholding altitude the wire format can actually carry — and
+        // that the live GAP estimator reads its grade from.
+        assert_eq!(PUBLISH_STEP_M, 0.1);
+        // It must also stay well under the noise floor the accumulator banks
+        // vert at, or a committed climb could go unpublished.
+        assert!(PUBLISH_STEP_M < DEADBAND_M);
+    }
+
+    #[test]
+    fn the_first_reading_always_publishes() {
+        let r = Reading {
+            alt_m: 1_610.0,
+            gain_m: 0.0,
+            loss_m: 0.0,
+        };
+        assert!(should_publish(None, r));
+    }
+
+    #[test]
+    fn sensor_noise_never_wakes_a_consumer_twice() {
+        // The defect this gate closes: a motionless wrist with a present BMP581
+        // used to publish (and so re-render the whole face) once a second
+        // forever, because two f32 samples off a real sensor are never equal.
+        // The jitter here is the configured 16x-OSR + IIR-7 noise floor, low
+        // centimetres.
+        let jitter = (0..600u32).map(|n| Reading {
+            alt_m: 1_000.0 + (((n * 7 % 11) as f32) - 5.0) * 0.005,
+            gain_m: 0.0,
+            loss_m: 0.0,
+        });
+        assert_eq!(publishes(jitter), 1);
+    }
+
+    #[test]
+    fn a_real_climb_publishes_every_sample() {
+        // Metre-a-second steps dwarf the step, so the gate is transparent —
+        // altitude, and the grade the GAP estimator reads off it, arrive at
+        // full sample rate exactly as before.
+        let mut acc = VertAccumulator::new();
+        let climb = (0..=100).map(|step| {
+            let corrected = acc.push(step as f32, true, None);
+            acc.reading(corrected)
+        });
+        assert_eq!(publishes(climb), 101);
+    }
+
+    #[test]
+    fn a_slow_climb_is_throttled_but_never_starved() {
+        // 4 cm a second — a gentle grade at a hiking pace, under the step. The
+        // gate must still publish on the step, and the published altitude must
+        // never trail the sample by a whole one.
+        let mut acc = VertAccumulator::new();
+        let mut published: Option<Reading> = None;
+        let mut n = 0;
+        for step in 0..=100 {
+            let corrected = acc.push(step as f32 * 0.04, true, None);
+            let r = acc.reading(corrected);
+            if should_publish(published, r) {
+                published = Some(r);
+                n += 1;
+            }
+            assert!(
+                libm::fabsf(published.unwrap().alt_m - r.alt_m) < PUBLISH_STEP_M,
+                "the published altitude fell a whole step behind the sample"
+            );
+        }
+        assert!((30..=40).contains(&n), "one publish per step climbed: {n}");
+    }
+
+    #[test]
+    fn banked_vert_publishes_even_when_the_altitude_barely_moved() {
+        // The totals are their own clause: they drive the VERT row, and they
+        // only move when the accumulator commits real vertical.
+        let prev = Reading {
+            alt_m: 100.0,
+            gain_m: 0.0,
+            loss_m: 0.0,
+        };
+        for next in [
+            Reading {
+                gain_m: 3.0,
+                ..prev
+            },
+            Reading {
+                loss_m: 3.0,
+                ..prev
+            },
+        ] {
+            assert!(should_publish(Some(prev), next));
+        }
+    }
+
+    #[test]
+    fn a_manual_rezero_snap_moves_far_enough_to_publish() {
+        let mut acc = VertAccumulator::new();
+        let raw = acc.push(1_624.0, true, None);
+        let before = acc.reading(raw);
+        let snapped = acc.rezero(1_624.0, Some(1_610.0)).unwrap();
+        assert!(should_publish(Some(before), acc.reading(snapped)));
+    }
+
+    #[test]
+    fn a_non_finite_altitude_does_not_free_run_the_waker() {
+        // A NaN comparison is false either way; the gate must fall on the side
+        // that cannot resurrect the per-second waker.
+        let nan = Reading {
+            alt_m: f32::NAN,
+            gain_m: 0.0,
+            loss_m: 0.0,
+        };
+        assert!(!should_publish(Some(nan), nan));
     }
 }

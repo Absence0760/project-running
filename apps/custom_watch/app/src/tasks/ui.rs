@@ -22,6 +22,7 @@ use watch_core::elevation::{self, Reading as ElevationReading, RezeroStatus};
 use watch_core::face::{self, FaceIcon, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
+use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::nav_map::{self, PanelCache, PanelKey};
 use watch_core::page::Page;
@@ -138,8 +139,7 @@ pub async fn screen_task(
     let mut nav_rx = unwrap!(state::NAV.receiver());
     let mut course_rx = unwrap!(state::COURSE.receiver());
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
-    let mut sats_rx = unwrap!(state::SATS.receiver());
-    let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
+    let mut signal_rx = unwrap!(state::SIGNAL.receiver());
     let mut battery_rx = unwrap!(state::BATTERY.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
@@ -149,8 +149,7 @@ pub async fn screen_task(
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
-    let mut sats: Option<u8> = None;
-    let mut fix_quality: Option<u8> = None;
+    let mut signal: Option<SignalSample> = None;
     let mut battery: Option<u8> = None;
     let mut page = Page::default();
     let mut idle_view = IdleView::Home;
@@ -226,11 +225,8 @@ pub async fn screen_task(
         if let Some(v) = tb_rx.try_changed() {
             tb = Some(v);
         }
-        if let Some(s) = sats_rx.try_changed() {
-            sats = Some(s);
-        }
-        if let Some(q) = fix_quality_rx.try_changed() {
-            fix_quality = Some(q);
+        if let Some(s) = signal_rx.try_changed() {
+            signal = Some(s);
         }
         if let Some(b) = battery_rx.try_changed() {
             battery = b;
@@ -410,7 +406,7 @@ pub async fn screen_task(
                 }
             }
         } else {
-            let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
+            let bars = signal.unwrap_or_default().bars();
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
             // The battery icon shares the title row's mid-band with the
             // post-press BTN3 hint AND the transient re-zero 2x banner, so it
@@ -522,13 +518,12 @@ pub async fn screen_task(
             select4(
                 tb_rx.changed(),
                 mode_rx.changed(),
-                sats_rx.changed(),
+                signal_rx.changed(),
                 select4(
-                    fix_quality_rx.changed(),
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
-                    select4(
-                        stop_armed_rx.changed(),
+                    stop_armed_rx.changed(),
+                    select3(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
                         Timer::after(tick),
@@ -548,16 +543,15 @@ pub async fn screen_task(
             Either3::Second(Either4::Fourth(v)) => nav = v,
             Either3::Third(Either4::First(v)) => tb = Some(v),
             Either3::Third(Either4::Second(m)) => mode = m,
-            Either3::Third(Either4::Third(s)) => sats = Some(s),
-            Either3::Third(Either4::Fourth(Either4::First(q))) => fix_quality = Some(q),
-            Either3::Third(Either4::Fourth(Either4::Second(r))) => rezero = Some(r),
-            Either3::Third(Either4::Fourth(Either4::Third(g))) => grid = g,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::First(v)))) => stop_armed = v,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(m)))) => {
+            Either3::Third(Either4::Third(s)) => signal = Some(s),
+            Either3::Third(Either4::Fourth(Either4::First(r))) => rezero = Some(r),
+            Either3::Third(Either4::Fourth(Either4::Second(g))) => grid = g,
+            Either3::Third(Either4::Fourth(Either4::Third(v))) => stop_armed = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::First(m)))) => {
                 tz_offset_min = Some(m)
             }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(b)))) => battery = b,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Second(b)))) => battery = b,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Third(())))) => {}
         }
     }
 }
