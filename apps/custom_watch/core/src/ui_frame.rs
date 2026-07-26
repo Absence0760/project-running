@@ -28,8 +28,8 @@ pub fn animating(now_s: u32, last_interaction_s: u32) -> bool {
 /// The page filter (data-present and curated) in force. No snapshot yet means
 /// no filter — every page is walkable rather than none, so a pre-run press can
 /// never dead-end on an empty cycle.
-pub fn pages_mask(rec: Option<&Snapshot>) -> u32 {
-    rec.map_or(u32::MAX, |s| s.pages_mask)
+pub fn pages_mask(rec: Option<&Snapshot>) -> u64 {
+    rec.map_or(u64::MAX, |s| s.pages_mask)
 }
 
 /// The recorder state the buttons act on. Before the first published snapshot
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn no_snapshot_means_no_page_filter_and_an_idle_recorder() {
-        assert_eq!(pages_mask(None), u32::MAX);
+        assert_eq!(pages_mask(None), u64::MAX);
         assert_eq!(record_state(None), RecordState::Idle);
         let snap = snapshot(RecordState::Recording);
         assert_eq!(pages_mask(Some(&snap)), snap.pages_mask);

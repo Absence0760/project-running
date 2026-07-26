@@ -26,6 +26,7 @@ use crate::fuel_plan::{
 };
 use crate::gear_wear::{gear_wear, GearWear};
 use crate::grade_adjusted_pace::GapEstimator;
+use crate::guided_runs::{cues_due, find_guided_run, is_guided_run_valid, GuidedRun};
 use crate::hr_zones::{
     self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
 };
@@ -307,6 +308,21 @@ pub struct PlanAdaptiveView {
     pub fitness_gated: bool,
 }
 
+/// Where the run has got to in the armed guided run ([`crate::guided_runs`]):
+/// how many of its cues the elapsed time has passed (`cue_index`, 0 before the
+/// first), how many it has in total, the wait until the next one (`None` past
+/// the last), and the run's target duration + what is left of it. Derived per
+/// snapshot from elapsed time against the compiled-in library run, so it needs
+/// no dispatcher state and re-derives correctly after a reboot mid-run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GuidedRunView {
+    pub cue_index: u8,
+    pub cue_count: u8,
+    pub next_cue_in_s: Option<u32>,
+    pub duration_s: u32,
+    pub remaining_s: u32,
+}
+
 /// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
 /// `band` is 0 low / 1 moderate / 2 high.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -504,6 +520,9 @@ pub struct Snapshot {
     pub plan_replan: Option<PlanReplanView>,
     /// The synced adaptive re-plan trend summary, or `None` until pushed.
     pub plan_adaptive: Option<PlanAdaptiveView>,
+    /// Where the run has reached in the armed guided run, or `None` when none is
+    /// armed.
+    pub guided_run: Option<GuidedRunView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -531,7 +550,7 @@ pub struct Snapshot {
     /// The effective BTN3 page cycle for this snapshot (bit = [`Page::bit`]):
     /// data-present pages ∩ the curated set, Dashboard always included. The
     /// button task walks it and the page indicator counts it.
-    pub pages_mask: u32,
+    pub pages_mask: u64,
 }
 
 impl Snapshot {
@@ -739,6 +758,10 @@ pub struct Recorder {
     pr_recency: Option<PrRecencyView>,
     plan_replan: Option<PlanReplanView>,
     plan_adaptive: Option<PlanAdaptiveView>,
+    /// The armed guided run, a reference into the compiled-in library
+    /// ([`set_guided_run`](Recorder::set_guided_run)); `None` leaves the
+    /// GuidedRun page an honest inactive state.
+    guided: Option<&'static GuidedRun<'static>>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -760,10 +783,10 @@ pub struct Recorder {
     /// The runner's curated page set, from settings sync
     /// ([`set_pages_enabled`](Recorder::set_pages_enabled)); bit =
     /// [`Page::bit`]. Default all-enabled.
-    pages_enabled: u32,
+    pages_enabled: u64,
     /// Whether the BTN3 cycle skips pages whose backing data is absent
     /// ([`set_hide_empty_pages`](Recorder::set_hide_empty_pages)). Default on:
-    /// an unsynced watch cycles ~10 live pages instead of 32, and a page
+    /// an unsynced watch cycles ~10 live pages instead of 33, and a page
     /// appears the moment its data does. Off restores the full fixed cycle
     /// (every empty state stays visitable).
     hide_empty_pages: bool,
@@ -817,6 +840,7 @@ impl Recorder {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -827,7 +851,7 @@ impl Recorder {
             race_phases: PhasePlan::new(),
             race_phase_goal_pace_s_per_km: None,
             course_loaded: false,
-            pages_enabled: u32::MAX,
+            pages_enabled: u64::MAX,
             hide_empty_pages: true,
         }
     }
@@ -849,7 +873,7 @@ impl Recorder {
     /// The curated page set from settings sync (bit = [`Page::bit`]). Any
     /// mask is accepted — [`Page::next_in`] force-includes the Dashboard, so
     /// even an all-zero push can't empty the cycle.
-    pub fn set_pages_enabled(&mut self, mask: u32) {
+    pub fn set_pages_enabled(&mut self, mask: u64) {
         self.pages_enabled = mask;
     }
 
@@ -1040,6 +1064,24 @@ impl Recorder {
                 fitness_gated: v.fitness_gated,
             }
         });
+    }
+
+    /// Arm the GuidedRun page with a scripted coach run by library id (the
+    /// runner's selection, made on the phone). `None` disarms it.
+    ///
+    /// The guard is library membership plus the ported validator: an id that is
+    /// not in the library, or a library entry whose cues are unsorted or run
+    /// past its duration, is IGNORED — the current selection stands rather than
+    /// a garbled push arming a different run or disarming one mid-run.
+    pub fn set_guided_run(&mut self, id: Option<&str>) {
+        match id {
+            None => self.guided = None,
+            Some(id) => {
+                if let Some(g) = find_guided_run(id).filter(|g| is_guided_run_valid(g)) {
+                    self.guided = Some(g);
+                }
+            }
+        }
     }
 
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
@@ -1468,6 +1510,7 @@ impl Recorder {
             pr_recency: self.pr_recency,
             plan_replan: self.plan_replan,
             plan_adaptive: self.plan_adaptive,
+            guided_run: self.guided_run_snapshot(),
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
@@ -1489,11 +1532,11 @@ impl Recorder {
     /// included. [`Page::next_in`] / [`Page::prev_in`] walk exactly this
     /// mask, and the page-position indicator counts it — so the dot row says
     /// how many pages the cycle actually has right now.
-    fn pages_mask(&self, s: &Snapshot) -> u32 {
+    fn pages_mask(&self, s: &Snapshot) -> u64 {
         let available = if self.hide_empty_pages {
             self.available_pages(s)
         } else {
-            u32::MAX
+            u64::MAX
         };
         (available & self.pages_enabled) | Page::Dashboard.bit()
     }
@@ -1503,7 +1546,7 @@ impl Recorder {
     /// Back-to-start safety page are always available; every other page is
     /// available exactly when the data behind its honest empty state exists —
     /// the same conditions the `face` renderers key their inactive states on.
-    fn available_pages(&self, s: &Snapshot) -> u32 {
+    fn available_pages(&self, s: &Snapshot) -> u64 {
         let mut m = Page::Dashboard.bit()
             | Page::Distance.bit()
             | Page::Pace.bit()
@@ -1536,6 +1579,7 @@ impl Recorder {
         set(Page::PrRecency, s.pr_recency.is_some());
         set(Page::PlanReplan, s.plan_replan.is_some());
         set(Page::PlanAdaptive, s.plan_adaptive.is_some());
+        set(Page::GuidedRun, s.guided_run.is_some());
         set(Page::Readiness, s.readiness.is_some());
         set(Page::Goals, s.goals.is_some());
         set(Page::TurnCue, s.turn_cue.is_some());
@@ -1544,6 +1588,35 @@ impl Recorder {
         set(Page::RouteElev, s.route_elev.is_some());
         set(Page::RaceDay, s.race_day.is_some());
         m
+    }
+
+    /// Where the run has reached in the armed guided run, or `None` when none is
+    /// armed. Derived, not stored: the cue the elapsed time has passed comes from
+    /// the ported `(prev, now]` dispatcher run from before the start
+    /// ([`cues_due`]), so the page needs no per-tick state and survives a reboot
+    /// mid-run. Elapsed reads 0 while idle, so an armed run shows its full
+    /// duration rather than the previous run's tail.
+    fn guided_run_snapshot(&self) -> Option<GuidedRunView> {
+        let g = self.guided?;
+        let elapsed_s = if self.state == RecordState::Idle {
+            0
+        } else {
+            self.elapsed_s()
+        };
+        let elapsed = f64::from(elapsed_s);
+        let cue_index = cues_due(g, -1.0, elapsed).len();
+        Some(GuidedRunView {
+            cue_index: cue_index as u8,
+            cue_count: g.cues.len() as u8,
+            // The cues are sorted ascending, so the first one not yet passed is
+            // the one at the passed count.
+            next_cue_in_s: g
+                .cues
+                .get(cue_index)
+                .map(|c| (c.at_sec - elapsed).max(0.0) as u32),
+            duration_s: g.duration_sec as u32,
+            remaining_s: (g.duration_sec - elapsed).max(0.0) as u32,
+        })
     }
 
     /// The training-pace zones derived from the synced goal-race pace, or `None`
@@ -2945,7 +3018,7 @@ mod tests {
         r.start(0);
         assert_eq!(
             r.snapshot().pages_mask,
-            u32::MAX,
+            u64::MAX,
             "every page visitable, empty states and all"
         );
     }
@@ -3229,6 +3302,94 @@ mod tests {
         // Clearing works.
         r.set_race_phases(None, Some(3_000.0), RacePhasePreset::Even);
         assert!(r.snapshot().race_phase.is_none());
+    }
+
+    // --- The guided-run page ----------------------------------------------
+
+    #[test]
+    fn an_unarmed_guided_run_page_is_honestly_inactive() {
+        let mut r = Recorder::new();
+        r.start(0);
+        let s = r.snapshot();
+        assert!(s.guided_run.is_none(), "nothing armed, nothing to show");
+        assert_eq!(
+            s.pages_mask & Page::GuidedRun.bit(),
+            0,
+            "an unarmed page stays out of the cycle"
+        );
+    }
+
+    #[test]
+    fn an_unknown_guided_run_id_is_ignored_not_applied() {
+        // The guard: a garbled id must neither arm a different run nor disarm
+        // the one the runner selected. Only an explicit `None` disarms.
+        let mut r = Recorder::new();
+        let armed = crate::guided_runs::guided_run_library()[0].id;
+        r.set_guided_run(Some(armed));
+        r.start(0);
+        let before = r.snapshot().guided_run.unwrap();
+        r.set_guided_run(Some("not-a-guided-run"));
+        assert_eq!(r.snapshot().guided_run, Some(before), "push ignored");
+        r.set_guided_run(None);
+        assert!(r.snapshot().guided_run.is_none(), "None disarms");
+        r.set_guided_run(Some(""));
+        assert!(r.snapshot().guided_run.is_none(), "empty id arms nothing");
+    }
+
+    #[test]
+    fn the_guided_run_page_walks_its_cues_with_elapsed_time() {
+        let g = crate::guided_runs::find_guided_run("easy-30").expect("library run");
+        let mut r = Recorder::new();
+        r.set_guided_run(Some(g.id));
+        r.start(0);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_count as usize, g.cues.len());
+        assert_eq!(v.duration_s, 1_800);
+        assert_eq!(v.remaining_s, 1_800);
+        assert_eq!(v.cue_index, 1, "the kickoff cue fires at the start");
+        assert_eq!(v.next_cue_in_s, Some(300));
+
+        // One second before the 5:00 cue, then the tick that crosses it.
+        r.tick(299);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!((v.cue_index, v.next_cue_in_s), (1, Some(1)));
+        r.tick(300);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index, 2, "the mark is inclusive, like cues_due");
+        assert_eq!(v.next_cue_in_s, Some(300));
+        assert_eq!(v.remaining_s, 1_500);
+
+        // Past the last cue: no next one, and the countdown floors at zero
+        // rather than wrapping.
+        r.tick(1_900);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index as usize, g.cues.len());
+        assert_eq!(v.next_cue_in_s, None);
+        assert_eq!(v.remaining_s, 0);
+    }
+
+    #[test]
+    fn every_library_guided_run_fits_the_dispatch_buffer() {
+        // `guided_run_snapshot` counts passed cues off `cues_due`, whose buffer
+        // is capped: a library run with more cues than the cap would silently
+        // stop advancing the page's cue index near the end.
+        for g in crate::guided_runs::guided_run_library() {
+            assert!(
+                g.cues.len() <= crate::guided_runs::MAX_GUIDED_CUES,
+                "{} has more cues than the dispatch buffer holds",
+                g.id
+            );
+            let mut r = Recorder::new();
+            r.set_guided_run(Some(g.id));
+            r.start(0);
+            r.tick(g.duration_sec as u32);
+            let v = r.snapshot().guided_run.unwrap();
+            assert_eq!(
+                v.cue_index, v.cue_count,
+                "{} must have passed every cue at its duration",
+                g.id
+            );
+        }
     }
 
     // --- Snapshot::is_moving — the barometric vert gate --------------------

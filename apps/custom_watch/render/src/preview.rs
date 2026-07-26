@@ -75,6 +75,7 @@ fn base_snapshot() -> Snapshot {
         pr_recency: None,
         plan_replan: None,
         plan_adaptive: None,
+        guided_run: None,
         readiness: None,
         goals: None,
         turn_cue: None,
@@ -84,7 +85,7 @@ fn base_snapshot() -> Snapshot {
         race_day: None,
         race_phase: None,
         track_thinning: 1,
-        pages_mask: u32::MAX,
+        pages_mask: u64::MAX,
     }
 }
 
@@ -231,7 +232,7 @@ fn preview_run_dashboard() {
     }
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Dashboard, u64::MAX),
     );
     show("run dashboard: hero + field grid + NOW/GAP pairing", &fb);
 }
@@ -258,7 +259,7 @@ fn preview_distance_and_pace_bignum_heroes() {
     draw_face(&mut fb, Page::Distance, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Distance, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Distance, u64::MAX),
     );
     show("distance glance: 32.40 in the numeral faces", &fb);
 
@@ -266,7 +267,7 @@ fn preview_distance_and_pace_bignum_heroes() {
     draw_face(&mut fb2, Page::Pace, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb2,
-        watch_core::statusbar::page_indicator(Page::Pace, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Pace, u64::MAX),
     );
     show("pace glance: 6:20 in the numeral faces", &fb2);
 }
@@ -291,7 +292,7 @@ fn preview_pacer_page() {
     draw_face(&mut fb, Page::Pacer, Some(&snap), Some(150));
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Pacer, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Pacer, u64::MAX),
     );
     widgets::draw_pacer_overlay(&mut fb, &snap);
     show("pacer: +75s ahead centre-bar", &fb);
@@ -305,7 +306,7 @@ fn preview_zones_page() {
     draw_face(&mut fb, Page::Zones, Some(&snap), Some(150));
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Zones, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Zones, u64::MAX),
     );
     widgets::draw_zones_overlay(&mut fb, &snap, Some(150));
     show("zones: per-zone bars + live-zone frame", &fb);
@@ -319,7 +320,7 @@ fn preview_splits_page() {
     draw_face(&mut fb, Page::Splits, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Splits, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Splits, u64::MAX),
     );
     widgets::draw_splits_overlay(&mut fb, &snap);
     show("splits: pace-distribution histogram", &fb);
@@ -356,16 +357,16 @@ fn preview_gear_and_fuel_pages() {
 fn preview_page_grid() {
     use watch_core::page_grid;
 
-    // The full 32-page grid with the cursor a row-down + a tap from home.
+    // The full grid with the cursor a row-down + a tap from home.
     let mut fb = Framebuffer::new();
-    let mask = u32::MAX;
+    let mask = u64::MAX;
     let mut grid = page_grid::PageGrid::open(Page::Dashboard, mask);
     grid.row_down(mask);
     grid.tap(mask);
-    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+    for (row, text) in page_grid::grid_rows(mask, grid.cursor()).iter().enumerate() {
         fb.draw_text_row(row, text);
     }
-    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor(), grid.cursor()) {
         widgets::draw_grid_cursor(&mut fb, cell);
     }
     widgets::draw_page_indicator(
@@ -385,10 +386,10 @@ fn preview_page_grid() {
         | Page::BackToStart.bit();
     let mut fb2 = Framebuffer::new();
     let grid = page_grid::PageGrid::open(Page::Roadbook, mask);
-    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+    for (row, text) in page_grid::grid_rows(mask, grid.cursor()).iter().enumerate() {
         fb2.draw_text_row(row, text);
     }
-    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor(), grid.cursor()) {
         widgets::draw_grid_cursor(&mut fb2, cell);
     }
     show("page grid: filtered mask, cursor on ROAD", &fb2);
@@ -412,7 +413,7 @@ fn preview_elevation_profile_page() {
     draw_face(&mut fb, Page::ElevationProfile, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::ElevationProfile, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::ElevationProfile, u64::MAX),
     );
     widgets::draw_elev_profile_overlay(&mut fb, &snap);
     show("elevation profile: banked altitude sparkline", &fb);
@@ -480,7 +481,7 @@ fn draw_nav_page(fb: &mut Framebuffer, nav: NavView, alert: Option<&str>) {
     }
     widgets::draw_page_indicator(
         fb,
-        watch_core::statusbar::page_indicator(Page::Nav, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Nav, u64::MAX),
     );
     let panel = watch_core::nav_map::nav_panel(
         &course,
@@ -567,7 +568,7 @@ fn preview_back_to_start_page() {
     }
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::BackToStart, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::BackToStart, u64::MAX),
     );
     widgets::draw_trackback_overlay(&mut fb, &view, 60);
     show("back to start: breadcrumb map + relative arrow", &fb);

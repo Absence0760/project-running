@@ -95,7 +95,7 @@ pub struct PageIndicator {
 /// just vanished), mirroring [`Page::next_in`]'s reachability rule. Walked
 /// off [`Page::next`] rather than a hardcoded count, so a new page can't
 /// silently desync the row from the enum.
-pub fn page_indicator(page: Page, pages_mask: u32) -> PageIndicator {
+pub fn page_indicator(page: Page, pages_mask: u64) -> PageIndicator {
     let mask = pages_mask | Page::Dashboard.bit() | page.bit();
     let mut active = 0;
     let mut total = 1;
@@ -233,9 +233,9 @@ mod tests {
 
     #[test]
     fn indicator_first_and_last_pages() {
-        let first = page_indicator(Page::Dashboard, u32::MAX);
+        let first = page_indicator(Page::Dashboard, u64::MAX);
         assert_eq!(first.active, 0);
-        let last = page_indicator(Page::BackToStart, u32::MAX);
+        let last = page_indicator(Page::BackToStart, u64::MAX);
         // BackToStart is the final variant (the safety page anchors the wrap),
         // so its index is total - 1.
         assert_eq!(last.active, last.total - 1);
@@ -244,16 +244,16 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard, u32::MAX).total, 32);
+        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 33);
     }
 
     #[test]
     fn walking_next_visits_every_active_index_once() {
-        let total = page_indicator(Page::Dashboard, u32::MAX).total;
+        let total = page_indicator(Page::Dashboard, u64::MAX).total;
         let mut seen = [false; 64];
         let mut p = Page::default();
         for _ in 0..total {
-            let ind = page_indicator(p, u32::MAX);
+            let ind = page_indicator(p, u64::MAX);
             assert_eq!(ind.total, total);
             assert!(ind.active < total);
             assert!(!seen[ind.active], "index {} seen twice", ind.active);

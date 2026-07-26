@@ -437,6 +437,7 @@ pub fn page_rows(
             Page::Splits => splits_glance(fix, tag, uptime_s, animate, mode),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::GuidedRun => guided_run_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RacePredictor => race_predictor_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::TrainingLoad => training_load_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::DistanceBand => distance_band_glance(fix, snap, tag, uptime_s, animate, mode),
@@ -488,6 +489,7 @@ pub fn page_icons(
         | Page::Splits
         | Page::Zones
         | Page::Pacer
+        | Page::GuidedRun
         | Page::RacePredictor
         | Page::TrainingLoad
         | Page::DistanceBand
@@ -552,6 +554,16 @@ pub fn page_hero(
         }
         Page::Pacer => match snap.pacer {
             Some(status) => signed_split(status.ahead_s),
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
+        // The guided run's countdown to its own target duration — the number a
+        // runner on a scripted coach run glances at; `--` until one is armed.
+        Page::GuidedRun => match snap.guided_run {
+            Some(v) => split_row(v.remaining_s),
             None => {
                 let mut row = Row::new();
                 let _ = write!(row, "--");
@@ -1035,6 +1047,66 @@ fn write_phase_row(row: &mut Row, phase: Option<RacePhaseView>, terrain_aware: b
     if terrain_aware {
         let _ = write!(row, " TERR");
     }
+}
+
+/// The GuidedRun glance: the armed scripted coach run
+/// ([`crate::guided_runs`]) — its target duration, which cue the elapsed time
+/// has reached, and the countdown to the next one, over a hero holding the time
+/// left in the run.
+///
+/// The cue's own line is NOT shown: the watch carries cue text as i18n key
+/// identifiers, never prose (see the [`crate::guided_runs`] module docs), and it
+/// has no voice. The wrist reads the schedule; the phone speaks the line.
+#[allow(clippy::too_many_arguments)]
+fn guided_run_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.guided_run {
+        None => {
+            let _ = write!(rows[2], "GUIDED --");
+            let _ = write!(rows[4], "NOT SYNCED");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(v) => {
+            let _ = write!(
+                rows[2],
+                "{:<8}{} MIN",
+                "GUIDED",
+                (v.duration_s / 60).min(999)
+            );
+            let _ = write!(rows[4], "{:<8}{}/{}", "CUE", v.cue_index, v.cue_count);
+            match v.next_cue_in_s {
+                Some(s) => {
+                    let _ = write!(rows[5], "{:<8}{}", "NEXT", split_row(s).as_str());
+                }
+                None => {
+                    let _ = write!(rows[5], "{:<8}LAST CUE", "NEXT");
+                }
+            }
+            let _ = write!(
+                rows[6],
+                "{:<8}{}",
+                "LEFT",
+                split_row(v.remaining_s).as_str()
+            );
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
 }
 
 /// One ladder row: the distance label, the projected finish (H:MM:SS past an
@@ -2706,6 +2778,7 @@ mod tests {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided_run: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -2715,7 +2788,7 @@ mod tests {
             race_day: None,
             race_phase: None,
             track_thinning: 1,
-            pages_mask: u32::MAX,
+            pages_mask: u64::MAX,
         }
     }
 
@@ -2821,9 +2894,10 @@ mod tests {
     fn every_page_fits_the_grid_active_and_inactive() {
         use crate::record::{
             AutoEffortView, ElevProfileView, FitnessView, FuelCarryView, FuelView, GoalsView,
-            PlanAdaptiveView, PlanReplanView, PrRecencyView, RaceDayView, ReadinessView, RecapView,
-            RoadbookLegView, RoadbookView, RouteElevView, RouteSimplifyView, RunStatsView,
-            StreaksView, TrainingPacesView, TurnCueView, ELEV_PROFILE_CAP,
+            GuidedRunView, PlanAdaptiveView, PlanReplanView, PrRecencyView, RaceDayView,
+            ReadinessView, RecapView, RoadbookLegView, RoadbookView, RouteElevView,
+            RouteSimplifyView, RunStatsView, StreaksView, TrainingPacesView, TurnCueView,
+            ELEV_PROFILE_CAP,
         };
         // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
@@ -2904,6 +2978,13 @@ mod tests {
             changes: 255,
             fitness_gated: false,
         });
+        rec.guided_run = Some(GuidedRunView {
+            cue_index: 255,
+            cue_count: 255,
+            next_cue_in_s: Some(999 * 3600 + 59 * 60 + 59),
+            duration_s: 999 * 3600,
+            remaining_s: 999 * 3600 + 59 * 60 + 59,
+        });
         rec.readiness = Some(ReadinessView {
             score: 100,
             band: 1,
@@ -2937,7 +3018,7 @@ mod tests {
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
-        for _ in 0..32 {
+        for _ in 0..33 {
             let rows = page_rows(
                 p,
                 Some(&fix()),
@@ -2972,7 +3053,7 @@ mod tests {
         // page must render its honest empty state and still fit the grid.
         let inactive = snapshot(RecordState::Recording, 15_000.0);
         let mut p = Page::default();
-        for _ in 0..32 {
+        for _ in 0..33 {
             let rows = page_rows(
                 p,
                 None,
@@ -4339,6 +4420,106 @@ mod tests {
                 .as_str(),
             "-1:02:03"
         );
+    }
+
+    #[test]
+    fn guided_run_glance_shows_the_cue_schedule_and_the_time_left() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        rec.guided_run = Some(crate::record::GuidedRunView {
+            cue_index: 3,
+            cue_count: 8,
+            next_cue_in_s: Some(150),
+            duration_s: 1_800,
+            remaining_s: 765,
+        });
+        let rows = page_rows(
+            Page::GuidedRun,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::GuidedRun, Some(152), Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "12:45"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "GUIDED  30 MIN");
+        assert_eq!(rows[4].as_str(), "CUE     3/8");
+        assert_eq!(rows[5].as_str(), "NEXT    2:30");
+        assert_eq!(rows[6].as_str(), "LEFT    12:45");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        // Text-only page: no gutter icons.
+        assert!(page_icons(
+            Page::GuidedRun,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            42,
+            true
+        )
+        .iter()
+        .all(Option::is_none));
+
+        // Past the last cue the row says so rather than showing a 0:00 that
+        // reads as a cue about to fire.
+        rec.guided_run = Some(crate::record::GuidedRunView {
+            cue_index: 8,
+            cue_count: 8,
+            next_cue_in_s: None,
+            duration_s: 1_800,
+            remaining_s: 0,
+        });
+        let rows = page_rows(
+            Page::GuidedRun,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[4].as_str(), "CUE     8/8");
+        assert_eq!(rows[5].as_str(), "NEXT    LAST CUE");
+        assert_eq!(rows[6].as_str(), "LEFT    0:00");
+    }
+
+    #[test]
+    fn guided_run_glance_without_an_armed_run_is_honestly_inactive() {
+        // Recording with nothing armed: the page says so instead of a 0/0 cue
+        // count that reads as a guided run that has finished.
+        let rec = snapshot(RecordState::Recording, 2_100.0);
+        assert!(rec.guided_run.is_none());
+        let rows = page_rows(
+            Page::GuidedRun,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            2,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::GuidedRun, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+        assert_eq!(rows[2].as_str(), "GUIDED --");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(rows[6].as_str(), "");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
     }
 
     #[test]

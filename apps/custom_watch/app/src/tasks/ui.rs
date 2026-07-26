@@ -452,10 +452,10 @@ pub async fn screen_task(
         // additionally latches into the persistent row-1 marker.
         if let Some(cursor) = grid.filter(|_| face::run_view(rec.as_ref())) {
             let pages_mask = ui_frame::pages_mask(rec.as_ref());
-            for (row, text) in page_grid::grid_rows(pages_mask).iter().enumerate() {
+            for (row, text) in page_grid::grid_rows(pages_mask, cursor).iter().enumerate() {
                 fb.draw_text_row(row, text);
             }
-            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor) {
+            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor, cursor) {
                 widgets::draw_grid_cursor(&mut fb, cell);
             }
             widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(cursor, pages_mask));

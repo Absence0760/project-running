@@ -63,8 +63,9 @@ pub enum SettingsEffect {
         drink_interval_s: u32,
         eat_interval_s: u32,
     },
-    /// [`crate::record::Recorder::set_pages_enabled`]
-    PagesEnabled(u32),
+    /// [`crate::record::Recorder::set_pages_enabled`], widened from the wire's
+    /// 32-bit field by [`crate::page::mask_from_wire`].
+    PagesEnabled(u64),
     /// [`crate::record::Recorder::set_hide_empty_pages`]
     HideEmptyPages(bool),
     /// The ui task's home-clock offset watch (`state::TZ_OFFSET_MIN`).
@@ -192,7 +193,9 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         });
     }
     if let Some(mask) = pages {
-        let _ = plan.push(SettingsEffect::PagesEnabled(mask));
+        let _ = plan.push(SettingsEffect::PagesEnabled(crate::page::mask_from_wire(
+            mask,
+        )));
     }
     if let Some(hide) = hide_empty_pages {
         let _ = plan.push(SettingsEffect::HideEmptyPages(hide));
@@ -359,7 +362,7 @@ mod tests {
                     pages: full.pages,
                     ..WatchSettings::default()
                 },
-                SettingsEffect::PagesEnabled(0b1010),
+                SettingsEffect::PagesEnabled(crate::page::mask_from_wire(0b1010)),
             ),
             (
                 WatchSettings {

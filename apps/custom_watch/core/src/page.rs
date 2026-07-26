@@ -46,6 +46,10 @@ pub enum Page {
     /// finish, and distance delta as context; an honest inactive state while
     /// no goal is configured.
     Pacer,
+    /// The armed scripted coach run ([`crate::guided_runs`]): how much of the
+    /// run is left, which cue the elapsed time has reached, and how long until
+    /// the next one; an honest inactive state until a guided run is armed.
+    GuidedRun,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
@@ -133,10 +137,12 @@ pub enum Page {
 }
 
 impl Page {
-    /// This page's bit in a pages bitmask (`1 << discriminant`). The 32
-    /// variants exactly fill a `u32`; a 33rd page needs a wider mask — the
-    /// `all_pages_fit_in_the_mask` test pins that.
-    pub fn bit(self) -> u32 {
+    /// This page's bit in a pages bitmask (`1 << discriminant`). The mask is a
+    /// `u64` — the 33rd page ([`Page::GuidedRun`]) overflowed the `u32` the mask
+    /// used to be, which in release builds would have wrapped `1 << 32` back
+    /// onto the Dashboard's bit rather than failing; a 65th page needs a wider
+    /// mask again, and the `all_pages_fit_in_the_mask` test pins the headroom.
+    pub fn bit(self) -> u64 {
         1 << self as u8
     }
 
@@ -152,6 +158,7 @@ impl Page {
             Page::Zones => "ZONE",
             Page::Splits => "SPLT",
             Page::Pacer => "PACR",
+            Page::GuidedRun => "GUID",
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
@@ -186,7 +193,7 @@ impl Page {
     /// parked on stays reachable as the walk's origin even when its own bit
     /// has since cleared (its data vanished mid-run) — the press moves off it
     /// and the cycle simply no longer returns.
-    pub fn next_in(self, mask: u32) -> Self {
+    pub fn next_in(self, mask: u64) -> Self {
         let mask = mask | Page::Dashboard.bit();
         let mut p = self.next();
         while p != self && p.bit() & mask == 0 {
@@ -201,7 +208,7 @@ impl Page {
 
     /// The previous enabled page — [`Page::next_in`]'s exact inverse over the
     /// same mask (the BTN3 long-press).
-    pub fn prev_in(self, mask: u32) -> Self {
+    pub fn prev_in(self, mask: u64) -> Self {
         let mask = mask | Page::Dashboard.bit();
         let mut p = self.prev();
         while p != self && p.bit() & mask == 0 {
@@ -223,7 +230,8 @@ impl Page {
             Page::Lap => Page::Zones,
             Page::Zones => Page::Splits,
             Page::Splits => Page::Pacer,
-            Page::Pacer => Page::Nav,
+            Page::Pacer => Page::GuidedRun,
+            Page::GuidedRun => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
             Page::CutoffEta => Page::Roadbook,
@@ -253,8 +261,8 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 32 pages a forward-
-    /// only walk needs up to ~31 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 33 pages a forward-
+    /// only walk needs up to ~32 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
@@ -268,6 +276,22 @@ impl Page {
     }
 }
 
+/// How many pages the `SET1` settings frame's 32-bit curated-page mask can
+/// address ([`crate::settings::WatchSettings::pages`]).
+pub const WIRE_MASK_BITS: u8 = 32;
+
+/// Widen a phone-pushed curated-page mask to the watch's internal `u64`.
+///
+/// The wire field is 32 bits wide, so a phone cannot express a page past
+/// discriminant 31. Those pages are left **enabled** rather than curated out: a
+/// zero-extension would hide a page the phone never meant to touch — and
+/// silently, since a curation push looks identical either way. Data presence
+/// still gates them, so nothing empty appears in the cycle. Widening the wire
+/// (a version bump plus the Dart encoder) retires this.
+pub fn mask_from_wire(wire: u32) -> u64 {
+    u64::from(wire) | !((1u64 << WIRE_MASK_BITS) - 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,7 +302,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 32] = [
+    const ALL: [Page; 33] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -286,6 +310,7 @@ mod tests {
         Page::Zones,
         Page::Splits,
         Page::Pacer,
+        Page::GuidedRun,
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
@@ -321,6 +346,11 @@ mod tests {
         assert_eq!(Page::Splits.next(), Page::Pacer);
         assert_eq!(
             Page::Pacer.next(),
+            Page::GuidedRun,
+            "guidance pages close the live cluster"
+        );
+        assert_eq!(
+            Page::GuidedRun.next(),
             Page::Nav,
             "course ops follow the live cluster"
         );
@@ -383,13 +413,34 @@ mod tests {
 
     #[test]
     fn all_pages_fit_in_the_mask() {
-        // 32 variants, one u32 bit each — bit() must stay collision-free.
-        let mut seen = 0u32;
+        // One u64 bit each, collision-free and inside the mask: the 33rd page
+        // is exactly what overflowed the u32 this mask used to be, and in a
+        // release build `1 << 32` would have wrapped onto the Dashboard's bit
+        // instead of panicking.
+        let mut seen = 0u64;
         for &p in ALL.iter() {
+            assert!(
+                (p as u8) < u64::BITS as u8,
+                "{p:?} sits past the mask's width"
+            );
             assert_eq!(seen & p.bit(), 0, "duplicate bit for {p:?}");
             seen |= p.bit();
         }
-        assert_eq!(seen, u32::MAX, "exactly 32 pages fill the mask");
+        assert_eq!(seen.count_ones() as usize, ALL.len());
+    }
+
+    #[test]
+    fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
+        // The phone's 32-bit field cannot express GuidedRun onward; zero-
+        // extending would curate them out invisibly on every curation push.
+        let curated = mask_from_wire(1u32 << (Page::Pace as u8));
+        assert_ne!(curated & Page::Pace.bit(), 0);
+        assert_eq!(curated & Page::Nav.bit(), 0, "an addressed page stays off");
+        assert_eq!(mask_from_wire(0) & Page::Pace.bit(), 0);
+        for &p in ALL.iter().filter(|p| (**p as u8) >= WIRE_MASK_BITS) {
+            assert_ne!(curated & p.bit(), 0, "{p:?} is past the wire's reach");
+            assert_ne!(mask_from_wire(0) & p.bit(), 0, "{p:?} on an empty mask");
+        }
     }
 
     #[test]
@@ -430,8 +481,8 @@ mod tests {
     fn full_mask_matches_the_plain_cycle() {
         let mut p = Page::default();
         for _ in 0..ALL.len() {
-            assert_eq!(p.next_in(u32::MAX), p.next());
-            assert_eq!(p.prev_in(u32::MAX), p.prev());
+            assert_eq!(p.next_in(u64::MAX), p.next());
+            assert_eq!(p.prev_in(u64::MAX), p.prev());
             p = p.next();
         }
     }

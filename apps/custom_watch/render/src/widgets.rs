@@ -781,6 +781,7 @@ mod tests {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided_run: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -790,7 +791,7 @@ mod tests {
             race_day: None,
             race_phase: None,
             track_thinning: 1,
-            pages_mask: u32::MAX,
+            pages_mask: u64::MAX,
         }
     }
 
@@ -997,10 +998,14 @@ mod tests {
         // rule in the ui task can't ghost. The inverse-video band makes this
         // the worst case: every pixel of rows 0-1 starts inked.
         use watch_core::alerts::{banner, Alert};
+        use watch_core::page::Page;
         let mut with_banner = Framebuffer::new();
         with_banner.draw_banner_2x(0, &banner(Alert::Drink));
         let mut clean = Framebuffer::new();
-        for (row, text) in page_grid::grid_rows(u32::MAX).iter().enumerate() {
+        for (row, text) in page_grid::grid_rows(u64::MAX, Page::Dashboard)
+            .iter()
+            .enumerate()
+        {
             with_banner.draw_text_row(row, text);
             clean.draw_text_row(row, text);
         }

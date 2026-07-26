@@ -603,6 +603,7 @@ mod tests {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided_run: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -612,7 +613,7 @@ mod tests {
             race_day: None,
             race_phase: None,
             track_thinning: 1,
-            pages_mask: u32::MAX,
+            pages_mask: u64::MAX,
         }
     }
 

@@ -130,7 +130,7 @@ pub fn grid_cursor_op(key: GridCursorKey, held_past_long: bool) -> GridCursorOp 
 }
 
 impl GridCursorOp {
-    pub fn apply(self, grid: &mut PageGrid, mask: u32) {
+    pub fn apply(self, grid: &mut PageGrid, mask: u64) {
         match self {
             GridCursorOp::Tap => grid.tap(mask),
             GridCursorOp::RowDown => grid.row_down(mask),
@@ -143,7 +143,7 @@ impl GridCursorOp {
 /// The page a BTN3 press lands on, walking the filtered cycle (data-present and
 /// curated) so a press never lands on an empty glance. An action that isn't a
 /// page walk leaves the page alone.
-pub fn paged(page: Page, action: Btn3Action, mask: u32) -> Page {
+pub fn paged(page: Page, action: Btn3Action, mask: u64) -> Page {
     match action {
         Btn3Action::PageNext => page.next_in(mask),
         Btn3Action::PagePrev => page.prev_in(mask),
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn cursor_ops_drive_the_grid_and_the_two_directions_mirror() {
-        let mask = u32::MAX;
+        let mask = u64::MAX;
         let mut grid = PageGrid::open(Page::default(), mask);
         let opened_at = grid.cursor();
         grid_cursor_op(GridCursorKey::Forward, false).apply(&mut grid, mask);
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn a_page_walk_follows_the_action_and_nothing_else_moves_the_page() {
-        let mask = u32::MAX;
+        let mask = u64::MAX;
         let page = Page::default();
         assert_eq!(paged(page, Btn3Action::PageNext, mask), page.next_in(mask));
         assert_eq!(paged(page, Btn3Action::PagePrev, mask), page.prev_in(mask));
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn a_page_walk_wraps_the_cycle_in_both_directions() {
-        let mask = u32::MAX;
+        let mask = u64::MAX;
         let mut page = Page::default();
         let mut seen = 0usize;
         loop {
@@ -391,7 +391,7 @@ mod tests {
     fn the_page_walk_direction_matches_the_press_that_produced_it() {
         // The task derives the action from the press; the two must agree for
         // every run-view state, or a long press would page the wrong way.
-        let mask = u32::MAX;
+        let mask = u64::MAX;
         let page = Page::default();
         for state in [
             RecordState::Recording,
