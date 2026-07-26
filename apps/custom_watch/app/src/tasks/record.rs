@@ -292,6 +292,14 @@ pub async fn run(store: &'static SharedStore) {
     {
         alerts.set_fuel_intervals(30, 45);
         info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");
+        // The distance / time / pace arms are off on hardware until a settings
+        // sync arms them, so the sim arms them itself through the same public
+        // setters: the shortest plausible cadences, and a band straddling the
+        // ~5:33/km bench_jog fixture so the pace alert reads a live TOO SLOW.
+        alerts.set_distance_interval(Some(watch_core::alerts::DISTANCE_INTERVAL_MIN_M));
+        alerts.set_time_interval(Some(watch_core::alerts::TIME_INTERVAL_MIN_S));
+        alerts.set_pace_band(Some((300, 320)));
+        info!("record: sim alerts 100m / 60s / pace band 5:00-5:20 per km");
     }
     // Sim-only demo settings, applied through the SAME path a phone push takes
     // (`apply_settings`) so the sim exercises the settings-sync apply, not a
