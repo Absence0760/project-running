@@ -37,6 +37,7 @@ stateDiagram-v2
     Run --> Run: BTN2 x2 — stop (FIN)
     Run --> Run: BTN4 — lap (REC / PAU), page prev (FIN)
     Run --> Run: BTN3 tap / long — page next / prev
+    Run --> Run: BTN3 held 0.5 s — "GRID? HOLD" banner while held
     Run --> Grid: BTN3 hold (1.5 s)
     Grid --> Grid: BTN3 tap / hold — cursor +1 / +4
     Grid --> Grid: BTN1 tap / hold — cursor -1 / -4
@@ -195,7 +196,21 @@ removes.
   banner outranks alerts but yields to the grid, where BTN2 means cancel.
 - **Idle gestures are duration-stable**: a BTN3 hold of any length while
   idle is the QNH re-zero — duration never changes an idle gesture
-  mid-press.
+  mid-press. Which is also why the idle face shows no hold prompt: there is
+  no second tier there to warn about, so naming one would be a lie.
+- **A timed press tier announces itself before it fires.** Once a run-view
+  BTN3 hold passes 0.5 s the hero band carries the inverse-video
+  `GRID? HOLD` banner for as long as the button is down, so the runner can
+  read where they are in the gesture and choose — release for the page back
+  they have already earned, or keep holding for the grid — instead of
+  learning the answer only once the modal has taken pause off BTN1 and stop
+  off BTN2 (§334). The prompt is driven entirely by the hold's own
+  escalation timer: it costs two `Watch` sends per hold that reaches the
+  tier, nothing at all for a tap, and it carries no TTL, so it never puts a
+  timed refresh into the screen task. It outranks an alert banner (whose
+  TTL outlives the hold) and yields to the armed-stop banner and to the
+  grid. On Distance / Pace the three-row numeral hero stands down under it,
+  the same way it does under the armed stop.
 - **The home face always tells the time** — the 32x48 clock hero
   extrapolates `HH:MM` from the last fix's wall clock plus uptime, and shows
   an honest `--:--` before any fix. Local time once a settings push has
@@ -209,6 +224,12 @@ removes.
   a resting clock flushes zero lines (pinned by a `sharp_mip` test).
 
 ## Known gaps (deliberate, tier-1)
+
+- The grid's 3 s auto-select still commits the cursor with no countdown on
+  screen — the one timed wait left without pre-fire feedback. The hold
+  prompt's mechanism does not reach it: the prompt rides a timer the press
+  already owns, whereas a countdown inside the grid would need a per-second
+  wake for as long as the modal is open, which §328 rules out.
 
 - The timezone offset is static between pushes: a DST transition or a border
   crossing shifts the home clock only after the phone's next settings push
@@ -227,6 +248,8 @@ removes.
 `pnpm watch:sim:gui:idle` boots to the home face (no auto-started run). Via
 `bin/watch-monitor.sh`: `runMacro $btn1` start / pause / dismiss-home,
 `$btn2` twice stop (watch the `STOP? BTN2` banner), `$btn3` page, `$btn3l`
-page back, `$btn3h` page grid, then `$btn3`/`$btn3l`/`$btn1` to move the
-cursor and `$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back. While
+page back (0.8 s — long enough to flash the `GRID? HOLD` banner before it
+resolves), `$btn3h` page grid (1.7 s — the banner stands for a second, then
+the grid replaces it), then `$btn3`/`$btn3l`/`$btn1` to move the cursor and
+`$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back. While
 idle, `$btn4` toggles the home face against the diagnostics face.
