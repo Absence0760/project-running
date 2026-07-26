@@ -102,6 +102,48 @@ fn band_redraw_erases_the_previous_text_without_a_clear_pass() {
     assert_eq!(count, expected, "residue from the previous clock survived");
 }
 
+// Rightmost inked column, or None for a blank framebuffer.
+fn rightmost_ink(fb: &Framebuffer) -> Option<usize> {
+    (0..WIDTH)
+        .rev()
+        .find(|&x| (0..HEIGHT).any(|y| fb.pixel(x, y)))
+}
+
+#[test]
+fn the_widest_signed_hero_still_fits_the_panel() {
+    // Now that the faces carry `+`, the Pacer / cut-off margins render as
+    // numeral heroes, and a signed `h:mm:ss` is the longest hero either page
+    // emits. Both pages put a label on row 2, so the renderer is the two-row
+    // medium face: `+1:05:30` is 8 cells of 16 px = 128 px, and `signed_split`
+    // caps hours at 999, so the widest possible `+999:59:59` is 10 cells =
+    // 160 px — both inside the 168 px panel, so no glyph is dropped. Asserted
+    // by where the ink actually ends, because the renderers drop glyphs past
+    // the right edge silently.
+    for (hero, cells) in [("+1:05:30", 8), ("+999:59:59", 10)] {
+        assert!(cells * bignum::BIGNUM_MED_WIDTH <= WIDTH, "{hero}");
+        let mut fb = Framebuffer::new();
+        fb.draw_bignum_med_hero(0, hero);
+        let last = rightmost_ink(&fb).expect("medium signed hero drew nothing");
+        assert!(
+            last >= (cells - 1) * bignum::BIGNUM_MED_WIDTH,
+            "{hero}: the last glyph was dropped, ink ends at {last}"
+        );
+        assert!(last < cells * bignum::BIGNUM_MED_WIDTH, "{hero} overran");
+    }
+
+    // The three-row mixed hero splits at the first `:`, so the same string is
+    // 2 big cells + 6 medium = 64 + 96 = 160 px. Only Distance / Pace use this
+    // renderer, but the arithmetic has to hold for whatever reaches it.
+    assert_eq!(2 * bignum::BIGNUM_WIDTH + 6 * bignum::BIGNUM_MED_WIDTH, 160);
+    let mut fb = Framebuffer::new();
+    fb.draw_bignum_hero(0, "+1:05:30");
+    let last = rightmost_ink(&fb).expect("mixed signed hero drew nothing");
+    assert!(
+        last >= 144 && last < 160,
+        "ink ends at {last}, expected 144..160"
+    );
+}
+
 // Bounding box of the ink inside an x-range of the hero band at y0 = 0.
 fn ink_box(fb: &Framebuffer, x0: usize, x1: usize) -> Option<(usize, usize)> {
     let ys: Vec<usize> = (0..bignum::BIGNUM_HEIGHT)

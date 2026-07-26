@@ -154,9 +154,10 @@ fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>) {
 /// The numeral-face glyph set is decided in `watch_core` (the face choice is a
 /// frame decision) and rasterised in `sharp_mip` (the pixels are a driver
 /// asset). This crate is the only one that sees both, so it is where the two
-/// are pinned: a regeneration that adds a glyph — a `+`, which would promote
-/// the signed Pacer / cut-off heroes out of the text font — fails here until
-/// the decision side learns about it.
+/// are pinned: a regeneration that adds a glyph fails here until the decision
+/// side learns about it. That is how the `+` landed — the table grew, this
+/// assertion caught it, and the signed Pacer / cut-off heroes then promoted out
+/// of the text font on the glyph rule alone.
 #[test]
 fn the_numeral_glyph_set_matches_the_generated_tables() {
     assert_eq!(
@@ -352,6 +353,34 @@ fn preview_pacer_page() {
     );
     widgets::draw_pacer_overlay(&mut fb, &snap);
     show("pacer: +75s ahead centre-bar", &fb);
+}
+
+#[test]
+fn preview_cutoff_eta_page() {
+    // The other signed hero: margin to the next cut-off, `+` slack / `-` over.
+    // Shown at an hours-wide margin, the widest a signed hero realistically
+    // gets — 8 glyphs of the 16 px medium cell is 128 px of a 168 px panel.
+    use watch_core::cutoff_eta::{CutoffEta, CutoffEtaStatus};
+    let mut snap = base_snapshot();
+    snap.cutoff = Some(CutoffEta {
+        has_cutoff: true,
+        distance_to_m: 8_400.0,
+        projected_arrival_elapsed_s: Some(4 * 3600 + 10 * 60),
+        margin_s: Some(3930),
+        required_pace_s_per_km: Some(7.0 * 60.0 + 30.0),
+        limit_passed: false,
+        status: CutoffEtaStatus::On,
+    });
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::CutoffEta, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::CutoffEta, u64::MAX),
+    );
+    show(
+        "cut-off eta: +1:05:30 margin in the medium numeral face",
+        &fb,
+    );
 }
 
 #[test]

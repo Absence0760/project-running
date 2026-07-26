@@ -102,12 +102,14 @@ pub enum HeroBand {
 /// glyph set). The face choice is a frame decision, so it lives here rather
 /// than in the driver; `watch_render`'s preview tests pin the two equal, so a
 /// regenerated table that gains a glyph cannot silently leave this behind.
-pub const NUMERAL_GLYPHS: &[u8] = b"0123456789:-.";
+pub const NUMERAL_GLYPHS: &[u8] = b"0123456789:-.+";
 
 /// Whether `text` can be drawn entirely from the numeral faces. A glyph the
-/// faces lack advances blank, and on a signed hero (`+0:42` ahead vs `-1:05`
-/// behind) the sign is the one character that may not silently disappear — so
-/// anything outside the set keeps the whole hero in the text font.
+/// faces lack advances blank, so anything outside the set — a unit suffix, a
+/// word, a space — keeps the whole hero in the text font rather than losing a
+/// character. Both signs are in the set since the faces gained `+`, so the
+/// signed Pacer / cut-off heroes render in the numeral face with their signs
+/// intact; that followed from the glyph set alone, with no page list to edit.
 pub fn numeral_hero(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|b| NUMERAL_GLYPHS.contains(&b))
 }
@@ -395,6 +397,11 @@ mod tests {
             Page::GearWear,
             Page::TrainingPaces,
             Page::Fitness,
+            // Converged onto the numeral face when the generated tables gained
+            // `+`: their signed `+0:42` / `-1:05` heroes are now spellable, so
+            // the glyph rule moved them with no page list to edit.
+            Page::Pacer,
+            Page::CutoffEta,
         ] {
             assert_eq!(
                 hero_band(HeroFrame { page, ..frame }),
@@ -424,26 +431,33 @@ mod tests {
             }),
             HeroBand::TextHero
         );
-        // Accepted consequence of deciding on glyphs rather than on a page
-        // list: the signed pages' honest inactive `--` is spellable, so it
-        // takes the numeral face while their live `+0:42` does not. The face
-        // follows the string, and the day a regeneration adds `+` both states
-        // converge with no page list to update.
-        assert_eq!(
-            hero_band(HeroFrame {
-                numeral: true,
-                ..frame
-            }),
-            HeroBand::MedNumHero
-        );
-        assert_eq!(
-            hero_band(HeroFrame {
-                page: Page::CutoffEta,
-                numeral: true,
-                ..frame
-            }),
-            HeroBand::MedNumHero
-        );
+    }
+
+    #[test]
+    fn the_signed_pages_take_the_numeral_face_in_both_their_states() {
+        // The split § 339 pinned deliberately is closed: while the numeral set
+        // carried no `+`, these pages' honest inactive `--` took the numeral
+        // face and their live `+0:42` fell back to the text font. Now that the
+        // faces carry both signs, both states render in the same face — and
+        // nothing but the glyph set changed to get there.
+        let frame = HeroFrame {
+            alert: false,
+            rezero_banner: false,
+            hero: true,
+            numeral: true,
+            stop_pending: false,
+            page: Page::Pacer,
+        };
+        for page in [Page::Pacer, Page::CutoffEta] {
+            for hero in ["+0:42", "-1:05", "--", "+1:05:30"] {
+                assert!(numeral_hero(hero), "{hero}");
+                assert_eq!(
+                    hero_band(HeroFrame { page, ..frame }),
+                    HeroBand::MedNumHero,
+                    "{page:?} {hero}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -453,10 +467,8 @@ mod tests {
         assert!(numeral_hero("1:02:03"));
         assert!(numeral_hero("--:--"));
         assert!(numeral_hero("-12"));
-        // The signed split's `+` is not in the faces, so the whole hero (sign
-        // included) has to stay in the text font — the alternative is a Pacer
-        // page that cannot show ahead from behind.
-        assert!(!numeral_hero("+0:42"));
+        assert!(numeral_hero("+0:42"));
+        assert!(numeral_hero("+1:05:30"));
         assert!(!numeral_hero("1.5 KM"));
         assert!(!numeral_hero("SET"));
         // An empty hero is not a numeral hero.
