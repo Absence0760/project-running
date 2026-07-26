@@ -1,9 +1,10 @@
-//! FIFO drain decisions for the app's `hr` task — the demux + between-window
-//! wait that used to be inlined in the async task body.
+//! FIFO drain decisions for the app's `hr` task — the demux, the LED auto-gain
+//! cadence, and the between-window wait that used to be inlined in the async
+//! task body.
 //!
 //! [`crate::hr_duty`] owns *when* the MAX86177 samples (the mode-keyed duty
 //! schedule) and the driver's `peak_detect` owns the pulse maths. This module
-//! owns the two decisions in between:
+//! owns the three decisions in between:
 //!
 //! - **Slot demux.** The FIFO interleaves two measurement slots — MEAS1
 //!   (LED-on PPG) and MEAS2 (LED-off ambient) — told apart only by their word
@@ -12,6 +13,12 @@
 //!   enabled must be **dropped**, never fed to the detector as PPG: a marker
 //!   or mis-decoded word pushed through as a pulse sample corrupts the
 //!   estimate. [`FifoDemux`] holds that latch and that rule.
+//! - **LED auto-gain cadence.** [`AgcCadence`] decides *when* the drive may be
+//!   stepped; the driver's `agc_next_pa_ambient` decides *by how much*. The
+//!   loop holds its drive both before a full period of pulse samples has been
+//!   drained and while the detector has no DC baseline to judge, and a
+//!   duty-cycle wake buys the freshly-woken part a whole fresh period before
+//!   its first step.
 //! - **Between-window wait.** [`next_window_wait_s`] is how long the task
 //!   sleeps once a duty-cycled window closes (and how long it defers after a
 //!   failed wake). Never zero — a zero-duration timer would spin the drain
@@ -91,6 +98,84 @@ impl FifoDemux {
     }
 }
 
+/// The detector's two DC estimates at the moment the LED auto-gain loop is
+/// allowed to look. Named fields because they are indistinguishable as bare
+/// `u32`s and the loop judges them for different things: `corrected` for
+/// brightness (ambient cancels out of it, so sunlight flicker cannot walk the
+/// drive), `raw` for the ADC clipping headroom that subtraction cannot recover.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct AgcDc {
+    pub raw: u32,
+    pub corrected: u32,
+}
+
+/// When the LED auto-gain loop may step the drive. The step size, hysteresis
+/// and clamps belong to the driver's `agc_next_pa_ambient`; this is only the
+/// cadence around it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AgcCadence {
+    period_samples: u32,
+    samples: u32,
+}
+
+impl AgcCadence {
+    /// At most one step per second of pulse samples: the detector's DC baseline
+    /// (tau ~0.64 s at 100 Hz) has to re-settle between corrections, and the
+    /// target band's hysteresis absorbs the residual lag, so the loop converges
+    /// without hunting. The period is at least one sample, so a nonsense
+    /// sampling rate cannot make every single sample due.
+    pub const fn per_second(sample_rate_hz: u32) -> Self {
+        Self {
+            period_samples: if sample_rate_hz < 1 {
+                1
+            } else {
+                sample_rate_hz
+            },
+            samples: 0,
+        }
+    }
+
+    /// Count one PPG word drained from the FIFO. Ambient and dropped words do
+    /// not count: the DC baseline the loop judges only advances on pulse
+    /// samples, so a window that yields nothing but ambient never comes due.
+    pub fn sample(&mut self) {
+        self.samples = self.samples.saturating_add(1);
+    }
+
+    /// The DC pair the drive may be stepped from right now, or `None` to hold
+    /// it — before the period has elapsed, or while the detector has no
+    /// baseline yet.
+    ///
+    /// The period is consumed only when a step is actually authorised. A period
+    /// that elapses with no baseline therefore leaves the count standing, and
+    /// the loop steps on the first check at or after the period with both
+    /// estimates present rather than throwing the elapsed period away and
+    /// waiting a whole second more.
+    pub fn due(&mut self, raw_dc: Option<u32>, corrected_dc: Option<u32>) -> Option<AgcDc> {
+        if self.samples < self.period_samples {
+            return None;
+        }
+        let dc = AgcDc {
+            raw: raw_dc?,
+            corrected: corrected_dc?,
+        };
+        self.samples = 0;
+        Some(dc)
+    }
+
+    /// Drop the count on a duty-cycle wake, so the freshly-woken part gets a
+    /// full period of live samples before its first gain step.
+    ///
+    /// This — not the detector's DC estimates — is what holds the loop after a
+    /// wake. `PeakDetector::reset` clears the estimates, but they read `Some`
+    /// again from the very first pushed sample, so without this reset the first
+    /// poll of a new window would step the drive off a one-sample-old baseline.
+    pub fn reset(&mut self) {
+        self.samples = 0;
+    }
+}
+
 /// Seconds to wait for `window`'s next sampling window to open, from
 /// `now_s`. At least 1: a zero-duration timer would spin the drain loop at
 /// executor pace instead of parking the task for the off-window.
@@ -107,7 +192,7 @@ pub const fn next_window_wait_s(window: DutyWindow, now_s: u32) -> u32 {
 mod tests {
     use super::*;
     use crate::gnss_mode::GnssMode;
-    use crate::hr_duty::{duty_window, BALANCED_PERIOD_S, ON_S};
+    use crate::hr_duty::{duty_window, shown_bpm, HrSample, BALANCED_PERIOD_S, ON_S};
 
     const TAGS: FifoTags = FifoTags {
         ppg: 0x01,
@@ -172,6 +257,168 @@ mod tests {
         d.apply(TAGS.ambient, 8_000);
         d.reset();
         assert_eq!(d.ambient(), 0);
+    }
+
+    /// The sampling rate the `hr` task configures the part at.
+    const RATE_HZ: u32 = 100;
+    const DC: (Option<u32>, Option<u32>) = (Some(200_000), Some(180_000));
+
+    fn drain_pulses(agc: &mut AgcCadence, n: u32) {
+        for _ in 0..n {
+            agc.sample();
+        }
+    }
+
+    #[test]
+    fn the_drive_holds_until_a_full_period_of_pulse_samples() {
+        // Stepping faster than the DC baseline can re-settle (tau ~0.64 s) makes
+        // the loop hunt: it would keep correcting against the level it set two
+        // corrections ago.
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        for _ in 0..RATE_HZ - 1 {
+            assert_eq!(agc.due(DC.0, DC.1), None);
+            agc.sample();
+        }
+        agc.sample();
+        assert_eq!(
+            agc.due(DC.0, DC.1),
+            Some(AgcDc {
+                raw: 200_000,
+                corrected: 180_000,
+            })
+        );
+    }
+
+    #[test]
+    fn an_absent_dc_estimate_holds_the_drive_however_long_the_period_ran() {
+        // A half-settled or missing baseline is not something to step a gain
+        // off; the honest move is to keep the current drive and look again.
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        drain_pulses(&mut agc, RATE_HZ * 3);
+        assert_eq!(agc.due(None, None), None);
+        assert_eq!(agc.due(Some(200_000), None), None);
+        assert_eq!(agc.due(None, Some(180_000)), None);
+    }
+
+    #[test]
+    fn the_step_lands_on_the_first_check_once_the_baseline_arrives() {
+        // The elapsed period must not be thrown away by a check that did not
+        // step: the loop already waited its second, so it is due the moment it
+        // has something to judge, not a whole second later. Holds however long
+        // the outage ran.
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        drain_pulses(&mut agc, RATE_HZ);
+        assert_eq!(agc.due(None, None), None);
+        assert!(agc.due(DC.0, DC.1).is_some());
+
+        drain_pulses(&mut agc, RATE_HZ * 5);
+        for _ in 0..5 {
+            assert_eq!(agc.due(None, None), None);
+        }
+        assert!(agc.due(DC.0, DC.1).is_some());
+    }
+
+    #[test]
+    fn a_step_consumes_the_period() {
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        drain_pulses(&mut agc, RATE_HZ);
+        assert!(agc.due(DC.0, DC.1).is_some());
+        assert_eq!(agc.due(DC.0, DC.1), None, "two steps back to back");
+        drain_pulses(&mut agc, RATE_HZ - 1);
+        assert_eq!(agc.due(DC.0, DC.1), None);
+        agc.sample();
+        assert!(agc.due(DC.0, DC.1).is_some());
+    }
+
+    #[test]
+    fn a_duty_cycle_wake_buys_a_full_reconvergence_window() {
+        // The DC estimates are `Some` again from the first sample after
+        // `PeakDetector::reset`, so they cannot be what holds the loop — only
+        // this count reset stops the freshly-woken part taking a gain step off a
+        // one-sample-old baseline.
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        drain_pulses(&mut agc, RATE_HZ - 1);
+        agc.reset();
+        agc.sample();
+        assert_eq!(agc.due(DC.0, DC.1), None);
+        drain_pulses(&mut agc, RATE_HZ - 1);
+        assert!(agc.due(DC.0, DC.1).is_some());
+    }
+
+    #[test]
+    fn only_pulse_words_advance_the_period() {
+        // Driven exactly as the drain loop drives it: the demux classifies, and
+        // only the PPG slot counts. An ambient-only or stray-tag stretch must
+        // not walk the drive on a baseline that never moved.
+        let mut demux = FifoDemux::new(TAGS);
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        for _ in 0..RATE_HZ * 4 {
+            for tag in [TAGS.ambient, 0x7f] {
+                if demux.apply(tag, 1_000) == FifoSlot::Ppg {
+                    agc.sample();
+                }
+            }
+        }
+        assert_eq!(agc.due(DC.0, DC.1), None);
+        for _ in 0..RATE_HZ {
+            if demux.apply(TAGS.ppg, 200_000) == FifoSlot::Ppg {
+                agc.sample();
+            }
+        }
+        assert!(agc.due(DC.0, DC.1).is_some());
+    }
+
+    #[test]
+    fn the_cadence_is_one_step_per_second_at_the_sampling_rate() {
+        // The tau ~0.64 s settling derivation is in samples, so it only holds
+        // while the period tracks the rate the part is actually configured at.
+        for rate in [50, RATE_HZ, 400] {
+            let mut agc = AgcCadence::per_second(rate);
+            drain_pulses(&mut agc, rate - 1);
+            assert_eq!(agc.due(DC.0, DC.1), None, "rate={rate}");
+            agc.sample();
+            assert!(agc.due(DC.0, DC.1).is_some(), "rate={rate}");
+        }
+    }
+
+    #[test]
+    fn a_zero_sampling_rate_still_requires_a_pulse_sample() {
+        // A zero period would step the drive on a poll that drained nothing at
+        // all — a gain walk driven by the executor rather than by the signal.
+        let mut agc = AgcCadence::per_second(0);
+        assert_eq!(agc.due(DC.0, DC.1), None);
+        agc.sample();
+        assert!(agc.due(DC.0, DC.1).is_some());
+    }
+
+    #[test]
+    fn a_reading_is_held_across_an_off_window_rather_than_re_sampled() {
+        // The whole point of duty-cycling: through the off-window the task
+        // parks, drains nothing, and publishes nothing — so the reading from the
+        // tail of the last on-window is still what a consumer shows when the
+        // next window opens, and the woken part owes a fresh period before it
+        // touches the drive.
+        let mode = GnssMode::Balanced;
+        let w = duty_window(mode).unwrap();
+        let last = Some(HrSample {
+            bpm: Some(152),
+            at_s: ON_S - 1,
+        });
+        let mut agc = AgcCadence::per_second(RATE_HZ);
+        drain_pulses(&mut agc, RATE_HZ * ON_S);
+
+        let wake_s = ON_S + next_window_wait_s(w, ON_S);
+        assert_eq!(wake_s, BALANCED_PERIOD_S);
+        assert!(w.is_on(wake_s), "the wait must land inside a window");
+        assert_eq!(
+            shown_bpm(last, wake_s, mode),
+            Some(152),
+            "the held reading must survive the gap it was budgeted for"
+        );
+
+        agc.reset();
+        agc.sample();
+        assert_eq!(agc.due(DC.0, DC.1), None);
     }
 
     #[test]
