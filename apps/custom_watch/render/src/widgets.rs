@@ -374,6 +374,35 @@ pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
     );
 }
 
+/// The elevation-profile page's mini-profile: the rows the face leaves blank
+/// below its vert-totals context row, full width with a small margin — the same
+/// page-body rect the splits histogram uses.
+const ELEV_PROFILE_X: usize = HIST_X;
+const ELEV_PROFILE_Y: usize = HIST_TOP_ROW * CELL_H;
+const ELEV_PROFILE_W: usize = HIST_W;
+const ELEV_PROFILE_H: usize = HIST_H;
+
+/// The elevation-profile page's overlay: the run's banked altitude series as a
+/// sparkline across the page body. No-op until the recorder has banked a
+/// sample, so the face's own empty state stands alone rather than being
+/// underlined by a flat baseline that reads as "dead level".
+pub fn draw_elev_profile_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
+    let ep = &snap.elev_profile;
+    if ep.len == 0 {
+        return;
+    }
+    draw_mini_profile(
+        fb,
+        &MiniProfile {
+            x: ELEV_PROFILE_X,
+            y: ELEV_PROFILE_Y,
+            w: ELEV_PROFILE_W,
+            h: ELEV_PROFILE_H,
+            samples: &ep.samples[..ep.len],
+        },
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Nav map panel (course polyline + position marker + off-course banner)
 // ---------------------------------------------------------------------------
@@ -1398,6 +1427,100 @@ mod tests {
 
     use watch_core::course::CoursePoint;
     use watch_core::nav_map;
+    use watch_core::record::{ElevProfileView, ELEV_PROFILE_CAP};
+
+    fn elev_snapshot(series: &[i32]) -> Snapshot {
+        let mut snap = snapshot();
+        let mut view = ElevProfileView::empty();
+        view.samples[..series.len()].copy_from_slice(series);
+        view.len = series.len();
+        snap.elev_profile = view;
+        snap
+    }
+
+    #[test]
+    fn elev_profile_fills_the_page_body_and_spares_the_hero_and_baseline_rows() {
+        let series: [i32; 9] = [1600, 1660, 1740, 1830, 1880, 1810, 1720, 1655, 1602];
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&series));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0,
+            "the profile drew nothing"
+        );
+        // Rows 0-2 are the hero + the vert-totals context row the face owns.
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0, "hero rows");
+        // The bottom band the face keeps for its GPS row stays clear, as do the
+        // side margins.
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0, "below");
+        assert_eq!(ink_in(&fb, 0, 0, ELEV_PROFILE_X, HEIGHT), 0, "left margin");
+        let right = ELEV_PROFILE_X + ELEV_PROFILE_W;
+        assert_eq!(ink_in(&fb, right, 0, WIDTH - right, HEIGHT), 0, "right");
+    }
+
+    #[test]
+    fn elev_profile_shares_the_splits_histogram_panel() {
+        // Both glance pages plot into the same page-body rect below the context
+        // row; a drift between them would put one of the two over a face row.
+        assert_eq!(ELEV_PROFILE_X, HIST_X);
+        assert_eq!(ELEV_PROFILE_Y, HIST_TOP_ROW * CELL_H);
+        assert_eq!(ELEV_PROFILE_W, HIST_W);
+        assert_eq!(ELEV_PROFILE_H, HIST_H);
+    }
+
+    #[test]
+    fn elev_profile_empty_series_draws_nothing() {
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &snapshot());
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
+    fn elev_profile_flat_series_sits_on_the_baseline_not_mid_panel() {
+        // A dead-level treadmill leg auto-ranges to min == max; it must read as
+        // flat along the bottom rather than as a full-height climb.
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&[1500; 6]));
+        let baseline = ELEV_PROFILE_Y + ELEV_PROFILE_H - 1;
+        assert!(fb.pixel(ELEV_PROFILE_X, baseline));
+        assert_eq!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H - 1
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn elev_profile_a_full_buffer_stays_inside_the_panel() {
+        // The recorder's whole banked series at once — the multi-day ultra case,
+        // where a per-sample column is a fraction of a pixel wide.
+        let series: [i32; ELEV_PROFILE_CAP] = core::array::from_fn(|i| 1000 + (i as i32 % 37) * 25);
+        let mut fb = Framebuffer::new();
+        draw_elev_profile_overlay(&mut fb, &elev_snapshot(&series));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0
+        );
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0);
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0);
+    }
 
     fn cp(lat_deg: f64, lon_deg: f64) -> CoursePoint {
         CoursePoint { lat_deg, lon_deg }

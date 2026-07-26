@@ -394,6 +394,30 @@ fn preview_page_grid() {
 }
 
 #[test]
+fn preview_elevation_profile_page() {
+    // The recorder's banked altitude series over its own glance page, so the
+    // sparkline is shown against the vert-totals context row it sits under.
+    let elevation: [i32; 18] = [
+        1600, 1612, 1648, 1705, 1782, 1851, 1884, 1902, 1868, 1801, 1744, 1712, 1690, 1701, 1748,
+        1690, 1632, 1604,
+    ];
+    let mut snap = base_snapshot();
+    let mut view = watch_core::record::ElevProfileView::empty();
+    view.samples[..elevation.len()].copy_from_slice(&elevation);
+    view.len = elevation.len();
+    snap.elev_profile = view;
+
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::ElevationProfile, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::ElevationProfile, u32::MAX),
+    );
+    widgets::draw_elev_profile_overlay(&mut fb, &snap);
+    show("elevation profile: banked altitude sparkline", &fb);
+}
+
+#[test]
 fn preview_mini_profile() {
     // A synthetic climb-then-descend altitude series — the shape a future glance
     // page would show for a route's elevation profile, auto-scaled to the cell.

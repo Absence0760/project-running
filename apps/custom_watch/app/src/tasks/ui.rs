@@ -49,14 +49,6 @@ const TICK_IDLE: Duration = Duration::from_secs(30);
 
 const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
 
-// The ElevationProfile page's mini-profile sparkline: the rows the face leaves
-// blank below its vert-totals context row (rows 3..8), full width with a small
-// margin — the elevation analogue of the splits histogram panel.
-const ELEV_PROFILE_X: usize = 6;
-const ELEV_PROFILE_Y: usize = 3 * CELL_H;
-const ELEV_PROFILE_W: usize = sharp_mip::WIDTH - 2 * ELEV_PROFILE_X;
-const ELEV_PROFILE_H: usize = 5 * CELL_H - 4;
-
 /// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
 /// firmware is alive before the display or defmt tells you. Gated behind the
 /// default-OFF `dev-blink` feature: a free-running 2 Hz waker + LED current is
@@ -413,21 +405,7 @@ pub async fn screen_task(
                     Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
-                    Page::ElevationProfile => {
-                        let ep = &snap.elev_profile;
-                        if ep.len > 0 {
-                            widgets::draw_mini_profile(
-                                &mut fb,
-                                &widgets::MiniProfile {
-                                    x: ELEV_PROFILE_X,
-                                    y: ELEV_PROFILE_Y,
-                                    w: ELEV_PROFILE_W,
-                                    h: ELEV_PROFILE_H,
-                                    samples: &ep.samples[..ep.len],
-                                },
-                            );
-                        }
-                    }
+                    Page::ElevationProfile => widgets::draw_elev_profile_overlay(&mut fb, snap),
                     _ => {}
                 }
             }
