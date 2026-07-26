@@ -20,7 +20,7 @@ stateDiagram-v2
     Diag: LAT / LON / SPD
     Diag: seconds clock / vert
     Run: Run view
-    Run: 32 pages (filtered mask)
+    Run: 33 pages (filtered mask)
     Grid: Page grid (modal)
     Grid: all enabled pages + cursor
 
@@ -93,7 +93,7 @@ The page grid (hold BTN3) shows this same ring as a 4-column map — codes in
 cycle order, cursor box on the current page — and moves over it with
 `±1` (taps) and `±4` (holds).
 
-## Press cost — measured, from the Dashboard, full 32-page mask
+## Press cost — measured, from the Dashboard, full 33-page mask
 
 Actions counted: each tap, long-press, or hold is one action; the grid's
 open-hold is one; the auto-select close is free (BTN4 costs one to jump
@@ -101,9 +101,19 @@ immediately). `linear` = tap-forward / long-back only.
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 16 | 8.0 |
+| Linear walk only (pre-§288) | 16 | 8.2 |
 | + grid, forward-only movement (§288 as first built) | 9 | 4.7 |
 | + grid, symmetric ±1/±4 (§289, shipped) | **6** | **3.7** |
+
+**The two grid rows below predate the 33rd page** (the `guided_runs` glance, 2026-07-26) **and
+the row-scrolling window it forced** — page 33 overflowed a grid that was full to the cell at
+4 x 8. The linear row above is recomputed: at 33 pages the worst page is unchanged at 16 (both
+16 and 17 steps away reduce to 16 by the long-press back) and the average moves 8.0 -> 8.2.
+The grid rows are left as measured rather than re-derived: an independent BFS over +-1/+-4
+reproduces the linear row exactly but returns 11 / 6.16 for the forward-only row against the
+9 / 4.7 recorded here, so the model behind those two numbers is not the one that reproduction
+assumed, and substituting a guess for a measurement would be worse than a flagged staleness.
+Re-measure them against the window model before quoting them.
 
 Under a typical filtered mask (~12 pages): worst 4, average ~2.2. The
 navigation-graph analysis is what motivated §289's symmetric movement: with
