@@ -94,6 +94,7 @@ no longer applies.
 | Product vision — ultra niche + the 10 product requirements that fall out of it | [../../docs/custom_watch/vision.md](../../docs/custom_watch/vision.md) |
 | Concrete BOM — chip picks per subsystem, ~$110 production BOM at 10k units | [../../docs/custom_watch/bom.md](../../docs/custom_watch/bom.md) |
 | Cost tiers — $1–2k bench, $15–250k wearable, $300–600k production-intent | [../../docs/custom_watch/prototyping.md](../../docs/custom_watch/prototyping.md) |
+| Tier-2 software scope — per-item sizing, prerequisites, sequencing (read before any tier-2 work) | [../../docs/custom_watch/tier2_scope.md](../../docs/custom_watch/tier2_scope.md) |
 | Firmware architecture + Supabase-integration design (Zephyr fallback spec) | [../../docs/custom_watch/firmware.md](../../docs/custom_watch/firmware.md) |
 | Where battery life actually comes from (big / medium / small levers) | [../../docs/custom_watch/performance_path.md](../../docs/custom_watch/performance_path.md) |
 | Tier-1 active parts list / shopping checklist | [../../docs/custom_watch/parts.md](../../docs/custom_watch/parts.md) |
