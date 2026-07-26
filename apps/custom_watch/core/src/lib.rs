@@ -45,6 +45,9 @@
 //!   and whether a published fix earns the receiver a nap
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
+//! - [`gnss_signal`] — the GSV/GSA side channel: the satellites-in-view + fix
+//!   mode pair behind the idle signal meter, and the bar-count gate that stops
+//!   a repeated GSV group waking a consumer several times a second
 //! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
 //!   targets over a week or month window (port of web `training/goals.ts`; the
 //!   localStorage persistence + UUID id + i18n period label are web-only, dates
@@ -254,6 +257,7 @@ pub mod gear_wear;
 pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;
+pub mod gnss_signal;
 pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod guided_runs;

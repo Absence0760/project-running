@@ -5,8 +5,9 @@
 //! Thin glue by design: byte assembly + parsing live in `ublox_nmea`,
 //! RMC/GGA merging in `watch_core::fix`, the publication cadence + the
 //! may-the-receiver-sleep decision in `watch_core::gnss_cadence`, the
-//! power-down schedule in `watch_core::gnss_power` — all host-tested. This task
-//! only moves bytes between the peripheral and those modules.
+//! power-down schedule in `watch_core::gnss_power`, the GSV/GSA signal-meter
+//! gate in `watch_core::gnss_signal` — all host-tested. This task only moves
+//! bytes between the peripheral and those modules.
 //!
 //! Publication is **throttled to the cadence the current situation needs**
 //! (`gnss_cadence::min_interval_s`), generalised from the original idle-only
@@ -20,6 +21,14 @@
 //!   `fix_interval_s` — every fix in Performance (interval 1, the historical
 //!   full-rate path), one per 15 s in Balanced, one per 60 s in Expedition
 //!   (`watch_core::gnss_mode`).
+//!
+//! The GSV/GSA side channel is throttled on the same principle. The parser
+//! emits one `Sentence::Gsv` per GSV *sentence*, so a multi-sentence group
+//! repeats its in-view total several times a second and a multi-constellation
+//! receiver stacks a group per constellation on top; GSA adds one more.
+//! Publishing each of them woke the screen task for a meter that had not
+//! moved, so the pair goes out as one `gnss_signal::SignalSample` only when
+//! `gnss_signal::should_publish` says the drawn bar count would change.
 //!
 //! On top of the throttle, **the receiver itself now sleeps between the
 //! fixes a throttled mode owes** — the deeper win the README's power
@@ -61,6 +70,7 @@ use watch_core::gnss_cadence::{
 };
 use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_power::SleepWindow;
+use watch_core::gnss_signal::{self, SignalSample};
 use watch_core::record::RecordState;
 
 use crate::state;
@@ -78,8 +88,9 @@ struct Pipeline {
     parser: Parser,
     acc: FixAccumulator,
     fix_tx: DynSender<'static, Fix>,
-    sats_tx: DynSender<'static, u8>,
-    quality_tx: DynSender<'static, u8>,
+    signal_tx: DynSender<'static, SignalSample>,
+    signal: SignalSample,
+    published_signal: Option<SignalSample>,
     last_published_s: u32,
 }
 
@@ -94,15 +105,20 @@ impl Pipeline {
                 continue;
             };
             let uptime_s = Instant::now().as_secs() as u32;
-            // Best-effort satellite count + GSA fix quality for an honest
-            // signal meter (L4): publish alongside the fix pipeline, never
-            // gating it. Fix quality lets the meter read "searching" on a
-            // no-fix even under a full sky in view.
-            if let Sentence::Gsv { sats_in_view } = sentence {
-                self.sats_tx.send(sats_in_view);
-            }
-            if let Sentence::Gsa { fix_type, .. } = sentence {
-                self.quality_tx.send(fix_type);
+            // Best-effort satellite count + GSA fix mode for an honest signal
+            // meter (L4): tracked alongside the fix pipeline, never gating it.
+            // Fix mode lets the meter read "searching" on a no-fix even under a
+            // full sky in view.
+            match sentence {
+                Sentence::Gsv { sats_in_view } => {
+                    self.signal.sats = sats_in_view;
+                    self.publish_signal();
+                }
+                Sentence::Gsa { fix_type, .. } => {
+                    self.signal.fix_type = fix_type;
+                    self.publish_signal();
+                }
+                _ => {}
             }
             if let Some(fix) = self.acc.apply(&sentence, uptime_s) {
                 // Throttle to the cadence in force: the idle de-rate, or the
@@ -121,6 +137,13 @@ impl Pipeline {
             }
         }
         published
+    }
+
+    fn publish_signal(&mut self) {
+        if gnss_signal::should_publish(self.published_signal, self.signal) {
+            self.published_signal = Some(self.signal);
+            self.signal_tx.send(self.signal);
+        }
     }
 }
 
@@ -144,8 +167,9 @@ pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
         parser: Parser::new(),
         acc: FixAccumulator::new(),
         fix_tx: state::FIX.dyn_sender(),
-        sats_tx: state::SATS.dyn_sender(),
-        quality_tx: state::FIX_QUALITY.dyn_sender(),
+        signal_tx: state::SIGNAL.dyn_sender(),
+        signal: SignalSample::default(),
+        published_signal: None,
         last_published_s: 0,
     };
     let mut rec_rx = unwrap!(state::RECORD.receiver());
