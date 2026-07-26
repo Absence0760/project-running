@@ -431,8 +431,9 @@ mod tests {
 
     #[test]
     fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
-        // The phone's 32-bit field cannot express GuidedRun onward; zero-
-        // extending would curate them out invisibly on every curation push.
+        // The phone's 32-bit field stops at discriminant 31, so BackToStart is
+        // the one page it cannot express; zero-extending would curate that page
+        // out invisibly on every curation push.
         let curated = mask_from_wire(1u32 << (Page::Pace as u8));
         assert_ne!(curated & Page::Pace.bit(), 0);
         assert_eq!(curated & Page::Nav.bit(), 0, "an addressed page stays off");
