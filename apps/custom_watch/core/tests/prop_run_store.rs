@@ -13,8 +13,9 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::run_store::{
     blob_len, crc32, point_count, record_tag, verify_blob, ChunkRequest, LapRecord, ManifestEntry,
-    ManifestHeader, RunFooter, RunHeader, RunWriter, TrackPoint, ELE_NONE, FOOTER_LEN, HEADER_LEN,
-    MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN, RECORD_LEN, RECORD_TAG_LAP, RECORD_TAG_POINT,
+    ManifestHeader, RunFooter, RunHeader, RunWriter, TrackPoint, ELE_NONE, FOOTER_CRC_OFFSET,
+    FOOTER_LEN, HEADER_LEN, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN, RECORD_LEN, RECORD_TAG_LAP,
+    RECORD_TAG_POINT,
 };
 
 /// Big enough for every blob these suites build, and the real slot size.
@@ -65,9 +66,18 @@ fn a_record() -> impl Strategy<Value = Record> {
 }
 
 /// A blob built the way the recorder builds one: header, records in order,
-/// CRC-stamped footer. Kept well under [`MAX_STORED_LAPS`] laps so the
-/// lap-drop rule never fires — that rule is another suite's business.
-fn a_blob(max_records: usize) -> impl Strategy<Value = (Vec<Record>, Vec<u8>)> {
+/// CRC-stamped footer — carrying the records and the totals it was written
+/// with, so a suite can assert the bytes still say what the writer meant. Kept
+/// well under [`MAX_STORED_LAPS`] laps so the lap-drop rule never fires — that
+/// rule is another suite's business.
+#[derive(Clone, Debug)]
+struct Blob {
+    records: Vec<Record>,
+    footer: RunFooter,
+    bytes: Vec<u8>,
+}
+
+fn a_blob(max_records: usize) -> impl Strategy<Value = Blob> {
     (
         prop::collection::vec(a_record(), 0..=max_records),
         any::<u32>(),
@@ -88,10 +98,17 @@ fn a_blob(max_records: usize) -> impl Strategy<Value = (Vec<Record>, Vec<u8>)> {
                         }
                     }
                 }
-                let blob = w
+                let bytes = w
                     .finalize(distance_m, moving_s, elapsed_s)
-                    .expect("finalize");
-                (records, blob.to_vec())
+                    .expect("finalize")
+                    .to_vec();
+                let footer = RunFooter::decode(&bytes[bytes.len() - FOOTER_LEN..])
+                    .expect("a written footer decodes");
+                Blob {
+                    records,
+                    footer,
+                    bytes,
+                }
             },
         )
 }
@@ -223,61 +240,84 @@ fn header_footer_manifest_and_chunk_request_round_trip() {
 }
 
 #[test]
-fn a_written_blob_verifies_and_replays_its_records_in_order() {
-    check(256, a_blob(48), |(records, blob)| {
-        prop_assert_eq!(blob.len() as u32, blob_len(records.len() as u32));
-        prop_assert_eq!(point_count(blob.len() as u32), Some(records.len() as u32));
-        prop_assert!(verify_blob(&blob));
-        let replayed = decode_records(&blob, records.len());
-        prop_assert_eq!(replayed.as_ref(), Some(&records));
+fn a_written_blob_verifies_and_replays_its_records_and_totals() {
+    check(256, a_blob(48), |b| {
+        prop_assert_eq!(b.bytes.len() as u32, blob_len(b.records.len() as u32));
+        prop_assert_eq!(
+            point_count(b.bytes.len() as u32),
+            Some(b.records.len() as u32)
+        );
+        prop_assert!(verify_blob(&b.bytes));
+        let replayed = decode_records(&b.bytes, b.records.len());
+        prop_assert_eq!(replayed.as_ref(), Some(&b.records));
         Ok(())
     });
 }
 
 #[test]
 fn every_proper_prefix_of_a_blob_is_rejected() {
-    check(256, (a_blob(32), any::<Index>()), |((_, blob), idx)| {
-        let cut = idx.index(blob.len());
+    check(256, (a_blob(32), any::<Index>()), |(b, idx)| {
+        let cut = idx.index(b.bytes.len());
         prop_assert!(
-            !verify_blob(&blob[..cut]),
+            !verify_blob(&b.bytes[..cut]),
             "a {cut}-byte prefix of a {}-byte blob must not verify",
-            blob.len()
+            b.bytes.len()
         );
         Ok(())
     });
 }
 
+/// Version 3's whole point: every byte of a blob is inside the integrity
+/// check, so there is no position at which a flip can survive verification —
+/// not in the header, not in a record, and not in the footer totals, which
+/// through v2 were unprotected and could sync a run with silently wrong
+/// distance / moving / elapsed (decisions §321).
 #[test]
-fn a_single_byte_corruption_never_yields_a_different_run() {
+fn no_single_byte_corruption_anywhere_survives_verification() {
     check(
         256,
         (a_blob(24), any::<Index>(), 1u8..=u8::MAX),
-        |((records, blob), idx, mask)| {
-            let at = idx.index(blob.len());
-            let footer_at = HEADER_LEN + records.len() * RECORD_LEN;
-            let mut bad = blob.clone();
+        |(b, idx, mask)| {
+            let at = idx.index(b.bytes.len());
+            let mut bad = b.bytes.clone();
             bad[at] ^= mask;
+            prop_assert!(
+                !verify_blob(&bad),
+                "a flip at byte {at} of {} must be caught",
+                b.bytes.len()
+            );
+            Ok(())
+        },
+    );
+}
 
-            if at < footer_at {
-                prop_assert!(
-                    !verify_blob(&bad),
-                    "a flip at {at} is inside the CRC-covered header+records"
-                );
-            }
-            if verify_blob(&bad) {
-                prop_assert_eq!(
-                    point_count(bad.len() as u32),
-                    Some(records.len() as u32),
-                    "a surviving corruption never changes the record count"
-                );
-                prop_assert_eq!(RunHeader::decode(&bad), RunHeader::decode(&blob));
-                let replayed = decode_records(&bad, records.len());
-                prop_assert_eq!(
-                    replayed.as_ref(),
-                    Some(&records),
-                    "a surviving corruption never changes a record"
-                );
-            }
+/// The same statement aimed squarely at the twelve summary bytes, so the
+/// regression is named rather than inferred from the exhaustive property: pick
+/// a byte of `distance_m` / `moving_s` / `elapsed_s`, disturb it, and the blob
+/// must stop verifying — and while intact, the totals a reader recovers are the
+/// ones the writer was handed.
+#[test]
+fn a_corrupted_footer_total_is_always_caught() {
+    check(
+        256,
+        (a_blob(16), any::<Index>(), 1u8..=u8::MAX),
+        |(b, idx, mask)| {
+            prop_assert!(verify_blob(&b.bytes));
+            let footer_at = HEADER_LEN + b.records.len() * RECORD_LEN;
+            prop_assert_eq!(
+                RunFooter::decode(&b.bytes[footer_at..]),
+                Some(b.footer),
+                "an intact blob reports the totals it was written with"
+            );
+
+            let totals = footer_at + 4..footer_at + FOOTER_CRC_OFFSET;
+            let at = totals.start + idx.index(totals.len());
+            let mut bad = b.bytes.clone();
+            bad[at] ^= mask;
+            prop_assert!(
+                !verify_blob(&bad),
+                "a flip in the footer totals at byte {at} must be caught"
+            );
             Ok(())
         },
     );
