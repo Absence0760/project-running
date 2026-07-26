@@ -244,12 +244,61 @@ fn the_medium_hero_truncates_and_clips_without_panicking() {
 }
 
 #[test]
-fn the_numeral_faces_carry_no_sign_so_a_signed_hero_must_not_use_them() {
-    // The Pacer / cut-off heroes are signed (`+0:42` ahead, `-1:05` behind).
-    // Until a regeneration adds `+`, `watch_core::ui_frame::numeral_hero`
-    // routes them to the text font; this is the driver-side half of that
-    // contract, so adding the glyph fails here and forces the pair to be
-    // reconsidered together.
-    assert!(!bignum::BIGNUM_GLYPHS.contains(&b'+'));
+fn both_faces_carry_a_sign_pair_that_cannot_be_confused() {
+    // The Pacer / cut-off heroes are signed (`+0:42` ahead, `-1:05` behind), so
+    // the sign is the one character on those pages that may not be lost or
+    // misread. The precedent is the 8x16 text font, where `+` rasterised so
+    // thin that its vertical stem vanished and it packed byte-identical to `-`
+    // — every `+` on the watch rendered as a minus until the supersampling
+    // repair landed. The table-wide sweeps above would catch an exact
+    // collision; this names the pair that has actually broken, in both faces,
+    // and asserts a real stem rather than merely a different bitmap.
+    assert!(bignum::BIGNUM_GLYPHS.contains(&b'+'));
     assert!(bignum::BIGNUM_GLYPHS.contains(&b'-'));
+
+    let index = |ch: u8| bignum::BIGNUM_GLYPHS.iter().position(|&c| c == ch).unwrap();
+    let (plus, dash) = (index(b'+'), index(b'-'));
+
+    let ink = |rows: &[[u8; 4]]| -> u32 { rows.iter().flatten().map(|b| b.count_ones()).sum() };
+    assert_ne!(bignum::BIGNUM[plus], bignum::BIGNUM[dash]);
+    assert!(
+        ink(&bignum::BIGNUM[plus]) > ink(&bignum::BIGNUM[dash]),
+        "the 32x48 `+` lost its stem: {} px vs the dash's {}",
+        ink(&bignum::BIGNUM[plus]),
+        ink(&bignum::BIGNUM[dash])
+    );
+
+    let ink_med = |rows: &[[u8; 2]]| -> u32 { rows.iter().flatten().map(|b| b.count_ones()).sum() };
+    assert_ne!(bignum::BIGNUM_MED[plus], bignum::BIGNUM_MED[dash]);
+    assert!(
+        ink_med(&bignum::BIGNUM_MED[plus]) > ink_med(&bignum::BIGNUM_MED[dash]),
+        "the 16x32 `+` lost its stem: {} px vs the dash's {}",
+        ink_med(&bignum::BIGNUM_MED[plus]),
+        ink_med(&bignum::BIGNUM_MED[dash])
+    );
+
+    // A stem is what distinguishes them, so the `+` must ink rows the dash
+    // leaves empty — a wider crossbar would pass the ink comparison alone.
+    let rows_above = |plus_rows: &[[u8; 4]], dash_rows: &[[u8; 4]]| {
+        (0..bignum::BIGNUM_HEIGHT)
+            .filter(|&y| {
+                plus_rows[y].iter().any(|&b| b != 0) && dash_rows[y].iter().all(|&b| b == 0)
+            })
+            .count()
+    };
+    assert!(
+        rows_above(&bignum::BIGNUM[plus], &bignum::BIGNUM[dash]) > 0,
+        "the 32x48 `+` inks no row outside the dash's band"
+    );
+    let rows_above_med = |plus_rows: &[[u8; 2]], dash_rows: &[[u8; 2]]| {
+        (0..bignum::BIGNUM_MED_HEIGHT)
+            .filter(|&y| {
+                plus_rows[y].iter().any(|&b| b != 0) && dash_rows[y].iter().all(|&b| b == 0)
+            })
+            .count()
+    };
+    assert!(
+        rows_above_med(&bignum::BIGNUM_MED[plus], &bignum::BIGNUM_MED[dash]) > 0,
+        "the 16x32 `+` inks no row outside the dash's band"
+    );
 }

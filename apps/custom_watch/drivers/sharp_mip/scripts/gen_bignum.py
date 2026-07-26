@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate src/bignum.rs — the designed numeral faces for the hero bands.
 
-Rasterises the numeral glyph set (digits, colon, dash, dot) from the
+Rasterises the numeral glyph set (digits, colon, dash, dot, plus) from the
 pinned Adobe Source Code Pro Bold vendored at `fonts/SourceCodePro-Bold.otf`
 (SIL OFL 1.1, the same family scripts/gen_font.py rasterises the 8x16 text
 font from — see `fonts/README.md` for its exact upstream release, its SHA256,
@@ -32,7 +32,9 @@ import tempfile
 
 from pinned_face import pinned_face
 
-GLYPHS = "0123456789:-."
+# `+` is appended rather than placed beside `-` so the existing glyphs keep
+# their table indices and the regeneration diff stays purely additive.
+GLYPHS = "0123456789:-.+"
 # Source Code Pro's advance is 0.6 em -> the em that lands the advance exactly
 # on the cell width: 53.333px em = 32px advance, 26.6667px em = 16px.
 TABLES = [
