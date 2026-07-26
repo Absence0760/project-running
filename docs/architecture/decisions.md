@@ -4333,3 +4333,21 @@ Don't re-litigate by:
 What it does **not** prove, and what the docs must not claim it does: nothing about BLE (Renode cannot run the proprietary S140 SoftDevice at all), nothing about power in any form, and nothing about real silicon — the peripheral models are pinned to what the drivers *believe* about the parts (register maps, retention across shutdown, contact and AGC constants) and the waveforms are clean synthetic shapes. Green means the firmware is self-consistent under the emulator. The bench-verify list is untouched by it.
 
 One coupling to respect: the harness keys on exact defmt strings (`run_flash: run store armed at`, `gps: fix lat=… sats=`, `record: sim-autostart on first fix`, `record: recording dist=`, `button: BTN2 armed`, `run_flash: stored run N (M B) in slot S`). Renaming any of them requires the matching change in `sim/ci_smoke.py`.
+
+---
+
+## 322. A run-store commit seals before it drops: the superseded checkpoint keeps its directory entry until the new bytes are down
+
+**Decided (2026-07-25).** § 316(d) made a run's flash writes ping-pong across two slots so a torn write always leaves an intact predecessor, and recorded one loose end: `reserve_commit` released the superseded checkpoint's directory entry *before* the commit write rather than after. Not a regression — the code it replaced erased the sole copy outright — but the ordering was backwards. Between reserving the commit's slot and its blob actually landing, the superseded checkpoint's bytes were the run's **only** durable copy, and the in-RAM `SlotDir` had already stopped claiming them. If the erase or write then failed, the driver's `forget(slot)` dropped the target too and the run vanished from RAM entirely, even though a perfectly good checkpoint was still sitting on flash — recoverable only by rebooting the watch.
+
+`reserve_commit` now only *adds* the commit's slot. Two explicit settle calls close the seam: `SlotDir::commit_written(slot)` releases the superseded entries once the bytes are durable, and `SlotDir::commit_failed(slot)` drops the failed reservation and **promotes the surviving checkpoint to advertisable**. `app/src/run_flash.rs`'s `commit()` calls one or the other on every path. Promotion is the same reasoning `from_recovered` already applies to a boot survivor: the commit ended the recording, so a mid-run snapshot is as complete as the watch will ever know, and it should reach the phone now rather than after a power cycle rediscovers it.
+
+Nothing else moved. The slot eviction policy, `next_run_seq` resuming above the highest recovered seq, the § 316(c) "only finished slots are advertised" contract, and the ping-pong alternation are all unchanged — the superseded entry is an *unfinished* checkpoint, so holding it longer never adds a second manifest row for one `run_seq`.
+
+Don't re-litigate by:
+
+- **Folding the settle back into `reserve_commit`.** The whole point is that the directory cannot know the write landed at the moment it picks a slot.
+- **Reusing `forget` for a failed commit.** `forget` is the *checkpoint* failure path, where the run is still recording and promoting anything would advertise a live run — exactly what § 316(c) forbids. The two failures are not the same event.
+- **Leaving the superseded entry in place after a successful commit** so no confirmation call is needed. It would hold a slot that nothing can ever serve, and `victim` would protect it (unsynced) ahead of a real synced run.
+
+Pinning: `core/src/flash_store.rs` (`reserve_commit` / `commit_written` / `commit_failed`, +5 tests), `core/src/flash_plan.rs` (`plan_slot_write` doc + 1 new end-to-end failure test over the flash model), `core/src/ble_sync.rs` (three fixtures that drove a directory through `plan_slot_write` now confirm the write, so they stay a faithful model of the driver), and a new property in `core/tests/prop_flash_store.rs` that drives arbitrary interleavings of checkpoints, commits and torn writes and asserts every advertised run is physically present at the slot and size it claims, and is advertised at most once — the guard against the late release turning under-reporting into *over*-reporting. Host-tested and build-verified only (§ 314's ladder): the torn-write behaviour this protects is bench-verification territory, and `quality_standards.md`'s brownout item now covers it.
