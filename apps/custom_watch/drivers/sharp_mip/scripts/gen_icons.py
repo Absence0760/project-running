@@ -13,11 +13,21 @@ alongside them, so a rendering change from an Inkscape / ImageMagick upgrade or
 an SVG edit shows up as a reviewable diff, not a silent change - same discipline
 as scripts/gen_font.py.
 
+Unlike the font generators there is no face to pin - the vendored SVGs under
+`icons/` *are* the pinned input, so a missing dependency cannot substitute a
+different design the way a fontconfig family lookup could substitute a
+different font weight (`docs/architecture/decisions.md` 339). What is not
+pinned is the rasteriser: Inkscape's version is not recorded, so review the
+pixels of any icon-table diff rather than assuming it was the change you meant.
+`fonts/README.md` records the versions the committed tables were last confirmed
+against.
+
 Bit convention (matches the framebuffer + the Sharp MIP wire format with
 LSB-first SPI): bit 0 of each row byte is the LEFTMOST pixel, 1 = ink (black).
 """
 
 import pathlib
+import shutil
 import subprocess
 import tempfile
 
@@ -121,6 +131,12 @@ def unpack_pbm(data: bytes) -> list[list[int]]:
 
 
 def main() -> None:
+    for tool in ("inkscape", "magick"):
+        if shutil.which(tool) is None:
+            raise SystemExit(
+                f"{tool} is not on PATH — see fonts/README.md for the versions "
+                "the committed icons.rs was confirmed against"
+            )
     with tempfile.TemporaryDirectory() as td:
         tmp = pathlib.Path(td)
         glyphs = {name: render(name, tmp) for name in ICONS}

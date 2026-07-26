@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """Generate src/bignum.rs — the designed numeral faces for the hero bands.
 
-Rasterises the numeral glyph set (digits, colon, dash, dot) from Adobe Source
-Code Pro Bold (SIL OFL 1.1, the same family scripts/gen_font.py rasterises the
-8x16 text font from) via ImageMagick into one monochrome strip per size, then
-packs each cell into a Rust table. Two sizes share the set: the 32x48 face
-(the home clock hero and the 3-row run glance heroes) and the 16x32 medium
-face (the 2-row run-view heroes). Native-resolution rasterisation is the whole
-point: the old heroes scaled the 8x16 text font 2x/3x, which blew its 1-2 px
-strokes up into ragged blocks; a real rasterisation at the target size gets
-the curves and the bold stroke weight right. Regenerate with:
+Rasterises the numeral glyph set (digits, colon, dash, dot) from the
+pinned Adobe Source Code Pro Bold vendored at `fonts/SourceCodePro-Bold.otf`
+(SIL OFL 1.1, the same family scripts/gen_font.py rasterises the 8x16 text
+font from — see `fonts/README.md` for its exact upstream release, its SHA256,
+and how to fetch it again) via ImageMagick into one monochrome strip per size,
+then packs each cell into a Rust table. Two sizes share the set: the 32x48
+face (the home clock hero and the 3-row run glance heroes) and the 16x32
+medium face (the 2-row run-view heroes). Native-resolution rasterisation is
+the whole point: the old heroes scaled the 8x16 text font 2x/3x, which blew
+its 1-2 px strokes up into ragged blocks; a real rasterisation at the target
+size gets the curves and the bold stroke weight right. Regenerate with:
 
     python3 scripts/gen_bignum.py   # from drivers/sharp_mip/
 
-The output file is committed; rendering differences from an ImageMagick or
-font-package upgrade show up as a reviewable diff, not a silent change.
+The face is verified by digest before anything is drawn (`pinned_face.py`), so
+a machine without it fails loudly rather than reshaping all the glyphs from
+whatever Source Code Pro build fontconfig resolves — the variable build's
+default instance is ExtraLight, and that reshape would read in review as one
+new glyph. The output file is committed; rendering differences from an
+ImageMagick upgrade still show up as a reviewable diff.
 
 Bit convention (matches font.rs and the Sharp MIP wire format with LSB-first
 SPI): bit 0 of each row byte is the LEFTMOST pixel of its 8-px span, 1 = ink.
@@ -24,6 +30,8 @@ import pathlib
 import subprocess
 import tempfile
 
+from pinned_face import pinned_face
+
 GLYPHS = "0123456789:-."
 # Source Code Pro's advance is 0.6 em -> the em that lands the advance exactly
 # on the cell width: 53.333px em = 32px advance, 26.6667px em = 16px.
@@ -31,7 +39,7 @@ TABLES = [
     ("BIGNUM", 32, 48, "53.3333"),
     ("BIGNUM_MED", 16, 32, "26.6667"),
 ]
-FONT = "Source-Code-Pro-Bold"
+FONT = pinned_face("SourceCodePro-Bold.otf")
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE.parent / "src" / "bignum.rs"
