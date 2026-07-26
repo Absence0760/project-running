@@ -25,11 +25,12 @@
 //! strictly (`watch_core::hr_drain`): each PPG count is paired with the latest
 //! ambient count for subtraction (bright-sun recovery), and a word with a tag
 //! we didn't enable is dropped, never fed to the detector as PPG. A slow LED
-//! auto-gain loop (`agc_next_pa_ambient`, ~1 Hz) keeps the corrected DC in the
-//! detector's band while a raw-DC guard protects ADC clipping headroom —
-//! ambient swings cancel out of the corrected level, so the drive can't
-//! oscillate against sunlight flicker. Register effects are compile-only until
-//! the dev kit lands, like the rest of this path.
+//! auto-gain loop keeps the corrected DC in the detector's band while a raw-DC
+//! guard protects ADC clipping headroom — ambient swings cancel out of the
+//! corrected level, so the drive can't oscillate against sunlight flicker. Its
+//! cadence is `hr_drain::AgcCadence` (~1 Hz, and a fresh period after every
+//! duty-cycle wake) and its step size `agc_next_pa_ambient`. Register effects
+//! are compile-only until the dev kit lands, like the rest of this path.
 //!
 //! The licensed Maxim HR algorithm is pulled in via `bindgen` post-tier-1;
 //! tier 1 uses the naive peak-detect in `max86177::peak_detect`.
@@ -44,7 +45,7 @@ use max86177::{
     MEAS2_TAG,
 };
 use watch_core::gnss_mode::GnssMode;
-use watch_core::hr_drain::{next_window_wait_s, FifoDemux, FifoSlot, FifoTags};
+use watch_core::hr_drain::{next_window_wait_s, AgcCadence, FifoDemux, FifoSlot, FifoTags};
 use watch_core::hr_duty::{self, HrSample};
 
 use crate::state;
@@ -57,12 +58,6 @@ const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
 /// Back-off between wake retries when continuous sampling (no schedule to
 /// defer to) hits a wake failure — keeps a dead bus off the 50 Hz poll pace.
 const WAKE_RETRY: Duration = Duration::from_secs(1);
-
-/// LED-AGC cadence, in PPG samples: step the drive at most once per second so
-/// the detector's DC baseline (tau ~0.64 s at 100 Hz) re-settles between
-/// corrections; the target band's hysteresis absorbs the residual lag, so the
-/// loop converges without hunting.
-const AGC_PERIOD_SAMPLES: u32 = SAMPLE_RATE_HZ;
 
 #[embassy_executor::task]
 pub async fn run(mut twim: Twim<'static>) {
@@ -104,17 +99,15 @@ pub async fn run(mut twim: Twim<'static>) {
     });
     // LED auto-gain state. `led_pa` mirrors the LEDx_PA register (init programs
     // LED_PA_DEFAULT; the register survives shutdown, so it carries across duty
-    // windows without a re-write). The AGC judges the corrected DC for
-    // brightness and the raw DC for clipping headroom (`agc_next_pa_ambient` —
-    // ambient swings can't walk the drive), stepping at most once per
-    // AGC_PERIOD_SAMPLES; after a duty-cycle wake the detector reset leaves
-    // both DC estimates `None`, so the loop naturally holds until the baseline
-    // re-converges on live samples. One unknown-tag warning per task lifetime:
-    // a persistent stray tag means config drift, and per-word logging at
-    // 100 Hz would drown defmt.
+    // windows without a re-write). `agc` owns when a step is allowed
+    // (`watch_core::hr_drain`) and `agc_next_pa_ambient` by how much — judging
+    // the corrected DC for brightness and the raw DC for clipping headroom, so
+    // ambient swings can't walk the drive. One unknown-tag warning per task
+    // lifetime: a persistent stray tag means config drift, and per-word logging
+    // at 100 Hz would drown defmt.
     let agc_cfg = AgcConfig::default();
     let mut led_pa: u8 = LED_PA_DEFAULT;
-    let mut agc_samples: u32 = 0;
+    let mut agc = AgcCadence::per_second(SAMPLE_RATE_HZ);
     let mut warned_unknown_tag = false;
     // Change-only observability: one line when the published estimate flips
     // (valid BPM appears / moves / blanks) and one when the contact
@@ -167,7 +160,7 @@ pub async fn run(mut twim: Twim<'static>) {
                     // the stale history into a bogus inter-beat interval.
                     detector.reset();
                     demux.reset();
-                    agc_samples = 0;
+                    agc.reset();
                     info!("hr: window open; sensor sampling");
                 }
                 Err(e) => {
@@ -201,7 +194,7 @@ pub async fn run(mut twim: Twim<'static>) {
                 Ok(Some(FifoWord { tag, value })) => match demux.apply(tag, value as i32) {
                     FifoSlot::Ppg => {
                         latest = Some(detector.push_ambient(value as i32, demux.ambient()));
-                        agc_samples = agc_samples.saturating_add(1);
+                        agc.sample();
                     }
                     FifoSlot::Ambient => {}
                     FifoSlot::Unknown => {
@@ -218,21 +211,18 @@ pub async fn run(mut twim: Twim<'static>) {
                 }
             }
         }
-        if agc_samples >= AGC_PERIOD_SAMPLES {
-            agc_samples = 0;
-            if let (Some(raw), Some(corrected)) = (detector.raw_dc(), detector.corrected_dc()) {
-                let next = agc_next_pa_ambient(raw, corrected, led_pa, &agc_cfg);
-                if next != led_pa {
-                    // L4 best-effort like every other write here: a failed
-                    // drive update keeps the old current — the detector's
-                    // contact honesty covers a rail until the next attempt.
-                    match sensor.set_led_current(next) {
-                        Ok(()) => {
-                            debug!("hr: AGC LED drive {=u8} -> {=u8}", led_pa, next);
-                            led_pa = next;
-                        }
-                        Err(e) => warn!("hr: AGC LED write failed {:?}", e),
+        if let Some(dc) = agc.due(detector.raw_dc(), detector.corrected_dc()) {
+            let next = agc_next_pa_ambient(dc.raw, dc.corrected, led_pa, &agc_cfg);
+            if next != led_pa {
+                // L4 best-effort like every other write here: a failed drive
+                // update keeps the old current — the detector's contact honesty
+                // covers a rail until the next attempt.
+                match sensor.set_led_current(next) {
+                    Ok(()) => {
+                        debug!("hr: AGC LED drive {=u8} -> {=u8}", led_pa, next);
+                        led_pa = next;
                     }
+                    Err(e) => warn!("hr: AGC LED write failed {:?}", e),
                 }
             }
         }
