@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'sim_watch_sync.dart' show crc32;
+
 /// Pure Dart mirror of the custom watch's `watch_core::course_store` CRS1 wire
 /// format — the phone → watch breadcrumb-course push.
 ///
@@ -9,7 +11,7 @@ import 'dart:typed_data';
 /// `Course` its nav task follows:
 ///
 ///   magic("CRS1", 4) | version(1) | point_count(2, u16 LE) | flags(1) |
-///   point[N] | elev_m[N]?
+///   point[N] | elev_m[N]? | crc32(4, u32 LE)
 ///
 /// where each point is `lat_e7(i32 LE) | lon_e7(i32 LE)` — lat/lon quantised to
 /// 1e-7 degrees (`(deg * 1e7).round()`, the same integer scaling `run_store`
@@ -19,10 +21,14 @@ import 'dart:typed_data';
 /// below Mont Blanc.
 ///
 /// Version 2 (2026-07-26) added the flags byte and the elevation series the
-/// watch's RouteElev page draws as a climb profile. The firmware still decodes
-/// v1 (polyline only), but this encoder always emits v2 — with the flag clear
-/// when the caller has no elevation for the route — mirroring how
-/// `watch_settings` always emits its newest version.
+/// watch's RouteElev page draws as a climb profile. Version 3 (2026-07-26)
+/// appends the CRC32 trailer over every byte before it: the length check alone
+/// could not tell a flipped byte inside the point array from a real course, so
+/// the watch would follow a *displaced* breadcrumb and calibrate its off-course
+/// alert against it. Unlike the settings frame, the firmware does **not** still
+/// decode the pre-CRC versions — a course has no plausibility guard downstream,
+/// so a wrong one is worse than none — which makes emitting the current version
+/// here mandatory rather than merely preferred.
 ///
 /// A whole course exceeds one BLE notification, so [chunkCourse] splits the
 /// frame into ordered `offset(2, u16 LE) | payload` chunks the watch's
@@ -31,8 +37,10 @@ import 'dart:typed_data';
 /// Deliberately pure — no BLE, no platform channels — so [encodeCourse] is
 /// unit-testable against the frozen golden vectors shared with the Rust tests.
 /// The phone only ever encodes (the watch decodes), mirroring how
-/// `watch_settings` is the phone's encode side of the settings push.
-const int _courseVersion = 0x02;
+/// `watch_settings` is the phone's encode side of the settings push — and, like
+/// it, reusing the run-sync module's [crc32], the same checksum the firmware
+/// shares between `run_store`, `flash_store` and `settings`.
+const int _courseVersion = 0x03;
 
 /// Presence bit: the frame ends with one `i16 LE` metre elevation per point.
 /// Mirrors the firmware's `course_store::COURSE_FLAG_ELEV`.
@@ -46,6 +54,9 @@ const int _courseHeaderLen = 8;
 const int _coursePointLen = 8;
 const int _courseElevLen = 2;
 
+/// Width of the v3 CRC32 trailer.
+const int _courseCrcLen = 4;
+
 /// Max payload per chunk = the watch's `COURSE_CHUNK_CAP` (244) minus the 2-byte
 /// offset header each chunk carries.
 const int kCourseChunkPayloadMax = 242;
@@ -58,7 +69,8 @@ class CoursePoint {
 }
 
 /// Encode a simplified course polyline — and, when the route has one, its
-/// per-point elevation in whole metres — into a CRS1 v2 frame. Throws when the
+/// per-point elevation in whole metres — into a CRS1 v3 frame, sealed with the
+/// CRC32 trailer the watch checks before it will load the course. Throws when the
 /// course has fewer than 2 or more than [kMaxCoursePoints] points (fail-closed,
 /// matching the firmware's `course_store::encode` / `Course::from_points`) — call
 /// [capCoursePoints] first to bring a dense route under the cap — or when
@@ -81,7 +93,8 @@ Uint8List encodeCourse(List<CoursePoint> points, {List<int>? elevationM}) {
   final len =
       _courseHeaderLen +
       points.length * _coursePointLen +
-      (elevationM == null ? 0 : points.length * _courseElevLen);
+      (elevationM == null ? 0 : points.length * _courseElevLen) +
+      _courseCrcLen;
   final out = ByteData(len);
   out.setUint8(0, 0x43); // C
   out.setUint8(1, 0x52); // R
@@ -101,7 +114,10 @@ Uint8List encodeCourse(List<CoursePoint> points, {List<int>? elevationM}) {
     out.setInt16(off, e.clamp(-32768, 32767), Endian.little);
     off += _courseElevLen;
   }
-  return out.buffer.asUint8List();
+
+  final frame = out.buffer.asUint8List();
+  out.setUint32(off, crc32(frame.sublist(0, off)), Endian.little);
+  return frame;
 }
 
 /// Split a CRS1 [frame] into ordered BLE chunks — each is

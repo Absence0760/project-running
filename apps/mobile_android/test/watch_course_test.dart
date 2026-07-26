@@ -2,17 +2,23 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/sim_watch_sync.dart' show crc32;
 import '../lib/watch_course.dart';
 
 /// The frozen golden vectors — kept byte-identical to the firmware's
 /// `watch_core::course_store` golden tests (the canned sim course's three
-/// points, with and without its elevation series), so a wire-format drift on
-/// either side is caught here.
+/// points, with and without its elevation series, each sealed with the v3
+/// CRC32 trailer), so a wire-format drift on either side is caught here.
 const _goldenHex =
-    '435253310203000083edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1';
+    '435253310303000083edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1'
+    '14996437';
 const _goldenElevHex =
-    '435253310203000183edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1'
-    '720677066806';
+    '435253310303000183edd91718ff40c1f0cdd91718ff40c1f0cdd9174e2841c1'
+    '720677066806'
+    'b8269c11';
+
+/// Width of the v3 CRC32 trailer.
+const _crcLen = 4;
 
 const _simPoints = [
   CoursePoint(40.0158083, -105.2705),
@@ -37,13 +43,13 @@ void main() {
     test('the sim course matches the golden vector byte-for-byte', () {
       final frame = encodeCourse(_simPoints);
       expect(frame, _hex(_goldenHex));
-      expect(frame, hasLength(8 + 3 * 8));
+      expect(frame, hasLength(8 + 3 * 8 + _crcLen));
     });
 
     test('the sim course with elevation matches its golden vector', () {
       final frame = encodeCourse(_simPoints, elevationM: _simElevM);
       expect(frame, _hex(_goldenElevHex));
-      expect(frame, hasLength(8 + 3 * 8 + 3 * 2));
+      expect(frame, hasLength(8 + 3 * 8 + 3 * 2 + _crcLen));
       expect(frame[7], kCourseFlagElev);
     });
 
@@ -55,7 +61,7 @@ void main() {
           const CoursePoint(3.0, 4.0),
         ]);
         expect(frame.sublist(0, 4), _hex('43525331')); // "CRS1"
-        expect(frame[4], 0x02); // version
+        expect(frame[4], 0x03); // version
         final view = ByteData.sublistView(frame);
         expect(view.getUint16(5, Endian.little), 2);
         expect(frame[7], 0); // no elevation
@@ -64,6 +70,39 @@ void main() {
         expect(view.getInt32(12, Endian.little), 20000000);
       },
     );
+
+    test('the v3 trailer is the crc32 of every byte before it', () {
+      // The goldens above pin the trailer as literal bytes; this pins that it is
+      // actually derived, so a course the goldens do not cover still carries the
+      // checksum the firmware verifies before it will load the breadcrumb.
+      for (final frame in [
+        encodeCourse(_simPoints),
+        encodeCourse(_simPoints, elevationM: _simElevM),
+      ]) {
+        final body = frame.sublist(0, frame.length - _crcLen);
+        final trailer = ByteData.sublistView(
+          frame,
+          frame.length - _crcLen,
+        ).getUint32(0, Endian.little);
+        expect(trailer, crc32(body));
+      }
+    });
+
+    test('a course that differs by one point seals to a different crc', () {
+      // The firmware refuses a frame whose trailer doesn't match, so the seal
+      // has to actually depend on the polyline — a constant would pass the
+      // golden tests and still let a displaced course through.
+      final honest = encodeCourse(_simPoints);
+      final moved = encodeCourse([
+        const CoursePoint(40.0158084, -105.2705),
+        _simPoints[1],
+        _simPoints[2],
+      ]);
+      expect(
+        moved.sublist(moved.length - _crcLen),
+        isNot(honest.sublist(honest.length - _crcLen)),
+      );
+    });
 
     test('a negative longitude encodes as a signed i32', () {
       final frame = encodeCourse([
@@ -128,7 +167,10 @@ void main() {
         kMaxCoursePoints,
         (i) => CoursePoint(0.0, i * 1e-4),
       );
-      expect(encodeCourse(atCap), hasLength(8 + kMaxCoursePoints * 8));
+      expect(
+        encodeCourse(atCap),
+        hasLength(8 + kMaxCoursePoints * 8 + _crcLen),
+      );
     });
   });
 
@@ -195,7 +237,10 @@ void main() {
       expect(capped.first.lng, dense.first.lng);
       expect(capped.last.lng, dense.last.lng);
       // The capped course still encodes within the tier-1 cap.
-      expect(encodeCourse(capped), hasLength(8 + kMaxCoursePoints * 8));
+      expect(
+        encodeCourse(capped),
+        hasLength(8 + kMaxCoursePoints * 8 + _crcLen),
+      );
     });
   });
 }
