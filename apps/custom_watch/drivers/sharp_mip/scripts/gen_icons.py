@@ -126,6 +126,7 @@ def main() -> None:
         glyphs = {name: render(name, tmp) for name in ICONS}
 
     variants = "".join(f"    {stem_to_variant(n)},\n" for n in ICONS)
+    all_entries = "".join(f"        Icon::{stem_to_variant(n)},\n" for n in ICONS)
     arms = "".join(
         f"            Icon::{stem_to_variant(n)} => &{n.upper()},\n" for n in ICONS
     )
@@ -149,6 +150,12 @@ pub enum Icon {{
 {variants}}}
 
 impl Icon {{
+    /// Every icon, in table order. Generated with the table so the invariant
+    /// tests in `tests/icons.rs` sweep a new SVG the moment it is added here
+    /// rather than a hand-kept list that can silently fall behind.
+    pub const ALL: [Icon; {len(ICONS)}] = [
+{all_entries}    ];
+
     /// The packed {SIZE}x{SIZE} bitmap for this icon.
     pub fn bitmap(self) -> &'static [[u8; ICON_BYTES_PER_ROW]; ICON_SIZE] {{
         match self {{
