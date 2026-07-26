@@ -23,12 +23,12 @@ use watch_core::face::{self, FaceIcon, IdleView, NavView};
 use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
-use watch_core::nav_map::{self, NavPanelGeom, PanelCache, PanelKey};
+use watch_core::nav_map::{self, PanelCache, PanelKey};
 use watch_core::page::Page;
 use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::statusbar;
-use watch_core::trackback::{self, TrackbackView};
+use watch_core::trackback::TrackbackView;
 use watch_core::ui_frame::{self, FrameLayout, HeroBand, HeroFrame, RowPaint};
 use watch_render::widgets;
 
@@ -47,31 +47,7 @@ const _: () = core::assert!(face::ROWS == sharp_mip::TEXT_ROWS);
 const TICK_ACTIVE: Duration = Duration::from_secs(1);
 const TICK_IDLE: Duration = Duration::from_secs(30);
 
-// The Nav page's map panel in panel pixels: full display width, the
-// face-declared text rows tall. `core` speaks rows; only this task knows the
-// panel's 16-px cell height.
 const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
-const CELL_W: usize = sharp_mip::WIDTH / sharp_mip::TEXT_COLS;
-const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
-const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
-
-// Half-length of the position marker's 5-px cross — the panel geometry the
-// host-tested `nav_map` decisions are taken against.
-const MARKER_ARM_PX: i32 = 2;
-const NAV_PANEL_GEOM: NavPanelGeom = NavPanelGeom {
-    w_px: sharp_mip::WIDTH as u32,
-    top_px: PANEL_TOP_PX,
-    h_px: PANEL_H_PX,
-    marker_arm_px: MARKER_ARM_PX,
-};
-
-// The ElevationProfile page's mini-profile sparkline: the rows the face leaves
-// blank below its vert-totals context row (rows 3..8), full width with a small
-// margin — the elevation analogue of the splits histogram panel.
-const ELEV_PROFILE_X: usize = 6;
-const ELEV_PROFILE_Y: usize = 3 * CELL_H;
-const ELEV_PROFILE_W: usize = sharp_mip::WIDTH - 2 * ELEV_PROFILE_X;
-const ELEV_PROFILE_H: usize = 5 * CELL_H - 4;
 
 /// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
 /// firmware is alive before the display or defmt tells you. Gated behind the
@@ -327,7 +303,7 @@ pub async fn screen_task(
             // Prefer a phone-pushed course over the boot/sim one for the drawn map.
             pushed_course.as_ref().or(course).map(|c| {
                 let runner = latest.as_ref().map(|f| (f.lat_deg, f.lon_deg));
-                (c, nav_map::nav_panel(c, runner, NAV_PANEL_GEOM))
+                (c, nav_map::nav_panel(c, runner, widgets::NAV_PANEL_GEOM))
             })
         } else {
             None
@@ -357,20 +333,7 @@ pub async fn screen_task(
         }
         if panel_repaint {
             let (course, panel) = unwrap!(nav_draw.as_ref());
-            for w in course.points().windows(2) {
-                let (x0, y0) = panel.fit.to_px(w[0].lat_deg, w[0].lon_deg);
-                let (x1, y1) = panel.fit.to_px(w[1].lat_deg, w[1].lon_deg);
-                fb.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
-            }
-            if let Some(&(mx, my)) = panel.marker.as_ref() {
-                fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
-                fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
-            }
-            // The off-course treatment: a steady inverse-video banner across
-            // the breadcrumb, drawn last so it wins the panel pixels.
-            if let Some(text) = &nav_alert {
-                fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
-            }
+            widgets::draw_nav_panel(&mut fb, course, panel, nav_alert.as_deref());
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
@@ -442,21 +405,7 @@ pub async fn screen_task(
                     Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
-                    Page::ElevationProfile => {
-                        let ep = &snap.elev_profile;
-                        if ep.len > 0 {
-                            widgets::draw_mini_profile(
-                                &mut fb,
-                                &widgets::MiniProfile {
-                                    x: ELEV_PROFILE_X,
-                                    y: ELEV_PROFILE_Y,
-                                    w: ELEV_PROFILE_W,
-                                    h: ELEV_PROFILE_H,
-                                    samples: &ep.samples[..ep.len],
-                                },
-                            );
-                        }
-                    }
+                    Page::ElevationProfile => widgets::draw_elev_profile_overlay(&mut fb, snap),
                     _ => {}
                 }
             }
@@ -483,7 +432,7 @@ pub async fn screen_task(
             .is_some_and(|snap| snap.state != RecordState::Idle);
         if page == Page::BackToStart && run_active {
             if let Some(view) = tb.as_ref() {
-                draw_trackback_overlay(&mut fb, view, uptime_s);
+                widgets::draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
         // The armed-stop prompt: the direct answer to a BTN2 press, so for its
@@ -609,50 +558,6 @@ pub async fn screen_task(
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(b)))) => battery = b,
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
-        }
-    }
-}
-
-/// Draw the BackToStart page's pixel layer: the north-up TrackBack breadcrumb
-/// map (right of the reserved text columns, rows 3-7) with a hollow-box start
-/// marker + filled-dot current position, and the relative back-to-start arrow
-/// (left, rows 5-7) whenever a fresh heading makes it meaningful — the face's
-/// text layer shows `--` in the arrow's spot otherwise, so the two never
-/// overlap.
-fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: u32) {
-    const MAP_X: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W) as i32;
-    const MAP_Y: i32 = (3 * CELL_H) as i32;
-    const MAP_W: u16 = (sharp_mip::WIDTH - face::TRACKBACK_TEXT_COLS * CELL_W) as u16;
-    const MAP_H: u16 = (5 * CELL_H) as u16;
-
-    let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
-    if let Some(map) = trackback::project_track(view, MAP_W, MAP_H, &mut pts) {
-        for pair in pts[..map.len].windows(2) {
-            fb.draw_line(
-                MAP_X + pair[0].0 as i32,
-                MAP_Y + pair[0].1 as i32,
-                MAP_X + pair[1].0 as i32,
-                MAP_Y + pair[1].1 as i32,
-                true,
-            );
-        }
-        let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
-        fb.draw_line(sx - 2, sy - 2, sx + 2, sy - 2, true);
-        fb.draw_line(sx + 2, sy - 2, sx + 2, sy + 2, true);
-        fb.draw_line(sx + 2, sy + 2, sx - 2, sy + 2, true);
-        fb.draw_line(sx - 2, sy + 2, sx - 2, sy - 2, true);
-        let (cx, cy) = (MAP_X + map.current.0 as i32, MAP_Y + map.current.1 as i32);
-        for dy in -1..=1 {
-            fb.draw_line(cx - 1, cy + dy, cx + 1, cy + dy, true);
-        }
-    }
-
-    if let Some(sector) = view.arrow_sector(uptime_s) {
-        const ARROW_CX: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W / 2) as i32;
-        const ARROW_CY: i32 = (13 * CELL_H / 2) as i32; // centre of rows 5-7
-        const ARROW_R: i32 = (3 * CELL_H) as i32 / 2 - 6;
-        for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
-            fb.draw_line(x0, y0, x1, y1, true);
         }
     }
 }
