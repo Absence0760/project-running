@@ -261,7 +261,7 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 
 ### The Renode sim in CI
 
-`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); a second job, **`sim-firmware`** ("Simulate custom_watch firmware (Renode)"), defends **sim-verified**. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
+`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); two further jobs defend **sim-verified**. **`sim-firmware`** ("Simulate custom_watch firmware (Renode)") runs the `smoke` scenario and is **in the `CI gate` required-check list**, because that sequence has a manual verification pass behind it (`sim/verification-2026-07-19/`) and a long green history on hosted runners. **`sim-scenarios`** runs `pages` + `alerts` and is deliberately **not** required yet: they first executed 2026-07-26, and blocking every PR in the repo on two-run-old assertions is the risk worth avoiding. It is strict within itself, so a regression still fails loudly — it just does not gate. Fold it into `needs:` once it has run green over a stretch of unrelated PRs. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
 
 ```
 # on ubuntu-latest, timeout-minutes: 25
@@ -270,7 +270,7 @@ cargo install defmt-print --locked --version '^1.1' # cached between runs
 DEFMT_LOG=debug cargo build --release --bin app \
   --features sim-autostart,sim-buttons,sim-course,dev-blink
 
-# one step per scenario, most-proven first, each in its own out-dir
+# one step per scenario, each in its own out-dir; smoke gates, the other two do not
 python3 …/ci_smoke.py --scenario smoke  --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"  --budget 300
 python3 …/ci_smoke.py --scenario pages  --out-dir "$RUNNER_TEMP/watch-sim-ci/pages"  --budget 300
 python3 …/ci_smoke.py --scenario alerts --out-dir "$RUNNER_TEMP/watch-sim-ci/alerts" --budget 300
