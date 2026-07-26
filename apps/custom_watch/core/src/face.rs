@@ -521,10 +521,13 @@ pub fn page_icons(
     }
 }
 
-/// The 2x hero string for `page`: elapsed time on the dashboard, the page's
+/// The hero string for `page`: elapsed time on the dashboard, the page's
 /// headline metric on a glance page (the live BPM on the zones page, `--`
 /// without a pulse), or `None` when no run is under way. The Nav page never
-/// has a hero — its map panel owns the rows the hero would cover.
+/// has a hero — its map panel owns the rows the hero would cover. Which face
+/// draws it is [`crate::ui_frame::hero_band`]'s call, off the glyphs the
+/// string uses — so a signed hero, whose `+` the numeral faces lack, keeps its
+/// sign by staying in the text font.
 pub fn page_hero(
     page: Page,
     hr_bpm: Option<u16>,

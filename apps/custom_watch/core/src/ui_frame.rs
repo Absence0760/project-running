@@ -87,9 +87,29 @@ pub enum HeroBand {
     /// A single-metric glance page's headline number in the generated numeral
     /// faces (three rows tall).
     BigNumHero,
-    /// Every other page's hero, doubled over rows 0-1.
+    /// A numeral hero in the generated 16x32 medium face, over the same two
+    /// rows a [`Self::TextHero`] occupies. Every page but Distance / Pace puts
+    /// a label on row 2, so the three-row band would erase it; the medium face
+    /// is the same cell size as the doubled text font and natively rasterised,
+    /// so the geometry is unchanged and only the strokes improve.
+    MedNumHero,
+    /// A hero the numeral faces cannot spell, doubled over rows 0-1.
     TextHero,
     None,
+}
+
+/// The characters the generated numeral faces carry (`sharp_mip::bignum`'s
+/// glyph set). The face choice is a frame decision, so it lives here rather
+/// than in the driver; `watch_render`'s preview tests pin the two equal, so a
+/// regenerated table that gains a glyph cannot silently leave this behind.
+pub const NUMERAL_GLYPHS: &[u8] = b"0123456789:-.";
+
+/// Whether `text` can be drawn entirely from the numeral faces. A glyph the
+/// faces lack advances blank, and on a signed hero (`+0:42` ahead vs `-1:05`
+/// behind) the sign is the one character that may not silently disappear — so
+/// anything outside the set keeps the whole hero in the text font.
+pub fn numeral_hero(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|b| NUMERAL_GLYPHS.contains(&b))
 }
 
 /// The frame inputs the hero band is decided from.
@@ -98,6 +118,8 @@ pub struct HeroFrame {
     pub alert: bool,
     pub rezero_banner: bool,
     pub hero: bool,
+    /// [`numeral_hero`] of the hero string.
+    pub numeral: bool,
     /// The armed-stop banner spans two rows, and a three-row numeral hero would
     /// otherwise peek out under it (a two-row hero is covered outright).
     pub stop_pending: bool,
@@ -111,6 +133,8 @@ pub fn hero_band(frame: HeroFrame) -> HeroBand {
         HeroBand::RezeroBanner
     } else if !frame.hero {
         HeroBand::None
+    } else if !frame.numeral {
+        HeroBand::TextHero
     } else if matches!(frame.page, Page::Distance | Page::Pace) {
         if frame.stop_pending {
             HeroBand::None
@@ -118,7 +142,7 @@ pub fn hero_band(frame: HeroFrame) -> HeroBand {
             HeroBand::BigNumHero
         }
     } else {
-        HeroBand::TextHero
+        HeroBand::MedNumHero
     }
 }
 
@@ -293,6 +317,7 @@ mod tests {
             alert: true,
             rezero_banner: true,
             hero: true,
+            numeral: true,
             stop_pending: false,
             page: Page::Distance,
         };
@@ -312,6 +337,7 @@ mod tests {
             alert: false,
             rezero_banner: false,
             hero: true,
+            numeral: true,
             stop_pending: false,
             page: Page::Distance,
         };
@@ -339,8 +365,102 @@ mod tests {
                 stop_pending: true,
                 ..frame
             }),
+            HeroBand::MedNumHero
+        );
+    }
+
+    #[test]
+    fn every_other_numeral_hero_takes_the_medium_face() {
+        let frame = HeroFrame {
+            alert: false,
+            rezero_banner: false,
+            hero: true,
+            numeral: true,
+            stop_pending: false,
+            page: Page::Lap,
+        };
+        for page in [
+            Page::Dashboard,
+            Page::Lap,
+            Page::Zones,
+            Page::GuidedRun,
+            Page::RacePredictor,
+            Page::ElevationProfile,
+            Page::BackToStart,
+            Page::Splits,
+            Page::DistanceBand,
+            Page::TrainingLoad,
+            Page::Roadbook,
+            Page::Fuel,
+            Page::GearWear,
+            Page::TrainingPaces,
+            Page::Fitness,
+        ] {
+            assert_eq!(
+                hero_band(HeroFrame { page, ..frame }),
+                HeroBand::MedNumHero,
+                "{page:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hero_the_numeral_faces_cannot_spell_stays_in_the_text_font() {
+        let frame = HeroFrame {
+            alert: false,
+            rezero_banner: false,
+            hero: true,
+            numeral: false,
+            stop_pending: false,
+            page: Page::Pacer,
+        };
+        assert_eq!(hero_band(frame), HeroBand::TextHero);
+        // Even the three-row pages fall back rather than advance a blank cell
+        // where a glyph the faces lack should be.
+        assert_eq!(
+            hero_band(HeroFrame {
+                page: Page::Distance,
+                ..frame
+            }),
             HeroBand::TextHero
         );
+        // Accepted consequence of deciding on glyphs rather than on a page
+        // list: the signed pages' honest inactive `--` is spellable, so it
+        // takes the numeral face while their live `+0:42` does not. The face
+        // follows the string, and the day a regeneration adds `+` both states
+        // converge with no page list to update.
+        assert_eq!(
+            hero_band(HeroFrame {
+                numeral: true,
+                ..frame
+            }),
+            HeroBand::MedNumHero
+        );
+        assert_eq!(
+            hero_band(HeroFrame {
+                page: Page::CutoffEta,
+                numeral: true,
+                ..frame
+            }),
+            HeroBand::MedNumHero
+        );
+    }
+
+    #[test]
+    fn the_numeral_test_admits_exactly_the_generated_glyph_set() {
+        assert!(numeral_hero("32.40"));
+        assert!(numeral_hero("6:20"));
+        assert!(numeral_hero("1:02:03"));
+        assert!(numeral_hero("--:--"));
+        assert!(numeral_hero("-12"));
+        // The signed split's `+` is not in the faces, so the whole hero (sign
+        // included) has to stay in the text font — the alternative is a Pacer
+        // page that cannot show ahead from behind.
+        assert!(!numeral_hero("+0:42"));
+        assert!(!numeral_hero("1.5 KM"));
+        assert!(!numeral_hero("SET"));
+        // An empty hero is not a numeral hero.
+        assert!(!numeral_hero(""));
     }
 
     #[test]
@@ -350,6 +470,7 @@ mod tests {
                 alert: false,
                 rezero_banner: false,
                 hero: false,
+                numeral: true,
                 stop_pending: false,
                 page: Page::Dashboard,
             }),

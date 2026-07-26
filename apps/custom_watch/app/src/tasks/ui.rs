@@ -358,17 +358,19 @@ pub async fn screen_task(
                 .map(elevation::rezero_banner);
         // Computed ahead of the hero: the armed-stop banner spans two rows,
         // and the glance pages' three-row numeral hero would otherwise peek
-        // out under it (a two-row 2x hero is covered outright).
+        // out under it (a two-row hero is covered outright).
         let stop_pending =
             ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
-        // The single-metric glance pages headline their number in the generated
-        // numeral faces (their face reserves rows 0-2 + puts the label and state
-        // tag on row 3); every other hero stays 2x over rows 0-1.
+        // The Distance / Pace glance pages headline their number in the 32x48 +
+        // 16x32 numeral faces (their face reserves rows 0-2 + puts the label and
+        // state tag on row 3); every other numeral hero takes the 16x32 medium
+        // face over rows 0-1, where a label on row 2 rules the taller band out.
         let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
         match ui_frame::hero_band(HeroFrame {
             alert: alert.is_some(),
             rezero_banner: rezero_banner.is_some(),
             hero: hero.is_some(),
+            numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
             stop_pending,
             page,
         }) {
@@ -385,6 +387,11 @@ pub async fn screen_task(
             HeroBand::BigNumHero => {
                 if let Some(hero) = &hero {
                     fb.draw_bignum_hero(0, hero);
+                }
+            }
+            HeroBand::MedNumHero => {
+                if let Some(hero) = &hero {
+                    fb.draw_bignum_med_hero(0, hero);
                 }
             }
             HeroBand::TextHero => {

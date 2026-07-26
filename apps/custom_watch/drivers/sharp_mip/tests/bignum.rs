@@ -180,3 +180,76 @@ fn hero_truncates_and_clips_without_panicking() {
     fb.draw_bignum_hero(HEIGHT - 10, "3.1"); // clips at the bottom
     fb.draw_bignum_hero(0, "abc"); // outside the glyph set: advances blank
 }
+
+#[test]
+fn the_medium_hero_occupies_exactly_the_two_rows_a_doubled_hero_does() {
+    let mut med = Framebuffer::new();
+    med.draw_bignum_med_hero(0, "12:34");
+    let mut doubled = Framebuffer::new();
+    doubled.draw_text_2x(0, 0, "12:34");
+    for (name, fb) in [("medium", &med), ("doubled", &doubled)] {
+        let inked: Vec<usize> = (0..HEIGHT)
+            .filter(|&y| (0..WIDTH).any(|x| fb.pixel(x, y)))
+            .collect();
+        assert!(!inked.is_empty(), "{name} hero drew nothing");
+        assert!(
+            *inked.last().unwrap() < bignum::BIGNUM_MED_HEIGHT,
+            "{name} hero escaped the two-row band"
+        );
+    }
+    // Same advance, so the two occupy the same columns: neither reaches past
+    // 5 glyphs of 16 px.
+    for fb in [&med, &doubled] {
+        assert!((0..HEIGHT).all(|y| (5 * bignum::BIGNUM_MED_WIDTH..WIDTH).all(|x| !fb.pixel(x, y))));
+    }
+    // The medium face is the heavier of the two at the same cell size — that
+    // is the whole reason to prefer it on a reflective panel with no backlight.
+    let ink = |fb: &Framebuffer| {
+        (0..HEIGHT)
+            .map(|y| (0..WIDTH).filter(|&x| fb.pixel(x, y)).count())
+            .sum::<usize>()
+    };
+    assert!(
+        ink(&med) > ink(&doubled),
+        "medium {} vs doubled {}",
+        ink(&med),
+        ink(&doubled)
+    );
+}
+
+#[test]
+fn the_medium_hero_leaves_the_state_tag_cells_alone_and_rests_clean() {
+    let mut fb = Framebuffer::new();
+    // A marker pixel where the right-aligned state tag lives on row 0.
+    fb.set_pixel(WIDTH - 4, 8, true);
+    fb.clear_dirty();
+    fb.draw_bignum_med_hero(0, "142");
+    assert!(
+        fb.pixel(WIDTH - 4, 8),
+        "medium hero clobbered the state tag's cells"
+    );
+    fb.clear_dirty();
+    fb.draw_bignum_med_hero(0, "142");
+    assert_eq!(fb.dirty_count(), 0, "an unchanged hero must flush no lines");
+    fb.draw_bignum_med_hero(0, "143");
+    assert!(fb.dirty_count() > 0, "a digit flip must dirty the band");
+}
+
+#[test]
+fn the_medium_hero_truncates_and_clips_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_bignum_med_hero(0, "999999999999999999"); // wider than the panel
+    fb.draw_bignum_med_hero(HEIGHT - 6, "1:02"); // clips at the bottom
+    fb.draw_bignum_med_hero(0, "abc"); // outside the glyph set: advances blank
+}
+
+#[test]
+fn the_numeral_faces_carry_no_sign_so_a_signed_hero_must_not_use_them() {
+    // The Pacer / cut-off heroes are signed (`+0:42` ahead, `-1:05` behind).
+    // Until a regeneration adds `+`, `watch_core::ui_frame::numeral_hero`
+    // routes them to the text font; this is the driver-side half of that
+    // contract, so adding the glyph fails here and forces the pair to be
+    // reconsidered together.
+    assert!(!bignum::BIGNUM_GLYPHS.contains(&b'+'));
+    assert!(bignum::BIGNUM_GLYPHS.contains(&b'-'));
+}

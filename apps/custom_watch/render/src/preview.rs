@@ -15,6 +15,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM};
 use watch_core::page::Page;
 use watch_core::record::{FuelCarryView, FuelView, RecordState, Snapshot, PACE_BUCKET_COUNT};
+use watch_core::ui_frame::{self, HeroBand, HeroFrame};
 
 use crate::widgets;
 
@@ -129,13 +130,39 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
             fb.draw_text_row(r, row);
         }
     }
-    if let Some(hero) = face::page_hero(page, hr, snap, None) {
-        if matches!(page, Page::Distance | Page::Pace) {
-            fb.draw_bignum_hero(0, &hero);
-        } else {
-            fb.draw_text_2x(0, 0, &hero);
-        }
+    draw_hero(fb, page, face::page_hero(page, hr, snap, None).as_deref());
+}
+
+// Through `ui_frame::hero_band`, not a second copy of the face test the ui task
+// runs — the preview's whole value is being the same composition.
+fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>) {
+    match ui_frame::hero_band(HeroFrame {
+        alert: false,
+        rezero_banner: false,
+        hero: hero.is_some(),
+        numeral: hero.is_some_and(ui_frame::numeral_hero),
+        stop_pending: false,
+        page,
+    }) {
+        HeroBand::BigNumHero => fb.draw_bignum_hero(0, hero.unwrap()),
+        HeroBand::MedNumHero => fb.draw_bignum_med_hero(0, hero.unwrap()),
+        HeroBand::TextHero => fb.draw_text_2x(0, 0, hero.unwrap()),
+        HeroBand::AlertBanner | HeroBand::RezeroBanner | HeroBand::None => {}
     }
+}
+
+/// The numeral-face glyph set is decided in `watch_core` (the face choice is a
+/// frame decision) and rasterised in `sharp_mip` (the pixels are a driver
+/// asset). This crate is the only one that sees both, so it is where the two
+/// are pinned: a regeneration that adds a glyph — a `+`, which would promote
+/// the signed Pacer / cut-off heroes out of the text font — fails here until
+/// the decision side learns about it.
+#[test]
+fn the_numeral_glyph_set_matches_the_generated_tables() {
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_GLYPHS,
+        sharp_mip::bignum::BIGNUM_GLYPHS.as_slice()
+    );
 }
 
 fn show(name: &str, fb: &Framebuffer) {
@@ -285,6 +312,20 @@ fn preview_distance_and_pace_bignum_heroes() {
         watch_core::statusbar::page_indicator(Page::Pace, u64::MAX),
     );
     show("pace glance: 6:20 in the numeral faces", &fb2);
+}
+
+#[test]
+fn preview_lap_page_medium_numeral_hero() {
+    // The two-row band: the lap time in the 16x32 medium face, with the lap
+    // number's label on row 2 the taller band would have erased.
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Lap, Some(&snap), Some(132));
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Lap, u64::MAX),
+    );
+    show("lap glance: 2:30 in the medium numeral face", &fb);
 }
 
 #[test]
@@ -610,9 +651,11 @@ fn preview_back_to_start_page() {
     for (r, row) in rows.iter().enumerate() {
         fb.draw_text_row(r, row);
     }
-    if let Some(hero) = face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)) {
-        fb.draw_text_2x(0, 0, &hero);
-    }
+    draw_hero(
+        &mut fb,
+        Page::BackToStart,
+        face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)).as_deref(),
+    );
     widgets::draw_page_indicator(
         &mut fb,
         watch_core::statusbar::page_indicator(Page::BackToStart, u64::MAX),
