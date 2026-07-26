@@ -1433,6 +1433,7 @@ version = "0.1.0"
 dependencies = [
  "critical-section",
  "defmt 1.1.0",
+ "embassy-futures",
  "embassy-sync",
  "heapless",
  "libm",
