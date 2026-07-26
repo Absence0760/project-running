@@ -179,6 +179,8 @@ These are the figures currently shipping in the firmware and its docs as **deriv
 
 **Sensor tuning constants flagged for on-device calibration:** the GPS-baro complementary filter's slew, the ambient-subtraction and raw-DC-rail thresholds, the LED AGC's step/hysteresis/clamps, and the off-wrist / saturated contact bands. Every one is a conservative starting point chosen without a sensor on a wrist.
 
+**Publish-gate quanta (new 2026-07-25):** `elevation::PUBLISH_STEP_M` = 0.1 m is chosen as an order of magnitude above the BMP581's noise floor at the driver's configured 16× OSR + IIR coeff-7 — a **datasheet-class derivation, never measured on the part**. Set it too fine and a resting wrist wakes the CPU on noise; too coarse and the live GAP estimator, which reads a grade off ~5 m segments, sees a stepped altitude. The bench item is: log the raw baro stream over a 60 s motionless hold and record the actual peak-to-peak spread, then confirm the step still clears it. The GSV/GSA bar-count gate needs no calibration (the quantum is the drawn meter itself) but is **untestable under Renode** — every sim NMEA fixture is single-constellation GPS-only, so the multi-constellation repeat the gate exists to absorb has never been exercised.
+
 **One structural assumption, not a number:** that the MAX86177 **retains its register file across `shutdown()`**. The firmware's wake path depends on it (no re-init, no AGC re-walk), the Renode model was written to honour it, and no silicon has confirmed it. It is called out in the step-5 checklist for that reason.
 
 ### Added 2026-07-25 (from the defect sweep, decisions § 316 + § 317)
