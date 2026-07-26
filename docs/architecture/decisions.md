@@ -4333,3 +4333,24 @@ Don't re-litigate by:
 What it does **not** prove, and what the docs must not claim it does: nothing about BLE (Renode cannot run the proprietary S140 SoftDevice at all), nothing about power in any form, and nothing about real silicon — the peripheral models are pinned to what the drivers *believe* about the parts (register maps, retention across shutdown, contact and AGC constants) and the waveforms are clean synthetic shapes. Green means the firmware is self-consistent under the emulator. The bench-verify list is untouched by it.
 
 One coupling to respect: the harness keys on exact defmt strings (`run_flash: run store armed at`, `gps: fix lat=… sats=`, `record: sim-autostart on first fix`, `record: recording dist=`, `button: BTN2 armed`, `run_flash: stored run N (M B) in slot S`). Renaming any of them requires the matching change in `sim/ci_smoke.py`.
+
+---
+
+## 323. A boot-recovered unfinished watch run is flagged phone-side with a public-safe `recovered_unfinished` metadata key
+
+**Decided (2026-07-26).** § 316(c) settled the firmware half: a run interrupted by a reset is recovered from its last flash checkpoint and advertised over BLE, because refusing to would delete the only copy of it. It also named the consequence left open — such a run reaches the phone as an ordinary run whose footer totals are its **totals-so-far**. The phone had the signal (`RunHeader.finished`, backed by `FLAG_FINISHED`) and dropped it on the floor at ingest, so a reboot at mile 60 landed in the runner's history looking exactly like a finished 60-mile day. That is now carried through: `payloadFromBlob` emits the header's `finished` boolean on the watch-run payload, and `runFromWatchPayload` stamps `metadata.recovered_unfinished = true` when — and only when — the payload says `false`.
+
+**Only the explicit `false` stamps the key.** A sender that says nothing (the Apple-Watch WCSession bridge, Wear OS) only ever produces finished runs, so silence must not read as partial; and writing `recovered_unfinished: false` onto every watch run would put a key with no information on every row in the bag. Absence is the normal case and presence is the whole signal, matching how `recovered_from_crash` / `manual_entry` / `indoor_estimated` already behave.
+
+**Classified public-safe, deliberately.** Every other recorder internal in the registry (`recovered_from_crash`, `in_progress`, `manual_entry`, `distance_source`) is stripped by the `public_runs` projection, so keeping this one is the exception and needs its reason recorded: the key carries no geographic or identity signal — it says a watch reset — and it is the one key whose entire purpose is to stop a set of totals being read as complete. Stripping it would make the public share page repeat exactly the lie the key exists to prevent, for a viewer who has even less context than the owner. It is therefore left off the strip denylist and **no `public_runs` migration is needed**.
+
+**A read surface shipped with it, because a recorded-but-unread flag does not fix the harm.** Web run-detail gains an "Incomplete" header chip beside the existing DNF / discipline chips (the established pattern for rendering a metadata flag), with a hover/long-press explanation, mirrored to the mobile run-detail AppBar badge. Web-first per § 24 even though only mobile can *produce* the key — web is where a synced run is read.
+
+Don't re-litigate by:
+
+- **Refusing the run at ingest** because it is incomplete. § 316(c) already settled that recovery is not admission; dropping it destroys the only copy.
+- **Writing `false` on finished runs** "for symmetry". Presence is the signal; a universal key is noise on every row.
+- **Adding it to the `public_runs` strip list** because the neighbouring recorder internals are stripped. The neighbours leak device cadence or the owner's private plan; this one exists to keep a public number honest.
+- **Deriving it from `duration_s` vs the point timestamps** instead of the flag. The checkpoint's footer is internally consistent — nothing in the blob's *numbers* betrays that the run was cut short. Only the header flag knows.
+
+Pinning: `packages/core_models/lib/src/metadata_keys.dart`, `apps/mobile_*/lib/{sim_watch_sync,watch_ingest_queue}.dart` + `lib/screens/run_detail_screen.dart` (both twins), `apps/web/src/lib/core/schema.ts` + `src/routes/runs/[id]/+page.svelte`, `docs/backend/metadata.md`, and the tests in `test/{sim_watch_sync,watch_ingest_queue_helpers,run_detail_screen}_test.dart` + `apps/web/tests-e2e/runs/recovered-unfinished.spec.ts`.
