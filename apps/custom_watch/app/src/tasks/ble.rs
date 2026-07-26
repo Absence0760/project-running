@@ -86,7 +86,7 @@ mod imp {
         IdentityResolutionKey, MasterId, SecurityMode,
     };
     use nrf_softdevice::{raw, Softdevice};
-    use watch_core::ble_sync::{self, MANIFEST_CAP};
+    use watch_core::ble_sync::{self, CHUNK_QUEUE_DEPTH, MANIFEST_CAP};
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
@@ -109,16 +109,6 @@ mod imp {
     /// worst-case frame is ~160 bytes; see `link.rs`). Also the run-chunk
     /// notify payload cap — a chunk reply never exceeds one notification.
     const FRAME_CAP: usize = 244;
-
-    /// Depth of the per-connection `run_chunk` request queue. A single-value
-    /// holder answers only the newest request, so a phone that PIPELINES pulls
-    /// (writes the next request before the previous notification lands) loses
-    /// every request but the last and then waits forever for a notification that
-    /// was never owed. A FIFO absorbs a realistic pipeline instead, and 8 is
-    /// several connection events' worth at the ~1 s interval this task
-    /// negotiates. Overflow past that is refused loudly rather than silently
-    /// overwritten (the phone's own reply timeout is what retries).
-    const CHUNK_QUEUE_DEPTH: usize = 8;
 
     // Every characteristic requires an encrypted (paired) link — issue #598.
     // `justworks` = Security Mode 1 Level 2: the SoftDevice rejects any read,

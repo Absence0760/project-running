@@ -22,6 +22,19 @@ defmt   = ["dep:defmt", "ublox_nmea/defmt"]
 # features = false` drops its fork / rusty-fork / tempfile / regex machinery:
 # the suites use none of it, and the fork harness would spawn a process per
 # failing case in CI.
+#
+# embassy-sync is a DEV-dep only, and must stay one: a real dependency would put
+# an embedded async runtime inside the crate whose whole contract is "pure logic
+# over plain data, no Embassy". The `ble_sync` queue tests instantiate the same
+# `Channel` the radio task runs the phone's pipelined chunk requests through, so
+# CHUNK_QUEUE_DEPTH is checked against the type that consumes it rather than
+# asserted about in prose. Version pinned to what `app/Cargo.toml` declares —
+# testing a different Channel than the firmware links is worse than no test.
+# `critical-section/std` comes with it: `CriticalSectionRawMutex` is an extern
+# call the firmware resolves against the SoftDevice, and nothing provides it on
+# the host, so the test binary would not link without an impl to bind to.
 [dev-dependencies]
 serde_json = "1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+embassy-sync = "0.8"
+critical-section = { version = "1", features = ["std"] }

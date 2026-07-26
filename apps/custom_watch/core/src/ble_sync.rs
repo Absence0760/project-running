@@ -5,8 +5,9 @@
 //! course frame, and [`crate::flash_plan`] the flash side. What is left, and
 //! lives here, is the framing in between: building the `run_manifest`
 //! characteristic value the phone reads to discover finished runs, bounding a
-//! `run_chunk` request to one notification, and splitting a `course` write into
-//! its offset header and payload.
+//! `run_chunk` request to one notification, sizing the queue that absorbs
+//! pipelined chunk requests, and splitting a `course` write into its offset
+//! header and payload.
 //!
 //! This is the one protocol in the firmware that gets NO integration coverage at
 //! all: the `ble` build needs the S140 SoftDevice, which the Renode sim does not
@@ -45,6 +46,18 @@ pub fn encode_manifest(entries: &[ManifestEntry], watch_uptime_s: u32) -> Vec<u8
     buf
 }
 
+/// Depth of the per-connection `run_chunk` request queue the `app/` task runs
+/// the phone's pulls through.
+///
+/// A single-value holder answers only the newest request, so a phone that
+/// PIPELINES pulls (writes the next request before the previous notification
+/// lands) loses every request but the last and then waits forever for a
+/// notification that was never owed. A FIFO absorbs a realistic pipeline
+/// instead, and 8 is several connection events' worth at the ~1 s interval that
+/// task negotiates. Overflow past that is refused rather than silently
+/// overwritten — the phone's own reply timeout is what retries.
+pub const CHUNK_QUEUE_DEPTH: usize = 8;
+
 /// How many bytes a chunk reply may carry: what the phone asked for, bounded by
 /// one notification. The blob-end bound is
 /// [`crate::flash_plan::plan_chunk_read`]'s job — this is only the transport
@@ -72,6 +85,10 @@ pub fn parse_course_chunk(bytes: &[u8]) -> Option<(usize, &[u8])> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
+    use embassy_sync::signal::Signal;
+
     use crate::flash_plan::{chunk_completes_run, plan_chunk_read, plan_slot_write, SlotWrite};
     use crate::flash_store::{slot_offset, SlotDir, SLOT_LEN};
     use crate::run_store::{
@@ -83,6 +100,19 @@ mod tests {
     const NOTIFY_CAP: u16 = 244;
 
     const BASE: u32 = 0x000F_B000;
+
+    /// The queue the radio task actually runs the phone's pulls through:
+    /// `app/src/tasks/ble.rs` builds this exact type from this exact constant,
+    /// so what these tests exercise is the transport, not a stand-in for it.
+    type ChunkQueue = Channel<CriticalSectionRawMutex, ChunkRequest, CHUNK_QUEUE_DEPTH>;
+
+    fn a_request(run_seq: u32) -> ChunkRequest {
+        ChunkRequest {
+            run_seq,
+            offset: run_seq * NOTIFY_CAP as u32,
+            len: NOTIFY_CAP,
+        }
+    }
 
     fn an_entry(run_seq: u32) -> ManifestEntry {
         ManifestEntry {
@@ -180,6 +210,85 @@ mod tests {
             NOTIFY_CAP,
             "a request 268x the notify payload is clamped, not honoured"
         );
+    }
+
+    #[test]
+    fn the_chunk_queue_is_eight_deep() {
+        assert_eq!(CHUNK_QUEUE_DEPTH, 8);
+    }
+
+    #[test]
+    fn pipelined_chunk_requests_are_served_oldest_first() {
+        // Order is the whole point: the phone walks a run's blob with a rising
+        // offset and appends each notification in arrival order, so serving a
+        // pipeline out of order would reassemble the run scrambled.
+        let queue: ChunkQueue = Channel::new();
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            queue.try_send(a_request(i as u32)).expect("within depth");
+        }
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            assert_eq!(
+                queue.try_receive().expect("queued"),
+                a_request(i as u32),
+                "request {i} is served {i}th"
+            );
+        }
+        assert!(queue.try_receive().is_err(), "and nothing else was held");
+    }
+
+    #[test]
+    fn the_chunk_queue_holds_exactly_chunk_queue_depth_requests() {
+        let queue: ChunkQueue = Channel::new();
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            queue.try_send(a_request(i as u32)).expect("within depth");
+        }
+        assert!(
+            queue.try_send(a_request(CHUNK_QUEUE_DEPTH as u32)).is_err(),
+            "the depth+1th request does not fit"
+        );
+
+        queue.try_receive().expect("queued");
+        queue
+            .try_send(a_request(CHUNK_QUEUE_DEPTH as u32))
+            .expect("serving one frees one slot");
+        assert!(
+            queue
+                .try_send(a_request(CHUNK_QUEUE_DEPTH as u32 + 1))
+                .is_err(),
+            "and exactly one"
+        );
+    }
+
+    #[test]
+    fn an_overflowing_request_is_refused_rather_than_displacing_a_queued_one() {
+        // The defect the queue replaced (decisions.md § 316). A single-value
+        // holder keeps only the newest write, so a phone that pipelined its
+        // pulls lost every earlier request without a trace and then waited on
+        // notifications it was never owed.
+        let holder: Signal<CriticalSectionRawMutex, ChunkRequest> = Signal::new();
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            holder.signal(a_request(i as u32));
+        }
+        assert_eq!(
+            holder.try_take(),
+            Some(a_request(CHUNK_QUEUE_DEPTH as u32 - 1))
+        );
+        assert_eq!(holder.try_take(), None, "every earlier pull vanished");
+
+        // The queue refuses the overflow instead, so the caller can say so and
+        // the requests already accepted are all still served.
+        let queue: ChunkQueue = Channel::new();
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            queue.try_send(a_request(i as u32)).expect("within depth");
+        }
+        assert!(queue.try_send(a_request(9_999)).is_err());
+        for i in 0..CHUNK_QUEUE_DEPTH {
+            assert_eq!(
+                queue.try_receive().expect("queued"),
+                a_request(i as u32),
+                "the refused request displaced nothing"
+            );
+        }
     }
 
     #[test]
