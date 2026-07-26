@@ -549,6 +549,8 @@
   "addRunPickerNoMatch": "Aucun itinéraire ne correspond à \"{query}\"",
   "addRunPickerNoRoute": "Aucun itinéraire",
   "runDetailDnfBadge": "DNF",
+  "runDetailIncompleteBadge": "Incomplète",
+  "runDetailIncompleteTooltip": "Ta montre a redémarré en pleine course. Ces totaux ne correspondent qu'à ce qu'elle avait enregistré jusque-là, pas à toute l'activité.",
   "runDetailEditTooltip": "Modifier la course",
   "runDetailShareTooltip": "Partager la course",
   "runDetailMoreTooltip": "Plus",

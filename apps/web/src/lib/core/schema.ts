@@ -107,6 +107,7 @@ export const METADATA_KEYS = {
 	strava_id: 'strava_id',
 	strava_activity_type: 'strava_activity_type',
 	manual_entry: 'manual_entry',
+	recovered_unfinished: 'recovered_unfinished',
 	notes: 'notes',
 	title: 'title',
 	plan_workout_id: 'plan_workout_id',

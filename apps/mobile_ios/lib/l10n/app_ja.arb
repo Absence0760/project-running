@@ -549,6 +549,8 @@
   "addRunPickerNoMatch": "\"{query}\" に一致するルートはありません",
   "addRunPickerNoRoute": "ルートなし",
   "runDetailDnfBadge": "DNF",
+  "runDetailIncompleteBadge": "記録途中",
+  "runDetailIncompleteTooltip": "ラン中にウォッチが再起動しました。ここに表示されている合計はその時点までに記録された分だけで、アクティビティ全体ではありません。",
   "runDetailEditTooltip": "ランを編集",
   "runDetailShareTooltip": "ランを共有",
   "runDetailMoreTooltip": "その他",

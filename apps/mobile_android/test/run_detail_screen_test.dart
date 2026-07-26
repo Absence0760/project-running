@@ -461,6 +461,26 @@ void main() {
       expect(find.text('Trail'), findsOneWidget);
     });
 
+    testWidgets(
+        'renders the Incomplete badge from metadata.recovered_unfinished',
+        (tester) async {
+      // A run recovered from the watch's mid-run checkpoint carries
+      // totals-so-far. Without the badge the screen presents a reboot at
+      // mile 60 as the runner's whole day (decisions §323).
+      final run = _run(metadata: {
+        'activity_type': 'run',
+        MetadataKeys.recoveredUnfinished: true,
+      });
+      await _pump(tester, run);
+      expect(find.text('Incomplete'), findsOneWidget);
+    });
+
+    testWidgets('omits the Incomplete badge on an ordinary run',
+        (tester) async {
+      await _pump(tester, _run(metadata: {'activity_type': 'run'}));
+      expect(find.text('Incomplete'), findsNothing);
+    });
+
     testWidgets('renders a Running Dynamics block from running_dynamics',
         (tester) async {
       final run = _run(metadata: {

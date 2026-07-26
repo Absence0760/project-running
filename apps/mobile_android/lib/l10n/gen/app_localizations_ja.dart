@@ -1887,6 +1887,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailDnfBadge => 'DNF';
 
   @override
+  String get runDetailIncompleteBadge => '記録途中';
+
+  @override
+  String get runDetailIncompleteTooltip =>
+      'ラン中にウォッチが再起動しました。ここに表示されている合計はその時点までに記録された分だけで、アクティビティ全体ではありません。';
+
+  @override
   String get runDetailEditTooltip => 'ランを編集';
 
   @override

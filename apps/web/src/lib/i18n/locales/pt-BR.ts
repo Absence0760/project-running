@@ -1036,6 +1036,9 @@ export const messages = {
 	"runDetail.public": "Público",
 	"runDetail.private": "Privado",
 	"runDetail.dnf": "DNF",
+	"runDetail.incomplete": "Incompleta",
+	"runDetail.incompleteHint":
+		"Seu relógio reiniciou no meio da corrida. Estes totais são apenas o que ele havia registrado até aquele ponto, não a atividade inteira.",
 	"runDetail.runActions": "Ações da corrida",
 	"runDetail.editAria": "Editar título e notas",
 	"runDetail.edit": "Editar",
