@@ -1060,9 +1060,11 @@ fn race_predictor_glance(
 /// The cut-off ETA glance page: the margin to the next cut-off up large in the
 /// rows-0-1 hero (drawn by [`page_hero`] via [`signed_split`] — `+` slack, `-`
 /// over the limit), then the verdict word, the distance to the cut-off, and the
-/// projected arrival clock. Honest inactive states: "NO CUTOFFS" when the
-/// course carries none, "NO CUTOFF AHEAD" once past the last one, and a `--`
-/// ETA when the fix is too stale (or the pace too uncertain) to project.
+/// projected arrival clock, then the flat pace still needed to make it. Honest
+/// inactive states: "NO CUTOFFS" when the course carries none, "NO CUTOFF
+/// AHEAD" once past the last one, a `--` ETA when the fix is too stale (or the
+/// pace too uncertain) to project, and a `--` NEED when the cutoff is under
+/// 50 m out or its limit has already passed.
 #[allow(clippy::too_many_arguments)]
 fn cutoff_glance(
     fix: Option<&Fix>,
@@ -1116,6 +1118,14 @@ fn cutoff_glance(
                     let _ = write!(rows[5], "{:<5}--", "ETA");
                 }
             }
+
+            // Independent of recent pace, so it stays readable when the ETA is
+            // withheld; `--` also covers "the limit has already passed".
+            write_pace(
+                &mut rows[6],
+                "NEED",
+                eta.required_pace_s_per_km.map(|p| libm::round(p) as u32),
+            );
         }
     }
 
@@ -4761,6 +4771,8 @@ mod tests {
             distance_to_m: 10_000.0,
             projected_arrival_elapsed_s: Some(5_400),
             margin_s: Some(1_800),
+            required_pace_s_per_km: Some(360.0),
+            limit_passed: false,
             status: crate::cutoff_eta::CutoffEtaStatus::On,
         });
         let rows = page_rows(
@@ -4785,6 +4797,7 @@ mod tests {
         assert_eq!(rows[2].as_str(), "CUTOFF        ON");
         assert_eq!(rows[4].as_str(), "TO   10.00 KM");
         assert_eq!(rows[5].as_str(), "ETA  1:30:00");
+        assert_eq!(rows[6].as_str(), "NEED 6:00 /KM");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         assert!(
             page_icons(Page::CutoffEta, Some(&fix()), None, Some(&rec), 42, true)
@@ -4825,6 +4838,8 @@ mod tests {
             distance_to_m: 0.0,
             projected_arrival_elapsed_s: None,
             margin_s: None,
+            required_pace_s_per_km: None,
+            limit_passed: false,
             status: crate::cutoff_eta::CutoffEtaStatus::Unknown,
         });
         let rows = page_rows(
@@ -4839,6 +4854,32 @@ mod tests {
             true,
         );
         assert_eq!(rows[4].as_str(), "NO CUTOFF AHEAD");
+
+        // A cutoff ahead whose limit has passed: no pace can make it, so the
+        // NEED row reads `--` rather than a number the runner could chase.
+        let mut expired = snapshot(RecordState::Recording, 500.0);
+        expired.cutoff = Some(crate::cutoff_eta::CutoffEta {
+            has_cutoff: true,
+            distance_to_m: 10_000.0,
+            projected_arrival_elapsed_s: Some(11_600),
+            margin_s: Some(-4_400),
+            required_pace_s_per_km: None,
+            limit_passed: true,
+            status: crate::cutoff_eta::CutoffEtaStatus::Behind,
+        });
+        let rows = page_rows(
+            Page::CutoffEta,
+            Some(&fix()),
+            None,
+            Some(&expired),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "CUTOFF        BEHIND");
+        assert_eq!(rows[6].as_str(), "NEED --");
     }
 
     #[test]
