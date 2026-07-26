@@ -16,6 +16,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`course_profile`] — the pushed course's climb profile for the RouteElev
+//!   page: gain / loss over the whole pushed series plus a distance-even
+//!   elevation series and the along-course marker position
 //! - [`nav_project`] — the `nav` task's per-fix composition over [`course`] +
 //!   [`turn_cues`]: biased projection, the off-course latch's two edges, and
 //!   the next turn ahead
@@ -253,6 +256,7 @@ pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
 pub mod course;
+pub mod course_profile;
 pub mod course_store;
 pub mod current_week;
 pub mod cutoff_eta;

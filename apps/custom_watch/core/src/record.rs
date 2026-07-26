@@ -115,6 +115,13 @@ pub const ELEV_PROFILE_CAP: usize = 64;
 /// has advanced this far since the last kept sample. Doubles on each thinning.
 pub const ELEV_PROFILE_SPACING_M: f64 = 25.0;
 
+/// Pushed-course climb-profile capacity, in samples. The profile panel is 156 px
+/// wide, so at 128 samples the drawn shape is limited by the panel rather than by
+/// the series, and it costs 256 B against the course's own 4 KiB budget. Unlike
+/// [`ELEV_PROFILE_CAP`] this never thins: the whole course is known up front, so
+/// the series is sampled evenly across it once ([`crate::course_profile`]).
+pub const COURSE_PROFILE_CAP: usize = 128;
+
 /// How many pushed roadbook checkpoints the watch holds — an ultra's aid legs,
 /// bounded like [`MAX_CUTOFF_LEGS`]. A longer roadbook is trimmed phone-side.
 pub const MAX_PUSHED_LEGS: usize = 16;
@@ -365,13 +372,19 @@ pub struct AutoEffortView {
     pub considered: u8,
 }
 
-/// The loaded course's elevation profile summary ([`crate::route_elevation`]):
-/// total gain / loss and the point count the profile was sampled to.
+/// The loaded course's climb profile ([`crate::course_profile`]): total gain /
+/// loss over the whole pushed series, the course's point count and length, and
+/// the distance-even elevation series the RouteElev page draws as a shape.
+/// `len == 0` means the course arrived without elevation — the page then shows
+/// the geometry rows and no profile, never a flat line at zero.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RouteElevView {
     pub gain_m: u16,
     pub loss_m: u16,
     pub points: u16,
+    pub total_m: u32,
+    pub samples: [i16; COURSE_PROFILE_CAP],
+    pub len: usize,
 }
 
 /// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]):
@@ -533,8 +546,13 @@ pub struct Snapshot {
     pub route_simplify: Option<RouteSimplifyView>,
     /// The auto-segment-effort match counts, or `None` until pushed.
     pub auto_effort: Option<AutoEffortView>,
-    /// The loaded course's elevation summary, or `None` until pushed.
+    /// The loaded course's climb profile, or `None` when no course is loaded.
     pub route_elev: Option<RouteElevView>,
+    /// Where the runner sits along the loaded course, in parts-per-thousand of
+    /// its length — the profile page's position marker. `None` without a course,
+    /// before a projection lands, or once the fed position goes stale, so the
+    /// marker disappears rather than freezing at a position the runner left.
+    pub route_position_permille: Option<u16>,
     /// The race-day countdown + feasibility, or `None` until pushed.
     pub race_day: Option<RaceDayView>,
     /// The pacing-strategy phase the run distance currently falls in, or `None`
@@ -1119,6 +1137,11 @@ impl Recorder {
         self.auto_effort = view;
     }
 
+    /// Load the loaded course's climb profile — the nav task shapes it with
+    /// [`crate::course_profile::course_elev_view`] whenever the active course
+    /// changes, and `None` once no course is loaded. The recorder stays
+    /// course-agnostic: it only folds the profile's length in with the fed
+    /// along-course distance to place the page's position marker.
     pub fn set_route_elev(&mut self, view: Option<RouteElevView>) {
         self.route_elev = view;
     }
@@ -1517,6 +1540,7 @@ impl Recorder {
             route_simplify: self.route_simplify,
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
+            route_position_permille: self.route_position_permille(),
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
             track_thinning: self.track_thinning,
@@ -1766,6 +1790,30 @@ impl Recorder {
         })
     }
 
+    /// Is the fed along-course position too old to speak for where the runner
+    /// is now? Stale once it ages past a few fix intervals (scaled to the GNSS
+    /// mode's cadence, so Expedition's 60 s gaps are not "stale"), and a
+    /// position that never arrived counts as stale.
+    fn route_position_stale(&self) -> bool {
+        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
+        self.route_along_m.is_none()
+            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s
+    }
+
+    /// The profile marker's along-course position, withheld while the fed
+    /// position is missing or stale — the same rule the cut-off ETA follows, so
+    /// a lost-signal runner's marker disappears instead of lying about where
+    /// they are.
+    fn route_position_permille(&self) -> Option<u16> {
+        if self.route_position_stale() {
+            return None;
+        }
+        crate::course_profile::position_permille(
+            self.route_along_m?,
+            self.route_elev.as_ref()?.total_m,
+        )
+    }
+
     /// The live next-cutoff ETA, or `None` when idle or no cutoff legs are
     /// loaded. Projects from the fed route position + the whole-run moving pace;
     /// a missing or stale route position (lost signal) drops the projected time
@@ -1774,11 +1822,7 @@ impl Recorder {
         if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
             return None;
         }
-        // Stale once the fed position ages past a few fix intervals (scaled to
-        // the GNSS mode's cadence, so Expedition's 60 s gaps are not "stale").
-        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
-        let stale = self.route_along_m.is_none()
-            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s;
+        let stale = self.route_position_stale();
         Some(next_cutoff_eta(
             self.route_along_m.unwrap_or(0.0),
             self.elapsed_s(),
@@ -2823,6 +2867,47 @@ mod tests {
         assert_eq!(stale.status, CutoffEtaStatus::Unknown);
         assert_eq!(stale.projected_arrival_elapsed_s, None);
         assert!(stale.has_cutoff);
+    }
+
+    #[test]
+    fn the_course_profile_marker_needs_both_a_profile_and_a_fresh_position() {
+        let profile = |total_m: u32| RouteElevView {
+            gain_m: 100,
+            loss_m: 50,
+            points: 8,
+            total_m,
+            samples: [1500; COURSE_PROFILE_CAP],
+            len: COURSE_PROFILE_CAP,
+        };
+
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+
+        // A fed position with no course profile has nothing to be a fraction of.
+        r.set_route_position(Some(500.0));
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // Profile plus a fresh position: half way along a 1 km course.
+        r.set_route_elev(Some(profile(1000)));
+        assert_eq!(r.snapshot().route_position_permille, Some(500));
+
+        // A profile with no fed position leaves the marker off.
+        r.set_route_position(None);
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // A position that ages past the stale budget withholds the marker rather
+        // than freezing it where the runner last had signal.
+        r.set_route_position(Some(500.0));
+        assert_eq!(r.snapshot().route_position_permille, Some(500));
+        r.tick(600);
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // A zero-length course can't place a marker either.
+        r.set_route_position(Some(500.0));
+        r.set_route_elev(Some(profile(0)));
+        assert_eq!(r.snapshot().route_position_permille, None);
     }
 
     #[test]

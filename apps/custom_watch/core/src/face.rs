@@ -2035,7 +2035,12 @@ fn auto_effort_glance(
     rows
 }
 
-/// The RouteElev glance: the loaded course's total gain / loss + point count.
+/// The RouteElev glance: the loaded course's climb profile, drawn as a shape the
+/// app paints (`render::widgets::draw_route_elev_overlay`) into rows 3..8 with
+/// the runner's along-course position marked on it, and the total gain / loss as
+/// the context row. Three honest states: "NOT SYNCED" with no course loaded,
+/// the course's geometry rows with no shape when a course was pushed *without*
+/// elevation (never a flat line at zero), and the profile once it carries one.
 #[allow(clippy::too_many_arguments)]
 fn route_elev_glance(
     fix: Option<&Fix>,
@@ -2047,16 +2052,25 @@ fn route_elev_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
-    match snap.route_elev {
+    match snap.route_elev.as_ref() {
         None => {
             let _ = write!(rows[2], "CRS ELEV --");
             let _ = write!(rows[4], "NOT SYNCED");
         }
+        Some(v) if v.len == 0 => {
+            let _ = write!(rows[2], "CRS ELEV --");
+            let _ = write!(rows[4], "NO ELEVATION");
+            let _ = write!(
+                rows[5],
+                "{} PTS {}.{} KM",
+                v.points,
+                v.total_m / 1000,
+                (v.total_m % 1000) / 100
+            );
+        }
+        // rows 3..8 are the profile cell the app draws into.
         Some(v) => {
-            let _ = write!(rows[2], "CRS ELEV");
-            let _ = write!(rows[4], "{:<7}{} M", "GAIN", v.gain_m);
-            let _ = write!(rows[5], "{:<7}{} M", "LOSS", v.loss_m);
-            let _ = write!(rows[6], "{:<7}{}", "PTS", v.points);
+            let _ = write!(rows[2], "CRS D+{} D-{}", v.gain_m, v.loss_m);
         }
     }
     rows
@@ -2785,6 +2799,7 @@ mod tests {
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
+            route_position_permille: None,
             race_day: None,
             race_phase: None,
             track_thinning: 1,
@@ -3010,6 +3025,9 @@ mod tests {
             gain_m: 65535,
             loss_m: 65535,
             points: 65535,
+            total_m: u32::MAX,
+            samples: [i16::MIN; crate::record::COURSE_PROFILE_CAP],
+            len: crate::record::COURSE_PROFILE_CAP,
         });
         rec.race_day = Some(RaceDayView {
             days_until: -9999,
@@ -5593,6 +5611,60 @@ mod tests {
             false,
         );
         assert_eq!(rows[4].as_str(), "2 MONTHS");
+    }
+
+    #[test]
+    fn route_elev_glance_separates_no_course_no_elevation_and_a_drawn_profile() {
+        let rows_for = |snap: &Snapshot| {
+            page_rows(
+                Page::RouteElev,
+                Some(&fix()),
+                None,
+                Some(snap),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            )
+        };
+
+        // No course pushed at all.
+        let rows = rows_for(&snapshot(RecordState::Recording, 5000.0));
+        assert_eq!(rows[2].as_str(), "CRS ELEV --");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+
+        // A course pushed WITHOUT elevation: geometry only, no fabricated shape.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.route_elev = Some(crate::record::RouteElevView {
+            gain_m: 0,
+            loss_m: 0,
+            points: 48,
+            total_m: 42_195,
+            samples: [0; crate::record::COURSE_PROFILE_CAP],
+            len: 0,
+        });
+        let rows = rows_for(&rec);
+        assert_eq!(rows[2].as_str(), "CRS ELEV --");
+        assert_eq!(rows[4].as_str(), "NO ELEVATION");
+        assert_eq!(rows[5].as_str(), "48 PTS 42.1 KM");
+
+        // With a profile: the vert totals ride row 2 and rows 3..8 are left to
+        // the drawn shape.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.route_elev = Some(crate::record::RouteElevView {
+            gain_m: 1820,
+            loss_m: 1755,
+            points: 48,
+            total_m: 42_195,
+            samples: [1500; crate::record::COURSE_PROFILE_CAP],
+            len: crate::record::COURSE_PROFILE_CAP,
+        });
+        let rows = rows_for(&rec);
+        assert_eq!(rows[2].as_str(), "CRS D+1820 D-1755");
+        for r in rows.iter().take(8).skip(3) {
+            assert!(r.is_empty(), "row reserved for the profile shape: {:?}", r);
+        }
     }
 
     #[test]

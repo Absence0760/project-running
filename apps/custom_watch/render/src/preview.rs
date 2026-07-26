@@ -82,6 +82,7 @@ fn base_snapshot() -> Snapshot {
         route_simplify: None,
         auto_effort: None,
         route_elev: None,
+        route_position_permille: None,
         race_day: None,
         race_phase: None,
         track_thinning: 1,
@@ -420,9 +421,41 @@ fn preview_elevation_profile_page() {
 }
 
 #[test]
+fn preview_route_elev_page() {
+    // The pushed course's climb profile with the runner marked a third of the
+    // way along it — the RouteElev glance.
+    let profile: [i16; 24] = [
+        1650, 1668, 1704, 1760, 1840, 1930, 2010, 2060, 2040, 1980, 1900, 1850, 1830, 1870, 1950,
+        2030, 2080, 2040, 1960, 1870, 1790, 1720, 1680, 1655,
+    ];
+    let mut snap = base_snapshot();
+    let mut view = watch_core::record::RouteElevView {
+        gain_m: 690,
+        loss_m: 685,
+        points: 128,
+        total_m: 42_195,
+        samples: [0; watch_core::record::COURSE_PROFILE_CAP],
+        len: profile.len(),
+    };
+    view.samples[..profile.len()].copy_from_slice(&profile);
+    snap.route_elev = Some(view);
+    snap.route_position_permille = Some(333);
+
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::RouteElev, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::RouteElev, u32::MAX),
+    );
+    widgets::draw_route_elev_overlay(&mut fb, &snap);
+    show("route elevation: course profile + position marker", &fb);
+}
+
+#[test]
 fn preview_mini_profile() {
-    // A synthetic climb-then-descend altitude series — the shape a future glance
-    // page would show for a route's elevation profile, auto-scaled to the cell.
+    // A synthetic climb-then-descend altitude series — the widget the run's
+    // ElevationProfile and the course's RouteElev pages both plot with,
+    // auto-scaled to the cell.
     let elevation: [i32; 14] = [
         1600, 1615, 1650, 1710, 1790, 1855, 1880, 1860, 1795, 1720, 1680, 1650, 1625, 1605,
     ];

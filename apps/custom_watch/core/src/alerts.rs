@@ -610,6 +610,7 @@ mod tests {
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
+            route_position_permille: None,
             race_day: None,
             race_phase: None,
             track_thinning: 1,

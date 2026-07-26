@@ -22,7 +22,7 @@ use watch_core::fix::Fix;
 use watch_core::gauge;
 use watch_core::nav_map::{NavPanel, NavPanelGeom};
 use watch_core::page_grid;
-use watch_core::record::Snapshot;
+use watch_core::record::{Snapshot, COURSE_PROFILE_CAP};
 use watch_core::statusbar::{self, PageIndicator};
 use watch_core::trackback::{self, TrackbackView};
 
@@ -401,6 +401,51 @@ pub fn draw_elev_profile_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
             samples: &ep.samples[..ep.len],
         },
     );
+}
+
+/// Dash pattern for the course-profile position marker: broken enough to read as
+/// a marker rather than as part of the profile line on a 1-bit panel.
+const ROUTE_ELEV_MARKER_DASH: (u32, u32) = (3, 3);
+
+/// The RouteElev page's overlay: the pushed course's climb profile as a
+/// sparkline across the page body, with a dashed vertical marker where the
+/// runner sits along it. No-op when no course is loaded or the course carries no
+/// elevation (`len == 0`) — the face's "NO ELEVATION" state must not be
+/// underlined by a flat baseline that reads as "dead level". The marker is drawn
+/// only while the recorder has a fresh along-course position, so a lost-signal
+/// runner loses the marker instead of seeing it frozen.
+pub fn draw_route_elev_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
+    let Some(view) = snap.route_elev.as_ref() else {
+        return;
+    };
+    if view.len == 0 {
+        return;
+    }
+    let mut samples = [0i32; COURSE_PROFILE_CAP];
+    for (dst, src) in samples.iter_mut().zip(view.samples.iter()) {
+        *dst = *src as i32;
+    }
+    draw_mini_profile(
+        fb,
+        &MiniProfile {
+            x: ELEV_PROFILE_X,
+            y: ELEV_PROFILE_Y,
+            w: ELEV_PROFILE_W,
+            h: ELEV_PROFILE_H,
+            samples: &samples[..view.len.min(COURSE_PROFILE_CAP)],
+        },
+    );
+    if let Some(permille) = snap.route_position_permille {
+        let x = ELEV_PROFILE_X + (permille.min(1000) as usize * (ELEV_PROFILE_W - 1)) / 1000;
+        fb.draw_dashed_line(
+            x as i32,
+            ELEV_PROFILE_Y as i32,
+            x as i32,
+            (ELEV_PROFILE_Y + ELEV_PROFILE_H - 1) as i32,
+            ROUTE_ELEV_MARKER_DASH,
+            true,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -788,6 +833,7 @@ mod tests {
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
+            route_position_permille: None,
             race_day: None,
             race_phase: None,
             track_thinning: 1,
@@ -1533,6 +1579,112 @@ mod tests {
         assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0);
         let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
         assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0);
+    }
+
+    fn route_elev_snapshot(series: &[i16], permille: Option<u16>) -> Snapshot {
+        let mut snap = snapshot();
+        let mut view = watch_core::record::RouteElevView {
+            gain_m: 100,
+            loss_m: 50,
+            points: 12,
+            total_m: 42_195,
+            samples: [0; COURSE_PROFILE_CAP],
+            len: series.len(),
+        };
+        view.samples[..series.len()].copy_from_slice(series);
+        snap.route_elev = Some(view);
+        snap.route_position_permille = permille;
+        snap
+    }
+
+    #[test]
+    fn route_elev_profile_fills_the_page_body_it_shares_with_the_run_profile() {
+        let series: [i16; 9] = [1600, 1660, 1740, 1830, 1880, 1810, 1720, 1655, 1602];
+        let mut fb = Framebuffer::new();
+        draw_route_elev_overlay(&mut fb, &route_elev_snapshot(&series, None));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0,
+            "the course profile drew nothing"
+        );
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0, "hero rows");
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0, "below");
+        assert_eq!(ink_in(&fb, 0, 0, ELEV_PROFILE_X, HEIGHT), 0, "left margin");
+        let right = ELEV_PROFILE_X + ELEV_PROFILE_W;
+        assert_eq!(ink_in(&fb, right, 0, WIDTH - right, HEIGHT), 0, "right");
+    }
+
+    #[test]
+    fn route_elev_draws_nothing_without_a_course_or_without_elevation() {
+        let mut fb = Framebuffer::new();
+        draw_route_elev_overlay(&mut fb, &snapshot());
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0, "no course pushed");
+        // A course pushed without elevation must not be drawn as a flat line.
+        draw_route_elev_overlay(&mut fb, &route_elev_snapshot(&[], Some(500)));
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0, "course, no elevation");
+    }
+
+    #[test]
+    fn route_elev_marks_the_runners_position_along_the_profile() {
+        let series: [i16; 4] = [1500, 1500, 1500, 1500];
+        // A flat series sits on the baseline, so any ink above it is the marker.
+        let mut without = Framebuffer::new();
+        draw_route_elev_overlay(&mut without, &route_elev_snapshot(&series, None));
+        let above_baseline =
+            |fb: &Framebuffer, x: usize| ink_in(fb, x, ELEV_PROFILE_Y, 1, ELEV_PROFILE_H - 1);
+        let mid_x = ELEV_PROFILE_X + (ELEV_PROFILE_W - 1) / 2;
+        assert_eq!(
+            above_baseline(&without, mid_x),
+            0,
+            "no marker without a fix"
+        );
+
+        let mut half = Framebuffer::new();
+        draw_route_elev_overlay(&mut half, &route_elev_snapshot(&series, Some(500)));
+        assert!(above_baseline(&half, mid_x) > 0, "marker at half distance");
+        assert_eq!(
+            above_baseline(&half, ELEV_PROFILE_X),
+            0,
+            "the marker is not at the start"
+        );
+
+        // At the start and at the finish the marker rides the panel edges.
+        let mut start = Framebuffer::new();
+        draw_route_elev_overlay(&mut start, &route_elev_snapshot(&series, Some(0)));
+        assert!(above_baseline(&start, ELEV_PROFILE_X) > 0);
+        let mut finish = Framebuffer::new();
+        draw_route_elev_overlay(&mut finish, &route_elev_snapshot(&series, Some(1000)));
+        assert!(above_baseline(&finish, ELEV_PROFILE_X + ELEV_PROFILE_W - 1) > 0);
+    }
+
+    #[test]
+    fn route_elev_a_full_capacity_series_and_an_over_range_marker_stay_inside_the_panel() {
+        let series: [i16; COURSE_PROFILE_CAP] =
+            core::array::from_fn(|i| 1000 + (i as i16 % 37) * 25);
+        let mut fb = Framebuffer::new();
+        // A marker over its declared range must clamp to the panel, never index
+        // past it.
+        draw_route_elev_overlay(&mut fb, &route_elev_snapshot(&series, Some(u16::MAX)));
+        assert!(
+            ink_in(
+                &fb,
+                ELEV_PROFILE_X,
+                ELEV_PROFILE_Y,
+                ELEV_PROFILE_W,
+                ELEV_PROFILE_H
+            ) > 0
+        );
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, ELEV_PROFILE_Y), 0);
+        let below = ELEV_PROFILE_Y + ELEV_PROFILE_H;
+        assert_eq!(ink_in(&fb, 0, below, WIDTH, HEIGHT - below), 0);
+        let right = ELEV_PROFILE_X + ELEV_PROFILE_W;
+        assert_eq!(ink_in(&fb, right, 0, WIDTH - right, HEIGHT), 0);
     }
 
     fn cp(lat_deg: f64, lon_deg: f64) -> CoursePoint {

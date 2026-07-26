@@ -10,8 +10,8 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::course::{CoursePoint, MAX_COURSE_POINTS};
 use watch_core::course_store::{
-    course_frame_len, decode, encode, CourseAssembler, CoursePush, COURSE_CHUNK_CAP,
-    COURSE_HEADER_LEN, MAX_COURSE_FRAME_LEN,
+    course_frame_len, course_frame_len_v1, decode, encode, CourseAssembler, CoursePush,
+    COURSE_CHUNK_CAP, COURSE_HEADER_LEN, MAX_COURSE_FRAME_LEN,
 };
 
 /// Coordinates on the 1e-7-degree integer grid the wire format quantises to,
@@ -37,9 +37,19 @@ fn to_points(e7: &[(i32, i32)]) -> Vec<CoursePoint> {
 }
 
 fn encoded(e7: &[(i32, i32)]) -> Vec<u8> {
+    encoded_with(e7, None)
+}
+
+fn encoded_with(e7: &[(i32, i32)], elev_m: Option<&[i16]>) -> Vec<u8> {
     let mut buf = [0u8; MAX_COURSE_FRAME_LEN];
-    let len = encode(&to_points(e7), &mut buf).expect("a legal polyline encodes");
+    let len = encode(&to_points(e7), elev_m, &mut buf).expect("a legal polyline encodes");
     buf[..len].to_vec()
+}
+
+/// One elevation per point, spread over a plausible mountain range so the
+/// series exercises both signs of delta.
+fn an_elevation_series(n: usize) -> impl Strategy<Value = Vec<i16>> {
+    prop::collection::vec(-500i16..=9000, n..=n)
 }
 
 #[test]
@@ -68,10 +78,19 @@ fn a_decoded_course_always_satisfies_the_courses_own_bounds() {
                 (2..=MAX_COURSE_POINTS).contains(&n),
                 "decoded {n} points, outside 2..={MAX_COURSE_POINTS}"
             );
-            prop_assert_eq!(bytes.len(), course_frame_len(n));
+            let with_elev = course.elevations().is_some();
+            prop_assert!(
+                bytes.len() == course_frame_len(n, with_elev)
+                    || (!with_elev && bytes.len() == course_frame_len_v1(n)),
+                "decoded {} bytes as {n} points (elevation: {with_elev})",
+                bytes.len()
+            );
             prop_assert!(course.total_m().is_finite());
             for p in course.points() {
                 prop_assert!(p.lat_deg.is_finite() && p.lon_deg.is_finite());
+            }
+            if let Some(elev) = course.elevations() {
+                prop_assert_eq!(elev.len(), n, "elevation must pair with the polyline");
             }
             Ok(())
         },
@@ -82,12 +101,31 @@ fn a_decoded_course_always_satisfies_the_courses_own_bounds() {
 fn a_polyline_round_trips_through_the_frame() {
     check(256, a_polyline(MAX_COURSE_POINTS), |e7| {
         let frame = encoded(&e7);
-        prop_assert_eq!(frame.len(), course_frame_len(e7.len()));
+        prop_assert_eq!(frame.len(), course_frame_len(e7.len(), false));
         let course = decode(&frame).expect("a freshly encoded frame decodes");
         let want = to_points(&e7);
         prop_assert_eq!(course.points(), want.as_slice());
+        prop_assert!(course.elevations().is_none());
         Ok(())
     });
+}
+
+#[test]
+fn a_polyline_with_elevation_round_trips_through_the_frame() {
+    check(
+        256,
+        a_polyline(MAX_COURSE_POINTS)
+            .prop_flat_map(|e7| (Just(e7.clone()), an_elevation_series(e7.len()))),
+        |(e7, elev)| {
+            let frame = encoded_with(&e7, Some(&elev));
+            prop_assert_eq!(frame.len(), course_frame_len(e7.len(), true));
+            let course = decode(&frame).expect("a freshly encoded frame decodes");
+            let want = to_points(&e7);
+            prop_assert_eq!(course.points(), want.as_slice());
+            prop_assert_eq!(course.elevations(), Some(elev.as_slice()));
+            Ok(())
+        },
+    );
 }
 
 #[test]
@@ -97,7 +135,7 @@ fn an_over_cap_or_too_short_polyline_is_refused() {
         prop::collection::vec((0i32..1000, 0i32..1000), 0..=1),
         |short| {
             let mut buf = [0u8; MAX_COURSE_FRAME_LEN];
-            prop_assert_eq!(encode(&to_points(&short), &mut buf), None);
+            prop_assert_eq!(encode(&to_points(&short), None, &mut buf), None);
             Ok(())
         },
     );
@@ -109,7 +147,7 @@ fn an_over_cap_or_too_short_polyline_is_refused() {
         ),
         |over| {
             let mut buf = [0u8; MAX_COURSE_FRAME_LEN + 8 * 8];
-            prop_assert_eq!(encode(&to_points(&over), &mut buf), None);
+            prop_assert_eq!(encode(&to_points(&over), None, &mut buf), None);
             Ok(())
         },
     );

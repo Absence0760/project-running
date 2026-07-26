@@ -17,7 +17,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
-use watch_core::record::Snapshot;
+use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
@@ -94,6 +94,15 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// receivers (`nav`, `ui`). The 4 KiB value is the course's point buffer — held
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
+
+/// The active course's climb profile for the RouteElev page: the `nav` task —
+/// which already owns the active (boot or pushed) course — shapes one with
+/// `course_profile::course_elev_view` whenever that course changes and publishes
+/// it here; the `record` task folds it into the recorder so the face + the
+/// profile overlay read it off the snapshot. `None` means no course is loaded.
+/// Sent instead of the `Course` itself so no second ~4.5 KiB polyline copy has
+/// to live in the record task. One receiver (`record`).
+pub static ROUTE_PROFILE: Watch<CriticalSectionRawMutex, Option<RouteElevView>, 1> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track

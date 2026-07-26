@@ -259,6 +259,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -406,6 +407,12 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => s.next_turn,
                 NavView::NoCourse | NavView::NoFix => None,
             });
+        }
+
+        // The active course's climb profile for the RouteElev page — shaped by
+        // the nav task on each course change, so this only forwards it.
+        if let Some(profile) = route_profile_rx.try_changed() {
+            recorder.set_route_elev(profile);
         }
 
         // Pushed settings frames (from the ble task; the sim seeds one above)

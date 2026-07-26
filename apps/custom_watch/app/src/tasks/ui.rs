@@ -402,6 +402,7 @@ pub async fn screen_task(
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
                     Page::ElevationProfile => widgets::draw_elev_profile_overlay(&mut fb, snap),
+                    Page::RouteElev => widgets::draw_route_elev_overlay(&mut fb, snap),
                     _ => {}
                 }
             }
