@@ -82,6 +82,7 @@ fn base_snapshot() -> Snapshot {
         auto_effort: None,
         route_elev: None,
         race_day: None,
+        race_phase: None,
         track_thinning: 1,
         pages_mask: u32::MAX,
     }

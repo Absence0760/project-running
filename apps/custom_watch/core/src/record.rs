@@ -32,6 +32,10 @@ use crate::hr_zones::{
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
 use crate::page::Page;
+use crate::race_phases::{
+    build_phase_plan, goal_pace_s_per_km, phase_at, phase_target_pace_s_per_km, PhasePlan,
+    RacePhaseIntent, RacePhasePreset,
+};
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
@@ -123,6 +127,14 @@ pub const ROADBOOK_WINDOW: usize = 4;
 /// not fabricate a training-pace set.
 pub const GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM: f64 = 120.0;
 pub const GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM: f64 = 1200.0;
+
+/// Plausible pushed race distance for a pacing-strategy phase plan: 1 km (the
+/// shortest race a three-phase strategy shapes usefully) to 500 km (past the
+/// longest single-stage ultras). A push outside this is corrupt and **ignored**,
+/// not clamped — a bad frame must leave the phase rows honestly inactive rather
+/// than plan a race the runner isn't in.
+pub const RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M: f64 = 1_000.0;
+pub const RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M: f64 = 500_000.0;
 
 /// Plausible synced VO2 max / VDOT band: 20 (very unfit) to 90 (the same
 /// physiological ceiling `fitness::vdot_from_run` rejects above). Guards a
@@ -355,6 +367,21 @@ pub struct RaceDayView {
     pub feasible: u8,
 }
 
+/// The pacing-strategy phase the run is currently in ([`crate::race_phases`]),
+/// re-derived from the live distance at [`snapshot`](Recorder::snapshot) time.
+/// The intent travels as its identifier — the face resolves the label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RacePhaseView {
+    /// 1-based position of the phase in progress.
+    pub index: u8,
+    /// Phases in the plan.
+    pub total: u8,
+    pub intent: RacePhaseIntent,
+    /// The phase's target pace, seconds per km; `None` when no goal time was
+    /// pushed with the plan — a phase without a goal has no target pace.
+    pub target_pace_s_per_km: Option<u32>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordState {
     Idle,
@@ -491,6 +518,10 @@ pub struct Snapshot {
     pub route_elev: Option<RouteElevView>,
     /// The race-day countdown + feasibility, or `None` until pushed.
     pub race_day: Option<RaceDayView>,
+    /// The pacing-strategy phase the run distance currently falls in, or `None`
+    /// until a plan is pushed — the Pacer page then reads "PHASE --" rather than
+    /// a phase the runner never asked for.
+    pub race_phase: Option<RacePhaseView>,
     /// The flash track's decimation factor: 1 = full resolution, `k` = one
     /// stored point per `k` accepted fixes after slot-full thinning
     /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
@@ -715,6 +746,12 @@ pub struct Recorder {
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
     race_day: Option<RaceDayView>,
+    /// The pushed race pacing-strategy plan, built once in
+    /// [`set_race_phases`](Recorder::set_race_phases); empty leaves the phase
+    /// rows inactive. The phase in force is re-derived per snapshot from the
+    /// live distance, so it advances with the run rather than at sync time.
+    race_phases: PhasePlan,
+    race_phase_goal_pace_s_per_km: Option<f64>,
     /// Whether the nav task holds a loaded course — the Nav page's data
     /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
     /// (the recorder stays course-agnostic; this is a presence bit, not the
@@ -787,6 +824,8 @@ impl Recorder {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            race_phases: PhasePlan::new(),
+            race_phase_goal_pace_s_per_km: None,
             course_loaded: false,
             pages_enabled: u32::MAX,
             hide_empty_pages: true,
@@ -1049,6 +1088,40 @@ impl Recorder {
             days_until: v.days_until,
             feasible: v.feasible.min(2),
         });
+    }
+
+    /// Load the runner's race pacing strategy: the race distance, the goal time
+    /// (optional — without one the phases are still bounded by distance but carry
+    /// no target pace), and the preset the phone chose. The plan is built here via
+    /// [`build_phase_plan`]; the phase in force is re-derived per snapshot.
+    ///
+    /// Both inputs are plausibility-guarded and an implausible one is **ignored**
+    /// (never clamped), the [`set_fitness`](Recorder::set_fitness) shape: a
+    /// distance outside
+    /// [`RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M`]..=[`RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M`]
+    /// leaves the whole plan unset, and a goal time whose implied pace falls
+    /// outside the shared
+    /// [`GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM`]..=[`GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM`]
+    /// band drops only the target pace — the phase boundaries are still honest.
+    pub fn set_race_phases(
+        &mut self,
+        distance_m: Option<f64>,
+        goal_time_s: Option<f64>,
+        preset: RacePhasePreset,
+    ) {
+        self.race_phases.clear();
+        self.race_phase_goal_pace_s_per_km = None;
+        let Some(distance_m) = distance_m.filter(|d| {
+            (RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M..=RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M).contains(d)
+        }) else {
+            return;
+        };
+        self.race_phases = build_phase_plan(distance_m, preset);
+        self.race_phase_goal_pace_s_per_km = goal_time_s
+            .and_then(|t| goal_pace_s_per_km(distance_m, t))
+            .filter(|p| {
+                (GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM..=GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM).contains(p)
+            });
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -1402,6 +1475,7 @@ impl Recorder {
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
             race_day: self.race_day,
+            race_phase: self.race_phase_snapshot(),
             track_thinning: self.track_thinning,
             pages_mask: 0,
         };
@@ -1482,6 +1556,28 @@ impl Recorder {
         Some(TrainingPacesView {
             goal_pace_s_per_km: goal as u32,
             paces: paces_from_goal_pace(goal, TrainingGender::None),
+        })
+    }
+
+    /// The pacing-strategy phase the live distance falls in, or `None` until a
+    /// plan is pushed. Not gated on run state: at distance 0 the runner is in the
+    /// plan's opening phase, which is the honest answer both before and at the
+    /// gun.
+    fn race_phase_snapshot(&self) -> Option<RacePhaseView> {
+        let index = phase_at(&self.race_phases, self.distance_m);
+        if index < 0 {
+            return None;
+        }
+        let phase = &self.race_phases[index as usize];
+        Some(RacePhaseView {
+            index: index as u8 + 1,
+            total: self.race_phases.len() as u8,
+            intent: phase.intent,
+            target_pace_s_per_km: phase_target_pace_s_per_km(
+                phase,
+                self.race_phase_goal_pace_s_per_km,
+            )
+            .map(|p| p as u32),
         })
     }
 
@@ -3073,6 +3169,66 @@ mod tests {
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    #[test]
+    fn race_phase_advances_from_hold_back_to_the_closing_phase_with_the_run() {
+        let mut r = Recorder::new();
+        assert!(r.snapshot().race_phase.is_none(), "no plan pushed");
+
+        // A 10 km race off a 50:00 goal: 300 s/km even, held back 2 % to 306.
+        r.set_race_phases(
+            Some(10_000.0),
+            Some(3_000.0),
+            RacePhasePreset::NegativeSplit,
+        );
+        let p = r.snapshot().race_phase.expect("active once pushed");
+        assert_eq!((p.index, p.total), (1, 2));
+        assert_eq!(p.intent, RacePhaseIntent::HoldBack);
+        assert_eq!(p.target_pace_s_per_km, Some(306));
+
+        // Past halfway the closing phase's derived factor takes over.
+        r.set_fix_interval_s(60);
+        r.start(0);
+        let d = 500.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=11 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let p = r.snapshot().race_phase.expect("still active mid-run");
+        assert_eq!((p.index, p.total), (2, 2));
+        assert_eq!(p.intent, RacePhaseIntent::Race);
+        assert_eq!(p.target_pace_s_per_km, Some(294));
+    }
+
+    #[test]
+    fn implausible_race_phase_pushes_are_ignored_not_clamped() {
+        let mut r = Recorder::new();
+        // A distance outside the plausible band leaves the whole plan unset —
+        // no silently-clamped race the runner never entered.
+        r.set_race_phases(Some(500.0), Some(3_000.0), RacePhasePreset::TenTenTen);
+        assert!(r.snapshot().race_phase.is_none());
+        r.set_race_phases(Some(600_000.0), Some(3_000.0), RacePhasePreset::TenTenTen);
+        assert!(r.snapshot().race_phase.is_none());
+        r.set_race_phases(Some(f64::NAN), Some(3_000.0), RacePhasePreset::Even);
+        assert!(r.snapshot().race_phase.is_none());
+
+        // An implausible goal time drops only the target pace: a 10 km in 60 s
+        // is a 6 s/km pace, so the phase boundaries stand and carry no target.
+        r.set_race_phases(Some(10_000.0), Some(60.0), RacePhasePreset::Even);
+        let p = r
+            .snapshot()
+            .race_phase
+            .expect("boundaries are still honest");
+        assert_eq!(p.intent, RacePhaseIntent::Even);
+        assert_eq!(p.target_pace_s_per_km, None);
+
+        // No goal time at all reads identically.
+        r.set_race_phases(Some(10_000.0), None, RacePhasePreset::Even);
+        assert_eq!(r.snapshot().race_phase.unwrap().target_pace_s_per_km, None);
+
+        // Clearing works.
+        r.set_race_phases(None, Some(3_000.0), RacePhasePreset::Even);
+        assert!(r.snapshot().race_phase.is_none());
     }
 
     // --- Snapshot::is_moving — the barometric vert gate --------------------

@@ -85,6 +85,10 @@
 //!   splits, the distance-aware pre-race checklist (items as enum ids), goal
 //!   feasibility vs a prediction, and the split-time formatter (port of web
 //!   `runs/race_day.ts`)
+//! - [`race_phases`] — race pacing-strategy phase plans: a distance + preset
+//!   sliced into hold-back / settle / race phases whose final factor is derived
+//!   so the distance-weighted mean is exactly 1.0 (port of web
+//!   `runs/race_phases.ts`; intent is an identifier, labels resolve in [`face`])
 //! - [`race_predictor`] — the 5K/10K/Half/Marathon race-time ladder (parity
 //!   port of web `training/race_predictor.ts` + the reused Riegel +
 //!   prediction-confidence helpers), recency-weighted anchor, per-rung
@@ -293,6 +297,7 @@ pub mod plan_replan;
 pub mod pr_recency;
 pub mod privacy;
 pub mod race_day;
+pub mod race_phases;
 pub mod race_predictor;
 pub mod readiness;
 pub mod recap;

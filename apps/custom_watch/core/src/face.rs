@@ -34,8 +34,9 @@ use crate::gnss_mode::GnssMode;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
+use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
-use crate::record::{RecordState, Snapshot};
+use crate::record::{RacePhaseView, RecordState, Snapshot};
 use crate::roadbook::CutoffStatus;
 use crate::trackback::{self, TrackbackView};
 
@@ -928,11 +929,12 @@ fn zones_glance(
 /// The pacer glance page: the virtual-partner delta up large in the rows-0-1
 /// hero (drawn by the app from [`page_hero`] via [`signed_split`] — `+` is
 /// AHEAD of the partner, `-` is BEHIND, and the verdict word beside the label
-/// spells the sign out so it is never ambiguous), then the goal distance +
-/// target time, the projected finish at the current whole-run average (the
-/// actual crossing time once finished), the distance delta in metres, and the
-/// GPS glance. With no goal configured the page is honestly inactive —
-/// `PACER --` and a how-to-set hint, never zeros pretending to be on pace.
+/// spells the sign out so it is never ambiguous), then the race pacing-strategy
+/// phase in force ([`write_phase_row`]), the goal distance + target time, the
+/// projected finish at the current whole-run average (the actual crossing time
+/// once finished), the distance delta in metres, and the GPS glance. With no goal
+/// configured the page is honestly inactive — `PACER --` and a how-to-set hint,
+/// never zeros pretending to be on pace.
 #[allow(clippy::too_many_arguments)]
 fn pacer_glance(
     fix: Option<&Fix>,
@@ -964,9 +966,7 @@ fn pacer_glance(
                 PaceVerdict::Behind => "BEHIND",
             };
             let _ = write!(rows[2], "{:<14}{}", "PACER", verdict);
-            if status.terrain_aware {
-                let _ = write!(rows[3], "TERRAIN SPLITS");
-            }
+            write_phase_row(&mut rows[3], snap.race_phase, status.terrain_aware);
 
             let goal_km = (status.goal.distance_m as f64 / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<5}{:.2} KM", "GOAL", goal_km);
@@ -995,6 +995,46 @@ fn pacer_glance(
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
+}
+
+/// Write the race pacing-strategy phase onto the pacer page's one spare row: the
+/// intent word — the label [`crate::race_phases`] deliberately doesn't carry —
+/// and the phase's target pace, with a `TERR` tag appended when the virtual
+/// partner is also terrain-allocated (both fit the 21-cell row, so neither is
+/// lost). Without a pushed plan the row keeps the partner's `TERRAIN SPLITS`
+/// marker, or reads `PHASE --`: an unfed phase says so instead of leaving a blank
+/// a runner could read as "no phase change due".
+fn write_phase_row(row: &mut Row, phase: Option<RacePhaseView>, terrain_aware: bool) {
+    let Some(v) = phase else {
+        let _ = write!(
+            row,
+            "{}",
+            if terrain_aware {
+                "TERRAIN SPLITS"
+            } else {
+                "PHASE --"
+            }
+        );
+        return;
+    };
+    let intent = match v.intent {
+        RacePhaseIntent::HoldBack => "HOLD",
+        RacePhaseIntent::Settle => "SETTLE",
+        RacePhaseIntent::Race => "RACE",
+        RacePhaseIntent::Even => "EVEN",
+    };
+    match v.target_pace_s_per_km {
+        Some(pace) => {
+            let (m, s) = ((pace / 60).min(99), pace % 60);
+            let _ = write!(row, "{intent:<7}{m}:{s:02} /KM");
+        }
+        None => {
+            let _ = write!(row, "{intent:<7}--");
+        }
+    }
+    if terrain_aware {
+        let _ = write!(row, " TERR");
+    }
 }
 
 /// One ladder row: the distance label, the projected finish (H:MM:SS past an
@@ -2673,6 +2713,7 @@ mod tests {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            race_phase: None,
             track_thinning: 1,
             pages_mask: u32::MAX,
         }
@@ -4109,7 +4150,8 @@ mod tests {
             true,
         );
         assert_eq!(rows[3].as_str(), "TERRAIN SPLITS");
-        // The flat partner leaves the row blank.
+        // The flat partner with no pushed phase plan falls through to the
+        // phase row's own inactive state.
         let mut flat = rec;
         flat.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000)));
         let rows = page_rows(
@@ -4123,7 +4165,82 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[3].as_str(), "");
+        assert_eq!(rows[3].as_str(), "PHASE --");
+    }
+
+    #[test]
+    fn pacer_glance_names_the_race_phase_and_its_target_pace() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        rec.pacer = Some(pacer_status(140.0, 42, PaceVerdict::Ahead, Some(2_857)));
+        rec.race_phase = Some(RacePhaseView {
+            index: 1,
+            total: 3,
+            intent: RacePhaseIntent::HoldBack,
+            target_pace_s_per_km: Some(306),
+        });
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "HOLD   5:06 /KM");
+        // The partner rows below it are untouched by the phase.
+        assert_eq!(rows[4].as_str(), "GOAL 10.00 KM");
+        assert_eq!(rows[7].as_str(), "DIST +140 M");
+
+        // The longest label plus the terrain tag still fits the grid.
+        rec.race_phase = Some(RacePhaseView {
+            index: 2,
+            total: 3,
+            intent: RacePhaseIntent::Settle,
+            target_pace_s_per_km: Some(300),
+        });
+        let mut status = pacer_status(140.0, 42, PaceVerdict::Ahead, Some(2_857));
+        status.terrain_aware = true;
+        rec.pacer = Some(status);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "SETTLE 5:00 /KM TERR");
+        assert!(rows[3].as_str().len() <= COLS);
+    }
+
+    #[test]
+    fn pacer_glance_phase_without_a_goal_pace_shows_dashes_not_a_zero_target() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        rec.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, Some(3_000)));
+        rec.race_phase = Some(RacePhaseView {
+            index: 3,
+            total: 3,
+            intent: RacePhaseIntent::Race,
+            target_pace_s_per_km: None,
+        });
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "RACE   --");
     }
 
     #[test]
