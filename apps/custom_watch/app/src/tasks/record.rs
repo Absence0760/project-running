@@ -8,7 +8,8 @@
 //! the button-press → command mapping lives in `watch_core::button`; the flash
 //! slot layout in `watch_core::flash_store`; the tick gate, flash-checkpoint
 //! cadence, track-point shaping and pushed-QNH guard in
-//! `watch_core::record_cadence`. This task selects over incoming
+//! `watch_core::record_cadence`; and which sink each pushed settings field
+//! feeds in `watch_core::settings_apply`. This task selects over incoming
 //! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
 //! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
 //! the wall clock between fixes. Idle and Finished have no clock to advance, so
@@ -50,9 +51,10 @@ use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::record_cadence::{plausible_sea_level_pa, run_active, track_point, CheckpointMark};
+use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
 use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
 use watch_core::settings::WatchSettings;
+use watch_core::settings_apply::{plan_apply, SettingsEffect};
 use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
@@ -538,15 +540,13 @@ pub async fn run(store: &'static SharedStore) {
     }
 }
 
-/// Apply a pushed settings frame: each present field feeds the recorder's (or
-/// alert engine's) existing settings-sync setter, which keeps its own
-/// plausibility guard, so a bad value is rejected the same way regardless of
-/// transport. The QNH sea-level reference has no setter (it is a `state` watch
-/// the baro task consumes), so it is range-checked here against
-/// `record_cadence::plausible_sea_level_pa` before publishing; the timezone
-/// offset rides the same seam toward the ui task, its guard host-tested in
-/// `watch_core::settings`. Absent fields are left untouched — a partial push is
-/// a partial update, never a reset of the rest.
+/// Execute a pushed settings frame: `watch_core::settings_apply` decides which
+/// sink each present field feeds and hands back one typed effect per field
+/// (host-tested, exhaustive by construction), so this is only the seam that
+/// owns the sinks themselves — the two `state` watches the baro + ui tasks
+/// consume, and the recorder / alert-engine setters, each of which keeps its own
+/// plausibility guard so a bad value is rejected the same way regardless of
+/// transport.
 fn apply_settings(
     s: &WatchSettings,
     recorder: &mut Recorder,
@@ -554,34 +554,26 @@ fn apply_settings(
     sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
     tz_offset_tx: &Sender<'static, CriticalSectionRawMutex, i16, 1>,
 ) {
-    if let Some(hr) = s.max_hr {
-        recorder.set_max_hr(hr);
-    }
-    if let Some(p) = s.pacer {
-        recorder.set_pacer_goal(p.distance_m, p.time_s);
-    }
-    if let Some(g) = s.gear {
-        recorder.set_gear(Some(g.baseline_m as f64), g.target_m.map(f64::from));
-    }
-    if let Some(z) = s.zone_ceiling {
-        alerts.set_zone_ceiling(z);
-    }
-    if let Some(pa) = s.sea_level_pa {
-        if plausible_sea_level_pa(pa) {
-            sea_level_tx.send(pa);
+    for effect in plan_apply(s) {
+        match effect {
+            SettingsEffect::MaxHr(bpm) => recorder.set_max_hr(bpm),
+            SettingsEffect::PacerGoal { distance_m, time_s } => {
+                recorder.set_pacer_goal(distance_m, time_s)
+            }
+            SettingsEffect::Gear {
+                baseline_m,
+                target_m,
+            } => recorder.set_gear(Some(baseline_m), target_m),
+            SettingsEffect::ZoneCeiling(zone) => alerts.set_zone_ceiling(zone),
+            SettingsEffect::SeaLevelPa(pa) => sea_level_tx.send(pa),
+            SettingsEffect::FuelIntervals {
+                drink_interval_s,
+                eat_interval_s,
+            } => alerts.set_fuel_intervals(drink_interval_s, eat_interval_s),
+            SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
+            SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
+            SettingsEffect::TzOffsetMin(m) => tz_offset_tx.send(m),
         }
-    }
-    if let Some(f) = s.fuel {
-        alerts.set_fuel_intervals(f.drink_interval_s, f.eat_interval_s);
-    }
-    if let Some(mask) = s.pages {
-        recorder.set_pages_enabled(mask);
-    }
-    if let Some(hide) = s.hide_empty_pages {
-        recorder.set_hide_empty_pages(hide);
-    }
-    if let Some(m) = s.plausible_tz_offset_min() {
-        tz_offset_tx.send(m);
     }
 }
 

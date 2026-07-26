@@ -104,6 +104,9 @@
 //! - [`run_store`] — on-device run wire format + BLE sync framing
 //! - [`settings`] — phone→watch settings frame (max HR / pacer goal / gear /
 //!   HR-zone ceiling) decoded into the recorder's settings-sync hooks
+//! - [`settings_apply`] — the fan-out that frame drives: each present field
+//!   routed to its sink as one typed effect, exhaustive by construction so a
+//!   newly-added field cannot be silently dropped
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
 //! - [`flash_plan`] — which slot a commit / checkpoint lands in and the erase +
 //!   write range it implies, where a chunk request reads from, and the boot
@@ -294,6 +297,7 @@ pub mod run_stats;
 pub mod run_store;
 pub mod segments;
 pub mod settings;
+pub mod settings_apply;
 pub mod statusbar;
 pub mod streaks;
 pub mod track_projection;

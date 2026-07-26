@@ -10,8 +10,8 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
-    FuelCfg, GearCfg, PacerGoalCfg, WatchSettings, MAX_SETTINGS_LEN, SETTINGS_VERSION,
-    TZ_OFFSET_LIMIT_MIN,
+    plausible_tz_offset_min, FuelCfg, GearCfg, PacerGoalCfg, WatchSettings, MAX_SETTINGS_LEN,
+    SETTINGS_VERSION, TZ_OFFSET_LIMIT_MIN,
 };
 
 /// The two legacy versions `decode` still accepts: v1 (no `flags2`) and v2
@@ -97,7 +97,7 @@ fn a_decoded_frames_timezone_is_never_an_implausible_offset() {
             let Some(s) = WatchSettings::decode(&bytes) else {
                 return Ok(());
             };
-            if let Some(m) = s.plausible_tz_offset_min() {
+            if let Some(m) = plausible_tz_offset_min(s.tz_offset_min) {
                 prop_assert!(
                     (-TZ_OFFSET_LIMIT_MIN..=TZ_OFFSET_LIMIT_MIN).contains(&m),
                     "plausible offset {m} is outside the UTC range"
