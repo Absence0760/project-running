@@ -31,14 +31,14 @@ use embassy_futures::select::{select, Either};
 use embassy_futures::select::{select4, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
-#[cfg(feature = "sim-buttons")]
-use watch_core::button::classify_btn3_hold;
 #[cfg(not(feature = "sim-buttons"))]
 use watch_core::button::Btn3Press;
 use watch_core::button::{
     btn3_action, btn4_action, command_for, grid_press, Btn3Action, Btn4Action, Button, GridPress,
     RecordCommand, StopGuard, StopPress, BTN3_LONG_PRESS_MS, STOP_CONFIRM_WINDOW_S,
 };
+#[cfg(feature = "sim-buttons")]
+use watch_core::button::{btn3_hold_prompt, classify_btn3_hold};
 use watch_core::face::IdleView;
 use watch_core::gnss_mode::GnssMode;
 #[cfg(not(feature = "sim-buttons"))]
@@ -106,6 +106,7 @@ pub async fn run(
     let mode_tx = state::GNSS_MODE.sender();
     let idle_view_tx = state::IDLE_VIEW.sender();
     let interaction_tx = state::INTERACTION.sender();
+    let hold_tx = state::BTN3_HOLD.sender();
     let mut page = Page::default();
     let mut idle_view = IdleView::Home;
     // Seed from the mode main restored from flash at boot so the BTN3 cycle
@@ -202,26 +203,36 @@ pub async fn run(
                     // tier (or hang the release swallow). The level check the
                     // host-tested tier steps take keeps a lost edge classified
                     // by what the pin actually says.
-                    let press =
+                    let stage =
                         match select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge())
                             .await
                         {
-                            Either::Second(()) => Btn3Press::Short,
-                            Either::First(()) => {
-                                match btn3_after_long_press(state, btn3.is_low()) {
-                                    Btn3Stage::Resolved(press) => press,
-                                    Btn3Stage::AwaitGridHold => match select(
-                                        Timer::after(BTN3_GRID_LEG),
-                                        btn3.wait_for_rising_edge(),
-                                    )
-                                    .await
-                                    {
-                                        Either::Second(()) => Btn3Press::Long,
-                                        Either::First(()) => btn3_after_grid_hold(btn3.is_low()),
-                                    },
-                                }
-                            }
+                            Either::Second(()) => Btn3Stage::Resolved(Btn3Press::Short),
+                            Either::First(()) => btn3_after_long_press(state, btn3.is_low()),
                         };
+                    // Reaching `AwaitGridHold` IS `button::btn3_hold_prompt` (a
+                    // host test pins the two equivalent), so the escalation leg's
+                    // own timer is the whole clock the mid-hold prompt needs:
+                    // raise it on entry, lower it however the leg resolves —
+                    // including on a release lost in the select's re-arm gap.
+                    let press = match stage {
+                        Btn3Stage::Resolved(press) => press,
+                        Btn3Stage::AwaitGridHold => {
+                            info!("button: BTN3 held past the page-back tier — grid prompt");
+                            hold_tx.send(true);
+                            let press = match select(
+                                Timer::after(BTN3_GRID_LEG),
+                                btn3.wait_for_rising_edge(),
+                            )
+                            .await
+                            {
+                                Either::Second(()) => Btn3Press::Long,
+                                Either::First(()) => btn3_after_grid_hold(btn3.is_low()),
+                            };
+                            hold_tx.send(false);
+                            press
+                        }
+                    };
                     let action = btn3_action(state, press);
                     match action {
                         Btn3Action::PageNext | Btn3Action::PagePrev => {
@@ -466,6 +477,7 @@ pub async fn run(
     let mode_tx = state::GNSS_MODE.sender();
     let idle_view_tx = state::IDLE_VIEW.sender();
     let interaction_tx = state::INTERACTION.sender();
+    let hold_tx = state::BTN3_HOLD.sender();
     let mut page = Page::default();
     let mut idle_view = IdleView::Home;
     let mut mode = initial_mode;
@@ -487,6 +499,10 @@ pub async fn run(
     // hardware task — and mark the press handled so its release is inert.
     let mut btn3_down_at: Option<Instant> = None;
     let mut btn3_handled = false;
+    // Whether the mid-hold grid prompt is currently raised. Latched so a held
+    // button publishes it once at the threshold rather than on every poll — a
+    // `Watch::send` of an unchanged value still wakes the ui task.
+    let mut btn3_prompted = false;
     // BTN1 gets the same treatment, but only while the grid is open (its
     // backward cursor role); a grid-closed BTN1 keeps acting on the falling
     // edge so pause stays instant.
@@ -532,6 +548,11 @@ pub async fn run(
                     if held >= BTN3_LONG_PRESS_MS {
                         let snap = record_rx.try_get();
                         let state = record_state(snap.as_ref());
+                        if !btn3_prompted && btn3_hold_prompt(state, grid.is_some()) {
+                            info!("button: BTN3 held past the page-back tier — grid prompt");
+                            hold_tx.send(true);
+                            btn3_prompted = true;
+                        }
                         match btn3_hold_fire(grid.is_some(), state, held) {
                             Some(Btn3HoldFire::GridRowDown) => {
                                 if let Some(g) = grid.as_mut() {
@@ -544,6 +565,11 @@ pub async fn run(
                                 }
                             }
                             Some(Btn3HoldFire::OpenGrid) => {
+                                // The grid itself is now the feedback.
+                                if btn3_prompted {
+                                    hold_tx.send(false);
+                                    btn3_prompted = false;
+                                }
                                 let g = PageGrid::open(page, pages_mask(snap.as_ref()));
                                 info!("button: BTN3 hold -> page grid at {}", g.cursor());
                                 grid_tx.send(Some(g.cursor()));
@@ -558,6 +584,10 @@ pub async fn run(
                 }
                 if !rising {
                     continue;
+                }
+                if btn3_prompted {
+                    hold_tx.send(false);
+                    btn3_prompted = false;
                 }
                 let held_for_ms = btn3_down_at.take().map(held_ms).unwrap_or(0);
                 if btn3_handled {

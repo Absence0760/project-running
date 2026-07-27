@@ -880,6 +880,44 @@ mod tests {
     }
 
     #[test]
+    fn a_checkpointed_run_is_reachable_and_flagged_pending_after_the_reboot() {
+        // The whole point of checkpointing, end to end over the flash model: the
+        // brown-out took the run before its commit, and at the next boot the run
+        // is advertised, pullable byte-for-byte, AND counted as pending so the
+        // idle face can say so. Before this the blob was recovered into RAM and
+        // then reachable by nobody — write-only checkpointing.
+        let mut flash = FakeFlash::erased();
+        let mut dir = SlotDir::new();
+        let ckpt = a_checkpoint(7, 41, 20, 200);
+        let plan = plan_checkpoint_write(&mut dir, BASE, 7, 41, ckpt.len()).expect("fits");
+        flash.apply(plan, &ckpt);
+        assert_eq!(
+            dir.pending_partial_count(),
+            0,
+            "nothing is pending while the run is still live"
+        );
+
+        let mut dir = recover_dir(&mut flash);
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(dir.pending_partial_count(), 1);
+        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        assert_eq!(&pulled[..], &ckpt[..]);
+        assert!(verify_blob(&pulled));
+        assert!(chunk_completes_run(&dir, 7, cursor));
+
+        // The phone pulling it through retires the marker; a run started
+        // afterwards never re-arms it off its own checkpoints.
+        dir.mark_synced(7);
+        assert_eq!(dir.pending_partial_count(), 0);
+        let seq = dir.next_run_seq();
+        let blob = a_checkpoint(seq, 900, 5, 100);
+        let plan = plan_checkpoint_write(&mut dir, BASE, seq, 900, blob.len()).expect("fits");
+        flash.apply(plan, &blob);
+        assert_eq!(dir.pending_partial_count(), 0);
+        assert_eq!(dir.find(seq), None, "and stays unservable while it records");
+    }
+
+    #[test]
     fn a_reboot_with_both_ping_pong_slots_intact_keeps_the_newer_one() {
         // Both checkpoints landed cleanly before the reset. Exactly one run may be
         // advertised, and it must be the fresher snapshot.

@@ -17,7 +17,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
-use watch_core::record::Snapshot;
+use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
@@ -80,6 +80,17 @@ pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::n
 /// rendering). One receiver (the `ui` task).
 pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::new();
 
+/// Whether a BTN3 hold is currently sitting between the two press tiers — past
+/// the page-back threshold, one continued hold from the page grid. The `button`
+/// task raises it as the hold crosses `button::BTN3_LONG_PRESS_MS` and lowers it
+/// the moment the escalation leg resolves (release, or the grid opening), so the
+/// *press* is the only clock the prompt has: unlike `STOP_ARMED` it carries no
+/// timestamp and has no TTL to expire, which is what keeps it out of the `ui`
+/// task's `owes_timed_refresh` decision and off any standing wake. Two sends per
+/// hold that reaches the tier, none at all for a tap. One receiver (the `ui`
+/// task, which additionally gates it on `button::btn3_hold_prompt`).
+pub static BTN3_HOLD: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the
@@ -94,6 +105,15 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// receivers (`nav`, `ui`). The 4 KiB value is the course's point buffer — held
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
+
+/// The active course's climb profile for the RouteElev page: the `nav` task —
+/// which already owns the active (boot or pushed) course — shapes one with
+/// `course_profile::course_elev_view` whenever that course changes and publishes
+/// it here; the `record` task folds it into the recorder so the face + the
+/// profile overlay read it off the snapshot. `None` means no course is loaded.
+/// Sent instead of the `Course` itself so no second ~4.5 KiB polyline copy has
+/// to live in the record task. One receiver (`record`).
+pub static ROUTE_PROFILE: Watch<CriticalSectionRawMutex, Option<RouteElevView>, 1> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track
@@ -169,6 +189,15 @@ pub static TZ_OFFSET_MIN: Watch<CriticalSectionRawMutex, i16, 1> = Watch::new();
 /// applies to) receives and performs it. Capacity 1 — a press while one is
 /// pending has nothing extra to ask for.
 pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::new();
+
+/// How many runs on flash are a mid-run checkpoint the phone has not pulled —
+/// the runs whose recording ended with the power rather than with a stop. The
+/// `run_flash` store publishes it (from its boot scan, and again whenever an
+/// eviction, a failed commit, or a completed phone pull moves the count); the
+/// `ui` task shows it as a standing marker on the home face, so a runner whose
+/// watch rebooted mid-ultra can see the run survived and needs syncing. No value
+/// published means none. One receiver (the `ui` task).
+pub static PENDING_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
 /// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
 /// was decided: the `baro` task publishes it (honest refusals included — no

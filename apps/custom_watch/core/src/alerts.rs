@@ -1,6 +1,6 @@
-//! On-run alerts — drink / eat reminders on a moving-time cadence plus an
-//! HR-zone ceiling alert (README step 7; the roadmap's "on-run alerts" T1
-//! slice — pace / distance / time alerts are T2).
+//! On-run alerts — drink / eat reminders on a moving-time cadence, an HR-zone
+//! ceiling alert, and the distance / time / pace kinds every running watch
+//! carries (README step 7; the roadmap's "on-run alerts" slice).
 //!
 //! The fuel cadences are not invented here: they reduce the main app's race
 //! fueling defaults (web `routes/fuel_plan.ts`, canonical, with its Dart twin)
@@ -27,11 +27,51 @@
 //! [`ZONE_ALERT_COOLDOWN_S`] gate so a BPM flapping across the boundary can't
 //! re-fire every second.
 //!
-//! At most one alert is on screen at a time, for [`ALERT_TTL_S`] seconds. The
-//! zone alert outranks the fuel reminders — over-effort is actionable *now*,
-//! a reminder can wait eight seconds — and supersedes an active one, which
-//! re-queues (fuel is the ultra-critical reminder; it must never be silently
-//! dropped). Queued reminders promote eat-before-drink when a slot frees.
+//! The distance alert fires every [`set_distance_interval`](AlertEngine::set_distance_interval)
+//! metres of accumulated distance, the time alert every
+//! [`set_time_interval`](AlertEngine::set_time_interval) seconds. Both report
+//! **exact multiples** of their interval and skip rather than burst: a fix that
+//! carries the run past several milestones at once announces the highest one
+//! reached, so the number on the banner is never stale and never drifts off the
+//! interval the way a re-based threshold would.
+//!
+//! The two bank on different clocks, deliberately. Distance banks on
+//! [`Snapshot::distance_m`], which only accrues while the runner moves, so a
+//! pause contributes nothing for free. The time alert banks on
+//! [`Snapshot::elapsed_s`] — the race clock, like [`crate::pacer`] and the
+//! cut-off schedule, not the moving clock the fuel cadences use. A periodic
+//! reminder means "half an hour of this race has passed"; keyed off moving time
+//! it would drift out of any relationship with the cut-offs the runner is
+//! actually racing, and would only duplicate the axis the fuel arms already
+//! cover. It therefore keeps ticking through a pause, which is the honest
+//! reading of a clock that does not stop at an aid station.
+//!
+//! The pace alert fires when [`Snapshot::current_pace_s_per_km`] leaves a
+//! configured band ([`set_pace_band`](AlertEngine::set_pace_band)). Pace noise
+//! around a band edge is the same flapping problem BPM has at a zone boundary,
+//! so it reuses the zone alert's mechanism rather than a second one: once per
+//! excursion, re-arming only on a sample back inside the band, with the
+//! [`PACE_ALERT_COOLDOWN_S`] gate on top.
+//!
+//! At most one alert is on screen at a time, for [`ALERT_TTL_S`] seconds, and
+//! the arms are ranked by what an ultra runner cannot afford to lose:
+//!
+//! 1. **Zone** — over-effort against physiological ground truth. Supersedes
+//!    anything below it.
+//! 2. **Pace** — the same correct-it-now class one rung down, because pace is a
+//!    proxy for the effort HR measures directly. It supersedes a fuel reminder
+//!    but never a zone banner; blocked by one, it stays armed and un-cooled so
+//!    it retries while the excursion lasts, rather than being swallowed.
+//! 3. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//!    only take a free slot; a superseded one **re-queues** (fuel is the
+//!    ultra-critical reminder, it must never be silently dropped) and queued
+//!    reminders promote eat-before-drink when a slot frees.
+//! 4. **Distance**, then **Time** — milestones, and the only arms that are
+//!    *dropped* rather than queued when the slot is busy. A milestone banner is
+//!    meaningful only at the moment it is reached; showing "5.0 KM" once the
+//!    runner is at 5.4 km is worse than not showing it, and unlike fuel there is
+//!    nothing left to act on later — the totals are on the page. Distance leads
+//!    the tie because distance is what the race is measured in.
 //!
 //! Display-only by design: the DK has no vibration motor, and alerts are an
 //! L4 auxiliary — the engine is pure and fed *after* the recorder updates, so
@@ -59,6 +99,36 @@ pub const ALERT_TTL_S: u32 = 8;
 /// ceiling boundary (re-arming on each dip) can't re-fire every second.
 pub const ZONE_ALERT_COOLDOWN_S: u32 = 60;
 
+/// The same anti-flap gate for the pace band. Derived from the zone constant
+/// rather than restating 60 because it is the same problem — a noisy signal
+/// crossing a configured boundary — and the two must not drift apart by
+/// accident.
+pub const PACE_ALERT_COOLDOWN_S: u32 = ZONE_ALERT_COOLDOWN_S;
+
+/// Plausibility window for the distance-alert interval, borrowed from the
+/// pacer's goal-distance window because the bounds mean the same thing here:
+/// below [`crate::pacer::GOAL_DISTANCE_MIN_M`] a value is a tap error rather
+/// than a lap, and past [`crate::pacer::GOAL_DISTANCE_MAX_M`] the interval
+/// outruns the longest single effort the tier-1 store can hold, so it could
+/// never fire.
+pub const DISTANCE_INTERVAL_MIN_M: u32 = crate::pacer::GOAL_DISTANCE_MIN_M;
+pub const DISTANCE_INTERVAL_MAX_M: u32 = crate::pacer::GOAL_DISTANCE_MAX_M;
+
+/// Plausibility window for the time-alert interval, from the pacer's goal-time
+/// window for the same reasons: under a minute an [`ALERT_TTL_S`] banner would
+/// occupy more than a tenth of the runner's screen and stop reading as an
+/// alert, and past the top of the window the interval outlasts any recordable
+/// run.
+pub const TIME_INTERVAL_MIN_S: u32 = crate::pacer::GOAL_TIME_MIN_S;
+pub const TIME_INTERVAL_MAX_S: u32 = crate::pacer::GOAL_TIME_MAX_S;
+
+/// Plausibility window for either edge of the pace band. The fast edge sits a
+/// step beyond any human record over any distance; the slow edge is the app's
+/// own live-pace ceiling ([`crate::grade_adjusted_pace::MAX_PACE_S_PER_KM`],
+/// 99:00/km), past which a value is a runaway rather than a pace.
+pub const PACE_BAND_MIN_S_PER_KM: u32 = 120;
+pub const PACE_BAND_MAX_S_PER_KM: u32 = 5_940;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Alert {
@@ -68,6 +138,17 @@ pub enum Alert {
     Eat,
     /// The live HR zone (carried for display) rose above the ceiling.
     ZoneAbove(u8),
+    /// A distance milestone, carried in metres as an exact multiple of the
+    /// configured interval.
+    Distance(u32),
+    /// An elapsed-time milestone, carried in seconds as an exact multiple of
+    /// the configured interval. The banner renders it `H:MM` — the truncation
+    /// of the elapsed hero, so a half-hour milestone reads `0:30`, not `30:00`.
+    Time(u32),
+    /// Live pace is below the band's fast edge.
+    PaceFast,
+    /// Live pace is above the band's slow edge.
+    PaceSlow,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -84,6 +165,24 @@ pub fn banner(alert: Alert) -> Banner {
         Alert::Drink => write!(b, "! DRINK"),
         Alert::Eat => write!(b, "! EAT"),
         Alert::ZoneAbove(zone) => write!(b, "! ZONE {}", zone.min(9)),
+        Alert::Distance(milestone_m) => {
+            write!(
+                b,
+                "! {:.1} KM",
+                (f64::from(milestone_m) / 1000.0).min(999.9)
+            )
+        }
+        // The trailing H is what separates a 30-minute milestone from a 30-second
+        // one: every other banner is a word or a unit-tagged number, so a bare
+        // `0:30` is the only one a glance can read on the wrong scale.
+        Alert::Time(milestone_s) => write!(
+            b,
+            "! {}:{:02} H",
+            (milestone_s / 3600).min(999),
+            milestone_s / 60 % 60
+        ),
+        Alert::PaceFast => write!(b, "! TOO FAST"),
+        Alert::PaceSlow => write!(b, "! TOO SLOW"),
     };
     b
 }
@@ -103,6 +202,22 @@ pub struct AlertEngine {
     /// the zone drops back — the once-per-excursion hysteresis.
     zone_armed: bool,
     last_zone_fire_s: Option<u32>,
+    /// Metres of accumulated distance between milestones. `None` = off, the
+    /// hardware default until a settings sync arms it.
+    distance_interval_m: Option<u32>,
+    /// Seconds of elapsed time between milestones. `None` = off.
+    time_interval_s: Option<u32>,
+    /// `(fast edge, slow edge)` in seconds per kilometre. `None` = off.
+    pace_band: Option<(u32, u32)>,
+    /// The last milestone announced on each arm — always an exact multiple of
+    /// the interval in force when it fired, so milestones can neither drift nor
+    /// repeat.
+    last_distance_alert_m: u32,
+    last_time_alert_s: u32,
+    /// The pace band's half of the once-per-excursion hysteresis, mirroring
+    /// [`Self::zone_armed`].
+    pace_armed: bool,
+    last_pace_fire_s: Option<u32>,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
     pending_drink: bool,
@@ -126,6 +241,13 @@ impl AlertEngine {
             zone_ceiling: None,
             zone_armed: true,
             last_zone_fire_s: None,
+            distance_interval_m: None,
+            time_interval_s: None,
+            pace_band: None,
+            last_distance_alert_m: 0,
+            last_time_alert_s: 0,
+            pace_armed: true,
+            last_pace_fire_s: None,
             active: None,
             pending_drink: false,
             pending_eat: false,
@@ -154,6 +276,55 @@ impl AlertEngine {
         match zone {
             None => self.zone_ceiling = None,
             Some(z) if (1..=4).contains(&z) => self.zone_ceiling = Some(z),
+            Some(_) => {}
+        }
+    }
+
+    /// Configure the distance-alert cadence: fire every `interval_m` metres of
+    /// accumulated distance — the classic every-kilometre (or every-mile, at
+    /// 1609) notify. `None` turns it off, the default. An interval outside
+    /// [`DISTANCE_INTERVAL_MIN_M`]`..=`[`DISTANCE_INTERVAL_MAX_M`] is ignored
+    /// so garbage can't arm a nonsense cadence.
+    pub fn set_distance_interval(&mut self, interval_m: Option<u32>) {
+        match interval_m {
+            None => self.distance_interval_m = None,
+            Some(m) if (DISTANCE_INTERVAL_MIN_M..=DISTANCE_INTERVAL_MAX_M).contains(&m) => {
+                self.distance_interval_m = Some(m)
+            }
+            Some(_) => {}
+        }
+    }
+
+    /// Configure the time-alert cadence: fire every `interval_s` seconds of
+    /// elapsed (race-clock) time. `None` turns it off, the default; an interval
+    /// outside [`TIME_INTERVAL_MIN_S`]`..=`[`TIME_INTERVAL_MAX_S`] is ignored.
+    pub fn set_time_interval(&mut self, interval_s: Option<u32>) {
+        match interval_s {
+            None => self.time_interval_s = None,
+            Some(s) if (TIME_INTERVAL_MIN_S..=TIME_INTERVAL_MAX_S).contains(&s) => {
+                self.time_interval_s = Some(s)
+            }
+            Some(_) => {}
+        }
+    }
+
+    /// Configure the pace band: alert when live pace leaves
+    /// `(fast_s_per_km, slow_s_per_km)`. `None` turns it off, the default.
+    ///
+    /// Both edges must sit inside
+    /// [`PACE_BAND_MIN_S_PER_KM`]`..=`[`PACE_BAND_MAX_S_PER_KM`] and the fast
+    /// edge must be strictly the smaller number — which also rejects a caller
+    /// that passed the pair the wrong way round, the one mistake two
+    /// same-typed arguments invite. A rejected band leaves the current one
+    /// standing, never a half-applied one.
+    pub fn set_pace_band(&mut self, band: Option<(u32, u32)>) {
+        let plausible_edge =
+            |p: u32| (PACE_BAND_MIN_S_PER_KM..=PACE_BAND_MAX_S_PER_KM).contains(&p);
+        match band {
+            None => self.pace_band = None,
+            Some((fast, slow)) if fast < slow && plausible_edge(fast) && plausible_edge(slow) => {
+                self.pace_band = Some((fast, slow))
+            }
             Some(_) => {}
         }
     }
@@ -210,6 +381,56 @@ impl AlertEngine {
                     self.zone_armed = true;
                 }
             }
+
+            // Pace band, one rung below the zone ceiling: it may take the slot
+            // off a fuel reminder (which re-queues) or a milestone, but a zone
+            // banner blocks it — and a blocked excursion neither disarms nor
+            // stamps the cooldown, so it fires on a later tick while the runner
+            // is still outside the band instead of being swallowed.
+            if let (Some((fast, slow)), Some(pace)) = (self.pace_band, snap.current_pace_s_per_km) {
+                if pace < fast || pace > slow {
+                    let cooled = self
+                        .last_pace_fire_s
+                        .is_none_or(|t| uptime_s.saturating_sub(t) >= PACE_ALERT_COOLDOWN_S);
+                    let outranked = matches!(self.active, Some((Alert::ZoneAbove(_), _)));
+                    if self.pace_armed && cooled && !outranked {
+                        match self.active {
+                            Some((Alert::Drink, _)) => self.pending_drink = true,
+                            Some((Alert::Eat, _)) => self.pending_eat = true,
+                            _ => {}
+                        }
+                        let alert = if pace < fast {
+                            Alert::PaceFast
+                        } else {
+                            Alert::PaceSlow
+                        };
+                        self.active = Some((alert, uptime_s));
+                        self.pace_armed = false;
+                        self.last_pace_fire_s = Some(uptime_s);
+                    }
+                } else {
+                    self.pace_armed = true;
+                }
+            }
+        }
+
+        // Milestones advance whether or not they can be shown: a milestone the
+        // busy slot swallows is gone, not owed, so the next one must still be
+        // measured from where the run actually is.
+        let mut distance_due = None;
+        if let Some(interval_m) = self.distance_interval_m {
+            let banked_m = snap.distance_m as u32;
+            if banked_m >= self.last_distance_alert_m.saturating_add(interval_m) {
+                self.last_distance_alert_m = banked_m / interval_m * interval_m;
+                distance_due = Some(self.last_distance_alert_m);
+            }
+        }
+        let mut time_due = None;
+        if let Some(interval_s) = self.time_interval_s {
+            if snap.elapsed_s >= self.last_time_alert_s.saturating_add(interval_s) {
+                self.last_time_alert_s = snap.elapsed_s / interval_s * interval_s;
+                time_due = Some(self.last_time_alert_s);
+            }
         }
 
         if snap.moving_s >= self.next_eat_at_moving_s {
@@ -228,6 +449,10 @@ impl AlertEngine {
             } else if self.pending_drink {
                 self.pending_drink = false;
                 self.active = Some((Alert::Drink, uptime_s));
+            } else if let Some(milestone_m) = distance_due {
+                self.active = Some((Alert::Distance(milestone_m), uptime_s));
+            } else if let Some(milestone_s) = time_due {
+                self.active = Some((Alert::Time(milestone_s), uptime_s));
             }
         }
 
@@ -242,6 +467,10 @@ impl AlertEngine {
         self.pending_eat = false;
         self.zone_armed = true;
         self.last_zone_fire_s = None;
+        self.pace_armed = true;
+        self.last_pace_fire_s = None;
+        self.last_distance_alert_m = 0;
+        self.last_time_alert_s = 0;
         self.in_run = false;
     }
 }
@@ -291,8 +520,8 @@ impl FuelOverdueTracker {
     ///
     /// - `active` — the transient banner on screen this frame. A fuel banner
     ///   means that reminder just fired, so it latches (and re-latches each new
-    ///   interval). A zone banner is ignored: zone supersedes the *banner*,
-    ///   never the standing fuel-overdue marker.
+    ///   interval). Every other kind is ignored: a zone / pace / milestone
+    ///   banner supersedes the *banner*, never the standing fuel-overdue marker.
     /// - `run_active` — false between runs (Idle / Finished). Clears the latch,
     ///   mirroring [`AlertEngine`]'s own reset so a new run starts clean, and so
     ///   a reminder that somehow fired outside a run can never latch.
@@ -312,7 +541,14 @@ impl FuelOverdueTracker {
         match active {
             Some(Alert::Drink) => self.drink = true,
             Some(Alert::Eat) => self.eat = true,
-            Some(Alert::ZoneAbove(_)) | None => {}
+            Some(
+                Alert::ZoneAbove(_)
+                | Alert::Distance(_)
+                | Alert::Time(_)
+                | Alert::PaceFast
+                | Alert::PaceSlow,
+            )
+            | None => {}
         }
         if acknowledged {
             self.drink = false;
@@ -367,20 +603,37 @@ mod tests {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided_run: None,
             readiness: None,
             goals: None,
             turn_cue: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
+            route_position_permille: None,
             race_day: None,
+            race_phase: None,
             track_thinning: 1,
-            pages_mask: u32::MAX,
+            pages_mask: u64::MAX,
         }
     }
 
     fn rec(moving_s: u32) -> Snapshot {
         snap(RecordState::Recording, moving_s)
+    }
+
+    fn dist(distance_m: f64, moving_s: u32) -> Snapshot {
+        Snapshot {
+            distance_m,
+            ..rec(moving_s)
+        }
+    }
+
+    fn paced(pace_s_per_km: u32, moving_s: u32) -> Snapshot {
+        Snapshot {
+            current_pace_s_per_km: Some(pace_s_per_km),
+            ..rec(moving_s)
+        }
     }
 
     #[test]
@@ -706,15 +959,470 @@ mod tests {
     }
 
     #[test]
+    fn distance_alert_is_off_by_default() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&dist(5_000.0, 300), None, 300), None);
+    }
+
+    #[test]
+    fn distance_alert_fires_every_interval() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        assert_eq!(e.on_update(&dist(999.0, 300), None, 300), None);
+        assert_eq!(
+            e.on_update(&dist(1_000.0, 301), None, 301),
+            Some(Alert::Distance(1_000))
+        );
+        let t = 301 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&dist(1_500.0, t), None, t), None);
+        assert_eq!(
+            e.on_update(&dist(2_000.0, t + 1), None, t + 1),
+            Some(Alert::Distance(2_000))
+        );
+    }
+
+    #[test]
+    fn distance_milestones_stay_on_exact_multiples_after_an_overshoot() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        // The 1 Hz feed crosses 1 km mid-tick, so the fire lands at 1009 m.
+        assert_eq!(
+            e.on_update(&dist(1_009.0, 300), None, 300),
+            Some(Alert::Distance(1_000))
+        );
+        // A threshold re-based off the fire (the fuel arms' rule) would push the
+        // next milestone out to 2009 m and drift a little further every time.
+        let t = 300 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&dist(2_000.0, t), None, t),
+            Some(Alert::Distance(2_000))
+        );
+    }
+
+    #[test]
+    fn a_distance_jump_reports_the_highest_milestone_not_a_burst() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        assert_eq!(
+            e.on_update(&dist(3_500.0, 300), None, 300),
+            Some(Alert::Distance(3_000))
+        );
+        // The skipped 1 km / 2 km milestones do not queue up behind it.
+        let t = 300 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&dist(3_600.0, t), None, t), None);
+        assert_eq!(
+            e.on_update(&dist(4_000.0, t + 1), None, t + 1),
+            Some(Alert::Distance(4_000))
+        );
+    }
+
+    #[test]
+    fn paused_distance_banks_nothing_toward_the_distance_alert() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        assert_eq!(e.on_update(&dist(999.0, 300), None, 300), None);
+        // An aid-station stop: distance frozen a metre short while the wall
+        // clock runs on. The shared `snap` helper's elapsed == moving can't show
+        // this, so the snapshot is built by hand.
+        for t in 301..1_400 {
+            let s = Snapshot {
+                distance_m: 999.0,
+                elapsed_s: t,
+                ..snap(RecordState::Paused, 300)
+            };
+            assert_eq!(
+                e.on_update(&s, None, t),
+                None,
+                "fired while paused at t={t}"
+            );
+        }
+        assert_eq!(
+            e.on_update(&dist(1_000.0, 301), None, 1_400),
+            Some(Alert::Distance(1_000))
+        );
+    }
+
+    #[test]
+    fn distance_interval_setter_rejects_garbage() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(0));
+        e.set_distance_interval(Some(DISTANCE_INTERVAL_MIN_M - 1));
+        e.set_distance_interval(Some(DISTANCE_INTERVAL_MAX_M + 1));
+        assert_eq!(e.on_update(&dist(500_000.0, 300), None, 300), None);
+        e.set_distance_interval(Some(DISTANCE_INTERVAL_MIN_M));
+        assert_eq!(
+            e.on_update(&dist(500_000.0, 301), None, 301),
+            Some(Alert::Distance(500_000))
+        );
+        // None turns it back off.
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        e.set_distance_interval(None);
+        assert_eq!(e.on_update(&dist(5_000.0, 300), None, 300), None);
+    }
+
+    #[test]
+    fn time_alert_is_off_by_default() {
+        let mut e = AlertEngine::new();
+        let held = Snapshot {
+            elapsed_s: 7_200,
+            ..rec(100)
+        };
+        assert_eq!(e.on_update(&held, None, 7_200), None);
+    }
+
+    #[test]
+    fn time_alert_banks_on_elapsed_not_moving_time() {
+        let mut e = AlertEngine::new();
+        e.set_time_interval(Some(1_800));
+        // Moving time frozen at 100 s while the race clock runs to half an hour
+        // — the gap the shared `snap` helper (elapsed == moving) hides. A
+        // cadence keyed off moving time would stay silent here; this arm is
+        // deliberately the race clock, so it must fire.
+        let held = |t: u32| Snapshot {
+            elapsed_s: t,
+            ..rec(100)
+        };
+        assert_eq!(e.on_update(&held(1_799), None, 1_799), None);
+        assert_eq!(
+            e.on_update(&held(1_800), None, 1_800),
+            Some(Alert::Time(1_800))
+        );
+    }
+
+    #[test]
+    fn time_alert_keeps_ticking_through_a_pause() {
+        let mut e = AlertEngine::new();
+        e.set_time_interval(Some(1_800));
+        let stopped = |t: u32| Snapshot {
+            elapsed_s: t,
+            ..snap(RecordState::Paused, 0)
+        };
+        assert_eq!(e.on_update(&stopped(1_799), None, 1_799), None);
+        // A race clock does not stop at an aid station.
+        assert_eq!(
+            e.on_update(&stopped(1_800), None, 1_800),
+            Some(Alert::Time(1_800))
+        );
+    }
+
+    #[test]
+    fn time_milestones_are_exact_multiples_and_a_gap_reports_the_highest() {
+        let mut e = AlertEngine::new();
+        e.set_time_interval(Some(1_800));
+        let held = |t: u32| Snapshot {
+            elapsed_s: t,
+            ..rec(100)
+        };
+        assert_eq!(
+            e.on_update(&held(5_000), None, 5_000),
+            Some(Alert::Time(3_600))
+        );
+        let t = 5_000 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&held(t), None, t), None);
+        assert_eq!(
+            e.on_update(&held(5_400), None, 5_400),
+            Some(Alert::Time(5_400))
+        );
+    }
+
+    #[test]
+    fn time_interval_setter_rejects_garbage() {
+        let mut e = AlertEngine::new();
+        let held = |t: u32| Snapshot {
+            elapsed_s: t,
+            ..rec(100)
+        };
+        e.set_time_interval(Some(0));
+        e.set_time_interval(Some(TIME_INTERVAL_MIN_S - 1));
+        e.set_time_interval(Some(TIME_INTERVAL_MAX_S + 1));
+        assert_eq!(e.on_update(&held(7_200), None, 7_200), None);
+        e.set_time_interval(Some(TIME_INTERVAL_MIN_S));
+        assert_eq!(
+            e.on_update(&held(7_201), None, 7_201),
+            Some(Alert::Time(7_200))
+        );
+        // None turns it back off.
+        let mut e = AlertEngine::new();
+        e.set_time_interval(Some(1_800));
+        e.set_time_interval(None);
+        assert_eq!(e.on_update(&held(1_800), None, 1_800), None);
+    }
+
+    #[test]
+    fn pace_alert_is_off_by_default() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&paced(60, 10), None, 10), None);
+    }
+
+    #[test]
+    fn pace_alert_fires_outside_either_edge_and_not_on_them() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        // Both edges are inside the band.
+        assert_eq!(e.on_update(&paced(300, 10), None, 10), None);
+        assert_eq!(e.on_update(&paced(420, 11), None, 11), None);
+        assert_eq!(
+            e.on_update(&paced(299, 12), None, 12),
+            Some(Alert::PaceFast)
+        );
+        // A fresh engine for the slow side — the first fire disarms this one.
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        assert_eq!(
+            e.on_update(&paced(421, 10), None, 10),
+            Some(Alert::PaceSlow)
+        );
+    }
+
+    #[test]
+    fn pace_alert_fires_once_per_excursion() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        assert_eq!(
+            e.on_update(&paced(250, 10), None, 10),
+            Some(Alert::PaceFast)
+        );
+        // Still outside the band after the TTL: disarmed, no re-fire.
+        for t in 11..120 {
+            let shown = e.on_update(&paced(250, t), None, t);
+            assert!(
+                shown.is_none() || t < 10 + ALERT_TTL_S,
+                "re-fired while still outside the band at t={t}"
+            );
+        }
+    }
+
+    #[test]
+    fn pace_alert_rearms_inside_the_band_but_the_cooldown_gates_flapping() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        assert_eq!(
+            e.on_update(&paced(250, 10), None, 10),
+            Some(Alert::PaceFast)
+        );
+        // Back inside (re-arm), out again within the cooldown: no fire.
+        let t1 = 10 + ALERT_TTL_S + 1;
+        assert_eq!(e.on_update(&paced(360, t1), None, t1), None);
+        assert_eq!(e.on_update(&paced(250, t1 + 1), None, t1 + 1), None);
+        // Dip back in and out again past the cooldown: fires.
+        let t2 = 10 + PACE_ALERT_COOLDOWN_S;
+        assert_eq!(e.on_update(&paced(360, t2), None, t2), None);
+        assert_eq!(
+            e.on_update(&paced(250, t2 + 1), None, t2 + 1),
+            Some(Alert::PaceFast)
+        );
+    }
+
+    #[test]
+    fn pace_band_setter_rejects_garbage() {
+        let mut e = AlertEngine::new();
+        // A swapped pair, a zero-width band, and either edge out of window.
+        e.set_pace_band(Some((420, 300)));
+        e.set_pace_band(Some((300, 300)));
+        e.set_pace_band(Some((0, 420)));
+        e.set_pace_band(Some((PACE_BAND_MIN_S_PER_KM - 1, 420)));
+        e.set_pace_band(Some((300, PACE_BAND_MAX_S_PER_KM + 1)));
+        assert_eq!(e.on_update(&paced(60, 10), None, 10), None);
+        e.set_pace_band(Some((PACE_BAND_MIN_S_PER_KM, PACE_BAND_MAX_S_PER_KM)));
+        assert_eq!(
+            e.on_update(&paced(PACE_BAND_MIN_S_PER_KM - 1, 11), None, 11),
+            Some(Alert::PaceFast)
+        );
+        // None turns it back off.
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        e.set_pace_band(None);
+        assert_eq!(e.on_update(&paced(60, 10), None, 10), None);
+    }
+
+    #[test]
+    fn pace_alert_is_gated_to_recording_not_paused() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        let stale = Snapshot {
+            current_pace_s_per_km: Some(250),
+            ..snap(RecordState::Paused, 10)
+        };
+        assert_eq!(e.on_update(&stale, None, 10), None);
+        // Back to recording with the same pace: fires.
+        assert_eq!(
+            e.on_update(&paced(250, 11), None, 11),
+            Some(Alert::PaceFast)
+        );
+    }
+
+    #[test]
+    fn no_pace_reading_never_fires_the_pace_alert() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        for t in 0..30 {
+            assert_eq!(e.on_update(&rec(t), None, t), None);
+        }
+    }
+
+    #[test]
+    fn zone_outranks_pace_and_a_blocked_excursion_retries() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        e.set_pace_band(Some((300, 420)));
+        let hot = |pace: u32, t: u32| Snapshot {
+            current_pace_s_per_km: Some(pace),
+            ..rec(t)
+        };
+        // Both come due on the same update: HR is the ground truth pace only
+        // proxies, so the zone alert takes the slot.
+        assert_eq!(
+            e.on_update(&hot(250, 10), Some(160), 10),
+            Some(Alert::ZoneAbove(4))
+        );
+        // The blocked excursion stayed armed and un-cooled, so it fires the
+        // moment the zone banner clears — still outside the band.
+        let after = 10 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&hot(250, after), Some(150), after),
+            Some(Alert::PaceFast)
+        );
+    }
+
+    #[test]
+    fn pace_supersedes_an_active_fuel_reminder_which_requeues() {
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        assert_eq!(e.on_update(&rec(900), None, 900), Some(Alert::Drink));
+        assert_eq!(
+            e.on_update(&paced(250, 902), None, 902),
+            Some(Alert::PaceFast)
+        );
+        // The superseded reminder comes back after the pace TTL, not lost.
+        let after = 902 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&paced(360, after), None, after),
+            Some(Alert::Drink)
+        );
+    }
+
+    #[test]
+    fn a_milestone_is_dropped_not_queued_when_fuel_holds_the_slot() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        // The run crosses 1 km on the very update the drink reminder comes due.
+        assert_eq!(
+            e.on_update(&dist(1_000.0, 900), None, 900),
+            Some(Alert::Drink)
+        );
+        // Unlike fuel, the milestone is gone rather than owed: nothing surfaces
+        // when the slot frees, and the next one is measured from 2 km.
+        let t = 900 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&dist(1_500.0, t), None, t), None);
+        assert_eq!(
+            e.on_update(&dist(2_000.0, t + 1), None, t + 1),
+            Some(Alert::Distance(2_000))
+        );
+    }
+
+    #[test]
+    fn distance_leads_time_when_both_milestones_land_together() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        e.set_time_interval(Some(TIME_INTERVAL_MIN_S));
+        let both = |distance_m: f64, elapsed_s: u32| Snapshot {
+            distance_m,
+            elapsed_s,
+            ..rec(30)
+        };
+        assert_eq!(
+            e.on_update(&both(1_000.0, 60), None, 60),
+            Some(Alert::Distance(1_000))
+        );
+        // The time milestone was dropped too, and its next one is measured from
+        // where the clock actually is.
+        let t = 60 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&both(1_100.0, t), None, t), None);
+        assert_eq!(
+            e.on_update(&both(1_100.0, 120), None, 120),
+            Some(Alert::Time(120))
+        );
+    }
+
+    #[test]
+    fn idle_clears_the_milestone_arms_and_a_new_run_rebases_them() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        assert_eq!(
+            e.on_update(&dist(1_000.0, 300), None, 300),
+            Some(Alert::Distance(1_000))
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 300), None, 302),
+            None
+        );
+        // A new run measures the cadence from zero again; the interval survives
+        // because it is settings, not run state.
+        assert_eq!(
+            e.on_update(&dist(1_000.0, 300), None, 1_000),
+            Some(Alert::Distance(1_000))
+        );
+    }
+
+    #[test]
+    fn the_pace_band_ceiling_is_the_apps_own_live_pace_ceiling() {
+        assert_eq!(
+            f64::from(PACE_BAND_MAX_S_PER_KM),
+            crate::grade_adjusted_pace::MAX_PACE_S_PER_KM
+        );
+    }
+
+    #[test]
     fn banner_text_is_the_bang_prefixed_label() {
         assert_eq!(banner(Alert::Drink).as_str(), "! DRINK");
         assert_eq!(banner(Alert::Eat).as_str(), "! EAT");
         assert_eq!(banner(Alert::ZoneAbove(5)).as_str(), "! ZONE 5");
-        // A corrupt zone clamps instead of overflowing the banner.
+        assert_eq!(banner(Alert::Distance(5_000)).as_str(), "! 5.0 KM");
+        assert_eq!(banner(Alert::Distance(1_609)).as_str(), "! 1.6 KM");
+        assert_eq!(banner(Alert::Time(1_800)).as_str(), "! 0:30 H");
+        assert_eq!(banner(Alert::Time(3 * 3600 + 45 * 60)).as_str(), "! 3:45 H");
+        assert_eq!(banner(Alert::PaceFast).as_str(), "! TOO FAST");
+        assert_eq!(banner(Alert::PaceSlow).as_str(), "! TOO SLOW");
+        // A corrupt zone / milestone clamps instead of overflowing the banner.
         assert_eq!(banner(Alert::ZoneAbove(200)).as_str(), "! ZONE 9");
-        // At 2x every banner must fit the 21-cell panel row.
-        for a in [Alert::Drink, Alert::Eat, Alert::ZoneAbove(5)] {
+        assert_eq!(banner(Alert::Distance(u32::MAX)).as_str(), "! 999.9 KM");
+        assert_eq!(banner(Alert::Time(u32::MAX)).as_str(), "! 999:28 H");
+        // At 2x every banner must fit the 21-cell panel row, worst case included.
+        for a in [
+            Alert::Drink,
+            Alert::Eat,
+            Alert::ZoneAbove(5),
+            Alert::Distance(u32::MAX),
+            Alert::Time(u32::MAX),
+            Alert::PaceFast,
+            Alert::PaceSlow,
+        ] {
             assert!(banner(a).chars().count() * 2 <= crate::face::COLS);
+        }
+    }
+
+    #[test]
+    fn the_milestone_and_pace_banners_leave_the_fuel_overdue_marker_untouched() {
+        let mut ov = FuelOverdueTracker::new();
+        assert_eq!(ov.observe(Some(Alert::Eat), true, false), FuelOverdue::Eat);
+        for a in [
+            Alert::Distance(5_000),
+            Alert::Time(1_800),
+            Alert::PaceFast,
+            Alert::PaceSlow,
+        ] {
+            assert_eq!(ov.observe(Some(a), true, false), FuelOverdue::Eat);
+        }
+        // Nor can any of them latch a marker of their own.
+        let mut ov2 = FuelOverdueTracker::new();
+        for a in [
+            Alert::Distance(1_000),
+            Alert::Time(60),
+            Alert::PaceFast,
+            Alert::PaceSlow,
+        ] {
+            assert_eq!(ov2.observe(Some(a), true, false), FuelOverdue::None);
         }
     }
 

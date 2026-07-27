@@ -52,6 +52,23 @@ pub fn is_low(percent: u8) -> bool {
     percent <= LOW_PCT
 }
 
+/// At or below this percent the cell is close enough to the empty cutoff that
+/// the run itself is at stake. 10 % is the next [`CURVE_MV_PCT`] anchor down
+/// (3.68 V): from there only 380 mV separate the cell from the 3.3 V cutoff
+/// below which a LiPo damages itself, and on this discharge curve that is
+/// minutes-to-tens-of-minutes, not hours. The run-view marker uses it to
+/// outrank a fuel reminder — a sip can wait a kilometre, a dead watch ends the
+/// recording.
+pub const CRITICAL_PCT: u8 = 10;
+
+/// Whether `percent` is at or past the point where losing the run is the
+/// nearer risk.
+pub fn is_critical(percent: u8) -> bool {
+    percent <= CRITICAL_PCT
+}
+
+const _: () = assert!(CRITICAL_PCT < LOW_PCT);
+
 /// Fill for the battery icon's body, in `0.0..=1.0` — the `gauge` convention:
 /// the decision here, the pixel scaling in the render layer.
 pub fn fill_fraction(percent: u8) -> f32 {
@@ -149,6 +166,18 @@ mod tests {
         // LOW_PCT is the plateau-knee anchor, not an arbitrary number: the
         // 3.74 V anchor maps exactly onto it.
         assert_eq!(percent_from_mv(3740), LOW_PCT);
+    }
+
+    #[test]
+    fn critical_state_starts_at_the_anchor_below_the_knee() {
+        assert!(is_critical(0));
+        assert!(is_critical(CRITICAL_PCT));
+        assert!(!is_critical(CRITICAL_PCT + 1));
+        // Critical is strictly inside low, so nothing can read critical-but-
+        // not-low and skip the gentler state on the way down.
+        assert!(is_low(CRITICAL_PCT));
+        // The 3.68 V anchor maps exactly onto it, like LOW_PCT onto 3.74 V.
+        assert_eq!(percent_from_mv(3680), CRITICAL_PCT);
     }
 
     #[test]

@@ -99,6 +99,63 @@ Surfaces: BTN3 gains a **ninth RacePredictor page** (after Pacer) and a **tenth 
 
 New `cutoff_eta` 13 + `race_predictor` 13 module tests, recorder 30 → 33 (route-position + cut-off gating, the min-distance predictor gate), face 49 → 53 (both pages, active + honest-inactive states, exact rendered rows) — **watch_core 212 → 245**. The full host suite, embedded release build (hardware default features), the sim feature set build (`sim-autostart,sim-buttons,sim-course,dev-blink`), embedded `clippy -D warnings`, and `rustfmt` are all green. **The rendered output is pinned by the face tests** (`CUTOFF        ON` / `TO   10.00 KM` / `ETA  1:30:00`; `5K   20:00 ?` and the `~` low-confidence marathon rung). Renode sim + bench verification are **pending** — renode/defmt-print weren't available in the authoring session, so unlike prior entries this one does not claim a live sim run; the sim build is clean and the render is test-pinned. [decisions § 215](../architecture/decisions.md#215-tier-1-cut-off-eta-feeds-the-course-agnostic-recorder-a-route-position-the-race-predictor-projects-the-current-run-as-a-single-effort).
 
+## 2026-07-26 — five buildable-now items, chosen because none needed parts
+
+A five-worktree parallel batch scoped deliberately: the work that needed **neither hardware nor a
+§ 71 tier-2 trigger**, picked after a pass over the parity backlog established that tier-1's
+remaining debt is verification, not code. Host tests **1799 -> 1883**; all three feature sets
+build, `clippy -D warnings` and `cargo fmt --check` clean. **Host-tested + build-verified only**
+(§ 314) — Renode is not installed on the authoring machine and no parts exist, so nothing here
+claims a sim or bench rung, and the radio leg of the course push is a bench item.
+
+Two parity ports: `cutoff_eta` caught up to web issue #607 (`required_pace_s_per_km` +
+`limit_passed`, the pace computed even on a stale fix because it does not depend on recent pace),
+and `race_phases` landed as a new core (the 10-10-10 / negative-split / even phase plan, closing
+factor derived so the distance-weighted mean is exactly 1.0) surfaced on the Pacer page's one
+spare row. Three surface items: distance / time / pace alert kinds in the existing engine
+(§ 332), a glance page for the already-ported `guided_runs` (§ 333), and the pushed course's
+climb profile drawn with a position marker behind a `CRS1` v2 elevation array (§ 334).
+
+**Three defects the batch found, which is the part worth recording.** `Page::bit()` returned
+`1 << discriminant` as a `u32` and the enum stood at exactly 32 variants, so page 33 would have
+wrapped to bit 0 in release and silently shared the Dashboard's bit — un-hideable, mis-counted,
+and reachable through a mask built to exclude it. The page grid was full to the cell at 4 x 8,
+which is why it surfaced as a compile error rather than a dropped page (the `const` assert
+earned its keep). And `cutoff_eta` gated pace on a bare `p > 0.0`, accepting `+Infinity` where
+the canonical helper gates on `Number.isFinite`. All three fixed here.
+
+**Owed, and named rather than deferred silently:** the `CRS1` frame carries no CRC, so a flipped
+byte in the point array decodes as a valid but displaced course (the hole § 319 closed for `SET1`
+and § 321 for the run blob) — a v3 reusing `run_store::crc32` is the fix. The `SET1` fields that
+would let a phone set the three new alert cadences are unwired, as are push paths for
+`set_race_phases` / `set_guided_run`. And `navigation.md`'s two page-grid press-cost rows now
+predate both the 33rd page and the row-scrolling window; an independent BFS reproduced the linear
+row exactly but not those two, so they are flagged for re-measurement rather than re-derived from
+a model that does not match.
+
+## 2026-07-26 (second batch) — the wire formats hardened, and the owed items closed
+
+A three-worktree pass taking the previous batch's named debt rather than new features. Host tests
+**1883 -> 1903**; three feature sets build, `clippy -D warnings` and `cargo fmt --check` clean,
+both Dart twins byte-identical. **Host-tested + build-verified only** (§ 314).
+
+`CRS1` v3 seals the course push with a mandatory CRC32 (§ 335) — and unlike the settings frame its
+pre-CRC versions stop decoding, because a course has no plausibility guard that could catch a
+displaced polyline and because an accepted un-checksummed version is a bypass. `SET1` v4 carries
+the five settings the firmware honoured but the phone could not reach (§ 336), so the alert
+cadences, pace band, race-phase plan and guided-run selection are now armable on real hardware
+rather than only in the sim. And `navigation.md`'s press-cost table is re-derived at 33 pages after
+the missing term was found: the grid is additive, so a page costs `min(walk, 1 + grid moves)` — the
+model then reproduces the pre-page-33 table exactly, which is what licensed publishing new figures.
+
+**Process note worth keeping.** Three agents ran in parallel worktrees; two fast-forwarded onto the
+working branch, the third forked from `origin/main` and correctly reported that the sinks its wire
+fields needed did not exist — because the batch that built them was not yet merged. It declined to
+add fields with no sink, which is the right instinct and exactly what the `settings_apply` seam
+exists to enforce, but it also rebuilt work already landed. The lesson is a briefing one: an agent
+whose worktree may fork from stale main must be told to fast-forward onto the working branch first
+and to verify the premises it was handed before building on them.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

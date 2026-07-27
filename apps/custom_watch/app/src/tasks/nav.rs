@@ -9,6 +9,12 @@
 //! excursion is visible in the defmt stream regardless of which display page is
 //! up.
 //!
+//! Because it owns the active course it also shapes that course's climb profile
+//! (`course_profile::course_elev_view`) on every course change and publishes it
+//! to `state::ROUTE_PROFILE` for the RouteElev page — the same seam as the turn
+//! cues, and it keeps the ~4.5 KiB polyline from needing a second copy in the
+//! `record` task.
+//!
 //! The task follows one of two courses: the canned sim course carried at boot
 //! behind the default-OFF `sim-course` feature (built by `bin/watch-sim.sh`), or
 //! a course the phone pushes over BLE (`course_store` frame reassembled by the
@@ -21,6 +27,7 @@
 use defmt::{info, unwrap, warn};
 use embassy_futures::select::{select, Either};
 use watch_core::course::{Course, OffCourseAlert};
+use watch_core::course_profile::course_elev_view;
 use watch_core::face::NavView;
 use watch_core::nav_project::{course_cues, project_fix};
 use watch_core::turn_cues::{TurnCue, MAX_TURN_CUES};
@@ -49,13 +56,20 @@ static SIM_COURSE: [watch_core::course::CoursePoint; 3] = [
     },
 ];
 
+/// Canned per-point altitudes for the sim course (Boulder sits at ~1650 m), so
+/// the RouteElev page draws a real climb profile under the sim. Hardware carries
+/// none until a phone pushes a v2 course frame that includes elevation — the
+/// page then shows the course's geometry and says NO ELEVATION.
+#[cfg(feature = "sim-course")]
+static SIM_COURSE_ELEV_M: [i16; 3] = [1650, 1662, 1655];
+
 /// The course this build carries, if any — shared by this task (projection)
 /// and the ui task (breadcrumb drawing), so the ~4 KiB point buffer exists
 /// once. `None` on the hardware build until a course-push path lands.
 #[cfg(feature = "sim-course")]
 pub fn course() -> Option<&'static Course> {
     static COURSE: static_cell::StaticCell<Course> = static_cell::StaticCell::new();
-    Course::from_points(&SIM_COURSE).map(|c| &*COURSE.init(c))
+    Course::from_points_with_elevation(&SIM_COURSE, &SIM_COURSE_ELEV_M).map(|c| &*COURSE.init(c))
 }
 
 #[cfg(not(feature = "sim-course"))]
@@ -66,6 +80,7 @@ pub fn course() -> Option<&'static Course> {
 #[embassy_executor::task]
 pub async fn run(boot_course: Option<&'static Course>) {
     let sender = state::NAV.sender();
+    let profile_sender = state::ROUTE_PROFILE.sender();
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut course_rx = unwrap!(state::COURSE.receiver());
     let mut pushed: Option<Course> = None;
@@ -87,10 +102,12 @@ pub async fn run(boot_course: Option<&'static Course>) {
                 c.total_m() as u32
             );
             cues = course_cues(c);
+            profile_sender.send(Some(course_elev_view(c)));
             sender.send(NavView::NoFix);
         }
         None => {
             info!("nav: no course loaded");
+            profile_sender.send(None);
             sender.send(NavView::NoCourse);
         }
     }
@@ -142,10 +159,12 @@ pub async fn run(boot_course: Option<&'static Course>) {
                             c.total_m() as u32
                         );
                         cues = course_cues(c);
+                        profile_sender.send(Some(course_elev_view(c)));
                         sender.send(NavView::NoFix);
                     }
                     None => {
                         info!("nav: no course loaded");
+                        profile_sender.send(None);
                         sender.send(NavView::NoCourse);
                     }
                 }

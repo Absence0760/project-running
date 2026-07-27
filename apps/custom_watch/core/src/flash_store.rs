@@ -305,6 +305,14 @@ struct SlotMeta {
     /// ordinal is the fresher copy and the lower one is what the next write may
     /// safely erase.
     write_no: u32,
+    /// The bytes in this slot are a mid-run checkpoint, not a commit: the run
+    /// ended without one and will never grow. Only ever set on a slot that is
+    /// ALSO `finished`, i.e. at the two points a run can end that way — the boot
+    /// scan ([`SlotDir::from_recovered`]) and a failed commit
+    /// ([`SlotDir::commit_failed`]). A live run's checkpoints are never marked:
+    /// the run may still commit, and while it records it is not a run at all as
+    /// far as every consumer here is concerned.
+    partial: bool,
 }
 
 /// In-RAM index of which slot holds which run, and which of those runs are
@@ -359,6 +367,18 @@ impl SlotDir {
     /// Every survivor is marked finished: the reset ended its recording, so even
     /// a mid-run checkpoint is as complete as the watch will ever know, and
     /// surfacing it is exactly what checkpointing exists for.
+    ///
+    /// **This is the only place an unfinished blob is promoted at boot, and it is
+    /// a constructor.** It runs once, from the flash driver's own construction,
+    /// before any run can be live — so every blob it sees is from a PRIOR power
+    /// cycle and is terminal by the reset that orphaned it. The live recorder's
+    /// checkpoints reach flash through
+    /// [`reserve_checkpoint`](Self::reserve_checkpoint) instead, which hard-codes
+    /// `finished: false` and is never re-run through this scan, so a run started
+    /// after the promotion cannot inherit it. A survivor promoted here also
+    /// carries [`SlotMeta::partial`] when its header lacked [`FLAG_FINISHED`],
+    /// which is what [`pending_partial_count`](Self::pending_partial_count)
+    /// surfaces on the wrist.
     pub fn from_recovered(slots: [Option<RecoveredRun>; SLOT_COUNT]) -> Self {
         let mut kept: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
         for (i, r) in slots.into_iter().enumerate() {
@@ -384,6 +404,7 @@ impl SlotDir {
                 synced: false,
                 finished: true,
                 write_no: 0,
+                partial: !r.finished,
             });
         }
         dir
@@ -420,6 +441,7 @@ impl SlotDir {
             synced: false,
             finished: false,
             write_no,
+            partial: false,
         });
         slot
     }
@@ -445,6 +467,7 @@ impl SlotDir {
             synced: false,
             finished: true,
             write_no,
+            partial: false,
         });
         slot
     }
@@ -481,6 +504,7 @@ impl SlotDir {
         for s in self.slots.iter_mut().flatten() {
             if s.run_seq == run_seq {
                 s.finished = true;
+                s.partial = true;
             }
         }
     }
@@ -578,6 +602,27 @@ impl SlotDir {
     /// runs the phone may pull.
     pub fn run_count(&self) -> u8 {
         self.slots.iter().flatten().filter(|m| m.finished).count() as u8
+    }
+
+    /// How many of the advertised runs are a mid-run checkpoint the phone has not
+    /// pulled yet — the runs whose recording ended with the power rather than with
+    /// a stop, recovered by [`from_recovered`](Self::from_recovered) (or handed
+    /// back by [`commit_failed`](Self::commit_failed)). The wrist marker's input:
+    /// after a brown-out the idle face otherwise looks exactly like a normal boot,
+    /// so the runner has no way to know the interrupted run is sitting on flash
+    /// waiting to be synced.
+    ///
+    /// A subset of [`run_count`](Self::run_count) by construction — `partial` is
+    /// only ever set together with `finished` — and it drops to zero as the phone
+    /// pulls each one, so the marker clears itself rather than standing until the
+    /// next reboot. A live run's checkpoints are never counted: they are not
+    /// `partial` (the run may still commit) and not `finished`.
+    pub fn pending_partial_count(&self) -> u8 {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|m| m.finished && m.partial && !m.synced)
+            .count() as u8
     }
 
     /// Manifest entries for every committed run, in slot order.
@@ -1094,6 +1139,116 @@ mod tests {
             "the committed blob is authoritative"
         );
         assert_eq!(dir.run_count(), 1);
+    }
+
+    /// A mid-run checkpoint of `run_seq` recovered from a prior power cycle.
+    fn recovered_partial(run_seq: u32, size: u32, start_uptime_s: u32) -> RecoveredRun {
+        RecoveredRun {
+            run_seq,
+            size,
+            start_uptime_s,
+            finished: false,
+            elapsed_s: 900,
+        }
+    }
+
+    #[test]
+    fn from_recovered_counts_only_the_unfinished_survivors_as_pending() {
+        // Both are advertised — the reset ended both recordings — but only the
+        // one that never got its commit is the run the runner needs telling
+        // about: the other ended with a stop they made themselves.
+        let mut slots = [None; SLOT_COUNT];
+        slots[0] = Some(recovered(5, blob_len(3), 40));
+        slots[2] = Some(recovered_partial(9, blob_len(7), 900));
+        let dir = SlotDir::from_recovered(slots);
+        assert_eq!(dir.run_count(), 2);
+        assert_eq!(dir.pending_partial_count(), 1);
+        assert_eq!(dir.find(9), Some((2, blob_len(7))), "and it is servable");
+    }
+
+    #[test]
+    fn a_pending_partial_clears_once_the_phone_has_pulled_it() {
+        // The marker has to retire itself. Standing until the next reboot would
+        // make it a permanent decoration rather than a signal.
+        let mut slots = [None; SLOT_COUNT];
+        slots[1] = Some(recovered_partial(4, blob_len(9), 60));
+        let mut dir = SlotDir::from_recovered(slots);
+        assert_eq!(dir.pending_partial_count(), 1);
+        dir.mark_synced(4);
+        assert_eq!(dir.pending_partial_count(), 0);
+        assert_eq!(dir.run_count(), 1, "still stored, just no longer pending");
+    }
+
+    #[test]
+    fn a_run_started_after_a_reboot_never_inherits_the_boot_promotion() {
+        // The boundary the whole design turns on. A blob recovered at boot may be
+        // surfaced because no run was live when it was found; the run the runner
+        // then starts must stay exactly as invisible as it was before the reboot,
+        // however many checkpoints it writes. The promotion is the constructor's,
+        // and the constructor does not run again.
+        let mut slots = [None; SLOT_COUNT];
+        slots[0] = Some(recovered_partial(7, blob_len(20), 41));
+        let mut dir = SlotDir::from_recovered(slots);
+        assert_eq!(dir.find(7), Some((0, blob_len(20))));
+        assert_eq!(dir.pending_partial_count(), 1);
+
+        let seq = dir.next_run_seq();
+        assert_eq!(seq, 8);
+        dir.reserve_checkpoint(seq, 100, 500);
+        dir.reserve_checkpoint(seq, 260, 500);
+        assert_eq!(dir.find(seq), None, "the live run is not servable");
+        assert_eq!(
+            dir.manifest()
+                .iter()
+                .map(|e| e.run_seq)
+                .collect::<Vec<u32, SLOT_COUNT>>()[..],
+            [7][..],
+            "nor advertised — only the recovered run is"
+        );
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(
+            dir.pending_partial_count(),
+            1,
+            "a live checkpoint is not a pending partial run"
+        );
+
+        // And when the new run does end properly it is advertised as a finished
+        // run, not as another interrupted one.
+        let slot = dir.reserve_commit(seq, 400, 500);
+        dir.commit_written(slot);
+        assert_eq!(dir.find(seq), Some((slot, 400)));
+        assert_eq!(dir.run_count(), 2);
+        assert_eq!(
+            dir.pending_partial_count(),
+            1,
+            "still just the recovered one"
+        );
+    }
+
+    #[test]
+    fn a_failed_commit_leaves_the_run_pending_like_a_reboot_would() {
+        // The run ended and its bytes are a checkpoint, which is the same state a
+        // reboot would rebuild from those bytes — so the wrist must say the same
+        // thing without waiting for one.
+        let mut dir = SlotDir::new();
+        dir.reserve_checkpoint(7, 100, 41);
+        dir.reserve_checkpoint(7, 260, 41);
+        assert_eq!(dir.pending_partial_count(), 0, "not while it records");
+        let committed = dir.reserve_commit(7, 400, 41);
+        assert_eq!(dir.pending_partial_count(), 0, "nor on the reservation");
+        dir.commit_failed(committed);
+        assert_eq!(dir.pending_partial_count(), 1);
+        assert_eq!(dir.run_count(), 1);
+    }
+
+    #[test]
+    fn a_landed_commit_is_never_pending() {
+        let mut dir = SlotDir::new();
+        dir.reserve_checkpoint(7, 100, 41);
+        let committed = dir.reserve_commit(7, 400, 41);
+        dir.commit_written(committed);
+        assert_eq!(dir.run_count(), 1);
+        assert_eq!(dir.pending_partial_count(), 0);
     }
 
     #[test]

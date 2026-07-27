@@ -25,7 +25,7 @@ Embedded firmware has a sharper split:
 
 - **Host tests** run on your development machine via `cargo test`. They cover any logic that doesn't touch a peripheral — NMEA parsers, recording state machines, signal-processing helpers, anything in the `drivers/` crates that's pure data manipulation. These give you instant feedback (sub-second), run in CI without any hardware, and are the same workflow you already know from web/backend.
 - **On-target tests** run on the actual nRF52840 DK. Anything that reads a sensor, drives the display, talks to the radio, or relies on hardware timers belongs here. They're slower (you have to flash the board before running) and require a board plugged in. They're the embedded equivalent of mobile e2e tests.
-- **Simulator runs** sit between the two: `bin/watch-sim.sh` boots the real firmware ELF on an emulated nRF52840 DK (Renode). Not a test tier with assertions (yet) — an interactive bring-up and debugging surface for the peripheral-touching paths host tests can't reach, minus what Renode can't model (BLE radio, sensor analog, power). See [Simulating without a board](#simulating-without-a-board-renode).
+- **Simulator runs** sit between the two: `bin/watch-sim.sh` boots the real firmware ELF on an emulated nRF52840 DK (Renode) as an interactive bring-up and debugging surface for the peripheral-touching paths host tests can't reach; `sim/ci_smoke.py` drives the same launcher non-interactively and asserts on named observables, which is the tier CI runs. Both stop where Renode does — no BLE radio, no sensor analog, no power. See [Simulating without a board](#simulating-without-a-board-renode).
 
 The line between the two is enforced architecturally: pure-logic crates in `apps/custom_watch/drivers/` build for the host (`x86_64-unknown-linux-gnu`) and `cargo test` normally. The `app/` and `boards/` crates build for `thumbv7em-none-eabihf` and need a board. Aim to keep 60–70% of firmware code host-testable — it's the single most effective lever for keeping the inner loop fast.
 
@@ -144,7 +144,7 @@ You **cannot**:
 
 - Run `cargo run` (it requires a board to flash to)
 - Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully; the phone link's sim transport below is the stand-in). This includes the step-7 run-sync `run_manifest` / `run_chunk` GATT characteristics, which only exist on the `--features ble` build.
-- Test the on-device flash run store's write path end to end (see the note in the Renode section: the store *arms* in the sim but the sim has no stop button, so a run is never committed to flash there)
+- Test the on-device flash run store against real NVMC. The store arms and a `runMacro $btn2` stop does commit a blob under Renode's NVMC model (see the Renode section), so the write path is exercised — but whether a real erase/write failure surfaces as an `Err` rather than a silent partial write is a bench item
 - Test real sensor analog behaviour (the HR/baro breakouts have no Renode device models yet — the display does)
 - Measure actual power consumption
 
@@ -261,7 +261,7 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 
 ### The Renode sim in CI
 
-`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); a second job, **`sim-firmware`** ("Simulate custom_watch firmware (Renode)"), defends **sim-verified**. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
+`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); two further jobs defend **sim-verified**. **`sim-firmware`** ("Simulate custom_watch firmware (Renode)") runs the `smoke` scenario and is **in the `CI gate` required-check list**, because that sequence has a manual verification pass behind it (`sim/verification-2026-07-19/`) and a long green history on hosted runners. **`sim-scenarios`** runs `pages` + `alerts` and is deliberately **not** required yet: they first executed 2026-07-26, and blocking every PR in the repo on two-run-old assertions is the risk worth avoiding. It is strict within itself, so a regression still fails loudly — it just does not gate. Fold it into `needs:` once it has run green over a stretch of unrelated PRs. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
 
 ```
 # on ubuntu-latest, timeout-minutes: 25
@@ -269,10 +269,20 @@ curl … renode-1.16.1.linux-portable-dotnet.tar.gz   # sha256-pinned
 cargo install defmt-print --locked --version '^1.1' # cached between runs
 DEFMT_LOG=debug cargo build --release --bin app \
   --features sim-autostart,sim-buttons,sim-course,dev-blink
-python3 apps/custom_watch/sim/ci_smoke.py           # boot + assert
+
+# one step per scenario, each in its own out-dir; smoke gates, the other two do not
+python3 …/ci_smoke.py --scenario smoke  --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"  --budget 300
+python3 …/ci_smoke.py --scenario pages  --out-dir "$RUNNER_TEMP/watch-sim-ci/pages"  --budget 300
+python3 …/ci_smoke.py --scenario alerts --out-dir "$RUNNER_TEMP/watch-sim-ci/alerts" --budget 300
 ```
 
-`sim/ci_smoke.py` is the harness — runnable locally too (it needs `renode` + `defmt-print` on PATH, so a Linux dev box, not a Mac). It drives `watch-sim.sh` on the `bench_jog` fixture and fails with a named expectation if any of these doesn't happen:
+Three steps rather than one `--scenario all` so a red step *names* the surface that broke without anyone opening a log — which matters more here than anywhere else in CI, because Renode is not installable on every contributor machine and CI is usually the only executor. Keeping `smoke` its own step is the load-bearing part of that split: a red `smoke` beside a green `pages` points at the pipeline, and the reverse points at the new scenario code. The cost is one emulator boot per step, which is what the budgets are sized against: 3 × 300 s = 15 min inside the 25 min cap, leaving ~10 min for the Renode fetch, the toolchain and a cold cargo build. The budget sits *below* the job timeout deliberately — overrunning it exits through the harness's own diagnostic dump, where the job timeout kills the runner bare. **A scenario added to the harness needs a step added to the workflow**; the `all` default is not what CI runs.
+
+Each step writes into its own subdirectory of `$RUNNER_TEMP/watch-sim-ci`, so the single `if: failure()` upload still carries every scenario's evidence and no two scenarios overwrite each other's `sim-output.log` / `frame.ppm` / `renode.log`.
+
+`sim/ci_smoke.py` is the harness — runnable locally too (it needs `renode` + `defmt-print` on PATH, so a Linux dev box, not a Mac). It drives `watch-sim.sh` and fails with a named expectation when an assertion's log line or artifact doesn't arrive.
+
+The `smoke` scenario is the original seven-assertion sequence, and the one with a manual verification pass behind it ([`sim/verification-2026-07-19/`](sim/verification-2026-07-19/README.md)):
 
 | Assertion | Log / artifact it waits on |
 |---|---|
@@ -286,7 +296,44 @@ python3 apps/custom_watch/sim/ci_smoke.py           # boot + assert
 
 Every wait is on a specific log line with a per-assertion deadline rather than a fixed sleep, and the fixture + sensor models are virtual-time driven with no randomness (see [`sim/verification-2026-07-19/README.md`](sim/verification-2026-07-19/README.md)), so the run replays identically. The one exception is the ~1.5 s gap between the two BTN2 presses, which has to land inside the firmware's 4 s stop-confirm window and so can't wait on the "armed" line; a missed injected press is retried up to three times. On failure the job uploads the decoded stream, `renode.log`, the raw defmt capture, the monitor transcript, and the panel dump as the `custom-watch-sim-logs` artifact.
 
-**What this job does not prove.** It is a smoke test of the *pipeline*, not evidence about silicon. BLE / the S140 SoftDevice cannot run under Renode at all; power draw is not modelled in any form; the sensor models answer what the drivers *believe* about the parts (register maps, retention-across-shutdown, contact/AGC constants are all pinned to the driver, not to a datasheet), and the waveforms are clean synthetic shapes, not analog behaviour. A green `sim-firmware` means the firmware is self-consistent end to end under the emulator — the bench-verify list in `sim/verification-2026-07-19/README.md § Model limitations` is untouched by it.
+### Scenarios — running one at a time
+
+`--scenario` selects which sequence runs. Default `all`; the process exits non-zero if any selected scenario fails.
+
+```
+python3 apps/custom_watch/sim/ci_smoke.py                        # all of them
+python3 apps/custom_watch/sim/ci_smoke.py --scenario smoke       # just the proven path
+python3 apps/custom_watch/sim/ci_smoke.py --scenario pages
+python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts
+
+# a named fixture from sim/nmea/, a moved out-dir, a tighter wall-clock cap
+python3 apps/custom_watch/sim/ci_smoke.py --scenario pages \
+  --fixture mountain_loop --out-dir /tmp/watch-pages --budget 300
+
+python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts --phone-port 9900
+```
+
+| Scenario | What it proves | What it still doesn't |
+|---|---|---|
+| `smoke` | The recording pipeline end to end: NMEA → parser → fix accumulator → recorder → distance, one run face on glass, and the two-press stop committing a CRC'd blob to a flash slot. | Nothing about the *other* 32 pages, and nothing about an alert firing. |
+| `pages` | That the run-view page cycle actually renders — BTN3 walks the filtered mask and each page produces a non-blank frame instead of a blank or a panic. It is a **render** assertion, so it catches a page whose face code faults, divides by zero on empty data, or draws nothing; it does not check that a number is *right*. | Correctness of any displayed value (that's the host tests on `watch_core`), legibility, glyph shape at a given font tier, or one-handed press ergonomics. |
+| `alerts` | That the alert path fires from real recorded state and reaches the panel — the `watch_core::alerts` engine's fuel / zone / pace reminders off the recorder's own event cadence, and the `nav` task's off-course latch and re-arm — as an inverse-video banner, without disturbing the recording underneath it (the L4 contract). | Whether a tired runner *notices* it. There is no vibration motor at tier 1, so an alert is display-only by construction and "unmissable" is a bench/wrist claim, never a sim one. |
+
+`--budget` is a hard wall-clock cap for the run, not a per-assertion deadline (those are per-assertion and tighter). It exists so a wedged emulator fails with the harness's own diagnostics — last 40 lines of decoded output plus the tail of `renode.log` — rather than hanging until something outside kills it. Locally you can leave it at the default; in CI it is set per step, and always below the job's own `timeout-minutes`.
+
+Use `--out-dir` when running more than one scenario by hand: each run clears `sim-output.log`, `frame.ppm` and the `watch-sim.latest` pointer in its out-dir first, so two scenarios sharing one out-dir destroy each other's evidence.
+
+### What the sim cannot prove, in the four-rung vocabulary
+
+The rungs are defined in [`docs/custom_watch/quality_standards.md`](../../docs/custom_watch/quality_standards.md). A green run of any scenario earns **sim-verified** for the observable it named, and that rung's ceiling is: *says nothing about real silicon, analog behaviour, the radio, or power*. Concretely, and none of this changes as scenarios are added:
+
+- **BLE can never be sim-verified.** Renode does not model the S140 SoftDevice ([decisions.md § 210](../../docs/architecture/decisions.md)), so the whole radio path — RAM origin, interrupt priorities, connection interval, pairing/bonding, `run_manifest` / `run_chunk` / settings / course-push — jumps host/build-verified straight to bench-verified. There is no sim scenario that could cover it.
+- **The sim models no power at all.** Renode does not simulate current, so a green run is **not a battery claim**. Every power and runtime figure in this workspace — the ~110 / ~180 / ~220 h GNSS-mode projections included — is a derivation awaiting a PPK2.
+- **The sensor models are pinned to the drivers, not to silicon.** The MAX86177 and BMP581 models answer the register sequences the drivers issue, with a deterministic waveform and a scripted altitude. That verifies the *path*; a model built from the driver's beliefs cannot detect a wrong belief. No register semantics, no bus timing, no analog noise or settling.
+- **No SAADC**, so the battery-gauge sampling path is unreachable; only "the task parks cleanly and the faces still render" is checkable.
+- **No RF, no antenna, no thermal, no mechanical, no legibility.** A `pages` pass says a page drew pixels — not that a numeral is readable in direct sun at arm's length, which is a step-4 bench item.
+
+A green `sim-firmware` means the firmware is self-consistent end to end under the emulator. The bench-verify list in [`sim/verification-2026-07-19/README.md`](sim/verification-2026-07-19/README.md) § Model limitations and the tier-1 checklist in `quality_standards.md` are untouched by it. Never write "verified" without the rung and the observable.
 
 **Not in the `CI gate` aggregator yet.** The job is deliberately absent from `ci-gate`'s `needs:` list, so it reports but does not block merges. Promoting it is a follow-up once it has been observed green on a few real runs — Renode is not installable on every contributor machine, so its first hosted-runner execution is its first execution.
 

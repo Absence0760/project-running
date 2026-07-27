@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -141,8 +141,10 @@ pub async fn screen_task(
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut signal_rx = unwrap!(state::SIGNAL.receiver());
     let mut battery_rx = unwrap!(state::BATTERY.receiver());
+    let mut pending_runs_rx = unwrap!(state::PENDING_RUNS.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
+    let mut btn3_hold_rx = unwrap!(state::BTN3_HOLD.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
@@ -151,7 +153,9 @@ pub async fn screen_task(
     let mut tb: Option<TrackbackView> = None;
     let mut signal: Option<SignalSample> = None;
     let mut battery: Option<u8> = None;
+    let mut pending_runs: u8 = 0;
     let mut page = Page::default();
+    let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
@@ -161,6 +165,10 @@ pub async fn screen_task(
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
     let mut stop_armed: Option<u32> = None;
+    // Whether BTN3 is being held between its two press tiers, published by the
+    // button task for the duration of the hold and nothing else — it has no TTL,
+    // so it never enters the tick decision below.
+    let mut btn3_hold = false;
     // No published offset yet = the home clock stays UTC (and says so).
     let mut tz_offset_min: Option<i16> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
@@ -231,14 +239,30 @@ pub async fn screen_task(
         if let Some(b) = battery_rx.try_changed() {
             battery = b;
         }
+        if let Some(n) = pending_runs_rx.try_changed() {
+            pending_runs = n;
+        }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
         }
         if let Some(v) = stop_armed_rx.try_changed() {
             stop_armed = v;
         }
+        if let Some(v) = btn3_hold_rx.try_changed() {
+            btn3_hold = v;
+        }
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
+        }
+        // Change-gated, not per-render: the loop also runs for every fix,
+        // snapshot, alert and heartbeat tick, and an unconditional log would put
+        // a standing per-second reason to emit back into a task whose whole
+        // design is to sleep between events. `sim/ci_smoke.py` matches this line
+        // to know a BTN3 press reached the panel, so its shape is a contract
+        // with the harness.
+        if logged_page != Some(page) {
+            debug!("ui: page {}", page);
+            logged_page = Some(page);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -262,19 +286,72 @@ pub async fn screen_task(
             idle_view,
             tz_offset_min,
         );
+        // The hero band is decided here rather than at its `match` below,
+        // because the standing marker shares row 1 with it and has to know how
+        // far its pixels reach before the text rows are committed.
+        //
+        // The manual QNH re-zero's transient feedback: an inverse banner over
+        // the idle face's title band for its TTL. Idle-only — the gesture only
+        // exists on the idle face, and a run view's hero band belongs to the
+        // run's own alerts.
+        let rezero_banner =
+            ui_frame::rezero_banner_status(rezero, uptime_s, face::run_view(rec.as_ref()))
+                .map(elevation::rezero_banner);
+        let stop_pending =
+            ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
+        // The mid-hold grid prompt, re-gated here on this task's own view of the
+        // state: the published flag says a hold is between the tiers, and only
+        // this side knows whether the surface under it still has a grid to
+        // escalate into by the time the frame composes.
+        let hold_prompt = btn3_hold
+            && button::btn3_hold_prompt(ui_frame::record_state(rec.as_ref()), grid.is_some());
+        // `hero_band`'s `stop_pending` input is really "a two-row banner is about
+        // to cover the band", which is what suppresses the three-row numeral hero
+        // whose bottom third would otherwise peek out below it. Both banners span
+        // the same two rows, so both owe it.
+        let band_covered = stop_pending || hold_prompt;
+        // The pages whose body spares row 2 headline their number in the 32x48 +
+        // 16x32 numeral faces over rows 0-2, with the label and state tag on row
+        // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
+        // and so does a value too wide to render whole at the taller size.
+        let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
+        let band = ui_frame::hero_band(HeroFrame {
+            alert: alert.is_some(),
+            rezero_banner: rezero_banner.is_some(),
+            hero: hero.is_some(),
+            numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
+            fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
+            stop_pending: band_covered,
+            page,
+        });
         // Persist the fuel reminder past its transient banner: latch the standing
-        // overdue state off the same `alert` value and paint a compact marker.
-        // The Fuel glance page being open is the acknowledgement.
+        // overdue state off the same `alert` value. The Fuel glance page being
+        // open is the acknowledgement.
         let overdue = fuel_overdue.observe(
             alert,
             ui_frame::alerts_run_active(rec.as_ref()),
             page == Page::Fuel,
         );
-        face::apply_fuel_marker(&mut rows, overdue, page);
-        // The diagnostics face's numeric battery read-out; the idle-face icon
-        // is a widget below, and run views carry neither.
-        if !face::run_view(rec.as_ref()) {
+        if face::run_view(rec.as_ref()) {
+            // A run view carries neither the idle battery icon nor the
+            // diagnostics BAT row, so this marker is the only place a runner can
+            // learn the cell is going — on a device whose mode picker exists to
+            // trade fixes for hours, and whose runs last days.
+            face::apply_run_marker(
+                &mut rows,
+                page,
+                overdue,
+                battery,
+                ui_frame::hero_row_cells(band, hero.as_deref().unwrap_or("")),
+            );
+        } else {
+            // The diagnostics face's numeric battery read-out; the idle-face
+            // icon is a widget below.
             face::apply_battery_row(&mut rows, idle_view, battery);
+            // A run interrupted by a reset (or a failed commit) is on flash and
+            // pullable, but nothing else on the idle face distinguishes that boot
+            // from any other — so say so, standing, until the phone has it.
+            face::apply_pending_run_marker(&mut rows, idle_view, pending_runs);
         }
         let icons = face::page_icons(
             page,
@@ -331,36 +408,14 @@ pub async fn screen_task(
             let (course, panel) = unwrap!(nav_draw.as_ref());
             widgets::draw_nav_panel(&mut fb, course, panel, nav_alert.as_deref());
         }
-        // The 2x hero (elapsed time, or the glance page's headline metric)
-        // overlays rows 0-1 (drawn after them so it wins); the state tag in
-        // row 0 sits top-right, clear of the digits. An active on-run alert
-        // takes the hero band over for its TTL — an inverse-video banner
-        // ("! DRINK" light on a dark band) is the most unmissable treatment
-        // the panel gives, and the alert engine only emits during a run, so
-        // the idle face never loses its title. The manual QNH re-zero's
-        // transient feedback: the same inverse banner over the idle face's
-        // title band for its TTL. Idle-only — the gesture only exists on the
-        // idle face, and a run view's hero band belongs to the run's own
-        // alerts.
-        let rezero_banner =
-            ui_frame::rezero_banner_status(rezero, uptime_s, face::run_view(rec.as_ref()))
-                .map(elevation::rezero_banner);
-        // Computed ahead of the hero: the armed-stop banner spans two rows,
-        // and the glance pages' three-row numeral hero would otherwise peek
-        // out under it (a two-row 2x hero is covered outright).
-        let stop_pending =
-            ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
-        // The single-metric glance pages headline their number in the generated
-        // numeral faces (their face reserves rows 0-2 + puts the label and state
-        // tag on row 3); every other hero stays 2x over rows 0-1.
-        let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
-        match ui_frame::hero_band(HeroFrame {
-            alert: alert.is_some(),
-            rezero_banner: rezero_banner.is_some(),
-            hero: hero.is_some(),
-            stop_pending,
-            page,
-        }) {
+        // The hero (elapsed time, or the glance page's headline metric) overlays
+        // the top rows, drawn after them so it wins; the state tag sits
+        // top-right, clear of the digits. An active on-run alert takes the band
+        // over for its TTL — an inverse-video banner ("! DRINK" light on a dark
+        // band) is the most unmissable treatment the panel gives, and the alert
+        // engine only emits during a run, so the idle face never loses its
+        // title. Which band this is was decided above, with the row layout.
+        match band {
             HeroBand::AlertBanner => {
                 if let Some(a) = alert {
                     fb.draw_banner_2x(0, &alerts::banner(a));
@@ -374,6 +429,11 @@ pub async fn screen_task(
             HeroBand::BigNumHero => {
                 if let Some(hero) = &hero {
                     fb.draw_bignum_hero(0, hero);
+                }
+            }
+            HeroBand::MedNumHero => {
+                if let Some(hero) = &hero {
+                    fb.draw_bignum_med_hero(0, hero);
                 }
             }
             HeroBand::TextHero => {
@@ -402,6 +462,7 @@ pub async fn screen_task(
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
                     Page::ElevationProfile => widgets::draw_elev_profile_overlay(&mut fb, snap),
+                    Page::RouteElev => widgets::draw_route_elev_overlay(&mut fb, snap),
                     _ => {}
                 }
             }
@@ -431,10 +492,22 @@ pub async fn screen_task(
                 widgets::draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
+        // The mid-hold grid prompt: the direct answer to a BTN3 hold, so like the
+        // armed stop it outranks an alert banner for the ~1 s it shows (a runner
+        // navigating during a reminder would otherwise get no tier feedback at
+        // all, which is the fried-hour-60 case this exists for). The hero band is
+        // the least load-bearing thing on screen mid-navigation — nobody reads
+        // elapsed time while thumbing through pages — and the alert's TTL
+        // outlives the hold, so it re-asserts on release exactly as it does after
+        // the grid closes.
+        if hold_prompt {
+            fb.draw_banner_2x(0, button::BTN3_HOLD_BANNER);
+        }
         // The armed-stop prompt: the direct answer to a BTN2 press, so for its
-        // 4 s confirm window it outranks an alert banner on the hero band. The
-        // grid (drawn after) still wins over it — BTN2 inside the grid cancels
-        // and disarms, never arms.
+        // 4 s confirm window it outranks an alert banner on the hero band. Drawn
+        // after the hold prompt because a terminal action's confirm outranks a
+        // navigation hint. The grid (drawn after) still wins over both — BTN2
+        // inside the grid cancels and disarms, never arms.
         if stop_pending {
             fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
         }
@@ -452,10 +525,10 @@ pub async fn screen_task(
         // additionally latches into the persistent row-1 marker.
         if let Some(cursor) = grid.filter(|_| face::run_view(rec.as_ref())) {
             let pages_mask = ui_frame::pages_mask(rec.as_ref());
-            for (row, text) in page_grid::grid_rows(pages_mask).iter().enumerate() {
+            for (row, text) in page_grid::grid_rows(pages_mask, cursor).iter().enumerate() {
                 fb.draw_text_row(row, text);
             }
-            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor) {
+            if let Some(cell) = page_grid::grid_cell(pages_mask, cursor, cursor) {
                 widgets::draw_grid_cursor(&mut fb, cell);
             }
             widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(cursor, pages_mask));
@@ -523,10 +596,14 @@ pub async fn screen_task(
                     rezero_rx.changed(),
                     page_grid_rx.changed(),
                     stop_armed_rx.changed(),
-                    select3(
+                    select4(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
-                        Timer::after(tick),
+                        pending_runs_rx.changed(),
+                        // A registered waker, not a timer: at rest this arm costs
+                        // nothing and only the button task's two sends per hold
+                        // ever resolve it.
+                        select(btn3_hold_rx.changed(), Timer::after(tick)),
                     ),
                 ),
             ),
@@ -547,11 +624,17 @@ pub async fn screen_task(
             Either3::Third(Either4::Fourth(Either4::First(r))) => rezero = Some(r),
             Either3::Third(Either4::Fourth(Either4::Second(g))) => grid = g,
             Either3::Third(Either4::Fourth(Either4::Third(v))) => stop_armed = v,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::First(m)))) => {
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::First(m)))) => {
                 tz_offset_min = Some(m)
             }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Second(b)))) => battery = b,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either3::Third(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::First(v))))) => {
+                btn3_hold = v
+            }
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::Second(
+                (),
+            ))))) => {}
         }
     }
 }
