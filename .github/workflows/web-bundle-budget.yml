@@ -49,11 +49,24 @@ env:
   # audit + dep dedupe), tracked separately — not folded into an
   # unrelated firmware PR.
   #
+  # 2026-07-27 — total raised 2200 → 2400. maplibre-gl v6 splits the map
+  # worker out of the main bundle into its own module graph, which the
+  # bundler must make self-contained, so the shared style/tile-parsing code
+  # is now on disk twice: once in the map chunk, once in the emitted
+  # worker (126 KB gzipped). v5's UMD carried the worker inline and counted
+  # it once. Measured total 2196 KB — i.e. the old 2200 ceiling passed with
+  # 4 KB to spare, which is noise-level and would flap. Not feature growth
+  # and not a rogue dep: largest single chunk is 244 KB, still well under
+  # the 350 ceiling. Re-set to ~9% headroom over 2196, matching the
+  # 2026-07-11 precedent. The dedicated bundle-trim pass noted above is
+  # still the durable follow-up and is where this 126 KB should be
+  # revisited — a self-hosted worker + shared pair would de-duplicate it.
+  #
   # 33% headroom on largest (≥350) → keeps the main entry bundle from
   # quietly drifting toward code-split territory. Bump deliberately when
   # the right answer is "ship the feature", not casually because the job
   # failed.
-  MAX_TOTAL_KB: 2200
+  MAX_TOTAL_KB: 2400
   MAX_LARGEST_CHUNK_KB: 350
 
 jobs:
