@@ -233,5 +233,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.49.0")
+    implementation("io.sentry:sentry-android:8.50.1")
 }
