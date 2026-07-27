@@ -51,6 +51,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      web_e2e: ${{ steps.filter.outputs.web_e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,6 +78,7 @@ jobs:
           if [ -z "$files" ]; then
             echo "::notice::could not determine changed files — running full CI"
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "web_e2e=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "$files"
@@ -85,6 +87,32 @@ jobs:
           else
             echo "::notice::docs-only diff — heavy jobs skip, CI gate still reports"
             echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The Playwright suite (14 shards) plus the live-hub and SSO runs are
+          # 89 of the ~139 runner-minutes a full run costs — 63%. A change
+          # confined to a native client or a Dart package cannot reach any of
+          # it, and paying that on a firmware-only PR is what starves the
+          # runner budget during a merge sweep (see the concurrency note above).
+          #
+          # Written as an EXCLUSION list on purpose. The gate treats `skipped`
+          # as a pass, so a filter that is too NARROW deletes coverage silently
+          # — green having tested nothing. Excluding known-irrelevant trees
+          # instead of listing web-relevant ones inverts that: an unrecognised
+          # path (a new top-level directory, a new app) runs the suite by
+          # default, and only a deliberate edit here can drop coverage.
+          #
+          # Deliberately NOT excluded, though they look unrelated to the web:
+          #   apps/job_worker — the live-hub e2e go-builds and runs it
+          #                     (apps/web/tests-e2e/scripts/start-livehub.sh)
+          #   apps/backend    — the whole suite runs against a real Supabase
+          #                     stack: schema, RLS, edge functions, seed
+          #   root lockfiles  — how a web dependency bump actually arrives
+          #                     (maplibre-gl v6 came in exactly this way)
+          if echo "$files" | grep -qvE '^(docs/|\.claude/|infra/|packages/|apps/(custom_watch|watch_wear|watch_ios|watch_garmin|mobile_android|mobile_ios)/)|\.md$|^(analysis_options\.yaml|melos\.yaml|pubspec\.yaml)$'; then
+            echo "web_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::nothing the web suite can reach changed — web e2e skips"
+            echo "web_e2e=false" >> "$GITHUB_OUTPUT"
           fi
 
   # A workflow file GitHub's parser rejects never fails a PR job — it produces
@@ -1141,7 +1169,7 @@ jobs:
 
   e2e-web:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web_e2e == 'true'
     # Shard the Playwright suite across 10 parallel jobs. Each shard
     # boots its own Supabase + dev server so there's zero shared-DB
     # state risk between shards. With workers=1 inside a shard (per
@@ -1329,7 +1357,7 @@ jobs:
 
   e2e-web-livehub:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web_e2e == 'true'
     # The Go live-hub WebSocket path, end-to-end. The sharded e2e-web
     # job above tests the spectator page against the Supabase Realtime
     # FALLBACK (PUBLIC_LIVE_HUB_URL unset). This single, UNSHARDED job
@@ -1438,7 +1466,7 @@ jobs:
 
   e2e-web-sso:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web_e2e == 'true'
     # The OAuth / SSO login path, end-to-end, against a mock OIDC
     # provider. Real Google/Apple can't run in CI and GoTrue special-cases
     # them, so config.toml's [auth.external.keycloak] is pointed at a
