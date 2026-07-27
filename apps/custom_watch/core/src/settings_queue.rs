@@ -103,7 +103,7 @@ mod tests {
         }
     }
 
-    fn page_mask(mask: u32) -> WatchSettings {
+    fn page_mask(mask: u64) -> WatchSettings {
         WatchSettings {
             pages: Some(mask),
             ..WatchSettings::default()

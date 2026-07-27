@@ -35,8 +35,11 @@
 
 use heapless::Vec;
 
+use crate::race_phases::RacePhasePreset;
 use crate::record_cadence::plausible_sea_level_pa;
-use crate::settings::{plausible_tz_offset_min, WatchSettings};
+use crate::settings::{
+    plausible_tz_offset_min, race_phase_preset_from_wire, GuidedRunId, WatchSettings,
+};
 
 /// One routed settings field: which sink to feed and the value to feed it,
 /// carried in the sink's own argument shape so the task's executor is a bare
@@ -63,12 +66,33 @@ pub enum SettingsEffect {
         drink_interval_s: u32,
         eat_interval_s: u32,
     },
-    /// [`crate::record::Recorder::set_pages_enabled`]
-    PagesEnabled(u32),
+    /// [`crate::record::Recorder::set_pages_enabled`], widened from the wire's
+    /// 32-bit field by [`crate::page::mask_from_wire`].
+    PagesEnabled(u64),
     /// [`crate::record::Recorder::set_hide_empty_pages`]
     HideEmptyPages(bool),
     /// The ui task's home-clock offset watch (`state::TZ_OFFSET_MIN`).
     TzOffsetMin(i16),
+    /// [`crate::alerts::AlertEngine::set_distance_interval`]; `None` disarms the
+    /// alert, which is a real update and not the same as the field being absent.
+    DistanceInterval(Option<u32>),
+    /// [`crate::alerts::AlertEngine::set_time_interval`]; `None` disarms.
+    TimeInterval(Option<u32>),
+    /// [`crate::alerts::AlertEngine::set_pace_band`], in that setter's own
+    /// `(fast, slow)` shape; `None` disarms. The transposition risk two
+    /// same-typed arguments carry is held off by naming the edges everywhere
+    /// upstream of here (`settings::PaceBandCfg`) and by the setter rejecting an
+    /// inverted band, so this is the only place the pair is positional.
+    PaceBand(Option<(u32, u32)>),
+    /// [`crate::record::Recorder::set_race_phases`]; a `None` distance is how
+    /// that setter is told to clear the plan.
+    RacePhases {
+        distance_m: Option<f64>,
+        goal_time_s: Option<f64>,
+        preset: RacePhasePreset,
+    },
+    /// [`crate::record::Recorder::set_guided_run`]; `None` deselects.
+    GuidedRun(Option<GuidedRunId>),
 }
 
 impl SettingsEffect {
@@ -85,6 +109,11 @@ impl SettingsEffect {
             Self::PagesEnabled(_) => EffectKind::PagesEnabled,
             Self::HideEmptyPages(_) => EffectKind::HideEmptyPages,
             Self::TzOffsetMin(_) => EffectKind::TzOffsetMin,
+            Self::DistanceInterval(_) => EffectKind::DistanceInterval,
+            Self::TimeInterval(_) => EffectKind::TimeInterval,
+            Self::PaceBand(_) => EffectKind::PaceBand,
+            Self::RacePhases { .. } => EffectKind::RacePhases,
+            Self::GuidedRun(_) => EffectKind::GuidedRun,
         }
     }
 }
@@ -105,6 +134,11 @@ pub enum EffectKind {
     PagesEnabled,
     HideEmptyPages,
     TzOffsetMin,
+    DistanceInterval,
+    TimeInterval,
+    PaceBand,
+    RacePhases,
+    GuidedRun,
 }
 
 impl EffectKind {
@@ -122,7 +156,12 @@ impl EffectKind {
             Self::FuelIntervals => Some(Self::PagesEnabled),
             Self::PagesEnabled => Some(Self::HideEmptyPages),
             Self::HideEmptyPages => Some(Self::TzOffsetMin),
-            Self::TzOffsetMin => None,
+            Self::TzOffsetMin => Some(Self::DistanceInterval),
+            Self::DistanceInterval => Some(Self::TimeInterval),
+            Self::TimeInterval => Some(Self::PaceBand),
+            Self::PaceBand => Some(Self::RacePhases),
+            Self::RacePhases => Some(Self::GuidedRun),
+            Self::GuidedRun => None,
         }
     }
 
@@ -161,6 +200,11 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         pages,
         hide_empty_pages,
         tz_offset_min,
+        distance_interval_m,
+        time_interval_s,
+        pace_band,
+        race_phases,
+        guided_run,
     } = *s;
 
     let mut plan = SettingsPlan::new();
@@ -192,6 +236,9 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         });
     }
     if let Some(mask) = pages {
+        // Already the recorder's full-width mask: since the v4 frame carries 64
+        // bits, the widening that used to happen here now happens once in
+        // `settings::decode`, where the frame's version says whether it is owed.
         let _ = plan.push(SettingsEffect::PagesEnabled(mask));
     }
     if let Some(hide) = hide_empty_pages {
@@ -200,6 +247,33 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
     if let Some(m) = plausible_tz_offset_min(tz_offset_min) {
         let _ = plan.push(SettingsEffect::TzOffsetMin(m));
     }
+    if let Some(m) = distance_interval_m {
+        let _ = plan.push(SettingsEffect::DistanceInterval(m));
+    }
+    if let Some(s) = time_interval_s {
+        let _ = plan.push(SettingsEffect::TimeInterval(s));
+    }
+    if let Some(band) = pace_band {
+        let _ =
+            plan.push(SettingsEffect::PaceBand(band.map(|b| {
+                (u32::from(b.fast_s_per_km), u32::from(b.slow_s_per_km))
+            })));
+    }
+    if let Some(cfg) = race_phases {
+        // The third guard with no setter to live in: a preset byte naming no
+        // member of the enum is not a value `set_race_phases` can be handed, so
+        // it is dropped here — costing only this field, never the frame.
+        if let Some(preset) = race_phase_preset_from_wire(cfg.preset) {
+            let _ = plan.push(SettingsEffect::RacePhases {
+                distance_m: cfg.distance_m.map(f64::from),
+                goal_time_s: cfg.goal_time_s.map(f64::from),
+                preset,
+            });
+        }
+    }
+    if let Some(id) = guided_run {
+        let _ = plan.push(SettingsEffect::GuidedRun(id));
+    }
     plan
 }
 
@@ -207,6 +281,9 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
 mod tests {
     use super::*;
     use crate::record_cadence::{MAX_SEA_LEVEL_PA, MIN_SEA_LEVEL_PA};
+    use crate::settings::{
+        race_phase_preset_to_wire, PaceBandCfg, RacePhasesCfg, GUIDED_RUN_ID_LEN,
+    };
     use crate::settings::{FuelCfg, GearCfg, PacerGoalCfg, MAX_SETTINGS_LEN, TZ_OFFSET_LIMIT_MIN};
 
     /// A frame carrying every field, each with a value its guard accepts. An
@@ -232,6 +309,18 @@ mod tests {
             pages: Some(0b1010),
             hide_empty_pages: Some(true),
             tz_offset_min: Some(-420),
+            distance_interval_m: Some(Some(1_000)),
+            time_interval_s: Some(Some(1_800)),
+            pace_band: Some(Some(PaceBandCfg {
+                fast_s_per_km: 300,
+                slow_s_per_km: 420,
+            })),
+            race_phases: Some(RacePhasesCfg {
+                distance_m: Some(42_195),
+                goal_time_s: Some(12_600),
+                preset: race_phase_preset_to_wire(RacePhasePreset::TenTenTen),
+            }),
+            guided_run: Some(GuidedRunId::new("easy-30")),
         }
     }
 
@@ -359,6 +448,7 @@ mod tests {
                     pages: full.pages,
                     ..WatchSettings::default()
                 },
+                // Verbatim, not widened: the v4 frame already carries all 64 bits.
                 SettingsEffect::PagesEnabled(0b1010),
             ),
             (
@@ -374,6 +464,45 @@ mod tests {
                     ..WatchSettings::default()
                 },
                 SettingsEffect::TzOffsetMin(-420),
+            ),
+            (
+                WatchSettings {
+                    distance_interval_m: full.distance_interval_m,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::DistanceInterval(Some(1_000)),
+            ),
+            (
+                WatchSettings {
+                    time_interval_s: full.time_interval_s,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::TimeInterval(Some(1_800)),
+            ),
+            (
+                WatchSettings {
+                    pace_band: full.pace_band,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::PaceBand(Some((300, 420))),
+            ),
+            (
+                WatchSettings {
+                    race_phases: full.race_phases,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::RacePhases {
+                    distance_m: Some(42_195.0),
+                    goal_time_s: Some(12_600.0),
+                    preset: RacePhasePreset::TenTenTen,
+                },
+            ),
+            (
+                WatchSettings {
+                    guided_run: full.guided_run,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::GuidedRun(GuidedRunId::new("easy-30")),
             ),
         ];
         for (frame, effect) in expected {
@@ -484,6 +613,125 @@ mod tests {
         assert_eq!(plan.len(), EffectKind::COUNT - 2);
         assert!(!kinds_of(&plan).contains(&EffectKind::SeaLevelPa));
         assert!(!kinds_of(&plan).contains(&EffectKind::TzOffsetMin));
+    }
+
+    #[test]
+    fn disarming_a_v4_setting_is_an_update_not_an_absence() {
+        // `Some(None)` is the phone turning a feature off and must reach its
+        // sink; `None` is the field not being in the frame. Collapsing the two
+        // would leave an alert armed, or a guided run selected, that the runner
+        // switched off — the same distinction `zone_ceiling` has always carried.
+        for (frame, effect) in [
+            (
+                WatchSettings {
+                    distance_interval_m: Some(None),
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::DistanceInterval(None),
+            ),
+            (
+                WatchSettings {
+                    time_interval_s: Some(None),
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::TimeInterval(None),
+            ),
+            (
+                WatchSettings {
+                    pace_band: Some(None),
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::PaceBand(None),
+            ),
+            (
+                WatchSettings {
+                    guided_run: Some(None),
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::GuidedRun(None),
+            ),
+            (
+                WatchSettings {
+                    race_phases: Some(RacePhasesCfg {
+                        distance_m: None,
+                        goal_time_s: None,
+                        preset: race_phase_preset_to_wire(RacePhasePreset::Even),
+                    }),
+                    ..WatchSettings::default()
+                },
+                // A `None` distance IS the clear, so the effect still routes and
+                // the setter drops the plan on arrival.
+                SettingsEffect::RacePhases {
+                    distance_m: None,
+                    goal_time_s: None,
+                    preset: RacePhasePreset::Even,
+                },
+            ),
+        ] {
+            assert_eq!(plan_apply(&frame).as_slice(), &[effect][..]);
+        }
+    }
+
+    #[test]
+    fn an_unknown_race_phase_preset_byte_costs_only_its_own_field() {
+        // The third guard with no setter to live in. A byte naming no preset
+        // cannot be handed to `set_race_phases` at all, so it is dropped — but
+        // dropping the frame would let one bad byte discard a whole push.
+        let mut s = fully_populated();
+        s.race_phases = Some(RacePhasesCfg {
+            distance_m: Some(42_195),
+            goal_time_s: Some(12_600),
+            preset: 3,
+        });
+        let plan = plan_apply(&s);
+        assert!(!kinds_of(&plan).contains(&EffectKind::RacePhases));
+        assert_eq!(plan.len(), EffectKind::COUNT - 1);
+        for b in 0..=2u8 {
+            let plan = plan_apply(&WatchSettings {
+                race_phases: Some(RacePhasesCfg {
+                    distance_m: Some(10_000),
+                    goal_time_s: None,
+                    preset: b,
+                }),
+                ..WatchSettings::default()
+            });
+            assert_eq!(plan.len(), 1, "preset byte {b} must route");
+        }
+    }
+
+    #[test]
+    fn a_pace_band_reaches_the_setter_edges_unswapped() {
+        // The one place the pair goes positional. A transposition here would arm
+        // an inverted band the setter then refuses, so the runner's push would
+        // vanish with no error anywhere.
+        let plan = plan_apply(&WatchSettings {
+            pace_band: Some(Some(PaceBandCfg {
+                fast_s_per_km: 300,
+                slow_s_per_km: 420,
+            })),
+            ..WatchSettings::default()
+        });
+        assert_eq!(
+            plan.as_slice(),
+            &[SettingsEffect::PaceBand(Some((300, 420)))][..]
+        );
+    }
+
+    #[test]
+    fn a_guided_run_id_routes_as_the_library_string_not_an_index() {
+        // The whole point of carrying the id: a later firmware build that
+        // reorders `guided_run_library()` must not re-point what the phone sent.
+        let plan = plan_apply(&WatchSettings {
+            guided_run: Some(GuidedRunId::new("tempo-builder-25")),
+            ..WatchSettings::default()
+        });
+        let [SettingsEffect::GuidedRun(Some(id))] = plan.as_slice() else {
+            panic!("expected one guided-run effect, got {plan:?}");
+        };
+        assert_eq!(id.as_str(), "tempo-builder-25");
+        // An id too long for the field is refused at construction rather than
+        // truncated into a different (or prefix-matching) run.
+        assert_eq!(GuidedRunId::new(&"x".repeat(GUIDED_RUN_ID_LEN + 1)), None);
     }
 
     #[test]

@@ -26,12 +26,17 @@ use crate::fuel_plan::{
 };
 use crate::gear_wear::{gear_wear, GearWear};
 use crate::grade_adjusted_pace::GapEstimator;
+use crate::guided_runs::{cues_due, find_guided_run, is_guided_run_valid, GuidedRun};
 use crate::hr_zones::{
     self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
 };
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
 use crate::page::Page;
+use crate::race_phases::{
+    build_phase_plan, goal_pace_s_per_km, phase_at, phase_target_pace_s_per_km, PhasePlan,
+    RacePhaseIntent, RacePhasePreset,
+};
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
@@ -110,6 +115,13 @@ pub const ELEV_PROFILE_CAP: usize = 64;
 /// has advanced this far since the last kept sample. Doubles on each thinning.
 pub const ELEV_PROFILE_SPACING_M: f64 = 25.0;
 
+/// Pushed-course climb-profile capacity, in samples. The profile panel is 156 px
+/// wide, so at 128 samples the drawn shape is limited by the panel rather than by
+/// the series, and it costs 256 B against the course's own 4 KiB budget. Unlike
+/// [`ELEV_PROFILE_CAP`] this never thins: the whole course is known up front, so
+/// the series is sampled evenly across it once ([`crate::course_profile`]).
+pub const COURSE_PROFILE_CAP: usize = 128;
+
 /// How many pushed roadbook checkpoints the watch holds — an ultra's aid legs,
 /// bounded like [`MAX_CUTOFF_LEGS`]. A longer roadbook is trimmed phone-side.
 pub const MAX_PUSHED_LEGS: usize = 16;
@@ -123,6 +135,14 @@ pub const ROADBOOK_WINDOW: usize = 4;
 /// not fabricate a training-pace set.
 pub const GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM: f64 = 120.0;
 pub const GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM: f64 = 1200.0;
+
+/// Plausible pushed race distance for a pacing-strategy phase plan: 1 km (the
+/// shortest race a three-phase strategy shapes usefully) to 500 km (past the
+/// longest single-stage ultras). A push outside this is corrupt and **ignored**,
+/// not clamped — a bad frame must leave the phase rows honestly inactive rather
+/// than plan a race the runner isn't in.
+pub const RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M: f64 = 1_000.0;
+pub const RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M: f64 = 500_000.0;
 
 /// Plausible synced VO2 max / VDOT band: 20 (very unfit) to 90 (the same
 /// physiological ceiling `fitness::vdot_from_run` rejects above). Guards a
@@ -295,6 +315,21 @@ pub struct PlanAdaptiveView {
     pub fitness_gated: bool,
 }
 
+/// Where the run has got to in the armed guided run ([`crate::guided_runs`]):
+/// how many of its cues the elapsed time has passed (`cue_index`, 0 before the
+/// first), how many it has in total, the wait until the next one (`None` past
+/// the last), and the run's target duration + what is left of it. Derived per
+/// snapshot from elapsed time against the compiled-in library run, so it needs
+/// no dispatcher state and re-derives correctly after a reboot mid-run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GuidedRunView {
+    pub cue_index: u8,
+    pub cue_count: u8,
+    pub next_cue_in_s: Option<u32>,
+    pub duration_s: u32,
+    pub remaining_s: u32,
+}
+
 /// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
 /// `band` is 0 low / 1 moderate / 2 high.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,13 +372,19 @@ pub struct AutoEffortView {
     pub considered: u8,
 }
 
-/// The loaded course's elevation profile summary ([`crate::route_elevation`]):
-/// total gain / loss and the point count the profile was sampled to.
+/// The loaded course's climb profile ([`crate::course_profile`]): total gain /
+/// loss over the whole pushed series, the course's point count and length, and
+/// the distance-even elevation series the RouteElev page draws as a shape.
+/// `len == 0` means the course arrived without elevation — the page then shows
+/// the geometry rows and no profile, never a flat line at zero.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RouteElevView {
     pub gain_m: u16,
     pub loss_m: u16,
     pub points: u16,
+    pub total_m: u32,
+    pub samples: [i16; COURSE_PROFILE_CAP],
+    pub len: usize,
 }
 
 /// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]):
@@ -353,6 +394,21 @@ pub struct RouteElevView {
 pub struct RaceDayView {
     pub days_until: i16,
     pub feasible: u8,
+}
+
+/// The pacing-strategy phase the run is currently in ([`crate::race_phases`]),
+/// re-derived from the live distance at [`snapshot`](Recorder::snapshot) time.
+/// The intent travels as its identifier — the face resolves the label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RacePhaseView {
+    /// 1-based position of the phase in progress.
+    pub index: u8,
+    /// Phases in the plan.
+    pub total: u8,
+    pub intent: RacePhaseIntent,
+    /// The phase's target pace, seconds per km; `None` when no goal time was
+    /// pushed with the plan — a phase without a goal has no target pace.
+    pub target_pace_s_per_km: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -477,6 +533,9 @@ pub struct Snapshot {
     pub plan_replan: Option<PlanReplanView>,
     /// The synced adaptive re-plan trend summary, or `None` until pushed.
     pub plan_adaptive: Option<PlanAdaptiveView>,
+    /// Where the run has reached in the armed guided run, or `None` when none is
+    /// armed.
+    pub guided_run: Option<GuidedRunView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -487,10 +546,19 @@ pub struct Snapshot {
     pub route_simplify: Option<RouteSimplifyView>,
     /// The auto-segment-effort match counts, or `None` until pushed.
     pub auto_effort: Option<AutoEffortView>,
-    /// The loaded course's elevation summary, or `None` until pushed.
+    /// The loaded course's climb profile, or `None` when no course is loaded.
     pub route_elev: Option<RouteElevView>,
+    /// Where the runner sits along the loaded course, in parts-per-thousand of
+    /// its length — the profile page's position marker. `None` without a course,
+    /// before a projection lands, or once the fed position goes stale, so the
+    /// marker disappears rather than freezing at a position the runner left.
+    pub route_position_permille: Option<u16>,
     /// The race-day countdown + feasibility, or `None` until pushed.
     pub race_day: Option<RaceDayView>,
+    /// The pacing-strategy phase the run distance currently falls in, or `None`
+    /// until a plan is pushed — the Pacer page then reads "PHASE --" rather than
+    /// a phase the runner never asked for.
+    pub race_phase: Option<RacePhaseView>,
     /// The flash track's decimation factor: 1 = full resolution, `k` = one
     /// stored point per `k` accepted fixes after slot-full thinning
     /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
@@ -500,7 +568,7 @@ pub struct Snapshot {
     /// The effective BTN3 page cycle for this snapshot (bit = [`Page::bit`]):
     /// data-present pages ∩ the curated set, Dashboard always included. The
     /// button task walks it and the page indicator counts it.
-    pub pages_mask: u32,
+    pub pages_mask: u64,
 }
 
 impl Snapshot {
@@ -708,6 +776,10 @@ pub struct Recorder {
     pr_recency: Option<PrRecencyView>,
     plan_replan: Option<PlanReplanView>,
     plan_adaptive: Option<PlanAdaptiveView>,
+    /// The armed guided run, a reference into the compiled-in library
+    /// ([`set_guided_run`](Recorder::set_guided_run)); `None` leaves the
+    /// GuidedRun page an honest inactive state.
+    guided: Option<&'static GuidedRun<'static>>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -715,6 +787,12 @@ pub struct Recorder {
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
     race_day: Option<RaceDayView>,
+    /// The pushed race pacing-strategy plan, built once in
+    /// [`set_race_phases`](Recorder::set_race_phases); empty leaves the phase
+    /// rows inactive. The phase in force is re-derived per snapshot from the
+    /// live distance, so it advances with the run rather than at sync time.
+    race_phases: PhasePlan,
+    race_phase_goal_pace_s_per_km: Option<f64>,
     /// Whether the nav task holds a loaded course — the Nav page's data
     /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
     /// (the recorder stays course-agnostic; this is a presence bit, not the
@@ -723,10 +801,10 @@ pub struct Recorder {
     /// The runner's curated page set, from settings sync
     /// ([`set_pages_enabled`](Recorder::set_pages_enabled)); bit =
     /// [`Page::bit`]. Default all-enabled.
-    pages_enabled: u32,
+    pages_enabled: u64,
     /// Whether the BTN3 cycle skips pages whose backing data is absent
     /// ([`set_hide_empty_pages`](Recorder::set_hide_empty_pages)). Default on:
-    /// an unsynced watch cycles ~10 live pages instead of 32, and a page
+    /// an unsynced watch cycles ~10 live pages instead of 33, and a page
     /// appears the moment its data does. Off restores the full fixed cycle
     /// (every empty state stays visitable).
     hide_empty_pages: bool,
@@ -780,6 +858,7 @@ impl Recorder {
             pr_recency: None,
             plan_replan: None,
             plan_adaptive: None,
+            guided: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -787,8 +866,10 @@ impl Recorder {
             auto_effort: None,
             route_elev: None,
             race_day: None,
+            race_phases: PhasePlan::new(),
+            race_phase_goal_pace_s_per_km: None,
             course_loaded: false,
-            pages_enabled: u32::MAX,
+            pages_enabled: u64::MAX,
             hide_empty_pages: true,
         }
     }
@@ -810,7 +891,7 @@ impl Recorder {
     /// The curated page set from settings sync (bit = [`Page::bit`]). Any
     /// mask is accepted — [`Page::next_in`] force-includes the Dashboard, so
     /// even an all-zero push can't empty the cycle.
-    pub fn set_pages_enabled(&mut self, mask: u32) {
+    pub fn set_pages_enabled(&mut self, mask: u64) {
         self.pages_enabled = mask;
     }
 
@@ -1003,6 +1084,24 @@ impl Recorder {
         });
     }
 
+    /// Arm the GuidedRun page with a scripted coach run by library id (the
+    /// runner's selection, made on the phone). `None` disarms it.
+    ///
+    /// The guard is library membership plus the ported validator: an id that is
+    /// not in the library, or a library entry whose cues are unsorted or run
+    /// past its duration, is IGNORED — the current selection stands rather than
+    /// a garbled push arming a different run or disarming one mid-run.
+    pub fn set_guided_run(&mut self, id: Option<&str>) {
+        match id {
+            None => self.guided = None,
+            Some(id) => {
+                if let Some(g) = find_guided_run(id).filter(|g| is_guided_run_valid(g)) {
+                    self.guided = Some(g);
+                }
+            }
+        }
+    }
+
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
     /// corrupt push can't render an out-of-range ring or an unknown band label.
     pub fn set_readiness(&mut self, view: Option<ReadinessView>) {
@@ -1038,6 +1137,11 @@ impl Recorder {
         self.auto_effort = view;
     }
 
+    /// Load the loaded course's climb profile — the nav task shapes it with
+    /// [`crate::course_profile::course_elev_view`] whenever the active course
+    /// changes, and `None` once no course is loaded. The recorder stays
+    /// course-agnostic: it only folds the profile's length in with the fed
+    /// along-course distance to place the page's position marker.
     pub fn set_route_elev(&mut self, view: Option<RouteElevView>) {
         self.route_elev = view;
     }
@@ -1049,6 +1153,40 @@ impl Recorder {
             days_until: v.days_until,
             feasible: v.feasible.min(2),
         });
+    }
+
+    /// Load the runner's race pacing strategy: the race distance, the goal time
+    /// (optional — without one the phases are still bounded by distance but carry
+    /// no target pace), and the preset the phone chose. The plan is built here via
+    /// [`build_phase_plan`]; the phase in force is re-derived per snapshot.
+    ///
+    /// Both inputs are plausibility-guarded and an implausible one is **ignored**
+    /// (never clamped), the [`set_fitness`](Recorder::set_fitness) shape: a
+    /// distance outside
+    /// [`RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M`]..=[`RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M`]
+    /// leaves the whole plan unset, and a goal time whose implied pace falls
+    /// outside the shared
+    /// [`GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM`]..=[`GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM`]
+    /// band drops only the target pace — the phase boundaries are still honest.
+    pub fn set_race_phases(
+        &mut self,
+        distance_m: Option<f64>,
+        goal_time_s: Option<f64>,
+        preset: RacePhasePreset,
+    ) {
+        self.race_phases.clear();
+        self.race_phase_goal_pace_s_per_km = None;
+        let Some(distance_m) = distance_m.filter(|d| {
+            (RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M..=RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M).contains(d)
+        }) else {
+            return;
+        };
+        self.race_phases = build_phase_plan(distance_m, preset);
+        self.race_phase_goal_pace_s_per_km = goal_time_s
+            .and_then(|t| goal_pace_s_per_km(distance_m, t))
+            .filter(|p| {
+                (GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM..=GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM).contains(p)
+            });
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -1395,13 +1533,16 @@ impl Recorder {
             pr_recency: self.pr_recency,
             plan_replan: self.plan_replan,
             plan_adaptive: self.plan_adaptive,
+            guided_run: self.guided_run_snapshot(),
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
             route_simplify: self.route_simplify,
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
+            route_position_permille: self.route_position_permille(),
             race_day: self.race_day,
+            race_phase: self.race_phase_snapshot(),
             track_thinning: self.track_thinning,
             pages_mask: 0,
         };
@@ -1415,11 +1556,11 @@ impl Recorder {
     /// included. [`Page::next_in`] / [`Page::prev_in`] walk exactly this
     /// mask, and the page-position indicator counts it — so the dot row says
     /// how many pages the cycle actually has right now.
-    fn pages_mask(&self, s: &Snapshot) -> u32 {
+    fn pages_mask(&self, s: &Snapshot) -> u64 {
         let available = if self.hide_empty_pages {
             self.available_pages(s)
         } else {
-            u32::MAX
+            u64::MAX
         };
         (available & self.pages_enabled) | Page::Dashboard.bit()
     }
@@ -1429,7 +1570,7 @@ impl Recorder {
     /// Back-to-start safety page are always available; every other page is
     /// available exactly when the data behind its honest empty state exists —
     /// the same conditions the `face` renderers key their inactive states on.
-    fn available_pages(&self, s: &Snapshot) -> u32 {
+    fn available_pages(&self, s: &Snapshot) -> u64 {
         let mut m = Page::Dashboard.bit()
             | Page::Distance.bit()
             | Page::Pace.bit()
@@ -1462,6 +1603,7 @@ impl Recorder {
         set(Page::PrRecency, s.pr_recency.is_some());
         set(Page::PlanReplan, s.plan_replan.is_some());
         set(Page::PlanAdaptive, s.plan_adaptive.is_some());
+        set(Page::GuidedRun, s.guided_run.is_some());
         set(Page::Readiness, s.readiness.is_some());
         set(Page::Goals, s.goals.is_some());
         set(Page::TurnCue, s.turn_cue.is_some());
@@ -1470,6 +1612,35 @@ impl Recorder {
         set(Page::RouteElev, s.route_elev.is_some());
         set(Page::RaceDay, s.race_day.is_some());
         m
+    }
+
+    /// Where the run has reached in the armed guided run, or `None` when none is
+    /// armed. Derived, not stored: the cue the elapsed time has passed comes from
+    /// the ported `(prev, now]` dispatcher run from before the start
+    /// ([`cues_due`]), so the page needs no per-tick state and survives a reboot
+    /// mid-run. Elapsed reads 0 while idle, so an armed run shows its full
+    /// duration rather than the previous run's tail.
+    fn guided_run_snapshot(&self) -> Option<GuidedRunView> {
+        let g = self.guided?;
+        let elapsed_s = if self.state == RecordState::Idle {
+            0
+        } else {
+            self.elapsed_s()
+        };
+        let elapsed = f64::from(elapsed_s);
+        let cue_index = cues_due(g, -1.0, elapsed).len();
+        Some(GuidedRunView {
+            cue_index: cue_index as u8,
+            cue_count: g.cues.len() as u8,
+            // The cues are sorted ascending, so the first one not yet passed is
+            // the one at the passed count.
+            next_cue_in_s: g
+                .cues
+                .get(cue_index)
+                .map(|c| (c.at_sec - elapsed).max(0.0) as u32),
+            duration_s: g.duration_sec as u32,
+            remaining_s: (g.duration_sec - elapsed).max(0.0) as u32,
+        })
     }
 
     /// The training-pace zones derived from the synced goal-race pace, or `None`
@@ -1482,6 +1653,28 @@ impl Recorder {
         Some(TrainingPacesView {
             goal_pace_s_per_km: goal as u32,
             paces: paces_from_goal_pace(goal, TrainingGender::None),
+        })
+    }
+
+    /// The pacing-strategy phase the live distance falls in, or `None` until a
+    /// plan is pushed. Not gated on run state: at distance 0 the runner is in the
+    /// plan's opening phase, which is the honest answer both before and at the
+    /// gun.
+    fn race_phase_snapshot(&self) -> Option<RacePhaseView> {
+        let index = phase_at(&self.race_phases, self.distance_m);
+        if index < 0 {
+            return None;
+        }
+        let phase = &self.race_phases[index as usize];
+        Some(RacePhaseView {
+            index: index as u8 + 1,
+            total: self.race_phases.len() as u8,
+            intent: phase.intent,
+            target_pace_s_per_km: phase_target_pace_s_per_km(
+                phase,
+                self.race_phase_goal_pace_s_per_km,
+            )
+            .map(|p| p as u32),
         })
     }
 
@@ -1597,6 +1790,30 @@ impl Recorder {
         })
     }
 
+    /// Is the fed along-course position too old to speak for where the runner
+    /// is now? Stale once it ages past a few fix intervals (scaled to the GNSS
+    /// mode's cadence, so Expedition's 60 s gaps are not "stale"), and a
+    /// position that never arrived counts as stale.
+    fn route_position_stale(&self) -> bool {
+        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
+        self.route_along_m.is_none()
+            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s
+    }
+
+    /// The profile marker's along-course position, withheld while the fed
+    /// position is missing or stale — the same rule the cut-off ETA follows, so
+    /// a lost-signal runner's marker disappears instead of lying about where
+    /// they are.
+    fn route_position_permille(&self) -> Option<u16> {
+        if self.route_position_stale() {
+            return None;
+        }
+        crate::course_profile::position_permille(
+            self.route_along_m?,
+            self.route_elev.as_ref()?.total_m,
+        )
+    }
+
     /// The live next-cutoff ETA, or `None` when idle or no cutoff legs are
     /// loaded. Projects from the fed route position + the whole-run moving pace;
     /// a missing or stale route position (lost signal) drops the projected time
@@ -1605,11 +1822,7 @@ impl Recorder {
         if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
             return None;
         }
-        // Stale once the fed position ages past a few fix intervals (scaled to
-        // the GNSS mode's cadence, so Expedition's 60 s gaps are not "stale").
-        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
-        let stale = self.route_along_m.is_none()
-            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s;
+        let stale = self.route_position_stale();
         Some(next_cutoff_eta(
             self.route_along_m.unwrap_or(0.0),
             self.elapsed_s(),
@@ -2657,6 +2870,47 @@ mod tests {
     }
 
     #[test]
+    fn the_course_profile_marker_needs_both_a_profile_and_a_fresh_position() {
+        let profile = |total_m: u32| RouteElevView {
+            gain_m: 100,
+            loss_m: 50,
+            points: 8,
+            total_m,
+            samples: [1500; COURSE_PROFILE_CAP],
+            len: COURSE_PROFILE_CAP,
+        };
+
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+
+        // A fed position with no course profile has nothing to be a fraction of.
+        r.set_route_position(Some(500.0));
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // Profile plus a fresh position: half way along a 1 km course.
+        r.set_route_elev(Some(profile(1000)));
+        assert_eq!(r.snapshot().route_position_permille, Some(500));
+
+        // A profile with no fed position leaves the marker off.
+        r.set_route_position(None);
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // A position that ages past the stale budget withholds the marker rather
+        // than freezing it where the runner last had signal.
+        r.set_route_position(Some(500.0));
+        assert_eq!(r.snapshot().route_position_permille, Some(500));
+        r.tick(600);
+        assert_eq!(r.snapshot().route_position_permille, None);
+
+        // A zero-length course can't place a marker either.
+        r.set_route_position(Some(500.0));
+        r.set_route_elev(Some(profile(0)));
+        assert_eq!(r.snapshot().route_position_permille, None);
+    }
+
+    #[test]
     fn distance_band_pace_buckets_and_training_stress_wire_through() {
         let mut r = Recorder::new();
         // Idle: every derived surface is inactive.
@@ -2849,7 +3103,7 @@ mod tests {
         r.start(0);
         assert_eq!(
             r.snapshot().pages_mask,
-            u32::MAX,
+            u64::MAX,
             "every page visitable, empty states and all"
         );
     }
@@ -3073,6 +3327,205 @@ mod tests {
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    #[test]
+    fn race_phase_advances_from_hold_back_to_the_closing_phase_with_the_run() {
+        let mut r = Recorder::new();
+        assert!(r.snapshot().race_phase.is_none(), "no plan pushed");
+
+        // A 10 km race off a 50:00 goal: 300 s/km even, held back 2 % to 306.
+        r.set_race_phases(
+            Some(10_000.0),
+            Some(3_000.0),
+            RacePhasePreset::NegativeSplit,
+        );
+        let p = r.snapshot().race_phase.expect("active once pushed");
+        assert_eq!((p.index, p.total), (1, 2));
+        assert_eq!(p.intent, RacePhaseIntent::HoldBack);
+        assert_eq!(p.target_pace_s_per_km, Some(306));
+
+        // Past halfway the closing phase's derived factor takes over.
+        r.set_fix_interval_s(60);
+        r.start(0);
+        let d = 500.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=11 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let p = r.snapshot().race_phase.expect("still active mid-run");
+        assert_eq!((p.index, p.total), (2, 2));
+        assert_eq!(p.intent, RacePhaseIntent::Race);
+        assert_eq!(p.target_pace_s_per_km, Some(294));
+    }
+
+    #[test]
+    fn implausible_race_phase_pushes_are_ignored_not_clamped() {
+        let mut r = Recorder::new();
+        // A distance outside the plausible band leaves the whole plan unset —
+        // no silently-clamped race the runner never entered.
+        r.set_race_phases(Some(500.0), Some(3_000.0), RacePhasePreset::TenTenTen);
+        assert!(r.snapshot().race_phase.is_none());
+        r.set_race_phases(Some(600_000.0), Some(3_000.0), RacePhasePreset::TenTenTen);
+        assert!(r.snapshot().race_phase.is_none());
+        r.set_race_phases(Some(f64::NAN), Some(3_000.0), RacePhasePreset::Even);
+        assert!(r.snapshot().race_phase.is_none());
+
+        // An implausible goal time drops only the target pace: a 10 km in 60 s
+        // is a 6 s/km pace, so the phase boundaries stand and carry no target.
+        r.set_race_phases(Some(10_000.0), Some(60.0), RacePhasePreset::Even);
+        let p = r
+            .snapshot()
+            .race_phase
+            .expect("boundaries are still honest");
+        assert_eq!(p.intent, RacePhaseIntent::Even);
+        assert_eq!(p.target_pace_s_per_km, None);
+
+        // No goal time at all reads identically.
+        r.set_race_phases(Some(10_000.0), None, RacePhasePreset::Even);
+        assert_eq!(r.snapshot().race_phase.unwrap().target_pace_s_per_km, None);
+
+        // Clearing works.
+        r.set_race_phases(None, Some(3_000.0), RacePhasePreset::Even);
+        assert!(r.snapshot().race_phase.is_none());
+    }
+
+    /// The sim's demo arming (`app/src/tasks/record.rs`, `sim-autostart`) picks
+    /// the shortest plan the setter will take and the preset with the earliest
+    /// first boundary, so a canned run of a few hundred metres actually crosses a
+    /// phase instead of holding phase 1 for the whole fixture. Both halves of
+    /// that claim are checked here, because nothing in `app/` is host-testable.
+    #[test]
+    fn the_shortest_plausible_ten_ten_ten_plan_changes_phase_inside_400_m() {
+        let mut r = Recorder::new();
+        r.set_race_phases(
+            Some(RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M),
+            Some(300.0),
+            RacePhasePreset::TenTenTen,
+        );
+        let p = r.snapshot().race_phase.expect("1 km is plausible");
+        assert_eq!((p.index, p.total), (1, 3));
+        assert_eq!(p.intent, RacePhaseIntent::HoldBack);
+        assert_eq!(p.target_pace_s_per_km, Some(306));
+
+        r.set_fix_interval_s(60);
+        r.start(0);
+        // The first fix anchors, then two 200 m hops: 400 m clears the
+        // generalised ten-mile boundary at 381.4 m, which no other preset
+        // reaches before its own halfway.
+        let d = 200.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=3 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let p = r.snapshot().race_phase.expect("still active mid-run");
+        assert_eq!((p.index, p.intent), (2, RacePhaseIntent::Settle));
+        assert_eq!(p.target_pace_s_per_km, Some(300));
+    }
+
+    // --- The guided-run page ----------------------------------------------
+
+    /// The other half of the sim demo: the armed run has to put a cue inside the
+    /// canned fixture's few minutes, or the page renders a schedule that never
+    /// advances. `first-timer-15` is the library's densest opener.
+    #[test]
+    fn the_sim_demo_guided_run_advances_a_cue_within_the_first_four_minutes() {
+        let mut r = Recorder::new();
+        r.set_guided_run(Some("first-timer-15"));
+        r.start(0);
+        let v = r.snapshot().guided_run.expect("library id arms");
+        assert_eq!(v.duration_s, 900);
+        assert_eq!((v.cue_index, v.next_cue_in_s), (1, Some(180)));
+
+        r.tick(180);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index, 2, "the 3:00 cue has fired");
+        assert_eq!(v.next_cue_in_s, Some(60), "then one a minute");
+        assert_eq!(v.remaining_s, 720);
+    }
+
+    #[test]
+    fn an_unarmed_guided_run_page_is_honestly_inactive() {
+        let mut r = Recorder::new();
+        r.start(0);
+        let s = r.snapshot();
+        assert!(s.guided_run.is_none(), "nothing armed, nothing to show");
+        assert_eq!(
+            s.pages_mask & Page::GuidedRun.bit(),
+            0,
+            "an unarmed page stays out of the cycle"
+        );
+    }
+
+    #[test]
+    fn an_unknown_guided_run_id_is_ignored_not_applied() {
+        // The guard: a garbled id must neither arm a different run nor disarm
+        // the one the runner selected. Only an explicit `None` disarms.
+        let mut r = Recorder::new();
+        let armed = crate::guided_runs::guided_run_library()[0].id;
+        r.set_guided_run(Some(armed));
+        r.start(0);
+        let before = r.snapshot().guided_run.unwrap();
+        r.set_guided_run(Some("not-a-guided-run"));
+        assert_eq!(r.snapshot().guided_run, Some(before), "push ignored");
+        r.set_guided_run(None);
+        assert!(r.snapshot().guided_run.is_none(), "None disarms");
+        r.set_guided_run(Some(""));
+        assert!(r.snapshot().guided_run.is_none(), "empty id arms nothing");
+    }
+
+    #[test]
+    fn the_guided_run_page_walks_its_cues_with_elapsed_time() {
+        let g = crate::guided_runs::find_guided_run("easy-30").expect("library run");
+        let mut r = Recorder::new();
+        r.set_guided_run(Some(g.id));
+        r.start(0);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_count as usize, g.cues.len());
+        assert_eq!(v.duration_s, 1_800);
+        assert_eq!(v.remaining_s, 1_800);
+        assert_eq!(v.cue_index, 1, "the kickoff cue fires at the start");
+        assert_eq!(v.next_cue_in_s, Some(300));
+
+        // One second before the 5:00 cue, then the tick that crosses it.
+        r.tick(299);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!((v.cue_index, v.next_cue_in_s), (1, Some(1)));
+        r.tick(300);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index, 2, "the mark is inclusive, like cues_due");
+        assert_eq!(v.next_cue_in_s, Some(300));
+        assert_eq!(v.remaining_s, 1_500);
+
+        // Past the last cue: no next one, and the countdown floors at zero
+        // rather than wrapping.
+        r.tick(1_900);
+        let v = r.snapshot().guided_run.unwrap();
+        assert_eq!(v.cue_index as usize, g.cues.len());
+        assert_eq!(v.next_cue_in_s, None);
+        assert_eq!(v.remaining_s, 0);
+    }
+
+    #[test]
+    fn every_library_guided_run_fits_the_dispatch_buffer() {
+        // `guided_run_snapshot` counts passed cues off `cues_due`, whose buffer
+        // is capped: a library run with more cues than the cap would silently
+        // stop advancing the page's cue index near the end.
+        for g in crate::guided_runs::guided_run_library() {
+            assert!(
+                g.cues.len() <= crate::guided_runs::MAX_GUIDED_CUES,
+                "{} has more cues than the dispatch buffer holds",
+                g.id
+            );
+            let mut r = Recorder::new();
+            r.set_guided_run(Some(g.id));
+            r.start(0);
+            r.tick(g.duration_sec as u32);
+            let v = r.snapshot().guided_run.unwrap();
+            assert_eq!(
+                v.cue_index, v.cue_count,
+                "{} must have passed every cue at its duration",
+                g.id
+            );
+        }
     }
 
     // --- Snapshot::is_moving — the barometric vert gate --------------------

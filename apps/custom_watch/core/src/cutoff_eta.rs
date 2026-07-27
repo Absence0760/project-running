@@ -15,6 +15,12 @@
 //! margin go `None`. [`CUTOFF_TIGHT_S`] is the same 30-minute "tight" span the
 //! app's roadbook + checkpoint-projection surfaces share.
 //!
+//! [`CutoffEta::required_pace_s_per_km`] is the flip side of the projection:
+//! the flat pace the runner must average over the remaining distance to arrive
+//! exactly at the limit. Unlike the ETA it does NOT depend on recent pace, so
+//! it is still computed when the fix is stale or the pace is unknown — a runner
+//! with no recent pace still deserves "you need 6:30s to make it".
+//!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
 /// Margin under which a made cutoff still reads as "tight" — 30 minutes, the
@@ -55,6 +61,18 @@ pub struct CutoffEta {
     pub projected_arrival_elapsed_s: Option<u32>,
     /// `limit - projected`, signed seconds; `None` when unknown.
     pub margin_s: Option<i32>,
+    /// Flat pace (s/km) needed over the remaining distance to hit the limit
+    /// exactly; independent of recent pace, so present even when the status is
+    /// [`Unknown`](CutoffEtaStatus::Unknown). `None` when there is no cutoff
+    /// ahead, when it is under 50 m out, or when the limit has passed.
+    pub required_pace_s_per_km: Option<f64>,
+    /// The cutoff's limit is already in the past — no pace can make it. The
+    /// explicit flag exists because [`required_pace_s_per_km`] is `None` for
+    /// TWO reasons (limit passed / too close to project a meaningful pace) and
+    /// a "you cannot make it" surface must never fire from the second.
+    ///
+    /// [`required_pace_s_per_km`]: CutoffEta::required_pace_s_per_km
+    pub limit_passed: bool,
     pub status: CutoffEtaStatus,
 }
 
@@ -84,20 +102,31 @@ pub fn next_cutoff_eta(
             distance_to_m: 0.0,
             projected_arrival_elapsed_s: None,
             margin_s: None,
+            required_pace_s_per_km: None,
+            limit_passed: false,
             status: CutoffEtaStatus::Unknown,
         };
     };
 
     let distance_to_m = leg.cum_dist_m - dist_along_route_m;
+    let remaining_s = f64::from(leg.limit_elapsed_s) - f64::from(elapsed_s);
+    let limit_passed = remaining_s <= 0.0;
+    let required_pace_s_per_km = if distance_to_m >= 50.0 && remaining_s > 0.0 {
+        Some(remaining_s / (distance_to_m / 1000.0))
+    } else {
+        None
+    };
 
     let pace = match recent_pace_s_per_km {
-        Some(p) if p > 0.0 && !stale => p,
+        Some(p) if p.is_finite() && p > 0.0 && !stale => p,
         _ => {
             return CutoffEta {
                 has_cutoff: true,
                 distance_to_m,
                 projected_arrival_elapsed_s: None,
                 margin_s: None,
+                required_pace_s_per_km,
+                limit_passed,
                 status: CutoffEtaStatus::Unknown,
             };
         }
@@ -118,6 +147,8 @@ pub fn next_cutoff_eta(
         distance_to_m,
         projected_arrival_elapsed_s: Some(libm::round(projected) as u32),
         margin_s: Some(libm::round(margin) as i32),
+        required_pace_s_per_km,
+        limit_passed,
         status,
     }
 }
@@ -250,14 +281,29 @@ mod tests {
 
     #[test]
     fn nan_pace_is_unknown() {
-        // The `p > 0.0` guard rejects NaN (NaN > 0.0 is false), so a corrupt pace
-        // withholds the ETA rather than fabricating a NaN "on pace" arrival.
+        // A corrupt pace withholds the ETA rather than fabricating a NaN
+        // "on pace" arrival.
         let legs = [HALFWAY, FINISH_GATE];
         let e = eta(10000.0, Some(f64::NAN), false, &legs);
         assert_eq!(e.status, CutoffEtaStatus::Unknown);
         assert_eq!(e.projected_arrival_elapsed_s, None);
         assert_eq!(e.margin_s, None);
         assert!(e.has_cutoff);
+    }
+
+    #[test]
+    fn infinite_pace_is_unknown() {
+        // The canonical web helper gates on `Number.isFinite`, which rejects both
+        // infinities; a bare `p > 0.0` would have let `+inf` through to saturate
+        // the projected arrival into a plausible-looking integer.
+        let legs = [HALFWAY, FINISH_GATE];
+        for p in [f64::INFINITY, f64::NEG_INFINITY] {
+            let e = eta(10000.0, Some(p), false, &legs);
+            assert_eq!(e.status, CutoffEtaStatus::Unknown);
+            assert_eq!(e.projected_arrival_elapsed_s, None);
+            assert_eq!(e.margin_s, None);
+            assert!(e.has_cutoff);
+        }
     }
 
     #[test]
@@ -291,6 +337,68 @@ mod tests {
         assert_eq!(e.projected_arrival_elapsed_s, Some(255_800));
         assert_eq!(e.margin_s, Some(144_200));
         assert_eq!(e.status, CutoffEtaStatus::On);
+    }
+
+    #[test]
+    fn required_pace_is_the_remaining_budget_over_the_remaining_distance() {
+        // 7200 limit - 3600 elapsed = 3600 s left over 10 km → 360 s/km.
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(10000.0, Some(360.0), false, &legs);
+        assert_eq!(e.required_pace_s_per_km, Some(360.0));
+    }
+
+    #[test]
+    fn no_checkpoint_means_no_required_pace() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(40000.0, Some(180.0), false, &legs);
+        assert!(!e.has_cutoff);
+        assert_eq!(e.required_pace_s_per_km, None);
+    }
+
+    #[test]
+    fn a_cutoff_under_fifty_metres_away_has_no_meaningful_required_pace() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(19960.0, Some(360.0), false, &legs);
+        assert!((e.distance_to_m - 40.0).abs() < 1e-9);
+        assert_eq!(e.required_pace_s_per_km, None);
+        assert_eq!(e.status, CutoffEtaStatus::On);
+    }
+
+    #[test]
+    fn a_limit_already_passed_cannot_be_made_at_any_pace() {
+        let legs = [HALFWAY, FINISH_GATE];
+        for elapsed_s in [7200, 8000] {
+            let e = next_cutoff_eta(10000.0, elapsed_s, Some(360.0), false, &legs);
+            assert_eq!(e.required_pace_s_per_km, None);
+            assert_eq!(e.status, CutoffEtaStatus::Behind);
+        }
+    }
+
+    #[test]
+    fn limit_passed_separates_an_expired_limit_from_a_too_close_projection() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let expired = next_cutoff_eta(10000.0, 8000, Some(360.0), false, &legs);
+        assert_eq!(expired.required_pace_s_per_km, None);
+        assert!(expired.limit_passed);
+
+        // 40 m out with time still on the clock: the required pace is None only
+        // because the projection is meaningless — the limit has NOT passed.
+        let close = eta(19960.0, Some(360.0), false, &legs);
+        assert_eq!(close.required_pace_s_per_km, None);
+        assert!(!close.limit_passed);
+    }
+
+    #[test]
+    fn a_stale_fix_or_unknown_pace_still_reports_the_required_pace() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let stale = eta(10000.0, Some(360.0), true, &legs);
+        assert_eq!(stale.status, CutoffEtaStatus::Unknown);
+        assert_eq!(stale.projected_arrival_elapsed_s, None);
+        assert_eq!(stale.required_pace_s_per_km, Some(360.0));
+
+        let no_pace = eta(10000.0, None, false, &legs);
+        assert_eq!(no_pace.status, CutoffEtaStatus::Unknown);
+        assert_eq!(no_pace.required_pace_s_per_km, Some(360.0));
     }
 
     #[test]

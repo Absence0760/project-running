@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Generate src/font.rs — an 8x16 bitmap font table for the Sharp MIP driver.
 
-Rasterises printable ASCII (32..=126) from Adobe Source Code Pro (SIL OFL 1.1,
-system-installed on Fedora as adobe-source-code-pro-fonts) via ImageMagick
-into one 760x16 monochrome strip, then packs each 8x16 cell into the Rust
-table the driver's text renderer indexes. Regenerate with:
+Rasterises printable ASCII (32..=126) from the pinned Adobe Source Code Pro
+vendored at `fonts/SourceCodePro-Regular.otf` (SIL OFL 1.1 — see
+`fonts/README.md` for its exact upstream release, its SHA256, and how to fetch
+it again) via ImageMagick into one 760x16 monochrome strip, then packs each
+8x16 cell into the Rust table the driver's text renderer indexes. Regenerate
+with:
 
     python3 scripts/gen_font.py   # from drivers/sharp_mip/
 
-The output file is committed; rendering differences from an ImageMagick or
-font-package upgrade show up as a reviewable diff, not a silent change.
+The face is verified by digest before anything is drawn (`pinned_face.py`): the
+script used to name it by fontconfig family, which resolves to whatever build
+the machine has installed, and the only Homebrew-installable Source Code Pro is
+the variable font whose default instance is ExtraLight. The output file is
+committed; rendering differences from an ImageMagick upgrade still show up as a
+reviewable diff, not a silent change.
 
 Bit convention (matches the framebuffer + the Sharp MIP wire format with
 LSB-first SPI): bit 0 of each row byte is the LEFTMOST pixel, 1 = ink.
@@ -20,11 +26,13 @@ import subprocess
 import sys
 import tempfile
 
+from pinned_face import pinned_face
+
 GLYPHS = "".join(chr(c) for c in range(32, 127))
 CELL_W, CELL_H = 8, 16
 # Source Code Pro's advance is 0.6 em -> a 13.333px em gives exactly 8px.
 POINTSIZE = "13.3333"
-FONT = "Source-Code-Pro"
+FONT = pinned_face("SourceCodePro-Regular.otf")
 # Supersampling factor for the collision-repair pass below. An integer multiple
 # keeps the cell grid and the baseline window aligned with the 1x pass.
 REPAIR_SCALE = 2

@@ -10,8 +10,8 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::flash_plan::{plan_checkpoint_write, plan_slot_write};
 use watch_core::flash_store::{
-    chunk_len, decode_config, encode_config, recover_slot, BondRecord, SlotDir, BOND_RECORD_LEN,
-    CONFIG_RECORD_LEN, MAX_POINTS_PER_RUN, SLOT_COUNT, SLOT_LEN,
+    chunk_len, decode_config, encode_config, recover_slot, BondRecord, RecoveredRun, SlotDir,
+    BOND_RECORD_LEN, CONFIG_RECORD_LEN, MAX_POINTS_PER_RUN, SLOT_COUNT, SLOT_LEN,
 };
 use watch_core::run_store::{
     blob_len, point_count, RunWriter, TrackPoint, FOOTER_LEN, HEADER_LEN, POINT_LEN,
@@ -271,6 +271,15 @@ fn the_directory_never_advertises_a_run_that_is_not_durable_on_flash() {
                 (false, false) => dir.forget(plan.slot),
             }
 
+            // A pending partial run is always one of the advertised ones: the
+            // wrist marker can never claim a run the phone cannot then pull.
+            prop_assert!(
+                dir.pending_partial_count() <= dir.run_count(),
+                "{} pending exceeds the {} advertised",
+                dir.pending_partial_count(),
+                dir.run_count()
+            );
+
             let mut seen: heapless::Vec<u32, SLOT_COUNT> = heapless::Vec::new();
             for entry in dir.manifest().iter() {
                 prop_assert!(
@@ -290,6 +299,91 @@ fn the_directory_never_advertises_a_run_that_is_not_durable_on_flash() {
                     durable[slot]
                 );
             }
+        }
+        Ok(())
+    });
+}
+
+/// An arbitrary post-reset flash region as the boot scan sees it: each slot
+/// either erased or holding a recovered blob, finished or not, with ids drawn
+/// from a small pool so ping-pong pairs of one run occur often.
+fn a_recovered_region() -> impl Strategy<Value = [Option<RecoveredRun>; SLOT_COUNT]> {
+    prop::collection::vec(
+        prop::option::of((any::<bool>(), 0u32..4, 1u32..=4096, any::<u32>())),
+        SLOT_COUNT,
+    )
+    .prop_map(|v| {
+        let mut slots: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
+        for (slot, entry) in slots.iter_mut().zip(v) {
+            *slot = entry.map(|(finished, run_seq, size, elapsed_s)| RecoveredRun {
+                run_seq,
+                size,
+                start_uptime_s: 0,
+                finished,
+                elapsed_s,
+            });
+        }
+        slots
+    })
+}
+
+#[test]
+fn the_boot_scan_counts_every_interrupted_run_it_advertises_and_no_others() {
+    // The wrist marker's honesty, over every shape a post-reset region can take:
+    // it never over-claims (a pending run is always advertised), a region of
+    // cleanly committed runs raises it not at all, and a region where NOTHING got
+    // its commit raises it for every run recovered.
+    check(256, a_recovered_region(), |slots| {
+        let dir = SlotDir::from_recovered(slots);
+        let mut ids: heapless::Vec<u32, SLOT_COUNT> = heapless::Vec::new();
+        for r in slots.iter().flatten() {
+            if !ids.contains(&r.run_seq) {
+                ids.push(r.run_seq).expect("at most one id per slot");
+            }
+        }
+        prop_assert_eq!(
+            dir.run_count() as usize,
+            ids.len(),
+            "every distinct recovered run is advertised exactly once"
+        );
+        prop_assert!(dir.pending_partial_count() <= dir.run_count());
+        if slots.iter().flatten().all(|r| r.finished) {
+            prop_assert_eq!(
+                dir.pending_partial_count(),
+                0,
+                "a region of committed runs has nothing pending"
+            );
+        }
+        if slots.iter().flatten().all(|r| !r.finished) {
+            prop_assert_eq!(
+                dir.pending_partial_count(),
+                dir.run_count(),
+                "a region of checkpoints is pending in full"
+            );
+        }
+        Ok(())
+    });
+}
+
+#[test]
+fn a_live_run_never_becomes_a_pending_partial_however_it_is_written() {
+    // The other direction of the same boundary: with every flash write landing,
+    // no interleaving of checkpoints and commits can make the recorder's own
+    // in-progress bytes look like an interrupted run. Only a reset (the scan
+    // above) or a failed commit may.
+    check(256, prop::collection::vec(a_slot_op(), 0..24), |ops| {
+        let mut dir = SlotDir::new();
+        for op in ops {
+            let planned = if op.commit {
+                plan_slot_write(&mut dir, 0, op.run_seq, 0, op.blob_len)
+            } else {
+                plan_checkpoint_write(&mut dir, 0, op.run_seq, 0, op.blob_len)
+            };
+            let Some(plan) = planned else { continue };
+            if op.commit {
+                dir.commit_written(plan.slot);
+            }
+            prop_assert_eq!(dir.pending_partial_count(), 0);
         }
         Ok(())
     });

@@ -102,6 +102,48 @@ fn band_redraw_erases_the_previous_text_without_a_clear_pass() {
     assert_eq!(count, expected, "residue from the previous clock survived");
 }
 
+// Rightmost inked column, or None for a blank framebuffer.
+fn rightmost_ink(fb: &Framebuffer) -> Option<usize> {
+    (0..WIDTH)
+        .rev()
+        .find(|&x| (0..HEIGHT).any(|y| fb.pixel(x, y)))
+}
+
+#[test]
+fn the_widest_signed_hero_still_fits_the_panel() {
+    // Now that the faces carry `+`, the Pacer / cut-off margins render as
+    // numeral heroes, and a signed `h:mm:ss` is the longest hero either page
+    // emits. Both pages put a label on row 2, so the renderer is the two-row
+    // medium face: `+1:05:30` is 8 cells of 16 px = 128 px, and `signed_split`
+    // caps hours at 999, so the widest possible `+999:59:59` is 10 cells =
+    // 160 px — both inside the 168 px panel, so no glyph is dropped. Asserted
+    // by where the ink actually ends, because the renderers drop glyphs past
+    // the right edge silently.
+    for (hero, cells) in [("+1:05:30", 8), ("+999:59:59", 10)] {
+        assert!(cells * bignum::BIGNUM_MED_WIDTH <= WIDTH, "{hero}");
+        let mut fb = Framebuffer::new();
+        fb.draw_bignum_med_hero(0, hero);
+        let last = rightmost_ink(&fb).expect("medium signed hero drew nothing");
+        assert!(
+            last >= (cells - 1) * bignum::BIGNUM_MED_WIDTH,
+            "{hero}: the last glyph was dropped, ink ends at {last}"
+        );
+        assert!(last < cells * bignum::BIGNUM_MED_WIDTH, "{hero} overran");
+    }
+
+    // The three-row mixed hero splits at the first `:`, so the same string is
+    // 2 big cells + 6 medium = 64 + 96 = 160 px. Only Distance / Pace use this
+    // renderer, but the arithmetic has to hold for whatever reaches it.
+    assert_eq!(2 * bignum::BIGNUM_WIDTH + 6 * bignum::BIGNUM_MED_WIDTH, 160);
+    let mut fb = Framebuffer::new();
+    fb.draw_bignum_hero(0, "+1:05:30");
+    let last = rightmost_ink(&fb).expect("mixed signed hero drew nothing");
+    assert!(
+        last >= 144 && last < 160,
+        "ink ends at {last}, expected 144..160"
+    );
+}
+
 // Bounding box of the ink inside an x-range of the hero band at y0 = 0.
 fn ink_box(fb: &Framebuffer, x0: usize, x1: usize) -> Option<(usize, usize)> {
     let ys: Vec<usize> = (0..bignum::BIGNUM_HEIGHT)
@@ -179,4 +221,126 @@ fn hero_truncates_and_clips_without_panicking() {
     fb.draw_bignum_hero(0, "99999999999.99"); // wider than the panel
     fb.draw_bignum_hero(HEIGHT - 10, "3.1"); // clips at the bottom
     fb.draw_bignum_hero(0, "abc"); // outside the glyph set: advances blank
+}
+
+#[test]
+fn the_medium_hero_occupies_exactly_the_two_rows_a_doubled_hero_does() {
+    let mut med = Framebuffer::new();
+    med.draw_bignum_med_hero(0, "12:34");
+    let mut doubled = Framebuffer::new();
+    doubled.draw_text_2x(0, 0, "12:34");
+    for (name, fb) in [("medium", &med), ("doubled", &doubled)] {
+        let inked: Vec<usize> = (0..HEIGHT)
+            .filter(|&y| (0..WIDTH).any(|x| fb.pixel(x, y)))
+            .collect();
+        assert!(!inked.is_empty(), "{name} hero drew nothing");
+        assert!(
+            *inked.last().unwrap() < bignum::BIGNUM_MED_HEIGHT,
+            "{name} hero escaped the two-row band"
+        );
+    }
+    // Same advance, so the two occupy the same columns: neither reaches past
+    // 5 glyphs of 16 px.
+    for fb in [&med, &doubled] {
+        assert!((0..HEIGHT).all(|y| (5 * bignum::BIGNUM_MED_WIDTH..WIDTH).all(|x| !fb.pixel(x, y))));
+    }
+    // The medium face is the heavier of the two at the same cell size — that
+    // is the whole reason to prefer it on a reflective panel with no backlight.
+    let ink = |fb: &Framebuffer| {
+        (0..HEIGHT)
+            .map(|y| (0..WIDTH).filter(|&x| fb.pixel(x, y)).count())
+            .sum::<usize>()
+    };
+    assert!(
+        ink(&med) > ink(&doubled),
+        "medium {} vs doubled {}",
+        ink(&med),
+        ink(&doubled)
+    );
+}
+
+#[test]
+fn the_medium_hero_leaves_the_state_tag_cells_alone_and_rests_clean() {
+    let mut fb = Framebuffer::new();
+    // A marker pixel where the right-aligned state tag lives on row 0.
+    fb.set_pixel(WIDTH - 4, 8, true);
+    fb.clear_dirty();
+    fb.draw_bignum_med_hero(0, "142");
+    assert!(
+        fb.pixel(WIDTH - 4, 8),
+        "medium hero clobbered the state tag's cells"
+    );
+    fb.clear_dirty();
+    fb.draw_bignum_med_hero(0, "142");
+    assert_eq!(fb.dirty_count(), 0, "an unchanged hero must flush no lines");
+    fb.draw_bignum_med_hero(0, "143");
+    assert!(fb.dirty_count() > 0, "a digit flip must dirty the band");
+}
+
+#[test]
+fn the_medium_hero_truncates_and_clips_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_bignum_med_hero(0, "999999999999999999"); // wider than the panel
+    fb.draw_bignum_med_hero(HEIGHT - 6, "1:02"); // clips at the bottom
+    fb.draw_bignum_med_hero(0, "abc"); // outside the glyph set: advances blank
+}
+
+#[test]
+fn both_faces_carry_a_sign_pair_that_cannot_be_confused() {
+    // The Pacer / cut-off heroes are signed (`+0:42` ahead, `-1:05` behind), so
+    // the sign is the one character on those pages that may not be lost or
+    // misread. The precedent is the 8x16 text font, where `+` rasterised so
+    // thin that its vertical stem vanished and it packed byte-identical to `-`
+    // — every `+` on the watch rendered as a minus until the supersampling
+    // repair landed. The table-wide sweeps above would catch an exact
+    // collision; this names the pair that has actually broken, in both faces,
+    // and asserts a real stem rather than merely a different bitmap.
+    assert!(bignum::BIGNUM_GLYPHS.contains(&b'+'));
+    assert!(bignum::BIGNUM_GLYPHS.contains(&b'-'));
+
+    let index = |ch: u8| bignum::BIGNUM_GLYPHS.iter().position(|&c| c == ch).unwrap();
+    let (plus, dash) = (index(b'+'), index(b'-'));
+
+    let ink = |rows: &[[u8; 4]]| -> u32 { rows.iter().flatten().map(|b| b.count_ones()).sum() };
+    assert_ne!(bignum::BIGNUM[plus], bignum::BIGNUM[dash]);
+    assert!(
+        ink(&bignum::BIGNUM[plus]) > ink(&bignum::BIGNUM[dash]),
+        "the 32x48 `+` lost its stem: {} px vs the dash's {}",
+        ink(&bignum::BIGNUM[plus]),
+        ink(&bignum::BIGNUM[dash])
+    );
+
+    let ink_med = |rows: &[[u8; 2]]| -> u32 { rows.iter().flatten().map(|b| b.count_ones()).sum() };
+    assert_ne!(bignum::BIGNUM_MED[plus], bignum::BIGNUM_MED[dash]);
+    assert!(
+        ink_med(&bignum::BIGNUM_MED[plus]) > ink_med(&bignum::BIGNUM_MED[dash]),
+        "the 16x32 `+` lost its stem: {} px vs the dash's {}",
+        ink_med(&bignum::BIGNUM_MED[plus]),
+        ink_med(&bignum::BIGNUM_MED[dash])
+    );
+
+    // A stem is what distinguishes them, so the `+` must ink rows the dash
+    // leaves empty — a wider crossbar would pass the ink comparison alone.
+    let rows_above = |plus_rows: &[[u8; 4]], dash_rows: &[[u8; 4]]| {
+        (0..bignum::BIGNUM_HEIGHT)
+            .filter(|&y| {
+                plus_rows[y].iter().any(|&b| b != 0) && dash_rows[y].iter().all(|&b| b == 0)
+            })
+            .count()
+    };
+    assert!(
+        rows_above(&bignum::BIGNUM[plus], &bignum::BIGNUM[dash]) > 0,
+        "the 32x48 `+` inks no row outside the dash's band"
+    );
+    let rows_above_med = |plus_rows: &[[u8; 2]], dash_rows: &[[u8; 2]]| {
+        (0..bignum::BIGNUM_MED_HEIGHT)
+            .filter(|&y| {
+                plus_rows[y].iter().any(|&b| b != 0) && dash_rows[y].iter().all(|&b| b == 0)
+            })
+            .count()
+    };
+    assert!(
+        rows_above_med(&bignum::BIGNUM_MED[plus], &bignum::BIGNUM_MED[dash]) > 0,
+        "the 16x32 `+` inks no row outside the dash's band"
+    );
 }

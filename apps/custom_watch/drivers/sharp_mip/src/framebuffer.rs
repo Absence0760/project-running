@@ -663,6 +663,43 @@ impl Framebuffer {
         }
     }
 
+    /// Draw `text` as a two-row run-view hero entirely in the generated 16x32
+    /// medium numeral face ([`bignum`]), anchored at the left edge of the band
+    /// whose top pixel row is `y0`. Same cell size as [`Self::draw_text_2x`]
+    /// — so a page whose face puts a label on row 2 keeps its layout — but
+    /// natively rasterised instead of pixel-doubled from the 8x16 text font,
+    /// which is where the ragged 2-px strokes come from. Composes and
+    /// compare-writes only the pixels the hero spans, so the state tag in row
+    /// 0's right cells is untouched and an unchanged hero dirties nothing;
+    /// characters outside the glyph set advance blank, glyphs past the right
+    /// edge are dropped, and it clips at the bottom.
+    pub fn draw_bignum_med_hero(&mut self, y0: usize, text: &str) {
+        let n = text.len().min(WIDTH / bignum::BIGNUM_MED_WIDTH);
+        let span_bytes = (n * bignum::BIGNUM_MED_WIDTH).div_ceil(8);
+        for dy in 0..bignum::BIGNUM_MED_HEIGHT {
+            let y = y0 + dy;
+            if y >= HEIGHT {
+                return;
+            }
+            let mut line = [0u8; LINE_BYTES];
+            for (i, ch) in text.bytes().take(n).enumerate() {
+                let Some(g) = bignum_index(ch) else {
+                    continue;
+                };
+                let x = i * bignum::BIGNUM_MED_WIDTH;
+                for (bx, &byte) in bignum::BIGNUM_MED[g][dy].iter().enumerate() {
+                    line[x / 8 + bx] |= byte;
+                }
+            }
+            for (bx, &b) in line.iter().enumerate().take(span_bytes) {
+                if self.lines[y][bx] != b {
+                    self.lines[y][bx] = b;
+                    self.dirty[y] = true;
+                }
+            }
+        }
+    }
+
     fn put_cell_byte(&mut self, cell: usize, y: usize, bits: u8) {
         if self.lines[y][cell] != bits {
             self.lines[y][cell] = bits;

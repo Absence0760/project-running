@@ -15,6 +15,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM};
 use watch_core::page::Page;
 use watch_core::record::{FuelCarryView, FuelView, RecordState, Snapshot, PACE_BUCKET_COUNT};
+use watch_core::ui_frame::{self, HeroBand, HeroFrame};
 
 use crate::widgets;
 
@@ -75,15 +76,18 @@ fn base_snapshot() -> Snapshot {
         pr_recency: None,
         plan_replan: None,
         plan_adaptive: None,
+        guided_run: None,
         readiness: None,
         goals: None,
         turn_cue: None,
         route_simplify: None,
         auto_effort: None,
         route_elev: None,
+        route_position_permille: None,
         race_day: None,
+        race_phase: None,
         track_thinning: 1,
-        pages_mask: u32::MAX,
+        pages_mask: u64::MAX,
     }
 }
 
@@ -126,13 +130,61 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
             fb.draw_text_row(r, row);
         }
     }
-    if let Some(hero) = face::page_hero(page, hr, snap, None) {
-        if matches!(page, Page::Distance | Page::Pace) {
-            fb.draw_bignum_hero(0, &hero);
-        } else {
-            fb.draw_text_2x(0, 0, &hero);
-        }
+    draw_hero(fb, page, face::page_hero(page, hr, snap, None).as_deref());
+}
+
+// Through `ui_frame::hero_band`, not a second copy of the face test the ui task
+// runs — the preview's whole value is being the same composition.
+fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>) {
+    match ui_frame::hero_band(HeroFrame {
+        alert: false,
+        rezero_banner: false,
+        hero: hero.is_some(),
+        numeral: hero.is_some_and(ui_frame::numeral_hero),
+        fits_tall: hero.is_some_and(ui_frame::tall_hero_fits),
+        stop_pending: false,
+        page,
+    }) {
+        HeroBand::BigNumHero => fb.draw_bignum_hero(0, hero.unwrap()),
+        HeroBand::MedNumHero => fb.draw_bignum_med_hero(0, hero.unwrap()),
+        HeroBand::TextHero => fb.draw_text_2x(0, 0, hero.unwrap()),
+        HeroBand::AlertBanner | HeroBand::RezeroBanner | HeroBand::None => {}
     }
+}
+
+/// The numeral-face glyph set is decided in `watch_core` (the face choice is a
+/// frame decision) and rasterised in `sharp_mip` (the pixels are a driver
+/// asset). This crate is the only one that sees both, so it is where the two
+/// are pinned: a regeneration that adds a glyph fails here until the decision
+/// side learns about it. That is how the `+` landed — the table grew, this
+/// assertion caught it, and the signed Pacer / cut-off heroes then promoted out
+/// of the text font on the glyph rule alone.
+#[test]
+fn the_numeral_glyph_set_matches_the_generated_tables() {
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_GLYPHS,
+        sharp_mip::bignum::BIGNUM_GLYPHS.as_slice()
+    );
+}
+
+/// The other half of that pin. `ui_frame` budgets the three-row hero in text
+/// cells so it need not know the panel's pixel width, which only works while a
+/// cell really is one glyph's width divided by the font cell — the same split
+/// this crate can see both sides of. A regenerated face at a different cell
+/// size would otherwise let an over-wide hero back through the fit rule and
+/// truncate on the panel.
+#[test]
+fn the_numeral_cell_widths_match_the_generated_faces() {
+    let cell_w = WIDTH / sharp_mip::TEXT_COLS;
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_CELLS,
+        sharp_mip::bignum::BIGNUM_WIDTH / cell_w
+    );
+    assert_eq!(
+        watch_core::ui_frame::NUMERAL_MED_CELLS,
+        sharp_mip::bignum::BIGNUM_MED_WIDTH / cell_w
+    );
+    assert_eq!(watch_core::face::COLS, sharp_mip::TEXT_COLS);
 }
 
 fn show(name: &str, fb: &Framebuffer) {
@@ -141,6 +193,20 @@ fn show(name: &str, fb: &Framebuffer) {
         (0..HEIGHT).any(|y| (0..WIDTH).any(|x| fb.pixel(x, y))),
         "{name} rendered a blank panel"
     );
+}
+
+/// The four-pixel indicator band at 1:1, undownsampled — [`ascii_dump`]'s 2x
+/// halving hides exactly the single-pixel seams and edge gaps this band is
+/// made of, so it cannot be used to judge the indicator.
+fn show_indicator_band(name: &str, fb: &Framebuffer) {
+    let mut out = String::new();
+    for y in 0..4 {
+        for x in 0..WIDTH {
+            out.push(if fb.pixel(x, y) { '#' } else { '.' });
+        }
+        out.push('\n');
+    }
+    println!("\n== {name} ==\n{out}");
 }
 
 #[test]
@@ -230,9 +296,55 @@ fn preview_run_dashboard() {
     }
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Dashboard, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Dashboard, u64::MAX),
     );
     show("run dashboard: hero + field grid + NOW/GAP pairing", &fb);
+}
+
+#[test]
+fn preview_run_view_low_battery_marker() {
+    // The only battery signal a run view has: a standing right-anchored tag on
+    // the hero band's blank lower row, clear of the elapsed digits.
+    use watch_core::alerts::FuelOverdue;
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    let mut rows = face::page_rows(
+        Page::Dashboard,
+        Some(&sample_fix()),
+        Some(150),
+        Some(&snap),
+        None,
+        NavView::NoCourse,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+    );
+    let hero = face::page_hero(Page::Dashboard, Some(150), Some(&snap), None);
+    face::apply_run_marker(
+        &mut rows,
+        Page::Dashboard,
+        FuelOverdue::None,
+        Some(12),
+        ui_frame::hero_row_cells(
+            ui_frame::HeroBand::MedNumHero,
+            hero.as_deref().unwrap_or(""),
+        ),
+    );
+    for (r, row) in rows.iter().enumerate() {
+        widgets::ruled_dashboard_row(&mut fb, r, row);
+    }
+    draw_hero(&mut fb, Page::Dashboard, hero.as_deref());
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Dashboard, u64::MAX),
+    );
+    show(
+        "run dashboard: standing 12% battery marker beside the hero",
+        &fb,
+    );
 }
 
 #[test]
@@ -257,7 +369,7 @@ fn preview_distance_and_pace_bignum_heroes() {
     draw_face(&mut fb, Page::Distance, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Distance, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Distance, u64::MAX),
     );
     show("distance glance: 32.40 in the numeral faces", &fb);
 
@@ -265,9 +377,48 @@ fn preview_distance_and_pace_bignum_heroes() {
     draw_face(&mut fb2, Page::Pace, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb2,
-        watch_core::statusbar::page_indicator(Page::Pace, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Pace, u64::MAX),
     );
     show("pace glance: 6:20 in the numeral faces", &fb2);
+}
+
+#[test]
+fn preview_lap_page_tall_numeral_hero() {
+    // The lap page gave row 2 up to the hero band, so its split renders in the
+    // three-row treatment with the lap number + state tag on row 3.
+    let snap = base_snapshot();
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Lap, Some(&snap), Some(132));
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Lap, u64::MAX),
+    );
+    show("lap glance: 2:30 in the tall numeral hero", &fb);
+}
+
+#[test]
+fn preview_a_hero_too_wide_for_the_tall_face() {
+    // The fallback the fit rule buys: a multi-day guided run's remaining time
+    // needs 24 of the panel's 21 cells at the tall size, so it drops to the
+    // medium face and shows the number whole rather than losing its last digit
+    // off the right edge.
+    let mut snap = base_snapshot();
+    snap.guided_run = Some(watch_core::record::GuidedRunView {
+        cue_index: 12,
+        cue_count: 40,
+        next_cue_in_s: Some(300),
+        duration_s: 200 * 3600,
+        remaining_s: 100 * 3600 + 5 * 60 + 30,
+    });
+    let hero = face::page_hero(Page::GuidedRun, None, Some(&snap), None).unwrap();
+    assert!(!ui_frame::tall_hero_fits(&hero), "{hero}");
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::GuidedRun, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::GuidedRun, u64::MAX),
+    );
+    show("guided run: 100:05:30 falls back to the medium face", &fb);
 }
 
 #[test]
@@ -290,10 +441,35 @@ fn preview_pacer_page() {
     draw_face(&mut fb, Page::Pacer, Some(&snap), Some(150));
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Pacer, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Pacer, u64::MAX),
     );
     widgets::draw_pacer_overlay(&mut fb, &snap);
     show("pacer: +75s ahead centre-bar", &fb);
+}
+
+#[test]
+fn preview_cutoff_eta_page() {
+    // The other signed hero: margin to the next cut-off, `+` slack / `-` over.
+    // Shown at an hours-wide margin, the widest a signed hero realistically
+    // gets — 8 glyphs of the 16 px medium cell is 128 px of a 168 px panel.
+    use watch_core::cutoff_eta::{CutoffEta, CutoffEtaStatus};
+    let mut snap = base_snapshot();
+    snap.cutoff = Some(CutoffEta {
+        has_cutoff: true,
+        distance_to_m: 8_400.0,
+        projected_arrival_elapsed_s: Some(4 * 3600 + 10 * 60),
+        margin_s: Some(3930),
+        required_pace_s_per_km: Some(7.0 * 60.0 + 30.0),
+        limit_passed: false,
+        status: CutoffEtaStatus::On,
+    });
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::CutoffEta, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::CutoffEta, u64::MAX),
+    );
+    show("cut-off eta: +1:05:30 margin in the tall numeral hero", &fb);
 }
 
 #[test]
@@ -304,7 +480,7 @@ fn preview_zones_page() {
     draw_face(&mut fb, Page::Zones, Some(&snap), Some(150));
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Zones, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Zones, u64::MAX),
     );
     widgets::draw_zones_overlay(&mut fb, &snap, Some(150));
     show("zones: per-zone bars + live-zone frame", &fb);
@@ -318,7 +494,7 @@ fn preview_splits_page() {
     draw_face(&mut fb, Page::Splits, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::Splits, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Splits, u64::MAX),
     );
     widgets::draw_splits_overlay(&mut fb, &snap);
     show("splits: pace-distribution histogram", &fb);
@@ -355,16 +531,16 @@ fn preview_gear_and_fuel_pages() {
 fn preview_page_grid() {
     use watch_core::page_grid;
 
-    // The full 32-page grid with the cursor a row-down + a tap from home.
+    // The full grid with the cursor a row-down + a tap from home.
     let mut fb = Framebuffer::new();
-    let mask = u32::MAX;
+    let mask = u64::MAX;
     let mut grid = page_grid::PageGrid::open(Page::Dashboard, mask);
     grid.row_down(mask);
     grid.tap(mask);
-    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+    for (row, text) in page_grid::grid_rows(mask, grid.cursor()).iter().enumerate() {
         fb.draw_text_row(row, text);
     }
-    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor(), grid.cursor()) {
         widgets::draw_grid_cursor(&mut fb, cell);
     }
     widgets::draw_page_indicator(
@@ -384,10 +560,10 @@ fn preview_page_grid() {
         | Page::BackToStart.bit();
     let mut fb2 = Framebuffer::new();
     let grid = page_grid::PageGrid::open(Page::Roadbook, mask);
-    for (row, text) in page_grid::grid_rows(mask).iter().enumerate() {
+    for (row, text) in page_grid::grid_rows(mask, grid.cursor()).iter().enumerate() {
         fb2.draw_text_row(row, text);
     }
-    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor()) {
+    if let Some(cell) = page_grid::grid_cell(mask, grid.cursor(), grid.cursor()) {
         widgets::draw_grid_cursor(&mut fb2, cell);
     }
     show("page grid: filtered mask, cursor on ROAD", &fb2);
@@ -411,16 +587,48 @@ fn preview_elevation_profile_page() {
     draw_face(&mut fb, Page::ElevationProfile, Some(&snap), None);
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::ElevationProfile, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::ElevationProfile, u64::MAX),
     );
     widgets::draw_elev_profile_overlay(&mut fb, &snap);
     show("elevation profile: banked altitude sparkline", &fb);
 }
 
 #[test]
+fn preview_route_elev_page() {
+    // The pushed course's climb profile with the runner marked a third of the
+    // way along it — the RouteElev glance.
+    let profile: [i16; 24] = [
+        1650, 1668, 1704, 1760, 1840, 1930, 2010, 2060, 2040, 1980, 1900, 1850, 1830, 1870, 1950,
+        2030, 2080, 2040, 1960, 1870, 1790, 1720, 1680, 1655,
+    ];
+    let mut snap = base_snapshot();
+    let mut view = watch_core::record::RouteElevView {
+        gain_m: 690,
+        loss_m: 685,
+        points: 128,
+        total_m: 42_195,
+        samples: [0; watch_core::record::COURSE_PROFILE_CAP],
+        len: profile.len(),
+    };
+    view.samples[..profile.len()].copy_from_slice(&profile);
+    snap.route_elev = Some(view);
+    snap.route_position_permille = Some(333);
+
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::RouteElev, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::RouteElev, u64::MAX),
+    );
+    widgets::draw_route_elev_overlay(&mut fb, &snap);
+    show("route elevation: course profile + position marker", &fb);
+}
+
+#[test]
 fn preview_mini_profile() {
-    // A synthetic climb-then-descend altitude series — the shape a future glance
-    // page would show for a route's elevation profile, auto-scaled to the cell.
+    // A synthetic climb-then-descend altitude series — the widget the run's
+    // ElevationProfile and the course's RouteElev pages both plot with,
+    // auto-scaled to the cell.
     let elevation: [i32; 14] = [
         1600, 1615, 1650, 1710, 1790, 1855, 1880, 1860, 1795, 1720, 1680, 1650, 1625, 1605,
     ];
@@ -479,7 +687,7 @@ fn draw_nav_page(fb: &mut Framebuffer, nav: NavView, alert: Option<&str>) {
     }
     widgets::draw_page_indicator(
         fb,
-        watch_core::statusbar::page_indicator(Page::Nav, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::Nav, u64::MAX),
     );
     let panel = watch_core::nav_map::nav_panel(
         &course,
@@ -561,12 +769,14 @@ fn preview_back_to_start_page() {
     for (r, row) in rows.iter().enumerate() {
         fb.draw_text_row(r, row);
     }
-    if let Some(hero) = face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)) {
-        fb.draw_text_2x(0, 0, &hero);
-    }
+    draw_hero(
+        &mut fb,
+        Page::BackToStart,
+        face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)).as_deref(),
+    );
     widgets::draw_page_indicator(
         &mut fb,
-        watch_core::statusbar::page_indicator(Page::BackToStart, u32::MAX),
+        watch_core::statusbar::page_indicator(Page::BackToStart, u64::MAX),
     );
     widgets::draw_trackback_overlay(&mut fb, &view, 60);
     show("back to start: breadcrumb map + relative arrow", &fb);
@@ -581,4 +791,59 @@ fn preview_dial_and_compass() {
     widgets::draw_dial(&mut fb, cx, cy, 56, 12, 0.66);
     widgets::draw_compass(&mut fb, cx, cy, 34, 300);
     show("dial + compass: fuel ring + bearing-to-start", &fb);
+}
+
+fn indicator_thumb_row(fb: &Framebuffer) -> String {
+    (0..WIDTH)
+        .map(|x| if fb.pixel(x, 0) { '#' } else { '.' })
+        .collect()
+}
+
+fn preview_indicator_over_mask(label: &str, mask: u64) {
+    let total = watch_core::statusbar::page_indicator(Page::Dashboard, mask).total;
+    println!("\n== page indicator: {label} ({total} enabled pages), thumb row at 1:1 ==");
+    let mut union = [false; WIDTH];
+    let mut page = Page::Dashboard;
+    for _ in 0..total {
+        let mut fb = Framebuffer::new();
+        widgets::draw_page_indicator(&mut fb, watch_core::statusbar::page_indicator(page, mask));
+        println!("{:>4} {}", page.code(), indicator_thumb_row(&fb));
+        for (x, seen) in union.iter_mut().enumerate() {
+            *seen |= fb.pixel(x, 0);
+        }
+        page = page.next_in(mask);
+    }
+    let covered: String = union.iter().map(|&s| if s { '#' } else { '.' }).collect();
+    println!("  U: {covered}");
+    println!(
+        "     union of every thumb covers {}/{WIDTH} track columns",
+        union.iter().filter(|&&s| s).count()
+    );
+}
+
+#[test]
+fn preview_page_indicator_at_three_mask_sizes() {
+    preview_indicator_over_mask("full cycle", u64::MAX);
+    let typical = Page::Dashboard.bit()
+        | Page::Distance.bit()
+        | Page::Pace.bit()
+        | Page::Lap.bit()
+        | Page::Zones.bit()
+        | Page::Splits.bit()
+        | Page::ElevationProfile.bit()
+        | Page::RacePredictor.bit()
+        | Page::TrainingLoad.bit()
+        | Page::DistanceBand.bit()
+        | Page::GearWear.bit()
+        | Page::BackToStart.bit();
+    preview_indicator_over_mask("typical unsynced run", typical);
+    let minimal = Page::Dashboard.bit() | Page::Pace.bit() | Page::BackToStart.bit();
+    preview_indicator_over_mask("minimal curated", minimal);
+
+    let mut fb = Framebuffer::new();
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::BackToStart, u64::MAX),
+    );
+    show_indicator_band("last page of the full cycle, all four band rows", &fb);
 }

@@ -54,7 +54,7 @@ use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
 use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
-use watch_core::settings::WatchSettings;
+use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
 use watch_core::trackback::Trackback;
 
@@ -259,6 +259,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -292,16 +293,39 @@ pub async fn run(store: &'static SharedStore) {
     {
         alerts.set_fuel_intervals(30, 45);
         info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");
+        // The distance / time / pace arms are off on hardware until a settings
+        // sync arms them, so the sim arms them itself through the same public
+        // setters: the shortest plausible cadences, and a band straddling the
+        // ~5:33/km bench_jog fixture so the pace alert reads a live TOO SLOW.
+        alerts.set_distance_interval(Some(watch_core::alerts::DISTANCE_INTERVAL_MIN_M));
+        alerts.set_time_interval(Some(watch_core::alerts::TIME_INTERVAL_MIN_S));
+        alerts.set_pace_band(Some((300, 320)));
+        info!("record: sim alerts 100m / 60s / pace band 5:00-5:20 per km");
     }
     // Sim-only demo settings, applied through the SAME path a phone push takes
     // (`apply_settings`) so the sim exercises the settings-sync apply, not a
     // separate hardcoded seam: a 1 km / 5:00 pacer goal (a partner slightly
     // faster than the ~5:33/km bench_jog fixture, so the Pacer page reads a live
     // BEHIND) and a 700 km / 800 km shoe (a live DUE the run's mileage pushes on).
+    //
+    // The race-phase plan and the guided run are here for the same reason and
+    // with values picked so their pages are not merely non-empty but *move*
+    // under bench_jog. 1 km is `RACE_PHASE_PLAUSIBLE_MIN_DISTANCE_M`, the
+    // shortest plan the setter accepts, and `TenTenTen` has the earliest first
+    // boundary any preset offers (381.4 m, the generalised 10-mile fraction) —
+    // so the Pacer page's phase row walks HOLD 5:06 -> SETTLE 5:00 -> RACE 4:50
+    // as the run accrues rather than sitting in phase 1. The goal time matches
+    // the pacer goal so both rows on that page describe one race.
+    // `first-timer-15` is the library run with the densest early cues (0 s,
+    // 180 s, then every 60 s), so the GuidedRun page's cue index advances inside
+    // the first few minutes; the other two wait 240 s / 300 s for their second.
     // Hardware stays unset until a real push over the settings characteristic.
     #[cfg(feature = "sim-autostart")]
     {
-        use watch_core::settings::{GearCfg, PacerGoalCfg};
+        use watch_core::race_phases::RacePhasePreset;
+        use watch_core::settings::{
+            race_phase_preset_to_wire, GearCfg, GuidedRunId, PacerGoalCfg, RacePhasesCfg,
+        };
         let demo = WatchSettings {
             pacer: Some(PacerGoalCfg {
                 distance_m: 1_000,
@@ -311,6 +335,12 @@ pub async fn run(store: &'static SharedStore) {
                 baseline_m: 700_000.0,
                 target_m: Some(800_000.0),
             }),
+            race_phases: Some(RacePhasesCfg {
+                distance_m: Some(1_000),
+                goal_time_s: Some(300),
+                preset: race_phase_preset_to_wire(RacePhasePreset::TenTenTen),
+            }),
+            guided_run: Some(GuidedRunId::new("first-timer-15")),
             ..WatchSettings::default()
         };
         apply_settings(
@@ -320,7 +350,9 @@ pub async fn run(store: &'static SharedStore) {
             &sea_level_tx,
             &tz_offset_tx,
         );
-        info!("record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km)");
+        info!(
+            "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15)"
+        );
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
@@ -398,6 +430,12 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => s.next_turn,
                 NavView::NoCourse | NavView::NoFix => None,
             });
+        }
+
+        // The active course's climb profile for the RouteElev page — shaped by
+        // the nav task on each course change, so this only forwards it.
+        if let Some(profile) = route_profile_rx.try_changed() {
+            recorder.set_route_elev(profile);
         }
 
         // Pushed settings frames (from the ble task; the sim seeds one above)
@@ -600,6 +638,17 @@ fn apply_settings(
             SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
             SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
             SettingsEffect::TzOffsetMin(m) => tz_offset_tx.send(m),
+            SettingsEffect::DistanceInterval(m) => alerts.set_distance_interval(m),
+            SettingsEffect::TimeInterval(s) => alerts.set_time_interval(s),
+            SettingsEffect::PaceBand(band) => alerts.set_pace_band(band),
+            SettingsEffect::RacePhases {
+                distance_m,
+                goal_time_s,
+                preset,
+            } => recorder.set_race_phases(distance_m, goal_time_s, preset),
+            SettingsEffect::GuidedRun(id) => {
+                recorder.set_guided_run(id.as_ref().map(GuidedRunId::as_str))
+            }
         }
     }
 }

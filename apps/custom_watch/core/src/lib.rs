@@ -16,6 +16,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`course_profile`] — the pushed course's climb profile for the RouteElev
+//!   page: gain / loss over the whole pushed series plus a distance-even
+//!   elevation series and the along-course marker position
 //! - [`nav_project`] — the `nav` task's per-fix composition over [`course`] +
 //!   [`turn_cues`]: biased projection, the off-course latch's two edges, and
 //!   the next turn ahead
@@ -85,6 +88,10 @@
 //!   splits, the distance-aware pre-race checklist (items as enum ids), goal
 //!   feasibility vs a prediction, and the split-time formatter (port of web
 //!   `runs/race_day.ts`)
+//! - [`race_phases`] — race pacing-strategy phase plans: a distance + preset
+//!   sliced into hold-back / settle / race phases whose final factor is derived
+//!   so the distance-weighted mean is exactly 1.0 (port of web
+//!   `runs/race_phases.ts`; intent is an identifier, labels resolve in [`face`])
 //! - [`race_predictor`] — the 5K/10K/Half/Marathon race-time ladder (parity
 //!   port of web `training/race_predictor.ts` + the reused Riegel +
 //!   prediction-confidence helpers), recency-weighted anchor, per-rung
@@ -249,6 +256,7 @@ pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
 pub mod course;
+pub mod course_profile;
 pub mod course_store;
 pub mod current_week;
 pub mod cutoff_eta;
@@ -293,6 +301,7 @@ pub mod plan_replan;
 pub mod pr_recency;
 pub mod privacy;
 pub mod race_day;
+pub mod race_phases;
 pub mod race_predictor;
 pub mod readiness;
 pub mod recap;
@@ -322,3 +331,4 @@ pub mod training_load;
 pub mod training_paces;
 pub mod turn_cues;
 pub mod ui_frame;
+pub mod unfed;

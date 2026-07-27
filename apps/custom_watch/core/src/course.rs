@@ -27,7 +27,8 @@ use heapless::Vec;
 
 use crate::grade_adjusted_pace::haversine_metres;
 
-/// Fixed course capacity: 256 points x 16 B = 4 KiB of RAM, one flash-slot's
+/// Fixed course capacity: 256 points x 16 B = 4 KiB of RAM for the polyline
+/// (plus 512 B when a push carries per-point elevation), one flash-slot's
 /// worth — enough for a phone-simplified ultra course polyline at tier 1 (the
 /// canned sim course uses 5). A longer course must be simplified phone-side
 /// before the (future) BLE push; `from_points` rejects an overflow rather than
@@ -81,10 +82,12 @@ pub struct Projection {
     pub off_m: f64,
 }
 
-/// A compact in-RAM course: a fixed-capacity polyline plus its cached length.
+/// A compact in-RAM course: a fixed-capacity polyline, its cached length, and
+/// the optional per-point elevation the phone pushed alongside it.
 #[derive(Clone)]
 pub struct Course {
     points: Vec<CoursePoint, MAX_COURSE_POINTS>,
+    elev_m: Vec<i16, MAX_COURSE_POINTS>,
     total_m: f64,
 }
 
@@ -92,20 +95,55 @@ impl Course {
     /// `None` when the polyline is too short to follow (< 2 points) or over
     /// the tier-1 capacity (> [`MAX_COURSE_POINTS`]).
     pub fn from_points(points: &[CoursePoint]) -> Option<Self> {
+        Self::build(points, None)
+    }
+
+    /// [`Course::from_points`] with the per-point elevation profile a `CRS1` v2
+    /// push carries (metres, one entry per point). `None` on the same rejections
+    /// plus a length that disagrees with the polyline — a course whose elevation
+    /// doesn't line up point-for-point would place the profile marker on the
+    /// wrong climb, so it is refused rather than trimmed.
+    pub fn from_points_with_elevation(points: &[CoursePoint], elev_m: &[i16]) -> Option<Self> {
+        if elev_m.len() != points.len() {
+            return None;
+        }
+        Self::build(points, Some(elev_m))
+    }
+
+    fn build(points: &[CoursePoint], elev_m: Option<&[i16]>) -> Option<Self> {
         if points.len() < 2 {
             return None;
         }
         let mut v: Vec<CoursePoint, MAX_COURSE_POINTS> = Vec::new();
         v.extend_from_slice(points).ok()?;
+        let mut e: Vec<i16, MAX_COURSE_POINTS> = Vec::new();
+        if let Some(elev_m) = elev_m {
+            e.extend_from_slice(elev_m).ok()?;
+        }
         let mut total_m = 0.0;
         for w in points.windows(2) {
             total_m += haversine_metres(w[0].lat_deg, w[0].lon_deg, w[1].lat_deg, w[1].lon_deg);
         }
-        Some(Self { points: v, total_m })
+        Some(Self {
+            points: v,
+            elev_m: e,
+            total_m,
+        })
     }
 
     pub fn points(&self) -> &[CoursePoint] {
         &self.points
+    }
+
+    /// The pushed per-point elevation (metres), or `None` when the course
+    /// arrived without one — the profile page then reads an honest "no
+    /// elevation" rather than a flat line at zero.
+    pub fn elevations(&self) -> Option<&[i16]> {
+        if self.elev_m.is_empty() {
+            None
+        } else {
+            Some(&self.elev_m)
+        }
     }
 
     pub fn total_m(&self) -> f64 {
@@ -553,6 +591,28 @@ mod tests {
             .map(|i| pt(0.0, i as f64 * 1e-4))
             .collect();
         assert!(Course::from_points(&at_cap).is_some());
+    }
+
+    #[test]
+    fn a_plain_course_carries_no_elevation() {
+        assert!(line().elevations().is_none());
+    }
+
+    #[test]
+    fn from_points_with_elevation_keeps_the_series_and_the_geometry() {
+        let pts = [pt(51.5, -0.12), pt(51.5, -0.1), pt(51.51, -0.1)];
+        let c = Course::from_points_with_elevation(&pts, &[10, 40, 25]).unwrap();
+        assert_eq!(c.elevations(), Some(&[10i16, 40, 25][..]));
+        assert_eq!(c.points().len(), 3);
+        assert!((c.total_m() - line().total_m()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn from_points_with_elevation_rejects_a_length_mismatch() {
+        let pts = [pt(51.5, -0.12), pt(51.5, -0.1), pt(51.51, -0.1)];
+        assert!(Course::from_points_with_elevation(&pts, &[10, 40]).is_none());
+        assert!(Course::from_points_with_elevation(&pts, &[10, 40, 25, 30]).is_none());
+        assert!(Course::from_points_with_elevation(&pts, &[]).is_none());
     }
 
     #[test]

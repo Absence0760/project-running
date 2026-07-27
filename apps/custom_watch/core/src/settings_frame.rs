@@ -9,7 +9,7 @@
 //!
 //! Two rules a driver must not get wrong:
 //!
-//! - **The buffer holds exactly one maximal frame.** A fully-populated v3 frame
+//! - **The buffer holds exactly one maximal frame.** A fully-populated frame
 //!   is [`MAX_SETTINGS_LEN`] bytes to the byte, and the phone's encoder emits
 //!   one whenever it pushes every field — so an accumulator one byte short
 //!   would refuse the largest legitimate push, and refuse it silently: the only
@@ -129,7 +129,9 @@ impl Default for SettingsFramer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{FuelCfg, GearCfg, PacerGoalCfg};
+    use crate::settings::{
+        FuelCfg, GearCfg, GuidedRunId, PaceBandCfg, PacerGoalCfg, RacePhasesCfg,
+    };
 
     /// Every field present, so `encode` emits a frame of exactly
     /// [`MAX_SETTINGS_LEN`] bytes — the maximal push the phone can make.
@@ -153,6 +155,18 @@ mod tests {
             pages: Some(0x0000_c0ff),
             hide_empty_pages: Some(true),
             tz_offset_min: Some(345),
+            distance_interval_m: Some(Some(1_000)),
+            time_interval_s: Some(Some(1_800)),
+            pace_band: Some(Some(PaceBandCfg {
+                fast_s_per_km: 300,
+                slow_s_per_km: 420,
+            })),
+            race_phases: Some(RacePhasesCfg {
+                distance_m: Some(42_195),
+                goal_time_s: Some(12_600),
+                preset: 0,
+            }),
+            guided_run: Some(GuidedRunId::new("tempo-builder-25")),
         }
     }
 
@@ -176,8 +190,9 @@ mod tests {
         // The live off-by-one risk: the buffer is sized MAX_SETTINGS_LEN and a
         // fully-populated frame is exactly that long, so a capacity one short
         // would refuse every all-fields push with only a log line to show for
-        // it. MAX_SETTINGS_LEN has already grown twice (45 -> 49 for the v3 CRC
-        // trailer), and each growth re-runs this risk.
+        // it. MAX_SETTINGS_LEN has grown three times now (45 -> 49 for the v3
+        // CRC trailer -> 98 for v4's five settings and the 64-bit page mask),
+        // and each growth re-runs this risk.
         let s = maximal();
         let frame = encoded(&s);
         assert_eq!(
@@ -288,7 +303,8 @@ mod tests {
     fn every_frame_length_the_encoder_emits_survives_the_accumulator() {
         // Presence bits change the frame length, so the accumulator has to hold
         // every length between a bare header and the maximum — not just the
-        // two ends.
+        // two ends. Walking `flags` alongside the five `flags2` fields covers
+        // the whole span rather than only the first byte's half of it.
         for mask in 0u8..=u8::MAX {
             let s = WatchSettings {
                 max_hr: (mask & 0x01 != 0).then_some(175),
@@ -306,9 +322,21 @@ mod tests {
                     drink_interval_s: 450,
                     eat_interval_s: 1_000,
                 }),
-                pages: (mask & 0x40 != 0).then_some(0x0f0f_0f0f),
+                pages: (mask & 0x40 != 0).then_some(0x0f0f_0f0f_f0f0_f0f0),
                 hide_empty_pages: (mask & 0x80 != 0).then_some(false),
                 tz_offset_min: Some(-570),
+                distance_interval_m: (mask & 0x01 != 0).then_some(Some(1_000)),
+                time_interval_s: (mask & 0x02 != 0).then_some(None),
+                pace_band: (mask & 0x04 != 0).then_some(Some(PaceBandCfg {
+                    fast_s_per_km: 300,
+                    slow_s_per_km: 420,
+                })),
+                race_phases: (mask & 0x08 != 0).then_some(RacePhasesCfg {
+                    distance_m: Some(42_195),
+                    goal_time_s: None,
+                    preset: 2,
+                }),
+                guided_run: (mask & 0x10 != 0).then(|| GuidedRunId::new("easy-30")),
             };
             let frame = encoded(&s);
             let mut framer = SettingsFramer::new();
