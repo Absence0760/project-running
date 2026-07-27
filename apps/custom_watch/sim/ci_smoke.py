@@ -152,6 +152,9 @@ FUEL_ALERT = re.compile(r"record: alert (Drink|Eat)\b")
 # slot is not something the arming makes inevitable.
 OTHER_ALERT = re.compile(r"record: alert (Distance|Time|PaceFast|PaceSlow)\b")
 ALERT_BANNER_ATTEMPTS = 4
+# The quiet baseline is sampled too, for the same repaint-lag reason the banner
+# side retries — see `scenario_alerts`.
+ALERT_QUIET_ATTEMPTS = 3
 ALERT_CLEAR_TIMEOUT = 30
 
 # How much extra ink an alert banner has to put on the panel over the same page
@@ -713,11 +716,37 @@ def scenario_alerts(sim):
     # The pair is what carries the claim: the same page with no banner, then
     # with one. The banner is a solid inverse-video band over the two hero rows,
     # so it has to add far more ink than the hero it replaces.
-    wait_for_no_alert(sim)
-    quiet = sim.dump("alert-quiet.ppm", "a panel frame with no alert on screen")
-    assert_rendered(quiet, "the run face between alerts")
+    # Both halves of the pair race the panel the same way, and the baseline is
+    # the half that fails silently. `wait_for_no_alert` returns on the record
+    # task's `cleared` line, but the screen task repaints a beat later, so a
+    # quiet dump can still be carrying the very banner it is supposed to be the
+    # baseline for — which inflates `quiet` to banner level and makes every
+    # later comparison read as "no banner rendered". Sample it a few times and
+    # keep the LOWEST: a stale quiet frame can only ever read too inky, never
+    # too clean, so the minimum is the one that cannot be the lagging one.
+    quiet = None
+    for attempt in range(1, ALERT_QUIET_ATTEMPTS + 1):
+        wait_for_no_alert(sim)
+        shot = sim.dump(
+            f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
+        )
+        assert_rendered(shot, "the run face between alerts")
+        if quiet is None or shot.dark < quiet.dark:
+            quiet = shot
+    announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
 
+    # `ALERT_RAISED` is the RECORD task's line; the banner is painted later by
+    # the screen task. So a dump can land after the raise is logged, with the
+    # alert still up, and still catch the panel one repaint short of the banner
+    # — which is a bannerless frame that the `cleared` guard below cannot see.
+    # Retry that case rather than reading the first sample as a verdict: the
+    # claim is that a banner reaches the panel while an alert is active, not
+    # that it is already there the instant the record task logs the raise.
+    # Exhausting every attempt still fails, so a banner that never renders is
+    # caught exactly as before — the loop widens when the assertion samples,
+    # not what it demands.
     banner = None
+    dumped = None
     for attempt in range(1, ALERT_BANNER_ATTEMPTS + 1):
         announce(f"waiting for an alert to dump under, attempt {attempt}/{ALERT_BANNER_ATTEMPTS}")
         mark = sim.tail.mark()
@@ -727,30 +756,43 @@ def scenario_alerts(sim):
             "an alert to raise so its banner can be dumped ('record: alert <Kind>')",
             start=mark,
         )
-        shot = sim.dump("alert-banner.ppm", "a panel frame while an alert is active")
+        # One file per attempt so a failing run keeps every frame it judged.
+        shot = sim.dump(
+            f"alert-banner-{attempt}.ppm", "a panel frame while an alert is active"
+        )
         if latest_alert(sim.tail) == "cleared":
             announce("the alert cleared before the dump landed — waiting for the next")
             continue
+        if dumped is None or shot.dark > dumped.dark:
+            dumped = shot
+        if shot.dark - quiet.dark < MIN_BANNER_INK_DELTA:
+            announce(
+                f"the alert was still up but the frame carries {shot.dark} dark pixels "
+                f"against {quiet.dark} quiet — the repaint had not landed yet, retrying"
+            )
+            continue
         banner = shot
         break
-    if banner is None:
+    if banner is None and dumped is None:
         raise SmokeFailure(
             f"no alert stayed on screen long enough to dump in "
             f"{ALERT_BANNER_ATTEMPTS} attempts — every raise had already logged "
             "'record: alert cleared' by the time the DumpFrame landed, so the "
             "banner's TTL is shorter than a panel dump takes"
         )
-    assert_rendered(banner, "the run face with an alert banner")
-
-    ink = banner.dark - quiet.dark
-    if ink < MIN_BANNER_INK_DELTA:
+    if banner is None:
+        ink = dumped.dark - quiet.dark
         raise SmokeFailure(
-            f"the frame dumped while an alert was active carries {banner.dark} dark "
+            f"no frame dumped while an alert was active carried a banner in "
+            f"{ALERT_BANNER_ATTEMPTS} attempts — the inkiest was {dumped.dark} dark "
             f"pixels against {quiet.dark} with no alert ({ink:+d}), short of the "
             f"{MIN_BANNER_INK_DELTA} an inverse-video banner band has to add — the "
             "alert reached state::ALERT but nothing that looks like a banner "
             "reached the panel"
         )
+    assert_rendered(banner, "the run face with an alert banner")
+
+    ink = banner.dark - quiet.dark
     passed(
         f"an alert banner reached the panel: {banner.dark} dark pixels with a banner "
         f"up against {quiet.dark} without ({ink:+d} ink, consistent with an "
