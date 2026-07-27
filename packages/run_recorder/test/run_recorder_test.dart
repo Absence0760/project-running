@@ -3,6 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:run_recorder/run_recorder.dart';
 
+/// Drives the recorder's monotonic clock so the re-anchor's real-elapsed arm
+/// can be exercised without waiting out ten real seconds.
+class _FakeClock extends Stopwatch {
+  Duration _value = Duration.zero;
+  void advance(Duration by) => _value += by;
+  @override
+  Duration get elapsed => _value;
+}
+
 void main() {
   // Zürich coordinates. 1 m east ≈ 1 / (111320 * cos(47.37°)) degrees of
   // longitude. Helpers keep the numbers readable in each test.
@@ -328,6 +337,82 @@ void main() {
       r.begin();
       r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 30));
       r.debugInjectPosition(makePosition(metresEast: 120, secondsFromStart: 30));
+      expect(r.debugDistanceMetres, 0);
+      expect(r.debugTrack.length, 1);
+    });
+
+    test('backwards device clock still re-anchors on real elapsed time', () {
+      // The device clock jumps an hour backwards mid-run (NTP correction,
+      // manual change, a phone that boots with a bad clock then syncs). Every
+      // later fix is then timestamped BEFORE the anchor, so dtSec is negative
+      // forever: implausible by the speed clamp AND below the re-anchor window.
+      // Without the monotonic arm the anchor could never rebase and distance
+      // stayed frozen until real time caught back up past it.
+      final clock = _FakeClock();
+      final r = RunRecorder(clock: clock)
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      clock.advance(const Duration(seconds: 12));
+      r.debugInjectPosition(
+          makePosition(metresEast: 150, secondsFromStart: -3600));
+      expect(r.debugDistanceMetres, 0,
+          reason: 'the un-sampled gap is still never credited');
+      expect(r.debugTrack.length, 2, reason: 'but the anchor must rebase');
+      // Ordinary movement accumulates again from the re-anchored position.
+      clock.advance(const Duration(seconds: 10));
+      r.debugInjectPosition(
+          makePosition(metresEast: 160, secondsFromStart: -3590));
+      expect(r.debugDistanceMetres, closeTo(10, 0.5));
+      expect(r.debugTrack.length, 3);
+    });
+
+    test('stalled GPS clock keeps recording the path, credits no distance', () {
+      // Every fix shares a timestamp, so dt is 0 and speed is unverifiable.
+      // Failing closed on DISTANCE is right; freezing the TRACK too is not —
+      // the run's path must keep being recorded.
+      final clock = _FakeClock();
+      final r = RunRecorder(clock: clock)
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 30));
+      clock.advance(const Duration(seconds: 12));
+      r.debugInjectPosition(makePosition(metresEast: 40, secondsFromStart: 30));
+      expect(r.debugTrack.length, 2);
+      expect(r.debugDistanceMetres, 0);
+    });
+
+    test('no GPS timestamp sequence can freeze the anchor permanently', () {
+      // The self-heal guarantee behind the monotonic arm: whatever the
+      // timestamps do — backwards, stuck, wildly out of order — a fix arriving
+      // after a genuine interval must always rebase the anchor, so the recorder
+      // can never strand itself on a stale one for the rest of the run (#330).
+      final clock = _FakeClock();
+      final r = RunRecorder(clock: clock)
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      const pathological = [-9999, 0, -1, 5, -50000, 0, 7, -3];
+      var east = 0.0;
+      for (final seconds in pathological) {
+        east += 250; // always beyond the 100 m one-hop cap
+        clock.advance(const Duration(seconds: 11));
+        r.debugInjectPosition(
+            makePosition(metresEast: east, secondsFromStart: seconds));
+      }
+      expect(r.debugTrack.length, pathological.length + 1);
+    });
+
+    test('monotonic arm does not weaken the teleport guard', () {
+      // The mirror of the guarantee above: a > 100 m hop whose dt claims 8 s
+      // but which arrives with NO real time elapsed is a corrupt fix, not a
+      // gap. Both clocks must agree the gap is real before the anchor moves.
+      final clock = _FakeClock();
+      final r = RunRecorder(clock: clock)
+        ..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 150, secondsFromStart: 8));
       expect(r.debugDistanceMetres, 0);
       expect(r.debugTrack.length, 1);
     });
