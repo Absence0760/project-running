@@ -131,6 +131,11 @@ List<LapSplit> lapsFromCanonicalJson(List<dynamic> json, {DateTime? startedAt}) 
 /// stream can't open, and a retry loop reopens the stream when services
 /// come back.
 class RunRecorder {
+  /// [clock] exists so tests can drive the monotonic gap the re-anchor escape
+  /// in [_onPosition] gates on without waiting out real seconds. Production
+  /// always takes the default.
+  RunRecorder({Stopwatch? clock}) : _stopwatch = clock ?? Stopwatch();
+
   static const _uuid = Uuid();
 
   /// How often [prepare] retries opening the position stream when it is
@@ -160,7 +165,7 @@ class RunRecorder {
   /// Monotonic clock for elapsed time. Unlike `DateTime.now()`, [Stopwatch]
   /// is unaffected by wall-clock jumps (NTP sync, manual time change,
   /// timezone change) — the run duration stays correct.
-  final Stopwatch _stopwatch = Stopwatch();
+  final Stopwatch _stopwatch;
   double _distanceMetres = 0;
   final List<Waypoint> _track = [];
   // Single read-only view handed out on every snapshot. `UnmodifiableListView`
@@ -209,6 +214,11 @@ class RunRecorder {
   // (up to a false safety escalation) and understating distance remaining.
   bool _currentWaypointTrusted = true;
   DateTime? _lastTrackedPositionAt;
+  /// [_stopwatch] reading when [_lastTrackedPosition] was last set. Always
+  /// written and cleared together with it — the tracking block treats a
+  /// half-set anchor as no anchor at all, so a divergence re-anchors rather
+  /// than freezing.
+  Duration? _lastTrackedElapsed;
   bool _recording = false;
   bool _paused = false;
   Route? _route;
@@ -353,6 +363,7 @@ class RunRecorder {
     _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastTrackedElapsed = null;
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
@@ -505,6 +516,7 @@ class RunRecorder {
     _laps.clear();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastTrackedElapsed = null;
     _paceFloorIdx = 0;
     _weakGps = false;
     _resetTreadmillAccumulators();
@@ -638,6 +650,7 @@ class RunRecorder {
       ..start();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastTrackedElapsed = null;
     _paceFloorIdx = _track.length;
     _weakGps = false;
     _resetTreadmillAccumulators();
@@ -707,6 +720,7 @@ class RunRecorder {
     _currentWaypointAt = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastTrackedElapsed = null;
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
@@ -801,6 +815,7 @@ class RunRecorder {
     _stopwatch.start();
     _lastTrackedPosition = null; // avoid a big jump after resume
     _lastTrackedPositionAt = null;
+    _lastTrackedElapsed = null;
     _paceFloorIdx = _track.length;
     // Drop the speed-integration anchor too. Without this, the first
     // post-resume belt sample integrates dt back to a timestamp written
@@ -987,9 +1002,11 @@ class RunRecorder {
     if (_recording) {
       final last = _lastTrackedPosition;
       final lastAt = _lastTrackedPositionAt;
-      if (last == null || lastAt == null) {
+      final lastElapsed = _lastTrackedElapsed;
+      if (last == null || lastAt == null || lastElapsed == null) {
         _lastTrackedPosition = pos;
         _lastTrackedPositionAt = pos.timestamp;
+        _lastTrackedElapsed = _stopwatch.elapsed;
         _track.add(_currentWaypoint!);
         _currentWaypointTrusted = true;
       } else {
@@ -1021,23 +1038,42 @@ class RunRecorder {
         // Only grow the track + accumulate distance on real movement. Ignore
         // GPS jitter below the threshold, implausible jumps (>100m in one
         // hop), and anything faster than the activity's max plausible speed.
+        // The same "has a genuine interval elapsed" question asked of the
+        // monotonic clock. dtSec is GPS-reported time, so a device clock that
+        // jumps backwards (NTP correction, manual change, a phone that boots
+        // with a bad clock and then syncs) leaves lastAt in the future: every
+        // later fix computes a non-positive dtSec, which is implausible by the
+        // clamp above AND below the re-anchor window, so the anchor could never
+        // rebase and distance stayed frozen until real time caught back up past
+        // it. A stuck clock (every fix sharing a timestamp) froze it outright.
+        // The stopwatch cannot go backwards or stall, so this arm makes the
+        // re-anchor fire on real elapsed time no matter what the GPS timestamps
+        // do — the escape is now unconditionally self-healing. It cannot weaken
+        // the teleport guard: it only fires where GPS time claims a SHORTER gap
+        // than the monotonic clock, i.e. exactly where GPS time is untrustworthy.
+        final monotonicGapSec =
+            (_stopwatch.elapsed - lastElapsed).inMilliseconds / 1000.0;
         if (delta > _trackThresholdMetres && delta < 100 && !implausible) {
           _distanceMetres += delta;
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
+          _lastTrackedElapsed = _stopwatch.elapsed;
           _track.add(_currentWaypoint!);
           _currentWaypointTrusted = true;
-        } else if (dtSec >= _gpsReanchorAfterSeconds) {
+        } else if (dtSec >= _gpsReanchorAfterSeconds ||
+            monotonicGapSec >= _gpsReanchorAfterSeconds) {
           // Real GPS gap: the hop failed the < 100 m cap (the runner genuinely
           // moved away while fixes were dropped) but a genuine interval has
           // elapsed. Rebase the anchor to this fresh fix WITHOUT crediting the
           // un-sampled gap distance — exactly how resume() nulls the anchor so
           // the first post-resume fix re-anchors. Without this the anchor stays
           // stale, every later delta only grows past 100 m, and distance is
-          // frozen for the rest of the run (#330). The dtSec gate (GPS time,
-          // not wall clock) keeps a zero/near-zero-dt duplicate failing closed.
+          // frozen for the rest of the run (#330). Both gates must agree the
+          // gap is short for a hop to fail closed, so a zero/near-zero-dt
+          // duplicate arriving immediately is still rejected as a teleport.
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
+          _lastTrackedElapsed = _stopwatch.elapsed;
           _track.add(_currentWaypoint!);
           _currentWaypointTrusted = true;
         } else {
