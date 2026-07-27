@@ -20,7 +20,7 @@
 // change of the container fires `map.resize()`. Caller gets back a
 // disposer to wire into `onDestroy`.
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 /// Attach a ResizeObserver to [container] that calls
 /// `map.resize()` on every dimension change. Returns a disposer

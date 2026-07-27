@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import maplibregl from 'maplibre-gl';
+	import maplibregl from '$lib/routes/maplibre';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
@@ -273,7 +273,7 @@
 		// silently (the bug that made "locate me" feel broken): surface it
 		// as a toast, then fall back to framing the loaded route data
 		// instead of stranding the user at the world view.
-		geolocate.on('error', (err: GeolocationPositionError) => {
+		geolocate.on('error', (err) => {
 			showToast(
 				err?.code === 1 ? m('routeHeatmap.locateDenied') : m('routeHeatmap.locateFailed'),
 				'error',
