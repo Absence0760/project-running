@@ -490,12 +490,16 @@ jobs:
           retention-days: 7
 
   # The newer half of the Renode coverage: the 33-page BTN3 cycle and the on-run
-  # alert engine. Split out of `sim-firmware` so the required gate carries only
-  # the scenario with a long green history — see that job's comment. Strict
-  # within itself: a regression here fails this job loudly and visibly, it just
-  # does not block every PR in the repo while these assertions are new. Fold
-  # into the `CI gate` `needs:` list once it has run green over a stretch of
-  # unrelated PRs.
+  # alert engine. Split out of `sim-firmware` as a soak — it stayed out of the
+  # required gate while the assertions were new, so a wobble in them could not
+  # block every PR in the repo.
+  #
+  # 2026-07-27 — folded into the `CI gate` `needs:` list. The soak did its job
+  # first: the alerts scenario raced the panel repaint on both halves of its
+  # banner/quiet pair, went red twice on a PR that touches no firmware, and the
+  # quiet half failed silently (the baseline came back carrying the banner it
+  # was meant to exclude). Fixed in ci_smoke.py before this job was allowed to
+  # block anything — gating on it while it flaked would have taxed every PR.
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -1669,6 +1673,7 @@ jobs:
       - build-watch-wear
       - build-firmware
       - sim-firmware
+      - sim-scenarios
       - build-mobile-android
       - twin-parity
       - schema-codegen-drift
