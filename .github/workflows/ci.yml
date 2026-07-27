@@ -1301,6 +1301,13 @@ jobs:
             # unset so paywall-wire.spec.ts still exercises the 429.
             echo "PUBLIC_BYPASS_PAYWALL=true"
           } > ../web/.env
+      # Playwright resolves apps/web/tsconfig.json, which extends the
+      # `svelte-kit sync`-generated ./.svelte-kit/tsconfig.json. That file is
+      # gitignored, so a fresh checkout doesn't have it and Playwright >= 1.62
+      # hard-errors on the unresolvable `extends` instead of ignoring it.
+      - name: Sync SvelteKit generated types
+        working-directory: apps/web
+        run: pnpm exec svelte-kit sync
       - name: Run Playwright suite (shard ${{ matrix.shard }}/14)
         working-directory: apps/web
         run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/14
@@ -1409,6 +1416,9 @@ jobs:
       # (start-livehub.sh — go build + run, resolves Supabase creds from
       # `supabase status`) and a second vite dev server with
       # PUBLIC_LIVE_HUB_URL set. Both are reaped on teardown.
+      - name: Sync SvelteKit generated types
+        working-directory: apps/web
+        run: pnpm exec svelte-kit sync
       - name: Run Playwright live-hub suite
         working-directory: apps/web
         run: pnpm exec playwright test --config=tests-e2e/playwright.livehub.config.ts
@@ -1537,6 +1547,9 @@ jobs:
       # playwright.sso.config.ts boots two webServers: the mock OIDC server
       # (start-mock-oidc.mjs) and a dedicated vite dev server on :7779.
       # Both are reaped on teardown.
+      - name: Sync SvelteKit generated types
+        working-directory: apps/web
+        run: pnpm exec svelte-kit sync
       - name: Run Playwright SSO suite
         working-directory: apps/web
         run: pnpm exec playwright test --config=tests-e2e/playwright.sso.config.ts
