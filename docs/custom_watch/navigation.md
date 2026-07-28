@@ -20,7 +20,7 @@ stateDiagram-v2
     Diag: LAT / LON / SPD
     Diag: seconds clock / vert
     Run: Run view
-    Run: 34 pages (filtered mask)
+    Run: 35 pages (filtered mask)
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
@@ -72,14 +72,15 @@ horizontally (the top-edge position thumb), so the lower-RIGHT key (BTN4)
 taps rightward and the lower-LEFT key (BTN3) taps leftward (§350), and both
 walks are filtered to `pages_mask` (data-present ∩ curated, Dashboard always
 enabled). Clusters are ordered by mid-run glance frequency; `GUID` (the
-scripted coach run) and `WKT` (the pushed structured workout, §354) close the
-live cluster as the virtual partner's siblings, and `BACK` (Back-to-start)
-sits last so the safety page is exactly one left-tap from home. The curation
-half of the mask reaches only the first 32 pages: the `SET1` wire field is 32
-bits, so `AEFF` and `BACK` — discriminants 32 and 33 since the `WKT` insert —
-are the two pages the phone cannot curate out, and `mask_from_wire` leaves
-them *enabled* rather than hiding them invisibly on every push (§333). Data
-presence still gates them.
+scripted coach run) closes the live cluster as the virtual partner's sibling,
+and `BACK` (Back-to-start) sits last so the safety page is exactly one
+left-tap from home. `WKT` (the pushed structured workout, §354) closes the
+live cluster beside `GUID`, its scripted sibling; `SUN` (the Daylight sunset
+countdown, §355) closes the synced back half just ahead of `BACK`. The curation mask has been
+64-bit on the wire since `SET1` v4 (§336), so every page the enum declares —
+including `BACK`, and the pages a pre-v4 phone's 32-bit mask cannot name,
+which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
+— is addressable by a current push. Data presence still gates them all.
 
 ```mermaid
 flowchart LR
@@ -96,13 +97,13 @@ flowchart LR
         GEAR --> TPCE --> FITN --> REDY --> GOAL --> RDAY --> PLAN --> ADPT
     end
     subgraph summaries [synced summaries]
-        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF
+        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF --> SUN
     end
     WKT --> NAV
     FUEL --> ELEV
     BAND --> GEAR
     ADPT --> RCAP
-    AEFF --> BACK
+    SUN --> BACK
     BACK --> DASH
 ```
 
@@ -114,14 +115,14 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 34-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 35-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
 rather than truncating the tail (§333) — scroll depth 2 at the full mask. Under
 the everyday filtered mask (~12 pages, 3 rows) the whole enabled set fits and
 nothing scrolls.
 
-The chrome is what makes the modal honest about itself. 34 codes need
-`ceil(34/4)` = 9 rows and the panel has exactly 9 (144 px / 16 px), so there was
+The chrome is what makes the modal honest about itself. 35 codes need
+`ceil(35/4)` = 9 rows and the panel has exactly 9 (144 px / 16 px), so there was
 never a spare row — every chrome row is bought from body capacity, which only
 §333's window makes affordable (before it the body was a hard 32-cell `const`
 assert). Row 0 names BTN2 and BTN1 and deliberately **not** BTN3/BTN4: a paging
@@ -179,7 +180,7 @@ unlabelled.
 
 The §350/§351 audit: what everything on the device costs, and whether that
 is the floor. "Floor" for a single discrete action is one press; for
-select-1-of-34 it is what the §289 BFS model computes for a five-key,
+select-1-of-35 it is what the §289 BFS model computes for a five-key,
 no-chord grammar.
 
 | Interaction | Cost | At floor? |
@@ -190,7 +191,7 @@ no-chord grammar.
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the §-StopGuard trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 34 pages | ≤ 6 actions, avg 3.8 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 35 pages | ≤ 6 actions, avg 3.9 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
@@ -203,7 +204,7 @@ its floor is the stop, on purpose. The remaining lever on the page-cycle
 average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
-## Press cost — computed, from the Dashboard, full 34-page mask
+## Press cost — computed, from the Dashboard, full 35-page mask
 
 Actions counted: each tap or hold is one action; the grid's open-hold is one;
 the auto-select close is free (BTN1 costs one to jump immediately). `linear` =
@@ -215,9 +216,9 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 17 | 8.5 |
-| + grid, forward-only movement (§288 as first built) | 9 | 4.9 |
-| + grid, symmetric ±1/±4 (§289; §350 keys) | **6** | **3.8** |
+| Linear walk only (pre-§288) | 17 | 8.7 |
+| + grid, forward-only movement (§288 as first built) | 9 | 5.0 |
+| + grid, symmetric ±1/±4 (§289; §350 keys) | **6** | **3.9** |
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
 a breadth-first search over the cursor's move set on the enabled cycle
@@ -227,9 +228,10 @@ the average over all `n` pages with the current page at zero. The model is
 validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 9 / 4.7188, 6 / 3.7188 — so the table above re-derives the original measurement
 at the new page count rather than replacing it with a fresh estimate. Both grid
-worsts survive pages 33 and 34 unchanged; the averages move 4.7188 → 4.8182 →
-4.9118 and 3.7188 → 3.7576 → 3.8235. The linear worst grows to 17 at an even
-34 pages (the antipodal page costs 17 either way).
+worsts survive pages 33, 34 and 35 unchanged; the averages move 4.7188 →
+4.8182 → 4.9118 → 5.0286 and 3.7188 → 3.7576 → 3.8235 → 3.8857. The linear
+worst grows 16 → 17 at page 34 (an even ring's antipode) and holds 17 at page
+35 (an odd ring has two).
 
 **§350 does not move these counts — it moves their price in seconds.** The
 action *counts* are identical under the spatial grammar (the walk was already
@@ -267,9 +269,9 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 34 pages: `LOAD`/`ROAD`
+  page's full name, because four glyphs cannot separate 35 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
-  `PACR`/`RCAP` are transpositions (computed over all 561 code pairs; 25 more sit
+  `PACR`/`RCAP` are transpositions (computed over all 595 code pairs; 27 more sit
   at distance 2). Both the 3 s auto-select and BTN1 therefore commit on
   something the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from

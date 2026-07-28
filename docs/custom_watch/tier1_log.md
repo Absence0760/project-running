@@ -186,6 +186,50 @@ latent single-writer assumption waiting to eat a future flag. No per-profile ale
 The four-item menu keeps the ≤ 4-press setting-change bound (farthest row is still two wrapping
 cursor steps). Host-tested + build-verified.
 
+## 2026-07-28 — structured workout execution: the mobile runner's math, on the wrist
+
+The parity backlog's last big on-run-guidance row ([§ 354](../architecture/decisions.md)).
+`watch_core::workout` ports the **shipped** mobile `WorkoutRunner` faithfully — per-step anchors,
+the overshoot-carrying multi-step advance loop (a single fix after a GPS gap can clear a short rep
+AND its recovery), both end axes, the end-of-step warning window, the mobile pace-adherence bands,
+and the ≥80 % completed/partial roll-up — fed the phone-expanded step list over a **`WKT1`** frame:
+a sixth GATT characteristic, chunked + reassembled in the course push's exact shape, and
+**CRC32-checksummed from v1** (the § 335 lesson applied in advance; a step with no end condition or
+both axes set rejects the frame whole, and the recorder's setter re-checks the same rule). The
+recorder banks `manual_paused_s` so the workout clock matches the phone stopwatch exactly — frozen
+by a manual pause, running through an auto-pause (a standing rest inside a timed recovery is the
+step working); **BTN5's lap press doubles as step-skip** (Garmin's lap semantics — § 350 has no
+spare key); and the step transition / end-of-step / DONE edges ride the alert slot as `! REP 3/6`
+/ `! STEP END` / `! WKT DONE` banners, one rung under the zone ceiling, drop-not-queue, displaced
+fuel re-queueing. A 34th **Workout glance page** closes the live cluster beside GuidedRun (step
+identity, target, live progress + a render-layer bar, the pace-band adherence vocabulary, the NEXT
+step); the § 289 press-cost model re-derived at 34 pages (worst stays 6, avg 3.8235; the linear
+worst grows 16 → 17 at the even ring's antipode). Deliberately not ported: rewind / abandon (no
+key budget) and the halfway cue (banner spam); the per-step result trail stays RAM-only pending a
+run-store format bump, and haptic cues wait on the tier-2 motor. Phone-side `watch_workout.dart`
+encoder + chunker take `run_recorder`'s own `WorkoutStep` type and pin the Rust goldens across
+both twins, transport-unwired like the course encoder. Host-tested + **sim-verified** (Renode:
+the sim demo workout advances warmup → rep → timed recovery under bench_jog with the banners and
+fuel re-queue interleaving in the defmt stream).
+
+## 2026-07-28 — Daylight sunset countdown: the ported solar model on a 35th page
+
+The tier-2 board's S-sized pull-forward ([§ 355](../architecture/decisions.md)). `watch_core::daylight`
+ports the web `safety_nudge.ts` seasonal half (Cooper's declination, solar noon at local 12:00, the
+−0.833° horizon, polar day/night at the `cos H` clamps) test-for-test; the watch adds input shaping
+only (§ 215) — `Fix` now carries the RMC `ddmmyy` date behind a day/month plausibility gate, the fix
+clock extrapolates by uptime and shifts **with its date** into local civil time, and the § 293
+`SET1` v2 timezone offset doubles as the page's data presence: a countdown against the wrong
+midnight is whole hours off, so no offset means no page in the cycle rather than a wrong number on
+one. The **Daylight glance** (`SUN`, just ahead of the still-last Back-to-start) puts the countdown
+floored to H:MM up large over SUNRISE/SUNSET, the event's local clock, and the day length; after
+sunset it counts across midnight to tomorrow's sunrise, and the polar seasons answer with two new
+Settled unfed states (`MIDNIGHT SUN` / `POLAR NIGHT`) instead of a fabricated clock. Press costs
+re-derived at 35 pages: grid worsts hold 6/9, symmetric avg 3.8857, linear worst holds 17 (an odd
+ring has two antipodes). The sim demo settings push UTC-6, so bench_jog renders the golden pre-dawn
+case — 3:03 to a 04:34 sunrise, 14:53 of day — and `ci_smoke`'s page walk reaches, dumps, and
+steps back off the page. Host-tested + sim-verified.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
