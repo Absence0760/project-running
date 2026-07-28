@@ -133,7 +133,7 @@ pub struct PageThumb {
 /// Taking the width from the SAME division as the position is what buys that.
 /// Truncating a shared `track_w / total` width instead leaves
 /// `track_w - total * (track_w / total)` columns owned by no page, and one of
-/// them is always the rightmost: at the live 33-page cycle on the 168-px panel
+/// them is always the rightmost: at the live 34-page cycle on the 168-px panel
 /// that stranded columns 55, 111 and 167, so the LAST page's thumb stopped a
 /// pixel short of the right edge and "the next tap wraps" — the one thing a
 /// position bar says better than any label — read the same as the page before
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 33);
+        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 34);
     }
 
     #[test]

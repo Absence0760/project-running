@@ -43,6 +43,7 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
+use crate::workout::{self, WorkoutView};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -559,6 +560,9 @@ pub struct Snapshot {
     /// Where the run has reached in the armed guided run, or `None` when none is
     /// armed.
     pub guided_run: Option<GuidedRunView>,
+    /// The pushed structured workout's live step state, or `None` until a
+    /// `WKT1` push arms one ([`Recorder::set_workout`]).
+    pub workout: Option<WorkoutView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -823,6 +827,9 @@ pub struct Recorder {
     /// ([`set_guided_run`](Recorder::set_guided_run)); `None` leaves the
     /// GuidedRun page an honest inactive state.
     guided: Option<&'static GuidedRun<'static>>,
+    /// The pushed structured workout's runner ([`set_workout`](Recorder::set_workout));
+    /// `None` leaves the Workout page an honest inactive state.
+    workout: Option<workout::WorkoutRunner>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -907,6 +914,7 @@ impl Recorder {
             plan_replan: None,
             plan_adaptive: None,
             guided: None,
+            workout: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -1187,6 +1195,24 @@ impl Recorder {
         }
     }
 
+    /// Load the pushed structured workout — the `WKT1` frame's expanded step
+    /// list, the same pushed-pre-built model as the roadbook (the phone runs
+    /// `expandWorkoutSteps` where the plan lives). An empty slice clears it; a
+    /// list over the cap or carrying a step with no end condition is IGNORED,
+    /// so a garbled push can't replace an armed workout with one that parks
+    /// the runner on an unfinishable step. Loading (re)starts at step 0.
+    pub fn set_workout(&mut self, steps: &[workout::WorkoutStep]) {
+        if steps.is_empty() {
+            self.workout = None;
+            return;
+        }
+        if steps.len() > workout::MAX_WORKOUT_STEPS || steps.iter().any(|s| !s.has_end_condition())
+        {
+            return;
+        }
+        self.workout = Some(workout::WorkoutRunner::new(steps));
+    }
+
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
     /// corrupt push can't render an out-of-range ring or an unknown band label.
     pub fn set_readiness(&mut self, view: Option<ReadinessView>) {
@@ -1324,6 +1350,11 @@ impl Recorder {
         self.gap.reset();
         self.pacer.reset();
         self.elev_profile.reset();
+        // The pushed workout is settings-like and survives; its progress is
+        // run state and starts over with the run.
+        if let Some(w) = self.workout.as_mut() {
+            w.reset();
+        }
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -1399,6 +1430,15 @@ impl Recorder {
             return;
         }
         self.now_s = now_s.max(self.now_s);
+        // The armed workout advances on the same 1 Hz cadence the mobile
+        // runner's snapshots gave it — here, so a duration step still ends
+        // while the runner stands at a track's start line between reps. The
+        // fix path needs no second call: a fix stamps `now_s` and the next
+        // tick folds its distance in, the same 1 s granularity the phone has.
+        let (d, e) = (self.distance_m, self.elapsed_s());
+        if let Some(w) = self.workout.as_mut() {
+            w.on_progress(d, e);
+        }
     }
 
     /// Consume one GPS fix, using its `uptime_s` as the current time. Ignored
@@ -1629,6 +1669,7 @@ impl Recorder {
             plan_replan: self.plan_replan,
             plan_adaptive: self.plan_adaptive,
             guided_run: self.guided_run_snapshot(),
+            workout: self.workout.as_ref().and_then(|w| w.view()),
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
@@ -1684,6 +1725,7 @@ impl Recorder {
         set(Page::Pacer, s.pacer.is_some());
         set(Page::RacePredictor, s.race_prediction.is_some());
         set(Page::TrainingLoad, s.training_stress.is_some());
+        set(Page::Workout, s.workout.is_some());
         set(Page::DistanceBand, s.band.is_some());
         set(Page::CutoffEta, s.cutoff.is_some());
         set(Page::Roadbook, s.roadbook.is_some());
@@ -3141,6 +3183,55 @@ mod tests {
             snap.training_stress_trimp,
             "sticky HR still feeds the new run"
         );
+    }
+
+    #[test]
+    fn a_pushed_workout_arms_resets_with_the_run_and_rejects_garbage() {
+        use crate::workout::{WorkoutStep, WorkoutStepKind};
+        let step = |m: u32| WorkoutStep {
+            kind: WorkoutStepKind::Rep,
+            rep_index: 0,
+            rep_total: 0,
+            tolerance_s_per_km: 10,
+            target_distance_m: m,
+            target_duration_s: 0,
+            target_pace_s_per_km: 0,
+        };
+        let mut r = Recorder::new();
+        assert_eq!(r.snapshot().workout, None);
+        r.set_workout(&[step(100), step(200)]);
+        let v = r.snapshot().workout.expect("armed once pushed");
+        assert_eq!(v.total, 2);
+
+        // A step with no end condition rejects the WHOLE push — the armed
+        // workout stands.
+        r.set_workout(&[step(100), step(0)]);
+        assert_eq!(r.snapshot().workout.unwrap().total, 2);
+
+        // The runner advances on the tick cadence while recording. The first
+        // tick anchors step 0 at the run's zero (the mobile first-snapshot
+        // anchor), the fixes then cover the 100 m step.
+        r.start(0);
+        r.tick(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 1));
+        r.on_fix(&fix(40.0008, -105.0, 8.9, 11));
+        r.on_fix(&fix(40.0016, -105.0, 8.9, 21));
+        r.tick(22);
+        let v = r.snapshot().workout.unwrap();
+        assert_eq!(v.step_index, 1, "the 133 m fix cleared the 100 m step");
+
+        // …and a new run restarts it while the pushed steps survive.
+        r.stop(30);
+        r.reset(31);
+        r.start(40);
+        r.tick(41);
+        let v = r.snapshot().workout.unwrap();
+        assert_eq!(v.step_index, 0);
+        assert_eq!(v.total, 2);
+
+        // An empty push clears it.
+        r.set_workout(&[]);
+        assert_eq!(r.snapshot().workout, None);
     }
 
     #[test]

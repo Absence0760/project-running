@@ -22,6 +22,7 @@ use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
+use watch_core::workout::{WorkoutStep, MAX_WORKOUT_STEPS};
 
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
 /// `baro` (which feeds GPS altitude into the elevation complementary filter)
@@ -107,6 +108,17 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// receivers (`nav`, `ui`). The 4 KiB value is the course's point buffer — held
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
+
+/// Pushed structured workout (the `WKT1` frame): the `ble` task reassembles a
+/// chunked phone write, decodes the step list, and publishes it here; the
+/// `record` task folds it into the recorder (`Recorder::set_workout`), whose
+/// snapshot feeds the Workout glance page. `None` means nothing pushed yet.
+/// One receiver (`record`).
+pub static WORKOUT: Watch<
+    CriticalSectionRawMutex,
+    Option<heapless::Vec<WorkoutStep, MAX_WORKOUT_STEPS>>,
+    1,
+> = Watch::new();
 
 /// The active course's climb profile for the RouteElev page: the `nav` task —
 /// which already owns the active (boot or pushed) course — shapes one with

@@ -334,3 +334,4 @@ pub mod training_paces;
 pub mod turn_cues;
 pub mod ui_frame;
 pub mod unfed;
+pub mod workout;
