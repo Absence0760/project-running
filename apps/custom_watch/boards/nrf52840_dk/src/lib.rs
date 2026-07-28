@@ -94,10 +94,11 @@ pub struct Leds {
     pub led4: Peri<'static, P0_16>,
 }
 
-/// The four user buttons. Active-LOW with the pin idle-high: a press pulls the
+/// The five user buttons. Active-LOW with the pin idle-high: a press pulls the
 /// line to GND, so each needs an internal pull-up and reads pressed as low.
-/// Pins per [`buttons`]. BTN1/BTN2 drive recording control, BTN3 cycles the
-/// run-view page, and BTN4 takes a manual lap (see the `button` task).
+/// Pins per [`buttons`]. BTN1/BTN2 drive recording control, BTN3/BTN4 are the
+/// left/right paging pair, and BTN5 takes the manual lap (decisions §350; see
+/// the `button` task).
 pub struct Buttons {
     /// BTN1 — P0.11.
     pub btn1: Peri<'static, AnyPin>,
@@ -107,6 +108,12 @@ pub struct Buttons {
     pub btn3: Peri<'static, AnyPin>,
     /// BTN4 — P0.25.
     pub btn4: Peri<'static, AnyPin>,
+    /// BTN5 — P0.02 (header P2 / AIN0). The DK has only four onboard buttons,
+    /// so the fifth is an external momentary switch to GND jumpered onto the
+    /// header (the internal pull-up means no resistor); the sim's bezel drives
+    /// the same pin. Unwired it just idles high — a dead lap key, never a
+    /// phantom press.
+    pub btn5: Peri<'static, AnyPin>,
 }
 
 pub struct Board {
@@ -135,6 +142,7 @@ impl Board {
                 btn2: p.P0_12.into(),
                 btn3: p.P0_24.into(),
                 btn4: p.P0_25.into(),
+                btn5: p.P0_02.into(),
             },
             gps: GpsPort {
                 uarte: p.UARTE0,
@@ -181,4 +189,6 @@ pub mod buttons {
     pub const BTN3_PIN: u8 = 24;
     /// Button4 — `P0.25`.
     pub const BTN4_PIN: u8 = 25;
+    /// Button5 — `P0.02` (external momentary on the header; no DK button).
+    pub const BTN5_PIN: u8 = 2;
 }

@@ -139,12 +139,13 @@ async fn main(spawner: Spawner) {
     );
 
     // Buttons are active-LOW with the line idle-high, so pull up and treat a
-    // press as a falling edge (see the `button` task). BTN3 cycles the run-view
-    // page (or, on the idle face, the GNSS mode), BTN4 takes a manual lap.
+    // press as a falling edge (see the `button` task). BTN3/BTN4 page left /
+    // right (BTN3 idle: the GNSS mode), BTN5 takes the manual lap (§350).
     let btn1 = Input::new(board.buttons.btn1, Pull::Up);
     let btn2 = Input::new(board.buttons.btn2, Pull::Up);
     let btn3 = Input::new(board.buttons.btn3, Pull::Up);
     let btn4 = Input::new(board.buttons.btn4, Pull::Up);
+    let btn5 = Input::new(board.buttons.btn5, Pull::Up);
 
     // The BLE build brings the SoftDevice up before the run store because the
     // S140 arbitrates all flash access: the store's backend there is
@@ -212,7 +213,7 @@ async fn main(spawner: Spawner) {
         course
     )));
     spawner.spawn(unwrap!(tasks::button::run(
-        btn1, btn2, btn3, btn4, boot_mode, store
+        btn1, btn2, btn3, btn4, btn5, boot_mode, store
     )));
     spawner.spawn(unwrap!(tasks::gps::run(gps_tx, gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
