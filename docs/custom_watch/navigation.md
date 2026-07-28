@@ -34,9 +34,9 @@ stateDiagram-v2
     Diag --> Idle: BTN4 — back to home
     Diag --> Run: BTN1 — start run
     Idle --> Menu: BTN5 — settings (§351)
-    Menu --> Menu: BTN3 / BTN4 — cursor up / down
-    Menu --> Menu: BTN1 — activate (value items cycle in place)
-    Menu --> Idle: BTN2 or BTN5 — exit
+    Menu --> Menu: BTN2 / BTN3 — cursor up / down (the UP / DOWN slots)
+    Menu --> Menu: BTN5 / BTN1 — edit left / right (off-on, dec-inc)
+    Menu --> Idle: BTN4 — exit (the BACK slot)
     Menu --> Idle: BTN1 on RE-ZERO — fire + close
     Menu --> Idle: 30 s inactivity — auto-close
     Idle --> Run: BTN1 — start run
@@ -130,22 +130,41 @@ stop everywhere else and cancels in here — is a *safety* remap the closing gri
 cannot reveal (§337), and `B1 GO` names the confirm because a START-key jump is
 learned from other watches, not from this screen.
 
-## The settings menu (idle, §351)
+## The settings menu (idle, §351 — directional key map)
 
 A BTN5 tap on the idle face opens it — the lap key is dead while idle, the
-same dead-key repurposing as §290/§291. It speaks the grid's dialect
-verbatim: BTN4/BTN3 step the cursor the directions they page, BTN1 activates,
-BTN2 (or BTN5 again) exits, and row 0 is the grid's own `B2 EXIT … B1 GO`
-legend, byte-identical by test. Three items: **GNSS MODE** (cycles in place —
-the projected hours are read *before* committing, unlike the blind quick
-cycle, which stays), **HIDE EMPTY** (the §284 filter; the full per-page mask
-stays a phone surface), **RE-ZERO ALTITUDE** (fires the idle hold's request
-and closes; the idle banner answers). Value items keep the menu open — the
-row re-rendering with the new value is the confirmation. Every press inside
-is swallowed, the menu is idle-only, and 30 s of inactivity closes it because
-it covers the home clock. The GNSS mode and the hide-empty choice both
-persist in the CFG1 flash record and restore at boot — whichever side wrote
-last, menu or phone push, wins the reboot.
+same dead-key repurposing as §290/§291. Inside, every key is spatially true
+to the case:
+
+- **BTN2 / BTN3** — cursor **up / down** the list. These are the §81 slots
+  Garmin literally names UP and DOWN, stacked vertically on the left of the
+  case.
+- **BTN5 / BTN1** — edit the selected row, **left / right**: left = off /
+  decrease, right = on / increase, and right fires an action row. Edits are
+  directional and idempotent — HIDE EMPTY is right=ON / left=OFF (the side
+  you want, never an overshootable toggle), GNSS MODE is a clamped ladder
+  (right toward Expedition and more hours, left toward Performance and more
+  fixes, no wrap) with the projected hours read *before* committing.
+- **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
+  puts it.
+
+Three items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+full per-page mask stays a phone surface), **RE-ZERO ALTITUDE** (right fires
+the idle hold's request and closes; the idle banner answers). Value rows keep
+the menu open — the row re-rendering with the new value is the confirmation.
+Every press inside is swallowed, the menu is idle-only, and 30 s of
+inactivity closes it because it covers the home clock. The GNSS mode and the
+hide-empty choice both persist in the CFG1 flash record and restore at boot —
+whichever side wrote last, menu or phone push, wins the reboot.
+
+The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
+`B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
+rides the paging pair; a settings list is *vertical* with a value axis across
+each row, so its cursor rides the vertical pair and its edits the horizontal
+one. Each modal is true to what it shows. The one §337-class surprise — EXIT
+living on B4 here but B2 there — is what the menu's legend row names
+(`B5- B1+       B4 EXIT`); the cursor keys move a visible marker and stay
+unlabelled.
 
 ## Every interaction, priced
 
@@ -168,7 +187,7 @@ no-chord grammar.
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
 | Diagnostics view | 1 tap (idle BTN4) | yes |
 | Open settings | 1 tap (idle BTN5) | yes |
-| Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + activate); exit is free (30 s) or 1 | — |
+| Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
 
 Everything that can be one press is one press; the only interaction above
 its floor is the stop, on purpose. The remaining lever on the page-cycle
@@ -271,10 +290,12 @@ removes.
   mid-press.
 - **The settings menu swallows every button and exists only while idle**
   (§351). No press inside it can start, pause, or lap a run; a run starting
-  under it (sim-autostart) closes it; and its legend row is byte-identical
-  to the grid's, so the two modals are one dialect. Its 30 s auto-close is a
-  per-press deadline, never a standing wake, and exists because the menu
-  covers the home clock.
+  under it (sim-autostart) closes it; edits are directional and idempotent
+  (a clamped ladder end or an on/on press is a no-op, never an overshoot);
+  and its legend names exactly what §337 demands — the exit that moved off
+  the grid's B2, and the novel edit pair. Its 30 s auto-close is a per-press
+  deadline, never a standing wake, and exists because the menu covers the
+  home clock.
 - **A hold's action fires at its threshold, not on release** (§350). At
   0.5 s of a run-view paging hold the grid simply opens under the thumb —
   the modal appearing IS the feedback — so no gesture asks the runner to
@@ -345,7 +366,7 @@ precedent that a lap deserves its own dedicated, undelayed tap.
 backward / forward and `$btn1` to jump (`B1 GO`), `$btn5` lap. The same
 grammar in `FIN`: `$btn4` right, `$btn3` left. While idle, `$btn4` toggles
 the home face against the diagnostics face, `$btn3h` is the QNH re-zero,
-and `$btn5` opens the settings menu (`$btn3`/`$btn4` cursor, `$btn1`
-activate, `$btn2` exit). Or click the bezel buttons in the `--gui` window —
-they sit at the §81 positions (BTN5 upper-left, BTN2 mid-left, BTN3
-lower-left, BTN1 upper-right, BTN4 lower-right).
+and `$btn5` opens the settings menu (`$btn2`/`$btn3` cursor up/down,
+`$btn5`/`$btn1` edit left/right, `$btn4` exit). Or click the bezel buttons
+in the `--gui` window — they sit at the §81 positions (BTN5 upper-left,
+BTN2 mid-left, BTN3 lower-left, BTN1 upper-right, BTN4 lower-right).
