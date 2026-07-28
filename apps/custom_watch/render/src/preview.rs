@@ -335,7 +335,15 @@ fn preview_run_view_low_battery_marker() {
         IdleView::Home,
         None,
     );
-    let hero = face::page_hero(Page::Dashboard, None, Some(150), Some(&snap), None, 100, None);
+    let hero = face::page_hero(
+        Page::Dashboard,
+        None,
+        Some(150),
+        Some(&snap),
+        None,
+        100,
+        None,
+    );
     face::apply_run_marker(
         &mut rows,
         Page::Dashboard,
@@ -785,8 +793,16 @@ fn preview_back_to_start_page() {
     draw_hero(
         &mut fb,
         Page::BackToStart,
-        face::page_hero(Page::BackToStart, None, None, Some(&snap), Some(&view), 100, None)
-            .as_deref(),
+        face::page_hero(
+            Page::BackToStart,
+            None,
+            None,
+            Some(&snap),
+            Some(&view),
+            100,
+            None,
+        )
+        .as_deref(),
     );
     widgets::draw_page_indicator(
         &mut fb,
