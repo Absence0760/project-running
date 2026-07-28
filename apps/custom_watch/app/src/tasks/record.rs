@@ -289,6 +289,14 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_hide_empty_pages(hide);
         info!("record: restored hide-empty-pages {}", hide);
     }
+    // Re-apply the persisted activity profile's page preset (§353) — the
+    // selection itself is display state (main seeds `state::PROFILE`), but the
+    // curated mask lives only in the recorder, so a reboot re-derives it from
+    // the stored profile the way the mode is re-read from CFG1.
+    if let Some(p) = store.lock().await.read_profile() {
+        recorder.set_pages_enabled(watch_core::profiles::preset(p).pages);
+        info!("record: restored profile {} page preset", p);
+    }
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();

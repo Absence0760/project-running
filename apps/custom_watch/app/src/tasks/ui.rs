@@ -146,6 +146,7 @@ pub async fn screen_task(
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut menu_rx = unwrap!(state::SETTINGS_MENU.receiver());
+    let mut profile_rx = unwrap!(state::PROFILE.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
@@ -165,6 +166,7 @@ pub async fn screen_task(
     // split as the grid.
     let mut menu: Option<u8> = None;
     let mut mode = GnssMode::default();
+    let mut profile: Option<watch_core::profiles::ActivityProfile> = None;
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
@@ -250,6 +252,13 @@ pub async fn screen_task(
         }
         if let Some(v) = menu_rx.try_changed() {
             menu = v;
+        }
+        // No dedicated select arm: a profile only changes on a menu edit,
+        // whose preset push always wakes this loop within a tick (the pages
+        // push republishes a snapshot; a mode change wakes mode_rx), so the
+        // coalescing poll here is enough.
+        if let Some(p) = profile_rx.try_changed() {
+            profile = p;
         }
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
@@ -519,7 +528,7 @@ pub async fn screen_task(
         // live run in the interim.
         if let Some(cursor) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
-            for (row, text) in settings_menu::menu_rows(cursor, mode, hide)
+            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile)
                 .iter()
                 .enumerate()
             {

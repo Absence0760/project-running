@@ -50,6 +50,7 @@ use watch_core::input_flow::{
 };
 use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
+use watch_core::profiles::{self, ActivityProfile};
 use watch_core::record::RecordState;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_menu::{self, Menu, MenuEdit, ValueDir, MENU_TIMEOUT_S};
@@ -92,11 +93,12 @@ struct NavState {
     menu: Option<Menu>,
     menu_deadline: Option<Instant>,
     mode: GnssMode,
+    profile: Option<ActivityProfile>,
     idle_view: IdleView,
 }
 
 impl NavState {
-    fn new(initial_mode: GnssMode) -> Self {
+    fn new(initial_mode: GnssMode, initial_profile: Option<ActivityProfile>) -> Self {
         Self {
             page: Page::default(),
             grid: None,
@@ -104,6 +106,7 @@ impl NavState {
             menu: None,
             menu_deadline: None,
             mode: initial_mode,
+            profile: initial_profile,
             idle_view: IdleView::Home,
         }
     }
@@ -185,8 +188,30 @@ async fn menu_edit(nav: &mut NavState, dir: ValueDir, hide_now: bool, store: &'s
     let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
         return;
     };
-    match settings_menu::edit(item, dir, nav.mode, hide_now) {
+    match settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile) {
         MenuEdit::SetGnssMode(mode) => set_gnss_mode(nav, store, mode).await,
+        MenuEdit::SetProfile(p) => {
+            // A profile is a macro over the existing knobs (§353): the pages
+            // preset rides the same settings channel a phone push takes, the
+            // mode rides the shared `set_gnss_mode` path (which persists it),
+            // and the selection itself persists so a reboot re-applies the
+            // preset. Last-writer-wins on every knob, exactly like §351.
+            let preset = profiles::preset(p);
+            info!("button: menu -> profile {} applied", p);
+            let s = WatchSettings {
+                pages: Some(preset.pages),
+                ..Default::default()
+            };
+            if state::SETTINGS.try_send(s).is_err() {
+                warn!("button: settings queue full — profile pages dropped");
+            }
+            if preset.gnss_mode != nav.mode {
+                set_gnss_mode(nav, store, preset.gnss_mode).await;
+            }
+            nav.profile = Some(p);
+            state::PROFILE.sender().send(nav.profile);
+            store.lock().await.persist_profile(p).await;
+        }
         MenuEdit::SetHideEmpty(hide) => {
             info!("button: menu -> hide empty pages {}", hide);
             // The same channel a phone push rides, so the apply path and the
@@ -311,14 +336,15 @@ pub async fn run(
     mut btn3: Input<'static>,
     mut btn4: Input<'static>,
     mut btn5: Input<'static>,
-    initial_mode: GnssMode,
+    initial: (GnssMode, Option<ActivityProfile>),
     store: &'static SharedStore,
 ) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let interaction_tx = state::INTERACTION.sender();
-    // Seed from the mode main restored from flash at boot so the BTN3 cycle
-    // continues from the persisted choice rather than the default.
-    let mut nav = NavState::new(initial_mode);
+    // Seed from the mode + profile main restored from flash at boot so the
+    // BTN3 cycle and the menu's PROFILE row continue from the persisted
+    // choices rather than the defaults.
+    let mut nav = NavState::new(initial.0, initial.1);
     let mut stop_guard = StopGuard::new();
     info!("{=str}", BOOT_LINE);
     loop {
@@ -553,7 +579,7 @@ pub async fn run(
     btn3: Input<'static>,
     btn4: Input<'static>,
     btn5: Input<'static>,
-    initial_mode: GnssMode,
+    initial: (GnssMode, Option<ActivityProfile>),
     store: &'static SharedStore,
 ) {
     /// Poll cadence. The `click` macro holds a press ~0.3 s, so any interval
@@ -562,7 +588,7 @@ pub async fn run(
 
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let interaction_tx = state::INTERACTION.sender();
-    let mut nav = NavState::new(initial_mode);
+    let mut nav = NavState::new(initial.0, initial.1);
     let mut stop_guard = StopGuard::new();
 
     // Active-low: pressed pulls the line low. Track the previous level per

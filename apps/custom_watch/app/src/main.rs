@@ -192,6 +192,19 @@ async fn main(spawner: Spawner) {
         saved.unwrap_or_default()
     };
 
+    // Boot-seed the last-applied activity profile (§353) the same way, so the
+    // menu's PROFILE row reads the restored selection and the record task can
+    // re-apply the profile's page preset. `None` (no stored choice, or a
+    // corrupt byte) leaves the row an honest `--`.
+    let boot_profile = {
+        let saved = store.lock().await.read_profile();
+        if let Some(p) = saved {
+            info!("boot: restored activity profile {} from flash", p);
+        }
+        state::PROFILE.sender().send(saved);
+        saved
+    };
+
     // The liveness LED is a debug affordance behind the default-OFF `dev-blink`
     // feature — a free-running 2 Hz waker has no place in the lean build.
     #[cfg(feature = "dev-blink")]
@@ -213,7 +226,13 @@ async fn main(spawner: Spawner) {
         course
     )));
     spawner.spawn(unwrap!(tasks::button::run(
-        btn1, btn2, btn3, btn4, btn5, boot_mode, store
+        btn1,
+        btn2,
+        btn3,
+        btn4,
+        btn5,
+        (boot_mode, boot_profile),
+        store
     )));
     spawner.spawn(unwrap!(tasks::gps::run(gps_tx, gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
