@@ -2,9 +2,9 @@
 //! (max HR, pacer goal, gear baseline/target, HR-zone ceiling, QNH sea-level
 //! reference, fuel-reminder cadences, run-view page curation, home-clock
 //! timezone offset, the distance / time / pace-band alert cadences, the
-//! race-phase plan, and the guided-run selection) into the recorder's + baro
-//! task's + alert engine's existing settings-sync hooks
-//! (`Recorder::set_max_hr` / `set_pacer_goal` / `set_gear` /
+//! race-phase plan, the guided-run selection, and the resting HR) into the
+//! recorder's + baro task's + alert engine's existing settings-sync hooks
+//! (`Recorder::set_max_hr` / `set_resting_hr` / `set_pacer_goal` / `set_gear` /
 //! `set_pages_enabled` / `set_hide_empty_pages` / `set_race_phases` /
 //! `set_guided_run`, `AlertEngine::set_zone_ceiling` / `set_fuel_intervals` /
 //! `set_distance_interval` / `set_time_interval` / `set_pace_band`,
@@ -27,15 +27,22 @@ use crate::run_store::crc32;
 
 pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
 
+/// Version 5 (2026-07-27): the resting-HR sync rides `flags2` bit 6 — the
+/// second half of the TRIMP calibration pair ([`FLAG_MAX_HR`] has carried the
+/// other half since v1), so the recorder's single-run training-stress model can
+/// upgrade from the distance proxy to Banister TRIMP
+/// ([`crate::training_load::compute_stress`]). `decode` accepts every earlier
+/// version alongside v5, so an old phone's push keeps working; the encoder
+/// always emits v5.
+pub const SETTINGS_VERSION: u8 = 5;
+
 /// Version 4 (2026-07-26): the five settings the watch could already honour but
 /// the phone had no way to reach took the next five `flags2` bits — the
 /// distance / time alert cadences, the pace band, the race-phase plan, and the
 /// guided-run selection — and the run-view page mask widened from 32 to 64 bits
 /// so every page the enum declares is addressable rather than relying on
-/// [`mask_from_wire`] to fail open past bit 31. `decode` accepts v1 (no
-/// `flags2`, no CRC), v2 (no CRC) and v3 (32-bit page mask) alongside v4, so an
-/// old phone's push keeps working; the encoder always emits v4.
-pub const SETTINGS_VERSION: u8 = 4;
+/// [`mask_from_wire`] to fail open past bit 31.
+const SETTINGS_VERSION_V4: u8 = 4;
 
 /// Version 2 (2026-07-22): v1's flag byte was saturated, so the ninth field
 /// (`tz_offset_min`) rode that version bump into a second presence byte
@@ -75,19 +82,28 @@ const KNOWN_FLAGS: u8 = FLAG_MAX_HR
     | FLAG_HIDE_EMPTY;
 
 /// Presence bits in the `flags2` byte, continuing the field order after
-/// [`FLAG_HIDE_EMPTY`]. Bit 0 arrived with v2, bits 1-4 and 5 with v4. Two of
-/// its eight bits are still free, which is why v4 needed no third presence
-/// byte.
+/// [`FLAG_HIDE_EMPTY`]. Bit 0 arrived with v2, bits 1-5 with v4, bit 6 with
+/// v5. One of its eight bits is still free, which is why v5 needed no third
+/// presence byte.
 pub const FLAG2_TZ_OFFSET: u8 = 1 << 0;
 pub const FLAG2_DISTANCE_INTERVAL: u8 = 1 << 1;
 pub const FLAG2_TIME_INTERVAL: u8 = 1 << 2;
 pub const FLAG2_PACE_BAND: u8 = 1 << 3;
 pub const FLAG2_RACE_PHASES: u8 = 1 << 4;
 pub const FLAG2_GUIDED_RUN: u8 = 1 << 5;
+pub const FLAG2_RESTING_HR: u8 = 1 << 6;
 
 /// Every presence bit `flags2` defines **at version 2 and 3** — a bit outside
 /// this mask is one those versions' own encoders could not have set.
 const KNOWN_FLAGS2_V2: u8 = FLAG2_TZ_OFFSET;
+
+/// Every presence bit `flags2` defines at version 4.
+const KNOWN_FLAGS2_V4: u8 = FLAG2_TZ_OFFSET
+    | FLAG2_DISTANCE_INTERVAL
+    | FLAG2_TIME_INTERVAL
+    | FLAG2_PACE_BAND
+    | FLAG2_RACE_PHASES
+    | FLAG2_GUIDED_RUN;
 
 /// Every presence bit `flags2` defines at the current version. A set bit
 /// outside the mask for the frame's *own* version can't be a forward-compatible
@@ -95,12 +111,7 @@ const KNOWN_FLAGS2_V2: u8 = FLAG2_TZ_OFFSET;
 /// version byte — so an unknown bit means a corrupt or misframed push, and
 /// `decode` rejects the frame rather than silently dropping whatever the sender
 /// meant by it.
-const KNOWN_FLAGS2: u8 = FLAG2_TZ_OFFSET
-    | FLAG2_DISTANCE_INTERVAL
-    | FLAG2_TIME_INTERVAL
-    | FLAG2_PACE_BAND
-    | FLAG2_RACE_PHASES
-    | FLAG2_GUIDED_RUN;
+const KNOWN_FLAGS2: u8 = KNOWN_FLAGS2_V4 | FLAG2_RESTING_HR;
 
 /// v1 header: magic (4) + version (1) + flags (1). v2 appends `flags2`.
 const V1_HEADER_LEN: usize = 6;
@@ -125,9 +136,10 @@ pub const GUIDED_RUN_ID_LEN: usize = 24;
 /// Largest a fully-populated frame can be — every field present: header,
 /// max_hr(2), pacer(8), gear(8), zone_ceiling(1), sea_level_pa(4), fuel(8),
 /// pages(8), hide_empty(1), tz_offset(2), distance_interval(4),
-/// time_interval(4), pace_band(4), race_phases(9), guided_run(24), and the CRC
-/// trailer. 98 bytes, well inside one write at the 256-byte ATT MTU the `ble`
-/// task configures, so a settings push still never needs chunking.
+/// time_interval(4), pace_band(4), race_phases(9), guided_run(24),
+/// resting_hr(2), and the CRC trailer. 100 bytes, well inside one write at the
+/// 256-byte ATT MTU the `ble` task configures, so a settings push still never
+/// needs chunking.
 pub const MAX_SETTINGS_LEN: usize = HEADER_LEN
     + 2
     + 8
@@ -143,6 +155,7 @@ pub const MAX_SETTINGS_LEN: usize = HEADER_LEN
     + 4
     + RACE_PHASES_LEN
     + GUIDED_RUN_ID_LEN
+    + 2
     + CRC_LEN;
 
 /// Widest plausible UTC offset (minutes): no real zone sits outside ±14 h.
@@ -342,6 +355,12 @@ pub struct WatchSettings {
     /// The guided run to arm, doubly-optional: `Some(None)` deselects (an
     /// all-zero id on the wire), `Some(Some(id))` selects.
     pub guided_run: Option<Option<GuidedRunId>>,
+    /// Resting HR (bpm) — the second half of the TRIMP calibration pair
+    /// ([`WatchSettings::max_hr`] is the other). Present = upgrade the
+    /// recorder's single-run stress model from the distance proxy to Banister
+    /// TRIMP; absent = leave the current calibration. Plausibility guard:
+    /// [`crate::record::Recorder::set_resting_hr`].
+    pub resting_hr: Option<u16>,
 }
 
 /// The pushed timezone offset when it is a plausible UTC offset, `None` when
@@ -378,6 +397,7 @@ impl WatchSettings {
             1 => (false, PAGES_LEN_V3, false, 0),
             SETTINGS_VERSION_V2 => (true, PAGES_LEN_V3, false, KNOWN_FLAGS2_V2),
             SETTINGS_VERSION_V3 => (true, PAGES_LEN_V3, true, KNOWN_FLAGS2_V2),
+            SETTINGS_VERSION_V4 => (true, PAGES_LEN, true, KNOWN_FLAGS2_V4),
             SETTINGS_VERSION => (true, PAGES_LEN, true, KNOWN_FLAGS2),
             _ => return None,
         };
@@ -534,6 +554,12 @@ impl WatchSettings {
             out.guided_run = Some((!id.is_empty()).then_some(id));
             off = end;
         }
+        if flags2 & FLAG2_RESTING_HR != 0 {
+            let end = off + 2;
+            let raw = b.get(off..end)?;
+            out.resting_hr = Some(u16::from_le_bytes([raw[0], raw[1]]));
+            off = end;
+        }
         // Bytes left over past the fields the flags claim mean a corrupt or
         // misframed push (data present for a bit that wasn't set); reject it
         // rather than silently apply a frame the phone didn't mean to send.
@@ -543,7 +569,7 @@ impl WatchSettings {
         Some(out)
     }
 
-    /// Encode a version-4 frame into `out`, returning the byte length written,
+    /// Encode a version-5 frame into `out`, returning the byte length written,
     /// or `None` if `out` is smaller than the frame needs. Only present fields
     /// are written, in flag order, then the CRC32 trailer over everything
     /// before it — the mirror the phone encoder pins to.
@@ -592,6 +618,9 @@ impl WatchSettings {
         if self.guided_run.is_some() {
             flags2 |= FLAG2_GUIDED_RUN;
         }
+        if self.resting_hr.is_some() {
+            flags2 |= FLAG2_RESTING_HR;
+        }
 
         let len = HEADER_LEN
             + CRC_LEN
@@ -608,7 +637,8 @@ impl WatchSettings {
             + self.time_interval_s.map_or(0, |_| 4)
             + self.pace_band.map_or(0, |_| 4)
             + self.race_phases.map_or(0, |_| RACE_PHASES_LEN)
-            + self.guided_run.map_or(0, |_| GUIDED_RUN_ID_LEN);
+            + self.guided_run.map_or(0, |_| GUIDED_RUN_ID_LEN)
+            + self.resting_hr.map_or(0, |_| 2);
         if out.len() < len {
             return None;
         }
@@ -689,6 +719,10 @@ impl WatchSettings {
             out[off..off + GUIDED_RUN_ID_LEN].copy_from_slice(&bytes);
             off += GUIDED_RUN_ID_LEN;
         }
+        if let Some(hr) = self.resting_hr {
+            out[off..off + 2].copy_from_slice(&hr.to_le_bytes());
+            off += 2;
+        }
         let crc = crc32(&out[..off]).to_le_bytes();
         out[off..off + CRC_LEN].copy_from_slice(&crc);
         Some(off + CRC_LEN)
@@ -754,6 +788,7 @@ mod tests {
             pace_band: Some(Some(BAND)),
             race_phases: Some(MARATHON_PLAN),
             guided_run: Some(GuidedRunId::new("easy-30")),
+            resting_hr: Some(48),
         };
         assert_eq!(roundtrip(&s), s);
     }
@@ -1093,7 +1128,7 @@ mod tests {
         bad_magic[0] = b'X';
         assert_eq!(WatchSettings::decode(&bad_magic), None);
         let mut bad_ver = buf;
-        bad_ver[4] = 4;
+        bad_ver[4] = SETTINGS_VERSION + 1;
         assert_eq!(WatchSettings::decode(&bad_ver), None);
         assert_eq!(WatchSettings::decode(&[]), None);
         assert_eq!(WatchSettings::decode(b"SE"), None);
@@ -1114,12 +1149,25 @@ mod tests {
         header[0..4].copy_from_slice(&SETTINGS_MAGIC);
         header[4] = SETTINGS_VERSION;
         header[5] = 0;
-        header[6] = 0x02; // bit 1: no v2 field defines it
+        header[6] = 0x80; // bit 7: no v5 field defines it
         let frame = sealed(&header);
         assert_eq!(WatchSettings::decode(&frame), None);
         // A v3 header cut short of its flags2 byte is a short buffer, not a
         // zero flags2.
         assert_eq!(WatchSettings::decode(&frame[..V1_HEADER_LEN]), None);
+    }
+
+    #[test]
+    fn a_v4_frame_claiming_the_v5_resting_hr_bit_is_rejected() {
+        // A version-4 encoder could never have set bit 6 — the field rode the
+        // v5 bump — so a v4 frame claiming it is corrupt, not forward-compatible.
+        let mut body = [0u8; HEADER_LEN + 2];
+        body[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        body[4] = SETTINGS_VERSION_V4;
+        body[5] = 0;
+        body[6] = FLAG2_RESTING_HR;
+        body[7] = 48;
+        assert_eq!(WatchSettings::decode(&sealed(&body)), None);
     }
 
     #[test]
@@ -1242,12 +1290,12 @@ mod tests {
         // byte is a known field, so the unknown-bit rejection only polices
         // flags2. The promised version bump happened — tz_offset (v2) rode it
         // into flags2 — and the next saturation repeats the drill: whoever
-        // fills flags2's bit 7 bumps to v3.
+        // fills flags2's bit 7 rides the next version bump.
         assert_eq!(KNOWN_FLAGS, u8::MAX);
         assert_eq!(
             KNOWN_FLAGS2.count_ones(),
-            6,
-            "six flags2 bits used, two spare"
+            7,
+            "seven flags2 bits used, one spare"
         );
         // A full flag byte with too few bytes for what it claims still rejects,
         // even when the checksum over those too-few bytes is correct.
@@ -1326,6 +1374,10 @@ mod tests {
                 guided_run: Some(GuidedRunId::new("easy-30")),
                 ..Default::default()
             },
+            WatchSettings {
+                resting_hr: Some(48),
+                ..Default::default()
+            },
         ];
         for s in cases {
             let mut buf = [0u8; MAX_SETTINGS_LEN];
@@ -1370,6 +1422,7 @@ mod tests {
                     race_phases: (flags2 & FLAG2_RACE_PHASES != 0).then_some(MARATHON_PLAN),
                     guided_run: (flags2 & FLAG2_GUIDED_RUN != 0)
                         .then(|| GuidedRunId::new("easy-30")),
+                    resting_hr: (flags2 & FLAG2_RESTING_HR != 0).then_some(48),
                 };
                 let back = roundtrip(&s);
                 assert_eq!(
@@ -1396,6 +1449,7 @@ mod tests {
                 assert_eq!(back.pace_band.is_some(), flags2 & FLAG2_PACE_BAND != 0);
                 assert_eq!(back.race_phases.is_some(), flags2 & FLAG2_RACE_PHASES != 0);
                 assert_eq!(back.guided_run.is_some(), flags2 & FLAG2_GUIDED_RUN != 0);
+                assert_eq!(back.resting_hr.is_some(), flags2 & FLAG2_RESTING_HR != 0);
             }
         }
     }
@@ -1439,12 +1493,53 @@ mod tests {
             pace_band: Some(Some(BAND)),
             race_phases: Some(MARATHON_PLAN),
             guided_run: Some(GuidedRunId::new("easy-30")),
+            resting_hr: Some(48),
         };
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
-            0x04, // version
+            0x05, // version
+            0xff, // flags: every version-1 field
+            0x7f, // flags2: tz | distance | time | pace | race | guided | resting
+            0xbe, 0x00, // max_hr = 190
+            0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
+            0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
+            0x00, 0x24, 0xf4, 0x48, // gear baseline_m = 500000.0 (f32 LE)
+            0x00, 0x50, 0x43, 0x49, // gear target_m = 800000.0 (f32 LE)
+            0x03, // zone_ceiling = 3
+            0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
+            0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
+            0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pages = 0xc0ff (u64 LE)
+            0x01, // hide_empty_pages = true
+            0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+            0xe8, 0x03, 0x00, 0x00, // distance_interval_m = 1000
+            0x08, 0x07, 0x00, 0x00, // time_interval_s = 1800
+            0x2c, 0x01, // pace_band fast = 300 s/km
+            0xa4, 0x01, // pace_band slow = 420 s/km
+            0xd3, 0xa4, 0x00, 0x00, // race_phases distance_m = 42195
+            0x38, 0x31, 0x00, 0x00, // race_phases goal_time_s = 12600
+            0x00, // race_phases preset = ten_ten_ten
+            0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, // guided_run id "easy-30"
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // NUL padding to 24
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30,
+            0x00, // resting_hr = 48
+            0x97, 0x6f, 0x44, 0xf0, // crc32 over every byte above (u32 LE)
+        ];
+        assert_eq!(n, MAX_SETTINGS_LEN);
+        assert_eq!(buf, expected);
+    }
+
+    /// The frozen v4 golden vector (every v4 field, version byte 0x04) must
+    /// keep decoding into exactly what it decoded into before the v5 bump: a
+    /// phone that hasn't shipped the resting-HR encoder yet still configures
+    /// the watch.
+    #[test]
+    fn v4_golden_vector_still_decodes() {
+        let v4: [u8; 98] = [
+            0x53, 0x45, 0x54, 0x31, // "SET1"
+            0x04, // version 4
             0xff, // flags: every version-1 field
             0x3f, // flags2: tz | distance | time | pace | race | guided
             0xbe, 0x00, // max_hr = 190
@@ -1471,8 +1566,35 @@ mod tests {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0xcd, 0x9c,
             0x55, // crc32 over every byte above (u32 LE)
         ];
-        assert_eq!(n, MAX_SETTINGS_LEN);
-        assert_eq!(buf, expected);
+        assert_eq!(
+            WatchSettings::decode(&v4),
+            Some(WatchSettings {
+                max_hr: Some(190),
+                pacer: Some(PacerGoalCfg {
+                    distance_m: 42_195,
+                    time_s: 14_400,
+                }),
+                gear: Some(GearCfg {
+                    baseline_m: 500_000.0,
+                    target_m: Some(800_000.0),
+                }),
+                zone_ceiling: Some(Some(3)),
+                sea_level_pa: Some(101_325.0),
+                fuel: Some(FuelCfg {
+                    drink_interval_s: 900,
+                    eat_interval_s: 1_500,
+                }),
+                pages: Some(0x0000_c0ff),
+                hide_empty_pages: Some(true),
+                tz_offset_min: Some(345),
+                distance_interval_m: Some(Some(1_000)),
+                time_interval_s: Some(Some(1_800)),
+                pace_band: Some(Some(BAND)),
+                race_phases: Some(MARATHON_PLAN),
+                guided_run: Some(GuidedRunId::new("easy-30")),
+                resting_hr: None,
+            })
+        );
     }
 
     /// The v4-arms-only frame, pinned byte-for-byte on both sides: the only
@@ -1492,11 +1614,27 @@ mod tests {
         assert_eq!(
             &buf[..n],
             &[
-                0x53, 0x45, 0x54, 0x31, 0x04, 0x00, 0x3e, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07, 0x00,
+                0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x3e, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07, 0x00,
                 0x00, 0x2c, 0x01, 0xa4, 0x01, 0xd3, 0xa4, 0x00, 0x00, 0x38, 0x31, 0x00, 0x00, 0x00,
                 0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xdb, 0x8e, 0x8d, 0xe6
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x62, 0x3c, 0xdb
             ]
+        );
+    }
+
+    /// The resting-HR-only frame, pinned byte-for-byte on both sides — the only
+    /// vector that exercises the v5 field alone.
+    #[test]
+    fn golden_vector_resting_hr_only() {
+        let s = WatchSettings {
+            resting_hr: Some(48),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(
+            &buf[..n],
+            &[0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x40, 0x30, 0x00, 0x7b, 0x88, 0x2b, 0xb3]
         );
     }
 
@@ -1513,7 +1651,7 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x04, 0x00, 0x01, 0xc6, 0xfd, 0xa6, 0x8e, 0xf9, 0x7e]
+            &[0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x01, 0xc6, 0xfd, 0x16, 0xa7, 0x99, 0x43]
         );
     }
 
@@ -1567,6 +1705,7 @@ mod tests {
                 pace_band: None,
                 race_phases: None,
                 guided_run: None,
+                resting_hr: None,
             })
         );
         // A v2 frame carrying a v3-shaped trailer is trailing bytes, not a crc.
@@ -1623,6 +1762,7 @@ mod tests {
                 pace_band: None,
                 race_phases: None,
                 guided_run: None,
+                resting_hr: None,
             }
         );
         // Chopped to its header, the flags still claim every field: reject.

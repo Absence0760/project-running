@@ -167,6 +167,7 @@ mod tests {
                 preset: 0,
             }),
             guided_run: Some(GuidedRunId::new("tempo-builder-25")),
+            resting_hr: Some(48),
         }
     }
 
@@ -337,6 +338,7 @@ mod tests {
                     preset: 2,
                 }),
                 guided_run: (mask & 0x10 != 0).then(|| GuidedRunId::new("easy-30")),
+                resting_hr: (mask & 0x20 != 0).then_some(48),
             };
             let frame = encoded(&s);
             let mut framer = SettingsFramer::new();

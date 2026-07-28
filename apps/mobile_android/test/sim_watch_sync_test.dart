@@ -606,7 +606,7 @@ void main() {
       final frame = Uint8List.fromList(transport.settingsWrites.single);
       expect(
         frame,
-        _hex('53455431040f00be00d3a40000403800000024f4480050434903acce5cc9'),
+        _hex('53455431050f00be00d3a40000403800000024f44800504349036caa74de'),
       );
     });
   });

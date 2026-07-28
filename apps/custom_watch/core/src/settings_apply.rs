@@ -93,6 +93,8 @@ pub enum SettingsEffect {
     },
     /// [`crate::record::Recorder::set_guided_run`]; `None` deselects.
     GuidedRun(Option<GuidedRunId>),
+    /// [`crate::record::Recorder::set_resting_hr`]
+    RestingHr(u16),
 }
 
 impl SettingsEffect {
@@ -114,6 +116,7 @@ impl SettingsEffect {
             Self::PaceBand(_) => EffectKind::PaceBand,
             Self::RacePhases { .. } => EffectKind::RacePhases,
             Self::GuidedRun(_) => EffectKind::GuidedRun,
+            Self::RestingHr(_) => EffectKind::RestingHr,
         }
     }
 }
@@ -139,6 +142,7 @@ pub enum EffectKind {
     PaceBand,
     RacePhases,
     GuidedRun,
+    RestingHr,
 }
 
 impl EffectKind {
@@ -161,7 +165,8 @@ impl EffectKind {
             Self::TimeInterval => Some(Self::PaceBand),
             Self::PaceBand => Some(Self::RacePhases),
             Self::RacePhases => Some(Self::GuidedRun),
-            Self::GuidedRun => None,
+            Self::GuidedRun => Some(Self::RestingHr),
+            Self::RestingHr => None,
         }
     }
 
@@ -205,6 +210,7 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         pace_band,
         race_phases,
         guided_run,
+        resting_hr,
     } = *s;
 
     let mut plan = SettingsPlan::new();
@@ -274,6 +280,9 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
     if let Some(id) = guided_run {
         let _ = plan.push(SettingsEffect::GuidedRun(id));
     }
+    if let Some(bpm) = resting_hr {
+        let _ = plan.push(SettingsEffect::RestingHr(bpm));
+    }
     plan
 }
 
@@ -321,6 +330,7 @@ mod tests {
                 preset: race_phase_preset_to_wire(RacePhasePreset::TenTenTen),
             }),
             guided_run: Some(GuidedRunId::new("easy-30")),
+            resting_hr: Some(48),
         }
     }
 
@@ -503,6 +513,13 @@ mod tests {
                     ..WatchSettings::default()
                 },
                 SettingsEffect::GuidedRun(GuidedRunId::new("easy-30")),
+            ),
+            (
+                WatchSettings {
+                    resting_hr: full.resting_hr,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::RestingHr(48),
             ),
         ];
         for (frame, effect) in expected {

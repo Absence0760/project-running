@@ -22,12 +22,15 @@ import 'sim_watch_sync.dart' show crc32;
 /// could already honour but the phone could not reach — bit1
 /// distance_interval_m, bit2 time_interval_s, bit3 pace_band, bit4
 /// race_phases, bit5 guided_run — and widens the run-view page mask from 32 to
-/// 64 bits so every page the firmware declares is addressable. `flags2` still
-/// has two free bits, which is why v4 needed no third presence byte. Only the
-/// present fields are written, so a partial update is a shorter frame; a fully
-/// populated frame is 98 bytes, one write at the watch's 256-byte ATT MTU. The
-/// firmware still decodes v1, v2 and v3 frames, but the phone always encodes
-/// the current version.
+/// 64 bits so every page the firmware declares is addressable. Version 5
+/// (2026-07-28) takes `flags2` bit 6 for the resting HR — the second half of
+/// the TRIMP calibration pair (max HR has carried the other half since v1), so
+/// the watch's single-run training stress upgrades from the distance proxy to
+/// Banister TRIMP. `flags2` still has one free bit. Only the present fields
+/// are written, so a partial update is a shorter frame; a fully populated
+/// frame is 100 bytes, one write at the watch's 256-byte ATT MTU. The
+/// firmware still decodes v1-v4 frames, but the phone always encodes the
+/// current version.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.
@@ -35,7 +38,7 @@ import 'sim_watch_sync.dart' show crc32;
 /// run-sync path (`sim_watch_sync.dart`) is the phone's decode side — and it
 /// reuses that module's [crc32], the same checksum the firmware shares
 /// between `run_store` and `settings`.
-const int _settingsVersion = 0x04;
+const int _settingsVersion = 0x05;
 
 /// Width of the CRC32 trailer, present since v3.
 const int _crcLen = 4;
@@ -60,6 +63,7 @@ const int _flag2TimeInterval = 0x04;
 const int _flag2PaceBand = 0x08;
 const int _flag2RacePhases = 0x10;
 const int _flag2GuidedRun = 0x20;
+const int _flag2RestingHr = 0x40;
 
 /// The watch's race-phase presets, in the firmware enum's declaration order —
 /// which is also `RacePhasePreset`'s order in `race_phases.dart` and the web
@@ -135,6 +139,12 @@ class WatchSettings {
   /// valid. An unknown id fails closed on the watch.
   final String? guidedRunId;
 
+  /// Resting HR (bpm) — the second half of the TRIMP calibration pair ([maxHr]
+  /// is the other). With both synced the watch's single-run training stress
+  /// upgrades from the distance proxy to Banister TRIMP. Implausible values
+  /// are rejected watch-side (`set_resting_hr`), never clamped.
+  final int? restingHr;
+
   const WatchSettings({
     this.maxHr,
     this.pacer,
@@ -150,6 +160,7 @@ class WatchSettings {
     this.paceBand,
     this.racePhases,
     this.guidedRunId,
+    this.restingHr,
   });
 
   Uint8List encode() {
@@ -168,6 +179,7 @@ class WatchSettings {
     if (paceBand != null) len += 4;
     if (racePhases != null) len += 9;
     if (guidedRunId != null) len += guidedRunIdLen;
+    if (restingHr != null) len += 2;
 
     final out = ByteData(len);
     out.setUint8(0, 0x53); // S
@@ -194,6 +206,7 @@ class WatchSettings {
     if (paceBand != null) flags2 |= _flag2PaceBand;
     if (racePhases != null) flags2 |= _flag2RacePhases;
     if (guidedRunId != null) flags2 |= _flag2GuidedRun;
+    if (restingHr != null) flags2 |= _flag2RestingHr;
     out.setUint8(6, flags2);
 
     var off = 7;
@@ -272,6 +285,10 @@ class WatchSettings {
         out.setUint8(off + i, id[i]);
       }
       off += guidedRunIdLen;
+    }
+    if (restingHr != null) {
+      out.setUint16(off, restingHr!, Endian.little);
+      off += 2;
     }
 
     final frame = out.buffer.asUint8List();

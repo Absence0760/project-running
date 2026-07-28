@@ -39,7 +39,9 @@ use crate::race_phases::{
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
-use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
+use crate::training_load::{
+    compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
+};
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
@@ -149,6 +151,18 @@ pub const RACE_PHASE_PLAUSIBLE_MAX_DISTANCE_M: f64 = 500_000.0;
 /// corrupt fitness push from showing a fake number.
 pub const FITNESS_VO2_PLAUSIBLE_MIN: f64 = 20.0;
 pub const FITNESS_VO2_PLAUSIBLE_MAX: f64 = 90.0;
+
+/// Plausible synced resting HR band: 25 bpm (below any recorded elite resting
+/// rate) to 120 (above it a "resting" rate reads as a live one). Outside is
+/// corrupt and ignored, the [`MAX_HR_PLAUSIBLE_MIN`] guard shape — a bad frame
+/// must not skew every TRIMP stress the run banks.
+pub const RESTING_HR_PLAUSIBLE_MIN: u16 = 25;
+pub const RESTING_HR_PLAUSIBLE_MAX: u16 = 120;
+
+/// Plausible magnitude bound for a pushed CTL / ATL / TSB value. A sustained
+/// CTL near 200 is already elite-tour territory; 500 leaves generous headroom
+/// while rejecting the wild values a corrupt push produces.
+pub const LOAD_TREND_PLAUSIBLE_MAX: f32 = 500.0;
 
 /// One pushed roadbook checkpoint — name-free + `Copy`. The phone builds the
 /// roadbook from the route polyline + markers ([`crate::roadbook`], which needs
@@ -502,6 +516,15 @@ pub struct Snapshot {
     /// This run's single-run training-load stress so far (distance/TRIMP model,
     /// see [`crate::training_load`]); `None` while idle or before any distance.
     pub training_stress: Option<f32>,
+    /// Whether [`Snapshot::training_stress`] was scored by the TRIMP model
+    /// (resting + max HR synced and a live HR average banked) rather than the
+    /// distance proxy — the page's honest model label, mirroring the web
+    /// chart's `has_trimp_signal` "HR-based" vs "volume-based" split. `false`
+    /// whenever `training_stress` is `None`.
+    pub training_stress_trimp: bool,
+    /// The synced rolling CTL/ATL/TSB trio, or `None` until the phone pushes
+    /// one — the TrainingLoad page's rolling half stays "NOT SYNCED" without it.
+    pub load_trend: Option<LoadTrendView>,
     /// The race-distance band the run distance falls in, or `None` in a gap
     /// between bands (or while idle).
     pub band: Option<DistanceBand>,
@@ -729,6 +752,21 @@ pub struct Recorder {
     zone_cutoffs: ZoneCutoffs,
     /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
     zone_time_s: [u32; ZONE_COUNT],
+    /// Time-weighted BPM sum + its seconds, banked exactly where zone time
+    /// banks (moving time with a live reading), reset on `start` — the run's
+    /// average HR for the TRIMP stress model, without holding a sample series.
+    hr_dt_bpm: u64,
+    hr_dt_s: u32,
+    /// The TRIMP calibration pair, from the settings sync via
+    /// [`set_max_hr`](Recorder::set_max_hr) /
+    /// [`set_resting_hr`](Recorder::set_resting_hr). Either absent keeps the
+    /// single-run stress on the distance model.
+    max_hr_bpm: Option<u16>,
+    resting_hr_bpm: Option<u16>,
+    /// The synced rolling CTL/ATL/TSB trio — see
+    /// [`set_load_trend`](Recorder::set_load_trend); `None` keeps the
+    /// TrainingLoad page's rolling half an honest "NOT SYNCED".
+    load_trend: Option<LoadTrendView>,
     /// Virtual partner vs the configured goal — see
     /// [`set_pacer_goal`](Recorder::set_pacer_goal).
     pacer: Pacer,
@@ -845,6 +883,11 @@ impl Recorder {
             hr_bpm: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
+            hr_dt_bpm: 0,
+            hr_dt_s: 0,
+            max_hr_bpm: None,
+            resting_hr_bpm: None,
+            load_trend: None,
             pacer: Pacer::new(),
             fix_interval_s: 1,
             route_along_m: None,
@@ -941,15 +984,52 @@ impl Recorder {
         self.hr_bpm = bpm;
     }
 
-    /// Rebuild the zone ladder from a configured max HR — the tier-1 hook a
-    /// future settings sync drives; nothing on-device sets it yet. Values
-    /// outside the app's plausibility window (80..=240, the same guard web's
-    /// `defaultZoneCutoffs` applies to an explicit override) are ignored so
-    /// garbage can't flatten the ladder. Zone time already banked is not
-    /// re-bucketed — the ladder applies from now on.
+    /// Rebuild the zone ladder from a configured max HR — the settings-sync
+    /// hook the `SET1` frame drives. Values outside the app's plausibility
+    /// window (80..=240, the same guard web's `defaultZoneCutoffs` applies to
+    /// an explicit override) are ignored so garbage can't flatten the ladder.
+    /// Zone time already banked is not re-bucketed — the ladder applies from
+    /// now on. Also the upper half of the TRIMP calibration pair (see
+    /// [`set_resting_hr`](Recorder::set_resting_hr)).
     pub fn set_max_hr(&mut self, max_hr_bpm: u16) {
         if (MAX_HR_PLAUSIBLE_MIN..=MAX_HR_PLAUSIBLE_MAX).contains(&max_hr_bpm) {
             self.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(max_hr_bpm);
+            self.max_hr_bpm = Some(max_hr_bpm);
+        }
+    }
+
+    /// Resting HR — the lower half of the TRIMP calibration pair. With both
+    /// halves synced (and a live HR average) the single-run training stress
+    /// upgrades from the distance proxy to Banister TRIMP, the same ladder the
+    /// web/Dart `training_load` helpers run. Values outside
+    /// [`RESTING_HR_PLAUSIBLE_MIN`]..=[`RESTING_HR_PLAUSIBLE_MAX`] are ignored.
+    pub fn set_resting_hr(&mut self, resting_hr_bpm: u16) {
+        if (RESTING_HR_PLAUSIBLE_MIN..=RESTING_HR_PLAUSIBLE_MAX).contains(&resting_hr_bpm) {
+            self.resting_hr_bpm = Some(resting_hr_bpm);
+        }
+    }
+
+    /// Load the synced rolling CTL/ATL/TSB trio the TrainingLoad page's rolling
+    /// half shows — pushed pre-computed by the phone (the watch holds no
+    /// multi-day history), the [`set_fitness`](Recorder::set_fitness) hook
+    /// shape. `None` clears back to the honest "NOT SYNCED". The trio is
+    /// accepted or rejected WHOLE: a non-finite or implausible member drops the
+    /// push (keeping the current view) rather than blending a corrupt value
+    /// into two good ones — the pace-band atomicity rule.
+    pub fn set_load_trend(&mut self, view: Option<LoadTrendView>) {
+        match view {
+            None => self.load_trend = None,
+            Some(v) => {
+                let plausible = |x: f32| x.is_finite() && x.abs() <= LOAD_TREND_PLAUSIBLE_MAX;
+                if plausible(v.ctl)
+                    && plausible(v.atl)
+                    && plausible(v.tsb)
+                    && v.ctl >= 0.0
+                    && v.atl >= 0.0
+                {
+                    self.load_trend = Some(v);
+                }
+            }
         }
     }
 
@@ -1234,6 +1314,8 @@ impl Recorder {
         self.last_lap = None;
         self.pending_laps.clear();
         self.zone_time_s = [0; ZONE_COUNT];
+        self.hr_dt_bpm = 0;
+        self.hr_dt_s = 0;
         self.pace_bucket_m = [0.0; PACE_BUCKET_COUNT];
         // Fresh grade anchors for the new run; the sticky baro altitude and HR
         // stay — each is still the current reading, not run state. The pacer
@@ -1397,10 +1479,14 @@ impl Recorder {
         if delta / dt as f64 >= MIN_MOVING_SPEED_MPS {
             self.moving_s += dt;
             // Zone time banks exactly where moving time does, into the zone of
-            // the HR in force for the segment — no reading, no accrual.
+            // the HR in force for the segment — no reading, no accrual. The
+            // TRIMP average banks on the same rule, so both HR aggregates agree
+            // on which seconds carried a pulse.
             if let Some(bpm) = self.hr_bpm {
                 let zone = hr_zones::zone_for_bpm(bpm, &self.zone_cutoffs);
                 self.zone_time_s[(zone - 1) as usize] += dt;
+                self.hr_dt_bpm += u64::from(bpm) * u64::from(dt);
+                self.hr_dt_s += dt;
             }
             self.state = RecordState::Recording;
         } else {
@@ -1520,7 +1606,11 @@ impl Recorder {
             cutoff: self.cutoff_snapshot(),
             race_prediction: self.race_prediction_snapshot(),
             pace_bucket_m: self.pace_bucket_m,
-            training_stress: self.training_stress_snapshot(),
+            training_stress: self.training_stress_snapshot().map(|(s, _)| s),
+            training_stress_trimp: self
+                .training_stress_snapshot()
+                .is_some_and(|(_, trimp)| trimp),
+            load_trend: self.load_trend,
             band: if self.state == RecordState::Idle {
                 None
             } else {
@@ -1684,20 +1774,29 @@ impl Recorder {
         })
     }
 
-    /// This run's single-run training-load stress, or `None` while idle / before
-    /// any distance. Distance-model by default (the watch tracks no average HR);
-    /// a future HR-threshold sync would upgrade it to TRIMP.
-    fn training_stress_snapshot(&self) -> Option<f32> {
+    /// This run's single-run training-load stress plus whether the TRIMP model
+    /// scored it, or `None` while idle / before any distance. Distance-model
+    /// until the settings sync delivers the resting + max HR pair AND the run
+    /// has banked a live HR average — then Banister TRIMP, the same
+    /// [`compute_stress`] ladder the web/Dart helpers run.
+    fn training_stress_snapshot(&self) -> Option<(f32, bool)> {
         if self.state == RecordState::Idle || self.distance_m < 1.0 {
             return None;
         }
+        let avg_bpm = (self.hr_dt_s > 0).then(|| self.hr_dt_bpm as f64 / f64::from(self.hr_dt_s));
+        let prefs = HrPrefs {
+            resting_hr_bpm: self.resting_hr_bpm.map(f64::from),
+            max_hr_bpm: self.max_hr_bpm.map(f64::from),
+        };
         let run = RunForLoad {
             day: 0,
             duration_s: self.moving_s,
             distance_m: self.distance_m,
-            avg_bpm: None,
+            avg_bpm,
         };
-        Some(compute_stress(&run, &HrPrefs::default(), None) as f32)
+        let trimp =
+            compute_calibration(core::slice::from_ref(&run), &prefs).mode == StressMode::Trimp;
+        Some((compute_stress(&run, &prefs, None) as f32, trimp))
     }
 
     /// The active gear's wear verdict with this run's distance folded into the
@@ -2948,9 +3047,142 @@ mod tests {
         // buckets sum back to the run distance.
         let bucket_sum: f64 = snap.pace_bucket_m.iter().sum();
         assert!((bucket_sum - snap.distance_m).abs() < 1.0);
-        // Single-run stress is the distance model (the watch tracks no avg HR).
+        // Single-run stress is the distance model until the HR pair syncs.
         let stress = snap.training_stress.expect("stress once distance accrues");
         assert!((stress - (snap.distance_m as f32 / 1000.0) * 10.0).abs() < 1.0);
+        assert!(!snap.training_stress_trimp);
+    }
+
+    #[test]
+    fn synced_hr_pair_plus_live_average_upgrades_stress_to_trimp() {
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.set_max_hr(190);
+        r.set_resting_hr(50);
+        r.start(0);
+        r.set_hr(Some(150));
+        let d = 500.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=11 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let snap = r.snapshot();
+        let stress = snap.training_stress.expect("stress once distance accrues");
+        assert!(snap.training_stress_trimp, "HR pair + average => TRIMP");
+        // The banked average is a constant 150, so the score IS the Banister
+        // TRIMP of the moving time at that HR — visibly different from the
+        // 10-points/km distance model.
+        let distance_model = (snap.distance_m as f32 / 1000.0) * 10.0;
+        assert!((stress - distance_model).abs() > 1.0);
+        assert!(stress > 0.0);
+
+        // Half the pair (or no HR average) stays honestly on the distance model.
+        let mut half = Recorder::new();
+        half.set_fix_interval_s(60);
+        half.set_max_hr(190);
+        half.start(0);
+        half.set_hr(Some(150));
+        half.on_fix(&fix(40.0, -105.0, 8.0, 0));
+        half.on_fix(&fix(40.0 + 3.0 * d, -105.0, 8.0, 180));
+        let s = half.snapshot();
+        assert!(!s.training_stress_trimp);
+
+        let mut no_avg = Recorder::new();
+        no_avg.set_fix_interval_s(60);
+        no_avg.set_max_hr(190);
+        no_avg.set_resting_hr(50);
+        no_avg.start(0);
+        no_avg.on_fix(&fix(40.0, -105.0, 8.0, 0));
+        no_avg.on_fix(&fix(40.0 + 3.0 * d, -105.0, 8.0, 180));
+        let s = no_avg.snapshot();
+        assert!(!s.training_stress_trimp, "sensorless run keeps the proxy");
+    }
+
+    #[test]
+    fn set_resting_hr_rejects_garbage_like_set_max_hr() {
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.set_max_hr(190);
+        r.set_resting_hr(10);
+        r.set_resting_hr(500);
+        r.start(0);
+        r.set_hr(Some(150));
+        let d = 500.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=4 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        assert!(
+            !r.snapshot().training_stress_trimp,
+            "an implausible resting HR must not arm the TRIMP pair"
+        );
+        r.set_resting_hr(50);
+        assert!(r.snapshot().training_stress_trimp);
+    }
+
+    #[test]
+    fn hr_average_resets_with_the_run_not_with_the_sticky_reading() {
+        let mut r = Recorder::new();
+        r.set_max_hr(190);
+        r.set_resting_hr(50);
+        r.start(0);
+        r.set_hr(Some(180));
+        for i in 0..=3u32 {
+            r.on_fix(&fix(40.0 + f64::from(i) * 0.00008, -105.0, 5.0, i));
+        }
+        r.stop(4);
+        r.reset(5);
+        // The next run's average starts fresh — a hard prior interval must not
+        // bleed its HR into an easy jog's TRIMP.
+        r.start(10);
+        assert_eq!(r.snapshot().training_stress, None);
+        r.on_fix(&fix(41.0, -105.0, 5.0, 10));
+        r.on_fix(&fix(41.00008, -105.0, 5.0, 11));
+        let snap = r.snapshot();
+        assert!(
+            snap.training_stress_trimp,
+            "sticky HR still feeds the new run"
+        );
+    }
+
+    #[test]
+    fn load_trend_syncs_whole_and_rejects_corrupt_pushes() {
+        let mut r = Recorder::new();
+        assert_eq!(r.snapshot().load_trend, None);
+
+        let trend = LoadTrendView {
+            ctl: 82.0,
+            atl: 95.0,
+            tsb: -13.0,
+        };
+        r.set_load_trend(Some(trend));
+        assert_eq!(r.snapshot().load_trend, Some(trend));
+
+        // A corrupt member drops the WHOLE push — the current view stands.
+        for bad in [
+            LoadTrendView {
+                ctl: f32::NAN,
+                ..trend
+            },
+            LoadTrendView {
+                atl: f32::INFINITY,
+                ..trend
+            },
+            LoadTrendView {
+                tsb: LOAD_TREND_PLAUSIBLE_MAX + 1.0,
+                ..trend
+            },
+            LoadTrendView { ctl: -1.0, ..trend },
+        ] {
+            r.set_load_trend(Some(bad));
+            assert_eq!(
+                r.snapshot().load_trend,
+                Some(trend),
+                "{bad:?} must not land"
+            );
+        }
+
+        // None clears back to the honest unsynced state.
+        r.set_load_trend(None);
+        assert_eq!(r.snapshot().load_trend, None);
     }
 
     #[test]
