@@ -40,6 +40,25 @@ fn parses_rmc() {
     assert!((rmc.lon_deg.unwrap() - -105.2705).abs() < 1e-9);
     assert!((rmc.speed_mps.unwrap() - 5.83 * 0.514_444).abs() < 1e-4);
     assert!((rmc.course_deg.unwrap() - 90.0).abs() < 1e-4);
+    assert_eq!(rmc.date_dmy, Some((8, 7, 2026)));
+}
+
+#[test]
+fn rmc_date_is_all_or_nothing() {
+    // An empty, short, or non-numeric ddmmyy field drops rather than
+    // reporting a partial or garbage date.
+    for date_field in ["", "0807", "0807a6"] {
+        let body = format!(
+            "GPRMC,073000.00,A,4000.9000,N,10516.2300,W,5.83,90.0,{},,,A",
+            date_field
+        );
+        let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+        let sentence = format!("${}*{:02X}\r\n", body, cksum);
+        let Some(Sentence::Rmc(rmc)) = parse_one(&sentence) else {
+            panic!("expected RMC for date field {date_field:?}");
+        };
+        assert_eq!(rmc.date_dmy, None, "date field {date_field:?}");
+    }
 }
 
 #[test]

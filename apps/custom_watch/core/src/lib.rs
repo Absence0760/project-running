@@ -260,6 +260,7 @@ pub mod course_profile;
 pub mod course_store;
 pub mod current_week;
 pub mod cutoff_eta;
+pub mod daylight;
 pub mod distance_bands;
 pub mod elevation;
 pub mod exercise_calories;

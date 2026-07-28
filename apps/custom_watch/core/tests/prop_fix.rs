@@ -28,15 +28,17 @@ fn an_rmc() -> impl Strategy<Value = RmcData> {
         a_coord(),
         prop::option::of(-1e6f32..1e6),
         prop::option::of(-1e6f32..1e6),
+        prop::option::of((0u8..=40, 0u8..=15, 2000u16..2100)),
     )
         .prop_map(
-            |(time, valid, lat_deg, lon_deg, speed_mps, course_deg)| RmcData {
+            |(time, valid, lat_deg, lon_deg, speed_mps, course_deg, date_dmy)| RmcData {
                 time,
                 valid,
                 lat_deg,
                 lon_deg,
                 speed_mps,
                 course_deg,
+                date_dmy,
             },
         )
 }
