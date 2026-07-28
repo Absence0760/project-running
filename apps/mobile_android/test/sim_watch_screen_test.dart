@@ -289,19 +289,25 @@ void main() {
       await tester.pump();
 
       expect(transport.settingsWrites, hasLength(1));
-      expect(transport.settingsWrites.single, hasLength(32));
+      expect(transport.settingsWrites.single, hasLength(34));
       expect(transport.settingsWrites.single.sublist(0, 7),
-          [0x53, 0x45, 0x54, 0x31, 0x04, 0x0f, 0x01]);
-      // The injected +5:45 phone zone rides as i16 LE 345, ahead of the v3
-      // crc32 trailer.
+          [0x53, 0x45, 0x54, 0x31, 0x05, 0x0f, 0x41]);
+      // The injected +5:45 phone zone rides as i16 LE 345, then the demo
+      // resting HR (the v5 TRIMP half), ahead of the crc32 trailer.
       expect(
         transport.settingsWrites.single.sublist(26, 28),
         [0x59, 0x01],
       );
       expect(
-        transport.settingsWrites.single.sublist(28),
-        [0xba, 0x75, 0xe1, 0x34],
+        transport.settingsWrites.single.sublist(28, 30),
+        [0x32, 0x00],
       );
+      final frame = transport.settingsWrites.single;
+      final trailer = frame[30] |
+          (frame[31] << 8) |
+          (frame[32] << 16) |
+          (frame[33] << 24);
+      expect(trailer, crc32(frame.sublist(0, 30)));
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });
   });

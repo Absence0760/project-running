@@ -1481,12 +1481,30 @@ fn training_load_glance(
     match snap.training_stress {
         None => write_unfed(&mut rows, Page::TrainingLoad, "LOAD", Unfed::NeedDistance),
         Some(_) => {
-            let _ = write!(rows[3], "LOAD  POINTS");
+            // The stress model, honestly labelled: TRIMP only when the synced
+            // HR pair + a live average actually scored it (the web chart's
+            // "HR-based" vs "volume-based" split).
+            let model = if snap.training_stress_trimp {
+                "TRIMP"
+            } else {
+                "DIST"
+            };
+            let _ = write!(rows[3], "{:<7}{}", "LOAD", model);
             let km = (snap.distance_m / 1000.0).min(9999.99);
             let _ = write!(rows[4], "{:<7}{:.2} KM", "DIST", km);
             let (h, m, s) = hms(snap.moving_s);
             let _ = write!(rows[5], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
-            let _ = write!(rows[6], "{:<8}{}", "ROLLING", Unfed::NotSynced.reason());
+            match snap.load_trend {
+                None => {
+                    let _ = write!(rows[6], "{:<8}{}", "ROLLING", Unfed::NotSynced.reason());
+                }
+                Some(t) => {
+                    let clamp = |x: f32| (x.max(0.0) as u32).min(999);
+                    let _ = write!(rows[6], "CTL {:<4}ATL {}", clamp(t.ctl), clamp(t.atl));
+                    let tsb = (t.tsb as i32).clamp(-999, 999);
+                    let _ = write!(rows[7], "{:<7}{:+}", "FORM", tsb);
+                }
+            }
         }
     }
     if tag_shown(tag, uptime_s, animate) {
@@ -2917,6 +2935,8 @@ mod tests {
             race_prediction: None,
             pace_bucket_m: [0.0; crate::record::PACE_BUCKET_COUNT],
             training_stress: None,
+            training_stress_trimp: false,
+            load_trend: None,
             band: None,
             gear: None,
             roadbook: None,
@@ -6274,9 +6294,37 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[3], header("LOAD  POINTS", "REC"));
+        assert_eq!(rows[3], header("LOAD   DIST", "REC"));
         assert_eq!(rows[4].as_str(), "DIST   12.00 KM");
         assert_eq!(rows[5].as_str(), "MOVING 1:02:05");
         assert_eq!(rows[6].as_str(), "ROLLING NOT SYNCED");
+        assert_eq!(rows[7].as_str(), "");
+    }
+
+    #[test]
+    fn training_load_shows_the_synced_rolling_trio_and_the_trimp_label() {
+        let mut rec = snapshot(RecordState::Recording, 12_000.0);
+        rec.training_stress = Some(84.0);
+        rec.training_stress_trimp = true;
+        rec.load_trend = Some(crate::training_load::LoadTrendView {
+            ctl: 82.4,
+            atl: 95.0,
+            tsb: -12.6,
+        });
+        rec.moving_s = 3_725;
+        let rows = page_rows(
+            Page::TrainingLoad,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[3], header("LOAD   TRIMP", "REC"));
+        assert_eq!(rows[6].as_str(), "CTL 82  ATL 95");
+        assert_eq!(rows[7].as_str(), "FORM   -12");
     }
 }

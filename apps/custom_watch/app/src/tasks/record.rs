@@ -668,6 +668,7 @@ fn apply_settings(
             SettingsEffect::GuidedRun(id) => {
                 recorder.set_guided_run(id.as_ref().map(GuidedRunId::as_str))
             }
+            SettingsEffect::RestingHr(bpm) => recorder.set_resting_hr(bpm),
         }
     }
 }

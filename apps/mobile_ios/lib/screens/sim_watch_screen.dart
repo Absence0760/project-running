@@ -191,6 +191,7 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
         gear: (baselineM: 500000.0, targetM: 800000.0),
         zoneCeiling: 3,
         tzOffsetMin: widget.tzOffset().inMinutes,
+        restingHr: 50,
       ));
       if (!mounted) return;
       setState(() => _syncMessage = l10n.simWatchSettingsPushed);

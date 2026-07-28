@@ -430,6 +430,19 @@ pub fn compute_training_load_series(
     points
 }
 
+/// The rolling CTL/ATL/TSB trio, pushed pre-computed by the phone (the watch
+/// holds no multi-day history to derive it from) via
+/// `Recorder::set_load_trend` — the TrainingLoad page's rolling half. The
+/// values are the tail of the phone's own [`compute_training_load_series`], so
+/// watch and app cannot disagree on the runner's form.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct LoadTrendView {
+    pub ctl: f32,
+    pub atl: f32,
+    pub tsb: f32,
+}
+
 /// Whether any run carries a TRIMP-eligible HR signal — drives the honest
 /// "HR-based" vs "volume-based" chart label.
 pub fn has_trimp_signal(runs: &[RunForLoad], prefs: &HrPrefs) -> bool {
