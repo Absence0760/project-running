@@ -39,7 +39,7 @@
 use heapless::Vec;
 
 /// Step-list capacity, sized for real plans with headroom: 6×400 expands to
-/// 14 steps, a C25K session to 17, a 20×400 track session to 41.
+/// 13 steps, a C25K session to 17, a 20×400 track session to 41.
 pub const MAX_WORKOUT_STEPS: usize = 64;
 
 /// Distance steps warn inside the last 50 m ([`WorkoutView::ending_seq`]),
