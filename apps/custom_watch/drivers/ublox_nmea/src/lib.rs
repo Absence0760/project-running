@@ -39,6 +39,12 @@ pub struct RmcData {
     pub lon_deg: Option<f64>,
     pub speed_mps: Option<f32>,
     pub course_deg: Option<f32>,
+    /// The ddmmyy date field as `(day, month, full year)`, all-or-nothing —
+    /// a malformed or short field drops rather than reporting a partial date.
+    /// The two-digit year maps into 2000..=2099; GPS receivers stopped
+    /// emitting 19xx dates decades ago and the mapping is what u-blox
+    /// documents.
+    pub date_dmy: Option<(u8, u8, u16)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -202,6 +208,7 @@ fn parse_rmc(f: &mut Fields) -> Option<RmcData> {
     let lon_deg = parse_coord(f.next()?, f.next()?, 3);
     let speed_mps = parse_f32(f.next()?).map(|kn| kn * 0.514_444);
     let course_deg = parse_f32(f.next()?);
+    let date_dmy = f.next().and_then(parse_ddmmyy);
     Some(RmcData {
         time,
         valid,
@@ -209,7 +216,16 @@ fn parse_rmc(f: &mut Fields) -> Option<RmcData> {
         lon_deg,
         speed_mps,
         course_deg,
+        date_dmy,
     })
+}
+
+fn parse_ddmmyy(field: &[u8]) -> Option<(u8, u8, u16)> {
+    if field.len() != 6 || !field.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let two = |i: usize| (field[i] - b'0') * 10 + (field[i + 1] - b'0');
+    Some((two(0), two(2), 2000 + u16::from(two(4))))
 }
 
 fn parse_gga(f: &mut Fields) -> Option<GgaData> {
