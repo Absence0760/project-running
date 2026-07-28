@@ -81,7 +81,7 @@ Why not a removable card (microSD): an SD slot interrupts the IPX7 sealing story
 
 ## Case + crystal + buttons
 
-Per [decisions.md § 81](../architecture/decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen), the production watch ships with **exactly 5 buttons in the Garmin Fenix 7 / Enduro 3 arrangement** (left side: LIGHT, UP, DOWN; right side: START/STOP, BACK/LAP), **no touchscreen**, no capacitive overlay, no touch controller IC. Tier-1 bench prototype uses the nRF52840 DK's 4 onboard buttons; production button mapping lands when there's a custom PCB.
+Per [decisions.md § 81](../architecture/decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen), the production watch ships with **exactly 5 buttons in the Garmin Fenix 7 / Enduro 3 arrangement** (left side: LIGHT, UP, DOWN; right side: START/STOP, BACK/LAP), **no touchscreen**, no capacitive overlay, no touch controller IC. The tier-1 bench prototype drives all five: the nRF52840 DK's 4 onboard buttons plus an external momentary on P0.02 for BTN5 (see [parts.md](parts.md)). The slot *functions* at tier 1 are ours, not Garmin's — spatial paging + the settings menu per [decisions §350](../architecture/decisions.md) / [§351](../architecture/decisions.md), mapped in [navigation.md](navigation.md); the production PCB re-pins them when it exists.
 
 This is where the budget actually goes once you get serious. A CNC-machined titanium case (Fenix 7X Sapphire), sapphire crystal, and 5 buttons with proper IPX7 sealing is **~$80–120 in materials and assembly per unit** at small production volumes, dropping to ~$40–60 at 10k+. The tooling to get there:
 
