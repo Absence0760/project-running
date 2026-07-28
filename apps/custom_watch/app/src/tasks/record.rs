@@ -275,12 +275,20 @@ pub async fn run(store: &'static SharedStore) {
     // Resume past any run recovered from flash so a new run can't reuse a
     // recovered run's id (which would confuse the phone's manifest + chunk pull).
     let mut next_seq: u32 = store.lock().await.next_run_seq();
+    // Restore the persisted hide-empty-pages choice (§351) so the settings
+    // menu's toggle survives a reboot the way the GNSS mode does; None means
+    // no explicit choice was ever stored and the recorder keeps its default.
+    let mut persisted_hide: Option<bool> = store.lock().await.read_hide_empty();
     let mut open: Option<OpenRun> = None;
     let mut hr: Option<HrSample> = None;
     let mut mode = GnssMode::default();
     let mut latest_baro_alt_m: Option<f32> = None;
     let mut trackback = Trackback::new();
     let mut crumb_len: usize = 0;
+    if let Some(hide) = persisted_hide {
+        recorder.set_hide_empty_pages(hide);
+        info!("record: restored hide-empty-pages {}", hide);
+    }
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
@@ -447,6 +455,17 @@ pub async fn run(store: &'static SharedStore) {
         // earlier push carried.
         while let Ok(s) = state::SETTINGS.try_receive() {
             apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
+            // An explicit hide-empty choice is persisted whichever side made
+            // it — the settings menu's toggle and a phone push land here on
+            // the same channel — so the last writer is what a reboot restores
+            // (§351). Skipped when unchanged: the config page is never
+            // re-erased for a repeated push.
+            if let Some(hide) = s.hide_empty_pages {
+                if persisted_hide != Some(hide) {
+                    store.lock().await.persist_hide_empty(hide).await;
+                    persisted_hide = Some(hide);
+                }
+            }
         }
 
         match event {

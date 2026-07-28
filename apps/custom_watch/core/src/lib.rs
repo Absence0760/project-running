@@ -322,6 +322,7 @@ pub mod segments;
 pub mod settings;
 pub mod settings_apply;
 pub mod settings_frame;
+pub mod settings_menu;
 pub mod settings_queue;
 pub mod statusbar;
 pub mod streaks;

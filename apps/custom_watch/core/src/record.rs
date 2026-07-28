@@ -565,10 +565,15 @@ pub struct Snapshot {
     /// surface the reduced stored resolution on the wrist instead of it being
     /// a cable-only `warn!`; the WHOLE run is still represented.
     pub track_thinning: u8,
-    /// The effective BTN3 page cycle for this snapshot (bit = [`Page::bit`]):
+    /// The effective page cycle for this snapshot (bit = [`Page::bit`]):
     /// data-present pages ∩ the curated set, Dashboard always included. The
     /// button task walks it and the page indicator counts it.
     pub pages_mask: u64,
+    /// The current hide-empty-pages filter state (the §284 toggle), published
+    /// so the settings menu can show the value it is about to change — the
+    /// read-before-commit rule — whichever side (menu or phone push) last set
+    /// it.
+    pub hide_empty_pages: bool,
 }
 
 impl Snapshot {
@@ -1545,6 +1550,7 @@ impl Recorder {
             race_phase: self.race_phase_snapshot(),
             track_thinning: self.track_thinning,
             pages_mask: 0,
+            hide_empty_pages: self.hide_empty_pages,
         };
         snap.pages_mask = self.pages_mask(&snap);
         snap

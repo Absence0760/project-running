@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -28,6 +28,7 @@ use watch_core::nav_map::{self, PanelCache, PanelKey};
 use watch_core::page::Page;
 use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
+use watch_core::settings_menu;
 use watch_core::statusbar;
 use watch_core::trackback::TrackbackView;
 use watch_core::ui_frame::{self, FrameLayout, HeroBand, HeroFrame, RowPaint};
@@ -144,6 +145,7 @@ pub async fn screen_task(
     let mut pending_runs_rx = unwrap!(state::PENDING_RUNS.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
+    let mut menu_rx = unwrap!(state::SETTINGS_MENU.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
@@ -159,6 +161,9 @@ pub async fn screen_task(
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
     let mut grid: Option<Page> = None;
+    // The idle settings menu's cursor while open (§351) — same ownership
+    // split as the grid.
+    let mut menu: Option<u8> = None;
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
@@ -242,6 +247,9 @@ pub async fn screen_task(
         }
         if let Some(v) = stop_armed_rx.try_changed() {
             stop_armed = v;
+        }
+        if let Some(v) = menu_rx.try_changed() {
+            menu = v;
         }
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
@@ -504,6 +512,21 @@ pub async fn screen_task(
             // The Nav map's skip-cache is stale once the grid painted over it.
             panel_cache.invalidate();
         }
+        // The settings menu takes the idle face over while open (§351) — the
+        // same one-render-path trade as the grid above. Idle-only by
+        // construction (the button task closes it when a run starts); the
+        // run_view gate keeps a not-yet-closed cursor from painting over a
+        // live run in the interim.
+        if let Some(cursor) = menu.filter(|_| !face::run_view(rec.as_ref())) {
+            let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
+            for (row, text) in settings_menu::menu_rows(cursor, mode, hide)
+                .iter()
+                .enumerate()
+            {
+                fb.draw_text_row(row, text);
+            }
+            panel_cache.invalidate();
+        }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
         }
@@ -569,7 +592,10 @@ pub async fn screen_task(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
                         pending_runs_rx.changed(),
-                        Timer::after(tick),
+                        // A registered waker, not a timer: at rest this arm
+                        // costs nothing — only the button task's sends while
+                        // the settings menu is open ever resolve it.
+                        select(menu_rx.changed(), Timer::after(tick)),
                     ),
                 ),
             ),
@@ -595,7 +621,12 @@ pub async fn screen_task(
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::First(v))))) => {
+                menu = v
+            }
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::Second(
+                (),
+            ))))) => {}
         }
     }
 }
