@@ -109,12 +109,12 @@ led3: Miscellaneous.LED @ gpio0 16
 # Sharp Memory LCD on SPIM3, chip-select on P1.12 (matches the pin map in
 # boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
 # sysbus.spi3.display` (watch-sim.sh --gui) opens the live panel window.
-# The model draws BTN1..BTN4 in bezel strips flanking the LCD at their §81
+# The model draws BTN1..BTN5 in bezel strips flanking the LCD at their §81
 # Fenix-analog positions (BTN1 upper-right, BTN4 lower-right, BTN2 mid-left,
-# BTN3 lower-left) and implements IAbsolutePositionPointerInput, so the
-# analyzer window auto-attaches it as the machine's pointer: clicking a bezel
-# button drives the same gpio0 pin the btnN macros below pull (buttonPort).
-# Mouse down = press, up = release.
+# BTN3 lower-left, BTN5 upper-left) and implements
+# IAbsolutePositionPointerInput, so the analyzer window auto-attaches it as
+# the machine's pointer: clicking a bezel button drives the same gpio0 pin
+# the btnN macros below pull (buttonPort). Mouse down = press, up = release.
 include @SharpMipDisplay.cs
 machine LoadPlatformDescriptionFromString
 """
@@ -170,38 +170,45 @@ def click(pin, hold=0.3):
     gpio.OnGPIO(pin, True)   # release: back to idle high
 """
 
-# BTN1 (P0.11) — start / pause / resume; dismiss a finished run home; grid: cursor back.
+# BTN1 (P0.11) — start / pause / resume; dismiss a finished run home;
+# grid: confirm the jump (B1 GO).
 macro btn1
 """
     python "click(11)"
 """
-# BTN2 (P0.12) — stop the recording.
+# BTN2 (P0.12) — stop the recording (press twice); grid: cancel.
 macro btn2
 """
     python "click(12)"
 """
-# BTN3 (P0.24) — cycle the run-view page (dashboard / distance / pace / lap).
+# BTN3 (P0.24) — page LEFT in any run view; idle: cycle the GNSS mode;
+# grid: cursor back.
 macro btn3
 """
     python "click(24)"
 """
-# BTN3 long-press (~0.8 s virtual) — page back in a run view; QNH re-zero
-# while idle.
-macro btn3l
+# BTN3 hold (~0.8 s virtual, past the 0.5 s tier) — open the page-grid
+# overview in a run view (btn3/btn4 step the cursor, btn3h/btn4h jump a row,
+# btn1 confirms; ~3 s idle auto-selects). QNH re-zero while idle.
+macro btn3h
 """
     python "click(24, 0.8)"
 """
-# BTN3 grid hold (~1.7 s) — open the page-grid overview in a run view (tap
-# btn3 to step the cursor, btn3l to drop a row, btn4 to jump; ~3 s idle
-# auto-selects). Still the QNH re-zero while idle.
-macro btn3h
-"""
-    python "click(24, 1.7)"
-"""
-# BTN4 (P0.25) — take a manual lap.
+# BTN4 (P0.25) — page RIGHT in any run view; idle: toggle the diagnostics
+# view; grid: cursor forward.
 macro btn4
 """
     python "click(25)"
+"""
+# BTN4 hold (~0.8 s) — the same grid open from the right-hand key.
+macro btn4h
+"""
+    python "click(25, 0.8)"
+"""
+# BTN5 (P0.02) — take a manual lap.
+macro btn5
+"""
+    python "click(2)"
 """
 
 # LED1 (P0.13) blinks at 1 Hz from ui::blink_task — echo each state change

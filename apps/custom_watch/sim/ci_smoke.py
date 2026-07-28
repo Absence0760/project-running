@@ -26,17 +26,17 @@ a 100 m distance arm, a 60 s elapsed arm, and a 5:00-5:20/km band the ~5:33/km
 bench_jog fixture sits outside), so this asserts what that arming makes
 inevitable and nothing more — see `scenario_alerts`.
 
-`pages` — the BTN3 glance cycle. Walks the cycle with `runMacro $btn3` and, for
-each page of interest, waits for the ui task's own page line and then dumps the
-panel. Two firmware lines are read per press and they are different claims: the
-ui task's `ui: page <Name>` is what the panel COMPOSED, the button task's
-`button: BTN3 -> page <Name>` is what the press INTENDED, and each press asserts
-they agree — disagreement means the cycle advanced without the panel following.
-The ui line is change-gated, so its first occurrence is a boot-time anchor for
-`Page::default()`, which the walk asserts and then uses to recognise a full lap.
-`$btn3l` (long press) steps back a page and is asserted to be the exact inverse
-of the forward walk; `$btn3h` (grid hold) opens the page-grid overview and is not
-exercised here.
+`pages` — the paged glance cycle. Walks the cycle right with `runMacro $btn4`
+(§350: the lower-right key pages right) and, for each page of interest, waits
+for the ui task's own page line and then dumps the panel. Two firmware lines are
+read per press and they are different claims: the ui task's `ui: page <Name>` is
+what the panel COMPOSED, the button task's `button: BTN4 -> page <Name>` is what
+the press INTENDED, and each press asserts they agree — disagreement means the
+cycle advanced without the panel following. The ui line is change-gated, so its
+first occurrence is a boot-time anchor for `Page::default()`, which the walk
+asserts and then uses to recognise a full lap. `$btn3` (the lower-left key) taps
+back a page and is asserted to be the exact inverse of the forward walk;
+`$btn3h`/`$btn4h` (hold) open the page-grid overview and are not exercised here.
 
 **What a panel dump does NOT prove.** A dump shows that *something* was drawn,
 not *what*: nothing here reads a glyph. The only evidence that a given page is
@@ -131,8 +131,12 @@ PAGE_LINE = re.compile(r"ui: page (\w+)")
 # The button task's page line — what the press INTENDED. A different claim from
 # the line above, and the pair disagreeing is its own bug class (the button task
 # advanced its page but state::PAGE never reached the composer), so each press
-# asserts they agree.
-BTN3_INTENT_LINE = re.compile(r"button: BTN3 -> page (\w+)")
+# asserts they agree. One pattern per paging key (§350: BTN4 pages right,
+# BTN3 pages left), so a walk also asserts WHICH key the firmware credited.
+PAGE_INTENT_LINES = {
+    "$btn3": re.compile(r"button: BTN3 -> page (\w+)"),
+    "$btn4": re.compile(r"button: BTN4 -> page (\w+)"),
+}
 PAGE_STEP_TIMEOUT = 30
 PAGE_PRESS_ATTEMPTS = 2
 # Enough presses for two-plus laps of the filtered cycle: an unsynced sim watch
@@ -480,9 +484,9 @@ def sim_session(args, label, deadline, phone_port):
 
 
 def require_recording(sim):
-    """Both run-view scenarios need a run under way: the BTN3 page cycle only
-    exists in a run view (BTN3 cycles the GNSS mode on the idle face), and the
-    alert cadences bank on the recorder's clocks."""
+    """Both run-view scenarios need a run under way: the page cycle only
+    exists in a run view (idle, BTN4 toggles diagnostics and BTN3 cycles the
+    GNSS mode), and the alert cadences bank on the recorder's clocks."""
     sim.wait(
         re.compile(r"record: sim-autostart on first fix"),
         180,
@@ -522,8 +526,9 @@ def wait_for_no_alert(sim):
     )
 
 
-def press_btn3(sim, macro, what):
-    """One BTN3 press, resolved by the page line the ui task emits on a change.
+def press_page(sim, macro, what):
+    """One paging-key press, resolved by the page line the ui task emits on a
+    change.
 
     That line is the firmware's own statement about which page it now composes,
     and it is the ONLY thing here that proves the page changed — a panel dump
@@ -531,6 +536,7 @@ def press_btn3(sim, macro, what):
     line is then cross-checked against it: intent and composition agreeing is a
     separate claim from either one alone.
     """
+    intent_line = PAGE_INTENT_LINES[macro]
     for attempt in range(1, PAGE_PRESS_ATTEMPTS + 1):
         mark = sim.tail.mark()
         sim.monitor().send(f"runMacro {macro}")
@@ -551,10 +557,10 @@ def press_btn3(sim, macro, what):
         # already in the stream by the time the composed one decodes; the wait
         # is only there so decode lag cannot turn agreement into a false miss.
         intent = sim.wait(
-            BTN3_INTENT_LINE,
+            intent_line,
             5,
             f"the button task to report the page it selected on {what} "
-            "('button: BTN3 -> page <Name>')",
+            f"('{intent_line.pattern}')",
             start=mark,
         ).group(1)
         if intent != composed:
@@ -801,7 +807,7 @@ def scenario_alerts(sim):
 
 
 def scenario_pages(sim):
-    """Walk the BTN3 glance cycle and prove each page of interest renders.
+    """Walk the paged glance cycle and prove each page of interest renders.
 
     Per press: the ui task's `ui: page <Name>` line says which page is now
     composed (the only page-change evidence available), the button task's line
@@ -846,7 +852,7 @@ def scenario_pages(sim):
     presses = 0
     while presses < MAX_PAGE_PRESSES and len(dumps) < len(PAGES_OF_INTEREST):
         presses += 1
-        page = press_btn3(sim, "$btn3", f"BTN3 press {presses}")
+        page = press_page(sim, "$btn4", f"BTN4 press {presses}")
         walk.append(page)
         if not lap_closed:
             if page == START_PAGE and lap:
@@ -863,7 +869,7 @@ def scenario_pages(sim):
     missing = [p for p in PAGES_OF_INTEREST if p not in dumps]
     if missing:
         raise SmokeFailure(
-            f"{', '.join(missing)} never appeared in the BTN3 cycle over {presses} "
+            f"{', '.join(missing)} never appeared in the BTN4 cycle over {presses} "
             f"presses (the cycle walked: {cycle}). The cycle is "
             "Snapshot::pages_mask (data-present INTERSECT phone-curated), so a page "
             "whose data nothing arms is LEGITIMATELY absent rather than a harness "
@@ -875,7 +881,7 @@ def scenario_pages(sim):
             "PAGES_OF_INTEREST — do not widen the walk to reach it"
         )
     passed(
-        f"the BTN3 cycle rendered every page of interest in {presses} presses "
+        f"the BTN4 cycle rendered every page of interest in {presses} presses "
         f"({'one full lap: ' + cycle if lap_closed else 'walk: ' + cycle})"
     )
 
@@ -900,17 +906,17 @@ def scenario_pages(sim):
         "pixels, the page identity comes from the 'ui: page' lines)"
     )
 
-    # $btn3l is the long press: `Page::prev_in` must be `next_in`'s exact
-    # inverse over the same mask, so one long press has to land back on the page
-    # before the last one the forward walk reported.
-    back = press_btn3(sim, "$btn3l", "the BTN3 long press")
+    # $btn3 is the left-paging tap (§350): `Page::prev_in` must be `next_in`'s
+    # exact inverse over the same mask, so one BTN3 tap has to land back on the
+    # page before the last one the forward walk reported.
+    back = press_page(sim, "$btn3", "the BTN3 tap")
     if back != walk[-2]:
         raise SmokeFailure(
-            f"a BTN3 long press from {walk[-1]} landed on {back}, not {walk[-2]} — "
-            "the long-press walk is not the exact inverse of the forward walk over "
-            "the same pages_mask"
+            f"a BTN3 tap from {walk[-1]} landed on {back}, not {walk[-2]} — "
+            "the left-paging walk is not the exact inverse of the forward walk "
+            "over the same pages_mask"
         )
-    passed(f"a BTN3 long press stepped back from {walk[-1]} to {back}")
+    passed(f"a BTN3 tap stepped back from {walk[-1]} to {back}")
 
 
 SCENARIOS = {

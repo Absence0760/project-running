@@ -10,11 +10,11 @@
 // 1 = white, matching the driver's composition exactly.
 //
 // The rendered canvas is wider than the panel: bezel strips flanking the
-// LCD draw four clickable BTN1..BTN4 buttons at the decisions.md §81
-// Garmin-Fenix positions their functions stand in for — BTN1 (start/stop)
-// upper-right, BTN4 (back/lap) lower-right, BTN2 mid-left in the UP slot,
-// BTN3 (pages) lower-left in the DOWN slot; the left-top LIGHT slot stays
-// empty because tier 1 has only the DK's four buttons. The class implements
+// LCD draw five clickable BTN1..BTN5 buttons at the decisions.md §81
+// Garmin-Fenix positions their §350 functions occupy — BTN1 (start/pause)
+// upper-right, BTN4 (page right) lower-right, BTN2 (stop) mid-left in the
+// UP slot, BTN3 (page left) lower-left in the DOWN slot, BTN5 (lap)
+// upper-left in the LIGHT slot. The class implements
 // IAbsolutePositionPointerInput, which Renode's video analyzer auto-attaches
 // (VideoAnalyzer.FindPointers picks any IPointerInput in the machine), so a
 // mouse press/release on a bezel button in the --gui window drives the same
@@ -352,15 +352,16 @@ namespace Antmicro.Renode.Peripherals.Video
         private const int GlyphWidth = 5;
         private const int GlyphHeight = 7;
 
-        // BTN1..BTN4 -> P0.11, P0.12, P0.24, P0.25 — the same pins the
-        // watch.resc btn macros drive; keep both in lockstep. ButtonX/Y are
-        // indexed to match: BTN1 upper-right (START/STOP), BTN2 mid-left
-        // (UP), BTN3 lower-left (DOWN), BTN4 lower-right (BACK/LAP).
-        private static readonly int[] ButtonPins = { 11, 12, 24, 25 };
+        // BTN1..BTN5 -> P0.11, P0.12, P0.24, P0.25, P0.02 — the same pins the
+        // watch.resc btn macros drive (and the BSP assigns); keep all three in
+        // lockstep. ButtonX/Y are indexed to match: BTN1 upper-right
+        // (start/pause), BTN2 mid-left (stop), BTN3 lower-left (page left),
+        // BTN4 lower-right (page right), BTN5 upper-left (lap).
+        private static readonly int[] ButtonPins = { 11, 12, 24, 25, 2 };
         private const int LeftColX = ButtonInset;
         private const int RightColX = CanvasWidth - ButtonWidth - ButtonInset;
-        private static readonly int[] ButtonX = { RightColX, LeftColX, LeftColX, RightColX };
-        private static readonly int[] ButtonY = { 14, 63, 112, 112 };
+        private static readonly int[] ButtonX = { RightColX, LeftColX, LeftColX, RightColX, LeftColX };
+        private static readonly int[] ButtonY = { 14, 63, 112, 112, 14 };
 
         private static readonly byte[] White = { 0xEC, 0xEF, 0xE8 };
         private static readonly byte[] Black = { 0x12, 0x14, 0x12 };
@@ -377,6 +378,7 @@ namespace Antmicro.Renode.Peripherals.Video
             { '2', new byte[] { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F } },
             { '3', new byte[] { 0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E } },
             { '4', new byte[] { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 } },
+            { '5', new byte[] { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E } },
         };
 
         private readonly IGPIOReceiver buttonPort;
