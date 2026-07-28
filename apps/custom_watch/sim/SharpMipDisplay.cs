@@ -9,8 +9,12 @@
 // over logical byte values, so bit 0 is the leftmost pixel of its group and
 // 1 = white, matching the driver's composition exactly.
 //
-// The rendered canvas is taller than the panel: a bezel strip below the LCD
-// draws four clickable BTN1..BTN4 buttons. The class implements
+// The rendered canvas is wider than the panel: bezel strips flanking the
+// LCD draw four clickable BTN1..BTN4 buttons at the decisions.md §81
+// Garmin-Fenix positions their functions stand in for — BTN1 (start/stop)
+// upper-right, BTN4 (back/lap) lower-right, BTN2 mid-left in the UP slot,
+// BTN3 (pages) lower-left in the DOWN slot; the left-top LIGHT slot stays
+// empty because tier 1 has only the DK's four buttons. The class implements
 // IAbsolutePositionPointerInput, which Renode's video analyzer auto-attaches
 // (VideoAnalyzer.FindPointers picks any IPointerInput in the machine), so a
 // mouse press/release on a bezel button in the --gui window drives the same
@@ -38,7 +42,7 @@ namespace Antmicro.Renode.Peripherals.Video
         public SharpMipDisplay(IMachine machine, IGPIOReceiver buttonPort = null) : base(machine)
         {
             this.buttonPort = buttonPort;
-            Reconfigure(PanelWidth, CanvasHeight, PixelFormat.RGB888);
+            Reconfigure(CanvasWidth, CanvasHeight, PixelFormat.RGB888);
             pixelsWhite = new bool[PanelHeight, PanelWidth];
             frameBytes = new byte[MaxFrameBytes];
             Reset();
@@ -126,7 +130,7 @@ namespace Antmicro.Renode.Peripherals.Video
         // coordinates over the drawn image into 0..MaxX/0..MaxY, so with the
         // canvas dimensions here a coordinate is (almost) a canvas pixel.
 
-        public int MaxX { get { return PanelWidth - 1; } }
+        public int MaxX { get { return CanvasWidth - 1; } }
         public int MaxY { get { return CanvasHeight - 1; } }
         public int MinX { get { return 0; } }
         public int MinY { get { return 0; } }
@@ -166,9 +170,9 @@ namespace Antmicro.Renode.Peripherals.Video
         {
             lock(pixelsWhite)
             {
-                var i = 0;
                 for(var y = 0; y < PanelHeight; y++)
                 {
+                    var i = (y * CanvasWidth + PanelLeft) * 3;
                     for(var x = 0; x < PanelWidth; x++)
                     {
                         var rgb = pixelsWhite[y, x] ? White : Black;
@@ -194,14 +198,10 @@ namespace Antmicro.Renode.Peripherals.Video
 
         private static int HitButton(int x, int y)
         {
-            if(y < ButtonTop || y >= ButtonTop + ButtonHeight)
-            {
-                return -1;
-            }
             for(var i = 0; i < ButtonPins.Length; i++)
             {
-                var x0 = ButtonLeft(i);
-                if(x >= x0 && x < x0 + ButtonWidth)
+                if(x >= ButtonX[i] && x < ButtonX[i] + ButtonWidth
+                    && y >= ButtonY[i] && y < ButtonY[i] + ButtonHeight)
                 {
                     return i;
                 }
@@ -209,25 +209,20 @@ namespace Antmicro.Renode.Peripherals.Video
             return -1;
         }
 
-        private static int ButtonLeft(int i)
-        {
-            return ButtonMargin + i * (ButtonWidth + ButtonGap);
-        }
-
         private void DrawBezel()
         {
-            FillRect(0, PanelHeight, PanelWidth, BezelHeight, BezelBg);
+            FillRect(0, 0, BezelWidth, CanvasHeight, BezelBg);
+            FillRect(PanelLeft + PanelWidth, 0, BezelWidth, CanvasHeight, BezelBg);
             var pressed = pressedIndex;
             for(var i = 0; i < ButtonPins.Length; i++)
             {
-                var x0 = ButtonLeft(i);
                 var fill = i == pressed ? White : BezelBg;
                 var ink = i == pressed ? Black : White;
-                FillRect(x0, ButtonTop, ButtonWidth, ButtonHeight, fill);
-                DrawRectOutline(x0, ButtonTop, ButtonWidth, ButtonHeight, BoxLine);
+                FillRect(ButtonX[i], ButtonY[i], ButtonWidth, ButtonHeight, fill);
+                DrawRectOutline(ButtonX[i], ButtonY[i], ButtonWidth, ButtonHeight, BoxLine);
                 var label = "BTN" + (i + 1);
                 var textWidth = label.Length * (GlyphWidth + 1) - 1;
-                DrawText(x0 + (ButtonWidth - textWidth) / 2, ButtonTop + (ButtonHeight - GlyphHeight) / 2, label, ink);
+                DrawText(ButtonX[i] + (ButtonWidth - textWidth) / 2, ButtonY[i] + (ButtonHeight - GlyphHeight) / 2, label, ink);
             }
         }
 
@@ -281,7 +276,7 @@ namespace Antmicro.Renode.Peripherals.Video
 
         private void SetPixel(int x, int y, byte[] rgb)
         {
-            var i = (y * PanelWidth + x) * 3;
+            var i = (y * CanvasWidth + x) * 3;
             buffer[i] = rgb[0];
             buffer[i + 1] = rgb[1];
             buffer[i + 2] = rgb[2];
@@ -345,20 +340,27 @@ namespace Antmicro.Renode.Peripherals.Video
         // mode + 144 * (addr + data + trailer) + final trailer, with slack
         private const int MaxFrameBytes = 2 + PanelHeight * (LineBytes + 2) + 64;
 
-        // Bezel geometry: a 24 px strip under the LCD, four boxes across.
-        private const int BezelHeight = 24;
-        private const int CanvasHeight = PanelHeight + BezelHeight;
-        private const int ButtonTop = PanelHeight + 3;
+        // Bezel geometry: a strip either side of the LCD, one box per button
+        // at the §81 Fenix slot its function maps to (see the file header).
+        private const int BezelWidth = 31;
+        private const int PanelLeft = BezelWidth;
+        private const int CanvasWidth = BezelWidth + PanelWidth + BezelWidth;
+        private const int CanvasHeight = PanelHeight;
         private const int ButtonHeight = 18;
-        private const int ButtonWidth = 39;
-        private const int ButtonGap = 3;
-        private const int ButtonMargin = 2;
+        private const int ButtonWidth = 27;
+        private const int ButtonInset = 2;
         private const int GlyphWidth = 5;
         private const int GlyphHeight = 7;
 
         // BTN1..BTN4 -> P0.11, P0.12, P0.24, P0.25 — the same pins the
-        // watch.resc btn macros drive; keep both in lockstep.
+        // watch.resc btn macros drive; keep both in lockstep. ButtonX/Y are
+        // indexed to match: BTN1 upper-right (START/STOP), BTN2 mid-left
+        // (UP), BTN3 lower-left (DOWN), BTN4 lower-right (BACK/LAP).
         private static readonly int[] ButtonPins = { 11, 12, 24, 25 };
+        private const int LeftColX = ButtonInset;
+        private const int RightColX = CanvasWidth - ButtonWidth - ButtonInset;
+        private static readonly int[] ButtonX = { RightColX, LeftColX, LeftColX, RightColX };
+        private static readonly int[] ButtonY = { 14, 63, 112, 112 };
 
         private static readonly byte[] White = { 0xEC, 0xEF, 0xE8 };
         private static readonly byte[] Black = { 0x12, 0x14, 0x12 };
