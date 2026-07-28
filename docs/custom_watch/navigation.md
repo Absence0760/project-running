@@ -35,13 +35,12 @@ stateDiagram-v2
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
     Run --> Run: BTN2 — arm stop ("STOP? BTN2" banner, 4 s)
     Run --> Run: BTN2 x2 — stop (FIN)
-    Run --> Run: BTN4 — lap (REC / PAU), page prev (FIN)
-    Run --> Run: BTN3 tap / long — page next / prev
-    Run --> Run: BTN3 held 0.5 s — "GRID? HOLD" banner while held
-    Run --> Grid: BTN3 hold (1.5 s)
-    Grid --> Grid: BTN3 tap / hold — cursor +1 / +4
-    Grid --> Grid: BTN1 tap / hold — cursor -1 / -4
-    Grid --> Run: BTN4 — jump to cursor
+    Run --> Run: BTN5 — lap (REC / PAU)
+    Run --> Run: BTN3 tap / BTN4 tap — page left / page right
+    Run --> Grid: BTN3 or BTN4 held 0.5 s — grid opens at the threshold
+    Grid --> Grid: BTN4 tap / hold — cursor +1 / +4
+    Grid --> Grid: BTN3 tap / hold — cursor -1 / -4
+    Grid --> Run: BTN1 — jump to cursor (B1 GO)
     Grid --> Run: 3 s inactivity — auto-jump to cursor
     Grid --> Run: BTN2 — cancel (swallowed)
     Run --> Idle: BTN1 from FIN — dismiss home
@@ -53,23 +52,25 @@ recording (steady through the min-move sampling artifact on slow climbs),
 steady only for a manual pause (owes a BTN1 press), `FIN` once stopped
 (decisions §287). `BTN1` from `FIN` returns home and the next run opens on
 the Dashboard (§289) — before §289, `Finished` was a dead end that held the
-run view until reboot. In `FIN` the dead lap key becomes a tap page-back
-(§290): the post-run review pages both ways on taps, BTN3 forward and BTN4
-backward, with the long-press back still available everywhere. Dismissing
-also resets the idle face to the home view, wherever a pre-run BTN4 toggle
-left it (§291).
+run view until reboot. Every run view — recording, paused, finished — pages
+the same way: BTN3 tap left, BTN4 tap right (§350, superseding §290's
+FIN-only tap-back). Dismissing also resets the idle face to the home view,
+wherever a pre-run BTN4 toggle left it (§291).
 
 ## The page cycle (§286 order, §284 filter)
 
-BTN3 walks this ring — forward on tap, backward on long-press — filtered to
-`pages_mask` (data-present ∩ curated, Dashboard always enabled). Clusters
-are ordered by mid-run glance frequency; `GUID` (the scripted coach run) closes
-the live cluster as the virtual partner's sibling, and `BACK` (Back-to-start)
-sits last so the safety page is exactly one long-press from home. The curation
-half of the mask reaches only the first 32 pages: the `SET1` wire field is 32
-bits, so `BACK` — discriminant 32 — is the one page the phone cannot curate out,
-and `mask_from_wire` leaves it *enabled* rather than hiding it invisibly on every
-push (§333). Data presence still gates it.
+The paging pair walks this ring the way it is drawn — the ring renders
+horizontally (the top-edge position thumb), so the lower-RIGHT key (BTN4)
+taps rightward and the lower-LEFT key (BTN3) taps leftward (§350), and both
+walks are filtered to `pages_mask` (data-present ∩ curated, Dashboard always
+enabled). Clusters are ordered by mid-run glance frequency; `GUID` (the
+scripted coach run) closes the live cluster as the virtual partner's sibling,
+and `BACK` (Back-to-start) sits last so the safety page is exactly one
+left-tap from home. The curation half of the mask reaches only the first 32
+pages: the `SET1` wire field is 32 bits, so `BACK` — discriminant 32 — is the
+one page the phone cannot curate out, and `mask_from_wire` leaves it
+*enabled* rather than hiding it invisibly on every push (§333). Data presence
+still gates it.
 
 ```mermaid
 flowchart LR
@@ -96,10 +97,13 @@ flowchart LR
     BACK --> DASH
 ```
 
-The page grid (hold BTN3) shows this same ring as a 4-column map — codes in
-cycle order, cursor box on the current page — and moves over it with
-`±1` (taps) and `±4` (holds). Above the map sit two chrome rows: row 0 is the
-**button legend** (`B2 EXIT` … `B4 GO`) and row 1 the **cursor page's full
+The page grid (hold either paging key 0.5 s — it opens at the threshold, so
+the grid appearing is the hold's own feedback) shows this same ring as a
+4-column map — codes in cycle order, cursor box on the current page — and
+moves over it with `±1` (taps) and `±4` (holds), BTN4 forward and BTN3
+backward: the same directions the keys page, so the modal never inverts the
+spatial mapping. Above the map sit two chrome rows: row 0 is the **button
+legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
 therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 33-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
@@ -111,16 +115,18 @@ The chrome is what makes the modal honest about itself. 33 codes need
 `ceil(33/4)` = 9 rows and the panel has exactly 9 (144 px / 16 px), so there was
 never a spare row — every chrome row is bought from body capacity, which only
 §333's window makes affordable (before it the body was a hard 32-cell `const`
-assert). Row 0 names BTN2 and BTN4 and deliberately **not** BTN1/BTN3: a BTN1 or
-BTN3 press moves the visible cursor and commits nothing, so it is discovered for
-free, whereas BTN2 — which arms the stop everywhere else and cancels in here —
-is a *safety* remap the closing grid cannot reveal (§337).
+assert). Row 0 names BTN2 and BTN1 and deliberately **not** BTN3/BTN4: a paging
+press moves the visible cursor one cell in the direction it always pages and
+commits nothing, so it is discovered for free, whereas BTN2 — which arms the
+stop everywhere else and cancels in here — is a *safety* remap the closing grid
+cannot reveal (§337), and `B1 GO` names the confirm because a START-key jump is
+learned from other watches, not from this screen.
 
 ## Press cost — computed, from the Dashboard, full 33-page mask
 
-Actions counted: each tap, long-press, or hold is one action; the grid's
-open-hold is one; the auto-select close is free (BTN4 costs one to jump
-immediately). `linear` = tap-forward / long-back only. The grid rows are
+Actions counted: each tap or hold is one action; the grid's open-hold is one;
+the auto-select close is free (BTN1 costs one to jump immediately). `linear` =
+the bidirectional tap walk (BTN4 right / BTN3 left). The grid rows are
 **additive**: the bidirectional walk does not go away when the grid arrives, so
 a page costs the cheaper of the two routes — which is why no grid row can be
 worse than the linear row, and why the grid's own worst *cell* is not the worst
@@ -130,7 +136,7 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 |---|---|---|
 | Linear walk only (pre-§288) | 16 | 8.2 |
 | + grid, forward-only movement (§288 as first built) | 9 | 4.8 |
-| + grid, symmetric ±1/±4 (§289, shipped) | **6** | **3.8** |
+| + grid, symmetric ±1/±4 (§289; §350 keys) | **6** | **3.8** |
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
 a breadth-first search over the cursor's move set on the enabled cycle
@@ -142,7 +148,14 @@ validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 at the new page count rather than replacing it with a fresh estimate. Both grid
 worsts survive page 33 unchanged; the averages move 4.7188 → 4.8182 and
 3.7188 → 3.7576. The linear worst stays 16 because the page 17 steps forward is
-16 long-presses back.
+16 taps back.
+
+**§350 does not move these counts — it moves their price in seconds.** The
+action *counts* are identical under the spatial grammar (the walk was already
+bidirectional, the grid moves are the same set), but a backward step is now a
+plain tap instead of a 0.5 s timed hold, and the grid-open hold fires at 0.5 s
+instead of 1.5 s — so the worst page costs 6 *taps-or-short-holds*, with no
+gesture in the chain longer than half a second.
 
 **§333's row-scrolling window does not enter this table.** `window_origin_row`
 decides which cells are on screen; it never changes what a cursor move does, so
@@ -160,24 +173,29 @@ removes.
 
 ## Invariants (each pinned by a host test)
 
+- **The paging taps mirror spatially in every run view** (§350). BTN3's tap
+  is `PagePrev` and BTN4's tap is `PageNext` in recording, paused, and
+  finished alike — no state may bend either tap to anything else, and the
+  grid cursor moves the same directions, so left always means left.
 - **The grid modal swallows every button.** No press inside it can pause,
-  stop-arm, or lap the recording; BTN2 cancels, BTN4 confirms, BTN1/BTN3
-  move the cursor. The recorder is unreachable from the modal.
+  stop-arm, or lap the recording; BTN2 cancels, BTN1 confirms, BTN3/BTN4
+  move the cursor, BTN5 is swallowed whole. The recorder is unreachable from
+  the modal.
 - **The grid states its own button map** (§337). Row 0 carries `B2 EXIT` and
-  `B4 GO` — the two presses that leave the modal — so BTN2's loss of the stop is
+  `B1 GO` — the two presses that leave the modal — so BTN2's loss of the stop is
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
   page's full name, because four glyphs cannot separate 33 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
   `PACR`/`RCAP` are transpositions (computed over all 528 code pairs; 24 more sit
-  at distance 2). Both the 3 s auto-select and BTN4 therefore commit on
+  at distance 2). Both the 3 s auto-select and BTN1 therefore commit on
   something the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
   `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
   spending a row on chrome shortens the window and never displaces the cursor.
-- **§286's safety contract stands**: Back-to-start is one long-press from
-  the Dashboard, grid or no grid.
+- **§286's safety contract stands, cheaper**: Back-to-start is one BTN3 tap
+  from the Dashboard (it was one long-press before §350), grid or no grid.
 - **Dashboard is always enabled** — no mask can empty the cycle or the grid.
 - **The page-position thumb partitions the top edge.** `statusbar::page_thumb`
   gives the active page the half-open segment
@@ -195,22 +213,16 @@ removes.
   fuel reminders latch into the persistent row-1 marker); the armed-stop
   banner outranks alerts but yields to the grid, where BTN2 means cancel.
 - **Idle gestures are duration-stable**: a BTN3 hold of any length while
-  idle is the QNH re-zero — duration never changes an idle gesture
-  mid-press. Which is also why the idle face shows no hold prompt: there is
-  no second tier there to warn about, so naming one would be a lie.
-- **A timed press tier announces itself before it fires.** Once a run-view
-  BTN3 hold passes 0.5 s the hero band carries the inverse-video
-  `GRID? HOLD` banner for as long as the button is down, so the runner can
-  read where they are in the gesture and choose — release for the page back
-  they have already earned, or keep holding for the grid — instead of
-  learning the answer only once the modal has taken pause off BTN1 and stop
-  off BTN2 (§334). The prompt is driven entirely by the hold's own
-  escalation timer: it costs two `Watch` sends per hold that reaches the
-  tier, nothing at all for a tap, and it carries no TTL, so it never puts a
-  timed refresh into the screen task. It outranks an alert banner (whose
-  TTL outlives the hold) and yields to the armed-stop banner and to the
-  grid. On Distance / Pace the three-row numeral hero stands down under it,
-  the same way it does under the armed stop.
+  idle is the QNH re-zero, and BTN4 toggles the diagnostics view whatever
+  its duration — duration never changes an idle gesture's meaning
+  mid-press.
+- **A hold's action fires at its threshold, not on release** (§350). At
+  0.5 s of a run-view paging hold the grid simply opens under the thumb —
+  the modal appearing IS the feedback — so no gesture asks the runner to
+  time a release blind. This is what §334's `GRID? HOLD` banner existed to
+  patch: it announced the boundary between the page-back tier and the grid
+  tier, and §350 deleted the middle tier, so the banner went with it —
+  there is no longer any timed boundary a hand has to feel for.
 - **The home face always tells the time** — the 32x48 clock hero
   extrapolates `HH:MM` from the last fix's wall clock plus uptime, and shows
   an honest `--:--` before any fix. Local time once a settings push has
@@ -226,10 +238,9 @@ removes.
 ## Known gaps (deliberate, tier-1)
 
 - The grid's 3 s auto-select still commits the cursor with no countdown on
-  screen — the one timed wait left without pre-fire feedback. The hold
-  prompt's mechanism does not reach it: the prompt rides a timer the press
-  already owns, whereas a countdown inside the grid would need a per-second
-  wake for as long as the modal is open, which §328 rules out.
+  screen — the one timed wait left without pre-fire feedback. A countdown
+  inside the grid would need a per-second wake for as long as the modal is
+  open, which §328 rules out.
 
 - The timezone offset is static between pushes: a DST transition or a border
   crossing shifts the home clock only after the phone's next settings push
@@ -243,13 +254,38 @@ removes.
   A rail the plausibility band can't read as a 1S LiPo — the USB-powered DK
   at ~3.0 V — shows nothing at all rather than a confident 0 %.
 
+## Design research — why the paging keys sit where they do (§350)
+
+What the five-button brands actually do, checked against their manuals: a
+Garmin Fenix pages data screens with UP/DOWN on the **left** side; a Polar
+Vantage browses training views with UP/DOWN on the **right** side (OK, the
+right-middle key, marks a lap; BACK, lower-left, pauses); a Suunto Vertical
+scrolls with the upper/lower of its three **right**-side buttons. Three
+brands, three placements — but all of them stack prev/next *vertically on
+one side*, because their page metaphor is a vertical list. No mainstream
+watch splits paging across the case. Ours does, deliberately: this UI's
+page ring is drawn *horizontally* (the §-invariant top-edge position thumb
+sweeps left→right across the cycle), and stimulus-response compatibility —
+the classic human-factors result that a control congruent with the
+display's motion is faster and less error-prone, especially under load —
+says the leftward key belongs on the left of the case and the rightward key
+on the right. The §81 asymmetric 3+2 shape is kept (case, tooling, the
+learned silhouette); what §350 reassigns is the slot *functions*: paging on
+the two lower corners where the metaphor puts them, start/pause staying
+upper-right (every brand's START), stop staying mid-left behind its
+two-press guard, and the lap on the upper-left fifth key — Polar's
+precedent that a lap deserves its own dedicated, undelayed tap.
+
 ## Driving it in the sim
 
 `pnpm watch:sim:gui:idle` boots to the home face (no auto-started run). Via
 `bin/watch-monitor.sh`: `runMacro $btn1` start / pause / dismiss-home,
-`$btn2` twice stop (watch the `STOP? BTN2` banner), `$btn3` page, `$btn3l`
-page back (0.8 s — long enough to flash the `GRID? HOLD` banner before it
-resolves), `$btn3h` page grid (1.7 s — the banner stands for a second, then
-the grid replaces it), then `$btn3`/`$btn3l`/`$btn1` to move the cursor and
-`$btn4` to jump. Once stopped (`FIN`), `$btn4` pages back. While
-idle, `$btn4` toggles the home face against the diagnostics face.
+`$btn2` twice stop (watch the `STOP? BTN2` banner), `$btn4` page right,
+`$btn3` page left, `$btn3h` or `$btn4h` page grid (0.8 s — it opens at the
+0.5 s threshold, mid-hold), then `$btn3`/`$btn4` to move the cursor
+backward / forward and `$btn1` to jump (`B1 GO`), `$btn5` lap. The same
+grammar in `FIN`: `$btn4` right, `$btn3` left. While idle, `$btn4` toggles
+the home face against the diagnostics face and `$btn3h` is the QNH
+re-zero. Or click the bezel buttons in the `--gui` window — they sit at the
+§81 positions (BTN5 upper-left, BTN2 mid-left, BTN3 lower-left, BTN1
+upper-right, BTN4 lower-right).
