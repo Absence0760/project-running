@@ -260,6 +260,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
+    let mut workout_rx = unwrap!(state::WORKOUT.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -369,6 +370,28 @@ pub async fn run(store: &'static SharedStore) {
         info!(
             "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15)"
         );
+        // A canned structured workout so the Workout page moves under
+        // bench_jog: the ~5:33/km fixture reads SLOW! against the 5:00/km rep
+        // target, and the short warmup advances within the first minutes.
+        let wo = |kind, m: u32, pace: u16, ri: u8, rt: u8| watch_core::workout::WorkoutStep {
+            kind,
+            rep_index: ri,
+            rep_total: rt,
+            tolerance_s_per_km: 10,
+            target_distance_m: m,
+            target_duration_s: 0,
+            target_pace_s_per_km: pace,
+        };
+        use watch_core::workout::WorkoutStepKind as Wk;
+        recorder.set_workout(&[
+            wo(Wk::Warmup, 300, 0, 0, 0),
+            wo(Wk::Rep, 400, 300, 1, 2),
+            wo(Wk::Recovery, 200, 0, 1, 2),
+            wo(Wk::Rep, 400, 300, 2, 2),
+            wo(Wk::Recovery, 200, 0, 2, 2),
+            wo(Wk::Cooldown, 400, 0, 0, 0),
+        ]);
+        info!("record: sim demo workout armed (6 steps, reps at 5:00/km)");
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
@@ -452,6 +475,16 @@ pub async fn run(store: &'static SharedStore) {
         // the nav task on each course change, so this only forwards it.
         if let Some(profile) = route_profile_rx.try_changed() {
             recorder.set_route_elev(profile);
+        }
+
+        // A pushed structured workout (the ble task's WKT1 reassembly) arms
+        // the recorder's runner; `None` never arrives in practice, but a
+        // cleared push would honestly clear the page.
+        if let Some(w) = workout_rx.try_changed() {
+            match w {
+                Some(steps) => recorder.set_workout(&steps),
+                None => recorder.set_workout(&[]),
+            }
         }
 
         // Pushed settings frames (from the ble task; the sim seeds one above)

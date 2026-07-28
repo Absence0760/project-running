@@ -310,6 +310,7 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::Pace
         | Page::Lap
         | Page::GuidedRun
+        | Page::Workout
         | Page::CutoffEta
         | Page::TrainingLoad
         | Page::DistanceBand
@@ -639,6 +640,7 @@ pub fn page_rows(
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::GuidedRun => guided_run_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Workout => workout_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RacePredictor => race_predictor_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::TrainingLoad => training_load_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::DistanceBand => distance_band_glance(fix, snap, tag, uptime_s, animate, mode),
@@ -691,6 +693,7 @@ pub fn page_icons(
         | Page::Zones
         | Page::Pacer
         | Page::GuidedRun
+        | Page::Workout
         | Page::RacePredictor
         | Page::TrainingLoad
         | Page::DistanceBand
@@ -769,6 +772,25 @@ pub fn page_hero(
         Page::GuidedRun => match snap.guided_run {
             Some(v) => split_row(v.remaining_s),
             None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
+        // The active step's remaining amount on its own axis — seconds for a
+        // duration step, metres otherwise; `--` until a workout is pushed or
+        // once it is done (the rows say DONE in words).
+        Page::Workout => match snap.workout {
+            Some(v) if !v.done => {
+                if v.duration_based {
+                    split_row(v.remaining_s)
+                } else {
+                    let mut row = Row::new();
+                    let _ = write!(row, "{}", v.remaining_m.min(99_999));
+                    row
+                }
+            }
+            _ => {
                 let mut row = Row::new();
                 let _ = write!(row, "--");
                 row
@@ -1304,6 +1326,92 @@ fn guided_run_glance(
     }
     if tag_shown(tag, uptime_s, animate) {
         write_tag(&mut rows[body_top_row(Page::GuidedRun)], tag);
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The structured-workout glance: which step the run is in (kind + rep
+/// labels), the remaining amount on the step's own axis, the target pace vs
+/// the step's live pace with the mobile adherence verdict, and what comes
+/// next. "NOT SYNCED" until a `WKT1` push arms one; "WORKOUT DONE" once the
+/// last step completes.
+fn workout_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    match snap.workout {
+        None => write_unfed(&mut rows, Page::Workout, "WORKOUT", Unfed::NotSynced),
+        Some(v) if v.done => {
+            let _ = rows[3].push_str("WORKOUT DONE");
+            let _ = write!(rows[4], "{:<7}{}", "STEPS", v.total);
+        }
+        Some(v) => {
+            let _ = write!(rows[3], "STEP   {}/{} ", v.step_index + 1, v.total);
+            let _ = rows[3].push_str(v.kind.label());
+            if v.rep_total > 0 {
+                let _ = write!(rows[3], " {}/{}", v.rep_index, v.rep_total);
+            }
+            if v.duration_based {
+                let _ = write!(
+                    rows[4],
+                    "{:<7}{}",
+                    "LEFT",
+                    split_row(v.remaining_s).as_str()
+                );
+            } else {
+                let _ = write!(rows[4], "{:<7}{} M", "LEFT", v.remaining_m.min(99_999));
+            }
+            if v.target_pace_s_per_km > 0 {
+                let _ = write!(
+                    rows[5],
+                    "{:<7}{}/KM",
+                    "TARGET",
+                    split_row(u32::from(v.target_pace_s_per_km)).as_str()
+                );
+            } else {
+                let _ = write!(rows[5], "{:<7}--", "TARGET");
+            }
+            match v.step_pace_s_per_km {
+                Some(p) => {
+                    let verdict = match v.adherence {
+                        crate::workout::PaceAdherence::OnPace => "ON",
+                        crate::workout::PaceAdherence::Ahead => "FAST",
+                        crate::workout::PaceAdherence::Behind => "SLOW",
+                        crate::workout::PaceAdherence::WayAhead => "FAST!",
+                        crate::workout::PaceAdherence::WayBehind => "SLOW!",
+                    };
+                    let _ = write!(
+                        rows[6],
+                        "{:<7}{}/KM {}",
+                        "PACE",
+                        split_row(u32::from(p)).as_str(),
+                        verdict
+                    );
+                }
+                None => {
+                    let _ = write!(rows[6], "{:<7}--", "PACE");
+                }
+            }
+            match v.next_kind {
+                Some(k) => {
+                    let _ = write!(rows[7], "{:<7}{}", "NEXT", k.label());
+                }
+                None => {
+                    let _ = write!(rows[7], "{:<7}LAST STEP", "NEXT");
+                }
+            }
+        }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::Workout)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -2951,6 +3059,7 @@ mod tests {
             plan_replan: None,
             plan_adaptive: None,
             guided_run: None,
+            workout: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -6159,6 +6268,7 @@ mod tests {
             | Page::BackToStart => None,
             Page::Pacer
             | Page::GuidedRun
+            | Page::Workout
             | Page::Nav
             | Page::TurnCue
             | Page::CutoffEta
@@ -6299,6 +6409,91 @@ mod tests {
         assert_eq!(rows[5].as_str(), "MOVING 1:02:05");
         assert_eq!(rows[6].as_str(), "ROLLING NOT SYNCED");
         assert_eq!(rows[7].as_str(), "");
+    }
+
+    #[test]
+    fn workout_glance_shows_the_step_the_paces_and_the_next() {
+        use crate::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
+        let mut rec = snapshot(RecordState::Recording, 1_200.0);
+        rec.workout = Some(WorkoutView {
+            step_index: 1,
+            total: 6,
+            kind: WorkoutStepKind::Rep,
+            rep_index: 1,
+            rep_total: 2,
+            duration_based: false,
+            remaining_m: 250,
+            remaining_s: 0,
+            target_pace_s_per_km: 300,
+            step_pace_s_per_km: Some(333),
+            adherence: PaceAdherence::WayBehind,
+            progress_permille: 375,
+            next_kind: Some(WorkoutStepKind::Recovery),
+            done: false,
+        });
+        let rows = page_rows(
+            Page::Workout,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        // The step row fills the width, so the REC tag has no gap to land in
+        // and the row stays untagged — the GPS row still carries liveness.
+        assert_eq!(rows[3].as_str(), "STEP   2/6 REP 1/2");
+        assert_eq!(rows[4].as_str(), "LEFT   250 M");
+        assert_eq!(rows[5].as_str(), "TARGET 5:00/KM");
+        assert_eq!(rows[6].as_str(), "PACE   5:33/KM SLOW!");
+        assert_eq!(rows[7].as_str(), "NEXT   RECOVER");
+        // The hero is the remaining amount on the step's own axis.
+        assert_eq!(
+            page_hero(Page::Workout, Some(152), Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "250"
+        );
+        // Unpushed: the honest phone-sync empty state.
+        let bare = snapshot(RecordState::Recording, 1_200.0);
+        let rows = page_rows(
+            Page::Workout,
+            Some(&fix()),
+            None,
+            Some(&bare),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        // Done: the words say it and the hero blanks.
+        let mut done = snapshot(RecordState::Recording, 6_000.0);
+        done.workout = rec.workout.map(|mut v| {
+            v.done = true;
+            v
+        });
+        let rows = page_rows(
+            Page::Workout,
+            Some(&fix()),
+            None,
+            Some(&done),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[3], header("WORKOUT DONE", "REC"));
+        assert_eq!(
+            page_hero(Page::Workout, Some(152), Some(&done), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
     }
 
     #[test]
