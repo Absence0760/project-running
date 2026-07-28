@@ -106,9 +106,11 @@ STOP_ATTEMPTS = 3
 SCENARIO_ORDER = ("smoke", "alerts", "pages")
 
 # The pages the walk has to reach and render. Two always-available heroes
-# (Distance / Pace, the generated-numeral pages), plus the three the recent
+# (Distance / Pace, the generated-numeral pages), plus the pages the recent
 # batches added or changed: Pacer (which now carries the race-phase row),
-# GuidedRun, and RouteElev (the drawn course climb profile).
+# GuidedRun, RouteElev (the drawn course climb profile), and Daylight (the
+# sunset/sunrise countdown the demo settings' UTC-6 offset arms — its render
+# under bench_jog is the golden-tested pre-dawn sunrise case).
 #
 # Anything added here must be a page the sim actually arms data for. With
 # `hide_empty_pages` at its on-watch default the cycle is FILTERED, so an
@@ -117,7 +119,7 @@ SCENARIO_ORDER = ("smoke", "alerts", "pages")
 # field: Fitness, Readiness, Goals, RaceDay, Recap, Streaks, RunStats,
 # PrRecency, PlanReplan, PlanAdaptive, RouteSimplify, AutoEffort,
 # TrainingPaces. DistanceBand needs ~5 km and stays dark on this fixture too.
-PAGES_OF_INTEREST = ("Distance", "Pace", "Pacer", "GuidedRun", "RouteElev")
+PAGES_OF_INTEREST = ("Distance", "Pace", "Pacer", "GuidedRun", "RouteElev", "Daylight")
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -140,7 +142,7 @@ PAGE_INTENT_LINES = {
 PAGE_STEP_TIMEOUT = 30
 PAGE_PRESS_ATTEMPTS = 2
 # Enough presses for two-plus laps of the filtered cycle: an unsynced sim watch
-# carries ~12-16 of the 33 pages, and the full cycle is 33.
+# carries ~12-18 of the 35 pages, and the full cycle is 35.
 MAX_PAGE_PRESSES = 48
 
 # `record: alert <Kind>` on a raise, `record: alert cleared` when its TTL runs
@@ -813,7 +815,7 @@ def scenario_pages(sim):
     composed (the only page-change evidence available), the button task's line
     is cross-checked against it, then a panel dump says the panel is not blank.
     The cycle is `Snapshot::pages_mask` — data-present INTERSECT phone-curated —
-    so the walk length is a property of what the sim arms, not of the 33-variant
+    so the walk length is a property of what the sim arms, not of the 35-variant
     enum, and the walk is driven by the reported pages rather than by counting
     presses.
 

@@ -104,6 +104,11 @@ fn sample_fix() -> Fix {
         sats: 8,
         alt_m: Some(1650.0),
         time_of_day: Some(12 * 3600),
+        date: Some(watch_core::daylight::Date {
+            year: 2026,
+            month: 7,
+            day: 8,
+        }),
         uptime_s: 100,
     }
 }
@@ -134,7 +139,11 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
             fb.draw_text_row(r, row);
         }
     }
-    draw_hero(fb, page, face::page_hero(page, hr, snap, None).as_deref());
+    draw_hero(
+        fb,
+        page,
+        face::page_hero(page, Some(&fix), hr, snap, None, 100, None).as_deref(),
+    );
 }
 
 // Through `ui_frame::hero_band`, not a second copy of the face test the ui task
@@ -326,7 +335,7 @@ fn preview_run_view_low_battery_marker() {
         IdleView::Home,
         None,
     );
-    let hero = face::page_hero(Page::Dashboard, Some(150), Some(&snap), None);
+    let hero = face::page_hero(Page::Dashboard, None, Some(150), Some(&snap), None, 100, None);
     face::apply_run_marker(
         &mut rows,
         Page::Dashboard,
@@ -414,7 +423,7 @@ fn preview_a_hero_too_wide_for_the_tall_face() {
         duration_s: 200 * 3600,
         remaining_s: 100 * 3600 + 5 * 60 + 30,
     });
-    let hero = face::page_hero(Page::GuidedRun, None, Some(&snap), None).unwrap();
+    let hero = face::page_hero(Page::GuidedRun, None, None, Some(&snap), None, 100, None).unwrap();
     assert!(!ui_frame::tall_hero_fits(&hero), "{hero}");
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::GuidedRun, Some(&snap), None);
@@ -776,7 +785,8 @@ fn preview_back_to_start_page() {
     draw_hero(
         &mut fb,
         Page::BackToStart,
-        face::page_hero(Page::BackToStart, None, Some(&snap), Some(&view)).as_deref(),
+        face::page_hero(Page::BackToStart, None, None, Some(&snap), Some(&view), 100, None)
+            .as_deref(),
     );
     widgets::draw_page_indicator(
         &mut fb,

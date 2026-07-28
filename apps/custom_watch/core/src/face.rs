@@ -29,6 +29,7 @@ use crate::alerts::FuelOverdue;
 use crate::battery;
 use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
+use crate::daylight;
 use crate::elevation;
 use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
@@ -315,7 +316,8 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::TrainingLoad
         | Page::DistanceBand
         | Page::GearWear
-        | Page::Fitness => TALL_HERO_BAND_ROWS,
+        | Page::Fitness
+        | Page::Daylight => TALL_HERO_BAND_ROWS,
         Page::Dashboard
         | Page::Zones
         | Page::Splits
@@ -669,6 +671,7 @@ pub fn page_rows(
             Page::AutoEffort => auto_effort_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RouteElev => route_elev_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RaceDay => race_day_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Daylight => daylight_glance(fix, tag, uptime_s, animate, mode, tz_offset_min),
         },
     }
 }
@@ -719,7 +722,8 @@ pub fn page_icons(
         | Page::RouteSimplify
         | Page::AutoEffort
         | Page::RouteElev
-        | Page::RaceDay => [None; ROWS],
+        | Page::RaceDay
+        | Page::Daylight => [None; ROWS],
     }
 }
 
@@ -729,12 +733,18 @@ pub fn page_icons(
 /// has a hero — its map panel owns the rows the hero would cover. Which face
 /// draws it is [`crate::ui_frame::hero_band`]'s call, off the glyphs the
 /// string uses — so a signed hero, whose `+` the numeral faces lack, keeps its
-/// sign by staying in the text font.
+/// sign by staying in the text font. `fix` + `uptime_s` + `tz_offset_min`
+/// feed the Daylight countdown, the one hero derived from the clock rather
+/// than the snapshot.
+#[allow(clippy::too_many_arguments)]
 pub fn page_hero(
     page: Page,
+    fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     rec: Option<&Snapshot>,
     tb: Option<&TrackbackView>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
 ) -> Option<Row> {
     let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
     Some(match page {
@@ -942,6 +952,20 @@ pub fn page_hero(
                     let _ = write!(row, "{:.2}", (d / 1000.0).min(9999.99));
                 }
                 None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // The countdown to the next sun event as H:MM (floored — the page must
+        // never promise light it may not have); `--` while unfed or polar.
+        Page::Daylight => {
+            let mut row = Row::new();
+            match daylight_now(fix, uptime_s, tz_offset_min) {
+                Some(daylight::Daylight::Sun(v)) => {
+                    let _ = write!(row, "{}:{:02}", v.countdown_min / 60, v.countdown_min % 60);
+                }
+                _ => {
                     let _ = write!(row, "--");
                 }
             }
@@ -1987,6 +2011,85 @@ fn fitness_glance(
     }
     if tag_shown(tag, uptime_s, animate) {
         write_tag(&mut rows[body_top_row(Page::Fitness)], tag);
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The Daylight page's model answer for *now*, or `None` while an input is
+/// missing: the synced timezone first (without it the countdown runs against
+/// the wrong midnight), then a fix carrying the RMC clock + date. The two
+/// absences render differently ([`Unfed::NotSynced`] vs [`Unfed::AwaitingFix`])
+/// so the glance body asks in that order too.
+fn daylight_now(
+    fix: Option<&Fix>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
+) -> Option<daylight::Daylight> {
+    let tz = tz_offset_min?;
+    let f = fix?;
+    Some(daylight::daylight_at(
+        f.lat_deg,
+        f.time_of_day?,
+        f.date?,
+        f.uptime_s,
+        uptime_s,
+        tz,
+    ))
+}
+
+/// The daylight glance: the countdown to the next sun event up large in the
+/// hero, the event's name on the header row, its local clock time and today's
+/// day length below. Unfed until the phone syncs a timezone (`NOT SYNCED`) and
+/// until a fix carries the RMC clock + date (`AWAITING FIX`); inside a polar
+/// season the honest answer is the season itself, not a fabricated clock.
+#[allow(clippy::too_many_arguments)]
+fn daylight_glance(
+    fix: Option<&Fix>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+    tz_offset_min: Option<i16>,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    match daylight_now(fix, uptime_s, tz_offset_min) {
+        None if tz_offset_min.is_none() => {
+            write_unfed(&mut rows, Page::Daylight, "DAYLIGHT", Unfed::NotSynced)
+        }
+        None => write_unfed(&mut rows, Page::Daylight, "DAYLIGHT", Unfed::AwaitingFix),
+        Some(daylight::Daylight::PolarDay) => {
+            write_unfed(&mut rows, Page::Daylight, "DAYLIGHT", Unfed::MidnightSun)
+        }
+        Some(daylight::Daylight::PolarNight) => {
+            write_unfed(&mut rows, Page::Daylight, "DAYLIGHT", Unfed::PolarNight)
+        }
+        Some(daylight::Daylight::Sun(v)) => {
+            let event = match v.event {
+                daylight::NextSunEvent::Sunrise => "SUNRISE",
+                daylight::NextSunEvent::Sunset => "SUNSET",
+            };
+            let _ = write!(rows[3], "{event}");
+            let _ = write!(
+                rows[4],
+                "{:<9}{:02}:{:02}",
+                "AT",
+                v.event_clock_min / 60,
+                v.event_clock_min % 60
+            );
+            let _ = write!(
+                rows[5],
+                "{:<9}{}:{:02}",
+                "DAYLIGHT",
+                v.daylight_min / 60,
+                v.daylight_min % 60
+            );
+        }
+    }
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::Daylight)], tag);
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -3082,6 +3185,15 @@ mod tests {
         )
     }
 
+    fn page_hero(
+        page: Page,
+        hr_bpm: Option<u16>,
+        rec: Option<&Snapshot>,
+        tb: Option<&TrackbackView>,
+    ) -> Option<Row> {
+        super::page_hero(page, Some(&fix()), hr_bpm, rec, tb, 42, None)
+    }
+
     fn fix() -> Fix {
         Fix {
             lat_deg: 40.01502,
@@ -3091,6 +3203,11 @@ mod tests {
             sats: 8,
             alt_m: Some(1624.0),
             time_of_day: Some(7 * 3600 + 30 * 60 + 15),
+            date: Some(daylight::Date {
+                year: 2026,
+                month: 7,
+                day: 8,
+            }),
             uptime_s: 41,
         }
     }
@@ -3518,7 +3635,7 @@ mod tests {
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
-        for _ in 0..33 {
+        loop {
             let rows = page_rows(
                 p,
                 Some(&fix()),
@@ -3547,13 +3664,16 @@ mod tests {
                 );
             }
             p = p.next();
+            if p == Page::default() {
+                break;
+            }
         }
 
         // Inactive: a short run with no pushed roadbook / fuel / gear — every new
         // page must render its honest empty state and still fit the grid.
         let inactive = snapshot(RecordState::Recording, 15_000.0);
         let mut p = Page::default();
-        for _ in 0..33 {
+        loop {
             let rows = page_rows(
                 p,
                 None,
@@ -3574,6 +3694,9 @@ mod tests {
                 );
             }
             p = p.next();
+            if p == Page::default() {
+                break;
+            }
         }
     }
 
@@ -6562,7 +6685,8 @@ mod tests {
             | Page::PrRecency
             | Page::RouteSimplify
             | Page::RouteElev
-            | Page::AutoEffort => Some(Unfed::NotSynced),
+            | Page::AutoEffort
+            | Page::Daylight => Some(Unfed::NotSynced),
             Page::ElevationProfile => Some(Unfed::AwaitingBaro),
             Page::RacePredictor => Some(Unfed::NeedOneKm),
             Page::TrainingLoad => Some(Unfed::NeedDistance),
@@ -6710,5 +6834,134 @@ mod tests {
         assert_eq!(rows[3], header("LOAD   TRIMP", "REC"));
         assert_eq!(rows[6].as_str(), "CTL 82  ATL 95");
         assert_eq!(rows[7].as_str(), "FORM   -12");
+    }
+
+    #[test]
+    fn daylight_glance_counts_down_to_sunrise_before_dawn() {
+        // The bench_jog opening fix (40.015°N, 07:30 UTC, 2026-07-08) at the
+        // sim's demo Mountain offset: 01:30 local, pre-dawn — the same case
+        // golden-tested in `daylight::tests`.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = super::page_rows(
+            Page::Daylight,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+            GnssMode::Performance,
+            IdleView::Home,
+            Some(-360),
+        );
+        assert_eq!(rows[3], header("SUNRISE", "REC"));
+        assert_eq!(rows[4].as_str(), "AT       04:34");
+        assert_eq!(rows[5].as_str(), "DAYLIGHT 14:53");
+        assert_eq!(
+            super::page_hero(
+                Page::Daylight,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                42,
+                Some(-360)
+            )
+            .unwrap()
+            .as_str(),
+            "3:03"
+        );
+    }
+
+    #[test]
+    fn daylight_glance_unfed_states_name_the_missing_input() {
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        // No timezone: the phone owns it, whatever the fix carries.
+        let rows = page_rows(
+            Page::Daylight,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[3], header("DAYLIGHT --", "REC"));
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), crate::unfed::PHONE_SYNC_HINT);
+        assert_eq!(
+            page_hero(Page::Daylight, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+        // Timezone synced, fix without an RMC date: wait for the receiver.
+        let mut dateless = fix();
+        dateless.date = None;
+        let rows = super::page_rows(
+            Page::Daylight,
+            Some(&dateless),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+            GnssMode::Performance,
+            IdleView::Home,
+            Some(-360),
+        );
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        assert_eq!(rows[5].as_str(), "", "a sensor wait owes no phone remedy");
+    }
+
+    #[test]
+    fn daylight_glance_reports_a_polar_season_not_a_clock() {
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let mut polar = fix();
+        polar.lat_deg = 80.0;
+        polar.time_of_day = Some(12 * 3600);
+        for (month, day, reason) in [(12, 21, "POLAR NIGHT"), (6, 21, "MIDNIGHT SUN")] {
+            polar.date = Some(daylight::Date {
+                year: 2026,
+                month,
+                day,
+            });
+            let rows = super::page_rows(
+                Page::Daylight,
+                Some(&polar),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+                GnssMode::Performance,
+                IdleView::Home,
+                Some(0),
+            );
+            assert_eq!(rows[4].as_str(), reason);
+            assert_eq!(rows[5].as_str(), "", "a settled state owes no remedy");
+            assert_eq!(
+                super::page_hero(
+                    Page::Daylight,
+                    Some(&polar),
+                    None,
+                    Some(&rec),
+                    None,
+                    42,
+                    Some(0)
+                )
+                .unwrap()
+                .as_str(),
+                "--"
+            );
+        }
     }
 }

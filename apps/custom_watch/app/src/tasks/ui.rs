@@ -312,7 +312,15 @@ pub async fn screen_task(
         // 16x32 numeral faces over rows 0-2, with the label and state tag on row
         // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
         // and so does a value too wide to render whole at the taller size.
-        let hero = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref());
+        let hero = face::page_hero(
+            page,
+            latest.as_ref(),
+            hr_bpm,
+            rec.as_ref(),
+            tb.as_ref(),
+            uptime_s,
+            tz_offset_min,
+        );
         let band = ui_frame::hero_band(HeroFrame {
             alert: alert.is_some(),
             rezero_banner: rezero_banner.is_some(),

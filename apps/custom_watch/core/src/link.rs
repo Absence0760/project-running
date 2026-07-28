@@ -96,6 +96,7 @@ mod tests {
             sats: 8,
             alt_m: Some(1624.0),
             time_of_day: Some(27015),
+            date: None,
             uptime_s: 41,
         }
     }
@@ -176,6 +177,7 @@ mod tests {
             sats: 255,
             alt_m: Some(-9999.9),
             time_of_day: Some(86399),
+            date: None,
             uptime_s: 0,
         };
         let e = elevation::Reading {
