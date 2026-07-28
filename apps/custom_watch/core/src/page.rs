@@ -50,11 +50,6 @@ pub enum Page {
     /// run is left, which cue the elapsed time has reached, and how long until
     /// the next one; an honest inactive state until a guided run is armed.
     GuidedRun,
-    /// The pushed structured workout ([`crate::workout`]): the active step's
-    /// kind + rep labels, the remaining distance or time on its own axis, the
-    /// step's target pace vs its live pace, and the next step; an honest
-    /// inactive state until a workout is pushed.
-    Workout,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
@@ -155,7 +150,7 @@ impl Page {
     /// four glyphs so four columns of codes fit the 21-cell text grid, unique
     /// so no two cells read the same (both test-pinned).
     ///
-    /// Four glyphs cannot carry 34 distinct meanings unambiguously: `LOAD` /
+    /// Four glyphs cannot carry 33 distinct meanings unambiguously: `LOAD` /
     /// `ROAD` and `PACE` / `PACR` are one edit apart, and `REDY` / `RDAY` and
     /// `PACR` / `RCAP` are transpositions of each other. The code is therefore
     /// a *position marker* on the grid map, never the thing the runner commits
@@ -170,7 +165,6 @@ impl Page {
             Page::Splits => "SPLT",
             Page::Pacer => "PACR",
             Page::GuidedRun => "GUID",
-            Page::Workout => "WORK",
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
@@ -213,7 +207,6 @@ impl Page {
             Page::Splits => "PACE SPLITS",
             Page::Pacer => "VIRTUAL PARTNER",
             Page::GuidedRun => "GUIDED RUN",
-            Page::Workout => "WORKOUT",
             Page::Nav => "COURSE MAP",
             Page::TurnCue => "NEXT TURN",
             Page::CutoffEta => "CUT-OFF ETA",
@@ -286,8 +279,7 @@ impl Page {
             Page::Zones => Page::Splits,
             Page::Splits => Page::Pacer,
             Page::Pacer => Page::GuidedRun,
-            Page::GuidedRun => Page::Workout,
-            Page::Workout => Page::Nav,
+            Page::GuidedRun => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
             Page::CutoffEta => Page::Roadbook,
@@ -317,7 +309,7 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 34 pages a forward-
+    /// wrapping from the first page back to the last. With 33 pages a forward-
     /// only walk needs up to ~32 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
@@ -358,7 +350,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 34] = [
+    const ALL: [Page; 33] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -367,7 +359,6 @@ mod tests {
         Page::Splits,
         Page::Pacer,
         Page::GuidedRun,
-        Page::Workout,
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
@@ -408,11 +399,6 @@ mod tests {
         );
         assert_eq!(
             Page::GuidedRun.next(),
-            Page::Workout,
-            "the structured workout closes the live cluster"
-        );
-        assert_eq!(
-            Page::Workout.next(),
             Page::Nav,
             "course ops follow the live cluster"
         );
