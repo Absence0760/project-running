@@ -5,16 +5,21 @@
 //! this task owns only the hardware that module can't reach — edge detection
 //! and contact debounce.
 //!
-//! Mapping (decisions §350; see `watch_core::button`):
+//! Mapping (decisions §350 + §351; see `watch_core::button` /
+//! `watch_core::settings_menu`):
 //!   BTN1 (upper-right) — start / pause / resume toggle; dismiss from FIN;
-//!          confirm the page-grid jump (the START-confirms idiom)
-//!   BTN2 (mid-left)    — stop (two-press guard); cancel the grid
+//!          confirm the page-grid jump (the START-confirms idiom); settings
+//!          menu: edit right (on / increase / fire)
+//!   BTN2 (mid-left)    — stop (two-press guard); cancel the grid; settings
+//!          menu: cursor up (its §81 slot is literally UP)
 //!   BTN3 (lower-left)  — tap pages LEFT in any run view; hold opens the page
 //!          grid; idle: tap cycles the GNSS mode, hold requests the QNH
-//!          re-zero
+//!          re-zero; settings menu: cursor down (the DOWN slot)
 //!   BTN4 (lower-right) — tap pages RIGHT in any run view; hold opens the page
-//!          grid; idle: toggles home / diagnostics whatever the duration
-//!   BTN5 (upper-left)  — manual lap; swallowed inside the grid
+//!          grid; idle: toggles home / diagnostics whatever the duration;
+//!          settings menu: exit (the BACK slot)
+//!   BTN5 (upper-left)  — manual lap; idle: open the settings menu; settings
+//!          menu: edit left (off / decrease); swallowed inside the grid
 //! The paging pair is spatially congruent with the horizontal page ring (the
 //! top-edge position thumb): left key walks left, right key walks right, and
 //! the grid cursor moves the same directions. The buttons are active-LOW
@@ -47,7 +52,7 @@ use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
 use watch_core::record::RecordState;
 use watch_core::settings::WatchSettings;
-use watch_core::settings_menu::{self, Menu, MenuAction, MENU_TIMEOUT_S};
+use watch_core::settings_menu::{self, Menu, MenuEdit, ValueDir, MENU_TIMEOUT_S};
 use watch_core::ui_frame::{pages_mask, record_state};
 
 use crate::run_flash::SharedStore;
@@ -132,14 +137,20 @@ impl NavState {
         self.menu_deadline = None;
     }
 
-    /// Move the menu cursor the direction the key pages — the same spatial
-    /// mapping as the run view and the grid.
-    fn menu_step(&mut self, key: PagingKey) {
+    /// Cursor up — BTN2, the mid-left §81 UP slot, physically above BTN3.
+    fn menu_up(&mut self) {
         if let Some(m) = self.menu.as_mut() {
-            match key {
-                PagingKey::Left => m.prev(),
-                PagingKey::Right => m.next(),
-            }
+            m.up();
+            info!("button: menu cursor -> {}", m.item());
+            state::SETTINGS_MENU.sender().send(Some(m.cursor()));
+            self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+        }
+    }
+
+    /// Cursor down — BTN3, the lower-left §81 DOWN slot.
+    fn menu_down(&mut self) {
+        if let Some(m) = self.menu.as_mut() {
+            m.down();
             info!("button: menu cursor -> {}", m.item());
             state::SETTINGS_MENU.sender().send(Some(m.cursor()));
             self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
@@ -147,11 +158,11 @@ impl NavState {
     }
 }
 
-/// Cycle the GNSS recording mode and persist the choice — one implementation
-/// for both routes to the same state (the idle BTN3 quick tap and the menu's
-/// item), so they cannot diverge.
-async fn cycle_gnss_mode(nav: &mut NavState, store: &'static SharedStore) {
-    nav.mode = nav.mode.next();
+/// Set the GNSS recording mode and persist the choice — one implementation
+/// for both routes to the same state (the idle BTN3 quick cycle and the
+/// menu's directional ladder), so they cannot diverge.
+async fn set_gnss_mode(nav: &mut NavState, store: &'static SharedStore, mode: GnssMode) {
+    nav.mode = mode;
     info!(
         "button: gnss mode -> {} (fix interval {=u32}s, ~{=u32}h)",
         nav.mode,
@@ -165,42 +176,43 @@ async fn cycle_gnss_mode(nav: &mut NavState, store: &'static SharedStore) {
     store.lock().await.persist_gnss_mode(nav.mode).await;
 }
 
-/// Activate (BTN1) the menu's cursor item. `hide_now` is the snapshot's
-/// current hide-empty value — the toggle flips what the runner just read.
-async fn menu_activate(nav: &mut NavState, hide_now: bool, store: &'static SharedStore) {
+/// An edit press (BTN5 = left / BTN1 = right) on the menu's cursor row.
+/// `hide_now` is the snapshot's current hide-empty value, so the pure
+/// `settings_menu::edit` resolves the press against exactly the state the
+/// runner just read — a clamped ladder end or an idempotent on/on comes back
+/// `Nothing` and only refreshes the timeout.
+async fn menu_edit(nav: &mut NavState, dir: ValueDir, hide_now: bool, store: &'static SharedStore) {
     let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
         return;
     };
-    match settings_menu::activate(item) {
-        MenuAction::CycleGnssMode => cycle_gnss_mode(nav, store).await,
-        MenuAction::ToggleHideEmpty => {
-            let hide = !hide_now;
+    match settings_menu::edit(item, dir, nav.mode, hide_now) {
+        MenuEdit::SetGnssMode(mode) => set_gnss_mode(nav, store, mode).await,
+        MenuEdit::SetHideEmpty(hide) => {
             info!("button: menu -> hide empty pages {}", hide);
             // The same channel a phone push rides, so the apply path and the
             // §351 persistence rule cannot diverge. try_send: a full queue
-            // only drops this toggle; the next press retries.
+            // only drops this edit; the next press retries.
             let s = WatchSettings {
                 hide_empty_pages: Some(hide),
                 ..Default::default()
             };
             if state::SETTINGS.try_send(s).is_err() {
-                warn!("button: settings queue full — hide-empty toggle dropped");
+                warn!("button: settings queue full — hide-empty edit dropped");
             }
         }
-        MenuAction::RequestQnhRezero => {
+        MenuEdit::RequestQnhRezero => {
             info!("button: menu -> qnh re-zero requested");
             let _ = state::QNH_REZERO_REQ.try_send(());
+            // The idle face's transient banner answers the request; the menu
+            // hands it the screen.
+            nav.close_menu("re-zero");
+            return;
         }
+        MenuEdit::Nothing => {}
     }
-    if settings_menu::closes_menu(item) {
-        // The idle face's transient banner answers the request; the menu
-        // hands it the screen.
-        nav.close_menu("re-zero");
-    } else {
-        // A value item stays open — the row re-rendering with the new value
-        // is the confirmation.
-        nav.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
-    }
+    // A value row stays open — the row re-rendering with the new value is
+    // the confirmation.
+    nav.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
 }
 
 fn key_label(key: PagingKey) -> &'static str {
@@ -250,7 +262,12 @@ async fn act_paging(
             state::PAGE_GRID.sender().send(Some(g.cursor()));
             nav.grid = Some(g);
         }
-        PagingAction::CycleGnssMode => cycle_gnss_mode(nav, store).await,
+        PagingAction::CycleGnssMode => {
+            // The quick path keeps its wrap-around cycle; the menu's ladder
+            // is clamped — both land in the same shared setter.
+            let next = nav.mode.next();
+            set_gnss_mode(nav, store, next).await;
+        }
         PagingAction::QnhRezero => {
             info!("button: BTN3 hold -> qnh re-zero requested");
             // try_send: a request already pending covers this press too.
@@ -383,15 +400,14 @@ pub async fn run(
                 let snap = record_rx.try_get();
                 let state = record_state(snap.as_ref());
                 if nav.menu.is_some() {
-                    // Menu modal: BTN1 activates, BTN2 and BTN5 both close —
-                    // every press swallowed, none reaches the recorder.
+                    // Menu modal: BTN2 (the UP slot) steps the cursor up,
+                    // BTN1/BTN5 are the right/left edit pair — every press
+                    // swallowed, none reaches the recorder.
+                    let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
                     match button {
-                        Button::Primary => {
-                            let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
-                            menu_activate(&mut nav, hide, store).await;
-                        }
-                        Button::Stop => nav.close_menu("btn2"),
-                        Button::Lap => nav.close_menu("btn5"),
+                        Button::Primary => menu_edit(&mut nav, ValueDir::Right, hide, store).await,
+                        Button::Stop => nav.menu_up(),
+                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, store).await,
                     }
                     continue;
                 }
@@ -421,10 +437,13 @@ pub async fn run(
         }
         interaction_tx.send(Instant::now().as_secs() as u32);
         if nav.menu.is_some() {
-            // Menu modal: the cursor steps on the press itself (three items
-            // need no hold tier), and the release is swallowed so no timing
-            // path runs underneath the modal.
-            nav.menu_step(key);
+            // Menu modal: BTN3 (the DOWN slot) steps the cursor down on the
+            // press itself, BTN4 (the BACK slot) exits — and the release is
+            // swallowed so no timing path runs underneath the modal.
+            match key {
+                PagingKey::Left => nav.menu_down(),
+                PagingKey::Right => nav.close_menu("btn4"),
+            }
             if pin.is_low() {
                 pin.wait_for_rising_edge().await;
             }
@@ -592,15 +611,19 @@ pub async fn run(
                 };
                 if falling {
                     if nav.menu.is_some() {
-                        // Menu modal: the cursor steps on the press itself
-                        // (mirroring the hardware task), unless a run started
-                        // under the menu — then the press closes it and falls
-                        // through to normal handling.
+                        // Menu modal: BTN3 (the DOWN slot) steps the cursor
+                        // down on the press itself, BTN4 (the BACK slot)
+                        // exits (mirroring the hardware task) — unless a run
+                        // started under the menu, in which case the press
+                        // closes it and falls through to normal handling.
                         if record_state(record_rx.try_get().as_ref()) != RecordState::Idle {
                             nav.close_menu("run started");
                         } else {
                             interaction_tx.send(Instant::now().as_secs() as u32);
-                            nav.menu_step(key);
+                            match key {
+                                PagingKey::Left => nav.menu_down(),
+                                PagingKey::Right => nav.close_menu("btn4"),
+                            }
                             pg_down_at[k] = Some(Instant::now());
                             pg_handled[k] = true;
                             continue;
@@ -687,15 +710,14 @@ pub async fn run(
                     // and let the press act on the surface that is really up.
                     nav.close_menu("run started");
                 } else {
-                    // Menu modal: BTN1 activates, BTN2 and BTN5 both close —
-                    // every press swallowed, none reaches the recorder.
+                    // Menu modal: BTN2 (the UP slot) steps the cursor up,
+                    // BTN1/BTN5 are the right/left edit pair — every press
+                    // swallowed, none reaches the recorder.
+                    let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
                     match button {
-                        Button::Primary => {
-                            let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
-                            menu_activate(&mut nav, hide, store).await;
-                        }
-                        Button::Stop => nav.close_menu("btn2"),
-                        Button::Lap => nav.close_menu("btn5"),
+                        Button::Primary => menu_edit(&mut nav, ValueDir::Right, hide, store).await,
+                        Button::Stop => nav.menu_up(),
+                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, store).await,
                     }
                     continue;
                 }

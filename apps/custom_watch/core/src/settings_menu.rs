@@ -1,20 +1,33 @@
 //! The idle-face settings menu — the on-watch home for every setting a runner
-//! can change without a phone (decisions §351).
+//! can change without a phone (decisions §351, key map revised same-day).
 //!
 //! Opened by a BTN5 tap on the idle face (the lap key is dead while idle, so
 //! the press gets the obvious meaning — the same dead-key repurposing as §290
-//! and §291). It is a modal like [`crate::page_grid`], and deliberately speaks
-//! the grid's exact dialect so nothing new has to be learned: BTN4/BTN3 move
-//! the cursor down/up, BTN1 activates (`B1 GO`), BTN2 exits (`B2 EXIT`), and
-//! the legend row is byte-identical to the grid's (pinned by a test). Every
-//! press inside it is swallowed — a menu press must never start, pause, or lap
-//! a run, and the menu only exists while the recorder is idle.
+//! and §291). Inside, every key is spatially true to the case:
+//!
+//! - **BTN2 / BTN3** (mid-left / lower-left — the §81 slots Garmin literally
+//!   names UP and DOWN, stacked vertically on the case) move the cursor up
+//!   and down the list.
+//! - **BTN5 / BTN1** (the upper-left / upper-right corners — a horizontal
+//!   pair) edit the selected row: left = off / decrease, right = on /
+//!   increase, and right also fires an action row. Directional, not a blind
+//!   toggle: pressing the side that matches the value you want is idempotent,
+//!   so a double-press can never overshoot.
+//! - **BTN4** (lower-right — the §81 BACK/LAP slot) exits, exactly where
+//!   every five-button watch puts BACK.
+//!
+//! This deliberately diverges from the page grid's key map (BTN3/BTN4 cursor,
+//! B1 GO, B2 EXIT): the grid's cursor walks the *horizontal* page ring, so
+//! its keys are the paging pair; a settings list is *vertical* with a value
+//! axis across each row, so its keys are the vertical pair plus the
+//! horizontal pair. Each modal is spatially true to what it shows. The one
+//! §337-class surprise — EXIT living on BTN4 here but BTN2 in the grid — is
+//! why the legend row names `B4 EXIT` (and the novel edit pair), while the
+//! self-revealing cursor keys stay unlabelled.
 //!
 //! The quick paths stay: idle BTN3 still cycles the GNSS mode blind and its
 //! hold still fires the QNH re-zero — the menu is the discoverable,
 //! read-the-value-first route to the same state, not a replacement press tax.
-//! Item activation is one press: an enum setting cycles in place, an action
-//! item fires and closes. Nothing here adds a press to any pre-§351 flow.
 
 use core::fmt::Write;
 
@@ -33,16 +46,19 @@ pub const MENU_TIMEOUT_S: u32 = 30;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum MenuItem {
-    /// Performance / Balanced / Expedition — the same cycle idle BTN3 taps
-    /// through, with the projected hours readable before committing.
+    /// The Performance ↔ Balanced ↔ Expedition ladder, edited directionally:
+    /// right = more projected hours, left = more fixes, clamped at the ends
+    /// (the idle BTN3 quick path keeps its wrap-around cycle).
     GnssMode,
-    /// The §284 hide-empty-pages filter, watch-editable: the one curation
-    /// lever that makes sense on the wrist (the full per-page mask stays a
-    /// phone surface — 33 checkboxes do not belong on four buttons).
+    /// The §284 hide-empty-pages filter, watch-editable: right = ON, left =
+    /// OFF. The one curation lever that makes sense on the wrist (the full
+    /// per-page mask stays a phone surface — 33 checkboxes do not belong on
+    /// five buttons).
     HideEmpty,
-    /// Fires the same request as the idle BTN3 hold and closes the menu; the
-    /// idle face's transient banner (`SET 1610M` / `NO GPS FIX` / `NO BARO`)
-    /// answers, exactly as it answers the hold.
+    /// An action row: right (BTN1) fires the same request as the idle BTN3
+    /// hold and closes the menu; the idle face's transient banner
+    /// (`SET 1610M` / `NO GPS FIX` / `NO BARO`) answers, exactly as it
+    /// answers the hold. Left does nothing — an action has no "off".
     QnhRezero,
 }
 
@@ -71,13 +87,13 @@ impl Menu {
         ITEMS[self.cursor as usize]
     }
 
-    /// Cursor down (BTN4 — the same key that pages right), wrapping.
-    pub fn next(&mut self) {
+    /// Cursor down (BTN3 — the lower-left DOWN slot), wrapping.
+    pub fn down(&mut self) {
         self.cursor = (self.cursor + 1) % MENU_ITEMS as u8;
     }
 
-    /// Cursor up (BTN3 — the same key that pages left), wrapping.
-    pub fn prev(&mut self) {
+    /// Cursor up (BTN2 — the mid-left UP slot), wrapping.
+    pub fn up(&mut self) {
         self.cursor = (self.cursor + MENU_ITEMS as u8 - 1) % MENU_ITEMS as u8;
     }
 }
@@ -88,39 +104,97 @@ impl Default for Menu {
     }
 }
 
-/// What activating (BTN1) the cursor item does. The menu itself owns no
-/// state beyond the cursor — the actions land on the same sinks the quick
-/// paths use, so the two routes cannot diverge.
+/// Which side of the horizontal edit pair was pressed: BTN5 = `Left`
+/// (off / decrease), BTN1 = `Right` (on / increase / fire).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum MenuAction {
-    CycleGnssMode,
-    ToggleHideEmpty,
-    RequestQnhRezero,
+pub enum ValueDir {
+    Left,
+    Right,
 }
 
-pub fn activate(item: MenuItem) -> MenuAction {
-    match item {
-        MenuItem::GnssMode => MenuAction::CycleGnssMode,
-        MenuItem::HideEmpty => MenuAction::ToggleHideEmpty,
-        MenuItem::QnhRezero => MenuAction::RequestQnhRezero,
+/// What an edit press asks for — computed against the *current* values, so
+/// the task applies exactly the state change the runner saw, or nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum MenuEdit {
+    /// Move the GNSS mode one rung along the ladder (already clamped —
+    /// never equal to the current mode).
+    SetGnssMode(GnssMode),
+    /// Set the hide-empty filter (already different from the current value).
+    SetHideEmpty(bool),
+    /// Fire the QNH re-zero and close the menu.
+    RequestQnhRezero,
+    /// The press asked for the state it is already in (a clamped ladder end,
+    /// an idempotent on/on) or has no meaning (left on an action row).
+    Nothing,
+}
+
+/// One rung right on the mode ladder — toward more projected hours; clamped.
+fn mode_right(mode: GnssMode) -> GnssMode {
+    match mode {
+        GnssMode::Performance => GnssMode::Balanced,
+        GnssMode::Balanced | GnssMode::Expedition => GnssMode::Expedition,
     }
 }
 
-/// Whether activating this item closes the menu. Value items stay open — the
-/// row re-renders with the new value, which is the confirmation; the action
-/// item hands the screen to the idle face, whose banner is its answer.
-pub fn closes_menu(item: MenuItem) -> bool {
-    matches!(item, MenuItem::QnhRezero)
+/// One rung left — toward more fixes; clamped.
+fn mode_left(mode: GnssMode) -> GnssMode {
+    match mode {
+        GnssMode::Expedition => GnssMode::Balanced,
+        GnssMode::Balanced | GnssMode::Performance => GnssMode::Performance,
+    }
 }
 
-/// The menu's text rows: the grid's legend verbatim, a title, then one row
-/// per item with the cursor marked `>` and the current value inline — a
-/// setting is read before it is changed, the same read-before-commit rule as
-/// the grid's name row (§337).
+/// Resolve an edit press on `item` against the current values. Pure and
+/// host-tested; both task variants dispatch on the result.
+pub fn edit(item: MenuItem, dir: ValueDir, mode: GnssMode, hide_empty: bool) -> MenuEdit {
+    match (item, dir) {
+        (MenuItem::GnssMode, ValueDir::Right) => {
+            let next = mode_right(mode);
+            if next == mode {
+                MenuEdit::Nothing
+            } else {
+                MenuEdit::SetGnssMode(next)
+            }
+        }
+        (MenuItem::GnssMode, ValueDir::Left) => {
+            let next = mode_left(mode);
+            if next == mode {
+                MenuEdit::Nothing
+            } else {
+                MenuEdit::SetGnssMode(next)
+            }
+        }
+        (MenuItem::HideEmpty, ValueDir::Right) => {
+            if hide_empty {
+                MenuEdit::Nothing
+            } else {
+                MenuEdit::SetHideEmpty(true)
+            }
+        }
+        (MenuItem::HideEmpty, ValueDir::Left) => {
+            if hide_empty {
+                MenuEdit::SetHideEmpty(false)
+            } else {
+                MenuEdit::Nothing
+            }
+        }
+        (MenuItem::QnhRezero, ValueDir::Right) => MenuEdit::RequestQnhRezero,
+        (MenuItem::QnhRezero, ValueDir::Left) => MenuEdit::Nothing,
+    }
+}
+
+/// The menu's text rows: a legend naming what §337 says must be named — the
+/// exit (which lives on BTN4 here, not the grid's BTN2) and the novel
+/// horizontal edit pair — then a title, then one row per item with the
+/// cursor marked `>` and the current value inline: a setting is read before
+/// it is changed. The cursor keys go unlabelled, exactly like the grid's:
+/// they move something visible and commit nothing, so they are discovered
+/// for free.
 pub fn menu_rows(cursor: u8, mode: GnssMode, hide_empty: bool) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
-    let _ = write!(rows[0], "{:<16}B1 GO", "B2 EXIT");
+    let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
     let _ = rows[1].push_str("SETTINGS");
     for (i, item) in ITEMS.iter().enumerate() {
         let row = MENU_TOP_ROW + i;
@@ -159,42 +233,128 @@ const MENU_TOP_ROW: usize = 3;
 mod tests {
     use super::*;
     use crate::face::COLS;
-    use crate::page::Page;
-    use crate::page_grid::grid_rows;
 
     #[test]
-    fn the_legend_is_byte_identical_to_the_grids() {
-        // One dialect for every modal on the device: B2 EXIT, B1 GO. A menu
-        // that relabels the exit or the confirm is a new grammar to learn.
-        let menu = menu_rows(0, GnssMode::Performance, true);
-        let grid = grid_rows(u64::MAX, Page::Dashboard);
-        assert_eq!(menu[0], grid[0]);
+    fn the_legend_names_the_exit_and_the_edit_pair() {
+        // §337: name what leaves the modal and what is not self-revealing.
+        // EXIT lives on BTN4 here (the grid trained BTN2), so it MUST be
+        // read, not discovered; the horizontal edit pair is the novel
+        // gesture. The cursor keys move a visible marker and stay unlabelled.
+        let rows = menu_rows(0, GnssMode::Performance, true);
+        assert_eq!(rows[0].as_str(), "B5- B1+       B4 EXIT");
+        assert_eq!(rows[0].len(), COLS, "the legend should fill the row");
     }
 
     #[test]
     fn the_cursor_wraps_both_ways() {
         let mut m = Menu::new();
         assert_eq!(m.item(), MenuItem::GnssMode);
-        m.next();
+        m.down();
         assert_eq!(m.item(), MenuItem::HideEmpty);
-        m.next();
+        m.down();
         assert_eq!(m.item(), MenuItem::QnhRezero);
-        m.next();
+        m.down();
         assert_eq!(m.item(), MenuItem::GnssMode);
-        m.prev();
+        m.up();
         assert_eq!(m.item(), MenuItem::QnhRezero);
     }
 
     #[test]
-    fn activation_maps_each_item_to_its_action() {
-        assert_eq!(activate(MenuItem::GnssMode), MenuAction::CycleGnssMode);
-        assert_eq!(activate(MenuItem::HideEmpty), MenuAction::ToggleHideEmpty);
-        assert_eq!(activate(MenuItem::QnhRezero), MenuAction::RequestQnhRezero);
-        // Value items stay open (the row re-rendering is the confirmation);
-        // only the action item hands the screen back.
-        assert!(!closes_menu(MenuItem::GnssMode));
-        assert!(!closes_menu(MenuItem::HideEmpty));
-        assert!(closes_menu(MenuItem::QnhRezero));
+    fn the_mode_ladder_clamps_at_both_ends() {
+        use GnssMode::*;
+        // Right walks toward Expedition (more hours) and stops there —
+        // "increase" semantics never wrap, or a press past the end would
+        // teleport to the opposite extreme.
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Right, Performance, true),
+            MenuEdit::SetGnssMode(Balanced)
+        );
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Right, Balanced, true),
+            MenuEdit::SetGnssMode(Expedition)
+        );
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Right, Expedition, true),
+            MenuEdit::Nothing
+        );
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Left, Expedition, true),
+            MenuEdit::SetGnssMode(Balanced)
+        );
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Left, Balanced, true),
+            MenuEdit::SetGnssMode(Performance)
+        );
+        assert_eq!(
+            edit(MenuItem::GnssMode, ValueDir::Left, Performance, true),
+            MenuEdit::Nothing
+        );
+    }
+
+    #[test]
+    fn hide_empty_is_directional_and_idempotent() {
+        // Right = ON, left = OFF — pressing the side that matches the value
+        // you want can never overshoot into the other state.
+        assert_eq!(
+            edit(
+                MenuItem::HideEmpty,
+                ValueDir::Right,
+                GnssMode::Performance,
+                false
+            ),
+            MenuEdit::SetHideEmpty(true)
+        );
+        assert_eq!(
+            edit(
+                MenuItem::HideEmpty,
+                ValueDir::Right,
+                GnssMode::Performance,
+                true
+            ),
+            MenuEdit::Nothing
+        );
+        assert_eq!(
+            edit(
+                MenuItem::HideEmpty,
+                ValueDir::Left,
+                GnssMode::Performance,
+                true
+            ),
+            MenuEdit::SetHideEmpty(false)
+        );
+        assert_eq!(
+            edit(
+                MenuItem::HideEmpty,
+                ValueDir::Left,
+                GnssMode::Performance,
+                false
+            ),
+            MenuEdit::Nothing
+        );
+    }
+
+    #[test]
+    fn the_action_row_fires_on_right_only() {
+        // Right is GO everywhere on this device; an action has no "off", so
+        // left is inert rather than a second trigger a fumbling hand hits.
+        assert_eq!(
+            edit(
+                MenuItem::QnhRezero,
+                ValueDir::Right,
+                GnssMode::Performance,
+                true
+            ),
+            MenuEdit::RequestQnhRezero
+        );
+        assert_eq!(
+            edit(
+                MenuItem::QnhRezero,
+                ValueDir::Left,
+                GnssMode::Performance,
+                true
+            ),
+            MenuEdit::Nothing
+        );
     }
 
     #[test]
@@ -221,7 +381,6 @@ mod tests {
     #[test]
     fn the_value_rows_read_the_current_state() {
         let rows = menu_rows(0, GnssMode::Performance, true);
-        assert_eq!(rows[0].as_str(), "B2 EXIT         B1 GO");
         assert_eq!(rows[1].as_str(), "SETTINGS");
         assert_eq!(rows[3].as_str(), "> GNSS MODE PERF 110H");
         assert_eq!(rows[4].as_str(), "  HIDE EMPTY ON");
