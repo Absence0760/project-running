@@ -6,14 +6,16 @@
 #
 # The ELF is the same thumbv7em build watch-flash.sh flashes, plus three sim
 # features: `sim-autostart` (start recording on the first fix so a run records
-# without a button), `sim-buttons` (poll the button pins so BTN1-4 presses
+# without a button), `sim-buttons` (poll the button pins so BTN1-5 presses
 # work — clicked on the --gui window's bezel, or injected via the watch.resc
-# btn1..btn4 monitor macros: BTN1 start/pause/resume, dismiss-home from FIN, BTN2 stop (press twice), BTN3 page / idle
-# GNSS mode, BTN4 lap / page back from FIN / home-diagnostics toggle while idle), and `sim-course` (the canned breadcrumb course the Nav
-# page follows; the bench_jog fixture leaves it on two legs so the off-course
-# alert fires each lap). What you can't simulate: BLE (nrf-softdevice needs
-# the real radio), power draw, GPS/HR analog behaviour. See
-# apps/custom_watch/local_testing.md § Simulating without a board.
+# btn1..btn5 monitor macros: BTN1 start/pause/resume + dismiss-home from FIN,
+# BTN2 stop (press twice), BTN3 page left / idle GNSS mode, BTN4 page right /
+# idle diagnostics toggle, BTN5 lap — decisions §350), and `sim-course` (the
+# canned breadcrumb course the Nav page follows; the bench_jog fixture leaves
+# it on two legs so the off-course alert fires each lap). What you can't
+# simulate: BLE (nrf-softdevice needs the real radio), power draw, GPS/HR
+# analog behaviour. See apps/custom_watch/local_testing.md § Simulating
+# without a board.
 #
 # Usage:
 #   bin/watch-sim.sh                      # build + simulate the default binary
@@ -77,7 +79,7 @@ command -v defmt-print >/dev/null || \
 # sim-autostart: start the run on the first fix so distance accrues without a
 # button (dropped by --no-autostart, which leaves the sim on the idle face —
 # BTN3 there cycles the GNSS mode — until a BTN1 press starts the run).
-# sim-buttons: poll the button pins so the watch.resc btn1/btn2/btn3 macros
+# sim-buttons: poll the button pins so the watch.resc btn1..btn5 macros
 # work (Renode's GPIO models the IN register but not the SENSE/DETECT edge
 # path the hardware button task waits on). sim-course: the canned breadcrumb
 # course the Nav page follows (the bench_jog fixture leaves it on two legs,
@@ -176,7 +178,7 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
-dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page / idle GNSS mode), \$btn3l (page back), \$btn3h (page grid), \$btn4 (lap / FIN page back / idle diag toggle)"
+dim "buttons: click BTN1-5 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause/dismiss; grid: GO), \$btn2 (stop x2; grid: cancel), \$btn3 (page left / idle GNSS mode), \$btn4 (page right / idle diag toggle), \$btn3h or \$btn4h (page grid; idle \$btn3h: QNH re-zero), \$btn5 (lap)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
