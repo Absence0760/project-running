@@ -7,7 +7,7 @@ mod support;
 
 use proptest::prelude::*;
 use support::check;
-use watch_core::ble_sync::{chunk_notify_len, encode_manifest, parse_course_chunk, MANIFEST_CAP};
+use watch_core::ble_sync::{chunk_notify_len, encode_manifest, parse_push_chunk, MANIFEST_CAP};
 use watch_core::flash_store::SLOT_COUNT;
 use watch_core::run_store::{
     ManifestEntry, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
@@ -83,7 +83,7 @@ fn a_course_write_either_parses_whole_or_is_dropped() {
     check(
         1024,
         prop::collection::vec(any::<u8>(), 0..=64),
-        |bytes| match parse_course_chunk(&bytes) {
+        |bytes| match parse_push_chunk(&bytes) {
             None => {
                 prop_assert!(bytes.len() < 2, "a {}-byte write was dropped", bytes.len());
                 Ok(())

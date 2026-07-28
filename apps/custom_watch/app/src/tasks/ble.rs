@@ -92,6 +92,7 @@ mod imp {
     use watch_core::link;
     use watch_core::run_store::ChunkRequest;
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
+    use watch_core::workout_store::{self, WorkoutAssembler, WorkoutPush, WORKOUT_CHUNK_CAP};
 
     use crate::run_flash::SharedStore;
     use crate::state;
@@ -161,6 +162,16 @@ mod imp {
             security = "justworks"
         )]
         course: Vec<u8, COURSE_CHUNK_CAP>,
+        /// Structured-workout push (the `WKT1` path). The phone WRITES chunked
+        /// `workout_store` frame bytes (the same `offset | payload` transport
+        /// as `course`); the watch reassembles, decodes the step list, and
+        /// publishes it to the record task via `state::WORKOUT`.
+        #[characteristic(
+            uuid = "d1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
+        workout: Vec<u8, WORKOUT_CHUNK_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -483,6 +494,7 @@ mod imp {
             // mutability (RefCell) keeps the GATT handler a plain `Fn`, like the
             // Cell/Signal above; the single-threaded executor makes it sound.
             let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
+            let workout_asm: RefCell<WorkoutAssembler> = RefCell::new(WorkoutAssembler::new());
 
             let gatt = gatt_server::run(&conn, server, |e| match e {
                 ServerEvent::Link(e) => match e {
@@ -520,7 +532,7 @@ mod imp {
                     LinkServiceEvent::CourseWrite(bytes) => {
                         // Feed the reassembler; on completion decode + publish
                         // the course.
-                        if let Some((offset, payload)) = ble_sync::parse_course_chunk(&bytes) {
+                        if let Some((offset, payload)) = ble_sync::parse_push_chunk(&bytes) {
                             let mut asm = course_asm.borrow_mut();
                             match asm.push(offset, payload) {
                                 CoursePush::Complete => match course_store::decode(asm.frame()) {
@@ -545,6 +557,33 @@ mod imp {
                             }
                         } else {
                             warn!("ble: short course chunk ({=usize} B)", bytes.len());
+                        }
+                    }
+                    LinkServiceEvent::WorkoutWrite(bytes) => {
+                        if let Some((offset, payload)) = ble_sync::parse_push_chunk(&bytes) {
+                            let mut asm = workout_asm.borrow_mut();
+                            match asm.push(offset, payload) {
+                                WorkoutPush::Complete => match workout_store::decode(asm.frame()) {
+                                    Some(steps) => {
+                                        info!(
+                                            "ble: workout push complete ({} steps)",
+                                            steps.len()
+                                        );
+                                        state::WORKOUT.sender().send(Some(steps));
+                                        asm.reset();
+                                    }
+                                    None => {
+                                        warn!("ble: workout frame failed to decode");
+                                        asm.reset();
+                                    }
+                                },
+                                WorkoutPush::More => {}
+                                WorkoutPush::Rejected => {
+                                    warn!("ble: bad workout chunk @ {=usize}", offset)
+                                }
+                            }
+                        } else {
+                            warn!("ble: short workout chunk ({=usize} B)", bytes.len());
                         }
                     }
                 },

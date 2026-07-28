@@ -67,12 +67,13 @@ pub fn chunk_notify_len(requested: u16, notify_cap: u16) -> u16 {
     requested.min(notify_cap)
 }
 
-/// Split one `course` write into its `offset(2, u16 LE) | payload` framing.
+/// Split one chunked-push write (the `course` and `workout` characteristics
+/// share this transport) into its `offset(2, u16 LE) | payload` framing.
 ///
 /// `None` when the write is too short to carry the offset header. Fail-closed:
 /// feeding a header-less write to the reassembler as offset 0 would silently
-/// overwrite the start of a course frame mid-push.
-pub fn parse_course_chunk(bytes: &[u8]) -> Option<(usize, &[u8])> {
+/// overwrite the start of a frame mid-push.
+pub fn parse_push_chunk(bytes: &[u8]) -> Option<(usize, &[u8])> {
     if bytes.len() < 2 {
         return None;
     }
@@ -292,23 +293,23 @@ mod tests {
     }
 
     #[test]
-    fn parse_course_chunk_rejects_a_header_less_write() {
-        assert_eq!(parse_course_chunk(&[]), None);
-        assert_eq!(parse_course_chunk(&[0x00]), None, "half an offset header");
+    fn parse_push_chunk_rejects_a_header_less_write() {
+        assert_eq!(parse_push_chunk(&[]), None);
+        assert_eq!(parse_push_chunk(&[0x00]), None, "half an offset header");
     }
 
     #[test]
-    fn parse_course_chunk_reads_a_little_endian_offset() {
+    fn parse_push_chunk_reads_a_little_endian_offset() {
         assert_eq!(
-            parse_course_chunk(&[0, 0, 1, 2, 3]),
+            parse_push_chunk(&[0, 0, 1, 2, 3]),
             Some((0, &[1u8, 2, 3][..]))
         );
         assert_eq!(
-            parse_course_chunk(&[0x34, 0x12, 9]),
+            parse_push_chunk(&[0x34, 0x12, 9]),
             Some((0x1234, &[9u8][..]))
         );
         assert_eq!(
-            parse_course_chunk(&[0xFF, 0xFF]),
+            parse_push_chunk(&[0xFF, 0xFF]),
             Some((0xFFFF, &[][..])),
             "the largest offset with an empty payload still parses"
         );
