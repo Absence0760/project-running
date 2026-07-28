@@ -14,6 +14,7 @@ Order numbers / vendor SKUs below are starting points — re-verify stock + curr
 | Maxim MAX86177 evaluation kit | Analog Devices `MAX86177EVSYS#` (verify current order number on the AD product page) | ~$130 | Optical HR AFE. Raw signal is fine for bench bring-up; the production HR algorithm needs licensing or in-house DSP work |
 | Bosch BMP390 breakout | Adafruit BMP390 "Precision Altimeter" (P/N 4816) | ~$15 | Barometric altimeter. Production target migrates to **Bosch BMP581** per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) (~85% lower current, capacitive vs piezoresistive) — BMP390 breakouts are cheap and well-supported, fine for tier-1 bench bring-up |
 | LiPo battery 500 mAh + JST-PH 2-pin | Adafruit 1578 | ~$10 | For runs off the dev-board |
+| Momentary tactile pushbutton (BTN5) | Generic 6mm through-hole, any breadboard assortment | ~$1 | The §350 grammar uses five buttons and the DK has four; BTN5 (manual lap) is an external momentary from **P0.02 to GND** on the header — the firmware's internal pull-up means no resistor. Unwired, the lap key is simply dead (idle-high), so the rest of the grammar works without it |
 | Breadboard + jumper wires + headers | Generic (Adafruit / SparkFun / Amazon) | ~$20 | Half-size breadboard, ~30× male-male + male-female jumpers, a strip of 0.1" male headers |
 
 ## Bench tools (~$320–$1020 depending on tier)
