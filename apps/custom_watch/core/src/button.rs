@@ -4,6 +4,14 @@
 //! edge detection and debounce. *Which* command a press should issue, given
 //! the run's current state, is this pure reducer — host-tested here, exactly
 //! like [`crate::record`] holds the state machine the record task drives.
+//!
+//! The five-slot grammar (decisions §350, within §81's 3+2 Fenix shape):
+//! the page ring renders horizontally (the top-edge position thumb), so the
+//! paging keys are spatially congruent with it — the lower-LEFT button pages
+//! left, the lower-RIGHT button pages right, both plain taps, and holding
+//! either past [`PAGE_HOLD_MS`] opens the page grid. BTN1 (upper-right)
+//! stays start/pause/resume/dismiss, BTN2 (mid-left) the guarded stop, and
+//! BTN5 (upper-left) is the manual lap.
 
 use crate::record::RecordState;
 
@@ -21,18 +29,17 @@ pub enum RecordCommand {
     Reset,
 }
 
-/// The physical buttons wired to recording control on the nRF52840 DK.
+/// The physical buttons wired to recording control.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Button {
-    /// BTN1 — a context-sensitive start / pause / resume toggle.
+    /// BTN1 (upper-right) — a context-sensitive start / pause / resume toggle.
     Primary,
-    /// BTN2 — stop.
+    /// BTN2 (mid-left) — stop.
     Stop,
-    /// BTN4 — manual lap, standing in for the Garmin Fenix layout's
-    /// lower-right Lap/Back button (decisions.md § 81). Once a run is
-    /// finished the lap is dead and the same key pages the review backward —
-    /// see [`btn4_action`].
+    /// BTN5 (upper-left) — manual lap. Its own key, like Polar's OK-marks-a-lap:
+    /// the paging pair below it must stay plain taps (decisions §350), so the
+    /// lap cannot share the lower-right slot the Fenix layout gives it.
     Lap,
 }
 
@@ -44,9 +51,8 @@ pub enum Button {
 /// face (the stored run was committed at stop, so the dismissal is view-only
 /// — without it `Finished` was a dead end that held the run view until
 /// reboot). BTN2 stops whenever a run is in progress and stays inert once
-/// finished. BTN4 closes the current lap whenever a run is in progress; once
-/// finished it issues no recorder command — its press belongs to the pages
-/// instead ([`btn4_action`]), exactly as BTN3 never reaches this reducer.
+/// finished. BTN5 closes the current lap whenever a run is in progress and is
+/// otherwise inert — the paging keys BTN3/BTN4 never reach this reducer.
 ///
 /// The state comes from the published [`crate::record::Snapshot`], which does
 /// not distinguish a manual pause from a speed-derived auto-pause — so a
@@ -65,139 +71,113 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
     }
 }
 
-/// What a BTN4 press does outside the grid, given the run state. While a run
-/// is in progress it is the manual lap. Once the run is finished a lap is
-/// meaningless, so the same key becomes a tap page-back: the post-run review
-/// pages both ways on taps (BTN3 forward, BTN4 back) instead of owing a
-/// BTN3 long-press for every leftward step — which also survives gloved or
-/// mouse-click presses that can't hold a threshold. While idle it toggles the
-/// home face against the diagnostics face (decisions §291) — every state
-/// gives the otherwise-dead key one obvious meaning, and none of them can
-/// reach the recorder outside a live run. The `Lap` arm must stay in lockstep
-/// with [`command_for`]'s — a state where this returns `Lap` is exactly a
-/// state where `command_for` issues `RecordCommand::Lap` (pinned by a test).
+/// How long a paging key (BTN3 / BTN4) was held: released before
+/// [`PAGE_HOLD_MS`] is a tap, anything longer is a hold. Two tiers only —
+/// the old middle tier (release-between-thresholds paged backward) died with
+/// §350, because backward paging became the BTN3 tap.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Btn4Action {
-    Lap,
-    PageBack,
-    ToggleDiagnostics,
+pub enum PageBtnPress {
+    Tap,
+    Hold,
 }
 
-pub fn btn4_action(state: RecordState) -> Option<Btn4Action> {
-    match state {
-        RecordState::Recording | RecordState::Paused => Some(Btn4Action::Lap),
-        RecordState::Finished => Some(Btn4Action::PageBack),
-        RecordState::Idle => Some(Btn4Action::ToggleDiagnostics),
-    }
-}
-
-/// How long BTN3 was held, classified by the app's button task: a tap
-/// released before the long-press threshold, a long press released between
-/// the two thresholds, or a hold carried past the grid threshold (which fires
-/// while still held — the page grid opening IS the feedback that the hold
-/// registered).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Btn3Press {
-    Short,
-    Long,
-    GridHold,
-}
-
-/// The BTN3 press-class thresholds, in milliseconds of hold. The app's button
-/// task owns the timing mechanics (hardware: nested selects; sim: level
-/// polling) but the boundaries live here, host-tested, so the two task
-/// variants and the tests can't drift.
+/// The tap / hold boundary for the two paging keys, in milliseconds.
 ///
-/// Both values are deliberately conventional rather than tuned. 500 ms is the
-/// long-press default of both phone platforms — Android's
+/// Deliberately conventional rather than tuned: 500 ms is the long-press
+/// default of both phone platforms — Android's
 /// `ViewConfiguration.DEFAULT_LONG_PRESS_TIMEOUT` and iOS's
 /// `UILongPressGestureRecognizer.minimumPressDuration` (0.5 s) — so a gloved
 /// thumb arrives already trained on it, and it is 25x the button task's 20 ms
-/// contact debounce, which is what keeps bounce from ever promoting a tap. The
-/// grid tier then sits a further full second on, three times the first
-/// threshold, so the gap between the tiers dwarfs the jitter a cold hand adds
-/// to a press duration.
-///
-/// What the pair could not offer was any way to *feel* where the boundary
-/// between them is — see [`BTN3_HOLD_BANNER`]. With the escalation window
-/// announced on screen the grid hold becomes a feedback-controlled gesture
-/// instead of an open-loop timed one, so the precision these numbers demand of
-/// the runner drops to "see the prompt, then decide"; that is the reason to
-/// keep them rather than guess at wider ones.
-pub const BTN3_LONG_PRESS_MS: u32 = 500;
-pub const BTN3_GRID_HOLD_MS: u32 = 1500;
-// The hardware task times the grid tier as a second select leg of
-// (GRID_HOLD - LONG_PRESS); reordering the constants would underflow it.
-const _: () = assert!(BTN3_GRID_HOLD_MS > BTN3_LONG_PRESS_MS);
+/// contact debounce, which is what keeps bounce from ever promoting a tap.
+/// The hold's action fires AT this threshold while the button is still down
+/// (the grid appearing / the re-zero banner IS the feedback), so the runner
+/// never times a release blind.
+pub const PAGE_HOLD_MS: u32 = 500;
 
-/// Classify a completed BTN3 hold by its duration — the release-path
+/// Classify a completed paging-key hold by its duration — the release-path
 /// classification the sim button task applies verbatim (the hardware task
-/// reproduces the same boundaries with select timers).
-pub fn classify_btn3_hold(held_ms: u32) -> Btn3Press {
-    if held_ms >= BTN3_GRID_HOLD_MS {
-        Btn3Press::GridHold
-    } else if held_ms >= BTN3_LONG_PRESS_MS {
-        Btn3Press::Long
+/// reproduces the same boundary with a select timer).
+pub fn classify_page_hold(held_ms: u32) -> PageBtnPress {
+    if held_ms >= PAGE_HOLD_MS {
+        PageBtnPress::Hold
     } else {
-        Btn3Press::Short
+        PageBtnPress::Tap
     }
 }
 
-/// What a BTN3 press does, given the run state and how long it was held. The
-/// run-view pages only exist once a run is under way (the idle status face
+/// What a BTN3 (lower-left) press does, given the run state and press tier.
+/// The run-view pages only exist once a run is under way (the idle status face
 /// ignores the page entirely — see [`crate::face`]), so while idle the
-/// otherwise-dead page button doubles as the GNSS-mode selector and its
-/// long-press as the manual QNH re-zero, keeping both surfaces inside
-/// decisions §81's five-button, no-chord budget. Any non-idle state
-/// (recording, paused, finished — all of which show a run view) keeps BTN3 on
-/// pages — short forward, long backward, and a hold past the long-press opens
-/// the [`crate::page_grid`] overview — which also freezes the GNSS mode (and
-/// parks the re-zero) for the duration of a run: mid-run the elevation
-/// complementary filter auto-corrects drift, so the manual snap is an idle
-/// (trailhead) affordance and a run's recording controls stay untouched. The
-/// idle face has no pages and therefore no grid: a hold there stays the
-/// re-zero, so the trailhead gesture is one motion regardless of duration.
+/// otherwise-dead paging key doubles as the GNSS-mode selector and its hold as
+/// the manual QNH re-zero, keeping both surfaces inside decisions §81's
+/// five-button, no-chord budget. Any non-idle state (recording, paused,
+/// finished — all of which show a run view) keeps BTN3 on pages: tap pages
+/// LEFT (the spatial mirror of BTN4's page-right tap), hold opens the
+/// [`crate::page_grid`] overview. Which also freezes the GNSS mode (and parks
+/// the re-zero) for the duration of a run: mid-run the elevation complementary
+/// filter auto-corrects drift, so the manual snap is an idle (trailhead)
+/// affordance and a run's recording controls stay untouched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Btn3Action {
-    PageNext,
     PagePrev,
     OpenGrid,
     CycleGnssMode,
     QnhRezero,
 }
 
-pub fn btn3_action(state: RecordState, press: Btn3Press) -> Btn3Action {
+pub fn btn3_action(state: RecordState, press: PageBtnPress) -> Btn3Action {
     match (state, press) {
-        (RecordState::Idle, Btn3Press::Short) => Btn3Action::CycleGnssMode,
-        (RecordState::Idle, _) => Btn3Action::QnhRezero,
-        (_, Btn3Press::Short) => Btn3Action::PageNext,
-        (_, Btn3Press::Long) => Btn3Action::PagePrev,
-        (_, Btn3Press::GridHold) => Btn3Action::OpenGrid,
+        (RecordState::Idle, PageBtnPress::Tap) => Btn3Action::CycleGnssMode,
+        (RecordState::Idle, PageBtnPress::Hold) => Btn3Action::QnhRezero,
+        (_, PageBtnPress::Tap) => Btn3Action::PagePrev,
+        (_, PageBtnPress::Hold) => Btn3Action::OpenGrid,
     }
 }
 
-/// What a non-BTN3 press does while the page grid is open: BTN4 confirms the
-/// jump, BTN1 drives the cursor backward (tap = one cell, hold = one row up —
-/// the symmetric mirror of BTN3, Garmin's up/down idiom), BTN2 cancels. Every
-/// one of them is swallowed — a press inside a navigation modal must never
-/// reach the recorder, so the picker can't pause, stop-arm, or lap a run by
-/// accident.
+/// What a BTN4 (lower-right) press does — the spatial mirror of
+/// [`btn3_action`]. In every run view a tap pages RIGHT and a hold opens the
+/// same page grid (either paging key reaches it, so whichever hand is free
+/// works). While idle it toggles the home face against the diagnostics face
+/// (decisions §291) whatever the duration — the idle face has no pages, and
+/// an idle gesture must never change meaning mid-press.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Btn4Action {
+    PageNext,
+    OpenGrid,
+    ToggleDiagnostics,
+}
+
+pub fn btn4_action(state: RecordState, press: PageBtnPress) -> Btn4Action {
+    match (state, press) {
+        (RecordState::Idle, _) => Btn4Action::ToggleDiagnostics,
+        (_, PageBtnPress::Tap) => Btn4Action::PageNext,
+        (_, PageBtnPress::Hold) => Btn4Action::OpenGrid,
+    }
+}
+
+/// What a non-paging press does while the page grid is open: BTN1 confirms
+/// the jump — the START-confirms idiom every 5-button watch trains (Garmin,
+/// Polar, Suunto) — BTN2 cancels, and BTN5 is swallowed whole. Every press
+/// inside a navigation modal must never reach the recorder, so the picker
+/// can't pause, stop-arm, or lap a run by accident; the cursor itself belongs
+/// to the paging keys (BTN3 back / BTN4 forward, the same directions they
+/// page).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GridPress {
     Select,
     Cancel,
-    CursorBack,
+    Swallow,
 }
 
 pub fn grid_press(button: Button) -> GridPress {
     match button {
-        Button::Lap => GridPress::Select,
-        Button::Primary => GridPress::CursorBack,
+        Button::Primary => GridPress::Select,
         Button::Stop => GridPress::Cancel,
+        Button::Lap => GridPress::Swallow,
     }
 }
 
@@ -217,28 +197,6 @@ pub const STOP_ARMED_BANNER: &str = "STOP? BTN2";
 /// the prompt can never outlive (or undercut) the press that would confirm.
 pub fn stop_arm_pending(armed_at_s: u32, now_s: u32) -> bool {
     now_s.saturating_sub(armed_at_s) <= STOP_CONFIRM_WINDOW_S
-}
-
-/// The 2x banner shown while a BTN3 hold sits *between* the two press tiers —
-/// past [`BTN3_LONG_PRESS_MS`], so releasing now is the page back, and still one
-/// continued hold from [`BTN3_GRID_HOLD_MS`] and the page grid.
-///
-/// Same `<outcome>? <how>` grammar as [`STOP_ARMED_BANNER`], and for the same
-/// reason: a timed boundary a cold, gloved hand cannot feel is indistinguishable
-/// from a dead button, and a runner who over-holds learns it only once the grid
-/// modal has already taken pause off BTN1 and stop off BTN2. It names the *next*
-/// tier rather than the current one because that is the half the runner can still
-/// act on — the tier they have already earned is what letting go gives them.
-pub const BTN3_HOLD_BANNER: &str = "GRID? HOLD";
-
-/// Whether a BTN3 hold past [`BTN3_LONG_PRESS_MS`] still has a tier to escalate
-/// into, i.e. whether [`BTN3_HOLD_BANNER`] has anything true to say. Derived from
-/// [`btn3_action`] rather than from the state directly, so the prompt can never
-/// advertise a grid on a surface that has none: an idle hold is duration-stable
-/// (any length is the QNH re-zero, decisions §290), and inside the grid the
-/// cursor jumping a row under the thumb is already its own feedback.
-pub fn btn3_hold_prompt(state: RecordState, grid_open: bool) -> bool {
-    !grid_open && btn3_action(state, Btn3Press::GridHold) == Btn3Action::OpenGrid
 }
 
 /// The outcome of feeding a BTN2 press to the [`StopGuard`].
@@ -355,110 +313,82 @@ mod tests {
     }
 
     #[test]
-    fn btn4_is_lap_in_a_run_page_back_finished_and_diag_toggle_idle() {
-        assert_eq!(btn4_action(RecordState::Recording), Some(Btn4Action::Lap));
-        assert_eq!(btn4_action(RecordState::Paused), Some(Btn4Action::Lap));
-        assert_eq!(
-            btn4_action(RecordState::Finished),
-            Some(Btn4Action::PageBack)
-        );
-        assert_eq!(
-            btn4_action(RecordState::Idle),
-            Some(Btn4Action::ToggleDiagnostics)
-        );
-        // Lockstep with the recorder-command reducer: BTN4 laps exactly where
-        // command_for issues the lap, and the view/page actions issue no
-        // recorder command at all.
+    fn the_paging_taps_mirror_spatially_in_every_run_view() {
+        // The whole point of §350: in any state that shows pages, the
+        // lower-left key pages left and the lower-right key pages right, both
+        // on a plain tap — no state may bend either tap to anything else.
         for state in [
-            RecordState::Idle,
             RecordState::Recording,
             RecordState::Paused,
             RecordState::Finished,
         ] {
             assert_eq!(
-                btn4_action(state) == Some(Btn4Action::Lap),
-                command_for(Button::Lap, state) == Some(RecordCommand::Lap)
+                btn3_action(state, PageBtnPress::Tap),
+                Btn3Action::PagePrev,
+                "{state:?}"
             );
-            if btn4_action(state) != Some(Btn4Action::Lap) {
-                assert_eq!(command_for(Button::Lap, state), None);
-            }
+            assert_eq!(
+                btn4_action(state, PageBtnPress::Tap),
+                Btn4Action::PageNext,
+                "{state:?}"
+            );
         }
     }
 
     #[test]
-    fn btn3_cycles_gnss_mode_only_while_idle() {
+    fn either_paging_key_held_opens_the_grid_in_every_run_view() {
+        for state in [
+            RecordState::Recording,
+            RecordState::Paused,
+            RecordState::Finished,
+        ] {
+            assert_eq!(
+                btn3_action(state, PageBtnPress::Hold),
+                Btn3Action::OpenGrid,
+                "{state:?}"
+            );
+            assert_eq!(
+                btn4_action(state, PageBtnPress::Hold),
+                Btn4Action::OpenGrid,
+                "{state:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn btn3_cycles_gnss_mode_and_rezeroes_only_while_idle() {
         assert_eq!(
-            btn3_action(RecordState::Idle, Btn3Press::Short),
+            btn3_action(RecordState::Idle, PageBtnPress::Tap),
             Btn3Action::CycleGnssMode
         );
-        // Every run-view state keeps BTN3 on pages — a mid-run (or post-run)
-        // press must never silently change the GNSS mode.
+        // A mid-run hold must never re-zero the altitude reference out from
+        // under a recording, and a mid-run (or post-run) tap must never
+        // silently change the GNSS mode.
         assert_eq!(
-            btn3_action(RecordState::Recording, Btn3Press::Short),
-            Btn3Action::PageNext
-        );
-        assert_eq!(
-            btn3_action(RecordState::Paused, Btn3Press::Short),
-            Btn3Action::PageNext
-        );
-        assert_eq!(
-            btn3_action(RecordState::Finished, Btn3Press::Short),
-            Btn3Action::PageNext
-        );
-    }
-
-    #[test]
-    fn btn3_long_press_is_rezero_while_idle_and_page_back_in_a_run() {
-        assert_eq!(
-            btn3_action(RecordState::Idle, Btn3Press::Long),
+            btn3_action(RecordState::Idle, PageBtnPress::Hold),
             Btn3Action::QnhRezero
         );
-        // Every run-view state keeps the long-press on the reverse page walk —
-        // a mid-run hold must never re-zero the altitude reference out from
-        // under a recording. §286's safety contract stands: Back-to-start
-        // stays exactly one long-press from home.
+    }
+
+    #[test]
+    fn btn4_toggles_diagnostics_while_idle_whatever_the_duration() {
+        // The idle face has no pages and no grid; an idle gesture must never
+        // change meaning mid-press, so both tiers land on the same toggle.
         assert_eq!(
-            btn3_action(RecordState::Recording, Btn3Press::Long),
-            Btn3Action::PagePrev
+            btn4_action(RecordState::Idle, PageBtnPress::Tap),
+            Btn4Action::ToggleDiagnostics
         );
         assert_eq!(
-            btn3_action(RecordState::Paused, Btn3Press::Long),
-            Btn3Action::PagePrev
-        );
-        assert_eq!(
-            btn3_action(RecordState::Finished, Btn3Press::Long),
-            Btn3Action::PagePrev
+            btn4_action(RecordState::Idle, PageBtnPress::Hold),
+            Btn4Action::ToggleDiagnostics
         );
     }
 
     #[test]
-    fn btn3_grid_hold_opens_the_grid_in_a_run_and_stays_rezero_while_idle() {
-        // The idle face has no pages, so a hold of any length stays the
-        // trailhead re-zero — duration must never change what an idle hold
-        // does mid-gesture.
-        assert_eq!(
-            btn3_action(RecordState::Idle, Btn3Press::GridHold),
-            Btn3Action::QnhRezero
-        );
-        assert_eq!(
-            btn3_action(RecordState::Recording, Btn3Press::GridHold),
-            Btn3Action::OpenGrid
-        );
-        assert_eq!(
-            btn3_action(RecordState::Paused, Btn3Press::GridHold),
-            Btn3Action::OpenGrid
-        );
-        assert_eq!(
-            btn3_action(RecordState::Finished, Btn3Press::GridHold),
-            Btn3Action::OpenGrid
-        );
-    }
-
-    #[test]
-    fn grid_swallows_every_button_select_back_and_cancel() {
-        assert_eq!(grid_press(Button::Lap), GridPress::Select);
-        assert_eq!(grid_press(Button::Primary), GridPress::CursorBack);
+    fn grid_swallows_every_button_select_cancel_and_lap() {
+        assert_eq!(grid_press(Button::Primary), GridPress::Select);
         assert_eq!(grid_press(Button::Stop), GridPress::Cancel);
+        assert_eq!(grid_press(Button::Lap), GridPress::Swallow);
     }
 
     #[test]
@@ -474,58 +404,20 @@ mod tests {
     }
 
     #[test]
-    fn the_hold_prompt_shows_exactly_where_a_hold_has_a_third_tier() {
-        use crate::input_flow::{btn3_after_long_press, Btn3Stage};
-
-        for state in [
-            RecordState::Idle,
-            RecordState::Recording,
-            RecordState::Paused,
-            RecordState::Finished,
-        ] {
-            // The prompt promises an escalation, so it must show exactly where
-            // the task actually keeps timing towards the grid — otherwise it
-            // either lies to an idle runner or leaves a run view silent.
-            assert_eq!(
-                btn3_hold_prompt(state, false),
-                btn3_after_long_press(state, true) == Btn3Stage::AwaitGridHold,
-                "{state:?}"
-            );
-            // Inside the grid the cursor is the feedback; the prompt stands down
-            // whatever the state.
-            assert!(!btn3_hold_prompt(state, true), "{state:?}");
-        }
-        assert!(!btn3_hold_prompt(RecordState::Idle, false));
-        assert!(btn3_hold_prompt(RecordState::Recording, false));
-    }
-
-    #[test]
-    fn the_hold_banner_fits_the_hero_band() {
-        // 2x glyphs are two cells wide; the banner must fit the 21-cell grid,
-        // the same budget STOP_ARMED_BANNER is held to.
-        assert!(BTN3_HOLD_BANNER.chars().count() * 2 <= crate::face::COLS);
-    }
-
-    #[test]
-    fn the_hold_tiers_stay_far_apart_enough_to_aim_at_with_a_gloved_hand() {
+    fn the_hold_threshold_is_the_platform_long_press_default() {
         // Pinned so a future change has to argue with the doc comment above:
         // 500 ms is the platform long-press default (Android
-        // ViewConfiguration / iOS UILongPressGestureRecognizer), and the
-        // escalation window is a further 2x that — the runner reacts to the
-        // on-screen prompt inside it rather than timing the hold blind.
-        assert_eq!(BTN3_LONG_PRESS_MS, 500);
-        assert_eq!(BTN3_GRID_HOLD_MS, 3 * BTN3_LONG_PRESS_MS);
-        assert!(BTN3_GRID_HOLD_MS - BTN3_LONG_PRESS_MS >= BTN3_LONG_PRESS_MS);
+        // ViewConfiguration / iOS UILongPressGestureRecognizer), 25x the
+        // 20 ms contact debounce.
+        assert_eq!(PAGE_HOLD_MS, 500);
     }
 
     #[test]
-    fn hold_classification_boundaries_are_inclusive_at_each_threshold() {
-        assert_eq!(classify_btn3_hold(0), Btn3Press::Short);
-        assert_eq!(classify_btn3_hold(BTN3_LONG_PRESS_MS - 1), Btn3Press::Short);
-        assert_eq!(classify_btn3_hold(BTN3_LONG_PRESS_MS), Btn3Press::Long);
-        assert_eq!(classify_btn3_hold(BTN3_GRID_HOLD_MS - 1), Btn3Press::Long);
-        assert_eq!(classify_btn3_hold(BTN3_GRID_HOLD_MS), Btn3Press::GridHold);
-        assert_eq!(classify_btn3_hold(u32::MAX), Btn3Press::GridHold);
+    fn hold_classification_is_inclusive_at_the_threshold() {
+        assert_eq!(classify_page_hold(0), PageBtnPress::Tap);
+        assert_eq!(classify_page_hold(PAGE_HOLD_MS - 1), PageBtnPress::Tap);
+        assert_eq!(classify_page_hold(PAGE_HOLD_MS), PageBtnPress::Hold);
+        assert_eq!(classify_page_hold(u32::MAX), PageBtnPress::Hold);
     }
 
     #[test]

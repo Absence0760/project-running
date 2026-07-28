@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -144,7 +144,6 @@ pub async fn screen_task(
     let mut pending_runs_rx = unwrap!(state::PENDING_RUNS.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
-    let mut btn3_hold_rx = unwrap!(state::BTN3_HOLD.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
@@ -165,10 +164,6 @@ pub async fn screen_task(
     let mut alert: Option<Alert> = None;
     let mut rezero: Option<(RezeroStatus, u32)> = None;
     let mut stop_armed: Option<u32> = None;
-    // Whether BTN3 is being held between its two press tiers, published by the
-    // button task for the duration of the hold and nothing else — it has no TTL,
-    // so it never enters the tick decision below.
-    let mut btn3_hold = false;
     // No published offset yet = the home clock stays UTC (and says so).
     let mut tz_offset_min: Option<i16> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
@@ -248,9 +243,6 @@ pub async fn screen_task(
         if let Some(v) = stop_armed_rx.try_changed() {
             stop_armed = v;
         }
-        if let Some(v) = btn3_hold_rx.try_changed() {
-            btn3_hold = v;
-        }
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
         }
@@ -299,17 +291,6 @@ pub async fn screen_task(
                 .map(elevation::rezero_banner);
         let stop_pending =
             ui_frame::stop_pending(face::run_view(rec.as_ref()), stop_armed, uptime_s);
-        // The mid-hold grid prompt, re-gated here on this task's own view of the
-        // state: the published flag says a hold is between the tiers, and only
-        // this side knows whether the surface under it still has a grid to
-        // escalate into by the time the frame composes.
-        let hold_prompt = btn3_hold
-            && button::btn3_hold_prompt(ui_frame::record_state(rec.as_ref()), grid.is_some());
-        // `hero_band`'s `stop_pending` input is really "a two-row banner is about
-        // to cover the band", which is what suppresses the three-row numeral hero
-        // whose bottom third would otherwise peek out below it. Both banners span
-        // the same two rows, so both owe it.
-        let band_covered = stop_pending || hold_prompt;
         // The pages whose body spares row 2 headline their number in the 32x48 +
         // 16x32 numeral faces over rows 0-2, with the label and state tag on row
         // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
@@ -321,7 +302,7 @@ pub async fn screen_task(
             hero: hero.is_some(),
             numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
             fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
-            stop_pending: band_covered,
+            stop_pending,
             page,
         });
         // Persist the fuel reminder past its transient banner: latch the standing
@@ -492,22 +473,10 @@ pub async fn screen_task(
                 widgets::draw_trackback_overlay(&mut fb, view, uptime_s);
             }
         }
-        // The mid-hold grid prompt: the direct answer to a BTN3 hold, so like the
-        // armed stop it outranks an alert banner for the ~1 s it shows (a runner
-        // navigating during a reminder would otherwise get no tier feedback at
-        // all, which is the fried-hour-60 case this exists for). The hero band is
-        // the least load-bearing thing on screen mid-navigation — nobody reads
-        // elapsed time while thumbing through pages — and the alert's TTL
-        // outlives the hold, so it re-asserts on release exactly as it does after
-        // the grid closes.
-        if hold_prompt {
-            fb.draw_banner_2x(0, button::BTN3_HOLD_BANNER);
-        }
         // The armed-stop prompt: the direct answer to a BTN2 press, so for its
-        // 4 s confirm window it outranks an alert banner on the hero band. Drawn
-        // after the hold prompt because a terminal action's confirm outranks a
-        // navigation hint. The grid (drawn after) still wins over both — BTN2
-        // inside the grid cancels and disarms, never arms.
+        // 4 s confirm window it outranks an alert banner on the hero band. The
+        // grid (drawn after) still wins over it — BTN2 inside the grid cancels
+        // and disarms, never arms.
         if stop_pending {
             fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
         }
@@ -600,10 +569,7 @@ pub async fn screen_task(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
                         pending_runs_rx.changed(),
-                        // A registered waker, not a timer: at rest this arm costs
-                        // nothing and only the button task's two sends per hold
-                        // ever resolve it.
-                        select(btn3_hold_rx.changed(), Timer::after(tick)),
+                        Timer::after(tick),
                     ),
                 ),
             ),
@@ -629,12 +595,7 @@ pub async fn screen_task(
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::First(v))))) => {
-                btn3_hold = v
-            }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::Second(
-                (),
-            ))))) => {}
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(())))) => {}
         }
     }
 }

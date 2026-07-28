@@ -175,17 +175,19 @@ fn windowed_row(i: usize, origin: usize) -> Option<usize> {
 /// The body shows [`GRID_CAPACITY`] cells; a wider enabled set scrolls in whole
 /// rows around `cursor` so the cursor's row is always on screen.
 ///
-/// Row 0 names BTN2 and BTN4 — the two buttons whose in-grid meaning is not
-/// self-revealing, because pressing them leaves the modal. BTN1/BTN3 are
-/// deliberately unlabelled: a press moves the visible cursor one cell and
-/// commits nothing, so the runner learns them for free. BTN2 is the one whose
-/// remap is a *safety* surprise — outside the grid it arms the stop, in here it
-/// cancels, and a runner who mashes it cannot tell from the closing grid
-/// whether the stop armed (it did not). `B2 EXIT` names the way back to where
-/// BTN2 stops, and the run view's own `STOP? BTN2` banner takes it from there.
+/// Row 0 names BTN2 and BTN1 — the two buttons whose in-grid meaning is not
+/// self-revealing, because pressing them leaves the modal. BTN3/BTN4 are
+/// deliberately unlabelled: a press moves the visible cursor one cell in the
+/// same direction it pages and commits nothing, so the runner learns them for
+/// free. BTN2 is the one whose remap is a *safety* surprise — outside the grid
+/// it arms the stop, in here it cancels, and a runner who mashes it cannot
+/// tell from the closing grid whether the stop armed (it did not). `B2 EXIT`
+/// names the way back to where BTN2 stops, and the run view's own `STOP? BTN2`
+/// banner takes it from there. `B1 GO` is the START-confirms idiom every
+/// five-button watch trains (§350).
 pub fn grid_rows(mask: u64, cursor: Page) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
-    let _ = write!(rows[0], "{:<16}B4 GO", "B2 EXIT");
+    let _ = write!(rows[0], "{:<16}B1 GO", "B2 EXIT");
     let _ = rows[GRID_NAME_ROW].push_str(cursor.name());
     let (index, count) = cursor_index(mask, cursor);
     let origin = window_origin_row(index, count);
@@ -279,7 +281,7 @@ mod tests {
     #[test]
     fn full_mask_seats_a_screenful_and_scrolls_to_the_rest() {
         let rows = grid_rows(u64::MAX, Page::Dashboard);
-        assert_eq!(rows[0].as_str(), "B2 EXIT         B4 GO");
+        assert_eq!(rows[0].as_str(), "B2 EXIT         B1 GO");
         // A cursor at the top shows the first GRID_CAPACITY cells, four per
         // body row, none truncated.
         for row in rows.iter().skip(GRID_TOP_ROW) {
@@ -368,7 +370,7 @@ mod tests {
     fn the_legend_names_the_two_buttons_that_leave_the_modal() {
         // BTN2's remap is the one that is not self-revealing: outside the grid
         // it arms the stop, in here it cancels, and the closing grid looks the
-        // same either way. BTN1/BTN3 move a visible cursor and commit nothing.
+        // same either way. BTN3/BTN4 move a visible cursor and commit nothing.
         let legend = grid_rows(u64::MAX, Page::Dashboard)[0].clone();
         assert!(legend.contains("B2"), "no stop-path hint: {legend:?}");
         assert!(
@@ -376,7 +378,7 @@ mod tests {
             "BTN2's meaning unnamed: {legend:?}"
         );
         assert!(
-            legend.contains("B4 GO"),
+            legend.contains("B1 GO"),
             "the jump hint was lost: {legend:?}"
         );
         assert_eq!(legend.len(), COLS, "the legend should fill the row exactly");

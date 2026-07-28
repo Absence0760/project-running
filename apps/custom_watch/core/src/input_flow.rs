@@ -1,15 +1,21 @@
 //! Button-task flow decisions — the pure half of the press handling that
 //! [`crate::button`]'s reducers don't already cover.
 //!
-//! The hardware task times a BTN3 hold with nested Embassy selects and the sim
-//! task polls pin levels, so the two arrive at a press class by different
-//! mechanics. Everything downstream of "how long was it held" — how a hold
-//! resolves tier by tier, what the grid cursor does, which page a press lands
-//! on, and where a dismissed run leaves the view — lives here so the two task
-//! variants cannot drift from each other or from the tests.
+//! The hardware task times a paging-key hold with an Embassy select and the
+//! sim task polls pin levels, so the two arrive at a press class by different
+//! mechanics. Everything downstream of "how long was it held" — what fires at
+//! the hold threshold, what the grid cursor does, and where a dismissed run
+//! leaves the view — lives here so the two task variants cannot drift from
+//! each other or from the tests.
+//!
+//! The §350 timing rule is one sentence: a paging key's Hold action fires AT
+//! [`crate::button::PAGE_HOLD_MS`] while the button is still down (the grid
+//! opening / the re-zero banner is its own feedback), a release before the
+//! threshold fires the Tap action, and a release after a threshold-fire is
+//! inert. One boundary, no middle tier, no on-screen countdown needed.
 
 use crate::button::{
-    btn3_action, Btn3Action, Btn3Press, RecordCommand, BTN3_GRID_HOLD_MS, BTN3_LONG_PRESS_MS,
+    btn3_action, btn4_action, Btn3Action, Btn4Action, PageBtnPress, RecordCommand,
 };
 use crate::face::IdleView;
 use crate::page::Page;
@@ -34,73 +40,71 @@ pub fn edge(was_pressed: bool, now_pressed: bool) -> Option<Edge> {
     }
 }
 
-/// The second timing leg the hardware task waits out after the long-press
-/// threshold has already elapsed.
-pub const BTN3_GRID_LEG_MS: u32 = BTN3_GRID_HOLD_MS - BTN3_LONG_PRESS_MS;
-
-/// Where a BTN3 hold stands once the long-press threshold has elapsed.
+/// Which paging key a press arrived on. The two are spatial mirrors: Left is
+/// the lower-left BTN3 (pages left), Right the lower-right BTN4 (pages right).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Btn3Stage {
-    Resolved(Btn3Press),
-    /// Still held on a surface that has a third tier — keep timing towards the
-    /// grid threshold.
-    AwaitGridHold,
+pub enum PagingKey {
+    Left,
+    Right,
 }
 
-/// Classify a BTN3 hold at the long-press threshold. The idle face has only two
-/// tiers (a hold of any length is the QNH re-zero), so it resolves here
-/// regardless of the pin; a run view has three, so a still-held button carries
-/// on towards the grid.
-///
-/// `still_held` is the pin level read after the threshold timer won: the timer
-/// arm drops the losing edge future, so a release landing in the re-arm gap
-/// would otherwise go unseen and stretch the classification a whole tier.
-pub fn btn3_after_long_press(state: RecordState, still_held: bool) -> Btn3Stage {
-    if state == RecordState::Idle || !still_held {
-        Btn3Stage::Resolved(Btn3Press::Long)
-    } else {
-        Btn3Stage::AwaitGridHold
-    }
-}
-
-/// Classify a BTN3 hold at the grid threshold — the same lost-release level
-/// check as [`btn3_after_long_press`], one tier up.
-pub fn btn3_after_grid_hold(still_held: bool) -> Btn3Press {
-    if still_held {
-        Btn3Press::GridHold
-    } else {
-        Btn3Press::Long
-    }
-}
-
-/// A BTN3 action that fires while the button is still held — the press tier
-/// whose feedback IS the screen changing under the thumb.
+/// What a paging key does outside the grid, resolved from the shared reducers
+/// so the two task variants and the tests read one truth.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Btn3HoldFire {
-    GridRowDown,
+pub enum PagingAction {
+    PagePrev,
+    PageNext,
     OpenGrid,
+    CycleGnssMode,
+    QnhRezero,
+    ToggleDiagnostics,
 }
 
-/// What a BTN3 hold of `held_ms` fires without waiting for its release: inside
-/// the grid a long-press drops a whole row, and on a run view a full hold opens
-/// the grid. The idle face fires nothing mid-press — its hold stays the re-zero,
-/// resolved on release, so duration never changes an idle gesture mid-motion.
-pub fn btn3_hold_fire(grid_open: bool, state: RecordState, held_ms: u32) -> Option<Btn3HoldFire> {
-    if grid_open {
-        (held_ms >= BTN3_LONG_PRESS_MS).then_some(Btn3HoldFire::GridRowDown)
-    } else if held_ms >= BTN3_GRID_HOLD_MS
-        && btn3_action(state, Btn3Press::GridHold) == Btn3Action::OpenGrid
-    {
-        Some(Btn3HoldFire::OpenGrid)
-    } else {
-        None
+/// The action a `key` press of `press` tier takes in `state` — the one lookup
+/// both task variants dispatch on, whether the tier came from a select timer
+/// or a poll-measured duration.
+pub fn paging_action(key: PagingKey, state: RecordState, press: PageBtnPress) -> PagingAction {
+    match key {
+        PagingKey::Left => match btn3_action(state, press) {
+            Btn3Action::PagePrev => PagingAction::PagePrev,
+            Btn3Action::OpenGrid => PagingAction::OpenGrid,
+            Btn3Action::CycleGnssMode => PagingAction::CycleGnssMode,
+            Btn3Action::QnhRezero => PagingAction::QnhRezero,
+        },
+        PagingKey::Right => match btn4_action(state, press) {
+            Btn4Action::PageNext => PagingAction::PageNext,
+            Btn4Action::OpenGrid => PagingAction::OpenGrid,
+            Btn4Action::ToggleDiagnostics => PagingAction::ToggleDiagnostics,
+        },
     }
 }
 
-/// Which direction an in-grid press drives the cursor: BTN3 forward, BTN1 back
-/// (Garmin's up/down idiom).
+/// The page a paging action lands on, walking the filtered cycle
+/// (data-present ∩ curated) so a tap never lands on an empty glance. An
+/// action that isn't a page walk leaves the page alone.
+pub fn paged(page: Page, action: PagingAction, mask: u64) -> Page {
+    match action {
+        PagingAction::PageNext => page.next_in(mask),
+        PagingAction::PagePrev => page.prev_in(mask),
+        PagingAction::OpenGrid
+        | PagingAction::CycleGnssMode
+        | PagingAction::QnhRezero
+        | PagingAction::ToggleDiagnostics => page,
+    }
+}
+
+/// The cursor direction a paging key drives while the grid is open — the same
+/// directions the keys page, so the modal never inverts the spatial mapping.
+pub fn grid_cursor_key(key: PagingKey) -> GridCursorKey {
+    match key {
+        PagingKey::Left => GridCursorKey::Back,
+        PagingKey::Right => GridCursorKey::Forward,
+    }
+}
+
+/// Which direction an in-grid press drives the cursor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GridCursorKey {
@@ -120,8 +124,8 @@ pub enum GridCursorOp {
 
 /// A tap steps one cell, a hold jumps a whole grid row — the long jump — in
 /// whichever direction the key drives.
-pub fn grid_cursor_op(key: GridCursorKey, held_past_long: bool) -> GridCursorOp {
-    match (key, held_past_long) {
+pub fn grid_cursor_op(key: GridCursorKey, held_past_hold: bool) -> GridCursorOp {
+    match (key, held_past_hold) {
         (GridCursorKey::Forward, false) => GridCursorOp::Tap,
         (GridCursorKey::Forward, true) => GridCursorOp::RowDown,
         (GridCursorKey::Back, false) => GridCursorOp::Back,
@@ -137,17 +141,6 @@ impl GridCursorOp {
             GridCursorOp::Back => grid.back(mask),
             GridCursorOp::RowUp => grid.row_up(mask),
         }
-    }
-}
-
-/// The page a BTN3 press lands on, walking the filtered cycle (data-present and
-/// curated) so a press never lands on an empty glance. An action that isn't a
-/// page walk leaves the page alone.
-pub fn paged(page: Page, action: Btn3Action, mask: u64) -> Page {
-    match action {
-        Btn3Action::PageNext => page.next_in(mask),
-        Btn3Action::PagePrev => page.prev_in(mask),
-        Btn3Action::OpenGrid | Btn3Action::CycleGnssMode | Btn3Action::QnhRezero => page,
     }
 }
 
@@ -187,7 +180,7 @@ pub fn landing_after(cmd: RecordCommand) -> Option<ViewLanding> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::button::classify_btn3_hold;
+    use crate::button::{classify_page_hold, PAGE_HOLD_MS};
 
     #[test]
     fn edges_fire_once_per_transition() {
@@ -198,105 +191,64 @@ mod tests {
     }
 
     #[test]
-    fn an_idle_hold_resolves_at_the_long_threshold_whatever_the_pin_says() {
-        // Two tiers only: the trailhead re-zero is one motion regardless of how
-        // long it is held, so a still-held idle button must not start timing a
-        // third tier.
-        assert_eq!(
-            btn3_after_long_press(RecordState::Idle, true),
-            Btn3Stage::Resolved(Btn3Press::Long)
-        );
-        assert_eq!(
-            btn3_after_long_press(RecordState::Idle, false),
-            Btn3Stage::Resolved(Btn3Press::Long)
-        );
-    }
-
-    #[test]
-    fn a_run_view_hold_carries_on_to_the_grid_tier_only_while_held() {
+    fn the_paging_keys_mirror_in_every_run_view() {
         for state in [
             RecordState::Recording,
             RecordState::Paused,
             RecordState::Finished,
         ] {
-            assert_eq!(btn3_after_long_press(state, true), Btn3Stage::AwaitGridHold);
-            // A release lost in the re-arm gap is classified by the pin, not by
-            // the timer that won — otherwise it would stretch a page-back into
-            // a grid open.
             assert_eq!(
-                btn3_after_long_press(state, false),
-                Btn3Stage::Resolved(Btn3Press::Long)
+                paging_action(PagingKey::Left, state, PageBtnPress::Tap),
+                PagingAction::PagePrev
+            );
+            assert_eq!(
+                paging_action(PagingKey::Right, state, PageBtnPress::Tap),
+                PagingAction::PageNext
+            );
+            // Either key held opens the same grid.
+            assert_eq!(
+                paging_action(PagingKey::Left, state, PageBtnPress::Hold),
+                PagingAction::OpenGrid
+            );
+            assert_eq!(
+                paging_action(PagingKey::Right, state, PageBtnPress::Hold),
+                PagingAction::OpenGrid
             );
         }
     }
 
     #[test]
-    fn the_grid_tier_needs_the_button_still_down() {
-        assert_eq!(btn3_after_grid_hold(true), Btn3Press::GridHold);
-        assert_eq!(btn3_after_grid_hold(false), Btn3Press::Long);
-    }
-
-    #[test]
-    fn the_timed_tiers_agree_with_the_duration_classification() {
-        // The hardware task's select tiers and the sim task's duration
-        // classification must land on the same press class for the same hold.
-        for held_ms in [
-            0,
-            BTN3_LONG_PRESS_MS - 1,
-            BTN3_LONG_PRESS_MS,
-            BTN3_GRID_HOLD_MS - 1,
-            BTN3_GRID_HOLD_MS,
-            u32::MAX,
-        ] {
-            let by_duration = classify_btn3_hold(held_ms);
-            let timed = if held_ms < BTN3_LONG_PRESS_MS {
-                Btn3Press::Short
-            } else {
-                match btn3_after_long_press(RecordState::Recording, true) {
-                    Btn3Stage::Resolved(p) => p,
-                    Btn3Stage::AwaitGridHold => btn3_after_grid_hold(held_ms >= BTN3_GRID_HOLD_MS),
-                }
-            };
-            assert_eq!(timed, by_duration, "held {held_ms}ms");
-        }
-        assert_eq!(BTN3_GRID_LEG_MS, BTN3_GRID_HOLD_MS - BTN3_LONG_PRESS_MS);
-    }
-
-    #[test]
-    fn a_hold_fires_a_grid_row_inside_the_grid_and_the_grid_itself_on_a_run() {
+    fn idle_keeps_its_own_meanings_on_both_keys() {
         assert_eq!(
-            btn3_hold_fire(true, RecordState::Recording, BTN3_LONG_PRESS_MS),
-            Some(Btn3HoldFire::GridRowDown)
+            paging_action(PagingKey::Left, RecordState::Idle, PageBtnPress::Tap),
+            PagingAction::CycleGnssMode
         );
         assert_eq!(
-            btn3_hold_fire(true, RecordState::Recording, BTN3_LONG_PRESS_MS - 1),
-            None
+            paging_action(PagingKey::Left, RecordState::Idle, PageBtnPress::Hold),
+            PagingAction::QnhRezero
+        );
+        // Duration-stable: an idle BTN4 gesture is the diagnostics toggle
+        // whatever its length.
+        assert_eq!(
+            paging_action(PagingKey::Right, RecordState::Idle, PageBtnPress::Tap),
+            PagingAction::ToggleDiagnostics
         );
         assert_eq!(
-            btn3_hold_fire(false, RecordState::Recording, BTN3_GRID_HOLD_MS),
-            Some(Btn3HoldFire::OpenGrid)
-        );
-        assert_eq!(
-            btn3_hold_fire(false, RecordState::Recording, BTN3_GRID_HOLD_MS - 1),
-            None
+            paging_action(PagingKey::Right, RecordState::Idle, PageBtnPress::Hold),
+            PagingAction::ToggleDiagnostics
         );
     }
 
     #[test]
-    fn an_idle_hold_fires_nothing_mid_press() {
-        // The idle face has no pages and therefore no grid: its hold resolves on
-        // release as the re-zero.
-        assert_eq!(
-            btn3_hold_fire(false, RecordState::Idle, BTN3_GRID_HOLD_MS),
-            None
-        );
-        assert_eq!(btn3_hold_fire(false, RecordState::Idle, u32::MAX), None);
-        // A grid can't be open while idle, but if one somehow were, the cursor
-        // still belongs to the grid.
-        assert_eq!(
-            btn3_hold_fire(true, RecordState::Idle, BTN3_GRID_HOLD_MS),
-            Some(Btn3HoldFire::GridRowDown)
-        );
+    fn the_release_classification_matches_the_threshold() {
+        assert_eq!(classify_page_hold(PAGE_HOLD_MS - 1), PageBtnPress::Tap);
+        assert_eq!(classify_page_hold(PAGE_HOLD_MS), PageBtnPress::Hold);
+    }
+
+    #[test]
+    fn the_grid_cursor_moves_the_way_the_key_pages() {
+        assert_eq!(grid_cursor_key(PagingKey::Left), GridCursorKey::Back);
+        assert_eq!(grid_cursor_key(PagingKey::Right), GridCursorKey::Forward);
     }
 
     #[test]
@@ -340,12 +292,19 @@ mod tests {
     fn a_page_walk_follows_the_action_and_nothing_else_moves_the_page() {
         let mask = u64::MAX;
         let page = Page::default();
-        assert_eq!(paged(page, Btn3Action::PageNext, mask), page.next_in(mask));
-        assert_eq!(paged(page, Btn3Action::PagePrev, mask), page.prev_in(mask));
+        assert_eq!(
+            paged(page, PagingAction::PageNext, mask),
+            page.next_in(mask)
+        );
+        assert_eq!(
+            paged(page, PagingAction::PagePrev, mask),
+            page.prev_in(mask)
+        );
         for action in [
-            Btn3Action::OpenGrid,
-            Btn3Action::CycleGnssMode,
-            Btn3Action::QnhRezero,
+            PagingAction::OpenGrid,
+            PagingAction::CycleGnssMode,
+            PagingAction::QnhRezero,
+            PagingAction::ToggleDiagnostics,
         ] {
             assert_eq!(paged(page, action, mask), page);
         }
@@ -357,7 +316,7 @@ mod tests {
         let mut page = Page::default();
         let mut seen = 0usize;
         loop {
-            page = paged(page, Btn3Action::PageNext, mask);
+            page = paged(page, PagingAction::PageNext, mask);
             seen += 1;
             if page == Page::default() {
                 break;
@@ -366,7 +325,7 @@ mod tests {
         }
         // A full walk backward returns home in exactly as many presses.
         for _ in 0..seen {
-            page = paged(page, Btn3Action::PagePrev, mask);
+            page = paged(page, PagingAction::PagePrev, mask);
         }
         assert_eq!(page, Page::default());
     }
@@ -378,19 +337,19 @@ mod tests {
         let mask = Page::Dashboard.bit() | Page::Pace.bit();
         let mut page = Page::default();
         for _ in 0..8 {
-            page = paged(page, Btn3Action::PageNext, mask);
+            page = paged(page, PagingAction::PageNext, mask);
             assert!(page == Page::Dashboard || page == Page::Pace, "{page:?}");
         }
         for _ in 0..8 {
-            page = paged(page, Btn3Action::PagePrev, mask);
+            page = paged(page, PagingAction::PagePrev, mask);
             assert!(page == Page::Dashboard || page == Page::Pace, "{page:?}");
         }
     }
 
     #[test]
-    fn the_page_walk_direction_matches_the_press_that_produced_it() {
-        // The task derives the action from the press; the two must agree for
-        // every run-view state, or a long press would page the wrong way.
+    fn the_page_walk_direction_matches_the_key_that_produced_it() {
+        // A left-key tap must land on the previous page and a right-key tap on
+        // the next, in every run-view state — or the spatial mapping lies.
         let mask = u64::MAX;
         let page = Page::default();
         for state in [
@@ -399,12 +358,20 @@ mod tests {
             RecordState::Finished,
         ] {
             assert_eq!(
-                paged(page, btn3_action(state, Btn3Press::Short), mask),
-                page.next_in(mask)
+                paged(
+                    page,
+                    paging_action(PagingKey::Left, state, PageBtnPress::Tap),
+                    mask
+                ),
+                page.prev_in(mask)
             );
             assert_eq!(
-                paged(page, btn3_action(state, Btn3Press::Long), mask),
-                page.prev_in(mask)
+                paged(
+                    page,
+                    paging_action(PagingKey::Right, state, PageBtnPress::Tap),
+                    mask
+                ),
+                page.next_in(mask)
             );
         }
     }
