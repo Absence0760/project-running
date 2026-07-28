@@ -140,7 +140,7 @@ PAGE_INTENT_LINES = {
 PAGE_STEP_TIMEOUT = 30
 PAGE_PRESS_ATTEMPTS = 2
 # Enough presses for two-plus laps of the filtered cycle: an unsynced sim watch
-# carries ~12-16 of the 33 pages, and the full cycle is 33.
+# carries ~12-17 of the 34 pages, and the full cycle is 34.
 MAX_PAGE_PRESSES = 48
 
 # `record: alert <Kind>` on a raise, `record: alert cleared` when its TTL runs
@@ -813,7 +813,7 @@ def scenario_pages(sim):
     composed (the only page-change evidence available), the button task's line
     is cross-checked against it, then a panel dump says the panel is not blank.
     The cycle is `Snapshot::pages_mask` — data-present INTERSECT phone-curated —
-    so the walk length is a property of what the sim arms, not of the 33-variant
+    so the walk length is a property of what the sim arms, not of the 34-variant
     enum, and the walk is driven by the reported pages rather than by counting
     presses.
 
