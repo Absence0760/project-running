@@ -335,3 +335,4 @@ pub mod turn_cues;
 pub mod ui_frame;
 pub mod unfed;
 pub mod workout;
+pub mod workout_store;
