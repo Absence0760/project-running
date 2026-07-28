@@ -61,13 +61,19 @@ pub enum Unfed {
     LastAidPassed,
     /// A course was pushed, without per-point elevation.
     NoCourseElevation,
+    /// The sun does not set at this latitude today — there is no sunset to
+    /// count down to.
+    MidnightSun,
+    /// The sun does not rise at this latitude today — there is no sunrise to
+    /// count down to.
+    PolarNight,
 }
 
 impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 9] = [
+    pub const ALL: [Unfed; 11] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
         Unfed::AwaitingFix,
@@ -77,6 +83,8 @@ impl Unfed {
         Unfed::NoCutoffAhead,
         Unfed::LastAidPassed,
         Unfed::NoCourseElevation,
+        Unfed::MidnightSun,
+        Unfed::PolarNight,
     ];
 
     /// What the runner can do about it.
@@ -88,7 +96,9 @@ impl Unfed {
             Unfed::NoRaceBand
             | Unfed::NoCutoffAhead
             | Unfed::LastAidPassed
-            | Unfed::NoCourseElevation => UnfedClass::Settled,
+            | Unfed::NoCourseElevation
+            | Unfed::MidnightSun
+            | Unfed::PolarNight => UnfedClass::Settled,
         }
     }
 
@@ -105,6 +115,8 @@ impl Unfed {
             Unfed::NoCutoffAhead => "NO CUTOFF AHEAD",
             Unfed::LastAidPassed => "LAST AID PASSED",
             Unfed::NoCourseElevation => "NO COURSE ELEV",
+            Unfed::MidnightSun => "MIDNIGHT SUN",
+            Unfed::PolarNight => "POLAR NIGHT",
         }
     }
 

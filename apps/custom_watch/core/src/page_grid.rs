@@ -41,7 +41,7 @@ pub const GRID_TOP_ROW: usize = 2;
 /// Body rows available to cells.
 pub const GRID_BODY_ROWS: usize = ROWS - GRID_TOP_ROW;
 
-/// Cells one screenful of grid shows. The enabled set can exceed it (33 pages
+/// Cells one screenful of grid shows. The enabled set can exceed it (35 pages
 /// need nine rows of four and the body has seven), so the body is a window onto
 /// the cycle anchored on the cursor rather than a silent truncation of the
 /// tail — see [`window_origin_row`].
@@ -300,7 +300,7 @@ mod tests {
         );
         assert_eq!(
             grid_cell(u64::MAX, Page::BackToStart, Page::BackToStart),
-            Some((1, GRID_BODY_ROWS - 1)),
+            Some((2, GRID_BODY_ROWS - 1)),
             "the last page seats on the bottom body row once it is the cursor"
         );
         let scrolled = grid_rows(u64::MAX, Page::BackToStart);
@@ -309,7 +309,7 @@ mod tests {
             "the window scrolled off the first row: {:?}",
             scrolled[GRID_TOP_ROW]
         );
-        assert_eq!(scrolled[ROWS - 1].as_str(), "AEFF BACK");
+        assert_eq!(scrolled[ROWS - 1].as_str(), "AEFF SUN  BACK");
         for row in scrolled.iter() {
             assert!(row.len() <= COLS, "scrolled row too wide: {row:?}");
         }
@@ -516,7 +516,7 @@ mod tests {
         full.row_up(u64::MAX);
         assert_eq!(
             grid_cell(u64::MAX, full.cursor(), full.cursor()),
-            Some((2, GRID_BODY_ROWS - 1)),
+            Some((3, GRID_BODY_ROWS - 1)),
             "one row up from home wraps into the grid's tail"
         );
     }

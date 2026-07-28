@@ -358,6 +358,11 @@ pub async fn run(store: &'static SharedStore) {
                 preset: race_phase_preset_to_wire(RacePhasePreset::TenTenTen),
             }),
             guided_run: Some(GuidedRunId::new("first-timer-15")),
+            // Mountain time (UTC-6), the bench_jog fixture's longitude — so the
+            // Daylight page renders a live pre-dawn sunrise countdown (the
+            // golden-tested 3:03 / AT 04:34 / DAYLIGHT 14:53) instead of its
+            // NOT SYNCED state.
+            tz_offset_min: Some(-360),
             ..WatchSettings::default()
         };
         apply_settings(
@@ -368,7 +373,7 @@ pub async fn run(store: &'static SharedStore) {
             &tz_offset_tx,
         );
         info!(
-            "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15)"
+            "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15, tz UTC-6)"
         );
         // A demo structured workout, armed over the SAME channel a phone's
         // WKT1 push lands on, with steps short enough that the ~3 m/s
@@ -716,7 +721,10 @@ fn apply_settings(
             } => alerts.set_fuel_intervals(drink_interval_s, eat_interval_s),
             SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
             SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
-            SettingsEffect::TzOffsetMin(m) => tz_offset_tx.send(m),
+            SettingsEffect::TzOffsetMin(m) => {
+                recorder.set_tz_offset_min(m);
+                tz_offset_tx.send(m);
+            }
             SettingsEffect::DistanceInterval(m) => alerts.set_distance_interval(m),
             SettingsEffect::TimeInterval(s) => alerts.set_time_interval(s),
             SettingsEffect::PaceBand(band) => alerts.set_pace_band(band),

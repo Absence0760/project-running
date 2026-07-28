@@ -135,6 +135,11 @@ pub enum Page {
     /// Auto-segment-effort match counts ([`crate::auto_segment_effort`]); empty
     /// until synced.
     AutoEffort,
+    /// The sunset/sunrise countdown ([`crate::daylight`]): the next sun event,
+    /// how long until it, and today's day length — needs the synced timezone
+    /// offset plus a fix carrying the RMC clock + date; honest states
+    /// otherwise.
+    Daylight,
     /// Distance back to the run's start up large, with a relative direction
     /// arrow, heading/bearing rows, and the TrackBack breadcrumb map.
     BackToStart,
@@ -194,6 +199,7 @@ impl Page {
             Page::RouteSimplify => "SMPL",
             Page::RouteElev => "RELV",
             Page::AutoEffort => "AEFF",
+            Page::Daylight => "SUN",
             Page::BackToStart => "BACK",
         }
     }
@@ -237,6 +243,7 @@ impl Page {
             Page::RouteSimplify => "ROUTE SIMPLIFY",
             Page::RouteElev => "ROUTE ELEVATION",
             Page::AutoEffort => "AUTO EFFORT",
+            Page::Daylight => "DAYLIGHT",
             Page::BackToStart => "BACK TO START",
         }
     }
@@ -310,14 +317,15 @@ impl Page {
             Page::PrRecency => Page::RouteSimplify,
             Page::RouteSimplify => Page::RouteElev,
             Page::RouteElev => Page::AutoEffort,
-            Page::AutoEffort => Page::BackToStart,
+            Page::AutoEffort => Page::Daylight,
+            Page::Daylight => Page::BackToStart,
             Page::BackToStart => Page::Dashboard,
         }
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 33 pages a forward-
-    /// only walk needs up to ~32 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 35 pages a forward-
+    /// only walk needs up to ~34 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
@@ -357,7 +365,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 34] = [
+    const ALL: [Page; 35] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -391,6 +399,7 @@ mod tests {
         Page::RouteSimplify,
         Page::RouteElev,
         Page::AutoEffort,
+        Page::Daylight,
         Page::BackToStart,
     ];
 
@@ -424,7 +433,8 @@ mod tests {
         assert_eq!(Page::RaceDay.next(), Page::PlanReplan);
         assert_eq!(Page::PlanReplan.next(), Page::PlanAdaptive);
         assert_eq!(Page::PrRecency.next(), Page::RouteSimplify);
-        assert_eq!(Page::AutoEffort.next(), Page::BackToStart);
+        assert_eq!(Page::AutoEffort.next(), Page::Daylight);
+        assert_eq!(Page::Daylight.next(), Page::BackToStart);
         assert_eq!(
             Page::BackToStart.next(),
             Page::Dashboard,
@@ -534,9 +544,9 @@ mod tests {
 
     #[test]
     fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
-        // The phone's 32-bit field stops at discriminant 31, so BackToStart is
-        // the one page it cannot express; zero-extending would curate that page
-        // out invisibly on every curation push.
+        // The phone's 32-bit field stops at discriminant 31, so AutoEffort,
+        // Daylight and BackToStart sit past its reach; zero-extending would
+        // curate those pages out invisibly on every curation push.
         let curated = mask_from_wire(1u32 << (Page::Pace as u8));
         assert_ne!(curated & Page::Pace.bit(), 0);
         assert_eq!(curated & Page::Nav.bit(), 0, "an addressed page stays off");
@@ -597,7 +607,7 @@ mod tests {
         // back from the default — and the last page is deliberately the
         // Back-to-start safety page, so "lost" is one long-press from home.
         assert_eq!(Page::Dashboard.prev(), Page::BackToStart);
-        assert_eq!(Page::BackToStart.prev(), Page::AutoEffort);
+        assert_eq!(Page::BackToStart.prev(), Page::Daylight);
         assert_eq!(Page::Distance.prev(), Page::Dashboard);
         // Walking `prev` from the default visits every page exactly once and
         // returns home.

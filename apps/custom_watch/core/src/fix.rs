@@ -6,6 +6,7 @@
 //! accumulator keeps the latest of each and emits a merged `Fix` whenever a
 //! sentence completes one.
 
+use crate::daylight;
 use ublox_nmea::{GgaData, RmcData, Sentence};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -18,6 +19,11 @@ pub struct Fix {
     pub alt_m: Option<f32>,
     /// hhmmss from the receiver, as seconds since midnight UTC.
     pub time_of_day: Option<u32>,
+    /// ddmmyy from the RMC sentence, as a UTC civil date. Gated for
+    /// plausibility here (day 1-31, month 1-12) so downstream date math
+    /// ([`crate::daylight`]) never sees a month 0 the parser's digit check
+    /// cannot reject.
+    pub date: Option<daylight::Date>,
     /// Local uptime second the fix was assembled — consumers judge
     /// staleness against this, never against wall time.
     pub uptime_s: u32,
@@ -64,6 +70,13 @@ impl FixAccumulator {
             sats: self.gga.map(|g| g.sats).unwrap_or(0),
             alt_m: self.gga.and_then(|g| g.alt_m),
             time_of_day: rmc.time,
+            date: rmc.date_dmy.and_then(|(day, month, year)| {
+                ((1..=31).contains(&day) && (1..=12).contains(&month)).then_some(daylight::Date {
+                    year,
+                    month,
+                    day,
+                })
+            }),
             uptime_s,
         })
     }
@@ -97,6 +110,31 @@ mod tests {
         assert_eq!(fix.sats, 0);
         assert_eq!(fix.alt_m, None);
         assert_eq!(fix.uptime_s, 5);
+        assert_eq!(
+            fix.date,
+            Some(daylight::Date {
+                year: 2026,
+                month: 7,
+                day: 8
+            })
+        );
+    }
+
+    #[test]
+    fn an_implausible_rmc_date_reads_as_absent() {
+        // A receiver mid-cold-start can emit a valid position with a garbage
+        // date field; the digits parse, so the gate here is the only thing
+        // between month 0 and the date math.
+        for date_field in ["320726", "081326", "000726", "080026"] {
+            let body = format!(
+                "GPRMC,073000.00,A,4000.9000,N,10516.2300,W,5.83,90.0,{date_field},,,A"
+            );
+            let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+            let text = format!("${}*{:02X}\r\n", body, cksum);
+            let mut acc = FixAccumulator::new();
+            let fix = acc.apply(&parse(&text), 5).expect("fix");
+            assert_eq!(fix.date, None, "date field {date_field:?}");
+        }
     }
 
     #[test]

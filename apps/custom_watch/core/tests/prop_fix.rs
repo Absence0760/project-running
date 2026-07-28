@@ -119,6 +119,16 @@ fn a_fix_never_outlives_the_sentence_it_came_from() {
                 );
                 prop_assert_eq!(fix.time_of_day, rmc.time);
                 prop_assert_eq!(fix.course_deg, rmc.course_deg);
+                // The date rides the same RMC, behind the accumulator's
+                // plausibility gate — a month 0 or day 40 the parser's digit
+                // check cannot reject must read as absent, never as a date.
+                prop_assert_eq!(
+                    fix.date,
+                    rmc.date_dmy
+                        .filter(|(d, m, _)| (1..=31).contains(d) && (1..=12).contains(m))
+                        .map(|(day, month, year)| watch_core::daylight::Date { year, month, day }),
+                    "the fix date is not the armed RMC's gated date"
+                );
 
                 match armed_gga {
                     None => {

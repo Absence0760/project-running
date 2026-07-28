@@ -865,6 +865,11 @@ pub struct Recorder {
     /// appears the moment its data does. Off restores the full fixed cycle
     /// (every empty state stays visitable).
     hide_empty_pages: bool,
+    /// The synced timezone offset — the Daylight page's data presence, fed
+    /// via [`set_tz_offset_min`](Recorder::set_tz_offset_min) (the face reads
+    /// the live offset from the `state` watch; this is a presence bit, like
+    /// [`course_loaded`](Recorder::set_course_loaded)).
+    tz_offset_min: Option<i16>,
 }
 
 impl Default for Recorder {
@@ -935,6 +940,7 @@ impl Recorder {
             course_loaded: false,
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
+            tz_offset_min: None,
         }
     }
 
@@ -962,6 +968,13 @@ impl Recorder {
     /// Whether the cycle skips data-less pages (see the field doc).
     pub fn set_hide_empty_pages(&mut self, hide: bool) {
         self.hide_empty_pages = hide;
+    }
+
+    /// Presence bit for the Daylight page: the settings sync has delivered a
+    /// timezone offset. Without one the countdown would run against the wrong
+    /// midnight, so the page stays out of the cycle rather than empty in it.
+    pub fn set_tz_offset_min(&mut self, m: i16) {
+        self.tz_offset_min = Some(m);
     }
 
     /// Expected seconds between incoming fixes, from the selected GNSS mode
@@ -1787,6 +1800,7 @@ impl Recorder {
         set(Page::AutoEffort, s.auto_effort.is_some());
         set(Page::RouteElev, s.route_elev.is_some());
         set(Page::RaceDay, s.race_day.is_some());
+        set(Page::Daylight, self.tz_offset_min.is_some());
         m
     }
 
@@ -2117,6 +2131,7 @@ mod tests {
             sats: 8,
             alt_m: None,
             time_of_day: None,
+            date: None,
             uptime_s: t,
         }
     }
@@ -3394,6 +3409,7 @@ mod tests {
             Page::Fitness,
             Page::Recap,
             Page::RaceDay,
+            Page::Daylight,
         ] {
             assert_eq!(mask & p.bit(), 0, "{p:?} has no data and must be hidden");
         }
@@ -3412,6 +3428,9 @@ mod tests {
         assert_ne!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
         r.set_course_loaded(false);
         assert_eq!(r.snapshot().pages_mask & Page::Nav.bit(), 0);
+        assert_eq!(r.snapshot().pages_mask & Page::Daylight.bit(), 0);
+        r.set_tz_offset_min(-360);
+        assert_ne!(r.snapshot().pages_mask & Page::Daylight.bit(), 0);
     }
 
     #[test]

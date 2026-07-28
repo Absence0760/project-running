@@ -290,6 +290,7 @@ mod tests {
             sats: 8,
             alt_m: None,
             time_of_day: None,
+            date: None,
             uptime_s: 100,
         }
     }
