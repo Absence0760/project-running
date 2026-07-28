@@ -57,6 +57,7 @@ use heapless::Vec;
 use watch_core::flash_plan::{self, SlotReader};
 use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
+use watch_core::profiles::ActivityProfile;
 use watch_core::run_store::ManifestEntry;
 
 use crate::state;
@@ -211,11 +212,11 @@ impl RunStore {
         self.dir.next_run_seq()
     }
 
-    /// Read the raw persisted config record — `(gnss_mode_byte, flags)` — or
-    /// `None` when flash is unavailable (sim), unreadable, or the config page
-    /// is erased/corrupt. Best-effort / L4: a read error only `warn!`s and
-    /// reads as "no saved config".
-    fn read_config_bytes(&mut self) -> Option<(u8, u8)> {
+    /// Read the raw persisted config record — `(gnss_mode_byte, flags,
+    /// profile_byte)` — or `None` when flash is unavailable (sim), unreadable,
+    /// or the config page is erased/corrupt. Best-effort / L4: a read error
+    /// only `warn!`s and reads as "no saved config".
+    fn read_config_bytes(&mut self) -> Option<(u8, u8, u8)> {
         if !self.available {
             return None;
         }
@@ -231,7 +232,7 @@ impl RunStore {
     /// so the boot path falls back to the default (same fail-closed rule as
     /// [`read_config_bytes`](Self::read_config_bytes)).
     pub fn read_gnss_mode(&mut self) -> Option<GnssMode> {
-        let (byte, _) = self.read_config_bytes()?;
+        let (byte, _, _) = self.read_config_bytes()?;
         GnssMode::from_byte(byte)
     }
 
@@ -240,8 +241,17 @@ impl RunStore {
     /// explicit choice was ever stored (every pre-§351 record) — the recorder
     /// then keeps its default.
     pub fn read_hide_empty(&mut self) -> Option<bool> {
-        let (_, flags) = self.read_config_bytes()?;
+        let (_, flags, _) = self.read_config_bytes()?;
         flash_store::hide_empty_from_flags(flags)
+    }
+
+    /// Read the activity profile persisted by
+    /// [`persist_profile`](Self::persist_profile), or `None` when no profile
+    /// was ever selected (every pre-§353 record) or the stored discriminant
+    /// names none — a corrupt byte reads as "no profile", never a wrong one.
+    pub fn read_profile(&mut self) -> Option<ActivityProfile> {
+        let (_, flags, profile) = self.read_config_bytes()?;
+        ActivityProfile::from_byte(flash_store::profile_from_flags(flags, profile)?)
     }
 
     /// Read the persisted BLE bond ([`persist_bond`](Self::persist_bond)), or
@@ -269,10 +279,13 @@ impl RunStore {
     /// erased at most once per user mode switch — trivially within flash
     /// endurance and off the per-tick path.
     pub async fn persist_gnss_mode(&mut self, mode: GnssMode) {
-        let flags = self.read_config_bytes().map(|(_, f)| f).unwrap_or(0);
+        let (flags, profile) = self
+            .read_config_bytes()
+            .map(|(_, f, p)| (f, p))
+            .unwrap_or((0, 0));
         let bond = self.read_bond();
         if self
-            .rewrite_config_page(Some((mode.to_byte(), flags)), bond)
+            .rewrite_config_page(Some((mode.to_byte(), flags, profile)), bond)
             .await
         {
             info!("run_flash: persisted GNSS mode {}", mode);
@@ -287,17 +300,35 @@ impl RunStore {
     /// mode pins the current default alongside — the record must carry a valid
     /// mode byte, and the default is what an unset mode already means.
     pub async fn persist_hide_empty(&mut self, hide: bool) {
-        let mode_byte = self
-            .read_config_bytes()
-            .map(|(m, _)| m)
-            .unwrap_or(GnssMode::default().to_byte());
-        let flags = flash_store::flags_with_hide_empty(hide);
+        let (mode_byte, flags, profile) =
+            self.read_config_bytes()
+                .unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        let flags = flash_store::set_hide_empty_flags(flags, hide);
         let bond = self.read_bond();
         if self
-            .rewrite_config_page(Some((mode_byte, flags)), bond)
+            .rewrite_config_page(Some((mode_byte, flags, profile)), bond)
             .await
         {
             info!("run_flash: persisted hide-empty-pages {}", hide);
+        }
+    }
+
+    /// Persist the selected activity profile (§353) so the menu's row — and
+    /// the boot-time re-apply of the profile's page preset — survive a
+    /// reboot. Same best-effort / L4 rules and carry-everything-forward page
+    /// rewrite as [`persist_gnss_mode`](Self::persist_gnss_mode); the button
+    /// task calls this only when the selection actually changes.
+    pub async fn persist_profile(&mut self, profile: ActivityProfile) {
+        let (mode_byte, flags, _) =
+            self.read_config_bytes()
+                .unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        let flags = flags | flash_store::CONFIG_FLAG_PROFILE_SET;
+        let bond = self.read_bond();
+        if self
+            .rewrite_config_page(Some((mode_byte, flags, profile.to_byte())), bond)
+            .await
+        {
+            info!("run_flash: persisted activity profile {}", profile);
         }
     }
 
@@ -324,7 +355,7 @@ impl RunStore {
     /// Returns whether the rewrite fully succeeded.
     async fn rewrite_config_page(
         &mut self,
-        config: Option<(u8, u8)>,
+        config: Option<(u8, u8, u8)>,
         bond: Option<flash_store::BondRecord>,
     ) -> bool {
         if !self.available {
@@ -336,8 +367,8 @@ impl RunStore {
             warn!("run_flash: config erase failed {:?}", e);
             return false;
         }
-        if let Some((mode, flags)) = config {
-            let rec = flash_store::encode_config(mode, flags);
+        if let Some((mode, flags, profile)) = config {
+            let rec = flash_store::encode_config(mode, flags, profile);
             if let Err(e) = self.flash_write(start, &rec).await {
                 warn!("run_flash: config write failed {:?}", e);
                 return false;

@@ -33,6 +33,7 @@ use core::fmt::Write;
 
 use crate::face::{Row, ROWS};
 use crate::gnss_mode::GnssMode;
+use crate::profiles::ActivityProfile;
 
 /// Seconds of inactivity before an open menu closes itself back to the home
 /// face. Unlike the grid's 3 s auto-select (mid-run, urgency), the menu is an
@@ -55,6 +56,13 @@ pub enum MenuItem {
     /// per-page mask stays a phone surface — 33 checkboxes do not belong on
     /// five buttons).
     HideEmpty,
+    /// The activity-profile ladder (Run → Trail → Ultra → Hike), edited
+    /// directionally like the mode ladder: right toward the longer / more-
+    /// battery activities, clamped at the ends. Selecting a rung APPLIES its
+    /// preset ([`crate::profiles::preset`]) — a macro over the pages mask +
+    /// GNSS mode, per §353 — and the row shows the last-applied profile
+    /// (`--` until one is ever chosen).
+    Profile,
     /// An action row: right (BTN1) fires the same request as the idle BTN3
     /// hold and closes the menu; the idle face's transient banner
     /// (`SET 1610M` / `NO GPS FIX` / `NO BARO`) answers, exactly as it
@@ -62,10 +70,14 @@ pub enum MenuItem {
     QnhRezero,
 }
 
-pub const MENU_ITEMS: usize = 3;
+pub const MENU_ITEMS: usize = 4;
 
-const ITEMS: [MenuItem; MENU_ITEMS] =
-    [MenuItem::GnssMode, MenuItem::HideEmpty, MenuItem::QnhRezero];
+const ITEMS: [MenuItem; MENU_ITEMS] = [
+    MenuItem::GnssMode,
+    MenuItem::HideEmpty,
+    MenuItem::Profile,
+    MenuItem::QnhRezero,
+];
 
 /// The open menu: a cursor over [`ITEMS`]. The button task owns it (like the
 /// grid state machine); the ui task renders the published cursor.
@@ -123,6 +135,9 @@ pub enum MenuEdit {
     SetGnssMode(GnssMode),
     /// Set the hide-empty filter (already different from the current value).
     SetHideEmpty(bool),
+    /// Apply an activity profile's preset (already different from the current
+    /// selection — the ladder never re-applies the rung it is on).
+    SetProfile(ActivityProfile),
     /// Fire the QNH re-zero and close the menu.
     RequestQnhRezero,
     /// The press asked for the state it is already in (a clamped ladder end,
@@ -147,8 +162,16 @@ fn mode_left(mode: GnssMode) -> GnssMode {
 }
 
 /// Resolve an edit press on `item` against the current values. Pure and
-/// host-tested; both task variants dispatch on the result.
-pub fn edit(item: MenuItem, dir: ValueDir, mode: GnssMode, hide_empty: bool) -> MenuEdit {
+/// host-tested; both task variants dispatch on the result. `profile` is the
+/// last-applied activity profile, `None` until one is ever chosen — a right
+/// press then starts the ladder at its first rung.
+pub fn edit(
+    item: MenuItem,
+    dir: ValueDir,
+    mode: GnssMode,
+    hide_empty: bool,
+    profile: Option<ActivityProfile>,
+) -> MenuEdit {
     match (item, dir) {
         (MenuItem::GnssMode, ValueDir::Right) => {
             let next = mode_right(mode);
@@ -180,6 +203,31 @@ pub fn edit(item: MenuItem, dir: ValueDir, mode: GnssMode, hide_empty: bool) -> 
                 MenuEdit::Nothing
             }
         }
+        (MenuItem::Profile, ValueDir::Right) => match profile {
+            // First-ever selection starts the ladder at its first rung.
+            None => MenuEdit::SetProfile(ActivityProfile::Run),
+            Some(p) => {
+                let next = p.right();
+                if next == p {
+                    MenuEdit::Nothing
+                } else {
+                    MenuEdit::SetProfile(next)
+                }
+            }
+        },
+        (MenuItem::Profile, ValueDir::Left) => match profile {
+            // No selection to step back from — and "left of the ladder" must
+            // not surprise-apply a preset.
+            None => MenuEdit::Nothing,
+            Some(p) => {
+                let next = p.left();
+                if next == p {
+                    MenuEdit::Nothing
+                } else {
+                    MenuEdit::SetProfile(next)
+                }
+            }
+        },
         (MenuItem::QnhRezero, ValueDir::Right) => MenuEdit::RequestQnhRezero,
         (MenuItem::QnhRezero, ValueDir::Left) => MenuEdit::Nothing,
     }
@@ -192,7 +240,12 @@ pub fn edit(item: MenuItem, dir: ValueDir, mode: GnssMode, hide_empty: bool) -> 
 /// it is changed. The cursor keys go unlabelled, exactly like the grid's:
 /// they move something visible and commit nothing, so they are discovered
 /// for free.
-pub fn menu_rows(cursor: u8, mode: GnssMode, hide_empty: bool) -> [Row; ROWS] {
+pub fn menu_rows(
+    cursor: u8,
+    mode: GnssMode,
+    hide_empty: bool,
+    profile: Option<ActivityProfile>,
+) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
     let _ = rows[1].push_str("SETTINGS");
@@ -215,6 +268,13 @@ pub fn menu_rows(cursor: u8, mode: GnssMode, hide_empty: bool) -> [Row; ROWS] {
                     rows[row],
                     "HIDE EMPTY {}",
                     if hide_empty { "ON" } else { "OFF" }
+                );
+            }
+            MenuItem::Profile => {
+                let _ = write!(
+                    rows[row],
+                    "PROFILE {}",
+                    profile.map_or("--", ActivityProfile::label)
                 );
             }
             MenuItem::QnhRezero => {
@@ -240,7 +300,7 @@ mod tests {
         // EXIT lives on BTN4 here (the grid trained BTN2), so it MUST be
         // read, not discovered; the horizontal edit pair is the novel
         // gesture. The cursor keys move a visible marker and stay unlabelled.
-        let rows = menu_rows(0, GnssMode::Performance, true);
+        let rows = menu_rows(0, GnssMode::Performance, true, None);
         assert_eq!(rows[0].as_str(), "B5- B1+       B4 EXIT");
         assert_eq!(rows[0].len(), COLS, "the legend should fill the row");
     }
@@ -251,6 +311,8 @@ mod tests {
         assert_eq!(m.item(), MenuItem::GnssMode);
         m.down();
         assert_eq!(m.item(), MenuItem::HideEmpty);
+        m.down();
+        assert_eq!(m.item(), MenuItem::Profile);
         m.down();
         assert_eq!(m.item(), MenuItem::QnhRezero);
         m.down();
@@ -266,27 +328,27 @@ mod tests {
         // "increase" semantics never wrap, or a press past the end would
         // teleport to the opposite extreme.
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Right, Performance, true),
+            edit(MenuItem::GnssMode, ValueDir::Right, Performance, true, None),
             MenuEdit::SetGnssMode(Balanced)
         );
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Right, Balanced, true),
+            edit(MenuItem::GnssMode, ValueDir::Right, Balanced, true, None),
             MenuEdit::SetGnssMode(Expedition)
         );
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Right, Expedition, true),
+            edit(MenuItem::GnssMode, ValueDir::Right, Expedition, true, None),
             MenuEdit::Nothing
         );
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Left, Expedition, true),
+            edit(MenuItem::GnssMode, ValueDir::Left, Expedition, true, None),
             MenuEdit::SetGnssMode(Balanced)
         );
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Left, Balanced, true),
+            edit(MenuItem::GnssMode, ValueDir::Left, Balanced, true, None),
             MenuEdit::SetGnssMode(Performance)
         );
         assert_eq!(
-            edit(MenuItem::GnssMode, ValueDir::Left, Performance, true),
+            edit(MenuItem::GnssMode, ValueDir::Left, Performance, true, None),
             MenuEdit::Nothing
         );
     }
@@ -300,7 +362,8 @@ mod tests {
                 MenuItem::HideEmpty,
                 ValueDir::Right,
                 GnssMode::Performance,
-                false
+                false,
+                None
             ),
             MenuEdit::SetHideEmpty(true)
         );
@@ -309,7 +372,8 @@ mod tests {
                 MenuItem::HideEmpty,
                 ValueDir::Right,
                 GnssMode::Performance,
-                true
+                true,
+                None
             ),
             MenuEdit::Nothing
         );
@@ -318,7 +382,8 @@ mod tests {
                 MenuItem::HideEmpty,
                 ValueDir::Left,
                 GnssMode::Performance,
-                true
+                true,
+                None
             ),
             MenuEdit::SetHideEmpty(false)
         );
@@ -327,7 +392,8 @@ mod tests {
                 MenuItem::HideEmpty,
                 ValueDir::Left,
                 GnssMode::Performance,
-                false
+                false,
+                None
             ),
             MenuEdit::Nothing
         );
@@ -342,7 +408,8 @@ mod tests {
                 MenuItem::QnhRezero,
                 ValueDir::Right,
                 GnssMode::Performance,
-                true
+                true,
+                None
             ),
             MenuEdit::RequestQnhRezero
         );
@@ -351,7 +418,8 @@ mod tests {
                 MenuItem::QnhRezero,
                 ValueDir::Left,
                 GnssMode::Performance,
-                true
+                true,
+                None
             ),
             MenuEdit::Nothing
         );
@@ -365,14 +433,22 @@ mod tests {
             GnssMode::Expedition,
         ] {
             for hide in [true, false] {
-                for cursor in 0..MENU_ITEMS as u8 {
-                    let rows = menu_rows(cursor, mode, hide);
-                    for row in rows.iter() {
-                        assert!(row.len() <= COLS, "row too wide: {row:?}");
+                for profile in [
+                    None,
+                    Some(ActivityProfile::Run),
+                    Some(ActivityProfile::Trail),
+                    Some(ActivityProfile::Ultra),
+                    Some(ActivityProfile::Hike),
+                ] {
+                    for cursor in 0..MENU_ITEMS as u8 {
+                        let rows = menu_rows(cursor, mode, hide, profile);
+                        for row in rows.iter() {
+                            assert!(row.len() <= COLS, "row too wide: {row:?}");
+                        }
+                        // The cursor marks exactly one row.
+                        let marked = rows.iter().filter(|r| r.starts_with('>')).count();
+                        assert_eq!(marked, 1);
                     }
-                    // The cursor marks exactly one row.
-                    let marked = rows.iter().filter(|r| r.starts_with('>')).count();
-                    assert_eq!(marked, 1);
                 }
             }
         }
@@ -380,14 +456,33 @@ mod tests {
 
     #[test]
     fn the_value_rows_read_the_current_state() {
-        let rows = menu_rows(0, GnssMode::Performance, true);
+        let rows = menu_rows(0, GnssMode::Performance, true, None);
         assert_eq!(rows[1].as_str(), "SETTINGS");
         assert_eq!(rows[3].as_str(), "> GNSS MODE PERF 110H");
         assert_eq!(rows[4].as_str(), "  HIDE EMPTY ON");
-        assert_eq!(rows[5].as_str(), "  RE-ZERO ALTITUDE");
-        let rows = menu_rows(1, GnssMode::Expedition, false);
+        assert_eq!(rows[5].as_str(), "  PROFILE --");
+        assert_eq!(rows[6].as_str(), "  RE-ZERO ALTITUDE");
+        let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
         assert_eq!(rows[3].as_str(), "  GNSS MODE EXP  220H");
         assert_eq!(rows[4].as_str(), "> HIDE EMPTY OFF");
+        assert_eq!(rows[5].as_str(), "  PROFILE ULTRA");
+    }
+
+    #[test]
+    fn the_profile_ladder_clamps_and_an_unset_row_only_starts_on_right() {
+        use ActivityProfile::*;
+        let e = |dir, p| edit(MenuItem::Profile, dir, GnssMode::Performance, true, p);
+        // First-ever selection starts the ladder; left of nothing applies
+        // nothing — "left of the ladder" must not surprise-apply a preset.
+        assert_eq!(e(ValueDir::Right, None), MenuEdit::SetProfile(Run));
+        assert_eq!(e(ValueDir::Left, None), MenuEdit::Nothing);
+        // The ladder walks rightward toward the longer activities and clamps.
+        assert_eq!(e(ValueDir::Right, Some(Run)), MenuEdit::SetProfile(Trail));
+        assert_eq!(e(ValueDir::Right, Some(Trail)), MenuEdit::SetProfile(Ultra));
+        assert_eq!(e(ValueDir::Right, Some(Ultra)), MenuEdit::SetProfile(Hike));
+        assert_eq!(e(ValueDir::Right, Some(Hike)), MenuEdit::Nothing);
+        assert_eq!(e(ValueDir::Left, Some(Hike)), MenuEdit::SetProfile(Ultra));
+        assert_eq!(e(ValueDir::Left, Some(Run)), MenuEdit::Nothing);
     }
 
     #[test]

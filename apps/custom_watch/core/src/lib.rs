@@ -300,6 +300,7 @@ pub mod plan_progress;
 pub mod plan_replan;
 pub mod pr_recency;
 pub mod privacy;
+pub mod profiles;
 pub mod race_day;
 pub mod race_phases;
 pub mod race_predictor;

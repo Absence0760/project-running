@@ -17,6 +17,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
 use watch_core::page::Page;
+use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
@@ -85,6 +86,12 @@ pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::n
 /// the `ui` task only renders the published cursor over the idle face. One
 /// receiver (the `ui` task).
 pub static SETTINGS_MENU: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
+
+/// The last-applied activity profile (§353), `None` until one is ever chosen.
+/// `main` seeds it from the persisted CFG1 record at boot, the `button` task
+/// re-publishes on a menu selection, and the `ui` task renders it on the
+/// menu's PROFILE row. One receiver (the `ui` task).
+pub static PROFILE: Watch<CriticalSectionRawMutex, Option<ActivityProfile>, 1> = Watch::new();
 
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and

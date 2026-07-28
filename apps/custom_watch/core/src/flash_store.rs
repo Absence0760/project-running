@@ -75,10 +75,19 @@ pub const CONFIG_FLAG_HIDE_EMPTY_SET: u8 = 0b0000_0001;
 /// Bit 1: the persisted hide-empty value itself (only meaningful when
 /// [`CONFIG_FLAG_HIDE_EMPTY_SET`] is set).
 pub const CONFIG_FLAG_HIDE_EMPTY_ON: u8 = 0b0000_0010;
+/// Bit 2 (§353): an activity profile has been explicitly selected; its
+/// discriminant lives in the record's profile byte. Pre-§353 records wrote
+/// that byte as a reserved zero with this bit clear, so they decode as "no
+/// profile" with no version bump — the §351 flags-byte drill again.
+pub const CONFIG_FLAG_PROFILE_SET: u8 = 0b0000_0100;
 
-/// The flags byte encoding an explicit hide-empty choice.
-pub fn flags_with_hide_empty(hide: bool) -> u8 {
-    CONFIG_FLAG_HIDE_EMPTY_SET | if hide { CONFIG_FLAG_HIDE_EMPTY_ON } else { 0 }
+/// The flags byte with an explicit hide-empty choice folded in — every other
+/// bit (the profile marker, future flags) carried forward, so persisting one
+/// setting can no longer erase another's.
+pub fn set_hide_empty_flags(flags: u8, hide: bool) -> u8 {
+    (flags & !CONFIG_FLAG_HIDE_EMPTY_ON)
+        | CONFIG_FLAG_HIDE_EMPTY_SET
+        | if hide { CONFIG_FLAG_HIDE_EMPTY_ON } else { 0 }
 }
 
 /// The persisted hide-empty choice carried by a flags byte, or `None` when
@@ -87,31 +96,40 @@ pub fn hide_empty_from_flags(flags: u8) -> Option<bool> {
     (flags & CONFIG_FLAG_HIDE_EMPTY_SET != 0).then_some(flags & CONFIG_FLAG_HIDE_EMPTY_ON != 0)
 }
 
-/// Encode the persisted-config record — `magic | version | gnss_mode | flags 0 |
-/// crc32` — for the flash config page. The CRC covers every byte before it, so a
-/// torn, erased, or garbage page fails [`decode_config`] and the caller falls
-/// back to defaults (same fail-closed rule as [`recover_slot`]).
-pub fn encode_config(gnss_mode: u8, flags: u8) -> [u8; CONFIG_RECORD_LEN] {
+/// The persisted profile byte carried by a record, or `None` when no profile
+/// was ever selected (every pre-§353 record). The byte itself only speaks
+/// through `profiles::ActivityProfile::from_byte`, so a CRC-valid but unknown
+/// discriminant still reads as "no profile".
+pub fn profile_from_flags(flags: u8, profile_byte: u8) -> Option<u8> {
+    (flags & CONFIG_FLAG_PROFILE_SET != 0).then_some(profile_byte)
+}
+
+/// Encode the persisted-config record — `magic | version | gnss_mode | flags |
+/// profile | crc32` — for the flash config page. The CRC covers every byte
+/// before it, so a torn, erased, or garbage page fails [`decode_config`] and
+/// the caller falls back to defaults (same fail-closed rule as
+/// [`recover_slot`]).
+pub fn encode_config(gnss_mode: u8, flags: u8, profile: u8) -> [u8; CONFIG_RECORD_LEN] {
     let mut buf = [0u8; CONFIG_RECORD_LEN];
     buf[0..4].copy_from_slice(&CONFIG_MAGIC);
     buf[4] = CONFIG_VERSION;
     buf[5] = gnss_mode;
     buf[6] = flags;
-    // buf[7] reserved, left zero (still CRC-covered).
+    buf[7] = profile;
     let crc = crc32(&buf[0..8]);
     buf[8..12].copy_from_slice(&crc.to_le_bytes());
     buf
 }
 
 /// Decode the persisted-config record, returning the stored `(gnss_mode,
-/// flags)` bytes, or `None` when the bytes are too short, carry the wrong
-/// magic or version, or fail the CRC — an erased or corrupt page reads as "no
-/// saved config". The mode byte itself is validated by the caller
+/// flags, profile)` bytes, or `None` when the bytes are too short, carry the
+/// wrong magic or version, or fail the CRC — an erased or corrupt page reads
+/// as "no saved config". The mode byte itself is validated by the caller
 /// ([`crate::gnss_mode::GnssMode::from_byte`]), so a CRC-valid but unknown
 /// byte still falls back to the default; the flags byte likewise only speaks
-/// through [`hide_empty_from_flags`], so an unknown bit is ignored rather
-/// than misread.
-pub fn decode_config(bytes: &[u8]) -> Option<(u8, u8)> {
+/// through [`hide_empty_from_flags`] / [`profile_from_flags`], so an unknown
+/// bit is ignored rather than misread.
+pub fn decode_config(bytes: &[u8]) -> Option<(u8, u8, u8)> {
     if bytes.len() < CONFIG_RECORD_LEN {
         return None;
     }
@@ -125,7 +143,7 @@ pub fn decode_config(bytes: &[u8]) -> Option<(u8, u8)> {
     if crc32(&bytes[0..8]) != stored {
         return None;
     }
-    Some((bytes[5], bytes[6]))
+    Some((bytes[5], bytes[6], bytes[7]))
 }
 
 /// Offset of the persisted BLE bond record within the config page — clear of
@@ -1469,10 +1487,17 @@ mod tests {
         // Both records written into one config page image read back
         // independently — the layout invariant rewrite_config_page relies on.
         let mut page = [0xFFu8; CONFIG_LEN];
-        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(2, flags_with_hide_empty(true)));
+        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(
+            2,
+            set_hide_empty_flags(0, true),
+            1,
+        ));
         page[BOND_RECORD_OFFSET..BOND_RECORD_OFFSET + BOND_RECORD_LEN]
             .copy_from_slice(&a_bond().encode());
-        assert_eq!(decode_config(&page), Some((2, flags_with_hide_empty(true))));
+        assert_eq!(
+            decode_config(&page),
+            Some((2, set_hide_empty_flags(0, true), 1))
+        );
         assert_eq!(
             BondRecord::decode(&page[BOND_RECORD_OFFSET..]),
             Some(a_bond())
@@ -1579,12 +1604,15 @@ mod tests {
         for mode in [0u8, 1, 2] {
             for flags in [
                 0u8,
-                flags_with_hide_empty(true),
-                flags_with_hide_empty(false),
+                set_hide_empty_flags(0, true),
+                set_hide_empty_flags(0, false),
+                CONFIG_FLAG_PROFILE_SET,
             ] {
-                let rec = encode_config(mode, flags);
-                assert_eq!(rec.len(), CONFIG_RECORD_LEN);
-                assert_eq!(decode_config(&rec), Some((mode, flags)));
+                for profile in [0u8, 3] {
+                    let rec = encode_config(mode, flags, profile);
+                    assert_eq!(rec.len(), CONFIG_RECORD_LEN);
+                    assert_eq!(decode_config(&rec), Some((mode, flags, profile)));
+                }
             }
         }
     }
@@ -1592,19 +1620,42 @@ mod tests {
     #[test]
     fn hide_empty_flags_round_trip_and_a_pre_351_record_reads_as_unset() {
         assert_eq!(
-            hide_empty_from_flags(flags_with_hide_empty(true)),
+            hide_empty_from_flags(set_hide_empty_flags(0, true)),
             Some(true)
         );
         assert_eq!(
-            hide_empty_from_flags(flags_with_hide_empty(false)),
+            hide_empty_from_flags(set_hide_empty_flags(0, false)),
             Some(false)
         );
         // Pre-§351 records wrote byte 6 as a reserved zero — they must decode
         // (same magic, same version, CRC still valid) and read as "no stored
         // choice", not as a confident OFF.
-        let old = encode_config(1, 0);
-        assert_eq!(decode_config(&old), Some((1, 0)));
+        let old = encode_config(1, 0, 0);
+        assert_eq!(decode_config(&old), Some((1, 0, 0)));
         assert_eq!(hide_empty_from_flags(0), None);
+    }
+
+    #[test]
+    fn setting_one_flag_carries_the_others_forward() {
+        // §353's whole point: persisting hide-empty must not erase the stored
+        // profile marker, and vice versa — the flags byte is shared state.
+        let with_profile = CONFIG_FLAG_PROFILE_SET;
+        let both = set_hide_empty_flags(with_profile, true);
+        assert_eq!(hide_empty_from_flags(both), Some(true));
+        assert_eq!(profile_from_flags(both, 2), Some(2));
+        // Flipping hide-empty off keeps the profile marker standing.
+        let flipped = set_hide_empty_flags(both, false);
+        assert_eq!(hide_empty_from_flags(flipped), Some(false));
+        assert_eq!(profile_from_flags(flipped, 2), Some(2));
+    }
+
+    #[test]
+    fn profile_flags_round_trip_and_a_pre_353_record_reads_as_unset() {
+        assert_eq!(profile_from_flags(CONFIG_FLAG_PROFILE_SET, 3), Some(3));
+        // Pre-§353 records wrote the profile byte as a reserved zero with the
+        // marker clear — "no profile", never a confident RUN.
+        assert_eq!(profile_from_flags(0, 0), None);
+        assert_eq!(profile_from_flags(set_hide_empty_flags(0, true), 0), None);
     }
 
     #[test]
@@ -1626,21 +1677,21 @@ mod tests {
     fn decode_config_rejects_a_corrupt_crc() {
         // Flip the stored mode byte without recomputing the CRC — exactly a
         // single-bit flash bit-rot — and the record must read as absent.
-        let mut rec = encode_config(2, 0);
+        let mut rec = encode_config(2, 0, 0);
         rec[5] ^= 0xFF;
         assert_eq!(decode_config(&rec), None);
         // Corrupting the CRC-covered flags byte is caught too.
-        let mut rec = encode_config(1, flags_with_hide_empty(true));
+        let mut rec = encode_config(1, set_hide_empty_flags(0, true), 0);
         rec[6] ^= 0x80;
         assert_eq!(decode_config(&rec), None);
     }
 
     #[test]
     fn decode_config_rejects_wrong_magic_and_version() {
-        let mut rec = encode_config(1, 0);
+        let mut rec = encode_config(1, 0, 0);
         rec[0] = b'X';
         assert_eq!(decode_config(&rec), None);
-        let mut rec = encode_config(1, 0);
+        let mut rec = encode_config(1, 0, 0);
         rec[4] = CONFIG_VERSION + 1;
         assert_eq!(decode_config(&rec), None);
     }
@@ -1649,7 +1700,7 @@ mod tests {
     fn decode_config_never_reads_out_of_bounds_on_a_short_slice() {
         assert_eq!(decode_config(&[]), None);
         assert_eq!(decode_config(&[0xFFu8; 4]), None);
-        let rec = encode_config(0, 0);
+        let rec = encode_config(0, 0, 0);
         assert_eq!(decode_config(&rec[..CONFIG_RECORD_LEN - 1]), None);
     }
 
