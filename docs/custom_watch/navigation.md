@@ -148,14 +148,22 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Three items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
-full per-page mask stays a phone surface), **RE-ZERO ALTITUDE** (right fires
-the idle hold's request and closes; the idle banner answers). Value rows keep
-the menu open — the row re-rendering with the new value is the confirmation.
-Every press inside is swallowed, the menu is idle-only, and 30 s of
-inactivity closes it because it covers the home clock. The GNSS mode and the
-hide-empty choice both persist in the CFG1 flash record and restore at boot —
-whichever side wrote last, menu or phone push, wins the reboot.
+Four items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
+Trail → Ultra → Hike ladder, right toward the longer / more-battery
+activities, clamped; selecting a rung *applies* its preset — a curated page
+mask plus a GNSS mode — through the same channels a phone push and the quick
+cycle ride, and the row shows the last-applied profile, `--` until one is
+ever chosen), **RE-ZERO ALTITUDE** (right fires the idle hold's request and
+closes; the idle banner answers). Value rows keep the menu open — the row
+re-rendering with the new value is the confirmation. Every press inside is
+swallowed, the menu is idle-only, and 30 s of inactivity closes it because it
+covers the home clock. The GNSS mode, the hide-empty choice, and the profile
+selection all persist in the CFG1 flash record and restore at boot (the
+profile restore re-applies its page preset) — whichever side wrote last,
+menu or phone push, wins the reboot. The four-item ring keeps the §351 cost
+bound: the farthest row is still ≤ 2 cursor steps, so any setting change
+stays ≤ 4 presses.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
