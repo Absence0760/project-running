@@ -186,23 +186,6 @@ latent single-writer assumption waiting to eat a future flag. No per-profile ale
 The four-item menu keeps the ≤ 4-press setting-change bound (farthest row is still two wrapping
 cursor steps). Host-tested + build-verified.
 
-## 2026-07-28 — structured workout execution: the mobile runner's math, on the wrist
-
-The batch's third pulled-forward item ([§ 354](../architecture/decisions.md)) and the one that
-needed a new wire. `watch_core::workout` ports the **shipped** mobile `WorkoutRunner` faithfully —
-per-step anchors, the duration-wins axis rule, the overshoot-carrying multi-step advance loop (a
-single fix after a GPS gap can clear a short rep AND its recovery), the mobile pace-adherence
-bands — fed the phone-expanded step list over a **`WKT1`** frame: a seventh GATT characteristic,
-chunked + reassembled in the course push's exact shape, and **CRC32-checksummed from v1** (the
-§ 335 lesson applied in advance; a step with no end condition rejects the frame whole, and the
-recorder's setter re-checks it). A 34th **Workout glance page** closes the live cluster beside
-GuidedRun; the § 289 press-cost model re-derived at 34 pages (worst stays 6, avg 3.8235; the
-linear worst grows 16 → 17 at the even ring's antipode). Deliberately not ported: skip / rewind /
-abandon, the step-result trail, and the cue events — the § 350 grammar has no spare key and tier 1
-has no haptics; those return with the tier-2 haptic channel. Phone-side `watch_workout.dart`
-encoder + chunker pinned to the Rust goldens across both twins, transport-unwired like the course
-encoder. Host-tested + build-verified.
-
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
