@@ -126,9 +126,8 @@ mod tests {
         // date field; the digits parse, so the gate here is the only thing
         // between month 0 and the date math.
         for date_field in ["320726", "081326", "000726", "080026"] {
-            let body = format!(
-                "GPRMC,073000.00,A,4000.9000,N,10516.2300,W,5.83,90.0,{date_field},,,A"
-            );
+            let body =
+                format!("GPRMC,073000.00,A,4000.9000,N,10516.2300,W,5.83,90.0,{date_field},,,A");
             let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
             let text = format!("${}*{:02X}\r\n", body, cksum);
             let mut acc = FixAccumulator::new();

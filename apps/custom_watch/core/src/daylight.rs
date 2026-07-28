@@ -78,7 +78,10 @@ pub fn day_of_year(d: Date) -> u16 {
 /// The next civil day.
 pub fn next_day(d: Date) -> Date {
     if d.day < days_in_month(d.year, d.month.clamp(1, 12)) {
-        Date { day: d.day + 1, ..d }
+        Date {
+            day: d.day + 1,
+            ..d
+        }
     } else if d.month < 12 {
         Date {
             year: d.year,
@@ -97,7 +100,10 @@ pub fn next_day(d: Date) -> Date {
 /// The previous civil day.
 pub fn prev_day(d: Date) -> Date {
     if d.day > 1 {
-        Date { day: d.day - 1, ..d }
+        Date {
+            day: d.day - 1,
+            ..d
+        }
     } else if d.month > 1 {
         Date {
             year: d.year,
@@ -264,8 +270,8 @@ pub fn daylight_at(
     now_uptime_s: u32,
     tz_offset_min: i16,
 ) -> Daylight {
-    let mut tod = u64::from(tod_utc_s % SEC_PER_DAY)
-        + u64::from(now_uptime_s.saturating_sub(fix_uptime_s));
+    let mut tod =
+        u64::from(tod_utc_s % SEC_PER_DAY) + u64::from(now_uptime_s.saturating_sub(fix_uptime_s));
     let mut date = date_utc;
     while tod >= u64::from(SEC_PER_DAY) {
         tod -= u64::from(SEC_PER_DAY);
