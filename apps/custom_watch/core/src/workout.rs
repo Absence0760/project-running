@@ -634,8 +634,7 @@ mod tests {
         // 100 m steps plus into a third: both crossed boundaries advance,
         // each completed step records its TARGET (not the overshoot), and
         // the third carries the leftover 50 m.
-        let mut r =
-            WorkoutRunner::new(&[dist_step(100), dist_step(100), dist_step(100)]).unwrap();
+        let mut r = WorkoutRunner::new(&[dist_step(100), dist_step(100), dist_step(100)]).unwrap();
         r.on_totals(0.0, 0);
         r.on_totals(250.0, 50);
         assert_eq!(r.view().step_index, 2);
@@ -860,8 +859,7 @@ mod tests {
 
     #[test]
     fn snapshot_results_cover_every_advanced_step_and_the_in_progress_one() {
-        let mut r =
-            WorkoutRunner::new(&[dist_step(100), dist_step(100), dist_step(400)]).unwrap();
+        let mut r = WorkoutRunner::new(&[dist_step(100), dist_step(100), dist_step(400)]).unwrap();
         r.on_totals(0.0, 0);
         r.on_totals(100.0, 30);
         r.on_totals(200.0, 60);

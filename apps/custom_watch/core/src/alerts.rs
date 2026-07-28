@@ -211,8 +211,8 @@ pub fn banner(alert: Alert) -> Banner {
                 WorkoutStepKind::Steady => "STEADY",
                 WorkoutStepKind::Cooldown => "COOLDOWN",
             };
-            let numbered = matches!(kind, WorkoutStepKind::Rep | WorkoutStepKind::Walk)
-                && rep_total > 0;
+            let numbered =
+                matches!(kind, WorkoutStepKind::Rep | WorkoutStepKind::Walk) && rep_total > 0;
             if numbered {
                 // The full i/n form when the ten-glyph band fits it, else the
                 // index alone — a truncated "! REP 12/2" would read as a
@@ -1723,13 +1723,14 @@ mod tests {
         let mut e = AlertEngine::new();
         // Enter the run first (the engine treats the first in-run update as
         // the run start), then pause.
-        assert_eq!(e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1), Some(
-            Alert::WorkoutStep {
+        assert_eq!(
+            e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1),
+            Some(Alert::WorkoutStep {
                 kind: WorkoutStepKind::Rep,
                 rep_index: 1,
                 rep_total: 6
-            }
-        ));
+            })
+        );
         let paused = Snapshot {
             state: RecordState::Paused,
             ..rec_workout(wv(2, 0, false), 1)
@@ -1771,7 +1772,10 @@ mod tests {
     #[test]
     fn a_workout_banner_displaces_a_fuel_reminder_which_requeues() {
         let mut e = AlertEngine::new();
-        assert_eq!(e.on_update(&rec_workout(wv(0, 0, false), 900), None, 900), Some(Alert::Drink));
+        assert_eq!(
+            e.on_update(&rec_workout(wv(0, 0, false), 900), None, 900),
+            Some(Alert::Drink)
+        );
         let fired = e.on_update(&rec_workout(wv(1, 0, false), 901), None, 901);
         assert!(matches!(fired, Some(Alert::WorkoutStep { .. })));
         // Once the step banner expires the displaced reminder returns.
@@ -1786,7 +1790,11 @@ mod tests {
     #[test]
     fn the_ending_warning_and_done_each_fire_once() {
         let mut e = AlertEngine::new();
-        assert_eq!(e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1).is_some(), true);
+        assert_eq!(
+            e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1)
+                .is_some(),
+            true
+        );
         let ending = e.on_update(
             &rec_workout(wv(1, 1, false), 1 + ALERT_TTL_S),
             None,
@@ -1831,7 +1839,10 @@ mod tests {
             banner(step(WorkoutStepKind::Recovery, 3, 5)).as_str(),
             "! RECOVER"
         );
-        assert_eq!(banner(step(WorkoutStepKind::Warmup, 0, 0)).as_str(), "! WARMUP");
+        assert_eq!(
+            banner(step(WorkoutStepKind::Warmup, 0, 0)).as_str(),
+            "! WARMUP"
+        );
         assert_eq!(
             banner(step(WorkoutStepKind::Cooldown, 0, 0)).as_str(),
             "! COOLDOWN"

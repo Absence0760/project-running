@@ -565,10 +565,7 @@ mod imp {
                             match asm.push(offset, payload) {
                                 WorkoutPush::Complete => match workout_store::decode(asm.frame()) {
                                     Some(steps) => {
-                                        info!(
-                                            "ble: workout push complete ({} steps)",
-                                            steps.len()
-                                        );
+                                        info!("ble: workout push complete ({} steps)", steps.len());
                                         state::WORKOUT.sender().send(Some(steps));
                                         asm.reset();
                                     }
