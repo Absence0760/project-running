@@ -257,6 +257,29 @@ pub fn draw_fuel_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
     }
 }
 
+/// Left edge of the workout step-progress bar — past the "STEP 14/64" text the
+/// face writes on its row (the zone-bar in-row placement).
+const WORKOUT_BAR_X: usize = 12 * CELL_W;
+const WORKOUT_BAR_W: usize = WIDTH - WORKOUT_BAR_X - 3;
+
+/// The workout page's step-progress gauge: an in-row bar beside the STEP
+/// counter on row 7, fed by [`gauge::workout_fill`] (the active step's own end
+/// condition, so a distance rep and a timed recovery fill the same way).
+/// No-op without an armed workout or once it completes (the row reads DONE).
+pub fn draw_workout_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
+    if let Some(w) = snap.workout {
+        if !w.complete {
+            fb.draw_progress_bar(
+                WORKOUT_BAR_X,
+                bar_y(7),
+                WORKOUT_BAR_W,
+                BAR_H,
+                gauge::workout_fill(&w),
+            );
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Zone bars (zones page, rows 3..8)
 // ---------------------------------------------------------------------------
@@ -832,6 +855,7 @@ mod tests {
             plan_replan: None,
             plan_adaptive: None,
             guided_run: None,
+            workout: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -1291,6 +1315,58 @@ mod tests {
         draw_fuel_overlay(&mut fp, &part);
         let y = bar_y(3);
         assert!(ink_in(&ff, BAR_X, y, BAR_W, BAR_H) > ink_in(&fp, BAR_X, y, BAR_W, BAR_H));
+    }
+
+    #[test]
+    fn workout_overlay_bar_scales_with_step_progress_and_stops_on_done() {
+        use watch_core::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
+        let view = |progress_permille: u16, complete: bool| WorkoutView {
+            step_index: 0,
+            step_total: 3,
+            kind: WorkoutStepKind::Rep,
+            rep_index: 1,
+            rep_total: 2,
+            duration_based: false,
+            target_distance_m: 400,
+            target_duration_s: 0,
+            target_pace_s_per_km: 240,
+            step_distance_m: 0,
+            step_elapsed_s: 0,
+            remaining_m: 400,
+            remaining_s: 0,
+            progress_permille,
+            step_pace_s_per_km: None,
+            adherence: PaceAdherence::OnPace,
+            next: None,
+            complete,
+            rollup: None,
+            transition_seq: 1,
+            ending_seq: 0,
+        };
+        let mut far = snapshot();
+        far.workout = Some(view(800, false));
+        let mut near = snapshot();
+        near.workout = Some(view(200, false));
+        let mut ff = Framebuffer::new();
+        let mut fn_ = Framebuffer::new();
+        draw_workout_overlay(&mut ff, &far);
+        draw_workout_overlay(&mut fn_, &near);
+        let y = bar_y(7);
+        assert!(
+            ink_in(&ff, WORKOUT_BAR_X, y, WORKOUT_BAR_W, BAR_H)
+                > ink_in(&fn_, WORKOUT_BAR_X, y, WORKOUT_BAR_W, BAR_H),
+            "the bar fills with step progress"
+        );
+        // A finished workout's row reads DONE — no bar under it.
+        let mut done = snapshot();
+        done.workout = Some(view(1000, true));
+        let mut fd = Framebuffer::new();
+        draw_workout_overlay(&mut fd, &done);
+        assert_eq!(ink_in(&fd, WORKOUT_BAR_X, y, WORKOUT_BAR_W, BAR_H), 0);
+        // And no armed workout draws nothing at all.
+        let mut fe = Framebuffer::new();
+        draw_workout_overlay(&mut fe, &snapshot());
+        assert_eq!(ink_in(&fe, 0, 0, WIDTH, HEIGHT), 0);
     }
 
     #[test]

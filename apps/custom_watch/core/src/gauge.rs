@@ -15,6 +15,7 @@ use crate::gear_wear::{GearWear, GearWearStatus};
 use crate::hr_zones::{zone_for_bpm, ZoneCutoffs};
 use crate::pacer::PacerStatus;
 use crate::record::FuelView;
+use crate::workout::WorkoutView;
 
 /// Full-scale window for the centre-out pacer bar: a ±120 s (two-minute) lead
 /// or deficit fills the bar to its end. Two minutes is a meaningful gap over an
@@ -60,6 +61,13 @@ pub fn fuel_fill(fuel: &FuelView) -> f32 {
         return 0.0;
     }
     clamp01(carry.carbs_g / fuel.total_carbs_g)
+}
+
+/// Fill for the workout step-progress bar, in `0.0..=1.0`: the active step's
+/// progress along its own end condition (distance or time), straight off the
+/// view's already-clamped permille.
+pub fn workout_fill(w: &WorkoutView) -> f32 {
+    f32::from(w.progress_permille.min(1000)) / 1000.0
 }
 
 /// 0-based index of the live zone (`0..ZONE_COUNT`) for a BPM, delegating to the

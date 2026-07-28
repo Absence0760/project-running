@@ -79,6 +79,7 @@ fn base_snapshot() -> Snapshot {
         plan_replan: None,
         plan_adaptive: None,
         guided_run: None,
+        workout: None,
         readiness: None,
         goals: None,
         turn_cue: None,

@@ -455,6 +455,7 @@ pub async fn screen_task(
             if let Some(snap) = rec.as_ref() {
                 match page {
                     Page::Pacer => widgets::draw_pacer_overlay(&mut fb, snap),
+                    Page::Workout => widgets::draw_workout_overlay(&mut fb, snap),
                     Page::Fuel => widgets::draw_fuel_overlay(&mut fb, snap),
                     Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
