@@ -109,10 +109,12 @@ led3: Miscellaneous.LED @ gpio0 16
 # Sharp Memory LCD on SPIM3, chip-select on P1.12 (matches the pin map in
 # boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
 # sysbus.spi3.display` (watch-sim.sh --gui) opens the live panel window.
-# The model draws a BTN1..BTN4 bezel under the LCD and implements
-# IAbsolutePositionPointerInput, so the analyzer window auto-attaches it as
-# the machine's pointer: clicking a bezel button drives the same gpio0 pin
-# the btnN macros below pull (buttonPort). Mouse down = press, up = release.
+# The model draws BTN1..BTN4 in bezel strips flanking the LCD at their §81
+# Fenix-analog positions (BTN1 upper-right, BTN4 lower-right, BTN2 mid-left,
+# BTN3 lower-left) and implements IAbsolutePositionPointerInput, so the
+# analyzer window auto-attaches it as the machine's pointer: clicking a bezel
+# button drives the same gpio0 pin the btnN macros below pull (buttonPort).
+# Mouse down = press, up = release.
 include @SharpMipDisplay.cs
 machine LoadPlatformDescriptionFromString
 """
