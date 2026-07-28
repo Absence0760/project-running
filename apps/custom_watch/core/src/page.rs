@@ -50,6 +50,10 @@ pub enum Page {
     /// run is left, which cue the elapsed time has reached, and how long until
     /// the next one; an honest inactive state until a guided run is armed.
     GuidedRun,
+    /// The armed structured workout ([`crate::workout`]): the active step, its
+    /// target + live progress + pace adherence, and the step after it; an
+    /// honest inactive state until a workout is pushed.
+    Workout,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
@@ -165,6 +169,7 @@ impl Page {
             Page::Splits => "SPLT",
             Page::Pacer => "PACR",
             Page::GuidedRun => "GUID",
+            Page::Workout => "WKT",
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
@@ -207,6 +212,7 @@ impl Page {
             Page::Splits => "PACE SPLITS",
             Page::Pacer => "VIRTUAL PARTNER",
             Page::GuidedRun => "GUIDED RUN",
+            Page::Workout => "WORKOUT",
             Page::Nav => "COURSE MAP",
             Page::TurnCue => "NEXT TURN",
             Page::CutoffEta => "CUT-OFF ETA",
@@ -279,7 +285,8 @@ impl Page {
             Page::Zones => Page::Splits,
             Page::Splits => Page::Pacer,
             Page::Pacer => Page::GuidedRun,
-            Page::GuidedRun => Page::Nav,
+            Page::GuidedRun => Page::Workout,
+            Page::Workout => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
             Page::CutoffEta => Page::Roadbook,
@@ -350,7 +357,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 33] = [
+    const ALL: [Page; 34] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -359,6 +366,7 @@ mod tests {
         Page::Splits,
         Page::Pacer,
         Page::GuidedRun,
+        Page::Workout,
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
@@ -399,6 +407,11 @@ mod tests {
         );
         assert_eq!(
             Page::GuidedRun.next(),
+            Page::Workout,
+            "the structured workout closes the guidance pair"
+        );
+        assert_eq!(
+            Page::Workout.next(),
             Page::Nav,
             "course ops follow the live cluster"
         );

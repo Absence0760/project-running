@@ -83,6 +83,7 @@ use core::fmt::Write;
 
 use crate::hr_zones;
 use crate::record::{RecordState, Snapshot};
+use crate::workout::WorkoutStepKind;
 
 /// Drink reminder cadence, seconds of moving time: `fuel_plan`'s 500 ml/hr
 /// split into four ~125 ml sips.
@@ -149,6 +150,18 @@ pub enum Alert {
     PaceFast,
     /// Live pace is above the band's slow edge.
     PaceSlow,
+    /// The armed structured workout entered a new step — the step now active
+    /// ([`crate::workout`]).
+    WorkoutStep {
+        kind: WorkoutStepKind,
+        rep_index: u8,
+        rep_total: u8,
+    },
+    /// The active workout step entered its end-of-step warning window (last
+    /// 50 m / last 10 s) — get ready for the change.
+    WorkoutEnding,
+    /// The structured workout's final step completed.
+    WorkoutDone,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -183,6 +196,40 @@ pub fn banner(alert: Alert) -> Banner {
         ),
         Alert::PaceFast => write!(b, "! TOO FAST"),
         Alert::PaceSlow => write!(b, "! TOO SLOW"),
+        Alert::WorkoutStep {
+            kind,
+            rep_index,
+            rep_total,
+        } => {
+            let word = match kind {
+                WorkoutStepKind::Warmup => "WARMUP",
+                WorkoutStepKind::Rep => "REP",
+                // No numbering: RECOVER + any count overflows the band, and
+                // the rep the recovery follows already carried the numbers.
+                WorkoutStepKind::Recovery => "RECOVER",
+                WorkoutStepKind::Walk => "WALK",
+                WorkoutStepKind::Steady => "STEADY",
+                WorkoutStepKind::Cooldown => "COOLDOWN",
+            };
+            let numbered = matches!(kind, WorkoutStepKind::Rep | WorkoutStepKind::Walk)
+                && rep_total > 0;
+            if numbered {
+                // The full i/n form when the ten-glyph band fits it, else the
+                // index alone — a truncated "! REP 12/2" would read as a
+                // different count.
+                let mut full = heapless::String::<16>::new();
+                let _ = write!(full, "! {word} {rep_index}/{rep_total}");
+                if full.len() <= b.capacity() {
+                    write!(b, "{full}")
+                } else {
+                    write!(b, "! {word} {rep_index}")
+                }
+            } else {
+                write!(b, "! {word}")
+            }
+        }
+        Alert::WorkoutEnding => write!(b, "! STEP END"),
+        Alert::WorkoutDone => write!(b, "! WKT DONE"),
     };
     b
 }
@@ -218,6 +265,12 @@ pub struct AlertEngine {
     /// [`Self::zone_armed`].
     pace_armed: bool,
     last_pace_fire_s: Option<u32>,
+    /// The last workout edge counters seen ([`crate::workout::WorkoutView`]'s
+    /// monotonic seqs), so each transition / warning fires exactly once. A
+    /// blocked edge is dropped, not owed — a stale step banner is wrong.
+    last_workout_transition_seq: u16,
+    last_workout_ending_seq: u16,
+    workout_done_fired: bool,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
     pending_drink: bool,
@@ -248,6 +301,9 @@ impl AlertEngine {
             last_time_alert_s: 0,
             pace_armed: true,
             last_pace_fire_s: None,
+            last_workout_transition_seq: 0,
+            last_workout_ending_seq: 0,
+            workout_done_fired: false,
             active: None,
             pending_drink: false,
             pending_eat: false,
@@ -368,12 +424,7 @@ impl AlertEngine {
                         .last_zone_fire_s
                         .is_none_or(|t| uptime_s.saturating_sub(t) >= ZONE_ALERT_COOLDOWN_S);
                     if self.zone_armed && cooled {
-                        match self.active {
-                            Some((Alert::Drink, _)) => self.pending_drink = true,
-                            Some((Alert::Eat, _)) => self.pending_eat = true,
-                            _ => {}
-                        }
-                        self.active = Some((Alert::ZoneAbove(zone), uptime_s));
+                        self.take_slot(Alert::ZoneAbove(zone), uptime_s);
                         self.zone_armed = false;
                         self.last_zone_fire_s = Some(uptime_s);
                     }
@@ -392,25 +443,80 @@ impl AlertEngine {
                     let cooled = self
                         .last_pace_fire_s
                         .is_none_or(|t| uptime_s.saturating_sub(t) >= PACE_ALERT_COOLDOWN_S);
-                    let outranked = matches!(self.active, Some((Alert::ZoneAbove(_), _)));
+                    let outranked = matches!(
+                        self.active,
+                        Some((
+                            Alert::ZoneAbove(_)
+                                | Alert::WorkoutStep { .. }
+                                | Alert::WorkoutEnding
+                                | Alert::WorkoutDone,
+                            _
+                        ))
+                    );
                     if self.pace_armed && cooled && !outranked {
-                        match self.active {
-                            Some((Alert::Drink, _)) => self.pending_drink = true,
-                            Some((Alert::Eat, _)) => self.pending_eat = true,
-                            _ => {}
-                        }
                         let alert = if pace < fast {
                             Alert::PaceFast
                         } else {
                             Alert::PaceSlow
                         };
-                        self.active = Some((alert, uptime_s));
+                        self.take_slot(alert, uptime_s);
                         self.pace_armed = false;
                         self.last_pace_fire_s = Some(uptime_s);
                     }
                 } else {
                     self.pace_armed = true;
                 }
+            }
+        }
+
+        // Workout edges — the step transition, the end-of-step warning, and
+        // completion, read off the snapshot's monotonic counters. NOT gated on
+        // Recording: a timed recovery legitimately advances through an
+        // auto-pause (a standing rest is that step working as intended), and
+        // the next rep's entry banner is exactly what the runner needs then.
+        // One rung under the zone ceiling: a workout banner takes the slot
+        // from anything below (a displaced fuel reminder re-queues) but never
+        // from a zone banner — and a blocked edge is dropped, not owed, the
+        // milestone rule: a stale "REP 3" is worse than none, and the page
+        // carries the current step regardless.
+        match snap.workout {
+            Some(w) => {
+                let outranked = matches!(self.active, Some((Alert::ZoneAbove(_), _)));
+                if w.ending_seq != self.last_workout_ending_seq {
+                    self.last_workout_ending_seq = w.ending_seq;
+                    if !outranked {
+                        self.take_slot(Alert::WorkoutEnding, uptime_s);
+                    }
+                }
+                // After the ending warning so a same-tick advance shows the
+                // new step, not the old step's last-metres notice.
+                if w.transition_seq != self.last_workout_transition_seq {
+                    self.last_workout_transition_seq = w.transition_seq;
+                    if w.transition_seq > 0 && !outranked {
+                        self.take_slot(
+                            Alert::WorkoutStep {
+                                kind: w.kind,
+                                rep_index: w.rep_index,
+                                rep_total: w.rep_total,
+                            },
+                            uptime_s,
+                        );
+                    }
+                }
+                if w.complete && !self.workout_done_fired {
+                    self.workout_done_fired = true;
+                    if !outranked {
+                        self.take_slot(Alert::WorkoutDone, uptime_s);
+                    }
+                } else if !w.complete {
+                    // A fresh workout pushed after one finished re-arms DONE.
+                    self.workout_done_fired = false;
+                }
+            }
+            None => {
+                self.last_workout_transition_seq = 0;
+                self.last_workout_ending_seq = 0;
+                self.workout_done_fired = false;
             }
         }
 
@@ -459,6 +565,18 @@ impl AlertEngine {
         self.active.map(|(alert, _)| alert)
     }
 
+    /// Put `alert` on the display slot, re-queueing the fuel reminder it may
+    /// be displacing (a superseded milestone / pace / workout banner is simply
+    /// gone — §214's re-queue rule is fuel's alone).
+    fn take_slot(&mut self, alert: Alert, uptime_s: u32) {
+        match self.active {
+            Some((Alert::Drink, _)) => self.pending_drink = true,
+            Some((Alert::Eat, _)) => self.pending_eat = true,
+            _ => {}
+        }
+        self.active = Some((alert, uptime_s));
+    }
+
     /// Back to the between-runs state. Configuration (intervals, ceiling)
     /// survives — it is settings, not run state.
     fn reset(&mut self) {
@@ -471,6 +589,9 @@ impl AlertEngine {
         self.last_pace_fire_s = None;
         self.last_distance_alert_m = 0;
         self.last_time_alert_s = 0;
+        self.last_workout_transition_seq = 0;
+        self.last_workout_ending_seq = 0;
+        self.workout_done_fired = false;
         self.in_run = false;
     }
 }
@@ -546,7 +667,10 @@ impl FuelOverdueTracker {
                 | Alert::Distance(_)
                 | Alert::Time(_)
                 | Alert::PaceFast
-                | Alert::PaceSlow,
+                | Alert::PaceSlow
+                | Alert::WorkoutStep { .. }
+                | Alert::WorkoutEnding
+                | Alert::WorkoutDone,
             )
             | None => {}
         }
@@ -606,6 +730,7 @@ mod tests {
             plan_replan: None,
             plan_adaptive: None,
             guided_run: None,
+            workout: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -1525,5 +1650,201 @@ mod tests {
         let expired = e.on_update(&rec(900 + ALERT_TTL_S), None, 900 + ALERT_TTL_S);
         assert_eq!(expired, None);
         assert_eq!(ov.observe(expired, true, false), FuelOverdue::Drink);
+    }
+
+    // ─────────── workout banners ───────────
+
+    fn wv(transition_seq: u16, ending_seq: u16, complete: bool) -> crate::workout::WorkoutView {
+        use crate::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
+        WorkoutView {
+            step_index: 0,
+            step_total: 2,
+            kind: WorkoutStepKind::Rep,
+            rep_index: 1,
+            rep_total: 6,
+            duration_based: false,
+            target_distance_m: 400,
+            target_duration_s: 0,
+            target_pace_s_per_km: 240,
+            step_distance_m: 0,
+            step_elapsed_s: 0,
+            remaining_m: 400,
+            remaining_s: 0,
+            progress_permille: 0,
+            step_pace_s_per_km: None,
+            adherence: PaceAdherence::OnPace,
+            next: None,
+            complete,
+            rollup: None,
+            transition_seq,
+            ending_seq,
+        }
+    }
+
+    fn rec_workout(view: crate::workout::WorkoutView, moving_s: u32) -> Snapshot {
+        Snapshot {
+            workout: Some(view),
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_workout_transition_fires_the_step_banner_once() {
+        let mut e = AlertEngine::new();
+        let fired = e.on_update(&rec_workout(wv(1, 0, false), 10), None, 10);
+        assert_eq!(
+            fired,
+            Some(Alert::WorkoutStep {
+                kind: WorkoutStepKind::Rep,
+                rep_index: 1,
+                rep_total: 6
+            })
+        );
+        // The same seq past the TTL is not a fresh edge.
+        let expired = e.on_update(
+            &rec_workout(wv(1, 0, false), 10 + ALERT_TTL_S),
+            None,
+            10 + ALERT_TTL_S,
+        );
+        assert_eq!(expired, None);
+        // The next seq is.
+        let again = e.on_update(
+            &rec_workout(wv(2, 0, false), 20 + ALERT_TTL_S),
+            None,
+            20 + ALERT_TTL_S,
+        );
+        assert!(matches!(again, Some(Alert::WorkoutStep { .. })));
+    }
+
+    #[test]
+    fn a_workout_transition_fires_while_auto_paused() {
+        // A timed recovery ends while the runner stands at the rail: the next
+        // rep's entry banner must not be gated on Recording.
+        let mut e = AlertEngine::new();
+        // Enter the run first (the engine treats the first in-run update as
+        // the run start), then pause.
+        assert_eq!(e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1), Some(
+            Alert::WorkoutStep {
+                kind: WorkoutStepKind::Rep,
+                rep_index: 1,
+                rep_total: 6
+            }
+        ));
+        let paused = Snapshot {
+            state: RecordState::Paused,
+            ..rec_workout(wv(2, 0, false), 1)
+        };
+        let fired = e.on_update(&paused, None, 2 + ALERT_TTL_S);
+        assert!(matches!(fired, Some(Alert::WorkoutStep { .. })));
+    }
+
+    #[test]
+    fn a_zone_banner_blocks_a_workout_edge_and_the_edge_is_dropped() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(2));
+        let cutoffs = zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM);
+        let hot = Snapshot {
+            zone_cutoffs: cutoffs,
+            ..rec_workout(wv(0, 0, false), 10)
+        };
+        assert!(matches!(
+            e.on_update(&hot, Some(180), 10),
+            Some((Alert::ZoneAbove(_))),
+        ));
+        // The transition lands while the zone banner holds the slot: dropped.
+        let hot_step = Snapshot {
+            zone_cutoffs: cutoffs,
+            ..rec_workout(wv(1, 0, false), 11)
+        };
+        assert!(matches!(
+            e.on_update(&hot_step, Some(180), 11),
+            Some(Alert::ZoneAbove(_))
+        ));
+        // Past the TTL the seq was already consumed — no stale step banner.
+        let later = Snapshot {
+            zone_cutoffs: cutoffs,
+            ..rec_workout(wv(1, 0, false), 11 + ALERT_TTL_S)
+        };
+        assert_eq!(e.on_update(&later, None, 11 + ALERT_TTL_S), None);
+    }
+
+    #[test]
+    fn a_workout_banner_displaces_a_fuel_reminder_which_requeues() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&rec_workout(wv(0, 0, false), 900), None, 900), Some(Alert::Drink));
+        let fired = e.on_update(&rec_workout(wv(1, 0, false), 901), None, 901);
+        assert!(matches!(fired, Some(Alert::WorkoutStep { .. })));
+        // Once the step banner expires the displaced reminder returns.
+        let requeued = e.on_update(
+            &rec_workout(wv(1, 0, false), 901 + ALERT_TTL_S),
+            None,
+            901 + ALERT_TTL_S,
+        );
+        assert_eq!(requeued, Some(Alert::Drink));
+    }
+
+    #[test]
+    fn the_ending_warning_and_done_each_fire_once() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&rec_workout(wv(1, 0, false), 1), None, 1).is_some(), true);
+        let ending = e.on_update(
+            &rec_workout(wv(1, 1, false), 1 + ALERT_TTL_S),
+            None,
+            1 + ALERT_TTL_S,
+        );
+        assert_eq!(ending, Some(Alert::WorkoutEnding));
+        let done_at = 2 * ALERT_TTL_S + 2;
+        let done = e.on_update(&rec_workout(wv(1, 1, true), done_at), None, done_at);
+        assert_eq!(done, Some(Alert::WorkoutDone));
+        // Complete stays complete; DONE does not refire.
+        let later = e.on_update(
+            &rec_workout(wv(1, 1, true), done_at + ALERT_TTL_S),
+            None,
+            done_at + ALERT_TTL_S,
+        );
+        assert_eq!(later, None);
+    }
+
+    #[test]
+    fn workout_banner_text_fits_the_band() {
+        use crate::workout::WorkoutStepKind;
+        let step = |kind, rep_index, rep_total| Alert::WorkoutStep {
+            kind,
+            rep_index,
+            rep_total,
+        };
+        assert_eq!(
+            banner(step(WorkoutStepKind::Rep, 3, 6)).as_str(),
+            "! REP 3/6"
+        );
+        // A count the ten-glyph band can't fit degrades to the index alone —
+        // never a truncated "! REP 12/2" that reads as a different count.
+        assert_eq!(
+            banner(step(WorkoutStepKind::Rep, 12, 20)).as_str(),
+            "! REP 12"
+        );
+        assert_eq!(
+            banner(step(WorkoutStepKind::Walk, 3, 7)).as_str(),
+            "! WALK 3/7"
+        );
+        assert_eq!(
+            banner(step(WorkoutStepKind::Recovery, 3, 5)).as_str(),
+            "! RECOVER"
+        );
+        assert_eq!(banner(step(WorkoutStepKind::Warmup, 0, 0)).as_str(), "! WARMUP");
+        assert_eq!(
+            banner(step(WorkoutStepKind::Cooldown, 0, 0)).as_str(),
+            "! COOLDOWN"
+        );
+        assert_eq!(banner(Alert::WorkoutEnding).as_str(), "! STEP END");
+        assert_eq!(banner(Alert::WorkoutDone).as_str(), "! WKT DONE");
+        for alert in [
+            step(WorkoutStepKind::Rep, 255, 255),
+            step(WorkoutStepKind::Recovery, 255, 255),
+            Alert::WorkoutEnding,
+            Alert::WorkoutDone,
+        ] {
+            assert!(banner(alert).len() <= 10, "{alert:?} overflows the band");
+        }
     }
 }

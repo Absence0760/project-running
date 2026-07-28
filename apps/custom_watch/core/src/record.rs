@@ -43,6 +43,7 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
+use crate::workout::{WorkoutRunner, WorkoutStep, WorkoutView};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -559,6 +560,10 @@ pub struct Snapshot {
     /// Where the run has reached in the armed guided run, or `None` when none is
     /// armed.
     pub guided_run: Option<GuidedRunView>,
+    /// Where the armed structured workout stands ([`crate::workout`]), or
+    /// `None` when none is pushed — the Workout page then reads an honest
+    /// inactive state. Armed while idle it previews step 0.
+    pub workout: Option<WorkoutView>,
     /// The synced training-readiness score, or `None` until pushed.
     pub readiness: Option<ReadinessView>,
     /// The synced primary-goal progress, or `None` until pushed.
@@ -705,6 +710,11 @@ pub struct Recorder {
     start_s: u32,
     now_s: u32,
     moving_s: u32,
+    /// Seconds the clock advanced while manually paused. The workout runner's
+    /// time axis is elapsed minus this — the phone recorder's stopwatch, which
+    /// halts on a manual pause but runs through an auto-pause (a standing rest
+    /// inside a timed recovery step is the step working as intended).
+    manual_paused_s: u32,
     distance_m: f64,
     current_speed_mps: f32,
     /// Last fix accepted for distance — the anchor the next segment measures
@@ -823,6 +833,10 @@ pub struct Recorder {
     /// ([`set_guided_run`](Recorder::set_guided_run)); `None` leaves the
     /// GuidedRun page an honest inactive state.
     guided: Option<&'static GuidedRun<'static>>,
+    /// The armed structured workout — the [`crate::workout`] runner over the
+    /// pushed pre-expanded step list ([`set_workout`](Recorder::set_workout));
+    /// `None` leaves the Workout page an honest inactive state.
+    workout: Option<WorkoutRunner>,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -867,6 +881,7 @@ impl Recorder {
             start_s: 0,
             now_s: 0,
             moving_s: 0,
+            manual_paused_s: 0,
             distance_m: 0.0,
             current_speed_mps: 0.0,
             last: None,
@@ -907,6 +922,7 @@ impl Recorder {
             plan_replan: None,
             plan_adaptive: None,
             guided: None,
+            workout: None,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -1169,6 +1185,23 @@ impl Recorder {
         });
     }
 
+    /// Arm the Workout page + runner with a pushed pre-expanded step list
+    /// (the `WKT1` push — [`crate::workout_store`] already validated every
+    /// step). Empty disarms; a list the runner rejects (over-cap) is IGNORED
+    /// so garbage can't disarm a workout mid-session. Armed mid-run, the
+    /// runner anchors at the current totals on its next feed; armed idle, it
+    /// waits for [`start`](Recorder::start). The step list is configuration
+    /// like the pacer goal — it survives stop and re-arms on the next start.
+    pub fn set_workout(&mut self, steps: &[WorkoutStep]) {
+        if steps.is_empty() {
+            self.workout = None;
+            return;
+        }
+        if let Some(w) = WorkoutRunner::new(steps) {
+            self.workout = Some(w);
+        }
+    }
+
     /// Arm the GuidedRun page with a scripted coach run by library id (the
     /// runner's selection, made on the phone). `None` disarms it.
     ///
@@ -1303,6 +1336,7 @@ impl Recorder {
         self.start_s = now_s;
         self.now_s = now_s;
         self.moving_s = 0;
+        self.manual_paused_s = 0;
         self.distance_m = 0.0;
         self.current_speed_mps = 0.0;
         self.last = None;
@@ -1324,6 +1358,12 @@ impl Recorder {
         self.gap.reset();
         self.pacer.reset();
         self.elev_profile.reset();
+        // The armed workout re-runs from step 0, and the immediate feed
+        // announces the first step at the gun (transition_seq 1).
+        if let Some(w) = self.workout.as_mut() {
+            w.reset();
+            w.on_totals(0.0, 0);
+        }
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -1334,7 +1374,7 @@ impl Recorder {
         if !active {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
         self.state = RecordState::Paused;
         self.manual_paused = true;
         self.current_speed_mps = 0.0;
@@ -1346,7 +1386,7 @@ impl Recorder {
         if self.state != RecordState::Paused || !self.manual_paused {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
         self.state = RecordState::Recording;
         self.manual_paused = false;
         self.last = None;
@@ -1361,8 +1401,14 @@ impl Recorder {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
         self.close_lap();
+        // During a workout the lap press doubles as "advance the step" —
+        // Garmin's own lap-button semantics — because the §350 grammar has no
+        // spare button for a dedicated skip.
+        if let Some(w) = self.workout.as_mut() {
+            w.skip_step();
+        }
     }
 
     /// Finalise the run. Inert once idle or already finished; afterward fixes
@@ -1373,7 +1419,7 @@ impl Recorder {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
         self.state = RecordState::Finished;
         self.current_speed_mps = 0.0;
     }
@@ -1388,7 +1434,7 @@ impl Recorder {
         if self.state != RecordState::Finished {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
         self.state = RecordState::Idle;
     }
 
@@ -1398,7 +1444,8 @@ impl Recorder {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
         }
-        self.now_s = now_s.max(self.now_s);
+        self.advance_now(now_s);
+        self.feed_workout();
     }
 
     /// Consume one GPS fix, using its `uptime_s` as the current time. Ignored
@@ -1411,7 +1458,7 @@ impl Recorder {
             RecordState::Paused if !self.manual_paused => {}
             _ => return,
         }
-        self.now_s = fix.uptime_s.max(self.now_s);
+        self.advance_now(fix.uptime_s);
 
         let last = match self.last {
             Some(l) => l,
@@ -1498,6 +1545,7 @@ impl Recorder {
         // Distance only moves here, so this is the one place the partner's
         // finish crossing can happen.
         self.pacer.on_distance(self.distance_m, self.elapsed_s());
+        self.feed_workout();
 
         // Auto-lap: close one lap per full AUTO_LAP_DISTANCE_M the current lap
         // has crossed. A single accepted fix in a throttled GNSS mode can span
@@ -1579,6 +1627,36 @@ impl Recorder {
         self.now_s.saturating_sub(self.start_s)
     }
 
+    /// Advance the wall clock, banking the delta as manually-paused time when
+    /// it passes during a manual pause — the accounting behind
+    /// [`workout_clock_s`](Recorder::workout_clock_s). Every mutator that used
+    /// to write `now_s` directly routes through here so no advancement can
+    /// slip past the bank.
+    fn advance_now(&mut self, now_s: u32) {
+        let now_s = now_s.max(self.now_s);
+        if self.state == RecordState::Paused && self.manual_paused {
+            self.manual_paused_s += now_s - self.now_s;
+        }
+        self.now_s = now_s;
+    }
+
+    /// The workout runner's time axis: elapsed minus manually-paused seconds —
+    /// the phone recorder's stopwatch (halts on manual pause, runs through an
+    /// auto-pause; see the `manual_paused_s` field).
+    fn workout_clock_s(&self) -> u32 {
+        self.elapsed_s().saturating_sub(self.manual_paused_s)
+    }
+
+    /// Feed the armed workout the live totals. Called wherever a run total
+    /// moves (the tick's clock, an accepted fix's distance); inert with no
+    /// workout armed.
+    fn feed_workout(&mut self) {
+        let (distance_m, clock_s) = (self.distance_m, self.workout_clock_s());
+        if let Some(w) = self.workout.as_mut() {
+            w.on_totals(distance_m, clock_s);
+        }
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         let mut snap = Snapshot {
             state: self.state,
@@ -1629,6 +1707,7 @@ impl Recorder {
             plan_replan: self.plan_replan,
             plan_adaptive: self.plan_adaptive,
             guided_run: self.guided_run_snapshot(),
+            workout: self.workout.as_ref().map(|w| w.view()),
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
@@ -1700,6 +1779,7 @@ impl Recorder {
         set(Page::PlanReplan, s.plan_replan.is_some());
         set(Page::PlanAdaptive, s.plan_adaptive.is_some());
         set(Page::GuidedRun, s.guided_run.is_some());
+        set(Page::Workout, s.workout.is_some());
         set(Page::Readiness, s.readiness.is_some());
         set(Page::Goals, s.goals.is_some());
         set(Page::TurnCue, s.turn_cue.is_some());
@@ -3874,5 +3954,171 @@ mod tests {
         }
         assert_eq!(vert.gain_m(), 0.0, "drift while stopped banks nothing");
         assert_eq!(vert.loss_m(), 0.0);
+    }
+
+    // ─────────── structured workout ───────────
+
+    fn workout_steps() -> [crate::workout::WorkoutStep; 2] {
+        use crate::workout::{WorkoutStep, WorkoutStepKind};
+        [
+            WorkoutStep {
+                kind: WorkoutStepKind::Rep,
+                rep_index: 1,
+                rep_total: 2,
+                target_distance_m: 100,
+                target_duration_s: 0,
+                target_pace_s_per_km: 300,
+                tolerance_s_per_km: 10,
+            },
+            WorkoutStep {
+                kind: WorkoutStepKind::Rep,
+                rep_index: 2,
+                rep_total: 2,
+                target_distance_m: 100,
+                target_duration_s: 0,
+                target_pace_s_per_km: 300,
+                tolerance_s_per_km: 10,
+            },
+        ]
+    }
+
+    fn duration_step(duration_s: u16) -> [crate::workout::WorkoutStep; 1] {
+        use crate::workout::{WorkoutStep, WorkoutStepKind};
+        [WorkoutStep {
+            kind: WorkoutStepKind::Steady,
+            rep_index: 0,
+            rep_total: 0,
+            target_distance_m: 0,
+            target_duration_s: duration_s,
+            target_pace_s_per_km: 300,
+            tolerance_s_per_km: 10,
+        }]
+    }
+
+    #[test]
+    fn set_workout_arms_the_page_and_start_announces_the_first_step() {
+        let mut r = Recorder::new();
+        assert!(r.snapshot().workout.is_none());
+        assert_eq!(r.snapshot().pages_mask & Page::Workout.bit(), 0);
+
+        r.set_workout(&workout_steps());
+        // Armed while idle: the page previews step 0, nothing announced yet.
+        let snap = r.snapshot();
+        let w = snap.workout.expect("armed");
+        assert_eq!(w.step_index, 0);
+        assert_eq!(w.transition_seq, 0);
+        assert_ne!(snap.pages_mask & Page::Workout.bit(), 0);
+
+        r.start(0);
+        let w = r.snapshot().workout.expect("armed");
+        assert_eq!(w.transition_seq, 1, "the gun announces step one");
+
+        r.set_workout(&[]);
+        assert!(r.snapshot().workout.is_none(), "empty push disarms");
+    }
+
+    #[test]
+    fn workout_advances_on_accepted_fix_distance() {
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        // Four ~33 m hops: 100.2 m banked, past the first 100 m rep.
+        for (i, t) in [1u32, 11, 21, 31].iter().enumerate() {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0003, -105.0, 3.0, *t));
+        }
+        let w = r.snapshot().workout.expect("armed");
+        assert_eq!(w.step_index, 1, "the covered distance advanced the rep");
+        assert!(!w.complete);
+    }
+
+    #[test]
+    fn manual_lap_skips_the_active_workout_step() {
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 1));
+        r.on_fix(&fix(40.0002, -105.0, 3.0, 8));
+        assert_eq!(r.snapshot().workout.unwrap().step_index, 0);
+        r.lap(9);
+        let snap = r.snapshot();
+        assert_eq!(
+            snap.workout.unwrap().step_index,
+            1,
+            "the lap press advances the step (Garmin lap semantics)"
+        );
+        assert_eq!(snap.lap, 2, "and still closes a lap");
+    }
+
+    #[test]
+    fn a_manual_pause_freezes_the_workout_clock() {
+        let mut r = Recorder::new();
+        r.set_workout(&duration_step(30));
+        r.start(0);
+        for t in 1..=10u32 {
+            r.tick(t);
+        }
+        assert_eq!(r.snapshot().workout.unwrap().step_elapsed_s, 10);
+        r.pause(10);
+        for t in 11..=100u32 {
+            r.tick(t);
+        }
+        let snap = r.snapshot();
+        assert_eq!(snap.elapsed_s, 100, "wall clock runs through the pause");
+        assert_eq!(
+            snap.workout.unwrap().step_elapsed_s,
+            10,
+            "the workout clock does not"
+        );
+        r.resume(100);
+        for t in 101..=115u32 {
+            r.tick(t);
+        }
+        assert_eq!(r.snapshot().workout.unwrap().step_elapsed_s, 25);
+        for t in 116..=121u32 {
+            r.tick(t);
+        }
+        let w = r.snapshot().workout.unwrap();
+        assert!(w.complete, "30 workout-clock seconds complete the step");
+    }
+
+    #[test]
+    fn an_auto_pause_keeps_the_workout_clock_running() {
+        // A standing rest inside a timed step is the step working as
+        // intended: the sub-threshold fix flips the state to (auto) Paused,
+        // and the clock — unlike a manual pause — keeps banking.
+        let mut r = Recorder::new();
+        r.set_workout(&duration_step(30));
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 1));
+        r.on_fix(&fix(40.0, -105.0, 0.0, 2));
+        assert_eq!(r.state(), RecordState::Paused);
+        assert!(!r.snapshot().manual_paused);
+        for t in 3..=35u32 {
+            r.tick(t);
+        }
+        assert!(
+            r.snapshot().workout.unwrap().complete,
+            "the timed step ran through the auto-pause"
+        );
+    }
+
+    #[test]
+    fn a_restart_rearms_the_pushed_workout_from_step_zero() {
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        for (i, t) in [1u32, 11, 21, 31].iter().enumerate() {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0003, -105.0, 3.0, *t));
+        }
+        assert_eq!(r.snapshot().workout.unwrap().step_index, 1);
+        r.stop(40);
+        r.reset(41);
+        // The pushed steps are configuration and survive; the next run
+        // starts the workout over.
+        r.start(50);
+        let w = r.snapshot().workout.expect("still armed");
+        assert_eq!(w.step_index, 0);
+        assert_eq!(w.transition_seq, 1);
+        assert!(!w.complete);
     }
 }

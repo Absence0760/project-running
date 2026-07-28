@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 33);
+        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 34);
     }
 
     #[test]
