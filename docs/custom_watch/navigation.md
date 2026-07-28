@@ -24,6 +24,8 @@ stateDiagram-v2
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
+    Menu: Settings menu (modal, §351)
+    Menu: GNSS mode / hide empty / re-zero
 
     [*] --> Idle
     Idle --> Idle: BTN3 tap — GNSS mode cycle
@@ -31,6 +33,12 @@ stateDiagram-v2
     Idle --> Diag: BTN4 — diagnostics view (§291)
     Diag --> Idle: BTN4 — back to home
     Diag --> Run: BTN1 — start run
+    Idle --> Menu: BTN5 — settings (§351)
+    Menu --> Menu: BTN3 / BTN4 — cursor up / down
+    Menu --> Menu: BTN1 — activate (value items cycle in place)
+    Menu --> Idle: BTN2 or BTN5 — exit
+    Menu --> Idle: BTN1 on RE-ZERO — fire + close
+    Menu --> Idle: 30 s inactivity — auto-close
     Idle --> Run: BTN1 — start run
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
     Run --> Run: BTN2 — arm stop ("STOP? BTN2" banner, 4 s)
@@ -121,6 +129,51 @@ commits nothing, so it is discovered for free, whereas BTN2 — which arms the
 stop everywhere else and cancels in here — is a *safety* remap the closing grid
 cannot reveal (§337), and `B1 GO` names the confirm because a START-key jump is
 learned from other watches, not from this screen.
+
+## The settings menu (idle, §351)
+
+A BTN5 tap on the idle face opens it — the lap key is dead while idle, the
+same dead-key repurposing as §290/§291. It speaks the grid's dialect
+verbatim: BTN4/BTN3 step the cursor the directions they page, BTN1 activates,
+BTN2 (or BTN5 again) exits, and row 0 is the grid's own `B2 EXIT … B1 GO`
+legend, byte-identical by test. Three items: **GNSS MODE** (cycles in place —
+the projected hours are read *before* committing, unlike the blind quick
+cycle, which stays), **HIDE EMPTY** (the §284 filter; the full per-page mask
+stays a phone surface), **RE-ZERO ALTITUDE** (fires the idle hold's request
+and closes; the idle banner answers). Value items keep the menu open — the
+row re-rendering with the new value is the confirmation. Every press inside
+is swallowed, the menu is idle-only, and 30 s of inactivity closes it because
+it covers the home clock. The GNSS mode and the hide-empty choice both
+persist in the CFG1 flash record and restore at boot — whichever side wrote
+last, menu or phone push, wins the reboot.
+
+## Every interaction, priced
+
+The §350/§351 audit: what everything on the device costs, and whether that
+is the floor. "Floor" for a single discrete action is one press; for
+select-1-of-33 it is what the §289 BFS model computes for a five-key,
+no-chord grammar.
+
+| Interaction | Cost | At floor? |
+|---|---|---|
+| Start a run (idle) | 1 tap (BTN1) | yes |
+| Pause / resume | 1 tap (BTN1) | yes |
+| Manual lap | 1 tap (BTN5) | yes |
+| Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the §-StopGuard trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
+| Dismiss a finished run | 1 tap (BTN1) | yes |
+| Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
+| Any of 33 pages | ≤ 6 actions, avg 3.8 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Open the page grid | 1 hold (0.5 s, either paging key) | yes |
+| GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
+| QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
+| Diagnostics view | 1 tap (idle BTN4) | yes |
+| Open settings | 1 tap (idle BTN5) | yes |
+| Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + activate); exit is free (30 s) or 1 | — |
+
+Everything that can be one press is one press; the only interaction above
+its floor is the stop, on purpose. The remaining lever on the page-cycle
+average is the phone-side mask curation (§284), which is a content decision,
+not a grammar one.
 
 ## Press cost — computed, from the Dashboard, full 33-page mask
 
@@ -216,6 +269,12 @@ removes.
   idle is the QNH re-zero, and BTN4 toggles the diagnostics view whatever
   its duration — duration never changes an idle gesture's meaning
   mid-press.
+- **The settings menu swallows every button and exists only while idle**
+  (§351). No press inside it can start, pause, or lap a run; a run starting
+  under it (sim-autostart) closes it; and its legend row is byte-identical
+  to the grid's, so the two modals are one dialect. Its 30 s auto-close is a
+  per-press deadline, never a standing wake, and exists because the menu
+  covers the home clock.
 - **A hold's action fires at its threshold, not on release** (§350). At
   0.5 s of a run-view paging hold the grid simply opens under the thumb —
   the modal appearing IS the feedback — so no gesture asks the runner to
@@ -285,7 +344,8 @@ precedent that a lap deserves its own dedicated, undelayed tap.
 0.5 s threshold, mid-hold), then `$btn3`/`$btn4` to move the cursor
 backward / forward and `$btn1` to jump (`B1 GO`), `$btn5` lap. The same
 grammar in `FIN`: `$btn4` right, `$btn3` left. While idle, `$btn4` toggles
-the home face against the diagnostics face and `$btn3h` is the QNH
-re-zero. Or click the bezel buttons in the `--gui` window — they sit at the
-§81 positions (BTN5 upper-left, BTN2 mid-left, BTN3 lower-left, BTN1
-upper-right, BTN4 lower-right).
+the home face against the diagnostics face, `$btn3h` is the QNH re-zero,
+and `$btn5` opens the settings menu (`$btn3`/`$btn4` cursor, `$btn1`
+activate, `$btn2` exit). Or click the bezel buttons in the `--gui` window —
+they sit at the §81 positions (BTN5 upper-left, BTN2 mid-left, BTN3
+lower-left, BTN1 upper-right, BTN4 lower-right).

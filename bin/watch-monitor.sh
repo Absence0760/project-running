@@ -15,7 +15,8 @@
 #   runMacro $btn3h   open the page grid ($btn3/$btn4 step, $btn3h/$btn4h row-jump,
 #                     $btn1 confirms, ~3 s auto-selects); idle: QNH re-zero
 #   runMacro $btn4h   the same grid open from the right-hand key
-#   runMacro $btn5    manual lap
+#   runMacro $btn5    manual lap; idle: open the settings menu ($btn3/$btn4
+#                     cursor, $btn1 activate, $btn2 exit)
 #
 # Any other monitor command works too, e.g.:
 #   sysbus.spi3.display DumpFrame "/tmp/frame.ppm"

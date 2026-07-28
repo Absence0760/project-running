@@ -170,7 +170,9 @@ runMacro $btn4    # page RIGHT in any run view (Dashboard -> Distance -> Pace ->
 runMacro $btn3h   # hold BTN3 ~0.8 s — run view: open the page-grid overview;
                   # idle face: QNH re-zero
 runMacro $btn4h   # hold BTN4 ~0.8 s — the same grid open, right-hand key
-runMacro $btn5    # take a manual lap
+runMacro $btn5    # take a manual lap; on the idle face: open the settings
+                  # menu (§351 — $btn3/$btn4 cursor, $btn1 activate,
+                  # $btn2 or $btn5 exit, 30 s inactivity auto-closes)
 ```
 
 Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3h` / `$btn4h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN4 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` (or `$btn4h`) opens it, `runMacro $btn3` / `runMacro $btn4` step the cursor backward / forward, and `runMacro $btn1` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-course` (below) are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
