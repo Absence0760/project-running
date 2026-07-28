@@ -171,6 +171,21 @@ compat vectors; a v4 frame claiming the v5 bit is rejected. Dart encoder + golde
 lockstep across both twins; the resting-HR-only vector is pinned Rust↔Dart. Host-tested +
 build-verified.
 
+## 2026-07-28 — activity profiles: four presets over the knobs that already existed
+
+The parity backlog's "Activity profiles" row, landed as a **macro, not a container**
+([§ 353](../architecture/decisions.md)): `watch_core::profiles` names Run / Trail / Ultra / Hike,
+each a curated §284 page mask + a GNSS mode, selected from a **fourth §351 settings-menu row** as a
+clamped directional ladder (right = longer / more battery; a first-ever press starts at Run, left
+of unset applies nothing). Applying a profile rides the SAME channels a phone push and the idle
+quick-cycle ride — pages via `state::SETTINGS`, mode via the shared `set_gnss_mode` — so §351's
+last-writer rule needed no third state system. The selection persists in CFG1's reserved byte
+behind a third flags bit (the no-version-bump drill again) and boot re-applies the preset;
+`persist_hide_empty` stopped rebuilding the shared flags byte from scratch on the way, which was a
+latent single-writer assumption waiting to eat a future flag. No per-profile alert cadences (§24).
+The four-item menu keeps the ≤ 4-press setting-change bound (farthest row is still two wrapping
+cursor steps). Host-tested + build-verified.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
