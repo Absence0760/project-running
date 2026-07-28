@@ -156,6 +156,21 @@ exists to enforce, but it also rebuilt work already landed. The lesson is a brie
 whose worktree may fork from stale main must be told to fast-forward onto the working branch first
 and to verify the premises it was handed before building on them.
 
+## 2026-07-28 — training load whole: TRIMP stress + the rolling trio
+
+The last unbuilt halves of the training-load row, pulled forward like the 2026-07-26 batch because
+neither needed parts ([§ 352](../architecture/decisions.md)). `SET1` v5 puts the **resting HR** on
+the wire (`flags2` bit 6 — the TRIMP calibration pair's second half; max HR has ridden since v1),
+the recorder banks a time-weighted HR average exactly where zone time banks, and the single-run
+stress upgrades from the 10-points/km proxy to **Banister TRIMP** when pair + average are live —
+with the page's `LOAD` row naming the model in force (`TRIMP`/`DIST`) so the number is never
+silently re-scored. The **rolling CTL/ATL/TSB** lands as a whole-or-nothing
+`Recorder::set_load_trend` push (the `set_fitness` hook shape, no wire field yet) rendering
+`CTL/ATL` + a signed `FORM` row once synced. The frozen v4 full-frame golden joins the v1/v2/v3
+compat vectors; a v4 frame claiming the v5 bit is rejected. Dart encoder + goldens moved in
+lockstep across both twins; the resting-HR-only vector is pinned Rust↔Dart. Host-tested +
+build-verified.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
