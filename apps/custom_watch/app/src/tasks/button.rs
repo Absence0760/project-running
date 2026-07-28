@@ -46,6 +46,8 @@ use watch_core::input_flow::{
 use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
 use watch_core::record::RecordState;
+use watch_core::settings::WatchSettings;
+use watch_core::settings_menu::{self, Menu, MenuAction, MENU_TIMEOUT_S};
 use watch_core::ui_frame::{pages_mask, record_state};
 
 use crate::run_flash::SharedStore;
@@ -69,6 +71,11 @@ const PAGE_HOLD: Duration = Duration::from_millis(PAGE_HOLD_MS as u64);
 /// `page_grid::GRID_AUTOSELECT_S` — the pure module owns the number).
 const GRID_AUTOSELECT: Duration = Duration::from_secs(GRID_AUTOSELECT_S as u64);
 
+/// The settings menu's inactivity auto-close (`settings_menu::MENU_TIMEOUT_S`
+/// owns the number) — the menu covers the home clock, so an abandoned one may
+/// not stand forever.
+const MENU_TIMEOUT: Duration = Duration::from_secs(MENU_TIMEOUT_S as u64);
+
 /// The view/navigation state both task variants thread through the shared
 /// action code: the current run page, the grid modal (this task owns its state
 /// machine and auto-select deadline; the ui task only renders the published
@@ -77,6 +84,8 @@ struct NavState {
     page: Page,
     grid: Option<PageGrid>,
     grid_deadline: Option<Instant>,
+    menu: Option<Menu>,
+    menu_deadline: Option<Instant>,
     mode: GnssMode,
     idle_view: IdleView,
 }
@@ -87,6 +96,8 @@ impl NavState {
             page: Page::default(),
             grid: None,
             grid_deadline: None,
+            menu: None,
+            menu_deadline: None,
             mode: initial_mode,
             idle_view: IdleView::Home,
         }
@@ -101,6 +112,94 @@ impl NavState {
         }
         self.grid_deadline = None;
         state::PAGE_GRID.sender().send(None);
+    }
+
+    /// Open the idle settings menu (§351) — BTN5's meaning while the lap is
+    /// dead, the same dead-key repurposing as §290/§291.
+    fn open_menu(&mut self) {
+        let m = Menu::new();
+        info!("button: BTN5 -> settings menu");
+        state::SETTINGS_MENU.sender().send(Some(m.cursor()));
+        self.menu = Some(m);
+        self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+    }
+
+    fn close_menu(&mut self, why: &str) {
+        if self.menu.take().is_some() {
+            info!("button: settings menu closed ({=str})", why);
+            state::SETTINGS_MENU.sender().send(None);
+        }
+        self.menu_deadline = None;
+    }
+
+    /// Move the menu cursor the direction the key pages — the same spatial
+    /// mapping as the run view and the grid.
+    fn menu_step(&mut self, key: PagingKey) {
+        if let Some(m) = self.menu.as_mut() {
+            match key {
+                PagingKey::Left => m.prev(),
+                PagingKey::Right => m.next(),
+            }
+            info!("button: menu cursor -> {}", m.item());
+            state::SETTINGS_MENU.sender().send(Some(m.cursor()));
+            self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+        }
+    }
+}
+
+/// Cycle the GNSS recording mode and persist the choice — one implementation
+/// for both routes to the same state (the idle BTN3 quick tap and the menu's
+/// item), so they cannot diverge.
+async fn cycle_gnss_mode(nav: &mut NavState, store: &'static SharedStore) {
+    nav.mode = nav.mode.next();
+    info!(
+        "button: gnss mode -> {} (fix interval {=u32}s, ~{=u32}h)",
+        nav.mode,
+        nav.mode.fix_interval_s(),
+        nav.mode.battery_est_h()
+    );
+    state::GNSS_MODE.sender().send(nav.mode);
+    // Persist so the choice survives reboot / brown-out. Best-effort / L4: a
+    // flash error only warns; the mode switch is never blocked on flash (and
+    // it no-ops under a sim with no NVMC).
+    store.lock().await.persist_gnss_mode(nav.mode).await;
+}
+
+/// Activate (BTN1) the menu's cursor item. `hide_now` is the snapshot's
+/// current hide-empty value — the toggle flips what the runner just read.
+async fn menu_activate(nav: &mut NavState, hide_now: bool, store: &'static SharedStore) {
+    let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
+        return;
+    };
+    match settings_menu::activate(item) {
+        MenuAction::CycleGnssMode => cycle_gnss_mode(nav, store).await,
+        MenuAction::ToggleHideEmpty => {
+            let hide = !hide_now;
+            info!("button: menu -> hide empty pages {}", hide);
+            // The same channel a phone push rides, so the apply path and the
+            // §351 persistence rule cannot diverge. try_send: a full queue
+            // only drops this toggle; the next press retries.
+            let s = WatchSettings {
+                hide_empty_pages: Some(hide),
+                ..Default::default()
+            };
+            if state::SETTINGS.try_send(s).is_err() {
+                warn!("button: settings queue full — hide-empty toggle dropped");
+            }
+        }
+        MenuAction::RequestQnhRezero => {
+            info!("button: menu -> qnh re-zero requested");
+            let _ = state::QNH_REZERO_REQ.try_send(());
+        }
+    }
+    if settings_menu::closes_menu(item) {
+        // The idle face's transient banner answers the request; the menu
+        // hands it the screen.
+        nav.close_menu("re-zero");
+    } else {
+        // A value item stays open — the row re-rendering with the new value
+        // is the confirmation.
+        nav.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
     }
 }
 
@@ -151,20 +250,7 @@ async fn act_paging(
             state::PAGE_GRID.sender().send(Some(g.cursor()));
             nav.grid = Some(g);
         }
-        PagingAction::CycleGnssMode => {
-            nav.mode = nav.mode.next();
-            info!(
-                "button: BTN3 -> gnss mode {} (fix interval {=u32}s, ~{=u32}h)",
-                nav.mode,
-                nav.mode.fix_interval_s(),
-                nav.mode.battery_est_h()
-            );
-            state::GNSS_MODE.sender().send(nav.mode);
-            // Persist so the choice survives reboot / brown-out. Best-effort /
-            // L4: a flash error only warns; the mode switch is never blocked
-            // on flash (and it no-ops under a sim with no NVMC).
-            store.lock().await.persist_gnss_mode(nav.mode).await;
-        }
+        PagingAction::CycleGnssMode => cycle_gnss_mode(nav, store).await,
         PagingAction::QnhRezero => {
             info!("button: BTN3 hold -> qnh re-zero requested");
             // try_send: a request already pending covers this press too.
@@ -198,7 +284,7 @@ fn act_grid_press(button: Button, nav: &mut NavState) {
 }
 
 const BOOT_LINE: &str =
-    "button: BTN1 start/pause, BTN2 stop, BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap";
+    "button: BTN1 start/pause, BTN2 stop, BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap / idle settings";
 
 #[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
@@ -232,17 +318,31 @@ pub async fn run(
             ),
             btn5.wait_for_falling_edge(),
         );
-        let pressed = if let Some(deadline) = nav.grid_deadline {
+        let pressed = if let Some(deadline) = nav.grid_deadline.or(nav.menu_deadline) {
+            // The two modal deadlines share the slot — the grid only exists
+            // in a run view and the menu only on the idle face, so at most
+            // one is armed at a time.
             match select(edges, Timer::at(deadline)).await {
                 Either::First(e) => e,
                 Either::Second(()) => {
-                    nav.grid_commit("auto-select");
+                    if nav.grid.is_some() {
+                        nav.grid_commit("auto-select");
+                    } else {
+                        nav.close_menu("timeout");
+                    }
                     continue;
                 }
             }
         } else {
             edges.await
         };
+
+        // A menu only exists on the idle face: if a run started under it
+        // (sim-autostart is the one path that can), the press that arrives
+        // closes it first and then acts on whatever surface is really up.
+        if nav.menu.is_some() && record_state(record_rx.try_get().as_ref()) != RecordState::Idle {
+            nav.close_menu("run started");
+        }
 
         // The two paging keys share one timing shape: debounce, then a single
         // select leg to the hold threshold. A release inside it is the tap; the
@@ -282,6 +382,26 @@ pub async fn run(
                 }
                 let snap = record_rx.try_get();
                 let state = record_state(snap.as_ref());
+                if nav.menu.is_some() {
+                    // Menu modal: BTN1 activates, BTN2 and BTN5 both close —
+                    // every press swallowed, none reaches the recorder.
+                    match button {
+                        Button::Primary => {
+                            let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
+                            menu_activate(&mut nav, hide, store).await;
+                        }
+                        Button::Stop => nav.close_menu("btn2"),
+                        Button::Lap => nav.close_menu("btn5"),
+                    }
+                    continue;
+                }
+                if button == Button::Lap && state == RecordState::Idle {
+                    // The lap is dead while idle, so the press opens the
+                    // settings menu (§351) — the same dead-key repurposing
+                    // that gave FIN its page-back and idle BTN4 diagnostics.
+                    nav.open_menu();
+                    continue;
+                }
                 if let Some(landing) = dispatch(button, state, now_s, &mut stop_guard)
                     .await
                     .and_then(landing_after)
@@ -300,6 +420,16 @@ pub async fn run(
             continue;
         }
         interaction_tx.send(Instant::now().as_secs() as u32);
+        if nav.menu.is_some() {
+            // Menu modal: the cursor steps on the press itself (three items
+            // need no hold tier), and the release is swallowed so no timing
+            // path runs underneath the modal.
+            nav.menu_step(key);
+            if pin.is_low() {
+                pin.wait_for_rising_edge().await;
+            }
+            continue;
+        }
         let press = match select(Timer::after(PAGE_HOLD), pin.wait_for_rising_edge()).await {
             Either::Second(()) => PageBtnPress::Tap,
             Either::First(()) => PageBtnPress::Hold,
@@ -439,6 +569,11 @@ pub async fn run(
         if nav.grid.is_some() && nav.grid_deadline.is_some_and(|dl| Instant::now() >= dl) {
             nav.grid_commit("auto-select");
         }
+        // The menu's inactivity auto-close — it covers the home clock, so an
+        // abandoned menu hands the screen back on its own.
+        if nav.menu.is_some() && nav.menu_deadline.is_some_and(|dl| Instant::now() >= dl) {
+            nav.close_menu("timeout");
+        }
         for (i, b) in btns.iter().enumerate() {
             let pressed = b.is_low();
             let was = prev[i];
@@ -456,6 +591,21 @@ pub async fn run(
                     PagingKey::Right
                 };
                 if falling {
+                    if nav.menu.is_some() {
+                        // Menu modal: the cursor steps on the press itself
+                        // (mirroring the hardware task), unless a run started
+                        // under the menu — then the press closes it and falls
+                        // through to normal handling.
+                        if record_state(record_rx.try_get().as_ref()) != RecordState::Idle {
+                            nav.close_menu("run started");
+                        } else {
+                            interaction_tx.send(Instant::now().as_secs() as u32);
+                            nav.menu_step(key);
+                            pg_down_at[k] = Some(Instant::now());
+                            pg_handled[k] = true;
+                            continue;
+                        }
+                    }
                     pg_down_at[k] = Some(Instant::now());
                     pg_handled[k] = false;
                     continue;
@@ -485,8 +635,9 @@ pub async fn run(
                 let held_for_ms = pg_down_at[k].take().map(held_ms).unwrap_or(0);
                 if pg_handled[k] {
                     pg_handled[k] = false;
-                    // The hold already acted; its release only starts the
-                    // grid's auto-select clock.
+                    // The press already acted (a threshold-fired hold, or a
+                    // menu cursor step on the press) — its release only
+                    // starts the grid's auto-select clock.
                     if nav.grid.is_some() {
                         nav.grid_deadline = Some(Instant::now() + GRID_AUTOSELECT);
                     }
@@ -530,6 +681,32 @@ pub async fn run(
             }
             let snap = record_rx.try_get();
             let state = record_state(snap.as_ref());
+            if nav.menu.is_some() {
+                if state != RecordState::Idle {
+                    // A run started under the menu (sim-autostart) — close it
+                    // and let the press act on the surface that is really up.
+                    nav.close_menu("run started");
+                } else {
+                    // Menu modal: BTN1 activates, BTN2 and BTN5 both close —
+                    // every press swallowed, none reaches the recorder.
+                    match button {
+                        Button::Primary => {
+                            let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
+                            menu_activate(&mut nav, hide, store).await;
+                        }
+                        Button::Stop => nav.close_menu("btn2"),
+                        Button::Lap => nav.close_menu("btn5"),
+                    }
+                    continue;
+                }
+            }
+            if button == Button::Lap && state == RecordState::Idle {
+                // The lap is dead while idle, so the press opens the settings
+                // menu (§351) — the same dead-key repurposing that gave FIN
+                // its page-back and idle BTN4 diagnostics.
+                nav.open_menu();
+                continue;
+            }
             if let Some(landing) = dispatch(button, state, now_s, &mut stop_guard)
                 .await
                 .and_then(landing_after)

@@ -80,6 +80,12 @@ pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::n
 /// rendering). One receiver (the `ui` task).
 pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::new();
 
+/// The idle settings menu's cursor while it is open (`None` = closed) —
+/// §351. The `button` task owns the menu state machine (like the page grid);
+/// the `ui` task only renders the published cursor over the idle face. One
+/// receiver (the `ui` task).
+pub static SETTINGS_MENU: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the

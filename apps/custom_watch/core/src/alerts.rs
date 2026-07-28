@@ -615,6 +615,7 @@ mod tests {
             race_phase: None,
             track_thinning: 1,
             pages_mask: u64::MAX,
+            hide_empty_pages: true,
         }
     }
 

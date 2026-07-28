@@ -101,22 +101,26 @@ fn an_erased_or_zeroed_page_reads_as_no_saved_state() {
 
 #[test]
 fn the_config_record_round_trips_and_rejects_every_truncation() {
-    check(256, (any::<u8>(), any::<Index>()), |(mode, idx)| {
-        let rec = encode_config(mode);
-        prop_assert_eq!(decode_config(&rec), Some(mode));
-        let cut = idx.index(CONFIG_RECORD_LEN);
-        prop_assert_eq!(decode_config(&rec[..cut]), None, "prefix of {} bytes", cut);
-        Ok(())
-    });
+    check(
+        256,
+        (any::<u8>(), any::<u8>(), any::<Index>()),
+        |(mode, flags, idx)| {
+            let rec = encode_config(mode, flags);
+            prop_assert_eq!(decode_config(&rec), Some((mode, flags)));
+            let cut = idx.index(CONFIG_RECORD_LEN);
+            prop_assert_eq!(decode_config(&rec[..cut]), None, "prefix of {} bytes", cut);
+            Ok(())
+        },
+    );
 }
 
 #[test]
 fn a_single_byte_corruption_of_the_config_record_is_always_caught() {
     check(
         512,
-        (any::<u8>(), any::<Index>(), 1u8..=u8::MAX),
-        |(mode, idx, mask)| {
-            let mut rec = encode_config(mode);
+        (any::<u8>(), any::<u8>(), any::<Index>(), 1u8..=u8::MAX),
+        |(mode, flags, idx, mask)| {
+            let mut rec = encode_config(mode, flags);
             let at = idx.index(CONFIG_RECORD_LEN);
             rec[at] ^= mask;
             prop_assert_eq!(decode_config(&rec), None, "flip at byte {}", at);

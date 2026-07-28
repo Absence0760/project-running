@@ -67,27 +67,51 @@ pub const CONFIG_VERSION: u8 = 1;
 /// an erased (all-`0xFF`) or zeroed page.
 const CONFIG_MAGIC: [u8; 4] = *b"CFG1";
 
-/// Encode the persisted-config record — `magic | version | gnss_mode | 0 0 |
+/// Bit 0 of the config flags byte: the hide-empty-pages setting has been
+/// explicitly persisted (menu edit or phone push); clear = no stored choice,
+/// the recorder keeps its default. Pre-§351 records wrote this byte as a
+/// reserved zero, so they decode as "no stored choice" with no version bump.
+pub const CONFIG_FLAG_HIDE_EMPTY_SET: u8 = 0b0000_0001;
+/// Bit 1: the persisted hide-empty value itself (only meaningful when
+/// [`CONFIG_FLAG_HIDE_EMPTY_SET`] is set).
+pub const CONFIG_FLAG_HIDE_EMPTY_ON: u8 = 0b0000_0010;
+
+/// The flags byte encoding an explicit hide-empty choice.
+pub fn flags_with_hide_empty(hide: bool) -> u8 {
+    CONFIG_FLAG_HIDE_EMPTY_SET | if hide { CONFIG_FLAG_HIDE_EMPTY_ON } else { 0 }
+}
+
+/// The persisted hide-empty choice carried by a flags byte, or `None` when
+/// the record never stored one (every pre-§351 record).
+pub fn hide_empty_from_flags(flags: u8) -> Option<bool> {
+    (flags & CONFIG_FLAG_HIDE_EMPTY_SET != 0).then_some(flags & CONFIG_FLAG_HIDE_EMPTY_ON != 0)
+}
+
+/// Encode the persisted-config record — `magic | version | gnss_mode | flags 0 |
 /// crc32` — for the flash config page. The CRC covers every byte before it, so a
 /// torn, erased, or garbage page fails [`decode_config`] and the caller falls
 /// back to defaults (same fail-closed rule as [`recover_slot`]).
-pub fn encode_config(gnss_mode: u8) -> [u8; CONFIG_RECORD_LEN] {
+pub fn encode_config(gnss_mode: u8, flags: u8) -> [u8; CONFIG_RECORD_LEN] {
     let mut buf = [0u8; CONFIG_RECORD_LEN];
     buf[0..4].copy_from_slice(&CONFIG_MAGIC);
     buf[4] = CONFIG_VERSION;
     buf[5] = gnss_mode;
-    // buf[6..8] reserved, left zero (still CRC-covered).
+    buf[6] = flags;
+    // buf[7] reserved, left zero (still CRC-covered).
     let crc = crc32(&buf[0..8]);
     buf[8..12].copy_from_slice(&crc.to_le_bytes());
     buf
 }
 
-/// Decode the persisted-config record, returning the stored `gnss_mode` byte, or
-/// `None` when the bytes are too short, carry the wrong magic or version, or fail
-/// the CRC — an erased or corrupt page reads as "no saved config". The mode byte
-/// itself is validated by the caller ([`crate::gnss_mode::GnssMode::from_byte`]),
-/// so a CRC-valid but unknown byte still falls back to the default.
-pub fn decode_config(bytes: &[u8]) -> Option<u8> {
+/// Decode the persisted-config record, returning the stored `(gnss_mode,
+/// flags)` bytes, or `None` when the bytes are too short, carry the wrong
+/// magic or version, or fail the CRC — an erased or corrupt page reads as "no
+/// saved config". The mode byte itself is validated by the caller
+/// ([`crate::gnss_mode::GnssMode::from_byte`]), so a CRC-valid but unknown
+/// byte still falls back to the default; the flags byte likewise only speaks
+/// through [`hide_empty_from_flags`], so an unknown bit is ignored rather
+/// than misread.
+pub fn decode_config(bytes: &[u8]) -> Option<(u8, u8)> {
     if bytes.len() < CONFIG_RECORD_LEN {
         return None;
     }
@@ -101,7 +125,7 @@ pub fn decode_config(bytes: &[u8]) -> Option<u8> {
     if crc32(&bytes[0..8]) != stored {
         return None;
     }
-    Some(bytes[5])
+    Some((bytes[5], bytes[6]))
 }
 
 /// Offset of the persisted BLE bond record within the config page — clear of
@@ -1445,10 +1469,10 @@ mod tests {
         // Both records written into one config page image read back
         // independently — the layout invariant rewrite_config_page relies on.
         let mut page = [0xFFu8; CONFIG_LEN];
-        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(2));
+        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(2, flags_with_hide_empty(true)));
         page[BOND_RECORD_OFFSET..BOND_RECORD_OFFSET + BOND_RECORD_LEN]
             .copy_from_slice(&a_bond().encode());
-        assert_eq!(decode_config(&page), Some(2));
+        assert_eq!(decode_config(&page), Some((2, flags_with_hide_empty(true))));
         assert_eq!(
             BondRecord::decode(&page[BOND_RECORD_OFFSET..]),
             Some(a_bond())
@@ -1551,12 +1575,36 @@ mod tests {
     }
 
     #[test]
-    fn config_round_trips_every_mode_byte() {
+    fn config_round_trips_every_mode_byte_and_flags() {
         for mode in [0u8, 1, 2] {
-            let rec = encode_config(mode);
-            assert_eq!(rec.len(), CONFIG_RECORD_LEN);
-            assert_eq!(decode_config(&rec), Some(mode));
+            for flags in [
+                0u8,
+                flags_with_hide_empty(true),
+                flags_with_hide_empty(false),
+            ] {
+                let rec = encode_config(mode, flags);
+                assert_eq!(rec.len(), CONFIG_RECORD_LEN);
+                assert_eq!(decode_config(&rec), Some((mode, flags)));
+            }
         }
+    }
+
+    #[test]
+    fn hide_empty_flags_round_trip_and_a_pre_351_record_reads_as_unset() {
+        assert_eq!(
+            hide_empty_from_flags(flags_with_hide_empty(true)),
+            Some(true)
+        );
+        assert_eq!(
+            hide_empty_from_flags(flags_with_hide_empty(false)),
+            Some(false)
+        );
+        // Pre-§351 records wrote byte 6 as a reserved zero — they must decode
+        // (same magic, same version, CRC still valid) and read as "no stored
+        // choice", not as a confident OFF.
+        let old = encode_config(1, 0);
+        assert_eq!(decode_config(&old), Some((1, 0)));
+        assert_eq!(hide_empty_from_flags(0), None);
     }
 
     #[test]
@@ -1578,21 +1626,21 @@ mod tests {
     fn decode_config_rejects_a_corrupt_crc() {
         // Flip the stored mode byte without recomputing the CRC — exactly a
         // single-bit flash bit-rot — and the record must read as absent.
-        let mut rec = encode_config(2);
+        let mut rec = encode_config(2, 0);
         rec[5] ^= 0xFF;
         assert_eq!(decode_config(&rec), None);
-        // Corrupting a CRC-covered reserved byte is caught too.
-        let mut rec = encode_config(1);
-        rec[6] ^= 0x01;
+        // Corrupting the CRC-covered flags byte is caught too.
+        let mut rec = encode_config(1, flags_with_hide_empty(true));
+        rec[6] ^= 0x80;
         assert_eq!(decode_config(&rec), None);
     }
 
     #[test]
     fn decode_config_rejects_wrong_magic_and_version() {
-        let mut rec = encode_config(1);
+        let mut rec = encode_config(1, 0);
         rec[0] = b'X';
         assert_eq!(decode_config(&rec), None);
-        let mut rec = encode_config(1);
+        let mut rec = encode_config(1, 0);
         rec[4] = CONFIG_VERSION + 1;
         assert_eq!(decode_config(&rec), None);
     }
@@ -1601,7 +1649,7 @@ mod tests {
     fn decode_config_never_reads_out_of_bounds_on_a_short_slice() {
         assert_eq!(decode_config(&[]), None);
         assert_eq!(decode_config(&[0xFFu8; 4]), None);
-        let rec = encode_config(0);
+        let rec = encode_config(0, 0);
         assert_eq!(decode_config(&rec[..CONFIG_RECORD_LEN - 1]), None);
     }
 
