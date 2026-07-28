@@ -791,7 +791,11 @@ pub fn page_hero(
             Some(w) => {
                 let mut row = Row::new();
                 if w.remaining_m >= 1000 {
-                    let _ = write!(row, "{:.2} KM", (f64::from(w.remaining_m) / 1000.0).min(999.99));
+                    let _ = write!(
+                        row,
+                        "{:.2} KM",
+                        (f64::from(w.remaining_m) / 1000.0).min(999.99)
+                    );
                 } else {
                     let _ = write!(row, "{} M", w.remaining_m);
                 }
@@ -1362,7 +1366,11 @@ fn write_workout_step_label(row: &mut Row, kind: WorkoutStepKind, rep_index: u8,
 /// `1:30 @ 7:00`.
 fn write_workout_target(row: &mut Row, w: &crate::workout::WorkoutView) {
     if w.duration_based {
-        let _ = write!(row, "{}", split_row(u32::from(w.target_duration_s)).as_str());
+        let _ = write!(
+            row,
+            "{}",
+            split_row(u32::from(w.target_duration_s)).as_str()
+        );
     } else if w.target_distance_m >= 1000 {
         let _ = write!(
             row,
@@ -1467,7 +1475,13 @@ fn workout_glance(
                     let _ = write!(rows[6], "LAST STEP");
                 }
             }
-            let _ = write!(rows[7], "{:<5}{}/{}", "STEP", w.step_index + 1, w.step_total);
+            let _ = write!(
+                rows[7],
+                "{:<5}{}/{}",
+                "STEP",
+                w.step_index + 1,
+                w.step_total
+            );
         }
     }
     if tag_shown(tag, uptime_s, animate) {
@@ -5129,16 +5143,11 @@ mod tests {
         assert_eq!(rows[6].as_str(), "NEXT RECOVERY 200 M");
         assert_eq!(rows[7].as_str(), "STEP 3/14");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        assert!(page_icons(
-            Page::Workout,
-            Some(&fix()),
-            Some(152),
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        assert!(
+            page_icons(Page::Workout, Some(&fix()), Some(152), Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
     }
 
     #[test]

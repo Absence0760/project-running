@@ -387,10 +387,8 @@ pub async fn run(store: &'static SharedStore) {
                 target_pace_s_per_km: pace,
                 tolerance_s_per_km: 10,
             };
-            let mut steps: heapless::Vec<
-                WorkoutStep,
-                { watch_core::workout::MAX_WORKOUT_STEPS },
-            > = heapless::Vec::new();
+            let mut steps: heapless::Vec<WorkoutStep, { watch_core::workout::MAX_WORKOUT_STEPS }> =
+                heapless::Vec::new();
             let _ = steps.push(dist(WorkoutStepKind::Warmup, 0, 0, 60, 360));
             let _ = steps.push(dist(WorkoutStepKind::Rep, 1, 2, 50, 300));
             let _ = steps.push(WorkoutStep {
