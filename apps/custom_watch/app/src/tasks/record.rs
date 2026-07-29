@@ -369,6 +369,14 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_pages_enabled(watch_core::profiles::preset(p).pages);
         info!("record: restored profile {} page preset", p);
     }
+    // Restore the marked waypoints (§357). A stash the runner marked is worth
+    // nothing if a battery pull forgets it, so the store is read back before
+    // the first press can land; an absent or corrupt record leaves the empty
+    // store the recorder booted with.
+    if let Some(w) = store.lock().await.read_waypoints() {
+        info!("record: restored {=usize} waypoint(s)", w.len());
+        recorder.set_waypoints(w);
+    }
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
@@ -670,6 +678,20 @@ pub async fn run(store: &'static SharedStore) {
                     RecordCommand::Stop => recorder.stop(now_s),
                     RecordCommand::Lap => recorder.lap(now_s),
                     RecordCommand::Reset => recorder.reset(now_s),
+                    RecordCommand::MarkWaypoint => {
+                        // Persist immediately rather than at stop: the reason
+                        // to mark a stash is that you may not finish the run
+                        // that found it. Best-effort / L4 like every other
+                        // config write — a flash error warns and the RAM mark
+                        // still shows on the page. A refused mark (no anchor)
+                        // writes nothing, so a dead press costs no page erase.
+                        if recorder.mark_waypoint(now_s) {
+                            let w = recorder.waypoints().clone();
+                            store.lock().await.persist_waypoints(&w).await;
+                        } else {
+                            warn!("record: waypoint mark ignored — no position anchor");
+                        }
+                    }
                 }
                 let now = recorder.state();
                 if prev == RecordState::Idle && now == RecordState::Recording {

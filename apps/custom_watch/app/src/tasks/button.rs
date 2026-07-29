@@ -18,8 +18,9 @@
 //!   BTN4 (lower-right) — tap pages RIGHT in any run view; hold opens the page
 //!          grid; idle: toggles home / diagnostics whatever the duration;
 //!          settings menu: exit (the BACK slot)
-//!   BTN5 (upper-left)  — manual lap; idle: open the settings menu; settings
-//!          menu: edit left (off / decrease); swallowed inside the grid
+//!   BTN5 (upper-left)  — manual lap, held past PAGE_HOLD_MS marks a waypoint
+//!          (§357); idle: open the settings menu; settings menu: edit left
+//!          (off / decrease); swallowed inside the grid
 //! The paging pair is spatially congruent with the horizontal page ring (the
 //! top-edge position thumb): left key walks left, right key walks right, and
 //! the grid cursor moves the same directions. The buttons are active-LOW
@@ -37,8 +38,8 @@ use embassy_time::{Duration, Instant, Timer};
 #[cfg(feature = "sim-buttons")]
 use watch_core::button::classify_page_hold;
 use watch_core::button::{
-    command_for, grid_press, Button, GridPress, PageBtnPress, RecordCommand, StopGuard, StopPress,
-    PAGE_HOLD_MS, STOP_CONFIRM_WINDOW_S,
+    command_for, grid_press, lap_press_command, Button, GridPress, PageBtnPress, RecordCommand,
+    StopGuard, StopPress, PAGE_HOLD_MS, STOP_CONFIRM_WINDOW_S,
 };
 use watch_core::face::IdleView;
 use watch_core::gnss_mode::GnssMode;
@@ -326,7 +327,7 @@ fn act_grid_press(button: Button, nav: &mut NavState) {
 }
 
 const BOOT_LINE: &str =
-    "button: BTN1 start/pause, BTN2 stop, BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap / idle settings";
+    "button: BTN1 start/pause, BTN2 stop, BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap (hold: mark waypoint) / idle settings";
 
 #[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
@@ -444,7 +445,19 @@ pub async fn run(
                     nav.open_menu();
                     continue;
                 }
-                if let Some(landing) = dispatch(button, state, now_s, &mut stop_guard)
+                // BTN5 mid-run has two tiers (§357), timed exactly like the
+                // paging keys: one boundary, the hold's action firing AT the
+                // threshold while still held, and its release swallowed. The
+                // other two buttons resolve on the press itself.
+                let press = if button == Button::Lap {
+                    match select(Timer::after(PAGE_HOLD), btn5.wait_for_rising_edge()).await {
+                        Either::Second(()) => PageBtnPress::Tap,
+                        Either::First(()) => PageBtnPress::Hold,
+                    }
+                } else {
+                    PageBtnPress::Tap
+                };
+                if let Some(landing) = dispatch(button, press, state, now_s, &mut stop_guard)
                     .await
                     .and_then(landing_after)
                 {
@@ -452,6 +465,12 @@ pub async fn run(
                     state::PAGE.sender().send(nav.page);
                     nav.idle_view = landing.idle_view;
                     state::IDLE_VIEW.sender().send(nav.idle_view);
+                }
+                // Same guard as the paging keys: only wait on a release that
+                // has not already happened, or a release landing in the
+                // re-arm gap would hang every button behind a whole new press.
+                if press == PageBtnPress::Hold && btn5.is_low() {
+                    btn5.wait_for_rising_edge().await;
                 }
                 continue;
             }
@@ -509,8 +528,15 @@ pub async fn run(
 /// reads as a dead button. Returns the command it sent, if any, so a caller
 /// can react (the page reset on a dismissed run). Shared by the hardware and
 /// sim button tasks.
+///
+/// `press` is the tier BTN5 was held for (§357) — the only non-paging key with
+/// two of them. BTN1 and BTN2 mean the same thing at any duration and are
+/// always fed [`PageBtnPress::Tap`]: an idle gesture must never change meaning
+/// mid-press, and a stop that only fires on a release nobody timed would be
+/// worse than the double-press guard it already carries.
 async fn dispatch(
     button: Button,
+    press: PageBtnPress,
     state: RecordState,
     now_s: u32,
     stop_guard: &mut StopGuard,
@@ -535,15 +561,17 @@ async fn dispatch(
             }
             None
         }
-        _ => {
-            if let Some(cmd) = command_for(button, state) {
-                info!("button: {} -> {}", button, cmd);
-                state::RECORD_CMD.send(cmd).await;
-                return Some(cmd);
-            }
-            None
-        }
+        Button::Lap => send_cmd(button, lap_press_command(state, press)).await,
+        Button::Primary => send_cmd(button, command_for(button, state)).await,
     }
+}
+
+async fn send_cmd(button: Button, cmd: Option<RecordCommand>) -> Option<RecordCommand> {
+    if let Some(cmd) = cmd {
+        info!("button: {} -> {}", button, cmd);
+        state::RECORD_CMD.send(cmd).await;
+    }
+    cmd
 }
 
 /// Milliseconds a button has been down, in the unit the host-tested press
@@ -606,6 +634,11 @@ pub async fn run(
     // the press handled so its release is inert. Index 0 = BTN3, 1 = BTN4.
     let mut pg_down_at: [Option<Instant>; 2] = [None, None];
     let mut pg_handled: [bool; 2] = [false, false];
+    // BTN5 times its own hold the same way, for the §357 mark tier — only
+    // while a run is under way; every other BTN5 meaning (the settings menu,
+    // the grid swallow, a menu edit) still resolves on the press itself.
+    let mut lap_down_at: Option<Instant> = None;
+    let mut lap_handled = false;
     info!("{=str}", BOOT_LINE);
 
     loop {
@@ -712,6 +745,53 @@ pub async fn run(
                 continue;
             }
 
+            // BTN5's mark tier (i == 4): the hold fires at the threshold while
+            // still down, mirroring the paging keys and the hardware task, and
+            // marks the press handled so its release is inert. The timer is
+            // armed ONLY by the falling-edge path below, once it has decided
+            // the press really is a run-view lap — so a press the grid or the
+            // menu swallowed leaves nothing armed, and its release cannot
+            // smuggle a lap through here.
+            if i == 4 && !falling && lap_down_at.is_some() {
+                if pressed
+                    && !lap_handled
+                    && lap_down_at.is_some_and(|at| held_ms(at) >= PAGE_HOLD_MS)
+                {
+                    let now_s = Instant::now().as_secs() as u32;
+                    interaction_tx.send(now_s);
+                    let state = record_state(record_rx.try_get().as_ref());
+                    dispatch(
+                        Button::Lap,
+                        PageBtnPress::Hold,
+                        state,
+                        now_s,
+                        &mut stop_guard,
+                    )
+                    .await;
+                    lap_handled = true;
+                    continue;
+                }
+                if rising {
+                    let held_for_ms = lap_down_at.take().map(held_ms).unwrap_or(0);
+                    if lap_handled {
+                        lap_handled = false;
+                        continue;
+                    }
+                    // A release that crossed the threshold between polls still
+                    // earns its hold action rather than being demoted to a tap.
+                    let now_s = Instant::now().as_secs() as u32;
+                    let state = record_state(record_rx.try_get().as_ref());
+                    dispatch(
+                        Button::Lap,
+                        classify_page_hold(held_for_ms),
+                        state,
+                        now_s,
+                        &mut stop_guard,
+                    )
+                    .await;
+                }
+                continue;
+            }
             if !falling {
                 continue;
             }
@@ -755,9 +835,18 @@ pub async fn run(
                 nav.open_menu();
                 continue;
             }
-            if let Some(landing) = dispatch(button, state, now_s, &mut stop_guard)
-                .await
-                .and_then(landing_after)
+            if button == Button::Lap {
+                // A run-view BTN5: hand the press to the hold timer above
+                // rather than acting now, so the tier is decided by how long
+                // it is held (§357).
+                lap_down_at = Some(Instant::now());
+                lap_handled = false;
+                continue;
+            }
+            if let Some(landing) =
+                dispatch(button, PageBtnPress::Tap, state, now_s, &mut stop_guard)
+                    .await
+                    .and_then(landing_after)
             {
                 nav.page = landing.page;
                 state::PAGE.sender().send(nav.page);
