@@ -20,6 +20,11 @@
 //! - [`UnfedClass::RunGate`] — run on; the page needs more of *this* run.
 //! - [`UnfedClass::Settled`] — nothing to do. The page IS fed and the honest
 //!   answer is none, so the wording must not read as a failed sync.
+//! - [`UnfedClass::WatchAction`] — act on the watch. The one class whose datum
+//!   neither the phone nor a sensor nor the run itself supplies: the runner
+//!   creates it with a button. Its hint therefore names the gesture, because a
+//!   surface that only says "empty" about a thing only a hidden press can fill
+//!   is a surface nobody ever fills.
 //!
 //! An absent *value* inside an otherwise-fed row keeps the `--` marker instead
 //! (`HR --`, `ETA --`, `WEAR --`); this module governs whole reason LINES.
@@ -35,10 +40,17 @@ pub enum UnfedClass {
     RunGate,
     /// Fed and computed; the honest answer is none.
     Settled,
+    /// The runner fills this one from the watch itself.
+    WatchAction,
 }
 
 /// The remedy line that follows every [`UnfedClass::PhoneFed`] reason.
 pub const PHONE_SYNC_HINT: &str = "SET VIA PHONE SYNC";
+
+/// The remedy line for [`Unfed::NoWaypoints`] — the §357 gesture spelled out.
+/// A hold has no discoverable affordance on a five-button watch, so the empty
+/// page is the only place the runner can learn it exists.
+pub const WAYPOINT_MARK_HINT: &str = "HOLD BTN5 TO MARK";
 
 /// The complete set of reasons a page may give for an empty body.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -67,13 +79,15 @@ pub enum Unfed {
     /// The sun does not rise at this latitude today — there is no sunrise to
     /// count down to.
     PolarNight,
+    /// Nothing has been marked, so there is no position to navigate back to.
+    NoWaypoints,
 }
 
 impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 11] = [
+    pub const ALL: [Unfed; 12] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
         Unfed::AwaitingFix,
@@ -85,6 +99,7 @@ impl Unfed {
         Unfed::NoCourseElevation,
         Unfed::MidnightSun,
         Unfed::PolarNight,
+        Unfed::NoWaypoints,
     ];
 
     /// What the runner can do about it.
@@ -99,6 +114,7 @@ impl Unfed {
             | Unfed::NoCourseElevation
             | Unfed::MidnightSun
             | Unfed::PolarNight => UnfedClass::Settled,
+            Unfed::NoWaypoints => UnfedClass::WatchAction,
         }
     }
 
@@ -117,6 +133,7 @@ impl Unfed {
             Unfed::NoCourseElevation => "NO COURSE ELEV",
             Unfed::MidnightSun => "MIDNIGHT SUN",
             Unfed::PolarNight => "POLAR NIGHT",
+            Unfed::NoWaypoints => "NO WAYPOINTS",
         }
     }
 
@@ -126,6 +143,7 @@ impl Unfed {
     pub const fn hint(self) -> Option<&'static str> {
         match self.class() {
             UnfedClass::PhoneFed => Some(PHONE_SYNC_HINT),
+            UnfedClass::WatchAction => Some(WAYPOINT_MARK_HINT),
             UnfedClass::Sensor | UnfedClass::RunGate | UnfedClass::Settled => None,
         }
     }
@@ -133,6 +151,7 @@ impl Unfed {
 
 const _: () = {
     assert!(PHONE_SYNC_HINT.len() <= crate::face::COLS);
+    assert!(WAYPOINT_MARK_HINT.len() <= crate::face::COLS);
     let mut i = 0;
     while i < Unfed::ALL.len() {
         assert!(Unfed::ALL[i].reason().len() <= crate::face::COLS);

@@ -169,11 +169,16 @@ pub fn landing_after(cmd: RecordCommand) -> Option<ViewLanding> {
             page: Page::default(),
             idle_view: IdleView::Home,
         }),
+        // A waypoint mark deliberately does NOT move the view: the runner is
+        // holding BTN5 while reading some other page, and yanking them onto
+        // the Waypoint page would cost a press to undo (and hide whatever
+        // they were watching at the moment they marked).
         RecordCommand::Start
         | RecordCommand::Pause
         | RecordCommand::Resume
         | RecordCommand::Stop
-        | RecordCommand::Lap => None,
+        | RecordCommand::Lap
+        | RecordCommand::MarkWaypoint => None,
     }
 }
 
