@@ -284,6 +284,7 @@ pub mod hr_drain;
 pub mod hr_duty;
 pub mod hr_zones;
 pub mod hydration;
+pub mod ice;
 pub mod input_flow;
 pub mod link;
 pub mod live_freshness;
