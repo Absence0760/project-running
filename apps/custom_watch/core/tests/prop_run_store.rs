@@ -13,9 +13,9 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::run_store::{
     blob_len, crc32, point_count, record_tag, verify_blob, ChunkRequest, LapRecord, ManifestEntry,
-    ManifestHeader, RunFooter, RunHeader, RunWriter, TrackPoint, ELE_NONE, FOOTER_CRC_OFFSET,
-    FOOTER_LEN, HEADER_LEN, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN, RECORD_LEN, RECORD_TAG_LAP,
-    RECORD_TAG_POINT,
+    ManifestHeader, RunFooter, RunHeader, RunWriter, StepRecord, TrackPoint, WorkoutRecord,
+    ELE_NONE, FOOTER_CRC_OFFSET, FOOTER_LEN, HEADER_LEN, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
+    RECORD_LEN, RECORD_TAG_LAP, RECORD_TAG_POINT, RECORD_TAG_STEP, RECORD_TAG_WORKOUT,
 };
 
 /// Big enough for every blob these suites build, and the real slot size.
@@ -52,24 +52,59 @@ fn a_lap() -> impl Strategy<Value = LapRecord> {
     )
 }
 
+/// A step record in the legal domain: `pace_s_per_km` never carries the
+/// 0 = absent sentinel, since it encodes as "absent" by design.
+fn a_step() -> impl Strategy<Value = StepRecord> {
+    (
+        any::<u8>(),
+        any::<bool>(),
+        any::<u32>(),
+        any::<u32>(),
+        prop::option::of(1u16..=u16::MAX),
+    )
+        .prop_map(
+            |(step_index, skipped, distance_dm, duration_s, pace_s_per_km)| StepRecord {
+                step_index,
+                skipped,
+                distance_dm,
+                duration_s,
+                pace_s_per_km,
+            },
+        )
+}
+
+fn a_workout() -> impl Strategy<Value = WorkoutRecord> {
+    (any::<u8>(), any::<bool>(), any::<u32>()).prop_map(|(step_total, partial, frame_crc)| {
+        WorkoutRecord {
+            step_total,
+            partial,
+            frame_crc,
+        }
+    })
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Record {
     Point(TrackPoint),
     Lap(LapRecord),
+    Step(StepRecord),
+    Workout(WorkoutRecord),
 }
 
 fn a_record() -> impl Strategy<Value = Record> {
     prop_oneof![
-        3 => a_point().prop_map(Record::Point),
+        4 => a_point().prop_map(Record::Point),
         1 => a_lap().prop_map(Record::Lap),
+        1 => a_step().prop_map(Record::Step),
     ]
 }
 
-/// A blob built the way the recorder builds one: header, records in order,
-/// CRC-stamped footer — carrying the records and the totals it was written
-/// with, so a suite can assert the bytes still say what the writer meant. Kept
-/// well under [`MAX_STORED_LAPS`] laps so the lap-drop rule never fires — that
-/// rule is another suite's business.
+/// A blob built the way the recorder builds one: header, records in order, an
+/// optional workout summary last (the finalize-time discipline), CRC-stamped
+/// footer — carrying the records and the totals it was written with, so a
+/// suite can assert the bytes still say what the writer meant. Kept well under
+/// [`MAX_STORED_LAPS`] laps / step budget so the drop rules never fire — those
+/// rules are another suite's business.
 #[derive(Clone, Debug)]
 struct Blob {
     records: Vec<Record>,
@@ -80,6 +115,7 @@ struct Blob {
 fn a_blob(max_records: usize) -> impl Strategy<Value = Blob> {
     (
         prop::collection::vec(a_record(), 0..=max_records),
+        prop::option::of(a_workout()),
         any::<u32>(),
         any::<u32>(),
         any::<u32>(),
@@ -87,7 +123,7 @@ fn a_blob(max_records: usize) -> impl Strategy<Value = Blob> {
         any::<u32>(),
     )
         .prop_map(
-            |(records, run_seq, start_uptime_s, distance_m, moving_s, elapsed_s)| {
+            |(mut records, summary, run_seq, start_uptime_s, distance_m, moving_s, elapsed_s)| {
                 let sink: heapless::Vec<u8, SLOT> = heapless::Vec::new();
                 let mut w = RunWriter::start(sink, run_seq, start_uptime_s).expect("start");
                 for r in &records {
@@ -96,7 +132,15 @@ fn a_blob(max_records: usize) -> impl Strategy<Value = Blob> {
                         Record::Lap(l) => {
                             assert!(w.push_lap(l).expect("push lap"), "under the lap cap");
                         }
+                        Record::Step(s) => {
+                            assert!(w.push_step(s).expect("push step"), "under the step cap");
+                        }
+                        Record::Workout(_) => unreachable!("a_record never emits a summary"),
                     }
+                }
+                if let Some(s) = summary {
+                    assert!(w.push_workout(&s).expect("push summary"), "first summary");
+                    records.push(Record::Workout(s));
                 }
                 let bytes = w
                     .finalize(distance_m, moving_s, elapsed_s)
@@ -123,6 +167,8 @@ fn decode_records(blob: &[u8], count: usize) -> Option<Vec<Record>> {
         match record_tag(cell)? {
             RECORD_TAG_POINT => out.push(Record::Point(TrackPoint::decode(cell)?)),
             RECORD_TAG_LAP => out.push(Record::Lap(LapRecord::decode(cell)?)),
+            RECORD_TAG_STEP => out.push(Record::Step(StepRecord::decode(cell)?)),
+            RECORD_TAG_WORKOUT => out.push(Record::Workout(WorkoutRecord::decode(cell)?)),
             _ => return None,
         }
     }
@@ -139,6 +185,8 @@ fn no_decoder_panics_on_arbitrary_bytes() {
             let _ = RunFooter::decode(&bytes);
             let _ = TrackPoint::decode(&bytes);
             let _ = LapRecord::decode(&bytes);
+            let _ = StepRecord::decode(&bytes);
+            let _ = WorkoutRecord::decode(&bytes);
             let _ = record_tag(&bytes);
             let _ = ManifestHeader::decode(&bytes);
             let _ = ManifestEntry::decode(&bytes);
@@ -178,6 +226,47 @@ fn a_lap_record_round_trips_through_its_record() {
         prop_assert_eq!(record_tag(&bytes), Some(RECORD_TAG_LAP));
         prop_assert_eq!(LapRecord::decode(&bytes), Some(l));
         prop_assert_eq!(TrackPoint::decode(&bytes), None);
+        Ok(())
+    });
+}
+
+#[test]
+fn a_step_record_round_trips_through_its_record() {
+    check(512, a_step(), |s| {
+        let bytes = s.encode();
+        prop_assert_eq!(record_tag(&bytes), Some(RECORD_TAG_STEP));
+        prop_assert_eq!(StepRecord::decode(&bytes), Some(s));
+        prop_assert_eq!(TrackPoint::decode(&bytes), None);
+        prop_assert_eq!(LapRecord::decode(&bytes), None);
+        prop_assert_eq!(WorkoutRecord::decode(&bytes), None);
+        Ok(())
+    });
+}
+
+#[test]
+fn a_workout_record_round_trips_through_its_record() {
+    check(512, a_workout(), |s| {
+        let bytes = s.encode();
+        prop_assert_eq!(record_tag(&bytes), Some(RECORD_TAG_WORKOUT));
+        prop_assert_eq!(WorkoutRecord::decode(&bytes), Some(s));
+        prop_assert_eq!(TrackPoint::decode(&bytes), None);
+        prop_assert_eq!(LapRecord::decode(&bytes), None);
+        prop_assert_eq!(StepRecord::decode(&bytes), None);
+        Ok(())
+    });
+}
+
+/// Every status / roll-up byte outside the two known values fails the decode
+/// — an unknown outcome must never read as some concrete one.
+#[test]
+fn an_unknown_status_byte_never_decodes() {
+    check(512, (a_step(), a_workout(), 2u8..=u8::MAX), |(s, w, bad)| {
+        let mut bytes = s.encode();
+        bytes[1] = bad;
+        prop_assert_eq!(StepRecord::decode(&bytes), None);
+        let mut bytes = w.encode();
+        bytes[1] = bad;
+        prop_assert_eq!(WorkoutRecord::decode(&bytes), None);
         Ok(())
     });
 }
