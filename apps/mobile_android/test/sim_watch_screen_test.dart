@@ -303,7 +303,7 @@ void main() {
       expect(transport.settingsWrites, hasLength(1));
       expect(transport.settingsWrites.single, hasLength(34));
       expect(transport.settingsWrites.single.sublist(0, 7),
-          [0x53, 0x45, 0x54, 0x31, 0x05, 0x0f, 0x41]);
+          [0x53, 0x45, 0x54, 0x31, 0x06, 0x0f, 0x41]);
       // The injected +5:45 phone zone rides as i16 LE 345, then the demo
       // resting HR (the v5 TRIMP half), ahead of the crc32 trailer.
       expect(
