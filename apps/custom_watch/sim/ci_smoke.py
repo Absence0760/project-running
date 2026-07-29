@@ -7,7 +7,7 @@ waiting for someone to run it by hand. It reuses the launcher rather than
 re-implementing the boot sequence, so a regression in watch-sim.sh itself
 (pty, defmt drain, monitor port, cleanup) also fails here.
 
-Three scenarios, selected with `--scenario` (default `all`):
+Four scenarios, selected with `--scenario` (default `all`):
 
 `smoke` — the original end-to-end pass, unchanged. In order, each assertion
 grounded in the manual evidence under sim/verification-2026-07-19/:
@@ -37,6 +37,16 @@ first occurrence is a boot-time anchor for `Page::default()`, which the walk
 asserts and then uses to recognise a full lap. `$btn3` (the lower-left key) taps
 back a page and is asserted to be the exact inverse of the forward walk;
 `$btn3h`/`$btn4h` (hold) open the page-grid overview and are not exercised here.
+
+`terrain` — the two pages the flat fixture cannot arm. Runs on mountain_loop
+with the BMP581 model's triangle profile started, marks a waypoint with the
+BTN5 hold (`$btn5h`, §357), waits for the baro's cumulative gain to pass the
+20 m a climb opens at (§359), then walks the cycle and asserts BOTH pages are
+now in it and render. `pages` proves these two stay OUT of an unarmed cycle;
+this proves they come INTO an armed one, which is the half a mis-wired
+data-presence bit would pass silently. Note the baro profile is load-bearing:
+`feed_gap` prefers baro altitude over the fix's, so the fixture's GPS ramp
+alone is shadowed by the model's static default.
 
 **What a panel dump does NOT prove.** A dump shows that *something* was drawn,
 not *what*: nothing here reads a glyph. The only evidence that a given page is
@@ -103,7 +113,19 @@ MIN_WHITE_PIXELS = 200
 MIN_SATS = 4
 STOP_ATTEMPTS = 3
 
-SCENARIO_ORDER = ("smoke", "alerts", "pages")
+SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain")
+
+# The NMEA fixture each scenario was written against, and a property OF the
+# scenario rather than of the invocation: `terrain` asserts a climb, which the
+# flat bench_jog fixture cannot produce, so running it against the default
+# would fail in a way that reads like a firmware regression. `--fixture`
+# overrides all of them for a manual poke.
+SCENARIO_FIXTURES = {
+    "smoke": "bench_jog",
+    "alerts": "bench_jog",
+    "pages": "bench_jog",
+    "terrain": "mountain_loop",
+}
 
 # The pages the walk has to reach and render. Two always-available heroes
 # (Distance / Pace, the generated-numeral pages), plus the pages the recent
@@ -120,6 +142,30 @@ SCENARIO_ORDER = ("smoke", "alerts", "pages")
 # PrRecency, PlanReplan, PlanAdaptive, RouteSimplify, AutoEffort,
 # TrainingPaces. DistanceBand needs ~5 km and stays dark on this fixture too.
 PAGES_OF_INTEREST = ("Distance", "Pace", "Pacer", "GuidedRun", "RouteElev", "Daylight")
+
+# `terrain`'s two pages. Both are absent from the bench_jog cycle by design —
+# nothing marks a point there and the ground is flat — so they get their own
+# scenario on mountain_loop rather than being bolted onto the walk above.
+TERRAIN_PAGES = ("Waypoint", "Climb")
+
+# The BMP581 triangle profile `terrain` arms. These are the rates BMP581.cs
+# documents as tracking the mountain_loop fixture's own GPS altitude ramp
+# (measured: ~417 mm/s over its 481 s climb, ~634 mm/s over its 316 s descent),
+# so baro and GPS co-vary through the elevation complementary filter.
+TRIANGLE_LOW_M = 1600
+TRIANGLE_HIGH_M = 1800
+TRIANGLE_UP_MM_S = 400
+TRIANGLE_DOWN_MM_S = 600
+# `watch_core::climb` opens a climb past 20 m of gain above the last low point
+# (at >= 2% grade, which this fixture clears by an order of magnitude). The
+# floor here carries a margin over that: the baro task's accumulator and the
+# detector's low-point-relative gain are two different sums over the same ramp
+# (the detector only samples on an accepted fix, which the min-move filter
+# thins), so waiting for exactly 20 m can start the walk a few samples before
+# the climb opens — which costs a whole extra lap of the cycle to notice. At
+# TRIANGLE_UP_MM_S the margin is ~12 s of virtual time.
+CLIMB_OPEN_GAIN_M = 25.0
+BARO_GAIN_TIMEOUT = 240
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -360,12 +406,13 @@ def assert_rendered(panel, what):
 class Sim:
     """One booted launcher session: the process, its decoded log, the monitor."""
 
-    def __init__(self, args, label, out_dir, deadline, phone_port):
+    def __init__(self, args, label, out_dir, deadline, phone_port, fixture):
         self.args = args
         self.label = label
         self.out_dir = out_dir
         self.deadline = deadline
         self.phone_port = phone_port
+        self.fixture = fixture
         self.combined = out_dir / "sim-output.log"
         self.tail = LogTail(self.combined)
         self.proc = None
@@ -424,7 +471,7 @@ class Sim:
         cmd = [
             str(REPO_ROOT / "bin" / "watch-sim.sh"),
             "--fixture",
-            self.args.fixture,
+            self.fixture,
             "--phone-port",
             str(self.phone_port),
         ]
@@ -476,8 +523,8 @@ class Sim:
 
 
 @contextmanager
-def sim_session(args, label, deadline, phone_port):
-    sim = Sim(args, label, Path(args.out_dir) / label, deadline, phone_port)
+def sim_session(args, label, deadline, phone_port, fixture):
+    sim = Sim(args, label, Path(args.out_dir) / label, deadline, phone_port, fixture)
     try:
         sim.boot()
         yield sim
@@ -586,7 +633,7 @@ def scenario_smoke(sim):
     fix = sim.wait(
         re.compile(r"gps: fix lat=(-?[\d.]+) lon=(-?[\d.]+).*sats=(\d+)"),
         120,
-        f"a parsed GPS fix from the {sim.args.fixture} NMEA fixture "
+        f"a parsed GPS fix from the {sim.fixture} NMEA fixture "
         "('gps: fix lat=… sats=N')",
     )
     sats = int(fix.group(3))
@@ -937,10 +984,149 @@ def scenario_pages(sim):
     passed(f"a BTN3 tap stepped back from {walk[-1]} to {back}")
 
 
+def scenario_terrain(sim):
+    """Arm the two pages that need terrain and prove they enter the cycle.
+
+    `pages` walks the cycle on bench_jog, where Waypoint and Climb are
+    LEGITIMATELY absent — nothing marks a point and the ground is flat — so
+    until now both were verified only negatively: the harness proved they stay
+    out of an unarmed cycle, never that they come into an armed one. A page can
+    fail that way silently (a data-presence bit wired to the wrong field reads
+    exactly like "no data"), which is the gap this closes.
+
+    Two arming steps, and neither is incidental:
+
+    **The baro ramp.** `Recorder::feed_gap` takes `baro_alt_m.or(fix.alt_m)` —
+    baro FIRST. The BMP581 model defaults to a static 1600 m, so mountain_loop's
+    GGA altitude ramp is shadowed by a flat baro and the climb detector sees
+    level ground however steep the fixture is. Starting the model's triangle
+    profile is therefore load-bearing, not scene-setting: without it this
+    scenario fails while the firmware is correct. The rates (400 mm/s up,
+    600 mm/s down between 1600 m and 1800 m) are the ones BMP581.cs documents as
+    tracking this fixture's GPS ramp, so baro and GPS co-vary through the
+    elevation complementary filter instead of fighting it.
+
+    **The BTN5 hold.** §357's mark is the only way a waypoint exists, and it is
+    a gesture no other scenario makes — `$btn5h` was added for this.
+
+    What this proves and what it does not: the pages enter `Snapshot::pages_mask`
+    and render non-blank. As everywhere else here, nothing reads a glyph — the
+    page identity is the firmware's own `ui: page <Name>` line, and the mark is
+    the record task's `run_flash: persisted waypoints`. That the WPT page shows
+    the RIGHT bearing, or the CLMB page the right metres-remaining, is a
+    host-test claim (`core/src/climb.rs`, `core/src/record.rs`), not a sim one.
+    """
+    # Assert the model is actually being read before leaning on it. The baro
+    # task parks itself on a probe timeout, and a parked baro would leave the
+    # climb detector on GPS altitude — a different code path, silently.
+    sim.wait(
+        re.compile(r"baro: BMP581 streaming"),
+        120,
+        "the baro task to reach the BMP581 model ('baro: BMP581 streaming') — "
+        "a parked task would leave the climb detector reading GPS altitude "
+        "instead, which is not what this scenario means to exercise",
+    )
+    passed("the baro task is streaming from the BMP581 model")
+
+    require_recording(sim)
+
+    # Armed AFTER the run starts, deliberately. The baro task's cumulative gain
+    # accumulates from boot, while `ClimbDetector` is reset by `Recorder::start`
+    # — so a ramp armed first banks gain the detector never sees, and the poll
+    # below would clear its floor while the detector was still short of it. Same
+    # start line for both, and the two track each other.
+    sim.monitor().send(
+        f"sysbus.twi1.bmp581 StartTriangleProfile {TRIANGLE_LOW_M} "
+        f"{TRIANGLE_HIGH_M} {TRIANGLE_UP_MM_S} {TRIANGLE_DOWN_MM_S}"
+    )
+    announce(
+        f"BMP581 triangle profile armed ({TRIANGLE_LOW_M}-{TRIANGLE_HIGH_M} m, "
+        f"up {TRIANGLE_UP_MM_S} mm/s, down {TRIANGLE_DOWN_MM_S} mm/s)"
+    )
+
+    # §357: the mark takes the recorder's distance anchor, so it needs a run
+    # that has actually accepted a fix — which `require_recording` just proved.
+    mark = sim.tail.mark()
+    sim.monitor().send("runMacro $btn5h")
+    sim.wait(
+        re.compile(r"button: Lap -> MarkWaypoint"),
+        PAGE_STEP_TIMEOUT,
+        "the BTN5 hold to be classified as the §357 mark tier "
+        "('button: Lap -> MarkWaypoint') rather than as a manual lap",
+        start=mark,
+    )
+    stored = sim.wait(
+        re.compile(r"run_flash: persisted waypoints \((\d+)\)"),
+        PAGE_STEP_TIMEOUT,
+        "the marked waypoint to reach the config page "
+        "('run_flash: persisted waypoints (N)') — a mark refused for want of a "
+        "position anchor warns instead and writes nothing",
+        start=mark,
+    )
+    passed(f"BTN5's hold marked and persisted {stored.group(1)} waypoint(s)")
+
+    # The climb detector opens past CLIMB_OPEN_GAIN_M above the last low point.
+    # Polled on the baro task's own cumulative gain rather than on the page
+    # appearing, so a stalled ramp reports as a stalled ramp instead of as a
+    # missing page 200 lines later.
+    gain_re = re.compile(r"baro: alt=(-?[\d.]+)m gain=([\d.]+)m")
+    deadline = time.monotonic() + BARO_GAIN_TIMEOUT
+    best = 0.0
+    while True:
+        sim.alive()
+        sim.tail.poll()
+        for line in sim.tail.lines:
+            m = gain_re.search(line)
+            if m:
+                best = max(best, float(m.group(2)))
+        if best >= CLIMB_OPEN_GAIN_M:
+            break
+        if time.monotonic() >= deadline:
+            raise SmokeFailure(
+                f"the baro gain reached only {best:.1f} m in "
+                f"{BARO_GAIN_TIMEOUT}s, short of the {CLIMB_OPEN_GAIN_M:.0f} m "
+                "a climb opens at — the triangle profile is not advancing (or "
+                "the elevation filter is rejecting it), so the Climb page below "
+                "would be absent for a reason that is not the page's fault"
+            )
+        time.sleep(0.5)
+    passed(f"baro gain accumulated to {best:.1f} m — past the climb-open floor")
+
+    walk = []
+    dumps = {}
+    presses = 0
+    while presses < MAX_PAGE_PRESSES and len(dumps) < len(TERRAIN_PAGES):
+        presses += 1
+        page = press_page(sim, "$btn4", f"BTN4 press {presses}")
+        walk.append(page)
+        if page in TERRAIN_PAGES and page not in dumps:
+            wait_for_no_alert(sim)
+            dumps[page] = sim.dump(f"page-{page}.ppm", f"the {page} page's panel frame")
+            assert_rendered(dumps[page], f"the {page} page")
+            announce(f"{page} rendered ({dumps[page].dark} dark pixels)")
+
+    missing = [p for p in TERRAIN_PAGES if p not in dumps]
+    if missing:
+        raise SmokeFailure(
+            f"{', '.join(missing)} never appeared in the BTN4 cycle over "
+            f"{presses} presses (walked: {' -> '.join(walk)}). Both are armed by "
+            "this scenario and by nothing else: Waypoint needs the BTN5 hold "
+            "above to have marked a point (Snapshot::waypoint_count > 0), Climb "
+            "needs a live ascent or a crest ahead (!ClimbView::is_empty). Both "
+            "arming steps asserted green above, so a page missing HERE is a "
+            "data-presence bug, not an unarmed fixture — do not widen the walk"
+        )
+    passed(
+        f"the BTN4 cycle reached both terrain pages in {presses} presses "
+        f"({' -> '.join(walk)})"
+    )
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
     "pages": scenario_pages,
+    "terrain": scenario_terrain,
 }
 
 
@@ -948,21 +1134,34 @@ def selected_scenarios(choice):
     return list(SCENARIO_ORDER) if choice == "all" else [choice]
 
 
-def plan_sessions(selected):
+def plan_sessions(selected, fixture_override=None):
     """Group the selected scenarios into booted sessions.
 
     `smoke` runs alone: its sequence stays exactly what it is today, and it stops
     the run the other two need in progress. `alerts` + `pages` share a boot —
     both need a live recording, neither disturbs it, and the alert cadences tick
     through the page walk anyway. `alerts` goes first so its banner/no-banner
-    pair is taken on the page the run view opens on.
+    pair is taken on the page the run view opens on. `terrain` runs alone
+    because it is the one scenario on a different fixture, and a boot has
+    exactly one: sharing would mean feeding bench_jog's flat ground to a
+    scenario whose whole subject is a climb.
+
+    Each session carries the fixture its scenarios agree on. An explicit
+    `--fixture` overrides every one of them, which is how a manual session
+    points an existing scenario at new terrain.
     """
+
+    def fixture_for(names):
+        return fixture_override or SCENARIO_FIXTURES[names[0]]
+
     sessions = []
     if "smoke" in selected:
-        sessions.append(("smoke", ["smoke"]))
+        sessions.append(("smoke", ["smoke"], fixture_for(["smoke"])))
     shared = [name for name in ("alerts", "pages") if name in selected]
     if shared:
-        sessions.append(("-".join(shared), shared))
+        sessions.append(("-".join(shared), shared, fixture_for(shared)))
+    if "terrain" in selected:
+        sessions.append(("terrain", ["terrain"], fixture_for(["terrain"])))
     return sessions
 
 
@@ -978,10 +1177,15 @@ def run(args):
     # timeout is the only other cap.
     deadline = time.monotonic() + args.budget
     failed = []
-    for index, (label, names) in enumerate(plan_sessions(selected_scenarios(args.scenario))):
-        print(f"\n=== session {label} ({', '.join(names)}) ===", flush=True)
+    plan = plan_sessions(selected_scenarios(args.scenario), args.fixture)
+    for index, (label, names, fixture) in enumerate(plan):
+        print(
+            f"\n=== session {label} ({', '.join(names)}) on {fixture} ===", flush=True
+        )
         try:
-            with sim_session(args, label, deadline, args.phone_port + index) as sim:
+            with sim_session(
+                args, label, deadline, args.phone_port + index, fixture
+            ) as sim:
                 for name in names:
                     print(f"\n--- scenario {name} ---", flush=True)
                     try:
@@ -1016,7 +1220,13 @@ def main():
         help="where the logs, panel dumps and copied sim artifacts land, one "
         "subdirectory per booted session",
     )
-    parser.add_argument("--fixture", default="bench_jog")
+    parser.add_argument(
+        "--fixture",
+        default=None,
+        help="override the NMEA fixture for every selected scenario; by "
+        "default each runs on the one it was written against "
+        f"({', '.join(f'{k}={v}' for k, v in SCENARIO_FIXTURES.items())})",
+    )
     parser.add_argument(
         "--phone-port",
         type=int,
@@ -1040,9 +1250,10 @@ def main():
     )
     parser.add_argument(
         "--scenario",
-        choices=("smoke", "pages", "alerts", "all"),
+        choices=("smoke", "pages", "alerts", "terrain", "all"),
         default="all",
-        help="which scenario to run; 'all' runs smoke, then alerts + pages",
+        help="which scenario to run; 'all' runs smoke, then alerts + pages, "
+        "then terrain",
     )
     args = parser.parse_args()
 

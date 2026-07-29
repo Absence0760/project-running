@@ -531,7 +531,7 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page + alert scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert + terrain scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
@@ -619,8 +619,10 @@ jobs:
       # A scenario added to the harness needs a step added here — the harness's
       # `--scenario all` default is not what runs.
       #
-      # No --fixture: each scenario's own default is the one it was written
-      # against (the sim-course breadcrumb only lines up under bench_jog).
+      # No --fixture: the harness binds one to each scenario (SCENARIO_FIXTURES)
+      # and the flag is only an override. `pages` and `alerts` are bench_jog (the
+      # sim-course breadcrumb only lines up there); `terrain` is mountain_loop,
+      # because it asserts a climb and flat ground cannot produce one.
       - name: Renode sim — pages scenario
         run: >-
           python3 apps/custom_watch/sim/ci_smoke.py
@@ -632,6 +634,15 @@ jobs:
           python3 apps/custom_watch/sim/ci_smoke.py
           --scenario alerts
           --out-dir "${{ runner.temp }}/watch-sim-ci/alerts"
+          --budget 300
+      # Last of the three: it boots on a different fixture and spends ~60 s of
+      # virtual time climbing before it can assert anything, so a failure in the
+      # two cheaper page scenarios above should surface first.
+      - name: Renode sim — terrain scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario terrain
+          --out-dir "${{ runner.temp }}/watch-sim-ci/terrain"
           --budget 300
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
