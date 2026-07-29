@@ -249,7 +249,11 @@ smoke stop now asserts "workout results stored (5 planned steps)" ahead of the f
 closed in the same batch: `WatchBleTransport.writeWorkout` targets the sixth characteristic,
 `WatchSyncClient.pushWorkout` carries `chunkWorkout`'s in-order offset chunks, and the dev Sim
 Watch screen gained a Push-workout action (the §209 surface) that sends the golden demo workout —
-so the encoder finally has a live caller and the CRC handshake is exercisable end-to-end.
+so the encoder finally has a live caller and the CRC handshake is exercisable end-to-end. The
+course encoder followed in the same batch: `WatchSyncClient.pushCourse` writes `chunkCourse`'s
+chunks to the fifth characteristic and a Push-course action sends the golden three-point sim
+course + elevation, so every phone→watch push rail (settings / course / workout) now has both
+halves wired.
 
 ## Next entry expected
 
