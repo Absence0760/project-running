@@ -230,6 +230,23 @@ ring has two antipodes). The sim demo settings push UTC-6, so bench_jog renders 
 case — 3:03 to a 04:34 sunrise, 14:53 of day — and `ci_smoke`'s page walk reaches, dumps, and
 steps back off the page. Host-tested + sim-verified.
 
+## 2026-07-29 — Run-store v4: the workout trail lands in the flash blob
+
+§ 354's named leftover closed ([§ 356](../architecture/decisions.md)). Each settled workout step's
+outcome streams into the staged blob as a tag-2 cell beside the laps — so the mid-run checkpoint
+ping-pong carries the trail through a brown-out — and the stop flushes the in-progress step as
+skipped-so-far plus a tag-3 summary: planned step count, the ≥80 % roll-up, and the armed step
+list's canonical `WKT1` frame CRC (`workout_store::frame_crc`, one `step_bytes` layout shared with
+`encode` so hash and frame cannot drift). That CRC is the attribution handle — the phone matches
+the trail to the workout it *pushed*, never "whatever came last" — and the phone decoder (v3 + v4)
+forwards the section into the new owner-only `metadata.watch_workout` key (registered,
+`public_runs`-stripped by `20270430_001`), dropping it whole when a checkpoint recovery has no
+summary or a mid-run re-arm spliced duplicate indices; the run itself is never dropped for its
+auxiliary trail. Neither workout tag ever decimates; v3 goldens stay as decode-compat vectors and
+the v4 goldens pin both codecs. Workspace host sweep 2061 → 2073; sim-verified — `ci_smoke`'s
+smoke stop now asserts "workout results stored (5 planned steps)" ahead of the flash commit. The
+`plan_workout_id` join stays with the phone's still-unwired workout-push transport.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
