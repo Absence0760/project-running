@@ -335,5 +335,6 @@ pub mod training_paces;
 pub mod turn_cues;
 pub mod ui_frame;
 pub mod unfed;
+pub mod waypoints;
 pub mod workout;
 pub mod workout_store;
