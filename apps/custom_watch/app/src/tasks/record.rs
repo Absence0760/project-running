@@ -51,6 +51,7 @@ use watch_core::fix::Fix;
 use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
+use watch_core::ice::IceCard;
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
 use watch_core::run_store::{
@@ -337,6 +338,7 @@ pub async fn run(store: &'static SharedStore) {
     let trackback_sender = state::TRACKBACK.sender();
     let sea_level_tx = state::SEA_LEVEL_PA.sender();
     let tz_offset_tx = state::TZ_OFFSET_MIN.sender();
+    let ice_tx = state::ICE.sender();
     let mut recorder = Recorder::new();
     // On-run alerts ride this task because it already owns the recorder's
     // event cadence; the engine is pure and fed after the recorder updates,
@@ -351,6 +353,14 @@ pub async fn run(store: &'static SharedStore) {
     // menu's toggle survives a reboot the way the GNSS mode does; None means
     // no explicit choice was ever stored and the recorder keeps its default.
     let mut persisted_hide: Option<bool> = store.lock().await.read_hide_empty();
+    // The ICE card the flash record already holds — published straight away so
+    // the idle face has it before any phone connects, and kept as the
+    // comparison so a repeated push never re-erases the config page.
+    let mut persisted_ice = store.lock().await.read_ice();
+    if persisted_ice.is_some() {
+        info!("record: restored ICE card");
+    }
+    ice_tx.send(persisted_ice);
     let mut open: Option<OpenRun> = None;
     let mut hr: Option<HrSample> = None;
     let mut mode = GnssMode::default();
@@ -450,6 +460,7 @@ pub async fn run(store: &'static SharedStore) {
             &mut alerts,
             &sea_level_tx,
             &tz_offset_tx,
+            &ice_tx,
         );
         info!(
             "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15, tz UTC-6)"
@@ -598,7 +609,14 @@ pub async fn run(store: &'static SharedStore) {
         // delta, so applying only the newest would silently drop whatever an
         // earlier push carried.
         while let Ok(s) = state::SETTINGS.try_receive() {
-            apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx, &tz_offset_tx);
+            apply_settings(
+                &s,
+                &mut recorder,
+                &mut alerts,
+                &sea_level_tx,
+                &tz_offset_tx,
+                &ice_tx,
+            );
             // An explicit hide-empty choice is persisted whichever side made
             // it — the settings menu's toggle and a phone push land here on
             // the same channel — so the last writer is what a reboot restores
@@ -608,6 +626,15 @@ pub async fn run(store: &'static SharedStore) {
                 if persisted_hide != Some(hide) {
                     store.lock().await.persist_hide_empty(hide).await;
                     persisted_hide = Some(hide);
+                }
+            }
+            // Same rule for the ICE card, and for the same reason it exists at
+            // all: a medic reads the wrist of a watch that may have
+            // power-cycled since the push. Skipped when unchanged.
+            if let Some(card) = s.ice {
+                if persisted_ice != card {
+                    store.lock().await.persist_ice(card).await;
+                    persisted_ice = card;
                 }
             }
         }
@@ -803,6 +830,7 @@ fn apply_settings(
     alerts: &mut AlertEngine,
     sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
     tz_offset_tx: &Sender<'static, CriticalSectionRawMutex, i16, 1>,
+    ice_tx: &Sender<'static, CriticalSectionRawMutex, Option<IceCard>, 1>,
 ) {
     for effect in plan_apply(s) {
         match effect {
@@ -838,6 +866,10 @@ fn apply_settings(
                 recorder.set_guided_run(id.as_ref().map(GuidedRunId::as_str))
             }
             SettingsEffect::RestingHr(bpm) => recorder.set_resting_hr(bpm),
+            // The one effect with two sinks: the watch the ui task renders
+            // from, here, and the flash record the drain loop writes — a
+            // medical ID that vanishes on a power cycle is not a medical ID.
+            SettingsEffect::Ice(card) => ice_tx.send(card),
         }
     }
 }

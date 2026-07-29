@@ -32,6 +32,14 @@ use crate::settings::{WatchSettings, MAX_SETTINGS_LEN};
 pub const FRAME_GAP_MS: u64 = 100;
 
 /// What a closed frame boundary turned out to hold.
+///
+/// `Applied` is far larger than the other three (a whole [`WatchSettings`],
+/// which the §358 ICE card took past 150 bytes) — the usual remedy is boxing
+/// it, which this crate has no allocator for. The value is produced once per
+/// closed frame, moved straight into the settings queue, and never stored in
+/// an array of these, so the size difference costs one short-lived stack
+/// frame rather than standing memory.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SettingsPush {
@@ -129,6 +137,7 @@ impl Default for SettingsFramer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ice::IceCard;
     use crate::settings::{
         FuelCfg, GearCfg, GuidedRunId, PaceBandCfg, PacerGoalCfg, RacePhasesCfg,
     };
@@ -168,6 +177,13 @@ mod tests {
             }),
             guided_run: Some(GuidedRunId::new("tempo-builder-25")),
             resting_hr: Some(48),
+            ice: Some(IceCard::new(
+                "ALEX MORGAN",
+                "O NEG",
+                "PENICILLIN, ASTHMA",
+                "JAMIE MORGAN",
+                "+1 555 0134",
+            )),
         }
     }
 
@@ -339,6 +355,8 @@ mod tests {
                 }),
                 guided_run: (mask & 0x10 != 0).then(|| GuidedRunId::new("easy-30")),
                 resting_hr: (mask & 0x20 != 0).then_some(48),
+                ice: (mask & 0x40 != 0)
+                    .then(|| IceCard::new("ALEX", "O NEG", "ASTHMA", "JAMIE", "555 0134")),
             };
             let frame = encoded(&s);
             let mut framer = SettingsFramer::new();
