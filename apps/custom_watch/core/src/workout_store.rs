@@ -29,7 +29,7 @@ use heapless::Vec;
 
 use crate::alerts::{PACE_BAND_MAX_S_PER_KM, PACE_BAND_MIN_S_PER_KM};
 use crate::pacer::GOAL_DISTANCE_MAX_M;
-use crate::run_store::crc32;
+use crate::run_store::{crc32, Crc32};
 use crate::workout::{WorkoutStep, WorkoutStepKind, MAX_WORKOUT_STEPS};
 
 /// Workout frame magic — "WKT1".
@@ -79,6 +79,35 @@ fn step_plausible(s: &WorkoutStep) -> bool {
     (PACE_BAND_MIN_S_PER_KM..=PACE_BAND_MAX_S_PER_KM).contains(&u32::from(s.target_pace_s_per_km))
 }
 
+/// The canonical frame header for a step count.
+fn header_bytes(step_count: usize) -> [u8; WORKOUT_HEADER_LEN] {
+    let mut b = [0u8; WORKOUT_HEADER_LEN];
+    b[0..4].copy_from_slice(&WORKOUT_MAGIC);
+    b[4] = WORKOUT_FORMAT_VERSION;
+    b[5] = step_count as u8;
+    b[6] = 0;
+    b
+}
+
+/// One step's canonical wire cell, or `None` when it fails [`step_plausible`]
+/// or carries a tolerance past the wire's u8. The single source of the step
+/// layout — [`encode`] and [`frame_crc`] both spell it through here, so the
+/// staged frame and the buffer-free hash cannot drift.
+fn step_bytes(s: &WorkoutStep) -> Option<[u8; WORKOUT_STEP_LEN]> {
+    if !step_plausible(s) || s.tolerance_s_per_km > u16::from(u8::MAX) {
+        return None;
+    }
+    let mut b = [0u8; WORKOUT_STEP_LEN];
+    b[0] = s.kind.code();
+    b[1] = s.rep_index;
+    b[2] = s.rep_total;
+    b[3] = s.tolerance_s_per_km as u8;
+    b[4..8].copy_from_slice(&s.target_distance_m.to_le_bytes());
+    b[8..10].copy_from_slice(&s.target_duration_s.to_le_bytes());
+    b[10..12].copy_from_slice(&s.target_pace_s_per_km.to_le_bytes());
+    Some(b)
+}
+
 /// Encode a pre-expanded step list into `out` as a WKT1 frame, returning the
 /// byte length written. `None` when the list is empty, over
 /// [`MAX_WORKOUT_STEPS`], carries a step that fails [`step_plausible`] or a
@@ -92,27 +121,33 @@ pub fn encode(steps: &[WorkoutStep], out: &mut [u8]) -> Option<usize> {
     if out.len() < len {
         return None;
     }
-    out[0..4].copy_from_slice(&WORKOUT_MAGIC);
-    out[4] = WORKOUT_FORMAT_VERSION;
-    out[5] = steps.len() as u8;
-    out[6] = 0;
+    out[0..WORKOUT_HEADER_LEN].copy_from_slice(&header_bytes(steps.len()));
     let mut off = WORKOUT_HEADER_LEN;
     for s in steps {
-        if !step_plausible(s) || s.tolerance_s_per_km > u16::from(u8::MAX) {
-            return None;
-        }
-        out[off] = s.kind.code();
-        out[off + 1] = s.rep_index;
-        out[off + 2] = s.rep_total;
-        out[off + 3] = s.tolerance_s_per_km as u8;
-        out[off + 4..off + 8].copy_from_slice(&s.target_distance_m.to_le_bytes());
-        out[off + 8..off + 10].copy_from_slice(&s.target_duration_s.to_le_bytes());
-        out[off + 10..off + 12].copy_from_slice(&s.target_pace_s_per_km.to_le_bytes());
+        out[off..off + WORKOUT_STEP_LEN].copy_from_slice(&step_bytes(s)?);
         off += WORKOUT_STEP_LEN;
     }
     let crc = crc32(&out[..off]).to_le_bytes();
     out[off..off + WORKOUT_CRC_LEN].copy_from_slice(&crc);
     Some(len)
+}
+
+/// The CRC32 the canonical WKT1 frame for `steps` carries in its trailer,
+/// computed incrementally with no frame buffer. `None` exactly when
+/// [`encode`] would refuse the list. This is the run blob's attribution
+/// handle ([`crate::run_store::WorkoutRecord::frame_crc`]): the phone hashed
+/// the frame it pushed, so a matching value means "these step results ran the
+/// workout you sent" — not merely "a workout was armed when this run synced".
+pub fn frame_crc(steps: &[WorkoutStep]) -> Option<u32> {
+    if steps.is_empty() || steps.len() > MAX_WORKOUT_STEPS {
+        return None;
+    }
+    let mut crc = Crc32::new();
+    crc.update(&header_bytes(steps.len()));
+    for s in steps {
+        crc.update(&step_bytes(s)?);
+    }
+    Some(crc.finish())
 }
 
 fn crc_matches(frame: &[u8]) -> bool {
@@ -379,6 +414,22 @@ mod tests {
             ]),
             crc32(&frame[..body])
         );
+    }
+
+    #[test]
+    fn frame_crc_matches_the_staged_frames_trailer() {
+        // The buffer-free hash and the staged encode must agree byte-for-byte
+        // on what they hash, or the run blob's attribution handle would never
+        // match the frame the phone actually pushed.
+        let steps = demo_steps();
+        let frame = encode_vec(&steps);
+        let body = frame.len() - WORKOUT_CRC_LEN;
+        assert_eq!(frame_crc(&steps), Some(crc32(&frame[..body])));
+        // And it refuses exactly what encode refuses.
+        assert_eq!(frame_crc(&[]), None);
+        let mut silly_pace = demo_steps();
+        silly_pace[0].target_pace_s_per_km = 60;
+        assert_eq!(frame_crc(&silly_pace), None);
     }
 
     #[test]

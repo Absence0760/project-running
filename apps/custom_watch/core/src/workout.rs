@@ -433,17 +433,40 @@ impl WorkoutRunner {
         }
     }
 
+    /// The settled results so far, one per advanced step in step order — the
+    /// stable prefix the recorder's flash drain reads
+    /// ([`crate::record::Recorder::pop_settled_workout_result`]).
+    pub fn results(&self) -> &[StepResult] {
+        &self.results
+    }
+
+    /// How many steps the armed workout plans.
+    pub fn step_count(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// The in-progress step's covered-so-far outcome, recorded as skipped —
+    /// what [`snapshot_results`](Self::snapshot_results) appends, and what the
+    /// flash drain persists when the run stops mid-step. `None` before the
+    /// first feed and once complete.
+    pub fn in_progress_result(&self) -> Option<StepResult> {
+        if self.is_complete() || self.last.is_none() {
+            return None;
+        }
+        Some(result_for(
+            self.idx as u8,
+            self.step_distance_m(),
+            self.step_elapsed_s(),
+            StepStatus::Skipped,
+        ))
+    }
+
     /// Every step's outcome, the in-progress one included as skipped-so-far —
     /// the same convention the phone uses for its crash-checkpoint trail.
     pub fn snapshot_results(&self) -> Vec<StepResult, MAX_WORKOUT_STEPS> {
         let mut out = self.results.clone();
-        if !self.is_complete() && self.last.is_some() {
-            let _ = out.push(result_for(
-                self.idx as u8,
-                self.step_distance_m(),
-                self.step_elapsed_s(),
-                StepStatus::Skipped,
-            ));
+        if let Some(r) = self.in_progress_result() {
+            let _ = out.push(r);
         }
         out
     }
