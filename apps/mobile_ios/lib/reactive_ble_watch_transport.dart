@@ -33,6 +33,8 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
       Uuid.parse('d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid settingsCharUuid =
       Uuid.parse('d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+  static final Uuid courseCharUuid =
+      Uuid.parse('d1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid workoutCharUuid =
       Uuid.parse('d1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
 
@@ -124,6 +126,10 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeWorkout(List<int> chunk) => _ble
       .writeCharacteristicWithResponse(_char(workoutCharUuid), value: chunk);
+
+  @override
+  Future<void> writeCourse(List<int> chunk) => _ble
+      .writeCharacteristicWithResponse(_char(courseCharUuid), value: chunk);
 
   @override
   Future<void> disconnect() async {

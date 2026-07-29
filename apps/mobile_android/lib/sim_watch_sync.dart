@@ -566,6 +566,12 @@ abstract class WatchBleTransport {
   /// firmware's `WorkoutAssembler` resets on offset 0 and rejects gaps.
   Future<void> writeWorkout(List<int> chunk);
 
+  /// Write one `offset(2 LE) | payload` chunk of a CRS1 course frame
+  /// (`chunkCourse` in watch_course.dart) to the watch's course
+  /// characteristic — the same in-order, offset-0-first contract the
+  /// firmware's `CourseAssembler` enforces.
+  Future<void> writeCourse(List<int> chunk);
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
@@ -661,6 +667,22 @@ class WatchSyncClient {
     try {
       for (final chunk in chunks) {
         await transport.writeWorkout(chunk);
+      }
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /// Push a chunked CRS1 course frame (`chunkCourse` over `encodeCourse`,
+  /// watch_course.dart) — [pushWorkout]'s contract on the course
+  /// characteristic: the firmware loads the course only once the last chunk
+  /// completes the frame and its CRC checks out, a broken-off push leaves
+  /// whatever was loaded before, and the next offset-0 write starts clean.
+  Future<void> pushCourse(Iterable<List<int>> chunks) async {
+    await transport.scan();
+    try {
+      for (final chunk in chunks) {
+        await transport.writeCourse(chunk);
       }
     } finally {
       await transport.disconnect();

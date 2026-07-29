@@ -11525,6 +11525,19 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'Envoyer le parcours à la montre';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Parcours envoyé à la montre ($points points)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Échec de l\'envoi du parcours : $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Aucune course à synchroniser sur la montre';
 
   @override

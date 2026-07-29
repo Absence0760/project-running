@@ -15,6 +15,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../reactive_ble_watch_transport.dart';
 import '../sim_watch_link.dart';
 import '../sim_watch_sync.dart';
+import '../watch_course.dart';
 import '../watch_ingest_queue.dart';
 import '../watch_settings.dart';
 import '../watch_workout.dart';
@@ -76,6 +77,7 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   bool _syncing = false;
   bool _pushingSettings = false;
   bool _pushingWorkout = false;
+  bool _pushingCourse = false;
   String? _syncMessage;
 
   @override
@@ -265,6 +267,42 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     ];
   }
 
+  /// The canned sim course + its elevation series — the exact three points
+  /// the CRS1 golden vectors pin on both codecs (the nav task's ~180 m
+  /// Boulder rectangle legs), so a push against the emulated watch overlays
+  /// the same line its `sim-course` feature would load. A canned push like
+  /// the settings one: the real route picker arrives with the product push
+  /// surface.
+  static const demoCoursePoints = [
+    CoursePoint(40.0158083, -105.2705),
+    CoursePoint(40.015, -105.2705),
+    CoursePoint(40.015, -105.269445),
+  ];
+  static const demoCourseElevM = [1650, 1655, 1640];
+
+  Future<void> _pushCourse() async {
+    if (_pushingCourse) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _pushingCourse = true);
+    try {
+      final client = WatchSyncClient(
+        transport: widget.transportFactory(),
+        onRun: widget.runSink,
+      );
+      final frame =
+          encodeCourse(demoCoursePoints, elevationM: demoCourseElevM);
+      await client.pushCourse(chunkCourse(frame));
+      if (!mounted) return;
+      setState(() => _syncMessage =
+          l10n.simWatchCoursePushed(demoCoursePoints.length));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchPushCourseFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pushingCourse = false);
+    }
+  }
+
   Future<void> _pushWorkout() async {
     if (_pushingWorkout) return;
     final l10n = AppLocalizations.of(context);
@@ -328,6 +366,17 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
                   )
                 : const Icon(Icons.checklist),
             onPressed: _pushingWorkout ? null : _pushWorkout,
+          ),
+          IconButton(
+            tooltip: l10n.simWatchPushCourseAction,
+            icon: _pushingCourse
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.route),
+            onPressed: _pushingCourse ? null : _pushCourse,
           ),
           IconButton(
             tooltip: l10n.simWatchSyncAction,

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 
 import '../lib/sim_watch_sync.dart';
+import '../lib/watch_course.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_settings.dart';
 import '../lib/watch_workout.dart';
@@ -188,6 +189,7 @@ class FakeWatchTransport implements WatchBleTransport {
   final requests = <List<int>>[];
   final settingsWrites = <List<int>>[];
   final workoutWrites = <List<int>>[];
+  final courseWrites = <List<int>>[];
 
   FakeWatchTransport({required this.blob, required this.manifest});
 
@@ -221,6 +223,11 @@ class FakeWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeWorkout(List<int> chunk) async {
     workoutWrites.add(chunk);
+  }
+
+  @override
+  Future<void> writeCourse(List<int> chunk) async {
+    courseWrites.add(chunk);
   }
 
   @override
@@ -873,6 +880,70 @@ void main() {
           reason: 'the finally must release the radio');
     });
   });
+
+  group('WatchSyncClient.pushCourse (fake transport)', () {
+    List<CoursePoint> points() => const [
+          CoursePoint(40.0158083, -105.2705),
+          CoursePoint(40.015, -105.2705),
+          CoursePoint(40.015, -105.269445),
+        ];
+
+    test('connects, writes every chunk in order, disconnects', () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(
+        transport: transport,
+        onRun: (_) async {},
+      );
+
+      final frame = encodeCourse(points(), elevationM: const [1650, 1655, 1640]);
+      // A payload cap below the frame length forces several chunks, so this
+      // pins the in-order offset walk on the course characteristic too.
+      final chunks = chunkCourse(frame, payloadMax: 12);
+      expect(chunks.length, greaterThan(2));
+      await client.pushCourse(chunks);
+
+      expect(transport.scanCount, 1);
+      expect(transport.disconnectCount, 1);
+      expect(transport.workoutWrites, isEmpty,
+          reason: 'a course push must not touch the workout characteristic');
+      expect(transport.courseWrites, hasLength(chunks.length));
+      final reassembled = <int>[];
+      var expectedOffset = 0;
+      for (final chunk in transport.courseWrites) {
+        final d = ByteData.sublistView(Uint8List.fromList(chunk));
+        expect(d.getUint16(0, Endian.little), expectedOffset);
+        reassembled.addAll(chunk.sublist(2));
+        expectedOffset = reassembled.length;
+      }
+      expect(reassembled, frame);
+    });
+
+    test('a failed chunk write still disconnects', () async {
+      final transport = _CourseWriteFailsTransport();
+      final client = WatchSyncClient(
+        transport: transport,
+        onRun: (_) async {},
+      );
+      await expectLater(
+        client.pushCourse(chunkCourse(encodeCourse(points()))),
+        throwsStateError,
+      );
+      expect(transport.disconnectCount, 1,
+          reason: 'the finally must release the radio');
+    });
+  });
+}
+
+class _CourseWriteFailsTransport extends FakeWatchTransport {
+  _CourseWriteFailsTransport() : super(blob: const [], manifest: const []);
+
+  @override
+  Future<void> writeCourse(List<int> chunk) async {
+    throw StateError('radio dropped');
+  }
 }
 
 class _WorkoutWriteFailsTransport extends FakeWatchTransport {
