@@ -317,6 +317,16 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
       laps.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
     );
   }
+  // The custom watch's planned-vs-actual workout trail (run-store v4,
+  // decisions §356): registered shape per `docs/backend/metadata.md`
+  // § watch_workout. Forwarded whole — the section only exists when the
+  // decoder found it attributable (a summary with the pushed WKT1 frame's
+  // CRC), and the join to a plan_workout_id stays a phone-side concern for
+  // when the workout-push surface lands.
+  final workout = raw['workout'];
+  if (workout is Map) {
+    metadata[cm.MetadataKeys.watchWorkout] = Map<String, dynamic>.from(workout);
+  }
 
   return cm.Run(
     id: id,

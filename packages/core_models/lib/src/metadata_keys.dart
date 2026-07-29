@@ -67,6 +67,7 @@ class MetadataKeys {
   static const String subSport = 'sub_sport';
   static const String title = 'title';
   static const String trackUrl = 'track_url';
+  static const String watchWorkout = 'watch_workout';
   static const String workoutAdherence = 'workout_adherence';
   static const String workoutStepResults = 'workout_step_results';
 }

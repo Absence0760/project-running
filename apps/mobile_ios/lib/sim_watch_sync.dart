@@ -12,8 +12,9 @@ import 'watch_settings.dart';
 ///
 ///   header(16) | record[N](16) | footer(20)
 ///
-/// Each record's byte 15 is a tag — 0 = track point, 1 = a closed lap —
-/// and lap records interleave with points in recording order.
+/// Each record's byte 15 is a tag — 0 = track point, 1 = a closed lap,
+/// 2 = a settled workout step's outcome, 3 = the workout summary — and
+/// tagged records interleave with points in recording order.
 ///
 /// Version 3 put the footer's totals under the CRC: the checksum covers
 /// every byte of the blob except the four it occupies itself, so a
@@ -22,7 +23,9 @@ import 'watch_settings.dart';
 /// [_minSupportedVersion] .. [_maxSupportedVersion] are rejected
 /// outright — a v1/v2 blob's CRC covers a narrower window and re-admitting
 /// it would re-open exactly that hole, and an unknown newer record layout
-/// decoded as GPS points would corrupt a track (decisions §321).
+/// decoded as GPS points would corrupt a track (decisions §321). Version 4
+/// added the two workout tags without touching v3's CRC window, so both
+/// decode here (decisions §356).
 ///
 /// The watch exposes the set of runs over BLE as a manifest (a header +
 /// one entry per stored run). The phone pulls each blob in chunks,
@@ -41,12 +44,15 @@ const int _footerLen = 20;
 /// Record tags at byte 15 of every 16-byte record.
 const int _recordTagPoint = 0;
 const int _recordTagLap = 1;
+const int _recordTagStep = 2;
+const int _recordTagWorkout = 3;
 
-/// The `run_store` formats this decoder understands. A single version by
+/// The `run_store` formats this decoder understands. The floor is by
 /// design: v3 redefined the CRC window, so v1/v2 blobs are not merely old,
-/// they carry a checksum that leaves their totals unprotected.
+/// they carry a checksum that leaves their totals unprotected. v4 only
+/// added record tags on the same window, so both v3 and v4 decode.
 const int _minSupportedVersion = 3;
-const int _maxSupportedVersion = 3;
+const int _maxSupportedVersion = 4;
 
 /// Bytes of the footer the CRC does not cover — the CRC field itself, which
 /// sits last. Everything before it is inside the window.
@@ -244,6 +250,83 @@ LapRecord decodeLap(List<int> blob, int offset) {
   );
 }
 
+/// One settled workout step's outcome persisted in the record stream
+/// (tag 2 at byte 15, run-store v4): the 0-based expanded-step index,
+/// whether it was skipped rather than completed, and what it banked —
+/// distance in decimetres, whole seconds on the workout clock, and the
+/// whole-step average pace (0 on the wire = none).
+class WorkoutStepRecord {
+  final int stepIndex;
+  final bool skipped;
+  final int distanceDm;
+  final int durationS;
+  final int? paceSecPerKm;
+
+  const WorkoutStepRecord({
+    required this.stepIndex,
+    required this.skipped,
+    required this.distanceDm,
+    required this.durationS,
+    required this.paceSecPerKm,
+  });
+}
+
+/// Decode the step record that starts at byte [offset]. A status byte
+/// outside the two known values is a malformed record inside a version this
+/// decoder claims to support — thrown, like an unknown tag, never read as
+/// "completed".
+WorkoutStepRecord decodeWorkoutStep(List<int> blob, int offset) {
+  if (offset + _pointLen > blob.length) {
+    throw const FormatException('workout step record out of range');
+  }
+  final status = blob[offset + 1];
+  if (status > 1) {
+    throw FormatException('unknown workout step status $status');
+  }
+  final d = _view(blob);
+  final pace = d.getUint16(offset + 10, Endian.little);
+  return WorkoutStepRecord(
+    stepIndex: blob[offset],
+    skipped: status == 1,
+    distanceDm: d.getUint32(offset + 2, Endian.little),
+    durationS: d.getUint32(offset + 6, Endian.little),
+    paceSecPerKm: pace == 0 ? null : pace,
+  );
+}
+
+/// The armed workout's finalize-time summary (tag 3 at byte 15, run-store
+/// v4): planned step count, the watch's >=80% roll-up, and the CRC32 of the
+/// canonical `WKT1` frame for the armed step list — the attribution handle
+/// that says WHICH pushed workout these step records ran.
+class WorkoutSummaryRecord {
+  final int stepTotal;
+  final bool partial;
+  final int frameCrc;
+
+  const WorkoutSummaryRecord({
+    required this.stepTotal,
+    required this.partial,
+    required this.frameCrc,
+  });
+}
+
+/// Decode the workout summary record that starts at byte [offset].
+WorkoutSummaryRecord decodeWorkoutSummary(List<int> blob, int offset) {
+  if (offset + _pointLen > blob.length) {
+    throw const FormatException('workout summary record out of range');
+  }
+  final rollup = blob[offset + 1];
+  if (rollup > 1) {
+    throw FormatException('unknown workout rollup $rollup');
+  }
+  final d = _view(blob);
+  return WorkoutSummaryRecord(
+    stepTotal: blob[offset],
+    partial: rollup == 1,
+    frameCrc: d.getUint32(offset + 2, Endian.little),
+  );
+}
+
 TrackFooter decodeFooter(List<int> blob) {
   if (blob.length < _footerLen) {
     throw const FormatException('blob shorter than footer');
@@ -380,6 +463,8 @@ Map<String, dynamic> payloadFromBlob(
 
   final track = <Map<String, dynamic>>[];
   final laps = <Map<String, dynamic>>[];
+  final stepResults = <Map<String, dynamic>>[];
+  WorkoutSummaryRecord? workoutSummary;
   // Cumulative duration up to the start of the next lap — the registered
   // `start_offset_s` (metadata.md § laps: per-lap deltas on the wire, the
   // offset reconstructed by summing prior splits).
@@ -405,12 +490,33 @@ Map<String, dynamic> payloadFromBlob(
           'duration_s': lap.splitS,
         });
         lapStartOffsetS += lap.splitS;
+      case _recordTagStep:
+        final step = decodeWorkoutStep(blob, at);
+        stepResults.add(<String, dynamic>{
+          'step_index': step.stepIndex,
+          'status': step.skipped ? 'skipped' : 'completed',
+          'actual_distance_m': step.distanceDm / 10.0,
+          'duration_s': step.durationS,
+          'actual_pace_sec_per_km': step.paceSecPerKm,
+        });
+      case _recordTagWorkout:
+        workoutSummary = decodeWorkoutSummary(blob, at);
       default:
         // The CRC passed, so this is a record kind this decoder does not
         // know within a version it claims to support — a bug, not noise.
         throw FormatException('unknown record tag ${blob[at + 15]} at $at');
     }
   }
+
+  // The workout trail is auxiliary to the run: semantic inconsistency drops
+  // the SECTION, never the verified run. No summary means no attribution —
+  // a run recovered from a mid-run checkpoint (the summary lands only at
+  // finalize) or a firmware bug — and duplicate step indices mean the
+  // workout was re-armed mid-run, splicing two trails this shape can't
+  // represent. Both are discarded whole rather than attributed by guess.
+  final indices = stepResults.map((r) => r['step_index']).toSet();
+  final workoutConsistent =
+      workoutSummary != null && indices.length == stepResults.length;
 
   return <String, dynamic>{
     'id': _uuid.v4(),
@@ -422,6 +528,13 @@ Map<String, dynamic> payloadFromBlob(
     'activity_type': 'run',
     'finished': header.finished,
     if (laps.isNotEmpty) 'laps': laps,
+    if (workoutConsistent)
+      'workout': <String, dynamic>{
+        'step_total': workoutSummary.stepTotal,
+        'adherence': workoutSummary.partial ? 'partial' : 'completed',
+        'workout_crc': workoutSummary.frameCrc,
+        'step_results': stepResults,
+      },
   };
 }
 
