@@ -19,31 +19,39 @@ stateDiagram-v2
     Diag: Diagnostics face
     Diag: LAT / LON / SPD
     Diag: seconds clock / vert
+    Ice: ICE / medical ID face (§358)
+    Ice: name / blood / conditions
+    Ice: emergency contact + number
     Run: Run view
-    Run: 35 pages (filtered mask)
+    Run: 37 pages (filtered mask)
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
     Menu: Settings menu (modal, §351)
-    Menu: GNSS mode / hide empty / re-zero
+    Menu: GNSS mode / hide empty / profile
+    Menu: re-zero / medical ID
 
     [*] --> Idle
     Idle --> Idle: BTN3 tap — GNSS mode cycle
     Idle --> Idle: BTN3 hold — QNH re-zero
     Idle --> Diag: BTN4 — diagnostics view (§291)
-    Diag --> Idle: BTN4 — back to home
+    Diag --> Ice: BTN4 — medical ID (§358)
+    Ice --> Idle: BTN4 — back to home
+    Ice --> Run: BTN1 — start run
     Diag --> Run: BTN1 — start run
     Idle --> Menu: BTN5 — settings (§351)
     Menu --> Menu: BTN2 / BTN3 — cursor up / down (the UP / DOWN slots)
     Menu --> Menu: BTN5 / BTN1 — edit left / right (off-on, dec-inc)
     Menu --> Idle: BTN4 — exit (the BACK slot)
     Menu --> Idle: BTN1 on RE-ZERO — fire + close
+    Menu --> Ice: BTN1 on MEDICAL ID — show + close
     Menu --> Idle: 30 s inactivity — auto-close
     Idle --> Run: BTN1 — start run
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
     Run --> Run: BTN2 — arm stop ("STOP? BTN2" banner, 4 s)
     Run --> Run: BTN2 x2 — stop (FIN)
-    Run --> Run: BTN5 — lap (REC / PAU); skips the workout step when one is armed (§354)
+    Run --> Run: BTN5 tap — lap (REC / PAU); skips the workout step when one is armed (§354)
+    Run --> Run: BTN5 held 0.5 s — mark a waypoint (§357)
     Run --> Run: BTN3 tap / BTN4 tap — page left / page right
     Run --> Grid: BTN3 or BTN4 held 0.5 s — grid opens at the threshold
     Grid --> Grid: BTN4 tap / hold — cursor +1 / +4
@@ -63,7 +71,16 @@ the Dashboard (§289) — before §289, `Finished` was a dead end that held the
 run view until reboot. Every run view — recording, paused, finished — pages
 the same way: BTN3 tap left, BTN4 tap right (§350, superseding §290's
 FIN-only tap-back). Dismissing also resets the idle face to the home view,
-wherever a pre-run BTN4 toggle left it (§291).
+wherever a pre-run BTN4 walk left it (§291, widened to three faces by §358).
+
+BTN5 grew a hold tier mid-run (§357): the tap is still the lap (and still the
+workout-step skip when one is armed, §354), and holding it past the same
+0.5 s boundary the paging keys use marks the current position as a waypoint.
+It was the one gesture the §350 grammar had left free, and it fires at the
+threshold while still held, exactly like the grid-open hold — no release is
+ever timed blind. A mark never moves the view: the runner is holding BTN5
+while reading some other page, and being yanked onto the Waypoint page would
+cost a press to undo.
 
 ## The page cycle (§286 order, §284 filter)
 
@@ -75,8 +92,12 @@ enabled). Clusters are ordered by mid-run glance frequency; `GUID` (the
 scripted coach run) closes the live cluster as the virtual partner's sibling,
 and `BACK` (Back-to-start) sits last so the safety page is exactly one
 left-tap from home. `WKT` (the pushed structured workout, §354) closes the
-live cluster beside `GUID`, its scripted sibling; `SUN` (the Daylight sunset
-countdown, §355) closes the synced back half just ahead of `BACK`. The curation mask has been
+live cluster beside `GUID`, its scripted sibling; `CLMB` (the §359 climb /
+crest view) *heads* the course cluster, because on a mountain course it is
+the question asked most; `SUN` (the Daylight sunset countdown, §355) and
+`WPT` (the §357 marked waypoint) close the back half just ahead of `BACK`,
+which `WPT` sits beside deliberately — the two pages answer the same "which
+way, how far" question about different anchors. The curation mask has been
 64-bit on the wire since `SET1` v4 (§336), so every page the enum declares —
 including `BACK`, and the pages a pre-v4 phone's 32-bit mask cannot name,
 which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
@@ -88,7 +109,7 @@ flowchart LR
         DASH --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
     end
     subgraph course [course / race ops]
-        NAV --> TURN --> CUT --> ROAD --> FUEL
+        CLMB --> NAV --> TURN --> CUT --> ROAD --> FUEL
     end
     subgraph effort [effort analysis]
         ELEV --> PRED --> LOAD --> BAND
@@ -97,13 +118,13 @@ flowchart LR
         GEAR --> TPCE --> FITN --> REDY --> GOAL --> RDAY --> PLAN --> ADPT
     end
     subgraph summaries [synced summaries]
-        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF --> SUN
+        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF --> SUN --> WPT
     end
-    WKT --> NAV
+    WKT --> CLMB
     FUEL --> ELEV
     BAND --> GEAR
     ADPT --> RCAP
-    SUN --> BACK
+    WPT --> BACK
     BACK --> DASH
 ```
 
@@ -115,15 +136,17 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 35-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 37-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
-rather than truncating the tail (§333) — scroll depth 2 at the full mask. Under
+rather than truncating the tail (§333) — scroll depth 3 at the full mask. Under
 the everyday filtered mask (~12 pages, 3 rows) the whole enabled set fits and
 nothing scrolls.
 
-The chrome is what makes the modal honest about itself. 35 codes need
-`ceil(35/4)` = 9 rows and the panel has exactly 9 (144 px / 16 px), so there was
-never a spare row — every chrome row is bought from body capacity, which only
+The chrome is what makes the modal honest about itself. 37 codes need
+`ceil(37/4)` = 10 rows against a panel of 9 (144 px / 16 px), so the ring has
+not merely filled the screen — it now outruns it even with no chrome at all,
+which is precisely what §333's window was built for. Every chrome row is
+bought from body capacity, which only
 §333's window makes affordable (before it the body was a hard 32-cell `const`
 assert). Row 0 names BTN2 and BTN1 and deliberately **not** BTN3/BTN4: a paging
 press moves the visible cursor one cell in the direction it always pages and
@@ -150,22 +173,28 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Four items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+Five items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
 full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
 Trail → Ultra → Hike ladder, right toward the longer / more-battery
 activities, clamped; selecting a rung *applies* its preset — a curated page
 mask plus a GNSS mode — through the same channels a phone push and the quick
 cycle ride, and the row shows the last-applied profile, `--` until one is
 ever chosen), **RE-ZERO ALTITUDE** (right fires the idle hold's request and
-closes; the idle banner answers). Value rows keep the menu open — the row
+closes; the idle banner answers), **MEDICAL ID** (§358 — right closes the
+menu onto the ICE face, the same action-row shape; the card itself is the
+only useful confirmation the row did anything). The BTN4 idle walk reaches
+that face too, but only for someone who already knows it is there — the
+named row is how a runner discovers the card exists and checks it before a
+race. Value rows keep the menu open — the row
 re-rendering with the new value is the confirmation. Every press inside is
 swallowed, the menu is idle-only, and 30 s of inactivity closes it because it
 covers the home clock. The GNSS mode, the hide-empty choice, and the profile
 selection all persist in the CFG1 flash record and restore at boot (the
 profile restore re-applies its page preset) — whichever side wrote last,
-menu or phone push, wins the reboot. The four-item ring keeps the §351 cost
-bound: the farthest row is still ≤ 2 cursor steps, so any setting change
-stays ≤ 4 presses.
+menu or phone push, wins the reboot. The five-item ring holds the §351 cost
+bound: the farthest row is still ≤ 2 cursor steps (the ring wraps both ways),
+so any setting change stays ≤ 4 presses. A sixth item would break it — that
+is the budget the menu is sized against, not the row count.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
@@ -180,7 +209,7 @@ unlabelled.
 
 The §350/§351 audit: what everything on the device costs, and whether that
 is the floor. "Floor" for a single discrete action is one press; for
-select-1-of-35 it is what the §289 BFS model computes for a five-key,
+select-1-of-37 it is what the §289 BFS model computes for a five-key,
 no-chord grammar.
 
 | Interaction | Cost | At floor? |
@@ -188,14 +217,16 @@ no-chord grammar.
 | Start a run (idle) | 1 tap (BTN1) | yes |
 | Pause / resume | 1 tap (BTN1) | yes |
 | Manual lap (doubles as workout-step skip when a workout is armed, §354) | 1 tap (BTN5) | yes |
+| Mark a waypoint mid-run (§357) | 1 hold (0.5 s, BTN5) | yes — the only gesture the grammar had free |
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the §-StopGuard trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 35 pages | ≤ 6 actions, avg 3.9 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 37 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
 | Diagnostics view | 1 tap (idle BTN4) | yes |
+| ICE / medical-ID face (§358) | 2 taps (idle BTN4 ×2), or 3 via the menu's named row (BTN5, BTN2 up-wraps to it, BTN1) | **deliberately +1** — the third face on a one-way walk; the named row costs one more press and buys the discoverability a blind walk cannot |
 | Open settings | 1 tap (idle BTN5) | yes |
 | Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
 
@@ -204,7 +235,7 @@ its floor is the stop, on purpose. The remaining lever on the page-cycle
 average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
-## Press cost — computed, from the Dashboard, full 35-page mask
+## Press cost — computed, from the Dashboard, full 37-page mask
 
 Actions counted: each tap or hold is one action; the grid's open-hold is one;
 the auto-select close is free (BTN1 costs one to jump immediately). `linear` =
@@ -216,9 +247,9 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 17 | 8.7 |
-| + grid, forward-only movement (§288 as first built) | 9 | 5.0 |
-| + grid, symmetric ±1/±4 (§289; §350 keys) | **6** | **3.9** |
+| Linear walk only (pre-§288) | 18 | 9.2 |
+| + grid, forward-only movement (§288 as first built) | 10 | 5.2 |
+| + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.1** |
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
 a breadth-first search over the cursor's move set on the enabled cycle
@@ -228,16 +259,26 @@ the average over all `n` pages with the current page at zero. The model is
 validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 9 / 4.7188, 6 / 3.7188 — so the table above re-derives the original measurement
 at the new page count rather than replacing it with a fresh estimate. Both grid
-worsts survive pages 33, 34 and 35 unchanged; the averages move 4.7188 →
-4.8182 → 4.9118 → 5.0286 and 3.7188 → 3.7576 → 3.8235 → 3.8857. The linear
-worst grows 16 → 17 at page 34 (an even ring's antipode) and holds 17 at page
-35 (an odd ring has two).
+worsts held through pages 33, 34 and 35; the averages move 4.7188 → 4.8182 →
+4.9118 → 5.0286 → 5.1389 → 5.2432 and 3.7188 → 3.7576 → 3.8235 → 3.8857 →
+3.9722 → 4.0541 across pages 33–37. The linear worst grows 16 → 17 at page 34
+(an even ring's antipode) and 17 → 18 at page 36.
+
+**Pages 36 and 37 are the first to move a grid worst since the model was
+built** — the symmetric worst 6 → 7 at page 36 (§357's Waypoint) and the
+forward-only 9 → 10 at page 37 (§359's Climb). `{±1, ±4}` reaches 28 cells in
+6 moves plus the open, and a 36-page ring is the first that does not fit that
+ball; the ring has outgrown one press. Worth recording plainly rather than
+rounding away: the everyday cost is unchanged (the filtered mask is ~12
+pages, worst 4), but the full-mask ceiling has stopped being flat, and a 41st
+page would move it again. The lever remains phone-side curation (§284), which
+is a content decision, not a grammar one.
 
 **§350 does not move these counts — it moves their price in seconds.** The
 action *counts* are identical under the spatial grammar (the walk was already
 bidirectional, the grid moves are the same set), but a backward step is now a
 plain tap instead of a 0.5 s timed hold, and the grid-open hold fires at 0.5 s
-instead of 1.5 s — so the worst page costs 6 *taps-or-short-holds*, with no
+instead of 1.5 s — so the worst page costs 7 *taps-or-short-holds*, with no
 gesture in the chain longer than half a second.
 
 **§333's row-scrolling window does not enter this table.** `window_origin_row`
@@ -269,11 +310,11 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 35 pages: `LOAD`/`ROAD`
+  page's full name, because four glyphs cannot separate 37 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
-  `PACR`/`RCAP` are transpositions (computed over all 595 code pairs; 27 more sit
-  at distance 2). Both the 3 s auto-select and BTN1 therefore commit on
-  something the runner has read.
+  `PACR`/`RCAP` are transpositions (computed over all 666 code pairs at 37
+  pages; the figure was 595 at 35). Both the 3 s auto-select and BTN1 therefore
+  commit on something the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
   `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
   spending a row on chrome shortens the window and never displaces the cursor.
@@ -296,9 +337,19 @@ removes.
   fuel reminders latch into the persistent row-1 marker); the armed-stop
   banner outranks alerts but yields to the grid, where BTN2 means cancel.
 - **Idle gestures are duration-stable**: a BTN3 hold of any length while
-  idle is the QNH re-zero, and BTN4 toggles the diagnostics view whatever
-  its duration — duration never changes an idle gesture's meaning
-  mid-press.
+  idle is the QNH re-zero, and BTN4 walks the idle faces whatever its
+  duration — duration never changes an idle gesture's meaning mid-press.
+  BTN5's mid-run tiers (§357) do not contradict this: they exist only in a
+  run view, where the paging keys are already two-tiered.
+- **BTN5's tap tier is exactly what the untiered reducer says** (§357). The
+  stop guard and the grid still read BTN5 through `command_for`, so
+  `lap_press_command(state, Tap)` is pinned equal to it for every run state —
+  two answers for one press would be two behaviours for one button. Neither
+  tier acts outside a run: idle BTN5 is the settings menu and FIN's BTN5 is
+  dead, so a hold cannot smuggle a mark into either.
+- **A waypoint mark never moves the view** (§357), and a refused mark (no
+  position anchor) writes nothing to flash — a dead press costs no page
+  erase.
 - **The settings menu swallows every button and exists only while idle**
   (§351). No press inside it can start, pause, or lap a run; a run starting
   under it (sim-autostart) closes it; edits are directional and idempotent
@@ -328,6 +379,14 @@ removes.
 
 ## Known gaps (deliberate, tier-1)
 
+- **The ICE face is idle-only** (§358). A responder reaching a watch that is
+  still recording has to stop and dismiss the run before BTN4 can walk to the
+  card — which is the wrong order of events for the surface most likely to be
+  read on a collapsed runner. Making it reachable from a run view needs a
+  gesture the §350 grammar does not have spare (BTN5's hold went to the §357
+  mark), so it is a tier-2 item, not an oversight. Stated here rather than
+  left implicit because the whole point of the feature is that it works when
+  the wearer cannot help.
 - The grid's 3 s auto-select still commits the cursor with no countdown on
   screen — the one timed wait left without pre-fire feedback. A countdown
   inside the grid would need a per-second wake for as long as the modal is

@@ -257,6 +257,49 @@ halves wired. And the frame CRC closed the loop it opened: an identical workout 
 retry, a reconnect) is now a recorder-level no-op, so a transport hiccup can't wipe mid-run step
 progress and splice the duplicate-index trail the phone fail-closed drops.
 
+## 2026-07-29 — Three parity rows in one batch: waypoints, the ICE card, climb detection
+
+Three backlog rows that had each been waiting on something other than maths ([§ 357](../architecture/decisions.md),
+[§ 358](../architecture/decisions.md), [§ 359](../architecture/decisions.md)).
+
+**Waypoint marking (§ 357)** had been blocked on the button budget, and the row's own
+settings-menu candidate turned out to be wrong: the menu exists only while idle, and the position
+worth saving is one the runner is standing on mid-run. The grammar had one gesture free after all —
+**BTN5's hold**, on the same 500 ms boundary the paging keys train, firing at the threshold while
+still held. `waypoints` is an eight-slot newest-wins store with a `WPT1` codec; marks take the
+recorder's distance anchor so the saved point and the recorded track agree, survive `start` and
+`reset` (a stash marked on a recce is the point), and persist on the press rather than at stop —
+you may not finish the run that found the stash. A refused mark writes nothing, so a dead press
+costs no page erase. That third config-page record is why `rewrite_config_page` stopped taking one
+`Option` per record: four positional same-shaped `Option`s is the shape a caller transposes in
+silence, so it takes a `ConfigPage` struct now.
+
+**The ICE / medical-ID card (§ 358)** rides `SET1` v6, which spends `flags2`'s **last** free bit —
+both presence bytes are now saturated and two const asserts in `decode` make the next field a
+compile error rather than a frame accepted with an undefined bit. Every gate fails the card whole
+rather than degrading a field, because a clipped allergy line reads as complete and a clipped
+number dials someone else; that makes ICE the one settings field whose own content can reject the
+frame, since it has no setter downstream to guard it. `IceCard` hand-writes its `defmt` impl to
+print presence only — a derived one would spill a name, blood type, medical history and a
+next-of-kin number into every logged settings frame. It is a third **idle face** (BTN4's walk
+gained a one-way third stop) plus a named `MEDICAL ID` menu row for discoverability, and an
+`ICE1` flash record, because a medic reads the wrist of a watch that may have power-cycled. Known
+tier-1 limit, recorded rather than papered over: the face is idle-only.
+
+**Climb detection (§ 359)** is the batch's one item with no web helper to port. `climb` splits
+into the two questions a runner asks: `ClimbDetector` segments the climb underfoot from the same
+altitude sample `feed_gap` already takes (so a hill can't register on the GAP page and not this
+one), and `crest_ahead` answers how much is left from § 334's distance-even course profile —
+needing no new wire, since that series and the along-course position were already on-device.
+Both edges hysteretic and deliberately blunt: a page that re-zeroes on every roller is worse than
+no page.
+
+Workspace host sweep 2073 → 2140; all three feature sets build and pass `clippy -D warnings`; all
+three Renode scenarios (smoke / pages / alerts) green. The page ring reached **37**, and pages 36
+and 37 are the first to move a grid worst since the § 289 model was built — symmetric 6 → 7 at
+page 36, forward-only 9 → 10 at page 37, linear 17 → 18 at page 36 (`navigation.md` re-derived).
+The everyday filtered cost is unchanged at worst 4.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
