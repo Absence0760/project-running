@@ -560,6 +560,12 @@ abstract class WatchBleTransport {
   /// characteristic — the phone → watch config push.
   Future<void> writeSettings(List<int> frame);
 
+  /// Write one `offset(2 LE) | payload` chunk of a WKT1 workout frame
+  /// (`chunkWorkout` in watch_workout.dart) to the watch's workout
+  /// characteristic. Chunks must arrive in order, offset 0 first — the
+  /// firmware's `WorkoutAssembler` resets on offset 0 and rejects gaps.
+  Future<void> writeWorkout(List<int> chunk);
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
@@ -638,6 +644,24 @@ class WatchSyncClient {
     await transport.scan();
     try {
       await transport.writeSettings(settings.encode());
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /// Push a chunked WKT1 workout frame (`chunkWorkout` over
+  /// `encodeWorkoutSteps`, watch_workout.dart — the chunking stays with the
+  /// wire module, this client only carries bytes): connect, write every
+  /// chunk in order, disconnect. The firmware arms the workout only once the
+  /// last chunk completes the frame and its CRC checks out; a broken-off
+  /// push leaves whatever was armed before, and the next offset-0 write
+  /// starts clean.
+  Future<void> pushWorkout(Iterable<List<int>> chunks) async {
+    await transport.scan();
+    try {
+      for (final chunk in chunks) {
+        await transport.writeWorkout(chunk);
+      }
     } finally {
       await transport.disconnect();
     }

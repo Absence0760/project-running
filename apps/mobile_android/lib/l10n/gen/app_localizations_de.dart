@@ -11497,6 +11497,19 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushWorkoutAction => 'Workout an Uhr senden';
+
+  @override
+  String simWatchWorkoutPushed(int steps) {
+    return 'Workout an die Uhr gesendet ($steps Schritte)';
+  }
+
+  @override
+  String simWatchPushWorkoutFailed(String error) {
+    return 'Senden des Workouts fehlgeschlagen: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Keine Läufe auf der Uhr zum Synchronisieren';
 
   @override

@@ -10947,6 +10947,19 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushWorkoutAction => 'ワークアウトを時計に送信';
+
+  @override
+  String simWatchWorkoutPushed(int steps) {
+    return 'ワークアウトを時計に送信しました（$stepsステップ）';
+  }
+
+  @override
+  String simWatchPushWorkoutFailed(String error) {
+    return 'ワークアウトの送信に失敗しました: $error';
+  }
+
+  @override
   String get simWatchNoRuns => '同期する時計のランがありません';
 
   @override

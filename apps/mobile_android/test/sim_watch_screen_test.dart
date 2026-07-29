@@ -29,6 +29,7 @@ List<int> _hex(String s) => [
 class _FakeSyncTransport implements WatchBleTransport {
   final _chunks = StreamController<List<int>>.broadcast();
   final settingsWrites = <List<int>>[];
+  final workoutWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -54,6 +55,11 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> writeSettings(List<int> frame) async {
     settingsWrites.add(frame);
+  }
+
+  @override
+  Future<void> writeWorkout(List<int> chunk) async {
+    workoutWrites.add(chunk);
   }
 }
 
@@ -309,6 +315,51 @@ void main() {
           (frame[33] << 24);
       expect(trailer, crc32(frame.sublist(0, 30)));
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
+    });
+  });
+
+  group('workout push', () {
+    testWidgets('Push-workout action writes the chunked WKT1 frame',
+        (tester) async {
+      final transport = _FakeSyncTransport();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: () => transport,
+            runSink: (_) async {},
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.checklist));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+
+      // The six-step demo frame (7 + 6*12 + 4 = 83 B) fits one chunk:
+      // offset(2 LE) | payload. The frame bytes themselves are pinned
+      // byte-exact against the Rust golden in watch_workout_test.dart, so
+      // this pins the plumbing: offset 0 leads, the payload is the sealed
+      // WKT1 frame the encoder produced.
+      expect(transport.workoutWrites, hasLength(1));
+      final chunk = transport.workoutWrites.single;
+      expect(chunk.sublist(0, 2), [0x00, 0x00]);
+      final frame = chunk.sublist(2);
+      expect(frame, hasLength(83));
+      expect(frame.sublist(0, 4), [0x57, 0x4b, 0x54, 0x31]); // WKT1
+      expect(frame[5], 6, reason: 'six demo steps');
+      final trailer = frame[79] |
+          (frame[80] << 8) |
+          (frame[81] << 16) |
+          (frame[82] << 24);
+      expect(trailer, crc32(frame.sublist(0, 79)));
+      expect(
+        find.text('Workout pushed to the watch (6 steps)'),
+        findsOneWidget,
+      );
     });
   });
 }
