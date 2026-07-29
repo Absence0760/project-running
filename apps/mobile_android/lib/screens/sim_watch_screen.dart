@@ -9,6 +9,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 
 import '../l10n/gen/app_localizations.dart';
 import '../reactive_ble_watch_transport.dart';
@@ -16,6 +17,7 @@ import '../sim_watch_link.dart';
 import '../sim_watch_sync.dart';
 import '../watch_ingest_queue.dart';
 import '../watch_settings.dart';
+import '../watch_workout.dart';
 
 class SimWatchScreen extends StatefulWidget {
   final SimWatchLink Function(String host, int port) linkFactory;
@@ -73,6 +75,7 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   SimWatchStatus? _status;
   bool _syncing = false;
   bool _pushingSettings = false;
+  bool _pushingWorkout = false;
   String? _syncMessage;
 
   @override
@@ -203,6 +206,87 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     }
   }
 
+  /// The demo workout the firmware golden pins (watch_core::workout_store
+  /// `demo_steps`): warmup, 2 x (400 m rep / 90 s walk-run recovery), a
+  /// steady km, cooldown — six steps covering both end axes and a rep
+  /// group, built from the same `run_recorder` step type
+  /// `expandWorkoutSteps` emits. A canned push like the settings one: the
+  /// real planned-workout picker arrives with the product push surface.
+  static List<WorkoutStep> demoWorkoutSteps() {
+    WorkoutStep dist({
+      required WorkoutStepKind kind,
+      int? repIndex,
+      int? repTotal,
+      required double distanceM,
+      required int pace,
+      int tolerance = 10,
+    }) {
+      return WorkoutStep(
+        kind: kind,
+        repIndex: repIndex,
+        repTotal: repTotal,
+        targetDistanceMetres: distanceM,
+        targetPaceSecPerKm: pace,
+        toleranceSecPerKm: tolerance,
+        label: 'demo',
+      );
+    }
+
+    return [
+      dist(kind: WorkoutStepKind.warmup, distanceM: 800, pace: 360),
+      dist(
+          kind: WorkoutStepKind.rep,
+          repIndex: 1,
+          repTotal: 2,
+          distanceM: 400,
+          pace: 240),
+      const WorkoutStep(
+        kind: WorkoutStepKind.walk,
+        repIndex: 1,
+        repTotal: 1,
+        targetDistanceMetres: 0,
+        targetDurationSec: 90,
+        targetPaceSecPerKm: 420,
+        toleranceSecPerKm: 15,
+        label: 'demo',
+      ),
+      dist(
+          kind: WorkoutStepKind.rep,
+          repIndex: 2,
+          repTotal: 2,
+          distanceM: 400,
+          pace: 240),
+      dist(
+          kind: WorkoutStepKind.steady,
+          distanceM: 1000,
+          pace: 300,
+          tolerance: 12),
+      dist(kind: WorkoutStepKind.cooldown, distanceM: 600, pace: 360),
+    ];
+  }
+
+  Future<void> _pushWorkout() async {
+    if (_pushingWorkout) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _pushingWorkout = true);
+    try {
+      final client = WatchSyncClient(
+        transport: widget.transportFactory(),
+        onRun: widget.runSink,
+      );
+      final steps = demoWorkoutSteps();
+      await client.pushWorkout(chunkWorkout(encodeWorkoutSteps(steps)));
+      if (!mounted) return;
+      setState(
+          () => _syncMessage = l10n.simWatchWorkoutPushed(steps.length));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchPushWorkoutFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pushingWorkout = false);
+    }
+  }
+
   String _hms(int totalSeconds) {
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds ~/ 60) % 60;
@@ -233,6 +317,17 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
                   )
                 : const Icon(Icons.tune),
             onPressed: _pushingSettings ? null : _pushSettings,
+          ),
+          IconButton(
+            tooltip: l10n.simWatchPushWorkoutAction,
+            icon: _pushingWorkout
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.checklist),
+            onPressed: _pushingWorkout ? null : _pushWorkout,
           ),
           IconButton(
             tooltip: l10n.simWatchSyncAction,

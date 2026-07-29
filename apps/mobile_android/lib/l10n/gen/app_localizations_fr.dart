@@ -11512,6 +11512,19 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushWorkoutAction => 'Envoyer la séance à la montre';
+
+  @override
+  String simWatchWorkoutPushed(int steps) {
+    return 'Séance envoyée à la montre ($steps étapes)';
+  }
+
+  @override
+  String simWatchPushWorkoutFailed(String error) {
+    return 'Échec de l\'envoi de la séance : $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Aucune course à synchroniser sur la montre';
 
   @override

@@ -3,10 +3,12 @@ import 'dart:typed_data';
 
 import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_settings.dart';
+import '../lib/watch_workout.dart';
 
 /// The frozen v3 golden vector — one 3-point run blob, as pre-§356 (v3)
 /// firmware wrote it. v4 only added record tags on the same CRC window, so
@@ -185,6 +187,7 @@ class FakeWatchTransport implements WatchBleTransport {
   int disconnectCount = 0;
   final requests = <List<int>>[];
   final settingsWrites = <List<int>>[];
+  final workoutWrites = <List<int>>[];
 
   FakeWatchTransport({required this.blob, required this.manifest});
 
@@ -213,6 +216,11 @@ class FakeWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeSettings(List<int> frame) async {
     settingsWrites.add(frame);
+  }
+
+  @override
+  Future<void> writeWorkout(List<int> chunk) async {
+    workoutWrites.add(chunk);
   }
 
   @override
@@ -796,4 +804,82 @@ void main() {
       );
     });
   });
+
+  group('WatchSyncClient.pushWorkout (fake transport)', () {
+    List<WorkoutStep> steps() => [
+          const WorkoutStep(
+            kind: WorkoutStepKind.warmup,
+            targetDistanceMetres: 800,
+            targetPaceSecPerKm: 360,
+            toleranceSecPerKm: 10,
+            label: 'w',
+          ),
+          const WorkoutStep(
+            kind: WorkoutStepKind.rep,
+            repIndex: 1,
+            repTotal: 1,
+            targetDistanceMetres: 400,
+            targetPaceSecPerKm: 240,
+            toleranceSecPerKm: 10,
+            label: 'r',
+          ),
+        ];
+
+    test('connects, writes every chunk in order, disconnects', () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(
+        transport: transport,
+        onRun: (_) async {},
+      );
+
+      final frame = encodeWorkoutSteps(steps());
+      // A payload cap far below the frame length forces several chunks, so
+      // this pins the in-order offset walk, not just a single write.
+      final chunks = chunkWorkout(frame, payloadMax: 10);
+      expect(chunks.length, greaterThan(2));
+      await client.pushWorkout(chunks);
+
+      expect(transport.scanCount, 1);
+      expect(transport.disconnectCount, 1);
+      expect(transport.requests, isEmpty);
+      expect(transport.workoutWrites, hasLength(chunks.length));
+      // Offsets lead each chunk, ascending from 0, and the payloads
+      // reassemble the exact sealed frame.
+      final reassembled = <int>[];
+      var expectedOffset = 0;
+      for (final chunk in transport.workoutWrites) {
+        final d = ByteData.sublistView(Uint8List.fromList(chunk));
+        expect(d.getUint16(0, Endian.little), expectedOffset);
+        reassembled.addAll(chunk.sublist(2));
+        expectedOffset = reassembled.length;
+      }
+      expect(reassembled, frame);
+    });
+
+    test('a failed chunk write still disconnects', () async {
+      final transport = _WorkoutWriteFailsTransport();
+      final client = WatchSyncClient(
+        transport: transport,
+        onRun: (_) async {},
+      );
+      await expectLater(
+        client.pushWorkout(chunkWorkout(encodeWorkoutSteps(steps()))),
+        throwsStateError,
+      );
+      expect(transport.disconnectCount, 1,
+          reason: 'the finally must release the radio');
+    });
+  });
+}
+
+class _WorkoutWriteFailsTransport extends FakeWatchTransport {
+  _WorkoutWriteFailsTransport() : super(blob: const [], manifest: const []);
+
+  @override
+  Future<void> writeWorkout(List<int> chunk) async {
+    throw StateError('radio dropped');
+  }
 }

@@ -14999,6 +14999,26 @@
       }
     }
   },
+  "simWatchPushWorkoutAction": "Push workout to watch",
+  "@simWatchPushWorkoutAction": {
+    "description": "Button that pushes a structured demo workout to the custom watch over BLE"
+  },
+  "simWatchWorkoutPushed": "Workout pushed to the watch ({steps} steps)",
+  "@simWatchWorkoutPushed": {
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      }
+    }
+  },
+  "simWatchPushWorkoutFailed": "Workout push failed: {error}",
+  "@simWatchPushWorkoutFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "simWatchNoRuns": "No runs on the watch to sync",
   "simWatchWaitingFrames": "Connected — waiting for frames…",
   "simWatchUptime": "Watch uptime",

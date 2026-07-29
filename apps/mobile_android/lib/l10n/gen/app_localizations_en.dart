@@ -11367,6 +11367,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushWorkoutAction => 'Push workout to watch';
+
+  @override
+  String simWatchWorkoutPushed(int steps) {
+    return 'Workout pushed to the watch ($steps steps)';
+  }
+
+  @override
+  String simWatchPushWorkoutFailed(String error) {
+    return 'Workout push failed: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'No runs on the watch to sync';
 
   @override
