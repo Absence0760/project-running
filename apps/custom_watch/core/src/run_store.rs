@@ -218,7 +218,8 @@ impl TrackPoint {
     }
 }
 
-/// The tag of a 16-byte record ([`RECORD_TAG_POINT`] / [`RECORD_TAG_LAP`]).
+/// The tag of a 16-byte record ([`RECORD_TAG_POINT`] / [`RECORD_TAG_LAP`] /
+/// [`RECORD_TAG_STEP`] / [`RECORD_TAG_WORKOUT`]).
 pub fn record_tag(b: &[u8]) -> Option<u8> {
     (b.len() >= RECORD_LEN).then(|| b[15])
 }
