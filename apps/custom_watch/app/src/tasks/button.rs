@@ -234,6 +234,16 @@ async fn menu_edit(nav: &mut NavState, dir: ValueDir, hide_now: bool, store: &'s
             nav.close_menu("re-zero");
             return;
         }
+        MenuEdit::ShowIce => {
+            // Same action-row shape as the re-zero: fire, then hand the
+            // screen over — here to the §358 card itself, which is the only
+            // useful confirmation that the row did anything.
+            info!("button: menu -> medical ID");
+            nav.close_menu("medical id");
+            nav.idle_view = IdleView::Ice;
+            state::IDLE_VIEW.sender().send(nav.idle_view);
+            return;
+        }
         MenuEdit::Nothing => {}
     }
     // A value row stays open — the row re-rendering with the new value is

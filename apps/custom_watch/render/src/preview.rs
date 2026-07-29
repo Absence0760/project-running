@@ -132,6 +132,7 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         GnssMode::default(),
         IdleView::Home,
         None,
+        None,
     );
     let field_grid = page == Page::Dashboard && snap.is_some();
     for (r, row) in rows.iter().enumerate() {
@@ -256,6 +257,7 @@ fn preview_idle_diagnostics_face() {
         GnssMode::default(),
         IdleView::Diagnostics,
         None,
+        None,
     );
     face::apply_battery_row(&mut rows, IdleView::Diagnostics, Some(12));
     for (r, row) in rows.iter().enumerate() {
@@ -335,6 +337,7 @@ fn preview_run_view_low_battery_marker() {
         false,
         GnssMode::default(),
         IdleView::Home,
+        None,
         None,
     );
     let hero = face::page_hero(
@@ -704,6 +707,7 @@ fn draw_nav_page(fb: &mut Framebuffer, nav: NavView, alert: Option<&str>) {
         GnssMode::default(),
         IdleView::Home,
         None,
+        None,
     );
     for (r, row) in rows.iter().enumerate() {
         fb.draw_text_row(r, row);
@@ -787,6 +791,7 @@ fn preview_back_to_start_page() {
         false,
         GnssMode::default(),
         IdleView::Home,
+        None,
         None,
     );
     for (r, row) in rows.iter().enumerate() {

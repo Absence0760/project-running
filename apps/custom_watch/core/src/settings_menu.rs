@@ -68,15 +68,22 @@ pub enum MenuItem {
     /// (`SET 1610M` / `NO GPS FIX` / `NO BARO`) answers, exactly as it
     /// answers the hold. Left does nothing — an action has no "off".
     QnhRezero,
+    /// An action row: right (BTN1) closes the menu onto the §358 ICE /
+    /// medical-ID face. The BTN4 idle walk reaches that face too, but only
+    /// by knowing it is there — a named row is how a runner finds out the
+    /// card exists at all, and how they check it is right before a race.
+    /// Left does nothing, like every other action row.
+    Ice,
 }
 
-pub const MENU_ITEMS: usize = 4;
+pub const MENU_ITEMS: usize = 5;
 
 const ITEMS: [MenuItem; MENU_ITEMS] = [
     MenuItem::GnssMode,
     MenuItem::HideEmpty,
     MenuItem::Profile,
     MenuItem::QnhRezero,
+    MenuItem::Ice,
 ];
 
 /// The open menu: a cursor over [`ITEMS`]. The button task owns it (like the
@@ -140,6 +147,8 @@ pub enum MenuEdit {
     SetProfile(ActivityProfile),
     /// Fire the QNH re-zero and close the menu.
     RequestQnhRezero,
+    /// Close the menu onto the ICE / medical-ID idle face (§358).
+    ShowIce,
     /// The press asked for the state it is already in (a clamped ladder end,
     /// an idempotent on/on) or has no meaning (left on an action row).
     Nothing,
@@ -230,6 +239,8 @@ pub fn edit(
         },
         (MenuItem::QnhRezero, ValueDir::Right) => MenuEdit::RequestQnhRezero,
         (MenuItem::QnhRezero, ValueDir::Left) => MenuEdit::Nothing,
+        (MenuItem::Ice, ValueDir::Right) => MenuEdit::ShowIce,
+        (MenuItem::Ice, ValueDir::Left) => MenuEdit::Nothing,
     }
 }
 
@@ -280,6 +291,9 @@ pub fn menu_rows(
             MenuItem::QnhRezero => {
                 let _ = rows[row].push_str("RE-ZERO ALTITUDE");
             }
+            MenuItem::Ice => {
+                let _ = rows[row].push_str("MEDICAL ID");
+            }
         }
     }
     rows
@@ -316,9 +330,38 @@ mod tests {
         m.down();
         assert_eq!(m.item(), MenuItem::QnhRezero);
         m.down();
+        assert_eq!(m.item(), MenuItem::Ice);
+        m.down();
         assert_eq!(m.item(), MenuItem::GnssMode);
         m.up();
-        assert_eq!(m.item(), MenuItem::QnhRezero);
+        assert_eq!(m.item(), MenuItem::Ice);
+    }
+
+    #[test]
+    fn the_medical_id_row_fires_right_and_is_inert_left() {
+        // Every action row behaves the same way: right fires, left has no
+        // "off" to mean. Pinned beside the re-zero row so the two cannot
+        // drift into different action grammars.
+        assert_eq!(
+            edit(
+                MenuItem::Ice,
+                ValueDir::Right,
+                GnssMode::Performance,
+                true,
+                None
+            ),
+            MenuEdit::ShowIce
+        );
+        assert_eq!(
+            edit(
+                MenuItem::Ice,
+                ValueDir::Left,
+                GnssMode::Performance,
+                true,
+                None
+            ),
+            MenuEdit::Nothing
+        );
     }
 
     #[test]
