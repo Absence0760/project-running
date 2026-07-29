@@ -300,7 +300,7 @@ mod tests {
         );
         assert_eq!(
             grid_cell(u64::MAX, Page::BackToStart, Page::BackToStart),
-            Some((3, GRID_BODY_ROWS - 1)),
+            Some((0, GRID_BODY_ROWS - 1)),
             "the last page seats on the bottom body row once it is the cursor"
         );
         let scrolled = grid_rows(u64::MAX, Page::BackToStart);
@@ -309,7 +309,7 @@ mod tests {
             "the window scrolled off the first row: {:?}",
             scrolled[GRID_TOP_ROW]
         );
-        assert_eq!(scrolled[ROWS - 1].as_str(), "AEFF SUN  WPT  BACK");
+        assert_eq!(scrolled[ROWS - 1].as_str(), "BACK");
         for row in scrolled.iter() {
             assert!(row.len() <= COLS, "scrolled row too wide: {row:?}");
         }
@@ -516,7 +516,7 @@ mod tests {
         full.row_up(u64::MAX);
         assert_eq!(
             grid_cell(u64::MAX, full.cursor(), full.cursor()),
-            Some((0, GRID_BODY_ROWS - 1)),
+            Some((1, GRID_BODY_ROWS - 1)),
             "one row up from home wraps into the grid's tail"
         );
     }

@@ -361,7 +361,8 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::AutoEffort
         | Page::RouteElev
         | Page::RaceDay
-        | Page::Waypoint => HERO_BAND_ROWS,
+        | Page::Waypoint
+        | Page::Climb => HERO_BAND_ROWS,
     }
 }
 
@@ -697,6 +698,7 @@ pub fn page_rows(
             Page::RaceDay => race_day_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Daylight => daylight_glance(fix, tag, uptime_s, animate, mode, tz_offset_min),
             Page::Waypoint => waypoint_glance(fix, snap, tb, tag, uptime_s, animate, mode),
+            Page::Climb => climb_glance(fix, snap, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -749,7 +751,8 @@ pub fn page_icons(
         | Page::RouteElev
         | Page::RaceDay
         | Page::Daylight
-        | Page::Waypoint => [None; ROWS],
+        | Page::Waypoint
+        | Page::Climb => [None; ROWS],
     }
 }
 
@@ -1008,6 +1011,23 @@ pub fn page_hero(
                 }
                 Some(d) => {
                     let _ = write!(row, "{:.2}", (d / 1000.0).min(9999.99));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // Metres still to climb when a course names a crest — the ClimbPro
+        // headline — falling back to the gain banked in the climb underfoot
+        // when there is no course to look ahead down. Both are metres of
+        // ascent, so the hero never changes what it means, only where it was
+        // measured from; the label row says which.
+        Page::Climb => {
+            let mut row = Row::new();
+            match climb_hero_gain(snap) {
+                Some(g) => {
+                    let _ = write!(row, "{:.0}", g.clamp(0.0, 99_999.0));
                 }
                 None => {
                     let _ = write!(row, "--");
@@ -2734,6 +2754,80 @@ fn back_to_start_glance(
     rows
 }
 
+/// The gain the Climb hero shows: what is left to the crest when a course
+/// names one, else what has been banked in the climb underfoot. `None` when
+/// neither exists — the page is then in its empty state and shows no number.
+fn climb_hero_gain(snap: &Snapshot) -> Option<f32> {
+    snap.climb
+        .ahead
+        .map(|a| a.gain_m)
+        .or_else(|| snap.climb.active.map(|c| c.gain_m))
+}
+
+/// A distance in the unit a climber reads it in: whole metres close in, one
+/// decimal of a kilometre once "how many metres" stops being the question.
+fn write_climb_distance(row: &mut Row, label: &str, m: f32) {
+    if m < 1000.0 {
+        let _ = write!(row, "{:<8}{:.0} M", label, m.max(0.0));
+    } else {
+        let _ = write!(row, "{:<8}{:.1} KM", label, (m / 1000.0).min(9999.9));
+    }
+}
+
+/// The climb page (§359). The hero is metres of ascent — remaining to the
+/// crest when the pushed course names one, banked in the climb underfoot
+/// otherwise — and the label row says which, because the same number measured
+/// from two different places is only useful if the runner knows where from.
+///
+/// When both halves have something, the crest block leads and the banked
+/// block follows: on a climb, what is left outranks what is done.
+fn climb_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
+    }
+
+    if snap.climb.is_empty() {
+        // Settled, not unfed: flat ground with no ascent ahead is a real
+        // answer, and it must not read like a sync that never happened.
+        write_unfed(&mut rows, Page::Climb, "CLIMB", Unfed::NoClimb);
+        write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+        return rows;
+    }
+
+    match snap.climb.ahead {
+        Some(a) => {
+            let _ = write!(rows[2], "TO CREST  M");
+            write_climb_distance(&mut rows[3], "IN", a.distance_m);
+            let _ = write!(rows[4], "{:<8}{:.0}%", "GRADE", a.avg_grade_pct);
+            if let Some(c) = snap.climb.active {
+                let _ = write!(rows[6], "{:<8}{:.0} M", "CLIMBED", c.gain_m.max(0.0));
+                write_climb_distance(&mut rows[7], "OVER", c.distance_m);
+            }
+        }
+        None => {
+            // No course to look ahead down: the banked gain IS the headline,
+            // and the rows describe the climb it came from rather than
+            // inventing a crest the watch cannot see.
+            let c = snap.climb.active.unwrap_or_default();
+            let _ = write!(rows[2], "CLIMBED  M");
+            write_climb_distance(&mut rows[3], "OVER", c.distance_m);
+            let _ = write!(rows[4], "{:<8}{:.0}%", "GRADE", c.avg_grade_pct);
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
 /// The marked-waypoint page (§357): distance to the NEWEST mark up large,
 /// then the same heading / bearing pair [`back_to_start_glance`] shows — the
 /// two pages answer "which way, and how far" about different anchors, so they
@@ -3425,6 +3519,7 @@ mod tests {
             route_position_permille: None,
             race_day: None,
             race_phase: None,
+            climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
             track_thinning: 1,
@@ -6103,6 +6198,107 @@ mod tests {
         }
     }
 
+    fn climb_rows(view: crate::climb::ClimbView) -> [Row; ROWS] {
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.climb = view;
+        page_rows(
+            Page::Climb,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        )
+    }
+
+    fn climb_hero(view: crate::climb::ClimbView) -> Row {
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.climb = view;
+        page_hero(Page::Climb, None, Some(&rec), None).unwrap()
+    }
+
+    const ON_A_CLIMB: crate::climb::ActiveClimb = crate::climb::ActiveClimb {
+        gain_m: 120.0,
+        distance_m: 1_400.0,
+        avg_grade_pct: 8.571,
+    };
+    const CREST: crate::climb::CrestAhead = crate::climb::CrestAhead {
+        distance_m: 600.0,
+        gain_m: 80.0,
+        avg_grade_pct: 13.333,
+    };
+
+    #[test]
+    fn the_climb_page_leads_with_what_is_left_when_a_course_names_a_crest() {
+        // On a climb, what remains outranks what is done — so the crest block
+        // takes the hero and the top rows, and the banked climb follows.
+        let rows = climb_rows(crate::climb::ClimbView {
+            active: Some(ON_A_CLIMB),
+            ahead: Some(CREST),
+        });
+        assert_eq!(rows[2].as_str(), "TO CREST  M");
+        assert_eq!(rows[3].as_str(), "IN      600 M");
+        assert_eq!(rows[4].as_str(), "GRADE   13%");
+        assert_eq!(rows[6].as_str(), "CLIMBED 120 M");
+        assert_eq!(rows[7].as_str(), "OVER    1.4 KM");
+        assert_eq!(
+            climb_hero(crate::climb::ClimbView {
+                active: Some(ON_A_CLIMB),
+                ahead: Some(CREST),
+            })
+            .as_str(),
+            "80"
+        );
+    }
+
+    #[test]
+    fn without_a_course_the_climb_page_reports_only_what_is_banked() {
+        // The watch cannot see the hill, so there is no crest row to fill —
+        // and a `--` remaining would read as a crest at zero metres.
+        let view = crate::climb::ClimbView {
+            active: Some(ON_A_CLIMB),
+            ahead: None,
+        };
+        let rows = climb_rows(view);
+        assert_eq!(rows[2].as_str(), "CLIMBED  M");
+        assert_eq!(rows[3].as_str(), "OVER    1.4 KM");
+        assert_eq!(rows[4].as_str(), "GRADE   9%");
+        assert_eq!(rows[6].as_str(), "");
+        assert_eq!(climb_hero(view).as_str(), "120");
+    }
+
+    #[test]
+    fn flat_ground_is_settled_not_unsynced() {
+        // Nothing underfoot and nothing ahead is a real answer. Saying NOT
+        // SYNCED would send a runner looking for a phone over a page that is
+        // working exactly as intended.
+        let rows = climb_rows(crate::climb::ClimbView::default());
+        assert_eq!(rows[2].as_str(), "CLIMB --");
+        assert_eq!(rows[4].as_str(), "NO CLIMB");
+        assert_eq!(rows[5].as_str(), "", "a settled state owes no remedy line");
+        assert_eq!(
+            climb_hero(crate::climb::ClimbView::default()).as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn a_crest_before_the_detector_opens_a_climb_still_shows() {
+        // The two halves are independent: a course can name the col ahead
+        // before 20 m of gain has been banked, and holding that back until
+        // the detector agrees would blank the page at the foot of the climb —
+        // exactly when it is most useful.
+        let rows = climb_rows(crate::climb::ClimbView {
+            active: None,
+            ahead: Some(CREST),
+        });
+        assert_eq!(rows[2].as_str(), "TO CREST  M");
+        assert_eq!(rows[6].as_str(), "", "no banked block without a climb");
+    }
+
     #[test]
     fn waypoint_page_reads_like_back_to_start_about_a_different_anchor() {
         let mut rec = snapshot(RecordState::Recording, 100.0);
@@ -7090,6 +7286,7 @@ mod tests {
             Page::TrainingLoad => Some(Unfed::NeedDistance),
             Page::DistanceBand => Some(Unfed::NoRaceBand),
             Page::Waypoint => Some(Unfed::NoWaypoints),
+            Page::Climb => Some(Unfed::NoClimb),
         }
     }
 

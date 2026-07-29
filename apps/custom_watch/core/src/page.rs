@@ -54,6 +54,11 @@ pub enum Page {
     /// target + live progress + pace adherence, and the step after it; an
     /// honest inactive state until a workout is pushed.
     Workout,
+    /// The climb underfoot and the crest ahead ([`crate::climb`]): metres
+    /// still to climb, how far to the top, and the gain banked so far. Heads
+    /// the course cluster because on a mountain course it is the question
+    /// asked most — the first thing checked the moment the trail tilts up.
+    Climb,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
@@ -181,6 +186,7 @@ impl Page {
             Page::Pacer => "PACR",
             Page::GuidedRun => "GUID",
             Page::Workout => "WKT",
+            Page::Climb => "CLMB",
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
@@ -226,6 +232,7 @@ impl Page {
             Page::Pacer => "VIRTUAL PARTNER",
             Page::GuidedRun => "GUIDED RUN",
             Page::Workout => "WORKOUT",
+            Page::Climb => "CLIMB",
             Page::Nav => "COURSE MAP",
             Page::TurnCue => "NEXT TURN",
             Page::CutoffEta => "CUT-OFF ETA",
@@ -301,7 +308,8 @@ impl Page {
             Page::Splits => Page::Pacer,
             Page::Pacer => Page::GuidedRun,
             Page::GuidedRun => Page::Workout,
-            Page::Workout => Page::Nav,
+            Page::Workout => Page::Climb,
+            Page::Climb => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
             Page::CutoffEta => Page::Roadbook,
@@ -333,8 +341,8 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 36 pages a forward-
-    /// only walk needs up to ~35 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 37 pages a forward-
+    /// only walk needs up to ~36 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
@@ -374,7 +382,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 36] = [
+    const ALL: [Page; 37] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -384,6 +392,7 @@ mod tests {
         Page::Pacer,
         Page::GuidedRun,
         Page::Workout,
+        Page::Climb,
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
@@ -431,9 +440,10 @@ mod tests {
         );
         assert_eq!(
             Page::Workout.next(),
-            Page::Nav,
-            "course ops follow the live cluster"
+            Page::Climb,
+            "course ops follow the live cluster, climb at their head"
         );
+        assert_eq!(Page::Climb.next(), Page::Nav);
         assert_eq!(Page::Nav.next(), Page::TurnCue);
         assert_eq!(Page::CutoffEta.next(), Page::Roadbook);
         assert_eq!(Page::Roadbook.next(), Page::Fuel);

@@ -50,8 +50,10 @@ pub const CLIMB_MIN_GRADE_PCT: f32 = 2.0;
 /// [`CLIMB_END_DROP_M`]'s job on the live side.
 pub const CREST_DROP_M: i32 = 10;
 
-/// The climb the runner is currently in.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// The climb the runner is currently in. `Default` is the all-zero climb —
+/// only ever a rendering placeholder for "no active climb", never a state the
+/// detector produces.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ActiveClimb {
     /// Metres gained from the climb's foot to the current position. Net of the
     /// dips inside the climb — this is height above the foot, not summed D+,

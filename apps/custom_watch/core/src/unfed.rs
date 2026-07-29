@@ -81,13 +81,15 @@ pub enum Unfed {
     PolarNight,
     /// Nothing has been marked, so there is no position to navigate back to.
     NoWaypoints,
+    /// Neither underfoot nor ahead is there an ascent to report.
+    NoClimb,
 }
 
 impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 12] = [
+    pub const ALL: [Unfed; 13] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
         Unfed::AwaitingFix,
@@ -100,6 +102,7 @@ impl Unfed {
         Unfed::MidnightSun,
         Unfed::PolarNight,
         Unfed::NoWaypoints,
+        Unfed::NoClimb,
     ];
 
     /// What the runner can do about it.
@@ -113,7 +116,8 @@ impl Unfed {
             | Unfed::LastAidPassed
             | Unfed::NoCourseElevation
             | Unfed::MidnightSun
-            | Unfed::PolarNight => UnfedClass::Settled,
+            | Unfed::PolarNight
+            | Unfed::NoClimb => UnfedClass::Settled,
             Unfed::NoWaypoints => UnfedClass::WatchAction,
         }
     }
@@ -134,6 +138,7 @@ impl Unfed {
             Unfed::MidnightSun => "MIDNIGHT SUN",
             Unfed::PolarNight => "POLAR NIGHT",
             Unfed::NoWaypoints => "NO WAYPOINTS",
+            Unfed::NoClimb => "NO CLIMB",
         }
     }
 

@@ -16,6 +16,7 @@
 //! dependency and the two agree to well under a millimetre at the metres-apart
 //! spacing of successive fixes.
 
+use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::distance_bands::{band_for_distance, DistanceBand};
 use crate::fitness::RecoveryAdvice;
@@ -589,6 +590,11 @@ pub struct Snapshot {
     /// until a plan is pushed — the Pacer page then reads "PHASE --" rather than
     /// a phase the runner never asked for.
     pub race_phase: Option<RacePhaseView>,
+    /// The climb underfoot and the crest ahead ([`crate::climb`], §359). Both
+    /// halves are independent: the live half needs no course, the crest half
+    /// needs the pushed profile, and the page is empty only when neither has
+    /// anything to say.
+    pub climb: ClimbView,
     /// Distance + bearing from the current position back to the newest marked
     /// waypoint (§357), or `None` when nothing is marked or no position anchor
     /// exists — the Waypoint page then reads an honest empty state rather than
@@ -902,6 +908,12 @@ pub struct Recorder {
     /// the live offset from the `state` watch; this is a presence bit, like
     /// [`course_loaded`](Recorder::set_course_loaded)).
     tz_offset_min: Option<i16>,
+    /// Live ascent segmentation ([`crate::climb`]), fed the run distance +
+    /// baro-preferred altitude on each accepted fix — the same seam the GAP
+    /// grade and the elevation profile ride. Reset on
+    /// [`start`](Recorder::start): a new run must not inherit the last one's
+    /// foot, which at a lower trailhead would open a climb on the first fix.
+    climb: ClimbDetector,
     /// Positions the runner marked mid-run (§357), newest-last. Deliberately
     /// NOT cleared by [`start`](Recorder::start) or [`reset`](Recorder::reset):
     /// a water stash marked on yesterday's recce is the whole point of the
@@ -982,6 +994,7 @@ impl Recorder {
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
             tz_offset_min: None,
+            climb: ClimbDetector::new(),
             waypoints: Waypoints::new(),
         }
     }
@@ -1495,6 +1508,7 @@ impl Recorder {
         self.gap.reset();
         self.pacer.reset();
         self.elev_profile.reset();
+        self.climb.reset();
         // The armed workout re-runs from step 0, and the immediate feed
         // announces the first step at the gun (transition_seq 1).
         if let Some(w) = self.workout.as_mut() {
@@ -1702,15 +1716,18 @@ impl Recorder {
         }
     }
 
-    /// Advance the live-GAP grade estimate with an anchor-adopting fix: the
-    /// run total so far plus the baro-preferred altitude (falling back to the
+    /// Advance the altitude-fed surfaces with an anchor-adopting fix: the run
+    /// total so far plus the baro-preferred altitude (falling back to the
     /// fix's GPS altitude, mirroring the flash store's point stamping). No
-    /// altitude at all leaves the grade untouched, exactly like the Connect IQ
-    /// field's `updateGrade` early-out.
+    /// altitude at all leaves them untouched, exactly like the Connect IQ
+    /// field's `updateGrade` early-out — the live GAP grade, the elevation
+    /// sparkline, and the §359 climb segmenter all read the same sample, so a
+    /// hill cannot register on one page and not another.
     fn feed_gap(&mut self, fix: &Fix) {
         if let Some(alt) = self.baro_alt_m.or(fix.alt_m.map(f64::from)) {
             self.gap.on_sample(self.distance_m, alt);
             self.elev_profile.push(self.distance_m, alt);
+            self.climb.on_sample(self.distance_m, alt);
         }
     }
 
@@ -1855,6 +1872,7 @@ impl Recorder {
             route_position_permille: self.route_position_permille(),
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
+            climb: self.climb_snapshot(),
             waypoint: self
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
@@ -1934,7 +1952,27 @@ impl Recorder {
         // navigating back to even while the GPS is still reacquiring, so the
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
+        set(Page::Climb, !s.climb.is_empty());
         m
+    }
+
+    /// The Climb page's view: the ascent the detector has open, plus the crest
+    /// the pushed course profile puts ahead of the runner's along-course
+    /// position. The crest half is derived per snapshot rather than banked, so
+    /// it shrinks with every fix instead of at sync time — and it needs no new
+    /// input: the distance-even profile the RouteElev page already carries is
+    /// exactly the series to search.
+    fn climb_snapshot(&self) -> ClimbView {
+        ClimbView {
+            active: self.climb.active(),
+            ahead: self.route_elev.as_ref().and_then(|e| {
+                crest_ahead(
+                    &e.samples[..e.len],
+                    f64::from(e.total_m),
+                    self.route_along_m?,
+                )
+            }),
+        }
     }
 
     /// Where the run has reached in the armed guided run, or `None` when none is
@@ -3513,6 +3551,100 @@ mod tests {
         // Clearing the roadbook drops the terrain partner with it.
         r.set_roadbook(&[]);
         assert!(!r.snapshot().pacer.unwrap().terrain_aware);
+    }
+
+    #[test]
+    fn the_climb_detector_rides_the_same_altitude_seam_as_the_grade() {
+        // A hill must not register on the GAP page and not on the Climb page:
+        // both read the sample `feed_gap` takes, so one feed proves both.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix_alt(0.0, 0.0, 3.0, 1, 100.0));
+        assert!(r.snapshot().climb.active.is_none());
+        // ~55 m of gain over ~550 m — a 10 % climb, past the opening gate.
+        for i in 1..=11 {
+            let lat = 0.0001 * i as f64 * 0.5;
+            r.on_fix(&fix_alt(
+                lat,
+                0.0,
+                3.0,
+                1 + i as u32 * 10,
+                100.0 + 5.0 * i as f32,
+            ));
+        }
+        let c = r.snapshot().climb.active.expect("a 10 % ascent is a climb");
+        assert!(c.gain_m > 50.0, "{}", c.gain_m);
+        assert_ne!(r.snapshot().pages_mask & Page::Climb.bit(), 0);
+    }
+
+    #[test]
+    fn a_new_run_never_inherits_the_last_runs_foot() {
+        // Without the reset, a run starting lower than the last one ended
+        // opens a climb on its first fix — a phantom ascent the runner never
+        // made, on the page that exists to tell them what they did.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix_alt(0.0, 0.0, 3.0, 1, 2_000.0));
+        for i in 1..=11 {
+            let lat = 0.0001 * i as f64 * 0.5;
+            r.on_fix(&fix_alt(
+                lat,
+                0.0,
+                3.0,
+                1 + i as u32 * 10,
+                2_000.0 + 5.0 * i as f32,
+            ));
+        }
+        assert!(r.snapshot().climb.active.is_some());
+        r.stop(200);
+        r.reset(201);
+        r.start(202);
+        r.on_fix(&fix_alt(0.0, 0.0, 3.0, 203, 100.0));
+        assert!(r.snapshot().climb.active.is_none());
+    }
+
+    #[test]
+    fn the_crest_ahead_needs_both_a_profile_and_a_position() {
+        // Derived per snapshot from the profile the RouteElev page already
+        // carries, so it shrinks with every fix rather than at sync time —
+        // but it is honestly absent until both halves are there.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        // Up to a crest at sample 6 (600 m), then a committed descent.
+        let mut samples = [0i16; COURSE_PROFILE_CAP];
+        for (i, s) in samples.iter_mut().enumerate().take(11) {
+            *s = if i <= 6 {
+                100 + 10 * i as i16
+            } else {
+                160 - 20 * (i as i16 - 6)
+            };
+        }
+        let view = RouteElevView {
+            gain_m: 60,
+            loss_m: 80,
+            points: 11,
+            total_m: 1_000,
+            samples,
+            len: 11,
+        };
+        r.set_route_elev(Some(view));
+        assert!(
+            r.snapshot().climb.ahead.is_none(),
+            "no along-course position yet"
+        );
+        r.set_route_position(Some(0.0));
+        let a = r
+            .snapshot()
+            .climb
+            .ahead
+            .expect("a crest 600 m up the course");
+        assert!((a.gain_m - 60.0).abs() < 0.01, "{}", a.gain_m);
+        assert!((a.distance_m - 600.0).abs() < 0.01, "{}", a.distance_m);
+        // ...and it shrinks as the runner climbs.
+        r.set_route_position(Some(400.0));
+        let b = r.snapshot().climb.ahead.unwrap();
+        assert!(b.gain_m < a.gain_m && b.distance_m < a.distance_m);
     }
 
     #[test]
