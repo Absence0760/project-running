@@ -1228,6 +1228,13 @@ impl Recorder {
     /// runner anchors at the current totals on its next feed; armed idle, it
     /// waits for [`start`](Recorder::start). The step list is configuration
     /// like the pacer goal — it survives stop and re-arms on the next start.
+    ///
+    /// A push identical to the armed list (same canonical frame CRC — the
+    /// §356 attribution identity) is a NO-OP: a BLE retry or a phone
+    /// reconnect re-delivering the frame must not wipe mid-run step progress
+    /// and splice a second trail into the stored blob — exactly the
+    /// duplicate-index shape the phone then has to discard. Re-arming stays
+    /// what it is for a *different* workout: a deliberate change.
     pub fn set_workout(&mut self, steps: &[WorkoutStep]) {
         if steps.is_empty() {
             self.workout = None;
@@ -1235,9 +1242,13 @@ impl Recorder {
             self.workout_results_popped = 0;
             return;
         }
+        let crc = workout_store::frame_crc(steps);
+        if self.workout.is_some() && crc.is_some() && crc == self.workout_frame_crc {
+            return;
+        }
         if let Some(w) = WorkoutRunner::new(steps) {
             self.workout = Some(w);
-            self.workout_frame_crc = workout_store::frame_crc(steps);
+            self.workout_frame_crc = crc;
             self.workout_results_popped = 0;
         }
     }
@@ -4177,10 +4188,41 @@ mod tests {
         r.lap(7);
         let again = r.pop_settled_workout_result().expect("new trail drains");
         assert_eq!(again.step_index, 0);
-        // Re-arming replaces the trail: the cursor resets with it.
+        // Re-arming with a DIFFERENT workout replaces the trail: the cursor
+        // resets with it (an identical push is a no-op — its own test).
         r.lap(8);
-        r.set_workout(&workout_steps());
+        r.set_workout(&duration_step(30));
         assert!(r.pop_settled_workout_result().is_none());
+    }
+
+    #[test]
+    fn an_identical_workout_repush_is_a_no_op() {
+        // A BLE retry or phone reconnect re-delivering the armed WKT1 frame
+        // must not wipe mid-run progress and splice a second trail into the
+        // blob — the duplicate-index shape the phone fail-closed drops. The
+        // canonical frame CRC (the §356 attribution identity) is the
+        // equality; a different workout still re-arms deliberately.
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 1));
+        r.lap(2);
+        assert!(r.pop_settled_workout_result().is_some());
+        assert_eq!(r.snapshot().workout.unwrap().step_index, 1);
+
+        r.set_workout(&workout_steps());
+        let w = r.snapshot().workout.expect("still armed");
+        assert_eq!(w.step_index, 1, "progress survives the re-push");
+        assert_eq!(w.transition_seq, 2, "no re-announcement of step one");
+        assert!(
+            r.pop_settled_workout_result().is_none(),
+            "the drain cursor did not rewind — no spliced second trail"
+        );
+
+        r.set_workout(&duration_step(30));
+        let w = r.snapshot().workout.expect("armed");
+        assert_eq!(w.step_index, 0, "a different workout re-arms fresh");
+        assert!(w.duration_based);
     }
 
     #[test]
