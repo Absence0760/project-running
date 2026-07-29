@@ -865,6 +865,7 @@ mod tests {
             route_position_permille: None,
             race_day: None,
             race_phase: None,
+            climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
             track_thinning: 1,
