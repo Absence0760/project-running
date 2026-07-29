@@ -8,9 +8,11 @@ import '../lib/sim_watch_sync.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_settings.dart';
 
-/// The frozen v3 golden vector — one 3-point run blob, byte-identical to
-/// the firmware's `golden_blob_is_stable` test vector so a wire-format
-/// drift on either side is caught here.
+/// The frozen v3 golden vector — one 3-point run blob, as pre-§356 (v3)
+/// firmware wrote it. v4 only added record tags on the same CRC window, so
+/// this must keep decoding: it is the still-in-a-bench-board's-flash compat
+/// vector, and its bytes are frozen even though the firmware's own golden
+/// now pins the v4 form ([_goldenV4Hex]).
 ///
 /// Header byte 4 is the format version (`03`) and byte 5 is `01` —
 /// [kRunFlagFinished], which the firmware stamps in `RunWriter::finalize`.
@@ -25,8 +27,9 @@ const _goldenHex =
     '454e4431d2040000580200006c02000039e3c091';
 
 /// The frozen v3 golden vector with a closed lap (index 1, 1 km, 5:00
-/// split, 290 s moving) interleaved after point 2. Byte-identical to the
-/// firmware's `golden_blob_with_a_lap_is_stable`.
+/// split, 290 s moving) interleaved after point 2 — the pre-§356 form of
+/// the firmware's `golden_blob_with_a_lap_is_stable`, kept decodable like
+/// [_goldenHex].
 const _goldenLapHex =
     '54524b31030100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
@@ -34,6 +37,42 @@ const _goldenLapHex =
     '0100102700002c010000220100000001'
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c0200008d2b643c';
+
+/// The same 3-point run as today's v4 firmware writes it — byte-identical
+/// to the firmware's `golden_blob_is_stable`, so a wire-format drift on
+/// either side is caught here. Only the version byte and the CRC differ
+/// from [_goldenHex].
+const _goldenV4Hex =
+    '54524b31040100000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    'e4cfd9170c0141c101000000723f7a00'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c02000001f8ef8c';
+
+/// The v4 lap golden — byte-identical to the firmware's
+/// `golden_blob_with_a_lap_is_stable`.
+const _goldenV4LapHex =
+    '54524b31040100000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    'e4cfd9170c0141c101000000723f7a00'
+    '0100102700002c010000220100000001'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c0200001ac2224c';
+
+/// The v4 workout golden — byte-identical to the firmware's
+/// `golden_blob_with_workout_records_is_stable`: two settled step records
+/// interleaved in stream order (step 0 completed — 400 m / 95 s / 238 s/km;
+/// step 1 skipped — 51.2 m / 30 s / no pace) and the finalize-time summary
+/// (3 planned steps, partial, WKT1 frame CRC 0x0BADF00D).
+const _goldenWorkoutHex =
+    '54524b31040100000700000029000000'
+    'b8ced91718ff40c100000000703f7800'
+    '0000a00f00005f000000ee0000000002'
+    'e4cfd9170c0141c101000000723f7a00'
+    '0101000200001e000000000000000002'
+    '74d1d917000341c10200000000800000'
+    '03010df0ad0b00000000000000000003'
+    '454e4431d2040000580200006c0200000895c50c';
 
 /// The v1 and v2 goldens as prior firmware wrote them. v3 widened the CRC
 /// window to take in the footer totals, so their checksums no longer
@@ -73,6 +112,49 @@ Uint8List _checkpointBlob() {
   final crc = crc32(blob.sublist(0, blob.length - 4));
   ByteData.sublistView(blob).setUint32(blob.length - 4, crc, Endian.little);
   return blob;
+}
+
+/// Hand-build a v4 blob over the golden's three points with a configurable
+/// workout trail — two step records (optionally sharing an index) and the
+/// summary unless [withSummary] is false. These are the semantically
+/// inconsistent shapes the fail-closed section-drop rules pin: a checkpoint
+/// recovered without its finalize-time summary, and a re-armed workout's
+/// spliced double trail.
+Uint8List _buildWorkoutBlob(
+    {required bool withSummary, bool duplicateIndex = false}) {
+  final golden = _goldenBlob();
+  final body = BytesBuilder();
+  final header = Uint8List.fromList(golden.sublist(0, 16));
+  header[4] = 4;
+  body.add(header);
+  Uint8List step(int index) {
+    final d = ByteData(16);
+    d.setUint8(0, index);
+    d.setUint32(2, 4000, Endian.little);
+    d.setUint32(6, 95, Endian.little);
+    d.setUint16(10, 238, Endian.little);
+    d.setUint8(15, 2); // step tag
+    return d.buffer.asUint8List();
+  }
+
+  body.add(golden.sublist(16, 32));
+  body.add(step(0));
+  body.add(golden.sublist(32, 48));
+  body.add(step(duplicateIndex ? 0 : 1));
+  body.add(golden.sublist(48, 64));
+  if (withSummary) {
+    final d = ByteData(16);
+    d.setUint8(0, 3);
+    d.setUint8(1, 1);
+    d.setUint32(2, 0x0BADF00D, Endian.little);
+    d.setUint8(15, 3); // summary tag
+    body.add(d.buffer.asUint8List());
+  }
+  final prefix = body.toBytes();
+  final footer = Uint8List.fromList(golden.sublist(golden.length - 20));
+  final crc = crc32([...prefix, ...footer.sublist(0, 16)]);
+  ByteData.sublistView(footer).setUint32(16, crc, Endian.little);
+  return Uint8List.fromList([...prefix, ...footer]);
 }
 
 /// MAN1 manifest describing exactly the golden run: watch uptime 700 s,
@@ -428,12 +510,116 @@ void main() {
     test('a blob newer than the supported format is rejected, never misread',
         () {
       final blob = Uint8List.fromList(_goldenLapBlob());
-      blob[4] = 4; // future version
+      blob[4] = 5; // future version
       // Re-stamp the CRC so ONLY the version gate can reject it.
       final d = ByteData.sublistView(blob);
       d.setUint32(blob.length - 4, crc32(blob.sublist(0, blob.length - 4)),
           Endian.little);
       expect(verifyBlob(blob), isTrue, reason: 'structurally valid');
+      final m = decodeManifest(_goldenManifest());
+      expect(
+        () => payloadFromBlob(
+            blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8)),
+        throwsFormatException,
+      );
+    });
+
+    test('the v4 goldens decode identically to their v3 forms', () {
+      // v4 changed nothing about points, laps, or the CRC window — the
+      // version exists so a v3-only reader rejects a blob that may carry
+      // workout tags instead of throwing mid-walk.
+      final m = decodeManifest(_goldenManifest());
+      final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
+      for (final (v3, v4) in [
+        (_goldenHex, _goldenV4Hex),
+        (_goldenLapHex, _goldenV4LapHex),
+      ]) {
+        expect(verifyBlob(_hex(v4)), isTrue);
+        final a = payloadFromBlob(_hex(v3), m.entries.single, m.header, phoneNow);
+        final b = payloadFromBlob(_hex(v4), m.entries.single, m.header, phoneNow);
+        for (final key in ['duration_s', 'distance_m', 'finished']) {
+          expect(b[key], a[key]);
+        }
+        expect(b['track'], a['track']);
+        expect(b['laps'], a['laps']);
+        expect(b.containsKey('workout'), isFalse,
+            reason: 'no workout records, no workout section');
+      }
+    });
+
+    test('the workout golden yields the attributable workout section', () {
+      final blob = _hex(_goldenWorkoutHex);
+      expect(verifyBlob(blob), isTrue, reason: 'workout golden must verify');
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+          blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8, 12));
+
+      // Points decode exactly as before — the workout records are not points.
+      expect((payload['track'] as List), hasLength(3));
+
+      final workout = payload['workout'] as Map<String, dynamic>;
+      expect(workout['step_total'], 3);
+      expect(workout['adherence'], 'partial');
+      expect(workout['workout_crc'], 0x0BADF00D);
+      final steps =
+          (workout['step_results'] as List).cast<Map<String, dynamic>>();
+      expect(steps, hasLength(2));
+      expect(steps[0]['step_index'], 0);
+      expect(steps[0]['status'], 'completed');
+      expect(steps[0]['actual_distance_m'], closeTo(400.0, 1e-9));
+      expect(steps[0]['duration_s'], 95);
+      expect(steps[0]['actual_pace_sec_per_km'], 238);
+      expect(steps[1]['step_index'], 1);
+      expect(steps[1]['status'], 'skipped');
+      expect(steps[1]['actual_distance_m'], closeTo(51.2, 1e-9));
+      expect(steps[1]['duration_s'], 30);
+      expect(steps[1]['actual_pace_sec_per_km'], isNull);
+
+      // And runFromWatchPayload forwards the section whole into
+      // metadata.watch_workout (registered in docs/backend/metadata.md).
+      final run = runFromWatchPayload(payload);
+      final meta = run.metadata?[MetadataKeys.watchWorkout] as Map?;
+      expect(meta, isNotNull);
+      expect(meta!['workout_crc'], 0x0BADF00D);
+      expect((meta['step_results'] as List), hasLength(2));
+    });
+
+    test('step records without a summary are dropped, keeping the run', () {
+      // A run recovered from a mid-run checkpoint carries settled steps but
+      // no summary (the summary lands only at finalize): no attribution, so
+      // the auxiliary section is discarded whole — never attributed by
+      // guessing which workout the phone pushed last.
+      final blob = _buildWorkoutBlob(withSummary: false);
+      expect(verifyBlob(blob), isTrue);
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+          blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8));
+      expect(payload.containsKey('workout'), isFalse);
+      expect((payload['track'] as List), hasLength(3),
+          reason: 'the verified run itself is kept');
+    });
+
+    test('duplicate step indices drop the workout section, keeping the run',
+        () {
+      // A workout re-armed mid-run splices two trails into one blob; the
+      // flat shape cannot represent that honestly, so it is discarded whole.
+      final blob = _buildWorkoutBlob(withSummary: true, duplicateIndex: true);
+      expect(verifyBlob(blob), isTrue);
+      final m = decodeManifest(_goldenManifest());
+      final payload = payloadFromBlob(
+          blob, m.entries.single, m.header, DateTime.utc(2026, 7, 8));
+      expect(payload.containsKey('workout'), isFalse);
+      expect((payload['track'] as List), hasLength(3));
+    });
+
+    test('an unknown step status byte throws like an unknown tag', () {
+      final blob = Uint8List.fromList(_hex(_goldenWorkoutHex));
+      // Byte 1 of the first step record (the second 16-byte cell).
+      blob[16 + 16 + 1] = 2;
+      final d = ByteData.sublistView(blob);
+      d.setUint32(blob.length - 4, crc32(blob.sublist(0, blob.length - 4)),
+          Endian.little);
+      expect(verifyBlob(blob), isTrue, reason: 'only the status is wrong');
       final m = decodeManifest(_goldenManifest());
       expect(
         () => payloadFromBlob(
