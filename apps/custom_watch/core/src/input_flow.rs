@@ -144,11 +144,18 @@ impl GridCursorOp {
     }
 }
 
-/// The idle face BTN4 toggles to (decisions §291).
+/// The idle face BTN4 walks to (decisions §291, extended by §358).
+///
+/// A one-way cycle, not a toggle: the ICE card is a third face, and the key
+/// has only one tier while idle (an idle gesture must never change meaning
+/// mid-press — `btn4_action`). Home is one press from either of the other two,
+/// which is the property that matters: a runner who lands somewhere they did
+/// not mean to is never more than a press from the clock.
 pub fn idle_view_toggled(view: IdleView) -> IdleView {
     match view {
         IdleView::Home => IdleView::Diagnostics,
-        IdleView::Diagnostics => IdleView::Home,
+        IdleView::Diagnostics => IdleView::Ice,
+        IdleView::Ice => IdleView::Home,
     }
 }
 
@@ -382,9 +389,20 @@ mod tests {
     }
 
     #[test]
-    fn btn4_toggles_the_idle_face_both_ways() {
+    fn btn4_walks_the_three_idle_faces_and_returns_home() {
         assert_eq!(idle_view_toggled(IdleView::Home), IdleView::Diagnostics);
-        assert_eq!(idle_view_toggled(IdleView::Diagnostics), IdleView::Home);
+        assert_eq!(idle_view_toggled(IdleView::Diagnostics), IdleView::Ice);
+        assert_eq!(idle_view_toggled(IdleView::Ice), IdleView::Home);
+        // The property that matters on a one-way cycle: home is never more
+        // than the cycle away, and the walk visits every face exactly once.
+        let mut v = IdleView::Home;
+        let mut seen = [v; 3];
+        for slot in seen.iter_mut().skip(1) {
+            v = idle_view_toggled(v);
+            *slot = v;
+        }
+        assert_eq!(seen, [IdleView::Home, IdleView::Diagnostics, IdleView::Ice]);
+        assert_eq!(idle_view_toggled(v), IdleView::Home);
     }
 
     #[test]

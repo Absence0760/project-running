@@ -36,6 +36,7 @@ use crate::fix::Fix;
 use crate::gear_wear::GearWearStatus;
 use crate::gnss_mode::GnssMode;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
+use crate::ice;
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
 use crate::race_phases::RacePhaseIntent;
@@ -47,6 +48,20 @@ use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
 
 pub const COLS: usize = 21;
+
+/// The ICE face's title and its two section labels (§358). Consts rather than
+/// literals so the const asserts below can pin them inside the row width — a
+/// responder-facing line that silently clips is the failure this whole
+/// surface exists to avoid.
+pub const ICE_TITLE: &str = "ICE / MEDICAL ID";
+pub const ICE_CONDITIONS_LABEL: &str = "ALLERGY / CONDITION";
+pub const ICE_CONTACT_LABEL: &str = "EMERGENCY CONTACT";
+
+const _: () = {
+    assert!(ICE_TITLE.len() <= COLS);
+    assert!(ICE_CONDITIONS_LABEL.len() <= COLS);
+    assert!(ICE_CONTACT_LABEL.len() <= COLS);
+};
 pub const ROWS: usize = 9;
 
 /// A fix older than this (in seconds of uptime) renders as signal lost.
@@ -80,6 +95,10 @@ pub enum IdleView {
     #[default]
     Home,
     Diagnostics,
+    /// The ICE / medical-ID card ([`crate::ice`], §358) — what a responder
+    /// reads off the wrist. Idle-only, like the other two: a run view's rows
+    /// belong to the run.
+    Ice,
 }
 
 /// The home face's clock hero band: these text rows stay blank in the face
@@ -515,6 +534,7 @@ pub fn face_rows(
     mode: GnssMode,
     view: IdleView,
     tz_offset_min: Option<i16>,
+    ice: Option<&ice::IceCard>,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
@@ -527,6 +547,7 @@ pub fn face_rows(
             false,
             view,
             tz_offset_min,
+            ice,
         ),
     }
 }
@@ -605,6 +626,7 @@ pub fn page_rows(
     mode: GnssMode,
     view: IdleView,
     tz_offset_min: Option<i16>,
+    ice: Option<&ice::IceCard>,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         None => status_face(
@@ -616,6 +638,7 @@ pub fn page_rows(
             animate,
             view,
             tz_offset_min,
+            ice,
         ),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
@@ -2940,11 +2963,52 @@ fn status_face(
     animate: bool,
     view: IdleView,
     tz_offset_min: Option<i16>,
+    ice: Option<&ice::IceCard>,
 ) -> [Row; ROWS] {
     match view {
         IdleView::Home => home_face(fix, hr_bpm, elev, uptime_s, mode, animate, tz_offset_min),
         IdleView::Diagnostics => diagnostics_face(fix, hr_bpm, elev, uptime_s, mode, animate),
+        IdleView::Ice => ice_face(ice),
     }
+}
+
+/// The ICE / medical-ID face (§358): the lines a responder needs off a
+/// stranger's wrist, each on its own row under its own label.
+///
+/// Label-above-value rather than label-and-value sharing 21 cells, because a
+/// responder has no context to expand an abbreviation from — `PENICILLIN,
+/// ASTHMA` must arrive whole or not at all, and [`crate::ice`] guarantees it
+/// fits a row by refusing anything wider at the door. An empty field reads
+/// `--` (nothing recorded) rather than a blank row, which would be
+/// indistinguishable from a render that failed.
+fn ice_face(card: Option<&ice::IceCard>) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    let _ = write!(rows[0], "{}", ICE_TITLE);
+    let Some(c) = card.filter(|c| !c.is_blank()) else {
+        // No card, or one cleared to blank: say which of the app's sanctioned
+        // reasons applies rather than showing five `--` rows, which would read
+        // as a runner who declined to answer.
+        let _ = write!(rows[2], "{}", Unfed::NotSynced.reason());
+        if let Some(hint) = Unfed::NotSynced.hint() {
+            let _ = write!(rows[3], "{hint}");
+        }
+        return rows;
+    };
+    fn or_dash(s: &str) -> &str {
+        if s.is_empty() {
+            "--"
+        } else {
+            s
+        }
+    }
+    let _ = write!(rows[1], "{}", or_dash(c.holder()));
+    let _ = write!(rows[2], "{:<6}{}", "BLOOD", or_dash(c.blood()));
+    let _ = write!(rows[3], "{}", ICE_CONDITIONS_LABEL);
+    let _ = write!(rows[4], "{}", or_dash(c.conditions()));
+    let _ = write!(rows[5], "{}", ICE_CONTACT_LABEL);
+    let _ = write!(rows[6], "{}", or_dash(c.contact()));
+    let _ = write!(rows[7], "{}", or_dash(c.phone()));
+    rows
 }
 
 /// The home layout — a watch face, not a debug readout (decisions §291): the
@@ -3195,6 +3259,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Home,
             None,
+            None,
         )
     }
 
@@ -3214,6 +3279,7 @@ mod tests {
             uptime_s,
             GnssMode::Performance,
             IdleView::Diagnostics,
+            None,
             None,
         )
     }
@@ -3260,6 +3326,7 @@ mod tests {
             animate,
             GnssMode::Performance,
             IdleView::Home,
+            None,
             None,
         )
     }
@@ -4166,6 +4233,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Home,
             Some(345),
+            None,
         );
         assert_eq!(rows[7].as_str(), "GPS 8 SATS      LOCAL");
         let rows = face_rows(Some(&fix()), None, None, None, 42);
@@ -4185,6 +4253,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Diagnostics,
             Some(345),
+            None,
         );
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
     }
@@ -5573,6 +5642,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Diagnostics,
             None,
+            None,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
@@ -5597,6 +5667,7 @@ mod tests {
                 mode,
                 IdleView::Diagnostics,
                 None,
+                None,
             );
             assert_eq!(rows[1].as_str(), expected);
             assert!(rows[1].len() <= COLS);
@@ -5608,6 +5679,7 @@ mod tests {
                 42,
                 mode,
                 IdleView::Home,
+                None,
                 None,
             );
             assert_eq!(rows[8].as_str(), expected);
@@ -5626,6 +5698,7 @@ mod tests {
             GnssMode::Expedition,
             IdleView::Home,
             None,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
         let rows = super::page_rows(
@@ -5640,6 +5713,7 @@ mod tests {
             true,
             GnssMode::Balanced,
             IdleView::Home,
+            None,
             None,
         );
         assert_eq!(rows[8].as_str(), "GPS  8 SATS BAL");
@@ -5661,6 +5735,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Home,
             None,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     STALE 40S PERF");
         let rows = super::face_rows(
@@ -5671,6 +5746,7 @@ mod tests {
             aged,
             GnssMode::Expedition,
             IdleView::Home,
+            None,
             None,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS EXP");
@@ -5687,6 +5763,7 @@ mod tests {
             lost,
             GnssMode::Expedition,
             IdleView::Home,
+            None,
             None,
         );
         assert_eq!(rows[8].as_str(), "     STALE 65S EXP");
@@ -5709,6 +5786,7 @@ mod tests {
             41 + 40,
             GnssMode::Expedition,
             IdleView::Diagnostics,
+            None,
             None,
         );
         assert_eq!(rows[2].as_str(), "GPS  STALE 40S");
@@ -5742,6 +5820,7 @@ mod tests {
                     mode,
                     IdleView::Home,
                     None,
+                    None,
                 );
                 for row in rows {
                     assert!(row.len() <= COLS, "row too wide in {:?}: {:?}", mode, row);
@@ -5756,6 +5835,7 @@ mod tests {
                     999_999,
                     mode,
                     view,
+                    None,
                     None,
                 );
                 for row in idle {
@@ -5925,6 +6005,102 @@ mod tests {
             tb.on_point(40.0, -105.0 + i as f64 * step_m * lon_per_m, i);
         }
         tb.view()
+    }
+
+    fn ice_card() -> ice::IceCard {
+        ice::IceCard::new(
+            "ALEX MORGAN",
+            "O NEG",
+            "PENICILLIN, ASTHMA",
+            "JAMIE MORGAN",
+            "+1 555 0134",
+        )
+        .unwrap()
+    }
+
+    fn ice_rows(card: Option<&ice::IceCard>) -> [Row; ROWS] {
+        super::face_rows(
+            Some(&fix()),
+            Some(150),
+            None,
+            None,
+            42,
+            GnssMode::Performance,
+            IdleView::Ice,
+            None,
+            card,
+        )
+    }
+
+    #[test]
+    fn the_ice_face_gives_every_line_its_own_row() {
+        // A responder reading a stranger's wrist cannot expand an
+        // abbreviation, so nothing here shares a row with a label it would
+        // have to be squeezed beside — and nothing clips.
+        let card = ice_card();
+        let rows = ice_rows(Some(&card));
+        assert_eq!(rows[0].as_str(), "ICE / MEDICAL ID");
+        assert_eq!(rows[1].as_str(), "ALEX MORGAN");
+        assert_eq!(rows[2].as_str(), "BLOOD O NEG");
+        assert_eq!(rows[3].as_str(), "ALLERGY / CONDITION");
+        assert_eq!(rows[4].as_str(), "PENICILLIN, ASTHMA");
+        assert_eq!(rows[5].as_str(), "EMERGENCY CONTACT");
+        assert_eq!(rows[6].as_str(), "JAMIE MORGAN");
+        assert_eq!(rows[7].as_str(), "+1 555 0134");
+        for (i, row) in rows.iter().enumerate() {
+            assert!(row.len() <= COLS, "row {i} overflows: {row:?}");
+        }
+    }
+
+    #[test]
+    fn an_empty_ice_field_reads_as_nothing_recorded_not_as_a_blank_row() {
+        // A runner with no known allergies still has a card; the row must say
+        // so, because an empty row is indistinguishable from a failed render.
+        let card = ice::IceCard::new("ALEX MORGAN", "", "", "JAMIE", "").unwrap();
+        let rows = ice_rows(Some(&card));
+        assert_eq!(rows[2].as_str(), "BLOOD --");
+        assert_eq!(rows[4].as_str(), "--");
+        assert_eq!(rows[6].as_str(), "JAMIE");
+        assert_eq!(rows[7].as_str(), "--");
+    }
+
+    #[test]
+    fn no_ice_card_says_so_rather_than_showing_five_dashes() {
+        // Five `--` rows would read as a runner who declined to answer. The
+        // honest statement is that nothing was ever synced — and a card
+        // cleared to all-blank is the same fact, so it takes the same words.
+        for card in [None, Some(ice::IceCard::new("", "", "", "", "").unwrap())] {
+            let rows = ice_rows(card.as_ref());
+            assert_eq!(rows[0].as_str(), "ICE / MEDICAL ID");
+            assert_eq!(rows[1].as_str(), "");
+            assert_eq!(rows[2].as_str(), "NOT SYNCED");
+            assert_eq!(rows[3].as_str(), "SET VIA PHONE SYNC");
+        }
+    }
+
+    #[test]
+    fn the_ice_face_never_leaks_into_a_run_view() {
+        // Idle-only, like the other two idle faces: with a run under way the
+        // rows belong to the run whatever the idle view last was.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let card = ice_card();
+        let rows = super::face_rows(
+            Some(&fix()),
+            Some(150),
+            Some(&rec),
+            None,
+            42,
+            GnssMode::Performance,
+            IdleView::Ice,
+            None,
+            Some(&card),
+        );
+        for row in rows.iter() {
+            assert!(
+                !row.as_str().contains("MORGAN"),
+                "the card reached a run view: {row:?}"
+            );
+        }
     }
 
     #[test]
@@ -7078,6 +7254,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Home,
             Some(-360),
+            None,
         );
         assert_eq!(rows[3], header("SUNRISE", "REC"));
         assert_eq!(rows[4].as_str(), "AT       04:34");
@@ -7138,6 +7315,7 @@ mod tests {
             GnssMode::Performance,
             IdleView::Home,
             Some(-360),
+            None,
         );
         assert_eq!(rows[4].as_str(), "AWAITING FIX");
         assert_eq!(rows[5].as_str(), "", "a sensor wait owes no phone remedy");
@@ -7168,6 +7346,7 @@ mod tests {
                 GnssMode::Performance,
                 IdleView::Home,
                 Some(0),
+                None,
             );
             assert_eq!(rows[4].as_str(), reason);
             assert_eq!(rows[5].as_str(), "", "a settled state owes no remedy");

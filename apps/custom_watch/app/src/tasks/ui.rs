@@ -24,6 +24,7 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::{self, HrSample};
+use watch_core::ice::IceCard;
 use watch_core::nav_map::{self, PanelCache, PanelKey};
 use watch_core::page::Page;
 use watch_core::page_grid;
@@ -148,6 +149,7 @@ pub async fn screen_task(
     let mut menu_rx = unwrap!(state::SETTINGS_MENU.receiver());
     let mut profile_rx = unwrap!(state::PROFILE.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
+    let mut ice_rx = unwrap!(state::ICE.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
@@ -173,6 +175,9 @@ pub async fn screen_task(
     let mut stop_armed: Option<u32> = None;
     // No published offset yet = the home clock stays UTC (and says so).
     let mut tz_offset_min: Option<i16> = None;
+    // The responder card (§358); None until the record task publishes one from
+    // flash or a phone push, which the ICE face says honestly.
+    let mut ice: Option<IceCard> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -214,6 +219,9 @@ pub async fn screen_task(
         }
         if let Some(v) = idle_view_rx.try_changed() {
             idle_view = v;
+        }
+        if let Some(c) = ice_rx.try_changed() {
+            ice = c;
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -294,6 +302,7 @@ pub async fn screen_task(
             mode,
             idle_view,
             tz_offset_min,
+            ice.as_ref(),
         );
         // The hero band is decided here rather than at its `match` below,
         // because the standing marker shares row 1 with it and has to know how
