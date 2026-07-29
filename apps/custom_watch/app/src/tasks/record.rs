@@ -53,7 +53,9 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
-use watch_core::run_store::{verify_blob, LapRecord, PushOutcome, RunWriter};
+use watch_core::run_store::{
+    verify_blob, LapRecord, PushOutcome, RunWriter, StepRecord, WorkoutRecord,
+};
 use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
 use watch_core::trackback::Trackback;
@@ -145,6 +147,75 @@ fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
         Err(_) => warn!(
             "record: run {=u32} lap {=u16} dropped from storage (slot full)",
             open.run_seq, lap.index
+        ),
+    }
+}
+
+/// Persist one settled workout step into the staged blob (v4 step record,
+/// stream order). Best-effort like the lap path: the RAM roll-up is what the
+/// runner reads mid-run; a full sink or the stored-step budget only warns.
+fn push_step_result(open: &mut OpenRun, r: &watch_core::workout::StepResult) {
+    let record = StepRecord {
+        step_index: r.step_index,
+        skipped: r.status == watch_core::workout::StepStatus::Skipped,
+        distance_dm: (r.actual_distance_m * 10.0).clamp(0.0, u32::MAX as f64) as u32,
+        duration_s: r.actual_duration_s.clamp(0.0, u32::MAX as f64) as u32,
+        pace_s_per_km: r.actual_pace_s_per_km,
+    };
+    match open.writer.push_step(&record) {
+        Ok(true) => {}
+        Ok(false) => warn!(
+            "record: run {=u32} workout step {=u8} dropped from storage (stored-step budget)",
+            open.run_seq, r.step_index
+        ),
+        Err(_) => warn!(
+            "record: run {=u32} workout step {=u8} dropped from storage (slot full)",
+            open.run_seq, r.step_index
+        ),
+    }
+}
+
+/// Flush the armed workout's remaining trail into the staged blob before the
+/// final commit (decisions §356): any settled results the event loop hasn't
+/// drained yet, the in-progress step recorded as skipped-so-far, then the
+/// summary that attributes the whole trail to the pushed WKT1 frame. Without
+/// the summary the phone deliberately discards the step records, so a step
+/// list the canonical encoder refuses (which set_workout can't arm from a
+/// real push) is logged rather than half-written.
+fn flush_workout(open: &mut OpenRun, recorder: &mut Recorder) {
+    while let Some(r) = recorder.pop_settled_workout_result() {
+        push_step_result(open, &r);
+    }
+    if let Some(r) = recorder.workout_in_progress_result() {
+        push_step_result(open, &r);
+    }
+    let Some(summary) = recorder.workout_summary() else {
+        return;
+    };
+    let Some(frame_crc) = summary.frame_crc else {
+        warn!(
+            "record: run {=u32} workout trail has no frame CRC — summary not stored",
+            open.run_seq
+        );
+        return;
+    };
+    let record = WorkoutRecord {
+        step_total: summary.step_total,
+        partial: summary.rollup == watch_core::workout::WorkoutAdherence::Partial,
+        frame_crc,
+    };
+    match open.writer.push_workout(&record) {
+        Ok(true) => info!(
+            "record: run {=u32} workout results stored ({=u8} planned steps)",
+            open.run_seq, summary.step_total
+        ),
+        Ok(false) => warn!(
+            "record: run {=u32} workout summary already stored",
+            open.run_seq
+        ),
+        Err(_) => warn!(
+            "record: run {=u32} workout summary dropped (slot full)",
+            open.run_seq
         ),
     }
 }
@@ -614,6 +685,9 @@ pub async fn run(store: &'static SharedStore) {
                     trackback_sender.send(trackback.view());
                 }
                 if now == RecordState::Finished {
+                    if let Some(o) = open.as_mut() {
+                        flush_workout(o, &mut recorder);
+                    }
                     if let Some(o) = open.take() {
                         commit_run(store, o, &recorder.snapshot()).await;
                     }
@@ -627,10 +701,15 @@ pub async fn run(store: &'static SharedStore) {
 
         // Persist any laps this event closed (manual, auto, or a throttled
         // fix that crossed several kilometre boundaries at once) — one v2 lap
-        // record each, in close order.
+        // record each, in close order — and any workout steps it settled
+        // (auto-advance or a lap-press skip) — one v4 step record each, so a
+        // mid-run checkpoint carries the trail settled before it.
         if let Some(o) = open.as_mut() {
             while let Some(lap) = recorder.pop_closed_lap() {
                 push_lap(o, &lap);
+            }
+            while let Some(r) = recorder.pop_settled_workout_result() {
+                push_step_result(o, &r);
             }
         }
 

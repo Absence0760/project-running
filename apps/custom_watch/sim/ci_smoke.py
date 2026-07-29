@@ -679,6 +679,22 @@ def scenario_smoke(sim):
         f"{stored.group(3)} after the two-press BTN2 guard"
     )
 
+    # The sim demo workout is always armed under sim-autostart, so the stop
+    # must have flushed its planned-vs-actual trail into the blob before the
+    # commit (run-store v4, decisions §356) — the summary log is the tell.
+    workout_stored = sim.tail.search(
+        re.compile(r"record: run \d+ workout results stored \((\d+) planned steps\)")
+    )
+    if workout_stored is None:
+        raise SmokeFailure(
+            "the run committed but 'record: run N workout results stored' "
+            "never appeared — the armed demo workout's trail was not flushed"
+        )
+    passed(
+        f"workout trail flushed into the blob "
+        f"({workout_stored.group(1)} planned steps) before the commit"
+    )
+
     text = sim.tail.text()
     panics = [ln for ln in text.splitlines() if "panicked" in ln.lower()]
     if panics:
