@@ -152,6 +152,14 @@ pub fn decode_config(bytes: &[u8]) -> Option<(u8, u8, u8)> {
 /// must carry the other forward (`run_flash::rewrite_config_page`).
 pub const BOND_RECORD_OFFSET: usize = 64;
 
+/// Offset of the persisted waypoint record ([`crate::waypoints`] `WPT1`,
+/// §357) within the config page — past the bond record's extent, word-
+/// aligned, carried forward by the same shared-page rewrite.
+pub const WAYPOINT_RECORD_OFFSET: usize = 128;
+
+const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
+const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= CONFIG_LEN);
+
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a
 /// multiple of the 4-byte NVMC write word.

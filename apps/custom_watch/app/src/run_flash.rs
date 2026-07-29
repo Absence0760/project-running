@@ -59,6 +59,7 @@ use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::profiles::ActivityProfile;
 use watch_core::run_store::ManifestEntry;
+use watch_core::waypoints;
 
 use crate::state;
 
@@ -284,8 +285,9 @@ impl RunStore {
             .map(|(_, f, p)| (f, p))
             .unwrap_or((0, 0));
         let bond = self.read_bond();
+        let wpts = self.read_waypoints();
         if self
-            .rewrite_config_page(Some((mode.to_byte(), flags, profile)), bond)
+            .rewrite_config_page(Some((mode.to_byte(), flags, profile)), bond, wpts)
             .await
         {
             info!("run_flash: persisted GNSS mode {}", mode);
@@ -305,8 +307,9 @@ impl RunStore {
                 .unwrap_or((GnssMode::default().to_byte(), 0, 0));
         let flags = flash_store::set_hide_empty_flags(flags, hide);
         let bond = self.read_bond();
+        let wpts = self.read_waypoints();
         if self
-            .rewrite_config_page(Some((mode_byte, flags, profile)), bond)
+            .rewrite_config_page(Some((mode_byte, flags, profile)), bond, wpts)
             .await
         {
             info!("run_flash: persisted hide-empty-pages {}", hide);
@@ -324,8 +327,9 @@ impl RunStore {
                 .unwrap_or((GnssMode::default().to_byte(), 0, 0));
         let flags = flags | flash_store::CONFIG_FLAG_PROFILE_SET;
         let bond = self.read_bond();
+        let wpts = self.read_waypoints();
         if self
-            .rewrite_config_page(Some((mode_byte, flags, profile.to_byte())), bond)
+            .rewrite_config_page(Some((mode_byte, flags, profile.to_byte())), bond, wpts)
             .await
         {
             info!("run_flash: persisted activity profile {}", profile);
@@ -343,20 +347,57 @@ impl RunStore {
     #[cfg(feature = "ble")]
     pub async fn persist_bond(&mut self, bond: flash_store::BondRecord) {
         let config = self.read_config_bytes();
-        if self.rewrite_config_page(config, Some(bond)).await {
+        let wpts = self.read_waypoints();
+        if self.rewrite_config_page(config, Some(bond), wpts).await {
             info!("run_flash: persisted BLE bond");
         }
     }
 
+    /// Read the waypoints persisted by
+    /// [`persist_waypoints`](Self::persist_waypoints), or `None` when flash is
+    /// unavailable, unreadable, or the record is erased / corrupt — the watch
+    /// then starts with an empty store (fail-closed, same rule as
+    /// [`read_bond`](Self::read_bond)).
+    pub fn read_waypoints(&mut self) -> Option<waypoints::Waypoints> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; waypoints::MAX_WPT1_LEN];
+        let at = CONFIG_OFFSET + flash_store::WAYPOINT_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: waypoint read failed {:?}", e);
+            return None;
+        }
+        waypoints::Waypoints::decode(&buf)
+    }
+
+    /// Persist the marked waypoints (§357) so a reboot keeps them — a stash
+    /// the runner marked to find again is worth nothing if a battery pull
+    /// forgets it. Same best-effort / L4 rules and carry-everything-forward
+    /// page rewrite as [`persist_gnss_mode`](Self::persist_gnss_mode); marks
+    /// are a handful per run, so page wear is negligible.
+    pub async fn persist_waypoints(&mut self, wpts: &waypoints::Waypoints) {
+        let config = self.read_config_bytes();
+        let bond = self.read_bond();
+        if self
+            .rewrite_config_page(config, bond, Some(wpts.clone()))
+            .await
+        {
+            info!("run_flash: persisted waypoints ({=usize})", wpts.len());
+        }
+    }
+
     /// Erase + rewrite the config page with whichever records are present.
-    /// The page holds BOTH the CFG record (base) and the bond record
-    /// ([`flash_store::BOND_RECORD_OFFSET`]); an erase clears both, so every
-    /// caller reads the record it is NOT changing first and passes it through.
-    /// Returns whether the rewrite fully succeeded.
+    /// The page holds the CFG record (base), the bond record
+    /// ([`flash_store::BOND_RECORD_OFFSET`]), and the waypoint record
+    /// ([`flash_store::WAYPOINT_RECORD_OFFSET`]); an erase clears all of
+    /// them, so every caller reads the records it is NOT changing first and
+    /// passes them through. Returns whether the rewrite fully succeeded.
     async fn rewrite_config_page(
         &mut self,
         config: Option<(u8, u8, u8)>,
         bond: Option<flash_store::BondRecord>,
+        wpts: Option<waypoints::Waypoints>,
     ) -> bool {
         if !self.available {
             return false;
@@ -380,6 +421,16 @@ impl RunStore {
             if let Err(e) = self.flash_write(at, &rec).await {
                 warn!("run_flash: bond write failed {:?}", e);
                 return false;
+            }
+        }
+        if let Some(w) = wpts {
+            let mut buf = [0u8; waypoints::MAX_WPT1_LEN];
+            if let Some(len) = w.encode(&mut buf) {
+                let at = start + flash_store::WAYPOINT_RECORD_OFFSET as u32;
+                if let Err(e) = self.flash_write(at, &buf[..len]).await {
+                    warn!("run_flash: waypoint write failed {:?}", e);
+                    return false;
+                }
             }
         }
         true
