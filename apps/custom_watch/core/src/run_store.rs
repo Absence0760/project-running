@@ -1443,7 +1443,11 @@ mod tests {
             }
         }
         assert_eq!(found_step, Some(step), "step results are never decimated");
-        assert_eq!(found_summary, Some(summary), "the summary survives thinning");
+        assert_eq!(
+            found_summary,
+            Some(summary),
+            "the summary survives thinning"
+        );
     }
 
     #[test]

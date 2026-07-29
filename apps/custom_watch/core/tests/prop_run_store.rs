@@ -260,15 +260,19 @@ fn a_workout_record_round_trips_through_its_record() {
 /// — an unknown outcome must never read as some concrete one.
 #[test]
 fn an_unknown_status_byte_never_decodes() {
-    check(512, (a_step(), a_workout(), 2u8..=u8::MAX), |(s, w, bad)| {
-        let mut bytes = s.encode();
-        bytes[1] = bad;
-        prop_assert_eq!(StepRecord::decode(&bytes), None);
-        let mut bytes = w.encode();
-        bytes[1] = bad;
-        prop_assert_eq!(WorkoutRecord::decode(&bytes), None);
-        Ok(())
-    });
+    check(
+        512,
+        (a_step(), a_workout(), 2u8..=u8::MAX),
+        |(s, w, bad)| {
+            let mut bytes = s.encode();
+            bytes[1] = bad;
+            prop_assert_eq!(StepRecord::decode(&bytes), None);
+            let mut bytes = w.encode();
+            bytes[1] = bad;
+            prop_assert_eq!(WorkoutRecord::decode(&bytes), None);
+            Ok(())
+        },
+    );
 }
 
 #[test]
