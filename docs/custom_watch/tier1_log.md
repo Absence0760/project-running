@@ -245,7 +245,11 @@ summary or a mid-run re-arm spliced duplicate indices; the run itself is never d
 auxiliary trail. Neither workout tag ever decimates; v3 goldens stay as decode-compat vectors and
 the v4 goldens pin both codecs. Workspace host sweep 2061 → 2073; sim-verified — `ci_smoke`'s
 smoke stop now asserts "workout results stored (5 planned steps)" ahead of the flash commit. The
-`plan_workout_id` join stays with the phone's still-unwired workout-push transport.
+`plan_workout_id` join stays with the product push surface — but the transport half of that seam
+closed in the same batch: `WatchBleTransport.writeWorkout` targets the sixth characteristic,
+`WatchSyncClient.pushWorkout` carries `chunkWorkout`'s in-order offset chunks, and the dev Sim
+Watch screen gained a Push-workout action (the §209 surface) that sends the golden demo workout —
+so the encoder finally has a live caller and the CRC handshake is exercisable end-to-end.
 
 ## Next entry expected
 
