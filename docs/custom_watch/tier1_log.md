@@ -253,7 +253,9 @@ so the encoder finally has a live caller and the CRC handshake is exercisable en
 course encoder followed in the same batch: `WatchSyncClient.pushCourse` writes `chunkCourse`'s
 chunks to the fifth characteristic and a Push-course action sends the golden three-point sim
 course + elevation, so every phone→watch push rail (settings / course / workout) now has both
-halves wired.
+halves wired. And the frame CRC closed the loop it opened: an identical workout re-push (a BLE
+retry, a reconnect) is now a recorder-level no-op, so a transport hiccup can't wipe mid-run step
+progress and splice the duplicate-index trail the phone fail-closed drops.
 
 ## Next entry expected
 
