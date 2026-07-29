@@ -255,6 +255,7 @@ pub mod ble_sync;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
+pub mod climb;
 pub mod course;
 pub mod course_profile;
 pub mod course_store;
