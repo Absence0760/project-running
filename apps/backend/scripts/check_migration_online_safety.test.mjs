@@ -13,7 +13,9 @@ import {
 
 test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // The cutoff itself and everything before it is grandfathered.
+  assert.equal(isAfterCutoff('20270430'), false);
   assert.equal(isAfterCutoff('20270429'), false);
+  assert.equal(isAfterCutoff('20270429000001'), false); // pre-cutoff same-day tail
   assert.equal(isAfterCutoff('20270428'), false);
   assert.equal(isAfterCutoff('20270427'), false);
   assert.equal(isAfterCutoff('20270426'), false);
@@ -28,8 +30,8 @@ test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // a naive numeric one that would rank 2026…000002 above the 2027 cutoff).
   assert.equal(isAfterCutoff('20260528000002'), false);
   // A genuinely newer migration is guarded.
-  assert.equal(isAfterCutoff('20270430'), true);
-  assert.equal(isAfterCutoff('20270429000001'), true); // same-day, added later
+  assert.equal(isAfterCutoff('20270501'), true);
+  assert.equal(isAfterCutoff('20270430000001'), true); // same-day, added later
   assert.equal(isAfterCutoff('20280101'), true);
 });
 

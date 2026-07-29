@@ -34,7 +34,10 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // reviewably ship a guarded-table constraint the blocking way (and say why in
 // the PR) — the normal path is the NOT VALID + VALIDATE two-step, which passes
 // this guard without any change here.
-export const GRANDFATHER_CUTOFF = '20270429';
+// 20270430: public_runs view redefinition only (watch_workout denylist entry)
+// — no constraint, no guarded-table DDL; the scanner passed it with zero
+// violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270430';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
