@@ -295,7 +295,17 @@ Both edges hysteretic and deliberately blunt: a page that re-zeroes on every rol
 no page.
 
 Workspace host sweep 2073 → 2140; all three feature sets build and pass `clippy -D warnings`; all
-three Renode scenarios (smoke / pages / alerts) green. The page ring reached **37**, and pages 36
+**four** Renode scenarios (smoke / pages / alerts / terrain) green. `terrain` is new with this
+batch and is what moves waypoints and climb from build-verified to **sim-verified**: the bench_jog
+walk can only show both pages correctly ABSENT, which is indistinguishable from a data-presence bit
+on the wrong field, so it boots `mountain_loop`, marks a point with the BTN5 hold and ramps the
+BMP581 model past the climb-open threshold, then asserts both pages enter the cycle and render.
+Arming that baro ramp is load-bearing — `feed_gap` prefers baro altitude, so the fixture's own GPS
+ramp is shadowed by the model's static default. Splitting it out also exposed a latent harness bug:
+`alerts` and `pages` had shared a boot, and `alerts` consumes the quiet window `pages` needs (past
+~100 s the overlapping cadences never let a banner expire with nothing behind it, so
+`record: alert cleared` stops firing). Each scenario now gets its own boot, which is what CI ran
+all along. The page ring reached **37**, and pages 36
 and 37 are the first to move a grid worst since the § 289 model was built — symmetric 6 → 7 at
 page 36, forward-only 9 → 10 at page 37, linear 17 → 18 at page 36 (`navigation.md` re-derived).
 The everyday filtered cost is unchanged at worst 4.
