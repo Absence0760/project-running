@@ -1962,10 +1962,20 @@ impl Recorder {
     /// it shrinks with every fix instead of at sync time — and it needs no new
     /// input: the distance-even profile the RouteElev page already carries is
     /// exactly the series to search.
+    ///
+    /// It takes the same staleness gate as the profile marker and the cutoff
+    /// ETA: a position frozen by a lost signal would keep reporting the crest
+    /// from where the runner *was*, so the metres-remaining would stop falling
+    /// while they climbed — the one number on the page a runner would act on,
+    /// stuck. The live half is unaffected, since it is fed by the fixes
+    /// themselves and simply stops advancing when they do.
     fn climb_snapshot(&self) -> ClimbView {
         ClimbView {
             active: self.climb.active(),
             ahead: self.route_elev.as_ref().and_then(|e| {
+                if self.route_position_stale() {
+                    return None;
+                }
                 crest_ahead(
                     &e.samples[..e.len],
                     f64::from(e.total_m),
@@ -3645,6 +3655,15 @@ mod tests {
         r.set_route_position(Some(400.0));
         let b = r.snapshot().climb.ahead.unwrap();
         assert!(b.gain_m < a.gain_m && b.distance_m < a.distance_m);
+
+        // A position frozen by a lost signal ages past the stale budget, and
+        // the crest goes away rather than reporting the one from where the
+        // runner was — metres-remaining stuck while they climb is the failure.
+        r.tick(600);
+        assert!(r.snapshot().climb.ahead.is_none());
+        // A fresh position brings it straight back.
+        r.set_route_position(Some(400.0));
+        assert!(r.snapshot().climb.ahead.is_some());
     }
 
     #[test]
