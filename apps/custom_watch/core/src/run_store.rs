@@ -33,6 +33,17 @@
 //! narrower window and cannot match, and [`MIN_FORMAT_VERSION`] rejects them
 //! explicitly rather than letting them read as corrupt (decisions §321).
 //!
+//! **Version 4 (2026-07-29) lands the armed workout's planned-vs-actual trail**
+//! (decisions §356, the §354 leftover): two more record tags in the same
+//! 16-byte cell — [`StepRecord`] (tag 2, one settled step's outcome, streamed
+//! in close order like laps so a checkpoint carries them) and
+//! [`WorkoutRecord`] (tag 3, written once at finalize: planned step count,
+//! the ≥80 % roll-up, and the CRC of the armed `WKT1` frame so the phone can
+//! attribute the trail to the workout it pushed rather than guessing). The
+//! CRC window is v3's — v4 only adds tags — so a v4 reader still decodes v3
+//! blobs, while a v3-only reader rejects v4 by version instead of throwing on
+//! a tag it has never seen. Like laps, neither tag is ever decimated.
+//!
 //! Manifest + chunk-request wire formats live here too so both ends agree.
 
 /// Track blob magic — "TRK1".
@@ -43,13 +54,13 @@ pub const FOOTER_MAGIC: [u8; 4] = *b"END1";
 pub const MANIFEST_MAGIC: [u8; 4] = *b"MAN1";
 
 /// What the writer emits today.
-pub const FORMAT_VERSION: u8 = 3;
-/// The oldest version a reader still decodes. Equal to [`FORMAT_VERSION`]
-/// because v3 redefined what the CRC covers: a v1/v2 blob's checksum is over a
-/// narrower window and cannot be re-checked without also re-admitting the
-/// unprotected-totals hole v3 closed. Keeping the range explicit means an old
-/// blob left on a bench board is rejected by version rather than reported as
-/// corrupt bytes.
+pub const FORMAT_VERSION: u8 = 4;
+/// The oldest version a reader still decodes. v4 added record tags without
+/// touching v3's CRC window, so a v3 blob stays decodable; v1/v2 checksums are
+/// over a narrower window and cannot be re-checked without also re-admitting
+/// the unprotected-totals hole v3 closed. Keeping the range explicit means an
+/// old blob left on a bench board is rejected by version rather than reported
+/// as corrupt bytes.
 pub const MIN_FORMAT_VERSION: u8 = 3;
 
 pub const HEADER_LEN: usize = 16;
@@ -68,6 +79,8 @@ pub const FOOTER_CRC_OFFSET: usize = FOOTER_LEN - 4;
 /// Record tags, at byte 15 of every record.
 pub const RECORD_TAG_POINT: u8 = 0;
 pub const RECORD_TAG_LAP: u8 = 1;
+pub const RECORD_TAG_STEP: u8 = 2;
+pub const RECORD_TAG_WORKOUT: u8 = 3;
 
 /// `flags` bit, stamped by [`RunWriter::finalize`]: this blob is a committed
 /// run, not a mid-run [`checkpoint_blob`](RunWriter::checkpoint_blob) snapshot
@@ -90,6 +103,12 @@ pub const ELE_NONE: i16 = i16::MIN;
 /// so a lap-heavy ultra can't crowd the track out of the slot. Real multi-day
 /// capacity is the tier-2 external-QSPI item, same as the point budget.
 pub const MAX_STORED_LAPS: u32 = 64;
+
+/// The most step-result records a run persists. The runner itself is bounded
+/// at [`crate::workout::MAX_WORKOUT_STEPS`] settled results (one per step,
+/// the in-progress row replacing the step it would have settled as), so this
+/// is a defensive mirror of that invariant, not a second budget.
+pub const MAX_STORED_STEP_RESULTS: u32 = 64;
 
 /// Total blob length for a run with `record_count` 16-byte records.
 pub const fn blob_len(record_count: u32) -> u32 {
@@ -241,6 +260,89 @@ impl LapRecord {
     }
 }
 
+/// One settled workout step's outcome (version 4), streamed in close order
+/// like laps: the 0-based expanded-step index, whether it was skipped (a lap
+/// press) rather than completed, and what it actually banked — distance in
+/// decimetres, whole seconds on the workout clock, and the whole-step average
+/// pace when the step covered enough to have one (the runner's ≥5 m / ≥1 s
+/// gate; 0 on the wire = none).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepRecord {
+    pub step_index: u8,
+    pub skipped: bool,
+    pub distance_dm: u32,
+    pub duration_s: u32,
+    pub pace_s_per_km: Option<u16>,
+}
+
+impl StepRecord {
+    pub fn encode(&self) -> [u8; RECORD_LEN] {
+        let mut b = [0u8; RECORD_LEN];
+        b[0] = self.step_index;
+        b[1] = u8::from(self.skipped);
+        b[2..6].copy_from_slice(&self.distance_dm.to_le_bytes());
+        b[6..10].copy_from_slice(&self.duration_s.to_le_bytes());
+        b[10..12].copy_from_slice(&self.pace_s_per_km.unwrap_or(0).to_le_bytes());
+        // b[12..15] reserved
+        b[15] = RECORD_TAG_STEP;
+        b
+    }
+
+    /// `None` for a different tag, and for a status byte outside the two
+    /// known values — an unknown status must not render as "completed".
+    pub fn decode(b: &[u8]) -> Option<Self> {
+        if b.len() < RECORD_LEN || b[15] != RECORD_TAG_STEP || b[1] > 1 {
+            return None;
+        }
+        let pace = u16::from_le_bytes([b[10], b[11]]);
+        Some(Self {
+            step_index: b[0],
+            skipped: b[1] == 1,
+            distance_dm: u32::from_le_bytes([b[2], b[3], b[4], b[5]]),
+            duration_s: u32::from_le_bytes([b[6], b[7], b[8], b[9]]),
+            pace_s_per_km: (pace != 0).then_some(pace),
+        })
+    }
+}
+
+/// The armed workout's summary (version 4), written once at finalize after
+/// the step records it accounts for: the planned step count, whether the
+/// ≥80 % roll-up came up short, and the CRC32 of the canonical `WKT1` frame
+/// for the armed step list ([`crate::workout_store::frame_crc`]) — the
+/// attribution handle that lets the phone match this trail to the workout it
+/// pushed instead of assuming whatever it pushed last.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WorkoutRecord {
+    pub step_total: u8,
+    pub partial: bool,
+    pub frame_crc: u32,
+}
+
+impl WorkoutRecord {
+    pub fn encode(&self) -> [u8; RECORD_LEN] {
+        let mut b = [0u8; RECORD_LEN];
+        b[0] = self.step_total;
+        b[1] = u8::from(self.partial);
+        b[2..6].copy_from_slice(&self.frame_crc.to_le_bytes());
+        // b[6..15] reserved
+        b[15] = RECORD_TAG_WORKOUT;
+        b
+    }
+
+    /// `None` for a different tag or an unknown roll-up byte — an unknown
+    /// verdict must not render as "completed".
+    pub fn decode(b: &[u8]) -> Option<Self> {
+        if b.len() < RECORD_LEN || b[15] != RECORD_TAG_WORKOUT || b[1] > 1 {
+            return None;
+        }
+        Some(Self {
+            step_total: b[0],
+            partial: b[1] == 1,
+            frame_crc: u32::from_le_bytes([b[2], b[3], b[4], b[5]]),
+        })
+    }
+}
+
 // ---- Header / footer ------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -362,6 +464,8 @@ pub struct RunWriter<S> {
     crc: Crc32,
     points: u32,
     laps: u32,
+    steps: u32,
+    workout_written: bool,
     /// Decimation state ([`push_point_bounded`](Self::push_point_bounded)):
     /// only every `keep_every`-th incoming point is stored. 1 = full
     /// resolution; doubles on each in-place thinning.
@@ -388,6 +492,8 @@ impl<S: ByteSink> RunWriter<S> {
             crc,
             points: 0,
             laps: 0,
+            steps: 0,
+            workout_written: false,
             keep_every: 1,
             point_ordinal: 0,
         })
@@ -413,6 +519,35 @@ impl<S: ByteSink> RunWriter<S> {
         self.sink.write(&bytes)?;
         self.crc.update(&bytes);
         self.laps += 1;
+        Ok(true)
+    }
+
+    /// Persist a settled workout step's outcome in stream order, the lap
+    /// contract exactly: capped ([`MAX_STORED_STEP_RESULTS`] mirrors the
+    /// runner's own bound), never decimated, RAM display state unaffected;
+    /// returns whether the record was stored.
+    pub fn push_step(&mut self, step: &StepRecord) -> Result<bool, S::Error> {
+        if self.steps >= MAX_STORED_STEP_RESULTS {
+            return Ok(false);
+        }
+        let bytes = step.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.steps += 1;
+        Ok(true)
+    }
+
+    /// Persist the armed workout's summary. Once per run — the record is the
+    /// blob's "these step results are attributed and final" marker, so a
+    /// second push is refused rather than written as a contradicting sibling.
+    pub fn push_workout(&mut self, workout: &WorkoutRecord) -> Result<bool, S::Error> {
+        if self.workout_written {
+            return Ok(false);
+        }
+        let bytes = workout.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.workout_written = true;
         Ok(true)
     }
 
@@ -512,11 +647,12 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
         }
     }
 
-    /// Drop every second stored point in place (first kept, laps untouched),
-    /// compact the staged buffer, rebuild the CRC, and double `keep_every`.
-    /// `false` when there is nothing left to gain (fewer than two stored
-    /// points — the slot is full of laps + header, which never happens within
-    /// [`MAX_STORED_LAPS`]).
+    /// Drop every second stored point in place (first kept, laps / step
+    /// results / the workout summary untouched), compact the staged buffer,
+    /// rebuild the CRC, and double `keep_every`. `false` when there is
+    /// nothing left to gain (fewer than two stored points — the slot is full
+    /// of undroppable records + header, which never happens within the
+    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets).
     fn thin_in_place(&mut self) -> bool {
         if self.points < 2 {
             return false;
@@ -527,7 +663,7 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
         let mut point_pos = 0u32;
         let mut kept_points = 0u32;
         while read + RECORD_LEN <= buf.len() {
-            let keep = if buf[read + RECORD_LEN - 1] == RECORD_TAG_LAP {
+            let keep = if buf[read + RECORD_LEN - 1] != RECORD_TAG_POINT {
                 true
             } else {
                 let keep = point_pos.is_multiple_of(2);
@@ -970,7 +1106,7 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31030100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000039e3c091",
+            "54524b31040100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000001f8ef8c",
             "wire format changed — update this vector, and the Dart mirror in \
              apps/mobile_android/test/sim_watch_sync_test.dart if the layout moved"
         );
@@ -1003,7 +1139,56 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31030100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c0200008d2b643c",
+            "54524b31040100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c0200001ac2224c",
+            "wire format changed — update BOTH this vector and the Dart mirror \
+             in apps/mobile_android/test/sim_watch_sync_test.dart"
+        );
+    }
+
+    /// Golden vector for a blob carrying the v4 workout records — two settled
+    /// steps interleaved in stream order plus the finalize-time summary —
+    /// pinned byte-for-byte in the Dart mirror so the two codecs can't drift.
+    #[test]
+    fn golden_blob_with_workout_records_is_stable() {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 7, 41).expect("start");
+        let pts = sample_points();
+        w.push_point(&pts[0]).expect("push");
+        w.push_step(&StepRecord {
+            step_index: 0,
+            skipped: false,
+            distance_dm: 4_000,
+            duration_s: 95,
+            pace_s_per_km: Some(238),
+        })
+        .expect("step");
+        w.push_point(&pts[1]).expect("push");
+        w.push_step(&StepRecord {
+            step_index: 1,
+            skipped: true,
+            distance_dm: 512,
+            duration_s: 30,
+            pace_s_per_km: None,
+        })
+        .expect("step");
+        w.push_point(&pts[2]).expect("push");
+        w.push_workout(&WorkoutRecord {
+            step_total: 3,
+            partial: true,
+            frame_crc: 0x0BAD_F00D,
+        })
+        .expect("summary");
+        let blob = w.finalize(1234, 600, 620).expect("finalize");
+        assert!(verify_blob(&blob));
+        let hex = blob
+            .iter()
+            .fold(heapless::String::<512>::new(), |mut s, b| {
+                let _ = core::fmt::write(&mut s, format_args!("{:02x}", b));
+                s
+            });
+        assert_eq!(
+            hex.as_str(),
+            "54524b31040100000700000029000000b8ced91718ff40c100000000703f78000000a00f00005f000000ee0000000002e4cfd9170c0141c101000000723f7a000101000200001e00000000000000000274d1d917000341c1020000000080000003010df0ad0b00000000000000000003454e4431d2040000580200006c0200000895c50c",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/test/sim_watch_sync_test.dart"
         );
@@ -1109,6 +1294,156 @@ mod tests {
             })
             .unwrap());
         assert_eq!(w.lap_count(), MAX_STORED_LAPS);
+    }
+
+    #[test]
+    fn step_and_workout_records_round_trip() {
+        let step = StepRecord {
+            step_index: 3,
+            skipped: true,
+            distance_dm: 4_010,
+            duration_s: 121,
+            pace_s_per_km: Some(302),
+        };
+        assert_eq!(StepRecord::decode(&step.encode()), Some(step));
+        let paceless = StepRecord {
+            pace_s_per_km: None,
+            skipped: false,
+            ..step
+        };
+        assert_eq!(StepRecord::decode(&paceless.encode()), Some(paceless));
+
+        let workout = WorkoutRecord {
+            step_total: 5,
+            partial: false,
+            frame_crc: 0xDEAD_BEEF,
+        };
+        assert_eq!(WorkoutRecord::decode(&workout.encode()), Some(workout));
+
+        // Tag dispatch is exact: no record kind decodes as another.
+        assert_eq!(TrackPoint::decode(&step.encode()), None);
+        assert_eq!(LapRecord::decode(&step.encode()), None);
+        assert_eq!(WorkoutRecord::decode(&step.encode()), None);
+        assert_eq!(StepRecord::decode(&workout.encode()), None);
+        assert_eq!(record_tag(&step.encode()), Some(RECORD_TAG_STEP));
+        assert_eq!(record_tag(&workout.encode()), Some(RECORD_TAG_WORKOUT));
+    }
+
+    #[test]
+    fn step_and_workout_records_reject_unknown_status_bytes() {
+        // An unknown status / roll-up byte must fail the decode, not read as
+        // "completed" — the same fail-closed rule every untrusted decoder
+        // here follows.
+        let mut b = StepRecord {
+            step_index: 0,
+            skipped: false,
+            distance_dm: 100,
+            duration_s: 30,
+            pace_s_per_km: None,
+        }
+        .encode();
+        b[1] = 2;
+        assert_eq!(StepRecord::decode(&b), None);
+
+        let mut b = WorkoutRecord {
+            step_total: 2,
+            partial: true,
+            frame_crc: 1,
+        }
+        .encode();
+        b[1] = 0xFF;
+        assert_eq!(WorkoutRecord::decode(&b), None);
+    }
+
+    #[test]
+    fn stored_steps_are_budgeted_and_the_summary_is_single() {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 3, 0).expect("start");
+        for i in 0..MAX_STORED_STEP_RESULTS {
+            assert!(w
+                .push_step(&StepRecord {
+                    step_index: i as u8,
+                    skipped: false,
+                    distance_dm: 4_000,
+                    duration_s: 120,
+                    pace_s_per_km: Some(300),
+                })
+                .unwrap());
+        }
+        // The budget-crossing step is dropped from storage, not an error.
+        assert!(!w
+            .push_step(&StepRecord {
+                step_index: MAX_STORED_STEP_RESULTS as u8,
+                skipped: false,
+                distance_dm: 4_000,
+                duration_s: 120,
+                pace_s_per_km: None,
+            })
+            .unwrap());
+        let summary = WorkoutRecord {
+            step_total: 12,
+            partial: true,
+            frame_crc: 7,
+        };
+        assert!(w.push_workout(&summary).unwrap());
+        assert!(
+            !w.push_workout(&summary).unwrap(),
+            "a second summary would contradict the first — refused"
+        );
+    }
+
+    #[test]
+    fn bounded_push_keeps_step_records_across_thinning() {
+        const N: usize = 1024;
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 5, 0).expect("start");
+        let step = StepRecord {
+            step_index: 0,
+            skipped: false,
+            distance_dm: 4_000,
+            duration_s: 95,
+            pace_s_per_km: Some(238),
+        };
+        w.push_point_bounded(&TrackPoint {
+            lat_e7: 0,
+            lon_e7: 0,
+            t_offset_s: 0,
+            ele_dm: None,
+            bpm: None,
+        });
+        assert!(w.push_step(&step).unwrap());
+        let summary = WorkoutRecord {
+            step_total: 1,
+            partial: false,
+            frame_crc: 0x1234_5678,
+        };
+        assert!(w.push_workout(&summary).unwrap());
+        for i in 1..200u32 {
+            w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            });
+        }
+        assert!(w.thinning() > 1, "the slot must have thinned");
+        let blob = w.finalize(1_000, 200, 210).expect("finalize");
+        assert!(verify_blob(&blob));
+        let n = point_count(blob.len() as u32).unwrap() as usize;
+        let mut found_step = None;
+        let mut found_summary = None;
+        for i in 0..n {
+            let at = HEADER_LEN + i * RECORD_LEN;
+            if let Some(s) = StepRecord::decode(&blob[at..]) {
+                found_step = Some(s);
+            }
+            if let Some(s) = WorkoutRecord::decode(&blob[at..]) {
+                found_summary = Some(s);
+            }
+        }
+        assert_eq!(found_step, Some(step), "step results are never decimated");
+        assert_eq!(found_summary, Some(summary), "the summary survives thinning");
     }
 
     #[test]
