@@ -43,7 +43,8 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
-use crate::workout::{WorkoutRunner, WorkoutStep, WorkoutView};
+use crate::workout::{StepResult, WorkoutAdherence, WorkoutRunner, WorkoutStep, WorkoutView};
+use crate::workout_store;
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -702,6 +703,18 @@ impl ElevProfile {
     }
 }
 
+/// What the record task writes as the run blob's finalize-time workout
+/// summary ([`Recorder::workout_summary`]): the planned step count, the
+/// runner's live roll-up, and the arming-time `WKT1` frame CRC (`None` only
+/// for a step list the canonical encoder refuses, in which case no summary —
+/// and so no attributable trail — is written).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WorkoutSummary {
+    pub step_total: u8,
+    pub rollup: WorkoutAdherence,
+    pub frame_crc: Option<u32>,
+}
+
 pub struct Recorder {
     state: RecordState,
     /// Distinguishes an explicit `pause()` (resumed only by `resume()`) from a
@@ -837,6 +850,14 @@ pub struct Recorder {
     /// pushed pre-expanded step list ([`set_workout`](Recorder::set_workout));
     /// `None` leaves the Workout page an honest inactive state.
     workout: Option<WorkoutRunner>,
+    /// The armed step list's canonical `WKT1` CRC, computed once at arming —
+    /// the flash blob's attribution handle
+    /// ([`workout_summary`](Recorder::workout_summary)).
+    workout_frame_crc: Option<u32>,
+    /// How many settled step results the flash drain has consumed
+    /// ([`pop_settled_workout_result`](Recorder::pop_settled_workout_result));
+    /// reset whenever the runner's result trail resets (arming, start).
+    workout_results_popped: usize,
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
@@ -928,6 +949,8 @@ impl Recorder {
             plan_adaptive: None,
             guided: None,
             workout: None,
+            workout_frame_crc: None,
+            workout_results_popped: 0,
             readiness: None,
             goals: None,
             turn_cue: None,
@@ -1208,11 +1231,47 @@ impl Recorder {
     pub fn set_workout(&mut self, steps: &[WorkoutStep]) {
         if steps.is_empty() {
             self.workout = None;
+            self.workout_frame_crc = None;
+            self.workout_results_popped = 0;
             return;
         }
         if let Some(w) = WorkoutRunner::new(steps) {
             self.workout = Some(w);
+            self.workout_frame_crc = workout_store::frame_crc(steps);
+            self.workout_results_popped = 0;
         }
+    }
+
+    /// The next settled step result the flash drain has not yet consumed —
+    /// the [`pop_closed_lap`](Recorder::pop_closed_lap) contract for workout
+    /// outcomes: the record task drains after each event and streams what it
+    /// gets into the staged blob, so a mid-run checkpoint carries every step
+    /// settled before it. The cursor resets wherever the runner's trail does
+    /// (arming, [`start`](Recorder::start)).
+    pub fn pop_settled_workout_result(&mut self) -> Option<StepResult> {
+        let w = self.workout.as_ref()?;
+        let r = w.results().get(self.workout_results_popped).copied()?;
+        self.workout_results_popped += 1;
+        Some(r)
+    }
+
+    /// The armed workout's in-progress step recorded as skipped-so-far, for
+    /// the finalize-time flush — a run stopped mid-step still accounts for
+    /// the step it was in, the phone runner's own convention.
+    pub fn workout_in_progress_result(&self) -> Option<StepResult> {
+        self.workout.as_ref()?.in_progress_result()
+    }
+
+    /// The armed workout's finalize-time summary: planned step count, the
+    /// live ≥80 % roll-up, and the arming-time `WKT1` frame CRC. `None` when
+    /// no workout is armed — a run without one writes no workout records.
+    pub fn workout_summary(&self) -> Option<WorkoutSummary> {
+        let w = self.workout.as_ref()?;
+        Some(WorkoutSummary {
+            step_total: w.step_count().min(u8::MAX as usize) as u8,
+            rollup: w.rollup(),
+            frame_crc: self.workout_frame_crc,
+        })
     }
 
     /// Arm the GuidedRun page with a scripted coach run by library id (the
@@ -1376,6 +1435,7 @@ impl Recorder {
         if let Some(w) = self.workout.as_mut() {
             w.reset();
             w.on_totals(0.0, 0);
+            self.workout_results_popped = 0;
         }
     }
 
@@ -4066,6 +4126,90 @@ mod tests {
             "the lap press advances the step (Garmin lap semantics)"
         );
         assert_eq!(snap.lap, 2, "and still closes a lap");
+    }
+
+    #[test]
+    fn settled_workout_results_drain_in_order_and_once() {
+        use crate::workout::StepStatus;
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        assert!(r.pop_settled_workout_result().is_none(), "nothing settled");
+        for (i, t) in [1u32, 11, 21, 31].iter().enumerate() {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0003, -105.0, 3.0, *t));
+        }
+        let first = r.pop_settled_workout_result().expect("step 0 settled");
+        assert_eq!(first.step_index, 0);
+        assert_eq!(first.status, StepStatus::Completed);
+        assert!(
+            r.pop_settled_workout_result().is_none(),
+            "a drained result is consumed exactly once"
+        );
+        // The in-progress step reads as skipped-so-far for a mid-step stop.
+        let in_progress = r.workout_in_progress_result().expect("mid step 1");
+        assert_eq!(in_progress.step_index, 1);
+        assert_eq!(in_progress.status, StepStatus::Skipped);
+        r.lap(35);
+        let second = r.pop_settled_workout_result().expect("skip settles");
+        assert_eq!(second.step_index, 1);
+        assert_eq!(second.status, StepStatus::Skipped);
+        assert!(
+            r.workout_in_progress_result().is_none(),
+            "complete — nothing in progress"
+        );
+    }
+
+    #[test]
+    fn the_workout_drain_resets_with_the_result_trail() {
+        let mut r = Recorder::new();
+        r.set_workout(&workout_steps());
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 1));
+        r.lap(2);
+        assert!(r.pop_settled_workout_result().is_some());
+        // A fresh start re-runs the workout from step 0 with a cleared trail;
+        // the drain cursor must follow or it would skip the new run's results.
+        r.stop(3);
+        r.reset(4);
+        r.start(5);
+        assert!(r.pop_settled_workout_result().is_none());
+        r.on_fix(&fix(40.0, -105.0, 3.0, 6));
+        r.lap(7);
+        let again = r.pop_settled_workout_result().expect("new trail drains");
+        assert_eq!(again.step_index, 0);
+        // Re-arming replaces the trail: the cursor resets with it.
+        r.lap(8);
+        r.set_workout(&workout_steps());
+        assert!(r.pop_settled_workout_result().is_none());
+    }
+
+    #[test]
+    fn workout_summary_carries_the_rollup_and_the_arming_crc() {
+        use crate::workout::WorkoutAdherence;
+        let mut r = Recorder::new();
+        assert!(r.workout_summary().is_none(), "no workout, no summary");
+        let steps = workout_steps();
+        r.set_workout(&steps);
+        let summary = r.workout_summary().expect("armed");
+        assert_eq!(summary.step_total, 2);
+        assert_eq!(summary.rollup, WorkoutAdherence::Partial, "nothing run yet");
+        assert_eq!(
+            summary.frame_crc,
+            crate::workout_store::frame_crc(&steps),
+            "the attribution handle is the canonical WKT1 frame CRC"
+        );
+        assert!(summary.frame_crc.is_some());
+        r.start(0);
+        for (i, t) in [1u32, 11, 21, 31, 41, 51, 61, 71].iter().enumerate() {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0003, -105.0, 3.0, *t));
+        }
+        assert!(r.snapshot().workout.unwrap().complete);
+        assert_eq!(
+            r.workout_summary().unwrap().rollup,
+            WorkoutAdherence::Completed
+        );
+        r.set_workout(&[]);
+        assert!(r.workout_summary().is_none(), "disarm clears the summary");
     }
 
     #[test]
