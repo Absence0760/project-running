@@ -16,6 +16,7 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
+use watch_core::ice::IceCard;
 use watch_core::page::Page;
 use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
@@ -198,6 +199,13 @@ pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
 /// clock hero and flips its row-7 label UTC → LOCAL. No value published means
 /// the clock stays honestly UTC-labelled. One receiver (the `ui` task).
 pub static TZ_OFFSET_MIN: Watch<CriticalSectionRawMutex, i16, 1> = Watch::new();
+
+/// The ICE / medical-ID card a responder reads off the wrist (§358): the
+/// `record` task publishes it from the flash record at boot and again on every
+/// pushed settings frame that carries one; the `ui` task renders it as the
+/// third idle face. `None` = no card, which that face says honestly rather
+/// than showing empty rows. One receiver (the `ui` task).
+pub static ICE: Watch<CriticalSectionRawMutex, Option<IceCard>, 1> = Watch::new();
 
 /// Manual QNH re-zero request: the `button` task sends one on an idle-face
 /// BTN3 long-press; the `baro` task (which owns the vert accumulator the snap

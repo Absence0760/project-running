@@ -92,6 +92,11 @@ fn a_settings() -> impl Strategy<Value = WatchSettings> {
             tz_offset_min,
             distance_interval_m,
             time_interval_s,
+            // Not generated: the card is free-form text with no numeric edge
+            // cases for a property to explore, and its codec has its own
+            // fail-closed unit tests. Fixed at absent so the generator keeps
+            // exercising the numeric fields it was written for.
+            ice: None,
             pace_band: pace_band.map(|b| {
                 b.map(|(fast_s_per_km, slow_s_per_km)| PaceBandCfg {
                     fast_s_per_km,

@@ -21,20 +21,27 @@
 //! in the setters it feeds, so a garbage value is rejected by the same rule
 //! whether it arrives over BLE or the sim link.
 
+use crate::ice::{IceCard, ICE_WIRE_LEN};
 use crate::page::mask_from_wire;
 use crate::race_phases::RacePhasePreset;
 use crate::run_store::crc32;
 
 pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
 
+/// Version 6 (2026-07-29): the ICE / medical-ID card ([`crate::ice`]) takes
+/// `flags2`'s LAST free bit — the card a responder reads off a collapsed
+/// runner's wrist (§358). `decode` accepts every earlier version alongside v6,
+/// so an old phone's push keeps working; the encoder always emits v6. A
+/// seventh field group now needs a third presence byte and therefore a version
+/// bump of its own, which is the point of the saturation assert below.
+pub const SETTINGS_VERSION: u8 = 6;
+
 /// Version 5 (2026-07-27): the resting-HR sync rides `flags2` bit 6 — the
 /// second half of the TRIMP calibration pair ([`FLAG_MAX_HR`] has carried the
 /// other half since v1), so the recorder's single-run training-stress model can
 /// upgrade from the distance proxy to Banister TRIMP
-/// ([`crate::training_load::compute_stress`]). `decode` accepts every earlier
-/// version alongside v5, so an old phone's push keeps working; the encoder
-/// always emits v5.
-pub const SETTINGS_VERSION: u8 = 5;
+/// ([`crate::training_load::compute_stress`]).
+const SETTINGS_VERSION_V5: u8 = 5;
 
 /// Version 4 (2026-07-26): the five settings the watch could already honour but
 /// the phone had no way to reach took the next five `flags2` bits — the
@@ -83,8 +90,9 @@ const KNOWN_FLAGS: u8 = FLAG_MAX_HR
 
 /// Presence bits in the `flags2` byte, continuing the field order after
 /// [`FLAG_HIDE_EMPTY`]. Bit 0 arrived with v2, bits 1-5 with v4, bit 6 with
-/// v5. One of its eight bits is still free, which is why v5 needed no third
-/// presence byte.
+/// v5, and bit 7 — the last — with v6. Both presence bytes are now saturated,
+/// so the next field needs a third one and the version bump that comes with
+/// it; [`KNOWN_FLAGS2`] is const-asserted saturated to make that unmissable.
 pub const FLAG2_TZ_OFFSET: u8 = 1 << 0;
 pub const FLAG2_DISTANCE_INTERVAL: u8 = 1 << 1;
 pub const FLAG2_TIME_INTERVAL: u8 = 1 << 2;
@@ -92,6 +100,7 @@ pub const FLAG2_PACE_BAND: u8 = 1 << 3;
 pub const FLAG2_RACE_PHASES: u8 = 1 << 4;
 pub const FLAG2_GUIDED_RUN: u8 = 1 << 5;
 pub const FLAG2_RESTING_HR: u8 = 1 << 6;
+pub const FLAG2_ICE: u8 = 1 << 7;
 
 /// Every presence bit `flags2` defines **at version 2 and 3** — a bit outside
 /// this mask is one those versions' own encoders could not have set.
@@ -105,13 +114,16 @@ const KNOWN_FLAGS2_V4: u8 = FLAG2_TZ_OFFSET
     | FLAG2_RACE_PHASES
     | FLAG2_GUIDED_RUN;
 
+/// Every presence bit `flags2` defines at version 5.
+const KNOWN_FLAGS2_V5: u8 = KNOWN_FLAGS2_V4 | FLAG2_RESTING_HR;
+
 /// Every presence bit `flags2` defines at the current version. A set bit
 /// outside the mask for the frame's *own* version can't be a forward-compatible
 /// field — a new field rides a version bump, which `decode` rejects on the
 /// version byte — so an unknown bit means a corrupt or misframed push, and
 /// `decode` rejects the frame rather than silently dropping whatever the sender
 /// meant by it.
-const KNOWN_FLAGS2: u8 = KNOWN_FLAGS2_V4 | FLAG2_RESTING_HR;
+const KNOWN_FLAGS2: u8 = KNOWN_FLAGS2_V5 | FLAG2_ICE;
 
 /// v1 header: magic (4) + version (1) + flags (1). v2 appends `flags2`.
 const V1_HEADER_LEN: usize = 6;
@@ -137,9 +149,11 @@ pub const GUIDED_RUN_ID_LEN: usize = 24;
 /// max_hr(2), pacer(8), gear(8), zone_ceiling(1), sea_level_pa(4), fuel(8),
 /// pages(8), hide_empty(1), tz_offset(2), distance_interval(4),
 /// time_interval(4), pace_band(4), race_phases(9), guided_run(24),
-/// resting_hr(2), and the CRC trailer. 100 bytes, well inside one write at the
-/// 256-byte ATT MTU the `ble` task configures, so a settings push still never
-/// needs chunking.
+/// resting_hr(2), ice(92), and the CRC trailer. 192 bytes — the ICE card is
+/// far the widest field, and it is what leaves the frame still inside one
+/// write at the 256-byte ATT MTU the `ble` task configures, so a settings push
+/// still never needs chunking. A field group wider than the ~64 bytes of
+/// headroom left would.
 pub const MAX_SETTINGS_LEN: usize = HEADER_LEN
     + 2
     + 8
@@ -156,7 +170,10 @@ pub const MAX_SETTINGS_LEN: usize = HEADER_LEN
     + RACE_PHASES_LEN
     + GUIDED_RUN_ID_LEN
     + 2
+    + ICE_WIRE_LEN
     + CRC_LEN;
+
+const _: () = assert!(MAX_SETTINGS_LEN <= 244);
 
 /// Widest plausible UTC offset (minutes): no real zone sits outside ±14 h.
 pub const TZ_OFFSET_LIMIT_MIN: i16 = 14 * 60;
@@ -361,6 +378,13 @@ pub struct WatchSettings {
     /// TRIMP; absent = leave the current calibration. Plausibility guard:
     /// [`crate::record::Recorder::set_resting_hr`].
     pub resting_hr: Option<u16>,
+    /// The ICE / medical-ID card a responder reads off the wrist
+    /// ([`crate::ice`]), doubly-optional: `Some(None)` clears the card (an
+    /// all-blank payload on the wire), `Some(Some(card))` sets it. A payload
+    /// any field of which is not printable ASCII refuses the whole FRAME, not
+    /// just this field — an unreadable medical ID is the one thing worse than
+    /// none, so it must not ride in beside settings that did decode.
+    pub ice: Option<Option<IceCard>>,
 }
 
 /// The pushed timezone offset when it is a plausible UTC offset, `None` when
@@ -380,6 +404,11 @@ impl WatchSettings {
     /// no tz offset) and version 2 (no CRC) alongside the current version 3, so
     /// an old phone's push keeps working.
     pub fn decode(b: &[u8]) -> Option<Self> {
+        // Both presence bytes are now full, so the next field cannot ride a
+        // spare bit — it needs a third byte and its own version. This turns
+        // the first over-saturating flag into a compile error rather than a
+        // silently-accepted frame, exactly as `KNOWN_FLAGS` does for byte one.
+        const _: () = assert!(KNOWN_FLAGS2 == u8::MAX);
         if b.len() < V1_HEADER_LEN || b[0..4] != SETTINGS_MAGIC {
             return None;
         }
@@ -398,6 +427,7 @@ impl WatchSettings {
             SETTINGS_VERSION_V2 => (true, PAGES_LEN_V3, false, KNOWN_FLAGS2_V2),
             SETTINGS_VERSION_V3 => (true, PAGES_LEN_V3, true, KNOWN_FLAGS2_V2),
             SETTINGS_VERSION_V4 => (true, PAGES_LEN, true, KNOWN_FLAGS2_V4),
+            SETTINGS_VERSION_V5 => (true, PAGES_LEN, true, KNOWN_FLAGS2_V5),
             SETTINGS_VERSION => (true, PAGES_LEN, true, KNOWN_FLAGS2),
             _ => return None,
         };
@@ -560,6 +590,20 @@ impl WatchSettings {
             out.resting_hr = Some(u16::from_le_bytes([raw[0], raw[1]]));
             off = end;
         }
+        if flags2 & FLAG2_ICE != 0 {
+            let end = off + ICE_WIRE_LEN;
+            let raw = b.get(off..end)?;
+            // The one field whose own content can reject the frame: every
+            // other value is merely parsed here and guarded at its setter, but
+            // `IceCard` HAS no plausibility guard downstream — the card is
+            // free-form text, so this parse is the only place a garbled
+            // medical line can be caught, and a card that reaches the face is
+            // one a responder will act on.
+            let card = IceCard::from_bytes(raw)?;
+            // An all-blank card clears the ID; anything else sets it.
+            out.ice = Some((!card.is_blank()).then_some(card));
+            off = end;
+        }
         // Bytes left over past the fields the flags claim mean a corrupt or
         // misframed push (data present for a bit that wasn't set); reject it
         // rather than silently apply a frame the phone didn't mean to send.
@@ -569,7 +613,7 @@ impl WatchSettings {
         Some(out)
     }
 
-    /// Encode a version-5 frame into `out`, returning the byte length written,
+    /// Encode a version-6 frame into `out`, returning the byte length written,
     /// or `None` if `out` is smaller than the frame needs. Only present fields
     /// are written, in flag order, then the CRC32 trailer over everything
     /// before it — the mirror the phone encoder pins to.
@@ -621,6 +665,9 @@ impl WatchSettings {
         if self.resting_hr.is_some() {
             flags2 |= FLAG2_RESTING_HR;
         }
+        if self.ice.is_some() {
+            flags2 |= FLAG2_ICE;
+        }
 
         let len = HEADER_LEN
             + CRC_LEN
@@ -638,7 +685,8 @@ impl WatchSettings {
             + self.pace_band.map_or(0, |_| 4)
             + self.race_phases.map_or(0, |_| RACE_PHASES_LEN)
             + self.guided_run.map_or(0, |_| GUIDED_RUN_ID_LEN)
-            + self.resting_hr.map_or(0, |_| 2);
+            + self.resting_hr.map_or(0, |_| 2)
+            + self.ice.map_or(0, |_| ICE_WIRE_LEN);
         if out.len() < len {
             return None;
         }
@@ -723,6 +771,13 @@ impl WatchSettings {
             out[off..off + 2].copy_from_slice(&hr.to_le_bytes());
             off += 2;
         }
+        if let Some(card) = self.ice {
+            // The clear is an all-blank payload, so `decode` reads it back as
+            // `Some(None)` without a second sentinel to keep in step.
+            let bytes = card.map_or([0u8; ICE_WIRE_LEN], |c| c.to_bytes());
+            out[off..off + ICE_WIRE_LEN].copy_from_slice(&bytes);
+            off += ICE_WIRE_LEN;
+        }
         let crc = crc32(&out[..off]).to_le_bytes();
         out[off..off + CRC_LEN].copy_from_slice(&crc);
         Some(off + CRC_LEN)
@@ -737,6 +792,18 @@ mod tests {
         fast_s_per_km: 300,
         slow_s_per_km: 420,
     };
+
+    /// The golden card: every field populated, the two widest at their cap so
+    /// a padding slip shows up in the pinned bytes.
+    fn ice_card() -> Option<IceCard> {
+        IceCard::new(
+            "ALEX MORGAN",
+            "O NEG",
+            "PENICILLIN, ASTHMA",
+            "JAMIE MORGAN",
+            "+1 555 0134",
+        )
+    }
 
     const MARATHON_PLAN: RacePhasesCfg = RacePhasesCfg {
         distance_m: Some(42_195),
@@ -789,6 +856,7 @@ mod tests {
             race_phases: Some(MARATHON_PLAN),
             guided_run: Some(GuidedRunId::new("easy-30")),
             resting_hr: Some(48),
+            ice: Some(ice_card()),
         };
         assert_eq!(roundtrip(&s), s);
     }
@@ -1289,13 +1357,16 @@ mod tests {
         // pages + hide_empty consumed bits 6 + 7: every bit of the first flag
         // byte is a known field, so the unknown-bit rejection only polices
         // flags2. The promised version bump happened — tz_offset (v2) rode it
-        // into flags2 — and the next saturation repeats the drill: whoever
-        // fills flags2's bit 7 rides the next version bump.
+        // into flags2 — and the drill has now run to its end: the ICE card
+        // (v6) took flags2's bit 7, so BOTH bytes are saturated and the next
+        // field needs a third presence byte plus its own version. Two const
+        // asserts in `decode` make that a compile error rather than a silently
+        // accepted frame; these pin the same fact where a reader will meet it.
         assert_eq!(KNOWN_FLAGS, u8::MAX);
         assert_eq!(
-            KNOWN_FLAGS2.count_ones(),
-            7,
-            "seven flags2 bits used, one spare"
+            KNOWN_FLAGS2,
+            u8::MAX,
+            "both presence bytes are full — the next field needs a third"
         );
         // A full flag byte with too few bytes for what it claims still rejects,
         // even when the checksum over those too-few bytes is correct.
@@ -1423,6 +1494,7 @@ mod tests {
                     guided_run: (flags2 & FLAG2_GUIDED_RUN != 0)
                         .then(|| GuidedRunId::new("easy-30")),
                     resting_hr: (flags2 & FLAG2_RESTING_HR != 0).then_some(48),
+                    ice: (flags2 & FLAG2_ICE != 0).then_some(ice_card()),
                 };
                 let back = roundtrip(&s);
                 assert_eq!(
@@ -1494,12 +1566,67 @@ mod tests {
             race_phases: Some(MARATHON_PLAN),
             guided_run: Some(GuidedRunId::new("easy-30")),
             resting_hr: Some(48),
+            ice: Some(ice_card()),
         };
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
-            0x05, // version
+            0x06, // version
+            0xff, // flags: every version-1 field
+            0xff, // flags2: tz|distance|time|pace|race|guided|resting|ice — saturated
+            0xbe, 0x00, // max_hr = 190
+            0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
+            0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
+            0x00, 0x24, 0xf4, 0x48, // gear baseline_m = 500000.0 (f32 LE)
+            0x00, 0x50, 0x43, 0x49, // gear target_m = 800000.0 (f32 LE)
+            0x03, // zone_ceiling = 3
+            0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
+            0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
+            0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pages = 0xc0ff (u64 LE)
+            0x01, // hide_empty_pages = true
+            0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+            0xe8, 0x03, 0x00, 0x00, // distance_interval_m = 1000
+            0x08, 0x07, 0x00, 0x00, // time_interval_s = 1800
+            0x2c, 0x01, // pace_band fast = 300 s/km
+            0xa4, 0x01, // pace_band slow = 420 s/km
+            0xd3, 0xa4, 0x00, 0x00, // race_phases distance_m = 42195
+            0x38, 0x31, 0x00, 0x00, // race_phases goal_time_s = 12600
+            0x00, // race_phases preset = ten_ten_ten
+            0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, // guided_run id "easy-30"
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // NUL padding to 24
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30,
+            0x00, // resting_hr = 48
+            // ice: holder "ALEX MORGAN", NUL-padded to 21
+            0x41, 0x4c, 0x45, 0x58, 0x20, 0x4d, 0x4f, 0x52, 0x47, 0x41, 0x4e, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            // ice: blood "O NEG", NUL-padded to 8
+            0x4f, 0x20, 0x4e, 0x45, 0x47, 0x00, 0x00, 0x00, //
+            // ice: conditions "PENICILLIN, ASTHMA", NUL-padded to 21
+            0x50, 0x45, 0x4e, 0x49, 0x43, 0x49, 0x4c, 0x4c, 0x49, 0x4e, 0x2c, 0x20, 0x41, 0x53,
+            0x54, 0x48, 0x4d, 0x41, 0x00, 0x00, 0x00, //
+            // ice: contact "JAMIE MORGAN", NUL-padded to 21
+            0x4a, 0x41, 0x4d, 0x49, 0x45, 0x20, 0x4d, 0x4f, 0x52, 0x47, 0x41, 0x4e, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            // ice: phone "+1 555 0134", NUL-padded to 21
+            0x2b, 0x31, 0x20, 0x35, 0x35, 0x35, 0x20, 0x30, 0x31, 0x33, 0x34, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            0x2d, 0xc5, 0x38, 0x5a, // crc32 over every byte above (u32 LE)
+        ];
+        assert_eq!(n, MAX_SETTINGS_LEN);
+        assert_eq!(buf, expected);
+    }
+
+    /// The frozen v5 golden vector (every v5 field, version byte 0x05) must
+    /// keep decoding into exactly what it decoded into before the v6 bump: a
+    /// phone that hasn't shipped the ICE encoder yet still configures the
+    /// watch, and the card it never sent reads as absent, not as blank.
+    #[test]
+    fn v5_golden_vector_still_decodes() {
+        let v5: [u8; 100] = [
+            0x53, 0x45, 0x54, 0x31, // "SET1"
+            0x05, // version 5
             0xff, // flags: every version-1 field
             0x7f, // flags2: tz | distance | time | pace | race | guided | resting
             0xbe, 0x00, // max_hr = 190
@@ -1527,8 +1654,13 @@ mod tests {
             0x00, // resting_hr = 48
             0x97, 0x6f, 0x44, 0xf0, // crc32 over every byte above (u32 LE)
         ];
-        assert_eq!(n, MAX_SETTINGS_LEN);
-        assert_eq!(buf, expected);
+        let decoded = WatchSettings::decode(&v5).expect("a v5 frame still decodes");
+        assert_eq!(decoded.resting_hr, Some(48));
+        assert_eq!(decoded.guided_run, Some(GuidedRunId::new("easy-30")));
+        assert_eq!(
+            decoded.ice, None,
+            "an unsent card is absent, which leaves the watch's own card standing"
+        );
     }
 
     /// The frozen v4 golden vector (every v4 field, version byte 0x04) must
@@ -1593,6 +1725,7 @@ mod tests {
                 race_phases: Some(MARATHON_PLAN),
                 guided_run: Some(GuidedRunId::new("easy-30")),
                 resting_hr: None,
+                ice: None,
             })
         );
     }
@@ -1614,10 +1747,10 @@ mod tests {
         assert_eq!(
             &buf[..n],
             &[
-                0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x3e, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07, 0x00,
+                0x53, 0x45, 0x54, 0x31, 0x06, 0x00, 0x3e, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07, 0x00,
                 0x00, 0x2c, 0x01, 0xa4, 0x01, 0xd3, 0xa4, 0x00, 0x00, 0x38, 0x31, 0x00, 0x00, 0x00,
                 0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x62, 0x3c, 0xdb
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x57, 0xee, 0x9d
             ]
         );
     }
@@ -1634,7 +1767,33 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x40, 0x30, 0x00, 0x7b, 0x88, 0x2b, 0xb3]
+            &[0x53, 0x45, 0x54, 0x31, 0x06, 0x00, 0x40, 0x30, 0x00, 0xab, 0xf2, 0x8b, 0xf4]
+        );
+    }
+
+    /// The ICE-only frame, pinned byte-for-byte on both sides — the only
+    /// vector that exercises the v6 field alone, and the one that pins the
+    /// field-by-field NUL padding a shorter name must produce.
+    #[test]
+    fn golden_vector_ice_only() {
+        let s = WatchSettings {
+            ice: Some(IceCard::new("ALEX", "O NEG", "ASTHMA", "JAMIE", "555 0134")),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(
+            &buf[..n],
+            &[
+                0x53, 0x45, 0x54, 0x31, 0x06, 0x00, 0x80, 0x41, 0x4c, 0x45, 0x58, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x4f, 0x20, 0x4e, 0x45, 0x47, 0x00, 0x00, 0x00, 0x41, 0x53, 0x54, 0x48, 0x4d, 0x41,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x4a, 0x41, 0x4d, 0x49, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x35, 0x35, 0x20, 0x30, 0x31,
+                0x33, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x72, 0x9c, 0x3d, 0xe9
+            ]
         );
     }
 
@@ -1651,7 +1810,7 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x05, 0x00, 0x01, 0xc6, 0xfd, 0x16, 0xa7, 0x99, 0x43]
+            &[0x53, 0x45, 0x54, 0x31, 0x06, 0x00, 0x01, 0xc6, 0xfd, 0xc6, 0xdd, 0x39, 0x04]
         );
     }
 
@@ -1706,6 +1865,7 @@ mod tests {
                 race_phases: None,
                 guided_run: None,
                 resting_hr: None,
+                ice: None,
             })
         );
         // A v2 frame carrying a v3-shaped trailer is trailing bytes, not a crc.
@@ -1763,6 +1923,7 @@ mod tests {
                 race_phases: None,
                 guided_run: None,
                 resting_hr: None,
+                ice: None,
             }
         );
         // Chopped to its header, the flags still claim every field: reject.

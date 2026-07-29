@@ -57,6 +57,7 @@ use heapless::Vec;
 use watch_core::flash_plan::{self, SlotReader};
 use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
+use watch_core::ice;
 use watch_core::profiles::ActivityProfile;
 use watch_core::run_store::ManifestEntry;
 use watch_core::waypoints;
@@ -109,6 +110,16 @@ pub struct RunStore {
     /// the count alone (the common case — every chunk served, every checkpoint
     /// that evicts nothing) wakes the ui task not at all.
     pending_published: u8,
+}
+
+/// Every record the shared config page holds. One erase covers the whole
+/// page, so a rewrite of any one of them must carry the others through.
+#[derive(Clone, Default)]
+struct ConfigPage {
+    config: Option<(u8, u8, u8)>,
+    bond: Option<flash_store::BondRecord>,
+    waypoints: Option<waypoints::Waypoints>,
+    ice: Option<ice::IceCard>,
 }
 
 impl RunStore {
@@ -280,16 +291,10 @@ impl RunStore {
     /// erased at most once per user mode switch — trivially within flash
     /// endurance and off the per-tick path.
     pub async fn persist_gnss_mode(&mut self, mode: GnssMode) {
-        let (flags, profile) = self
-            .read_config_bytes()
-            .map(|(_, f, p)| (f, p))
-            .unwrap_or((0, 0));
-        let bond = self.read_bond();
-        let wpts = self.read_waypoints();
-        if self
-            .rewrite_config_page(Some((mode.to_byte(), flags, profile)), bond, wpts)
-            .await
-        {
+        let mut page = self.read_config_page();
+        let (flags, profile) = page.config.map(|(_, f, p)| (f, p)).unwrap_or((0, 0));
+        page.config = Some((mode.to_byte(), flags, profile));
+        if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted GNSS mode {}", mode);
         }
     }
@@ -302,16 +307,15 @@ impl RunStore {
     /// mode pins the current default alongside — the record must carry a valid
     /// mode byte, and the default is what an unset mode already means.
     pub async fn persist_hide_empty(&mut self, hide: bool) {
+        let mut page = self.read_config_page();
         let (mode_byte, flags, profile) =
-            self.read_config_bytes()
-                .unwrap_or((GnssMode::default().to_byte(), 0, 0));
-        let flags = flash_store::set_hide_empty_flags(flags, hide);
-        let bond = self.read_bond();
-        let wpts = self.read_waypoints();
-        if self
-            .rewrite_config_page(Some((mode_byte, flags, profile)), bond, wpts)
-            .await
-        {
+            page.config.unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        page.config = Some((
+            mode_byte,
+            flash_store::set_hide_empty_flags(flags, hide),
+            profile,
+        ));
+        if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted hide-empty-pages {}", hide);
         }
     }
@@ -322,16 +326,14 @@ impl RunStore {
     /// rewrite as [`persist_gnss_mode`](Self::persist_gnss_mode); the button
     /// task calls this only when the selection actually changes.
     pub async fn persist_profile(&mut self, profile: ActivityProfile) {
-        let (mode_byte, flags, _) =
-            self.read_config_bytes()
-                .unwrap_or((GnssMode::default().to_byte(), 0, 0));
-        let flags = flags | flash_store::CONFIG_FLAG_PROFILE_SET;
-        let bond = self.read_bond();
-        let wpts = self.read_waypoints();
-        if self
-            .rewrite_config_page(Some((mode_byte, flags, profile.to_byte())), bond, wpts)
-            .await
-        {
+        let mut page = self.read_config_page();
+        let (mode_byte, flags, _) = page.config.unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        page.config = Some((
+            mode_byte,
+            flags | flash_store::CONFIG_FLAG_PROFILE_SET,
+            profile.to_byte(),
+        ));
+        if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted activity profile {}", profile);
         }
     }
@@ -346,9 +348,9 @@ impl RunStore {
     /// forward on every build).
     #[cfg(feature = "ble")]
     pub async fn persist_bond(&mut self, bond: flash_store::BondRecord) {
-        let config = self.read_config_bytes();
-        let wpts = self.read_waypoints();
-        if self.rewrite_config_page(config, Some(bond), wpts).await {
+        let mut page = self.read_config_page();
+        page.bond = Some(bond);
+        if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted BLE bond");
         }
     }
@@ -377,28 +379,71 @@ impl RunStore {
     /// page rewrite as [`persist_gnss_mode`](Self::persist_gnss_mode); marks
     /// are a handful per run, so page wear is negligible.
     pub async fn persist_waypoints(&mut self, wpts: &waypoints::Waypoints) {
-        let config = self.read_config_bytes();
-        let bond = self.read_bond();
-        if self
-            .rewrite_config_page(config, bond, Some(wpts.clone()))
-            .await
-        {
+        let mut page = self.read_config_page();
+        page.waypoints = Some(wpts.clone());
+        if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted waypoints ({=usize})", wpts.len());
         }
     }
 
+    /// Read the ICE / medical-ID card persisted by
+    /// [`persist_ice`](Self::persist_ice), or `None` when flash is
+    /// unavailable, unreadable, or the record is erased / corrupt / carries a
+    /// byte the face cannot render — a responder is shown nothing rather than
+    /// a garbled medical line (fail-closed, and the same gate the wire uses).
+    pub fn read_ice(&mut self) -> Option<ice::IceCard> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; ice::ICE1_RECORD_LEN];
+        let at = CONFIG_OFFSET + flash_store::ICE_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: ice read failed {:?}", e);
+            return None;
+        }
+        ice::decode_record(&buf)
+    }
+
+    /// Persist the ICE / medical-ID card (§358). A medic reads the wrist of a
+    /// watch that may have power-cycled, so the card must not live only in
+    /// the RAM a `SET1` push fills. `None` clears it — the record is simply
+    /// not rewritten after the erase, so a cleared card leaves no stale one
+    /// behind. Same best-effort / L4 rules and carry-everything-forward page
+    /// rewrite as [`persist_gnss_mode`](Self::persist_gnss_mode); a card
+    /// changes about as often as a phone number does.
+    pub async fn persist_ice(&mut self, card: Option<ice::IceCard>) {
+        let mut page = self.read_config_page();
+        page.ice = card;
+        if self.rewrite_config_page(&page).await {
+            match card {
+                Some(_) => info!("run_flash: persisted ICE card"),
+                None => info!("run_flash: cleared ICE card"),
+            }
+        }
+    }
+
+    /// Every record the shared config page currently holds, so a writer can
+    /// change one and hand the rest back untouched.
+    fn read_config_page(&mut self) -> ConfigPage {
+        ConfigPage {
+            config: self.read_config_bytes(),
+            bond: self.read_bond(),
+            waypoints: self.read_waypoints(),
+            ice: self.read_ice(),
+        }
+    }
+
     /// Erase + rewrite the config page with whichever records are present.
-    /// The page holds the CFG record (base), the bond record
-    /// ([`flash_store::BOND_RECORD_OFFSET`]), and the waypoint record
-    /// ([`flash_store::WAYPOINT_RECORD_OFFSET`]); an erase clears all of
-    /// them, so every caller reads the records it is NOT changing first and
-    /// passes them through. Returns whether the rewrite fully succeeded.
-    async fn rewrite_config_page(
-        &mut self,
-        config: Option<(u8, u8, u8)>,
-        bond: Option<flash_store::BondRecord>,
-        wpts: Option<waypoints::Waypoints>,
-    ) -> bool {
+    /// One erase clears the WHOLE page — every record on it — so a writer
+    /// reads the page ([`read_config_page`](Self::read_config_page)), changes
+    /// the one field it owns, and hands the rest straight back. Returns
+    /// whether the rewrite fully succeeded.
+    ///
+    /// Takes the records as a struct rather than as N same-shaped `Option`
+    /// arguments: four positional `Option`s is exactly the shape a caller can
+    /// transpose in silence, and the page would still write — just with the
+    /// bond's bytes where the waypoints go.
+    async fn rewrite_config_page(&mut self, page: &ConfigPage) -> bool {
         if !self.available {
             return false;
         }
@@ -408,14 +453,14 @@ impl RunStore {
             warn!("run_flash: config erase failed {:?}", e);
             return false;
         }
-        if let Some((mode, flags, profile)) = config {
+        if let Some((mode, flags, profile)) = page.config {
             let rec = flash_store::encode_config(mode, flags, profile);
             if let Err(e) = self.flash_write(start, &rec).await {
                 warn!("run_flash: config write failed {:?}", e);
                 return false;
             }
         }
-        if let Some(b) = bond {
+        if let Some(b) = page.bond {
             let rec = b.encode();
             let at = start + flash_store::BOND_RECORD_OFFSET as u32;
             if let Err(e) = self.flash_write(at, &rec).await {
@@ -423,7 +468,7 @@ impl RunStore {
                 return false;
             }
         }
-        if let Some(w) = wpts {
+        if let Some(w) = page.waypoints.as_ref() {
             let mut buf = [0u8; waypoints::MAX_WPT1_LEN];
             if let Some(len) = w.encode(&mut buf) {
                 let at = start + flash_store::WAYPOINT_RECORD_OFFSET as u32;
@@ -431,6 +476,14 @@ impl RunStore {
                     warn!("run_flash: waypoint write failed {:?}", e);
                     return false;
                 }
+            }
+        }
+        if let Some(c) = page.ice.as_ref() {
+            let rec = c.encode_record();
+            let at = start + flash_store::ICE_RECORD_OFFSET as u32;
+            if let Err(e) = self.flash_write(at, &rec).await {
+                warn!("run_flash: ice write failed {:?}", e);
+                return false;
             }
         }
         true

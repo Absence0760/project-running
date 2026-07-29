@@ -157,8 +157,16 @@ pub const BOND_RECORD_OFFSET: usize = 64;
 /// aligned, carried forward by the same shared-page rewrite.
 pub const WAYPOINT_RECORD_OFFSET: usize = 128;
 
+/// Offset of the persisted ICE / medical-ID record ([`crate::ice`] `ICE1`,
+/// §358) within the config page — past the waypoint record's worst case,
+/// word-aligned, carried forward by the same shared-page rewrite. A medic
+/// reads the wrist of a watch that may have power-cycled, so the card cannot
+/// live only in the RAM a `SET1` push fills.
+pub const ICE_RECORD_OFFSET: usize = 256;
+
 const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
-const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= CONFIG_LEN);
+const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= ICE_RECORD_OFFSET);
+const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= CONFIG_LEN);
 
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a

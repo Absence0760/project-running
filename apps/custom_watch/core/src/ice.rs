@@ -55,6 +55,12 @@ const _: () = assert!(ICE1_RECORD_LEN.is_multiple_of(4));
 
 /// A responder-facing medical ID. `Copy` and fixed-size so it rides the
 /// settings frame and the flash record without an allocator.
+///
+/// Deliberately NOT `derive(defmt::Format)`: the card is a name, a blood
+/// type, a medical history and a next-of-kin phone number, and a derived
+/// impl would spill all four into the defmt stream every time a settings
+/// frame is logged — a log a cable, a CI artifact, or a bug report then
+/// carries. The hand-written impl below says only whether a card is there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IceCard {
     holder: [u8; ICE_FIELD_LEN],
@@ -62,6 +68,18 @@ pub struct IceCard {
     conditions: [u8; ICE_FIELD_LEN],
     contact: [u8; ICE_FIELD_LEN],
     phone: [u8; ICE_FIELD_LEN],
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for IceCard {
+    fn format(&self, f: defmt::Formatter) {
+        // Presence only — never the fields. See the type's doc.
+        defmt::write!(
+            f,
+            "IceCard({=str})",
+            if self.is_blank() { "blank" } else { "set" }
+        )
+    }
 }
 
 /// Copy `src` into a NUL-padded fixed field, or `None` when it does not fit

@@ -35,6 +35,7 @@
 
 use heapless::Vec;
 
+use crate::ice::IceCard;
 use crate::race_phases::RacePhasePreset;
 use crate::record_cadence::plausible_sea_level_pa;
 use crate::settings::{
@@ -95,6 +96,11 @@ pub enum SettingsEffect {
     GuidedRun(Option<GuidedRunId>),
     /// [`crate::record::Recorder::set_resting_hr`]
     RestingHr(u16),
+    /// The `state::ICE` watch the ui task renders the responder card from, and
+    /// the flash record the record task writes beside it; `None` clears the
+    /// card. Unlike every other effect this one has TWO sinks, because a
+    /// medical ID that vanishes on a power cycle is not a medical ID.
+    Ice(Option<IceCard>),
 }
 
 impl SettingsEffect {
@@ -117,6 +123,7 @@ impl SettingsEffect {
             Self::RacePhases { .. } => EffectKind::RacePhases,
             Self::GuidedRun(_) => EffectKind::GuidedRun,
             Self::RestingHr(_) => EffectKind::RestingHr,
+            Self::Ice(_) => EffectKind::Ice,
         }
     }
 }
@@ -143,6 +150,7 @@ pub enum EffectKind {
     RacePhases,
     GuidedRun,
     RestingHr,
+    Ice,
 }
 
 impl EffectKind {
@@ -166,7 +174,8 @@ impl EffectKind {
             Self::PaceBand => Some(Self::RacePhases),
             Self::RacePhases => Some(Self::GuidedRun),
             Self::GuidedRun => Some(Self::RestingHr),
-            Self::RestingHr => None,
+            Self::RestingHr => Some(Self::Ice),
+            Self::Ice => None,
         }
     }
 
@@ -211,6 +220,7 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         race_phases,
         guided_run,
         resting_hr,
+        ice,
     } = *s;
 
     let mut plan = SettingsPlan::new();
@@ -283,6 +293,12 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
     if let Some(bpm) = resting_hr {
         let _ = plan.push(SettingsEffect::RestingHr(bpm));
     }
+    if let Some(card) = ice {
+        // No guard here: the card's only plausibility rule is that its bytes
+        // are renderable, and `settings::decode` already refuses the whole
+        // frame otherwise — there is nothing left for this seam to reject.
+        let _ = plan.push(SettingsEffect::Ice(card));
+    }
     plan
 }
 
@@ -331,6 +347,13 @@ mod tests {
             }),
             guided_run: Some(GuidedRunId::new("easy-30")),
             resting_hr: Some(48),
+            ice: Some(IceCard::new(
+                "ALEX MORGAN",
+                "O NEG",
+                "PENICILLIN, ASTHMA",
+                "JAMIE MORGAN",
+                "+1 555 0134",
+            )),
         }
     }
 
@@ -520,6 +543,19 @@ mod tests {
                     ..WatchSettings::default()
                 },
                 SettingsEffect::RestingHr(48),
+            ),
+            (
+                WatchSettings {
+                    ice: full.ice,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::Ice(IceCard::new(
+                    "ALEX MORGAN",
+                    "O NEG",
+                    "PENICILLIN, ASTHMA",
+                    "JAMIE MORGAN",
+                    "+1 555 0134",
+                )),
             ),
         ];
         for (frame, effect) in expected {
