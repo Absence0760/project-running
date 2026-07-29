@@ -11510,6 +11510,19 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'Strecke an Uhr senden';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Strecke an die Uhr gesendet ($points Punkte)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Senden der Strecke fehlgeschlagen: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Keine Läufe auf der Uhr zum Synchronisieren';
 
   @override

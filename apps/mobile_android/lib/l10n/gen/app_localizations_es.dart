@@ -11500,6 +11500,19 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'Enviar recorrido al reloj';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Recorrido enviado al reloj ($points puntos)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Error al enviar el recorrido: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'No hay carreras en el reloj para sincronizar';
 
   @override

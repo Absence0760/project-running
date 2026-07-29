@@ -15019,6 +15019,26 @@
       }
     }
   },
+  "simWatchPushCourseAction": "Push course to watch",
+  "@simWatchPushCourseAction": {
+    "description": "Button that pushes a demo breadcrumb course to the custom watch over BLE"
+  },
+  "simWatchCoursePushed": "Course pushed to the watch ({points} points)",
+  "@simWatchCoursePushed": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      }
+    }
+  },
+  "simWatchPushCourseFailed": "Course push failed: {error}",
+  "@simWatchPushCourseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "simWatchNoRuns": "No runs on the watch to sync",
   "simWatchWaitingFrames": "Connected — waiting for frames…",
   "simWatchUptime": "Watch uptime",

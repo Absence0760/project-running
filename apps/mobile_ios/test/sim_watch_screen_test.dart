@@ -30,6 +30,7 @@ class _FakeSyncTransport implements WatchBleTransport {
   final _chunks = StreamController<List<int>>.broadcast();
   final settingsWrites = <List<int>>[];
   final workoutWrites = <List<int>>[];
+  final courseWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -60,6 +61,11 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> writeWorkout(List<int> chunk) async {
     workoutWrites.add(chunk);
+  }
+
+  @override
+  Future<void> writeCourse(List<int> chunk) async {
+    courseWrites.add(chunk);
   }
 }
 
@@ -358,6 +364,51 @@ void main() {
       expect(trailer, crc32(frame.sublist(0, 79)));
       expect(
         find.text('Workout pushed to the watch (6 steps)'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('course push', () {
+    testWidgets('Push-course action writes the chunked CRS1 frame',
+        (tester) async {
+      final transport = _FakeSyncTransport();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: () => transport,
+            runSink: (_) async {},
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.route));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+
+      // The three-point demo course with elevation (8 + 3*8 + 3*2 + 4 =
+      // 42 B) fits one chunk: offset(2 LE) | payload. The frame bytes are
+      // the CRS1 golden fixture watch_course_test.dart pins byte-exact
+      // against the Rust vectors; this pins the plumbing.
+      expect(transport.courseWrites, hasLength(1));
+      final chunk = transport.courseWrites.single;
+      expect(chunk.sublist(0, 2), [0x00, 0x00]);
+      final frame = chunk.sublist(2);
+      expect(frame, hasLength(42));
+      expect(frame.sublist(0, 4), [0x43, 0x52, 0x53, 0x31]); // CRS1
+      expect(frame[5] | (frame[6] << 8), 3, reason: 'three demo points');
+      expect(frame[7], 1, reason: 'the elevation flag rides the push');
+      final trailer = frame[38] |
+          (frame[39] << 8) |
+          (frame[40] << 16) |
+          (frame[41] << 24);
+      expect(trailer, crc32(frame.sublist(0, 38)));
+      expect(
+        find.text('Course pushed to the watch (3 points)'),
         findsOneWidget,
       );
     });

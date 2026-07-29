@@ -11496,6 +11496,19 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'Enviar percurso para o relógio';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Percurso enviado para o relógio ($points pontos)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Falha ao enviar percurso: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
 
   @override
@@ -23320,6 +23333,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String simWatchPushWorkoutFailed(String error) {
     return 'Falha ao enviar treino: $error';
+  }
+
+  @override
+  String get simWatchPushCourseAction => 'Enviar percurso para o relógio';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Percurso enviado para o relógio ($points pontos)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Falha ao enviar percurso: $error';
   }
 
   @override

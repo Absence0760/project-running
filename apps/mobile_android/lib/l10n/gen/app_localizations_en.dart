@@ -11380,6 +11380,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'Push course to watch';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'Course pushed to the watch ($points points)';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'Course push failed: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'No runs on the watch to sync';
 
   @override

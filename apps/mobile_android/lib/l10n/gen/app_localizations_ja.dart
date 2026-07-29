@@ -10960,6 +10960,19 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushCourseAction => 'コースを時計に送信';
+
+  @override
+  String simWatchCoursePushed(int points) {
+    return 'コースを時計に送信しました（$pointsポイント）';
+  }
+
+  @override
+  String simWatchPushCourseFailed(String error) {
+    return 'コースの送信に失敗しました: $error';
+  }
+
+  @override
   String get simWatchNoRuns => '同期する時計のランがありません';
 
   @override

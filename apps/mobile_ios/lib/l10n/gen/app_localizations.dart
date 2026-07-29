@@ -19248,6 +19248,24 @@ abstract class AppLocalizations {
   /// **'Workout push failed: {error}'**
   String simWatchPushWorkoutFailed(String error);
 
+  /// Button that pushes a demo breadcrumb course to the custom watch over BLE
+  ///
+  /// In en, this message translates to:
+  /// **'Push course to watch'**
+  String get simWatchPushCourseAction;
+
+  /// No description provided for @simWatchCoursePushed.
+  ///
+  /// In en, this message translates to:
+  /// **'Course pushed to the watch ({points} points)'**
+  String simWatchCoursePushed(int points);
+
+  /// No description provided for @simWatchPushCourseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Course push failed: {error}'**
+  String simWatchPushCourseFailed(String error);
+
   /// No description provided for @simWatchNoRuns.
   ///
   /// In en, this message translates to:
