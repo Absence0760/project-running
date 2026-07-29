@@ -2225,6 +2225,17 @@ BEGIN
                                    'actual_pace_sec_per_km', 365)
               ),
               'workout_adherence', 'completed',
+              -- 20270430_001 strip-list addition:
+              'watch_workout', jsonb_build_object(
+                'step_total', 3, 'adherence', 'partial',
+                'workout_crc', 195948557,
+                'step_results', jsonb_build_array(
+                  jsonb_build_object('step_index', 0, 'status', 'completed',
+                                     'actual_distance_m', 400.0,
+                                     'duration_s', 95,
+                                     'actual_pace_sec_per_km', 238)
+                )
+              ),
               'last_modified_at', '2026-05-01T00:00:00Z',
               'recovered_from_crash', true,
               'in_progress_saved_at', '2026-05-01T00:00:00Z',
@@ -2273,6 +2284,7 @@ BEGIN
      OR v_public_metadata ? 'plan_workout_id'
      OR v_public_metadata ? 'workout_step_results'
      OR v_public_metadata ? 'workout_adherence'
+     OR v_public_metadata ? 'watch_workout'
      OR v_public_metadata ? 'last_modified_at'
      OR v_public_metadata ? 'recovered_from_crash'
      OR v_public_metadata ? 'in_progress_saved_at'
