@@ -740,6 +740,8 @@ mod tests {
             route_position_permille: None,
             race_day: None,
             race_phase: None,
+            waypoint: None,
+            waypoint_count: 0,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,

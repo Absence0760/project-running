@@ -11,7 +11,8 @@
 //! left, the lower-RIGHT button pages right, both plain taps, and holding
 //! either past [`PAGE_HOLD_MS`] opens the page grid. BTN1 (upper-right)
 //! stays start/pause/resume/dismiss, BTN2 (mid-left) the guarded stop, and
-//! BTN5 (upper-left) is the manual lap.
+//! BTN5 (upper-left) is the manual lap — whose hold tier marks a waypoint
+//! (§357, [`lap_press_command`]).
 
 use crate::record::RecordState;
 
@@ -27,6 +28,9 @@ pub enum RecordCommand {
     Stop,
     Lap,
     Reset,
+    /// Mark the current position as a waypoint (§357) — BTN5's hold tier
+    /// while a run is in progress; the tap stays the lap.
+    MarkWaypoint,
 }
 
 /// The physical buttons wired to recording control.
@@ -103,6 +107,25 @@ pub fn classify_page_hold(held_ms: u32) -> PageBtnPress {
         PageBtnPress::Hold
     } else {
         PageBtnPress::Tap
+    }
+}
+
+/// What a BTN5 press does while a run is in progress, by tier (§357): the tap
+/// stays the lap (doubling as workout-step skip, §354), the [`PAGE_HOLD_MS`]
+/// hold marks the current position as a waypoint — the one free gesture the
+/// §350 grammar had left mid-run, on the same one-tier hold boundary as the
+/// paging keys so nothing new has to be learned. Idle and finished states
+/// never reach this reducer (idle BTN5 is the settings menu; FIN's BTN5 is
+/// dead), mirroring [`command_for`]'s gating.
+pub fn lap_press_command(state: RecordState, press: PageBtnPress) -> Option<RecordCommand> {
+    match (state, press) {
+        (RecordState::Recording | RecordState::Paused, PageBtnPress::Tap) => {
+            Some(RecordCommand::Lap)
+        }
+        (RecordState::Recording | RecordState::Paused, PageBtnPress::Hold) => {
+            Some(RecordCommand::MarkWaypoint)
+        }
+        _ => None,
     }
 }
 
@@ -313,6 +336,53 @@ mod tests {
     }
 
     #[test]
+    fn a_lap_tap_still_laps_and_a_hold_marks_a_waypoint() {
+        for state in [RecordState::Recording, RecordState::Paused] {
+            assert_eq!(
+                lap_press_command(state, PageBtnPress::Tap),
+                Some(RecordCommand::Lap),
+                "{state:?}"
+            );
+            assert_eq!(
+                lap_press_command(state, PageBtnPress::Hold),
+                Some(RecordCommand::MarkWaypoint),
+                "{state:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_lap_tap_is_exactly_what_the_untiered_reducer_says() {
+        // The tap tier may not drift from `command_for`: the stop guard and
+        // the grid still read BTN5 through that reducer, so two answers for
+        // one press would be two behaviours for one button.
+        for state in [
+            RecordState::Idle,
+            RecordState::Recording,
+            RecordState::Paused,
+            RecordState::Finished,
+        ] {
+            assert_eq!(
+                lap_press_command(state, PageBtnPress::Tap),
+                command_for(Button::Lap, state),
+                "{state:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn neither_lap_tier_acts_outside_a_run() {
+        // Idle BTN5 is the settings menu and FIN's BTN5 is dead; a hold must
+        // not smuggle a mark into either — there is no position to mark from
+        // an idle watch, and a finished run's track is already committed.
+        for state in [RecordState::Idle, RecordState::Finished] {
+            for press in [PageBtnPress::Tap, PageBtnPress::Hold] {
+                assert_eq!(lap_press_command(state, press), None, "{state:?} {press:?}");
+            }
+        }
+    }
+
+    #[test]
     fn the_paging_taps_mirror_spatially_in_every_run_view() {
         // The whole point of §350: in any state that shows pages, the
         // lower-left key pages left and the lower-right key pages right, both
@@ -497,6 +567,9 @@ mod tests {
                     RecordCommand::Stop => r.stop(now),
                     RecordCommand::Lap => r.lap(now),
                     RecordCommand::Reset => r.reset(now),
+                    RecordCommand::MarkWaypoint => {
+                        r.mark_waypoint(now);
+                    }
                 }
             }
         };

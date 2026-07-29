@@ -341,7 +341,8 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::RouteSimplify
         | Page::AutoEffort
         | Page::RouteElev
-        | Page::RaceDay => HERO_BAND_ROWS,
+        | Page::RaceDay
+        | Page::Waypoint => HERO_BAND_ROWS,
     }
 }
 
@@ -672,6 +673,7 @@ pub fn page_rows(
             Page::RouteElev => route_elev_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RaceDay => race_day_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Daylight => daylight_glance(fix, tag, uptime_s, animate, mode, tz_offset_min),
+            Page::Waypoint => waypoint_glance(fix, snap, tb, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -723,7 +725,8 @@ pub fn page_icons(
         | Page::AutoEffort
         | Page::RouteElev
         | Page::RaceDay
-        | Page::Daylight => [None; ROWS],
+        | Page::Daylight
+        | Page::Waypoint => [None; ROWS],
     }
 }
 
@@ -966,6 +969,24 @@ pub fn page_hero(
                     let _ = write!(row, "{}:{:02}", v.countdown_min / 60, v.countdown_min % 60);
                 }
                 _ => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // Distance to the newest mark, in the same m-then-km shape the
+        // back-to-start hero uses — the two pages answer the same question
+        // about different anchors and must not read differently.
+        Page::Waypoint => {
+            let mut row = Row::new();
+            match snap.waypoint.map(|w| w.distance_m) {
+                Some(d) if d < 1000.0 => {
+                    let _ = write!(row, "{:.0}", d);
+                }
+                Some(d) => {
+                    let _ = write!(row, "{:.2}", (d / 1000.0).min(9999.99));
+                }
+                None => {
                     let _ = write!(row, "--");
                 }
             }
@@ -2690,6 +2711,83 @@ fn back_to_start_glance(
     rows
 }
 
+/// The marked-waypoint page (§357): distance to the NEWEST mark up large,
+/// then the same heading / bearing pair [`back_to_start_glance`] shows — the
+/// two pages answer "which way, and how far" about different anchors, so they
+/// deliberately read the same. The age row is what tells a runner at hour 40
+/// whether the mark is this loop's water stash or yesterday's recce, and the
+/// count row is the only place the store's depth is visible at all.
+///
+/// Two honest empty states, and they are NOT the same thing: nothing marked
+/// (the runner can fix that with a hold, so the reason carries the gesture),
+/// versus marks that exist with no position anchor to measure them from yet.
+fn waypoint_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
+    }
+
+    let Some(w) = snap.waypoint else {
+        let why = if snap.waypoint_count == 0 {
+            Unfed::NoWaypoints
+        } else {
+            Unfed::AwaitingFix
+        };
+        write_unfed(&mut rows, Page::Waypoint, "WAYPOINT", why);
+        write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+        return rows;
+    };
+
+    if w.distance_m < 1000.0 {
+        let _ = write!(rows[2], "TO WPT  M");
+    } else {
+        let _ = write!(rows[2], "TO WPT  KM");
+    }
+
+    match tb.and_then(|n| n.heading_sector(uptime_s)) {
+        Some(s) => {
+            let _ = write!(
+                rows[3],
+                "{:<6}{}",
+                "HDG",
+                trackback::SECTOR_NAMES[s as usize]
+            );
+        }
+        None => {
+            let _ = write!(rows[3], "{:<6}--", "HDG");
+        }
+    }
+    let _ = write!(
+        rows[4],
+        "{:<6}{}",
+        "BRG",
+        trackback::SECTOR_NAMES[trackback::sector_of_deg(w.bearing_deg) as usize]
+    );
+
+    // Clock skew (a mark stamped after `uptime_s`, which a reboot's restarted
+    // uptime makes real for a restored mark) saturates to 0 rather than
+    // wrapping into a fake multi-century age.
+    let (h, m, s) = hms(uptime_s.saturating_sub(w.marked_uptime_s));
+    if h > 0 {
+        let _ = write!(rows[5], "{:<6}{}:{:02}:{:02}", "AGO", h.min(999), m, s);
+    } else {
+        let _ = write!(rows[5], "{:<6}{}:{:02}", "AGO", m, s);
+    }
+    let _ = write!(rows[6], "{:<6}{}", "MARKS", w.count);
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
 /// A lap split as `M:SS`, growing to `H:MM:SS` past the hour — laps are
 /// usually minutes, so the shorter form keeps the 2x hero digits big without
 /// a misleading leading zero-hour.
@@ -3260,6 +3358,8 @@ mod tests {
             route_position_permille: None,
             race_day: None,
             race_phase: None,
+            waypoint: None,
+            waypoint_count: 0,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,
@@ -5828,6 +5928,128 @@ mod tests {
     }
 
     #[test]
+    fn waypoint_page_reads_like_back_to_start_about_a_different_anchor() {
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 250.0,
+            bearing_deg: 45.0,
+            count: 3,
+            marked_uptime_s: 10,
+        });
+        rec.waypoint_count = 3;
+        let nav = nav_east(20, 6.0); // heading due east
+        let rows = page_rows(
+            Page::Waypoint,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            Some(&nav),
+            20,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TO WPT  M");
+        assert_eq!(rows[3].as_str(), "HDG   E");
+        assert_eq!(rows[4].as_str(), "BRG   NE");
+        assert_eq!(rows[5].as_str(), "AGO   0:10");
+        assert_eq!(rows[6].as_str(), "MARKS 3");
+        assert_eq!(
+            page_hero(Page::Waypoint, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "250"
+        );
+        // Past a kilometre the hero switches unit exactly where the
+        // back-to-start hero does — one shape for one question.
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 1_500.0,
+            ..rec.waypoint.unwrap()
+        });
+        let rows = page_rows(
+            Page::Waypoint,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            Some(&nav),
+            20,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TO WPT  KM");
+        assert_eq!(
+            page_hero(Page::Waypoint, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "1.50"
+        );
+    }
+
+    #[test]
+    fn waypoint_page_distinguishes_nothing_marked_from_no_position_yet() {
+        // Nothing marked: the reason names the gesture, because a hold has no
+        // affordance to discover and this page is where it can be learned.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        let rows = page_rows(
+            Page::Waypoint,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            20,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "WAYPOINT --");
+        assert_eq!(rows[4].as_str(), "NO WAYPOINTS");
+        assert_eq!(rows[5].as_str(), "HOLD BTN5 TO MARK");
+        // Marks restored from flash with no anchor this run yet: a different
+        // fact, and telling the runner to mark another would be nonsense.
+        rec.waypoint_count = 2;
+        let rows = page_rows(
+            Page::Waypoint,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            20,
+            false,
+        );
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        assert_eq!(rows[5].as_str(), "");
+    }
+
+    #[test]
+    fn a_mark_stamped_after_the_clock_reads_zero_rather_than_centuries() {
+        // A restored mark carries the PREVIOUS boot's uptime, which can sit
+        // far ahead of this boot's — the age must saturate, not wrap.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 40.0,
+            bearing_deg: 0.0,
+            count: 1,
+            marked_uptime_s: 90_000,
+        });
+        rec.waypoint_count = 1;
+        let rows = page_rows(
+            Page::Waypoint,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            20,
+            false,
+        );
+        assert_eq!(rows[5].as_str(), "AGO   0:00");
+    }
+
+    #[test]
     fn back_to_start_shows_distance_heading_and_bearing() {
         let rec = snapshot(RecordState::Recording, 100.0);
         let nav = nav_east(20, 6.0); // ~120 m due east, heading E, start W
@@ -6691,6 +6913,7 @@ mod tests {
             Page::RacePredictor => Some(Unfed::NeedOneKm),
             Page::TrainingLoad => Some(Unfed::NeedDistance),
             Page::DistanceBand => Some(Unfed::NoRaceBand),
+            Page::Waypoint => Some(Unfed::NoWaypoints),
         }
     }
 

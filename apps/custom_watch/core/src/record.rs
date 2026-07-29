@@ -43,6 +43,7 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
+use crate::waypoints::{WaypointView, Waypoints};
 use crate::workout::{StepResult, WorkoutAdherence, WorkoutRunner, WorkoutStep, WorkoutView};
 use crate::workout_store;
 
@@ -588,6 +589,16 @@ pub struct Snapshot {
     /// until a plan is pushed — the Pacer page then reads "PHASE --" rather than
     /// a phase the runner never asked for.
     pub race_phase: Option<RacePhaseView>,
+    /// Distance + bearing from the current position back to the newest marked
+    /// waypoint (§357), or `None` when nothing is marked or no position anchor
+    /// exists — the Waypoint page then reads an honest empty state rather than
+    /// an arrow to nowhere.
+    pub waypoint: Option<WaypointView>,
+    /// How many waypoints are stored, marked or not — the page's data-presence
+    /// bit. Distinct from [`Snapshot::waypoint`] being `Some`: marks survive
+    /// between runs, so the page must stay in the cycle while the store is
+    /// non-empty even before this run has an anchor to measure from.
+    pub waypoint_count: u8,
     /// The flash track's decimation factor: 1 = full resolution, `k` = one
     /// stored point per `k` accepted fixes after slot-full thinning
     /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
@@ -891,6 +902,13 @@ pub struct Recorder {
     /// the live offset from the `state` watch; this is a presence bit, like
     /// [`course_loaded`](Recorder::set_course_loaded)).
     tz_offset_min: Option<i16>,
+    /// Positions the runner marked mid-run (§357), newest-last. Deliberately
+    /// NOT cleared by [`start`](Recorder::start) or [`reset`](Recorder::reset):
+    /// a water stash marked on yesterday's recce is the whole point of the
+    /// feature, so the store outlives the run that filled it and only ages out
+    /// by the newest-wins eviction in [`Waypoints::mark`]. The app restores it
+    /// from flash at boot via [`set_waypoints`](Recorder::set_waypoints).
+    waypoints: Waypoints,
 }
 
 impl Default for Recorder {
@@ -964,6 +982,7 @@ impl Recorder {
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
             tz_offset_min: None,
+            waypoints: Waypoints::new(),
         }
     }
 
@@ -998,6 +1017,41 @@ impl Recorder {
     /// midnight, so the page stays out of the cycle rather than empty in it.
     pub fn set_tz_offset_min(&mut self, m: i16) {
         self.tz_offset_min = Some(m);
+    }
+
+    /// Mark the last accepted fix's position as a waypoint (§357) — BTN5's
+    /// hold tier. Returns whether a mark was actually taken, so the caller can
+    /// tell "saved" from "no position to save": marking uses the recorder's
+    /// distance anchor rather than the raw fix stream because that is the
+    /// position the run itself is measured from, so the mark and the track
+    /// agree about where the runner was. No anchor (pre-first-fix, or a run
+    /// that has only seen rejected fixes) marks nothing rather than a
+    /// fabricated 0,0.
+    ///
+    /// A mark outside a run is refused for the same reason the button
+    /// reducer never emits one there: an idle watch's anchor is the PREVIOUS
+    /// run's last position, and silently saving that would be a lie about
+    /// where the runner is standing.
+    pub fn mark_waypoint(&mut self, uptime_s: u32) -> bool {
+        if !matches!(self.state, RecordState::Recording | RecordState::Paused) {
+            return false;
+        }
+        let Some(last) = self.last else {
+            return false;
+        };
+        self.waypoints.mark(last.lat_deg, last.lon_deg, uptime_s)
+    }
+
+    /// Restore the marks persisted in flash (the app's boot path). Whole-store
+    /// replacement rather than a merge: the flash record IS the store, so a
+    /// decode failure leaves whatever is already in RAM instead of clearing it.
+    pub fn set_waypoints(&mut self, w: Waypoints) {
+        self.waypoints = w;
+    }
+
+    /// The marked positions, for the app's flash persistence.
+    pub fn waypoints(&self) -> &Waypoints {
+        &self.waypoints
     }
 
     /// Expected seconds between incoming fixes, from the selected GNSS mode
@@ -1801,6 +1855,10 @@ impl Recorder {
             route_position_permille: self.route_position_permille(),
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
+            waypoint: self
+                .last
+                .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
+            waypoint_count: self.waypoints.len() as u8,
             track_thinning: self.track_thinning,
             pages_mask: 0,
             hide_empty_pages: self.hide_empty_pages,
@@ -1872,6 +1930,10 @@ impl Recorder {
         set(Page::RouteElev, s.route_elev.is_some());
         set(Page::RaceDay, s.race_day.is_some());
         set(Page::Daylight, self.tz_offset_min.is_some());
+        // Keyed on the STORE, not on a live view: a marked stash is worth
+        // navigating back to even while the GPS is still reacquiring, so the
+        // page must not vanish from the cycle the moment the fix does.
+        set(Page::Waypoint, s.waypoint_count > 0);
         m
     }
 
@@ -3451,6 +3513,88 @@ mod tests {
         // Clearing the roadbook drops the terrain partner with it.
         r.set_roadbook(&[]);
         assert!(!r.snapshot().pacer.unwrap().terrain_aware);
+    }
+
+    #[test]
+    fn a_mark_saves_the_anchor_the_run_is_measured_from() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        assert!(r.mark_waypoint(5));
+        let w = r.waypoints().latest().copied().unwrap();
+        assert_eq!((w.lat_deg, w.lon_deg), (10.0, 20.0));
+        assert_eq!(w.marked_uptime_s, 5);
+        // The view measures from the CURRENT anchor back to the mark, so a
+        // mark taken where the runner stands reads zero and then grows.
+        assert_eq!(r.snapshot().waypoint.unwrap().distance_m, 0.0);
+        // Due north — 0.001 deg of latitude is ~111 m.
+        r.on_fix(&fix(10.001, 20.0, 3.0, 40));
+        let v = r.snapshot().waypoint.unwrap();
+        assert!((v.distance_m - 111.0).abs() < 2.0, "{}", v.distance_m);
+        assert!(
+            v.bearing_deg > 179.0 && v.bearing_deg < 181.0,
+            "{}",
+            v.bearing_deg
+        );
+        assert_eq!(v.count, 1);
+    }
+
+    #[test]
+    fn a_mark_without_an_anchor_or_outside_a_run_saves_nothing() {
+        // Never a fabricated 0,0: idle has no position of its own, and a run
+        // that has not yet accepted a fix has no anchor to save.
+        let mut r = Recorder::new();
+        assert!(!r.mark_waypoint(1));
+        r.start(0);
+        assert!(!r.mark_waypoint(2));
+        assert!(r.waypoints().is_empty());
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        assert!(r.mark_waypoint(3));
+        // A finished run's anchor is history — the run is already committed,
+        // so a stray hold must not append to the store.
+        r.stop(10);
+        assert!(!r.mark_waypoint(11));
+        assert_eq!(r.waypoints().len(), 1);
+    }
+
+    #[test]
+    fn marks_outlive_the_run_that_made_them() {
+        // The whole point of the feature: a stash marked on one run is still
+        // there on the next, so neither start nor reset may clear the store.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        assert!(r.mark_waypoint(2));
+        r.stop(10);
+        r.reset(11);
+        assert_eq!(r.waypoints().len(), 1);
+        r.start(20);
+        assert_eq!(r.waypoints().len(), 1);
+        // ...and with no anchor yet in the new run, the page has a count but
+        // no honest distance to show.
+        let s = r.snapshot();
+        assert_eq!(s.waypoint_count, 1);
+        assert!(s.waypoint.is_none());
+    }
+
+    #[test]
+    fn the_waypoint_page_joins_the_cycle_on_the_first_mark_and_stays() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        assert_eq!(r.snapshot().pages_mask & Page::Waypoint.bit(), 0);
+        assert!(r.mark_waypoint(2));
+        assert_ne!(r.snapshot().pages_mask & Page::Waypoint.bit(), 0);
+        // Keyed on the store, not on a live view: losing the fix must not
+        // pull the page out from under a runner walking back to the stash.
+        r.stop(10);
+        r.reset(11);
+        r.start(12);
+        assert_ne!(
+            r.snapshot().pages_mask & Page::Waypoint.bit(),
+            0,
+            "a stored mark keeps the page reachable before the new run's first fix"
+        );
     }
 
     #[test]
