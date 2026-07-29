@@ -210,6 +210,13 @@ macro btn5
 """
     python "click(2)"
 """
+# BTN5 hold (~0.8 s virtual, past the same 0.5 s tier the paging keys use) —
+# mark a waypoint at the recorder's current anchor (§357). Only meaningful
+# while a run is under way; idle, BTN5 opens the settings menu at any duration.
+macro btn5h
+"""
+    python "click(2, 0.8)"
+"""
 
 # LED1 (P0.13) blinks at 1 Hz from ui::blink_task — echo each state change
 # into the Renode log as a scheduler-liveness signal.
