@@ -61,10 +61,12 @@ What no scenario can cover, per decisions.md §314: BLE (the S140 SoftDevice doe
 not run under Renode), power draw, and any claim about real silicon — the sensor
 models answer what the drivers believe about the parts.
 
-Sessions: `smoke` gets its own boot so its sequence stays byte-for-byte what it
-is today (it also ENDS the run, which the other two need in progress).
-`alerts` + `pages` share one boot: both need a live recording, neither disturbs
-it, and the alert cadences tick through the page walk anyway. Each session gets
+Sessions: one boot per scenario, which is what CI has always done (one step
+each) and what `--scenario all` now does too. `alerts` and `pages` shared a boot
+until 2026-07-29 on the grounds that neither disturbed the other; `alerts` in
+fact consumed the quiet window `pages` needs, because past ~100 s the sim's
+overlapping alert cadences never let a banner expire with nothing behind it and
+`record: alert cleared` stops firing — see `plan_sessions`. Each session gets
 its own phone port (`--phone-port` + session index) because watch.resc binds
 that port at a FIXED number and watch-sim.sh aborts if it is still held — a
 sequential re-launch must not race the previous Renode's teardown. `--budget` is
@@ -1135,34 +1137,37 @@ def selected_scenarios(choice):
 
 
 def plan_sessions(selected, fixture_override=None):
-    """Group the selected scenarios into booted sessions.
+    """Group the selected scenarios into booted sessions — one each.
 
-    `smoke` runs alone: its sequence stays exactly what it is today, and it stops
-    the run the other two need in progress. `alerts` + `pages` share a boot —
-    both need a live recording, neither disturbs it, and the alert cadences tick
-    through the page walk anyway. `alerts` goes first so its banner/no-banner
-    pair is taken on the page the run view opens on. `terrain` runs alone
-    because it is the one scenario on a different fixture, and a boot has
-    exactly one: sharing would mean feeding bench_jog's flat ground to a
-    scenario whose whole subject is a climb.
+    `alerts` and `pages` used to share a boot on the grounds that "both need a
+    live recording and neither disturbs the other". The second half was wrong.
+    `pages` refuses to dump under a banner (a dump taken under one is a dump OF
+    the banner), so it waits for `record: alert cleared` — and the engine only
+    emits that when a banner expires with nothing behind it. Past roughly 100 s
+    the sim's shortened cadences overlap: drink at 30 s, eat at 45 s, and since
+    § 354 a WorkoutStep alert on every rep boundary, each raised inside the
+    previous one's 8 s TTL. The engine then goes banner-to-banner and `cleared`
+    never fires, so `alerts` — which runs ~100 s — was handing `pages` a boot
+    with no quiet window left in it. Sharing did not just cost time, it consumed
+    the exact resource the other scenario needed.
 
-    Each session carries the fixture its scenarios agree on. An explicit
-    `--fixture` overrides every one of them, which is how a manual session
-    points an existing scenario at new terrain.
+    So each scenario now gets its own boot, which is also how CI has always run
+    them (one step per scenario, one process each). `--scenario all` and the CI
+    job finally agree about what is being executed.
+
+    `smoke` additionally has to be alone — it stops the run the others need in
+    progress — and `terrain` is on a different fixture, and a boot has exactly
+    one.
+
+    Each session carries its scenario's own fixture. An explicit `--fixture`
+    overrides every one of them, which is how a manual session points an
+    existing scenario at new terrain.
     """
-
-    def fixture_for(names):
-        return fixture_override or SCENARIO_FIXTURES[names[0]]
-
-    sessions = []
-    if "smoke" in selected:
-        sessions.append(("smoke", ["smoke"], fixture_for(["smoke"])))
-    shared = [name for name in ("alerts", "pages") if name in selected]
-    if shared:
-        sessions.append(("-".join(shared), shared, fixture_for(shared)))
-    if "terrain" in selected:
-        sessions.append(("terrain", ["terrain"], fixture_for(["terrain"])))
-    return sessions
+    return [
+        (name, [name], fixture_override or SCENARIO_FIXTURES[name])
+        for name in SCENARIO_ORDER
+        if name in selected
+    ]
 
 
 def run(args):
