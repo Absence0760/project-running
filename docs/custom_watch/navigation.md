@@ -266,13 +266,16 @@ worsts held through pages 33, 34 and 35; the averages move 4.7188 → 4.8182 →
 
 **Pages 36 and 37 are the first to move a grid worst since the model was
 built** — the symmetric worst 6 → 7 at page 36 (§357's Waypoint) and the
-forward-only 9 → 10 at page 37 (§359's Climb). `{±1, ±4}` reaches 28 cells in
-6 moves plus the open, and a 36-page ring is the first that does not fit that
-ball; the ring has outgrown one press. Worth recording plainly rather than
-rounding away: the everyday cost is unchanged (the filtered mask is ~12
-pages, worst 4), but the full-mask ceiling has stopped being flat, and a 41st
-page would move it again. The lever remains phone-side curation (§284), which
-is a content decision, not a grammar one.
+forward-only 9 → 10 at page 37 (§359's Climb). Five `{±1, ±4}` moves cover 37
+distinct offsets — everything within ±20 except the gaps the ±4 stride leaves
+near the edges — and a 36-page ring is the first whose furthest cell falls
+outside them, so the cursor needs a sixth move and the page costs `1 + 6 = 7`.
+The ring has outgrown one press. Worth recording plainly rather than rounding
+away: the everyday cost is unchanged (the filtered mask is ~12 pages, worst
+4), but the full-mask ceiling has stopped being flat. The next moves are
+computed, not guessed: the forward-only worst goes 10 → 11 at page 42, and the
+symmetric worst 7 → 8 at page 44. The lever remains phone-side curation
+(§284), which is a content decision, not a grammar one.
 
 **§350 does not move these counts — it moves their price in seconds.** The
 action *counts* are identical under the spatial grammar (the walk was already
