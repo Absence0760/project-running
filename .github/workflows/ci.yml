@@ -531,14 +531,14 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens + settings scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens + idle scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
     # harness carries its own tighter per-assertion deadlines and a --budget.
     #
     # Raised 25 -> 35 when `dropout` was added, 35 -> 40 for `screens`, and
-    # 40 -> 45 for `settings`: the six budgets below now sum to 32 min against ~10 min of Renode
+    # 40 -> 45 for `idle`: the six budgets below now sum to 32 min against ~10 min of Renode
     # fetch, toolchain and a cold cargo build, and 35 no longer left the harness
     # room to fail with its own diagnostics before the runner was killed bare.
     # The cap is still what it has always been — a backstop over the budgets,
@@ -635,7 +635,7 @@ jobs:
       #
       # No --fixture: the harness binds one to each scenario (SCENARIO_FIXTURES)
       # and the flag is only an override. `pages`, `alerts`, `screens` and
-      # `settings` are
+      # `idle` are
       # bench_jog (the sim-course breadcrumb only lines up there); `terrain` is
       # mountain_loop, because it asserts a climb and flat ground cannot produce
       # one; `dropout` is gps_dropout, which is the void it exists to cross.
@@ -687,14 +687,15 @@ jobs:
           --budget 300
       # The only scenario that boots `--no-autostart`, so the only one that ever
       # reaches an idle face. Every other one starts a run on the first fix and
-      # pages the run view, which left the §351 settings menu — five rows, a
-      # cursor, and directional edits that write real state — with no coverage
-      # at all. ~20 s on a quiet box; takes the same 300 s as its siblings.
-      - name: Renode sim — settings scenario
+      # pages the run view, which left both idle rails uncovered: the §351
+      # settings menu (five rows, a cursor, directional edits that write real
+      # state) and the §358 faces BTN4 walks, the ICE card among them. Takes the
+      # same 300 s as its siblings.
+      - name: Renode sim — idle scenario
         run: >-
           python3 apps/custom_watch/sim/ci_smoke.py
-          --scenario settings
-          --out-dir "${{ runner.temp }}/watch-sim-ci/settings"
+          --scenario idle
+          --out-dir "${{ runner.temp }}/watch-sim-ci/idle"
           --budget 300
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's

@@ -191,7 +191,7 @@ SCENARIO_ORDER = (
     "terrain",
     "dropout",
     "screens",
-    "settings",
+    "idle",
 )
 
 # The NMEA fixture each scenario was written against, and a property OF the
@@ -208,7 +208,7 @@ SCENARIO_FIXTURES = {
     "screens": "bench_jog",
     # Idle-only: it never starts a run, so the fixture is just something for the
     # receiver to chew on while the thumb works the menu.
-    "settings": "bench_jog",
+    "idle": "bench_jog",
 }
 
 # Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
@@ -222,8 +222,8 @@ SCENARIO_LAUNCHER_ARGS = {
     # The same reason `bin/watch-shots.sh` boots that way.
     "screens": ("--screens", "--no-alerts"),
     # The whole point of this one: no `sim-autostart`, so the watch stays on the
-    # idle face where the menu lives instead of paging a run view.
-    "settings": ("--no-autostart",),
+    # idle faces instead of paging a run view.
+    "idle": ("--no-autostart",),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -367,12 +367,18 @@ MENU_CLOSED = re.compile(r"button: settings menu closed \(([\w ]+)\)")
 GNSS_MODE_SET = re.compile(r"button: gnss mode -> (\w+) \(fix interval (\d+)s, ~(\d+)h\)")
 # The ui task's idle face, the BTN4 walk's observable (§291 + §358).
 IDLE_VIEW = re.compile(r"ui: idle (\w+)")
+# `face::IdleView` in BTN4 order, starting from the boot face. Hard-coded for
+# the same reason as MENU_ROWS: the order is what the thumb learns.
+IDLE_FACES = ("Home", "Diagnostics", "Ice")
 
 # `settings_menu::ITEMS` order. Hard-coded rather than derived because the
 # ORDER is the contract the runner's thumb learns — a reordering that both the
 # firmware and a derived expectation followed would assert nothing.
 MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "QnhRezero", "Ice")
-MENU_STEP_TIMEOUT = 20
+# A menu press lands in well under a second (the button task polls at 50 Hz);
+# 10 s is an order of magnitude of headroom for a loaded runner without making
+# an expected-silent press — a ladder clamped at its end — cost half a minute.
+MENU_STEP_TIMEOUT = 10
 # `GnssMode`'s rungs (Performance / Balanced / Expedition). Only the COUNT is
 # used — enough lefts to park at the end, then one fewer right to walk back —
 # so this survives a rung being renamed but not one being added, which is the
@@ -1909,7 +1915,14 @@ def scenario_screens(sim):
     passed(f"the uncomposed fourth screen is not in the cycle (tap landed on {after})")
 
 
-def press_menu(sim, macro, what, pattern=MENU_CURSOR, timeout=MENU_STEP_TIMEOUT, required=True):
+def press_menu(
+    sim,
+    macro,
+    what,
+    pattern=MENU_CURSOR,
+    timeout=MENU_STEP_TIMEOUT,
+    required=True,
+):
     """One settings-menu press, resolved by the line the button task emits.
 
     Retries a silent press exactly like `press_page` does, and for the same
@@ -1921,19 +1934,21 @@ def press_menu(sim, macro, what, pattern=MENU_CURSOR, timeout=MENU_STEP_TIMEOUT,
 
     `required=False` returns None instead of raising, for presses whose whole
     point is that they may legitimately do nothing (a ladder clamped at its
-    end).
+    end). Those are not retried: silence is the expected answer, so a retry
+    only doubles the wait for it.
 
     Unlike `press_page` there is no second task to cross-check: the menu's rows
     are the button task's own model. What the panel does with them is asserted
     separately, by the dumps.
     """
-    for attempt in range(1, PAGE_PRESS_ATTEMPTS + 1):
+    attempts = PAGE_PRESS_ATTEMPTS if required else 1
+    for attempt in range(1, attempts + 1):
         mark = sim.tail.mark()
         sim.monitor().send(f"runMacro {macro}")
         try:
             return sim.wait(pattern, timeout, what, start=mark)
         except SmokeFailure:
-            if attempt < PAGE_PRESS_ATTEMPTS:
+            if attempt < attempts:
                 announce("no menu line seen — the injected press likely missed a poll")
                 continue
             if not required:
@@ -1942,8 +1957,8 @@ def press_menu(sim, macro, what, pattern=MENU_CURSOR, timeout=MENU_STEP_TIMEOUT,
     raise AssertionError("unreachable")
 
 
-def scenario_settings(sim):
-    """Open the idle settings menu, walk it, edit it, and close it (§351).
+def scenario_idle(sim):
+    """The idle surfaces: the settings menu (§351) and the faces BTN4 walks (§358).
 
     Boots `--no-autostart`, which is the point: every other scenario in this
     file starts a run on the first fix and pages the RUN view, so the idle
@@ -1951,18 +1966,24 @@ def scenario_settings(sim):
     at all. The `Sim` docstring says as much ("every scenario in this file skips
     past by design"); this is the one that does not.
 
-    Four claims, in the order a thumb produces them:
+    Two rails share one boot. The menu: BTN5 opens it and it reaches the panel,
+    BTN3 walks all five rows in their documented order and wraps, BTN2 walks
+    back, an edit on the GNSS row moves the ladder, BTN4 closes it. Then the
+    three faces BTN4 walks — Home, Diagnostics, and the §358 ICE card a
+    responder reads off a collapsed runner's wrist — each rendering a distinct
+    frame, plus the menu's own MEDICAL ID row as the card's second route in.
 
-      1. BTN5 on the idle face opens the menu, and the menu reaches the panel
-      2. BTN3 walks all five rows in their documented order and wraps
-      3. an edit on a row does something a second observable confirms
-      4. BTN4 closes it and the idle face comes back
+    The edit is the claim with teeth. A menu that renders and scrolls but whose
+    edits go nowhere passes every other assertion here, so the GNSS row is read
+    back off the button task's own `gnss mode ->` line, including the
+    direction: the ladder is ordered by projected battery hours, so an edit
+    right must not come back with fewer. It is parked at its left end first, so
+    the ordering has two samples to compare and does not depend on whatever
+    mode the build defaults to.
 
-    (3) is the one with teeth. A menu that renders and scrolls but whose edits
-    go nowhere passes (1), (2) and (4) — so the GNSS row is edited and the
-    resulting mode is read back off the button task's own `gnss mode ->` line,
-    including the direction: the ladder is ordered by projected battery hours,
-    so an edit right must not come back with fewer.
+    The faces are folded in here rather than given a scenario of their own
+    because they need exactly this boot and nothing more, and a scenario costs
+    an emulator — the same call § 362 made for the HR and phone-link rails.
 
     What it does NOT prove: that an edit SURVIVES A REBOOT. `CFG1` persistence
     is a flash claim and this scenario never power-cycles the emulator; the
@@ -2038,10 +2059,21 @@ def scenario_settings(sim):
     # the rights below are measured from a KNOWN rung rather than from whatever
     # mode the build happens to default to. Clamping at the end is the expected
     # outcome of the last of these, so a silent press is not a failure here.
+    # Stops at the first silent press, which IS the clamp — the build defaults
+    # to the leftmost rung, so this is usually one press and out. Pressing the
+    # full ladder blindly cost ~2 min of expected silence.
     for _ in range(GNSS_LADDER_RUNGS):
-        press_menu(
-            sim, "$btn5", "BTN5 to edit the GNSS row left", GNSS_MODE_SET, required=False
-        )
+        if (
+            press_menu(
+                sim,
+                "$btn5",
+                "BTN5 to edit the GNSS row left",
+                GNSS_MODE_SET,
+                required=False,
+            )
+            is None
+        ):
+            break
 
     # ...then walk it back up. From the left end at least two rights must move
     # it, which is what makes the ordering assertion below possible at all: a
@@ -2086,6 +2118,76 @@ def scenario_settings(sim):
         )
     passed("BTN4 closed the menu and the idle face came back")
 
+    # --- the three idle faces BTN4 walks (§291, widened to three by §358) ---
+    #
+    # Folded in here rather than given a scenario of its own: it needs exactly
+    # the `--no-autostart` boot the menu above needs and nothing more, and a
+    # scenario costs an emulator. Same call §362 made for the HR and phone-link
+    # rails inside `smoke`.
+    walk = []
+    faces = {}
+    for _ in range(len(IDLE_FACES)):
+        view = press_menu(sim, "$btn4", "BTN4 to walk to the next idle face", IDLE_VIEW).group(1)
+        walk.append(view)
+        panel = sim.dump(f"idle-{view}.ppm", f"the {view} idle face")
+        if panel.dark == 0:
+            raise SmokeFailure(f"the {view} idle face rendered a blank panel")
+        faces.setdefault(view, panel)
+    if walk != [*IDLE_FACES[1:], IDLE_FACES[0]]:
+        raise SmokeFailure(
+            f"BTN4 walked {' -> '.join(walk)} from {IDLE_FACES[0]}, not "
+            f"{' -> '.join([*IDLE_FACES[1:], IDLE_FACES[0]])} — the idle faces "
+            "are not the cycle §358 documents"
+        )
+    passed(f"BTN4 walked the idle faces and wrapped: {IDLE_FACES[0]} -> {' -> '.join(walk)}")
+
+    # Three faces that render identically would pass the walk above while a
+    # responder reads the wrong card off the wrist.
+    for a, b in itertools.combinations(sorted(faces), 2):
+        if faces[a].data == faces[b].data:
+            raise SmokeFailure(
+                f"the {a} and {b} idle faces are byte-identical — the view "
+                "changed in the button task but the composer drew the same card"
+            )
+    passed(f"the {len(faces)} idle faces are distinct frames")
+
+    # The ICE card's second route, and the one a responder never uses but the
+    # runner does: the menu's own MEDICAL ID row (§358) is an action row, so it
+    # fires and hands the screen over rather than staying open on a value.
+    press_menu(sim, "$btn5", "BTN5 to reopen the settings menu", MENU_OPENED)
+    # The cursor opens on row 0, so reaching the row takes exactly its index in
+    # presses — one more would wrap past it and back onto GnssMode.
+    row = None
+    for _ in range(MENU_ROWS.index("Ice")):
+        row = press_menu(sim, "$btn3", "BTN3 to step toward the MEDICAL ID row").group(1)
+    if row != "Ice":
+        raise SmokeFailure(f"expected the cursor on Ice, it reads {row}")
+    # Marked before the press so the idle line read below is the one this press
+    # produced — an unanchored wait finds the boot-time `ui: idle Home` and
+    # reports the face never changed.
+    fired = sim.tail.mark()
+    why = press_menu(
+        sim, "$btn1", "BTN1 to fire the MEDICAL ID row", MENU_CLOSED
+    ).group(1)
+    if why != "medical id":
+        raise SmokeFailure(
+            f"firing the MEDICAL ID row closed the menu for '{why}' — the row is "
+            "meant to hand the screen to the card, which is the only confirmation "
+            "the runner gets that it did anything"
+        )
+    view = sim.wait(
+        IDLE_VIEW,
+        MENU_STEP_TIMEOUT,
+        "the ui task to compose the ICE card after the MEDICAL ID row fired",
+        start=fired,
+    ).group(1)
+    if view != "Ice":
+        raise SmokeFailure(
+            f"the MEDICAL ID row closed the menu but the face went to {view}, not "
+            "Ice — the row fired and left the runner somewhere else"
+        )
+    passed("the menu's MEDICAL ID row fires and hands the screen to the ICE card")
+
 
 SCENARIOS = {
     "smoke": scenario_smoke,
@@ -2094,7 +2196,7 @@ SCENARIOS = {
     "terrain": scenario_terrain,
     "dropout": scenario_dropout,
     "screens": scenario_screens,
-    "settings": scenario_settings,
+    "idle": scenario_idle,
 }
 
 
@@ -2233,7 +2335,7 @@ def main():
             "terrain",
             "dropout",
             "screens",
-            "settings",
+            "idle",
             "all",
         ),
         default="all",
