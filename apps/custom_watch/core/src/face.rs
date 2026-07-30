@@ -805,11 +805,11 @@ pub fn page_hero(
                 if w.remaining_m >= 1000 {
                     let _ = write!(
                         row,
-                        "{:.2} KM",
+                        "{:.2}",
                         (f64::from(w.remaining_m) / 1000.0).min(999.99)
                     );
                 } else {
-                    let _ = write!(row, "{} M", w.remaining_m);
+                    let _ = write!(row, "{}", w.remaining_m);
                 }
                 row
             }
@@ -1031,6 +1031,88 @@ fn trackback_distance(tb: Option<&TrackbackView>) -> Option<f32> {
     tb.filter(|n| n.active()).map(|n| n.distance_to_start_m)
 }
 
+/// The unit a sub-kilometre distance is read in, and the one it is read in
+/// beyond — the same threshold [`page_hero`] switches its own formatting at, so
+/// the unit and the number it labels can never disagree about scale.
+fn distance_unit(m: f32) -> &'static str {
+    if m < 1000.0 {
+        "M"
+    } else {
+        "KM"
+    }
+}
+
+/// The unit belonging with `page`'s hero number, drawn at 1x against the hero's
+/// own baseline — `None` when the hero needs none (a clock time reads as a
+/// time) or when the page has no hero at all.
+///
+/// The unit cannot simply be appended to the hero string. The numeral faces
+/// carry digits, `.`, `:`, `-` and `+` and nothing else, so one letter demotes
+/// the whole value to the pixel-doubled text font
+/// ([`crate::ui_frame::numeral_hero`]) — which is exactly why these units had
+/// drifted down onto the label row, two rows under the number they measure,
+/// leaving a bare `0.08` over a `DISTANCE  KM` that reads as a heading rather
+/// than as this number's unit. Returning it separately lets the app keep the
+/// numeral face *and* keep the unit with its number
+/// ([`crate::ui_frame::hero_unit_cell`] places it, § 361).
+///
+/// Whether it is actually drawn is the app's call, gated on
+/// [`crate::ui_frame::hero_has_value`]: a unit beside a `--` placeholder
+/// measures nothing. That gate is one rule for every page rather than each arm
+/// here re-deriving its own fed check.
+pub fn page_hero_unit(
+    page: Page,
+    rec: Option<&Snapshot>,
+    tb: Option<&TrackbackView>,
+) -> Option<&'static str> {
+    let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
+    match page {
+        Page::Distance | Page::Splits | Page::DistanceBand | Page::Roadbook => Some("KM"),
+        Page::Pace | Page::TrainingPaces => Some("/KM"),
+        Page::Zones => Some("BPM"),
+        // Both are metres of altitude — ascent still to climb, and the run's
+        // latest banked sample.
+        Page::Climb | Page::ElevationProfile => Some("M"),
+        Page::Fuel => Some("G"),
+        Page::GearWear => Some("%"),
+        Page::BackToStart => trackback_distance(tb).map(distance_unit),
+        Page::Waypoint => snap.waypoint.map(|w| distance_unit(w.distance_m)),
+        // A duration step's hero is a countdown; only the distance axis has a
+        // unit, and only while the workout is still running.
+        Page::Workout => snap
+            .workout
+            .filter(|w| !w.complete && !w.duration_based)
+            .map(|w| distance_unit(w.remaining_m as f32)),
+        // Times (elapsed, lap, partner delta, cut-off margin, cue countdown,
+        // projected race time, daylight countdown) carry their own meaning; the
+        // training-load score and the VO2 ceiling are dimensionless as shown;
+        // Nav has no hero and the synced-summary pages label theirs in-row.
+        Page::Dashboard
+        | Page::Lap
+        | Page::Pacer
+        | Page::GuidedRun
+        | Page::CutoffEta
+        | Page::RacePredictor
+        | Page::TrainingLoad
+        | Page::Fitness
+        | Page::Daylight
+        | Page::Nav
+        | Page::TurnCue
+        | Page::Recap
+        | Page::Streaks
+        | Page::RunStats
+        | Page::PrRecency
+        | Page::PlanReplan
+        | Page::PlanAdaptive
+        | Page::Readiness
+        | Page::Goals
+        | Page::RouteSimplify
+        | Page::AutoEffort
+        | Page::RouteElev
+        | Page::RaceDay => None,
+    }
+}
+
 /// The row a glance page's empty-body reason rides, and the row its remedy
 /// follows on. Fixed across every page so the wording is always in the same
 /// place — the Nav page is the one exception, its map panel owns these rows and
@@ -1081,8 +1163,8 @@ fn glance(
     // runner takes at arm's length); the state tag rides the label row's right
     // cells instead, clear of the digits.
     let label = match metric {
-        GlanceMetric::Distance => "DISTANCE  KM",
-        GlanceMetric::Pace => "AVG PACE  /KM",
+        GlanceMetric::Distance => "DISTANCE",
+        GlanceMetric::Pace => "AVG PACE",
     };
     let _ = write!(rows[3], "{}", label);
     if tag_shown(tag, uptime_s, animate) {
@@ -2675,17 +2757,7 @@ fn back_to_start_glance(
         write_tag(&mut rows[0], tag);
     }
 
-    match trackback_distance(tb) {
-        Some(d) if d < 1000.0 => {
-            let _ = write!(rows[2], "TO START  M");
-        }
-        Some(_) => {
-            let _ = write!(rows[2], "TO START  KM");
-        }
-        None => {
-            let _ = write!(rows[2], "TO START");
-        }
-    }
+    let _ = write!(rows[2], "TO START");
 
     let heading = tb.and_then(|n| n.heading_sector(uptime_s));
     let bearing = tb.filter(|n| n.active()).and_then(|n| n.bearing_sector());
@@ -2778,7 +2850,7 @@ fn climb_glance(
 
     match snap.climb.ahead {
         Some(a) => {
-            let _ = write!(rows[2], "TO CREST  M");
+            let _ = write!(rows[2], "TO CREST");
             write_climb_distance(&mut rows[3], "IN", a.distance_m);
             let _ = write!(rows[4], "{:<8}{:.0}%", "GRADE", a.avg_grade_pct);
             if let Some(c) = snap.climb.active {
@@ -2791,7 +2863,7 @@ fn climb_glance(
             // and the rows describe the climb it came from rather than
             // inventing a crest the watch cannot see.
             let c = snap.climb.active.unwrap_or_default();
-            let _ = write!(rows[2], "CLIMBED  M");
+            let _ = write!(rows[2], "CLIMBED");
             write_climb_distance(&mut rows[3], "OVER", c.distance_m);
             let _ = write!(rows[4], "{:<8}{:.0}%", "GRADE", c.avg_grade_pct);
         }
@@ -2837,11 +2909,7 @@ fn waypoint_glance(
         return rows;
     };
 
-    if w.distance_m < 1000.0 {
-        let _ = write!(rows[2], "TO WPT  M");
-    } else {
-        let _ = write!(rows[2], "TO WPT  KM");
-    }
+    let _ = write!(rows[2], "TO WPT");
 
     match tb.and_then(|n| n.heading_sector(uptime_s)) {
         Some(s) => {
@@ -3656,8 +3724,11 @@ mod tests {
         // elapsed hero leaves three cells, which the battery tag clears and the
         // five-cell `DRINK` does not. The fuel reminder still gets its transient
         // banner — this row is only its standing backstop.
-        let wide =
-            crate::ui_frame::hero_row_cells(crate::ui_frame::HeroBand::MedNumHero, "100:05:30");
+        let wide = crate::ui_frame::hero_row_cells(
+            crate::ui_frame::HeroBand::MedNumHero,
+            "100:05:30",
+            None,
+        );
         assert_eq!(wide, 18);
         assert!(fits(FuelOverdue::None, Some(12), wide));
         assert!(!fits(FuelOverdue::Drink, None, wide));
@@ -3667,15 +3738,23 @@ mod tests {
     fn the_hero_row_span_follows_the_face_the_band_chose() {
         use crate::ui_frame::{hero_row_cells, HeroBand};
         // A banner owns the whole band, which is the point of a banner.
-        assert_eq!(hero_row_cells(HeroBand::AlertBanner, ""), COLS);
-        assert_eq!(hero_row_cells(HeroBand::RezeroBanner, ""), COLS);
-        assert_eq!(hero_row_cells(HeroBand::None, "3:12:05"), 0);
+        assert_eq!(hero_row_cells(HeroBand::AlertBanner, "", None), COLS);
+        assert_eq!(hero_row_cells(HeroBand::RezeroBanner, "", None), COLS);
+        assert_eq!(hero_row_cells(HeroBand::None, "3:12:05", None), 0);
         // Two cells per doubled character, four per tall-face leading digit.
-        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "3:12:05"), 14);
-        assert_eq!(hero_row_cells(HeroBand::TextHero, "3:12:05"), 14);
-        assert_eq!(hero_row_cells(HeroBand::BigNumHero, "32.40"), 14);
+        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "3:12:05", None), 14);
+        assert_eq!(hero_row_cells(HeroBand::TextHero, "3:12:05", None), 14);
+        assert_eq!(hero_row_cells(HeroBand::BigNumHero, "32.40", None), 14);
         // The 100-hour dashboard hero that motivated the clearance rule.
-        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "100:05:30"), 18);
+        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "100:05:30", None), 18);
+        // A two-row face puts the unit on the marker row, so the marker has to
+        // clear it too; the three-row face's unit sits a row lower and cannot
+        // reach the marker.
+        assert_eq!(hero_row_cells(HeroBand::MedNumHero, "152", Some("BPM")), 9);
+        assert_eq!(
+            hero_row_cells(HeroBand::BigNumHero, "32.40", Some("KM")),
+            14
+        );
     }
 
     #[test]
@@ -4046,6 +4125,73 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// § 361: a unit is a label for a hero, so it must have one to label, and it
+    /// must fit beside it in the band the frame would actually choose. Walked
+    /// over the fed and the unfed body of every page, because the unit is
+    /// suppressed on a placeholder and the two branches produce different hero
+    /// widths.
+    #[test]
+    fn every_hero_unit_has_a_hero_to_label_and_room_beside_it() {
+        use crate::ui_frame::{
+            hero_band, hero_has_value, hero_unit_cell, numeral_hero, tall_hero_fits, HeroFrame,
+        };
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let mut labelled = 0;
+        for rec in [&fed, &unfed] {
+            let mut p = Page::default();
+            loop {
+                let hero = page_hero(p, Some(152), Some(rec), Some(&nav_east(500, 6.0)));
+                let unit = page_hero_unit(p, Some(rec), Some(&nav_east(500, 6.0)));
+                if let Some(unit) = unit {
+                    let hero = hero.as_deref().unwrap_or_else(|| {
+                        panic!("page {p:?} claims the unit {unit:?} with no hero to label")
+                    });
+                    assert!(!unit.is_empty(), "page {p:?} claims an empty unit");
+                    if !hero_has_value(hero) {
+                        // A placeholder body suppresses the unit at the frame,
+                        // so there is nothing to place.
+                        p = p.next();
+                        if p == Page::default() {
+                            break;
+                        }
+                        continue;
+                    }
+                    let band = hero_band(HeroFrame {
+                        alert: false,
+                        rezero_banner: false,
+                        hero: true,
+                        numeral: numeral_hero(hero),
+                        fits_tall: tall_hero_fits(hero, Some(unit)),
+                        stop_pending: false,
+                        page: p,
+                    });
+                    let (col, row) = hero_unit_cell(band, hero, unit).unwrap_or_else(|| {
+                        panic!("page {p:?} has no room for {unit:?} beside {hero:?} ({band:?})")
+                    });
+                    assert!(
+                        col + unit.len() <= COLS,
+                        "page {p:?} unit overruns the grid"
+                    );
+                    // The unit rides the hero band, whose rows every page's own
+                    // text already leaves clear — so it can never land on a
+                    // metric row.
+                    assert!(
+                        row < body_top_row(p),
+                        "page {p:?} puts {unit:?} on row {row}, inside its own body"
+                    );
+                    labelled += 1;
+                }
+                p = p.next();
+                if p == Page::default() {
+                    break;
+                }
+            }
+        }
+        // The sweep is only worth anything if it actually reached some units.
+        assert!(labelled >= 12, "only {labelled} hero units placed");
     }
 
     /// [`write_tag`] refuses rather than truncates, so a header that grew into
@@ -4761,7 +4907,7 @@ mod tests {
         // the right-anchored state tag share row 3.
         assert_eq!(rows[0].as_str(), "");
         assert_eq!(rows[2].as_str(), "");
-        assert_eq!(rows[3].as_str(), "DISTANCE  KM      REC");
+        assert_eq!(rows[3].as_str(), "DISTANCE          REC");
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
@@ -4825,7 +4971,7 @@ mod tests {
                 .as_str(),
             "5:12"
         );
-        assert_eq!(rows[3].as_str(), "AVG PACE  /KM     REC");
+        assert_eq!(rows[3].as_str(), "AVG PACE          REC");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(rows[7].as_str(), "GAP  4:52 /KM");
@@ -5587,8 +5733,9 @@ mod tests {
             page_hero(Page::Workout, Some(152), Some(&rec), None)
                 .unwrap()
                 .as_str(),
-            "120 M"
+            "120"
         );
+        assert_eq!(page_hero_unit(Page::Workout, Some(&rec), None), Some("M"));
         assert_eq!(rows[2], header("REP 2/6", "REC"));
         assert_eq!(rows[3].as_str(), "TGT  400 M @ 4:00");
         assert_eq!(rows[4].as_str(), "GONE 280 M  70%");
@@ -5727,8 +5874,14 @@ mod tests {
             page_hero(Page::Workout, None, Some(&rec), None)
                 .unwrap()
                 .as_str(),
-            "9.60 KM"
+            "9.60"
         );
+        // The unit moved to its own channel, which is what lets the number
+        // itself render in the numeral face: `9.60 KM` had a space and two
+        // letters the faces cannot spell, so the whole hero fell back to the
+        // pixel-doubled text font.
+        assert_eq!(page_hero_unit(Page::Workout, Some(&rec), None), Some("KM"));
+        assert!(crate::ui_frame::numeral_hero("9.60"));
     }
 
     #[test]
@@ -6298,7 +6451,7 @@ mod tests {
             active: Some(ON_A_CLIMB),
             ahead: Some(CREST),
         });
-        assert_eq!(rows[2].as_str(), "TO CREST  M");
+        assert_eq!(rows[2].as_str(), "TO CREST");
         assert_eq!(rows[3].as_str(), "IN      600 M");
         assert_eq!(rows[4].as_str(), "GRADE   13%");
         assert_eq!(rows[6].as_str(), "CLIMBED 120 M");
@@ -6322,7 +6475,7 @@ mod tests {
             ahead: None,
         };
         let rows = climb_rows(view);
-        assert_eq!(rows[2].as_str(), "CLIMBED  M");
+        assert_eq!(rows[2].as_str(), "CLIMBED");
         assert_eq!(rows[3].as_str(), "OVER    1.4 KM");
         assert_eq!(rows[4].as_str(), "GRADE   9%");
         assert_eq!(rows[6].as_str(), "");
@@ -6354,7 +6507,7 @@ mod tests {
             active: None,
             ahead: Some(CREST),
         });
-        assert_eq!(rows[2].as_str(), "TO CREST  M");
+        assert_eq!(rows[2].as_str(), "TO CREST");
         assert_eq!(rows[6].as_str(), "", "no banked block without a climb");
     }
 
@@ -6380,7 +6533,7 @@ mod tests {
             20,
             false,
         );
-        assert_eq!(rows[2].as_str(), "TO WPT  M");
+        assert_eq!(rows[2].as_str(), "TO WPT");
         assert_eq!(rows[3].as_str(), "HDG   E");
         assert_eq!(rows[4].as_str(), "BRG   NE");
         assert_eq!(rows[5].as_str(), "AGO   0:10");
@@ -6408,7 +6561,7 @@ mod tests {
             20,
             false,
         );
-        assert_eq!(rows[2].as_str(), "TO WPT  KM");
+        assert_eq!(rows[2].as_str(), "TO WPT");
         assert_eq!(
             page_hero(Page::Waypoint, None, Some(&rec), None)
                 .unwrap()
@@ -6502,7 +6655,7 @@ mod tests {
             "120"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "TO START  M");
+        assert_eq!(rows[2].as_str(), "TO START");
         assert_eq!(rows[3].as_str(), "HDG  E");
         assert_eq!(rows[4].as_str(), "BRG  W");
         // A live arrow: its text spot stays blank for the app's drawing.
@@ -6526,7 +6679,7 @@ mod tests {
             500,
             true,
         );
-        assert_eq!(rows[2].as_str(), "TO START  KM");
+        assert_eq!(rows[2].as_str(), "TO START");
         assert_eq!(
             page_hero(Page::BackToStart, None, Some(&rec), Some(&nav))
                 .unwrap()

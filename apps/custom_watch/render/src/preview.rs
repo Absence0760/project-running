@@ -147,25 +147,36 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         fb,
         page,
         face::page_hero(page, Some(&fix), hr, snap, None, 100, None).as_deref(),
+        face::page_hero_unit(page, snap, None),
     );
 }
 
 // Through `ui_frame::hero_band`, not a second copy of the face test the ui task
-// runs — the preview's whole value is being the same composition.
-fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>) {
-    match ui_frame::hero_band(HeroFrame {
+// runs — the preview's whole value is being the same composition. Same order as
+// the ui task: unit before the band (it is part of the tall face's width
+// budget), hero, then the unit on the number's baseline.
+fn draw_hero(fb: &mut Framebuffer, page: Page, hero: Option<&str>, unit: Option<&'static str>) {
+    let unit = hero.filter(|h| ui_frame::hero_has_value(h)).and(unit);
+    let band = ui_frame::hero_band(HeroFrame {
         alert: false,
         rezero_banner: false,
         hero: hero.is_some(),
         numeral: hero.is_some_and(ui_frame::numeral_hero),
-        fits_tall: hero.is_some_and(ui_frame::tall_hero_fits),
+        fits_tall: hero.is_some_and(|h| ui_frame::tall_hero_fits(h, unit)),
         stop_pending: false,
         page,
-    }) {
+    });
+    match band {
         HeroBand::BigNumHero => fb.draw_bignum_hero(0, hero.unwrap()),
         HeroBand::MedNumHero => fb.draw_bignum_med_hero(0, hero.unwrap()),
         HeroBand::TextHero => fb.draw_text_2x(0, 0, hero.unwrap()),
         HeroBand::AlertBanner | HeroBand::RezeroBanner | HeroBand::None => {}
+    }
+    if let Some(((col, row), u)) = hero
+        .zip(unit)
+        .and_then(|(h, u)| ui_frame::hero_unit_cell(band, h, u).map(|cell| (cell, u)))
+    {
+        fb.draw_text(col, row, u);
     }
 }
 
@@ -358,12 +369,18 @@ fn preview_run_view_low_battery_marker() {
         ui_frame::hero_row_cells(
             ui_frame::HeroBand::MedNumHero,
             hero.as_deref().unwrap_or(""),
+            None,
         ),
     );
     for (r, row) in rows.iter().enumerate() {
         widgets::ruled_dashboard_row(&mut fb, r, row);
     }
-    draw_hero(&mut fb, Page::Dashboard, hero.as_deref());
+    draw_hero(
+        &mut fb,
+        Page::Dashboard,
+        hero.as_deref(),
+        face::page_hero_unit(Page::Dashboard, Some(&snap), None),
+    );
     widgets::draw_page_indicator(
         &mut fb,
         watch_core::statusbar::page_indicator(Page::Dashboard, u64::MAX),
@@ -438,7 +455,7 @@ fn preview_a_hero_too_wide_for_the_tall_face() {
         remaining_s: 100 * 3600 + 5 * 60 + 30,
     });
     let hero = face::page_hero(Page::GuidedRun, None, None, Some(&snap), None, 100, None).unwrap();
-    assert!(!ui_frame::tall_hero_fits(&hero), "{hero}");
+    assert!(!ui_frame::tall_hero_fits(&hero, None), "{hero}");
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::GuidedRun, Some(&snap), None);
     widgets::draw_page_indicator(
@@ -811,6 +828,7 @@ fn preview_back_to_start_page() {
             None,
         )
         .as_deref(),
+        face::page_hero_unit(Page::BackToStart, Some(&snap), Some(&view)),
     );
     widgets::draw_page_indicator(
         &mut fb,
