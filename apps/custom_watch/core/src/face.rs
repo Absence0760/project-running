@@ -410,6 +410,17 @@ pub const DASH_FIELD_TOP_ROW: usize = 2;
 pub const DASH_SPLIT_ROW: usize = 4;
 pub const DASH_SPLIT_COL: usize = 10;
 
+/// The blank five cells an iconned row leaves for its 16x16 gutter glyph. Two
+/// cells carry the icon; the other three are the gap before the value, so a
+/// glyph and a numeral never touch.
+const GUTTER: &str = "     ";
+
+/// The bottom row. Every run page ends on the GPS glance, so this is the one
+/// row whose meaning is fixed across the whole cycle — which is what lets
+/// [`page_icons`] label it with the satellite glyph everywhere instead of each
+/// page spelling the word `GPS` in five of its twenty-one cells (§ 361).
+pub const GPS_ROW: usize = ROWS - 1;
+
 /// The diagnostics row carrying the numeric battery read-out: the HR row —
 /// every diagnostics row is claimed, and this is the one with slack
 /// (`HR   152 BPM` is 12 cells, the widest `BAT 100%` tag needs 8, COLS is
@@ -554,9 +565,9 @@ pub fn face_rows(
 }
 
 /// The icon that sits in each row's left gutter, paired 1:1 with [`face_rows`].
-/// Only the run dashboard carries icons — the idle status face is all text, so
-/// every slot is `None` there. The dashboard's icon rows leave their gutter (the
-/// first five cells) blank so the blitted 16x16 glyph never collides with text.
+/// The idle status face is all text, so every slot is `None` there. An iconned
+/// row leaves its gutter (the first five cells, [`GUTTER`]) blank so the
+/// blitted 16x16 glyph never collides with text.
 ///
 /// Two gutter icons animate off `uptime_s` (so the choice stays a pure,
 /// host-tested function of the inputs, not a hidden timer): the HR heart pulses
@@ -569,27 +580,7 @@ pub fn face_icons(
     uptime_s: u32,
     mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
-    dashboard_icons(fix, hr_bpm, rec, uptime_s, true, mode)
-}
-
-fn dashboard_icons(
-    fix: Option<&Fix>,
-    hr_bpm: Option<u16>,
-    rec: Option<&Snapshot>,
-    uptime_s: u32,
-    animate: bool,
-    mode: GnssMode,
-) -> [Option<FaceIcon>; ROWS] {
-    let mut icons = [None; ROWS];
-    if rec.and_then(rec_tag).is_some() {
-        // Rows 0-1 are the 2x time hero (no gutter icon). Row 2 down carry them.
-        icons[2] = Some(FaceIcon::Footsteps);
-        icons[5] = Some(heart_icon(hr_bpm, uptime_s, animate));
-        icons[6] = Some(FaceIcon::Mountain);
-        icons[7] = Some(FaceIcon::Vert);
-        icons[8] = Some(gps_icon(fix, uptime_s, animate, stale_after_s(mode, true)));
-    }
-    icons
+    page_icons(Page::Dashboard, fix, hr_bpm, rec, uptime_s, true, mode)
 }
 
 /// The elapsed run time for the dashboard's 2x hero band (rows 0-1), or `None`
@@ -703,9 +694,15 @@ pub fn page_rows(
     }
 }
 
-/// Gutter icons for `page`. Only the dashboard carries them; the glance pages
-/// are text + a single 2x hero, so every slot is `None`. `animate` gates the
-/// heart pulse + GPS-search cycle (see [`dashboard_icons`]).
+/// Gutter icons for `page`. `animate` gates the heart pulse + GPS-search cycle.
+///
+/// Every run page ends on the GPS glance ([`GPS_ROW`]), so the satellite glyph
+/// labels that row on all of them rather than only on the dashboard (§ 361).
+/// The word `GPS` cost five of twenty-one cells on twenty-one pages to say
+/// what the glyph the dashboard already used says in two — and its search-arc
+/// frames additionally say *acquiring* without spending a cell on the word.
+/// The dashboard's other four icons are its own: it is the only page whose
+/// rows are a fixed metric list.
 pub fn page_icons(
     page: Page,
     fix: Option<&Fix>,
@@ -715,45 +712,21 @@ pub fn page_icons(
     animate: bool,
     mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
-    match page {
-        Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate, mode),
-        Page::Distance
-        | Page::Pace
-        | Page::Lap
-        | Page::Splits
-        | Page::Zones
-        | Page::Pacer
-        | Page::GuidedRun
-        | Page::Workout
-        | Page::RacePredictor
-        | Page::TrainingLoad
-        | Page::DistanceBand
-        | Page::CutoffEta
-        | Page::Roadbook
-        | Page::Fuel
-        | Page::Nav
-        | Page::BackToStart
-        | Page::GearWear
-        | Page::TrainingPaces
-        | Page::Fitness
-        | Page::ElevationProfile
-        | Page::Recap
-        | Page::Streaks
-        | Page::RunStats
-        | Page::PrRecency
-        | Page::PlanReplan
-        | Page::PlanAdaptive
-        | Page::Readiness
-        | Page::Goals
-        | Page::TurnCue
-        | Page::RouteSimplify
-        | Page::AutoEffort
-        | Page::RouteElev
-        | Page::RaceDay
-        | Page::Daylight
-        | Page::Waypoint
-        | Page::Climb => [None; ROWS],
+    let mut icons = [None; ROWS];
+    // The idle status face is all text — it pairs a spelled-out GPS row with a
+    // dedicated MODE row, and has no icon gutter to blit into.
+    if rec.and_then(rec_tag).is_none() {
+        return icons;
     }
+    icons[GPS_ROW] = Some(gps_icon(fix, uptime_s, animate, stale_after_s(mode, true)));
+    if page == Page::Dashboard {
+        // Rows 0-1 are the 2x time hero (no gutter icon). Row 2 down carry them.
+        icons[2] = Some(FaceIcon::Footsteps);
+        icons[5] = Some(heart_icon(hr_bpm, uptime_s, animate));
+        icons[6] = Some(FaceIcon::Mountain);
+        icons[7] = Some(FaceIcon::Vert);
+    }
+    icons
 }
 
 /// The hero string for `page`: elapsed time on the dashboard, the page's
@@ -1146,7 +1119,7 @@ fn glance(
         write_pace(&mut rows[7], "GAP", snap.gap_s_per_km);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1218,7 +1191,7 @@ fn lap_glance(
 
     write_hr(&mut rows[6], "HR", hr_bpm, &snap.zone_cutoffs);
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1268,7 +1241,7 @@ fn zones_glance(
         let _ = write!(rows[3 + i], "Z{} {:<9}", i + 1, split_row(t).as_str());
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1334,7 +1307,7 @@ fn pacer_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1427,7 +1400,7 @@ fn guided_run_glance(
         write_tag(&mut rows[body_top_row(Page::GuidedRun)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1576,7 +1549,7 @@ fn workout_glance(
         write_tag(&mut rows[body_top_row(Page::Workout)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1632,7 +1605,7 @@ fn race_predictor_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1701,7 +1674,7 @@ fn cutoff_glance(
         write_tag(&mut rows[body_top_row(Page::CutoffEta)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1727,7 +1700,7 @@ fn splits_glance(
     // fastest right); this labels the axis and leaves those rows blank for it.
     let _ = write!(rows[2], "PACE DIST  SLOW>FAST");
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1781,7 +1754,7 @@ fn training_load_glance(
         write_tag(&mut rows[body_top_row(Page::TrainingLoad)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1829,7 +1802,7 @@ fn distance_band_glance(
         write_tag(&mut rows[body_top_row(Page::DistanceBand)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1884,7 +1857,7 @@ fn roadbook_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1930,7 +1903,7 @@ fn fuel_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -1974,7 +1947,7 @@ fn gear_wear_glance(
         write_tag(&mut rows[body_top_row(Page::GearWear)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2021,7 +1994,7 @@ fn training_paces_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2077,7 +2050,7 @@ fn fitness_glance(
         write_tag(&mut rows[body_top_row(Page::Fitness)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2156,7 +2129,7 @@ fn daylight_glance(
         write_tag(&mut rows[body_top_row(Page::Daylight)], tag);
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2208,7 +2181,7 @@ fn elevation_profile_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2225,7 +2198,7 @@ fn summary_frame(
     if tag_shown(tag, uptime_s, animate) {
         write_tag(&mut rows[0], tag);
     }
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
 }
 
 /// The Recap glance: the synced Year/Month-in-Running totals. Unfed until the
@@ -2656,7 +2629,7 @@ fn nav_page(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2750,7 +2723,7 @@ fn back_to_start_glance(
         let _ = write!(rows[6], "  --");
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2799,7 +2772,7 @@ fn climb_glance(
         // Settled, not unfed: flat ground with no ascent ahead is a real
         // answer, and it must not read like a sync that never happened.
         write_unfed(&mut rows, Page::Climb, "CLIMB", Unfed::NoClimb);
-        write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
         return rows;
     }
 
@@ -2824,7 +2797,7 @@ fn climb_glance(
         }
     }
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2860,7 +2833,7 @@ fn waypoint_glance(
             Unfed::AwaitingFix
         };
         write_unfed(&mut rows, Page::Waypoint, "WAYPOINT", why);
-        write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
         return rows;
     };
 
@@ -2901,7 +2874,7 @@ fn waypoint_glance(
     }
     let _ = write!(rows[6], "{:<6}{}", "MARKS", w.count);
 
-    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -2970,7 +2943,6 @@ fn dashboard(
     animate: bool,
     mode: GnssMode,
 ) -> [Row; ROWS] {
-    const GUTTER: &str = "     ";
     let mut rows: [Row; ROWS] = Default::default();
 
     // Rows 0-1 hold the 2x elapsed-time hero (drawn by the app). Only the
@@ -3022,7 +2994,7 @@ fn dashboard(
         }
     }
 
-    write_gps_row(&mut rows[8], "", fix, uptime_s, mode);
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
     rows
 }
 
@@ -3315,11 +3287,14 @@ fn gps_value(fix: Option<&Fix>, uptime_s: u32, stale_after: u32) -> Row {
 /// always shows which fix cadence (and battery trade) the run is on. Run
 /// layouts only — the idle status face pairs its plain GPS row with the
 /// dedicated MODE row instead.
-fn write_gps_row(row: &mut Row, label: &str, fix: Option<&Fix>, uptime_s: u32, mode: GnssMode) {
+///
+/// The label is always the blank icon gutter: [`page_icons`] blits the
+/// satellite glyph into those cells on every run page, so the row never spells
+/// the word (see the § 361 note on [`GPS_ROW`]).
+fn write_gps_row(row: &mut Row, fix: Option<&Fix>, uptime_s: u32, mode: GnssMode) {
     let _ = write!(
         row,
-        "{:<5}{} {}",
-        label,
+        "{GUTTER}{} {}",
         gps_value(fix, uptime_s, stale_after_s(mode, true)).as_str(),
         mode.label()
     );
@@ -4471,6 +4446,73 @@ mod tests {
             .all(Option::is_none));
     }
 
+    /// Every run page but the dashboard carries exactly one gutter icon: the
+    /// satellite labelling [`GPS_ROW`]. Called beside each page's own row
+    /// expectations, and swept over the whole cycle by
+    /// `every_run_page_labels_its_gps_row_with_the_satellite`.
+    fn only_the_gps_icon(page: Page, rec: &Snapshot, uptime_s: u32) {
+        let icons = page_icons(page, Some(&fix()), Some(152), Some(rec), uptime_s, true);
+        for (row, icon) in icons.iter().enumerate() {
+            let want = (row == GPS_ROW).then_some(FaceIcon::Satellite);
+            assert_eq!(*icon, want, "{page:?} row {row}");
+        }
+    }
+
+    /// The § 361 contract: the bottom row means the same thing on every run
+    /// page, so the glyph labels it on every run page — and the five cells the
+    /// word `GPS` used to hold stay blank for it. Both halves are asserted
+    /// together, because an icon without the cleared gutter blits over the
+    /// value and a cleared gutter without the icon leaves the row unlabelled.
+    #[test]
+    fn every_run_page_labels_its_gps_row_with_the_satellite() {
+        let rec = fed_snapshot();
+        let e = elev(1_650.0, 540.0, 120.0);
+        let mut p = Page::default();
+        loop {
+            let icons = page_icons(p, Some(&fix()), Some(152), Some(&rec), 42, true);
+            assert_eq!(
+                icons[GPS_ROW],
+                Some(FaceIcon::Satellite),
+                "{p:?} GPS row unlabelled"
+            );
+            let rows = page_rows(
+                p,
+                Some(&fix()),
+                Some(152),
+                Some(&rec),
+                Some(&e),
+                NavView::NoCourse,
+                None,
+                42,
+                true,
+            );
+            assert!(
+                rows[GPS_ROW].as_str().starts_with(GUTTER),
+                "{p:?} GPS row writes into the icon gutter: {:?}",
+                rows[GPS_ROW]
+            );
+            if p != Page::Dashboard {
+                only_the_gps_icon(p, &rec, 42);
+            }
+            p = p.next();
+            if p == Page::default() {
+                break;
+            }
+        }
+        // Idle keeps the spelled label and no gutter at all — it has a
+        // dedicated MODE row instead, so the mode tag the glyph rows carry is
+        // not there to shorten.
+        let idle = snapshot(RecordState::Idle, 0.0);
+        for page in [Page::Dashboard, Page::Distance] {
+            assert!(
+                page_icons(page, Some(&fix()), Some(152), Some(&idle), 42, true)
+                    .iter()
+                    .all(Option::is_none),
+                "{page:?} iconned an idle face"
+            );
+        }
+    }
+
     #[test]
     fn heart_icon_pulses_once_per_second_while_hr_is_present() {
         let rec = snapshot(RecordState::Recording, 100.0);
@@ -4723,18 +4765,8 @@ mod tests {
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Glance pages carry no gutter icons.
-        assert!(page_icons(
-            Page::Distance,
-            Some(&fix()),
-            Some(152),
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::Distance, &rec, 42);
     }
 
     #[test]
@@ -4874,13 +4906,8 @@ mod tests {
         assert_eq!(rows[4].as_str(), "LAST 4:58");
         assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Glance pages carry no gutter icons.
-        assert!(
-            page_icons(Page::Lap, Some(&fix()), Some(152), Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::Lap, &rec, 42);
     }
 
     #[test]
@@ -5136,13 +5163,8 @@ mod tests {
         assert_eq!(rows[5].as_str(), "Z3 20:00    ");
         assert_eq!(rows[6].as_str(), "Z4 5:00     ");
         assert_eq!(rows[7].as_str(), "Z5 0:00     ");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Text-only page: no gutter icons.
-        assert!(
-            page_icons(Page::Zones, Some(&fix()), Some(152), Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::Zones, &rec, 42);
     }
 
     #[test]
@@ -5171,7 +5193,7 @@ mod tests {
             assert!(row.as_str().ends_with("0:00     "), "row: {:?}", row);
             assert!(!row.as_str().contains('#'));
         }
-        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING PERF");
+        assert_eq!(rows[8].as_str(), "     ACQUIRING PERF");
     }
 
     #[test]
@@ -5240,13 +5262,8 @@ mod tests {
         assert_eq!(rows[5].as_str(), "TGT  50:00");
         assert_eq!(rows[6].as_str(), "PROJ 47:37");
         assert_eq!(rows[7].as_str(), "DIST +140 M");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Text-only page: no gutter icons.
-        assert!(
-            page_icons(Page::Pacer, Some(&fix()), Some(152), Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::Pacer, &rec, 42);
     }
 
     #[test]
@@ -5438,7 +5455,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
         assert_eq!(rows[7].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
     }
 
     #[test]
@@ -5490,18 +5507,8 @@ mod tests {
         assert_eq!(rows[4].as_str(), "CUE     3/8");
         assert_eq!(rows[5].as_str(), "NEXT    2:30");
         assert_eq!(rows[6].as_str(), "LEFT    12:45");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Text-only page: no gutter icons.
-        assert!(page_icons(
-            Page::GuidedRun,
-            Some(&fix()),
-            Some(152),
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::GuidedRun, &rec, 42);
 
         // Past the last cue the row says so rather than showing a 0:00 that
         // reads as a cue about to fire.
@@ -5588,12 +5595,8 @@ mod tests {
         assert_eq!(rows[5].as_str(), "PACE 4:10  BEHIND");
         assert_eq!(rows[6].as_str(), "NEXT RECOVERY 200 M");
         assert_eq!(rows[7].as_str(), "STEP 3/14");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        assert!(
-            page_icons(Page::Workout, Some(&fix()), Some(152), Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::Workout, &rec, 42);
     }
 
     #[test]
@@ -5755,7 +5758,7 @@ mod tests {
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
     }
 
     #[test]
@@ -5870,7 +5873,7 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS BAL");
+        assert_eq!(rows[8].as_str(), "     8 SATS BAL");
     }
 
     #[test]
@@ -6030,14 +6033,11 @@ mod tests {
         );
         assert_eq!(rows[0].as_str(), "NAV               REC");
         assert_eq!(rows[7].as_str(), "12.34 KM  OFF 23 M");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // No hero and no gutter icons — the map panel owns rows 1-6.
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        // No hero — the map panel owns rows 1-6 — and no gutter icon above the
+        // GPS row it shares with every other page.
         assert!(page_hero(Page::Nav, Some(152), Some(&rec), None).is_none());
-        assert!(
-            page_icons(Page::Nav, Some(&fix()), Some(152), Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        only_the_gps_icon(Page::Nav, &rec, 42);
     }
 
     #[test]
@@ -6092,7 +6092,7 @@ mod tests {
             true,
         );
         assert_eq!(rows[7].as_str(), "AWAITING FIX");
-        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING PERF");
+        assert_eq!(rows[8].as_str(), "     ACQUIRING PERF");
     }
 
     #[test]
@@ -6507,13 +6507,8 @@ mod tests {
         assert_eq!(rows[4].as_str(), "BRG  W");
         // A live arrow: its text spot stays blank for the app's drawing.
         assert_eq!(rows[6].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        // Text-only page: no gutter icons.
-        assert!(
-            page_icons(Page::BackToStart, Some(&fix()), None, Some(&rec), 20, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::BackToStart, &rec, 20);
     }
 
     #[test]
@@ -6662,12 +6657,8 @@ mod tests {
         assert_eq!(rows[4].as_str(), "TO   10.00 KM");
         assert_eq!(rows[5].as_str(), "ETA  1:30:00");
         assert_eq!(rows[6].as_str(), "NEED 6:00 /KM");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
-        assert!(
-            page_icons(Page::CutoffEta, Some(&fix()), None, Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::CutoffEta, &rec, 42);
     }
 
     #[test]
@@ -6780,20 +6771,11 @@ mod tests {
         // Marathon is >4x the anchor: low confidence, flagged `~`.
         assert!(rows[6].as_str().starts_with("MAR "));
         assert!(rows[6].as_str().ends_with('~'));
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         // Hero echoes the 10K rung and is a real time, not `--`.
         let hero = page_hero(Page::RacePredictor, None, Some(&rec), None).unwrap();
         assert_ne!(hero.as_str(), "--");
-        assert!(page_icons(
-            Page::RacePredictor,
-            Some(&fix()),
-            None,
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        only_the_gps_icon(Page::RacePredictor, &rec, 42);
     }
 
     #[test]
@@ -6850,20 +6832,11 @@ mod tests {
         assert!(rows[5].as_str().starts_with("TEMPO "));
         assert!(rows[6].as_str().starts_with("INTVL "));
         assert!(rows[7].as_str().starts_with("REP   "));
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         // Hero echoes the easy pace and is a real time, not `--`.
         let hero = page_hero(Page::TrainingPaces, None, Some(&rec), None).unwrap();
         assert_ne!(hero.as_str(), "--");
-        assert!(page_icons(
-            Page::TrainingPaces,
-            Some(&fix()),
-            None,
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        only_the_gps_icon(Page::TrainingPaces, &rec, 42);
     }
 
     #[test]
@@ -6913,18 +6886,14 @@ mod tests {
         assert_eq!(rows[0].as_str(), "");
         assert_eq!(rows[3], header("FITNESS SWEET", "REC"));
         assert_eq!(rows[4].as_str(), "VO2 MAX  52");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         assert_eq!(
             page_hero(Page::Fitness, None, Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "52"
         );
-        assert!(
-            page_icons(Page::Fitness, Some(&fix()), None, Some(&rec), 42, true)
-                .iter()
-                .all(Option::is_none)
-        );
+        only_the_gps_icon(Page::Fitness, &rec, 42);
     }
 
     #[test]
@@ -7008,7 +6977,7 @@ mod tests {
         // rows 3..8 are left blank for the sparkline pixel layer.
         assert_eq!(rows[3].as_str(), "");
         assert_eq!(rows[7].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         // Hero echoes the current (latest) altitude, not `--`.
         assert_eq!(
             page_hero(Page::ElevationProfile, None, Some(&rec), None)
@@ -7016,16 +6985,7 @@ mod tests {
                 .as_str(),
             "1250"
         );
-        assert!(page_icons(
-            Page::ElevationProfile,
-            Some(&fix()),
-            None,
-            Some(&rec),
-            42,
-            true
-        )
-        .iter()
-        .all(Option::is_none));
+        only_the_gps_icon(Page::ElevationProfile, &rec, 42);
     }
 
     #[test]
