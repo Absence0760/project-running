@@ -2057,11 +2057,9 @@ fn distance_band_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let km = (snap.distance_m / 1000.0).min(9999.99);
     match snap.band {
         None => {
             write_unfed(&mut rows, Page::DistanceBand, "BAND", Unfed::NoRaceBand);
-            let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
         }
         Some(b) => {
             // The ported catalogue spells its labels for the web ("Marathon");
@@ -2080,7 +2078,6 @@ fn distance_band_glance(
                     let _ = write!(rows[4], "{:<6}{}+ KM", "RANGE", lo);
                 }
             }
-            let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
         }
     }
     if tag_shown(tag, uptime_s, animate) {
@@ -2170,16 +2167,14 @@ fn fuel_glance(
             let _ = write!(rows[2], "FUEL  TO NEXT AID");
             match f.carry {
                 Some(c) => {
-                    let _ = write!(rows[4], "{:<7}{} G", "CARB", (c.carbs_g as u32).min(9999));
-                    let _ = write!(rows[5], "{:<7}{} ML", "FLUID", (c.fluid_ml as u32));
+                    let _ = write!(rows[4], "{:<7}{} ML", "FLUID", (c.fluid_ml as u32));
                 }
                 None => {
-                    let _ = write!(rows[4], "{:<7}--", "CARB");
-                    let _ = write!(rows[5], "{}", Unfed::LastAidPassed.reason());
+                    let _ = write!(rows[4], "{}", Unfed::LastAidPassed.reason());
                 }
             }
             let _ = write!(
-                rows[6],
+                rows[5],
                 "{:<7}{}G {}ML",
                 "TOTAL",
                 (f.total_carbs_g as u32).min(9999),
@@ -2218,14 +2213,6 @@ fn gear_wear_glance(
             // One gap past the label, not out at column 11: the header row now
             // shares its right cells with the state tag.
             let _ = write!(rows[3], "{:<6}{}", "GEAR", word);
-            match g.fraction {
-                Some(fr) => {
-                    let _ = write!(rows[4], "{:<6}{} %", "WEAR", ((fr * 100.0) as u32).min(999));
-                }
-                None => {
-                    let _ = write!(rows[4], "{:<6}--", "WEAR");
-                }
-            }
         }
     }
     if tag_shown(tag, uptime_s, animate) {
@@ -4065,9 +4052,13 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.moving_s = 999 * 3600 + 59 * 60 + 59;
+        // Same five-cell width, three DIFFERENT values. Three independent
+        // fields sharing one number let a test assert the wrong one and pass,
+        // and it also made `no_page_restates_its_hero_in_a_body_row` read the
+        // Pace page's GAP row as a restatement of its avg-pace hero.
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
-        rec.current_pace_s_per_km = Some(99 * 60 + 59);
-        rec.gap_s_per_km = Some(99 * 60 + 59);
+        rec.current_pace_s_per_km = Some(98 * 60 + 58);
+        rec.gap_s_per_km = Some(97 * 60 + 57);
         rec.pace_bucket_m = [12_345.6; crate::record::PACE_BUCKET_COUNT];
         rec.training_stress = Some(9999.0);
         rec.band = crate::distance_bands::band_for_distance(42_200.0);
@@ -4115,8 +4106,11 @@ mod tests {
             longest_km: 9999,
             best_streak_days: 9999,
         });
+        // Distinct, and in the order the two counts can actually hold: a best
+        // streak is never shorter than the current one, and one number for both
+        // made the BEST row read as a restatement of the current-streak hero.
         rec.streaks = Some(StreaksView {
-            current_days: 9999,
+            current_days: 9998,
             best_days: 9999,
         });
         rec.run_stats = Some(RunStatsView {
@@ -4220,11 +4214,15 @@ mod tests {
             }])
             .unwrap(),
         );
+        // Widest values, but distinct between the two halves: the crest ahead
+        // and the climb underfoot are independent quantities, and giving them
+        // one number made the banked-gain row read as a restatement of the
+        // remaining-gain hero.
         rec.climb = crate::climb::ClimbView {
             active: Some(crate::climb::ActiveClimb {
-                gain_m: 99_999.0,
-                distance_m: 999_999.0,
-                avg_grade_pct: 99.0,
+                gain_m: 98_888.0,
+                distance_m: 888_888.0,
+                avg_grade_pct: 88.0,
             }),
             ahead: Some(crate::climb::CrestAhead {
                 gain_m: 99_999.0,
@@ -4340,6 +4338,66 @@ mod tests {
                 if p == Page::default() {
                     break;
                 }
+            }
+        }
+    }
+
+    /// § 361's other half: a page may not restate its own hero in a body row.
+    ///
+    /// A hero exists so one number is readable at arm's length; the same number
+    /// again at 8x16, two rows down, spends a row of a nine-row panel saying
+    /// nothing new. Three pages were doing it before the hero band was audited
+    /// at all (`WEAR 87 %` under an `87%` hero, `CARB 0 G` under a `0` carbs
+    /// hero, `DIST 0.08 KM` under a `0.08 KM` hero) and thirteen more would
+    /// have started when they gained heroes.
+    ///
+    /// Matched as "a body row whose value equals the hero's digits AND whose
+    /// unit equals the hero's unit". That is deliberately narrow: a row may
+    /// legitimately carry the same NUMBER as a different quantity (the Climb
+    /// page's `OVER 83 M` is a distance under an ascent hero, and would collide
+    /// at 83 m of climb over 83 m of ground), and a member of an ordered ladder
+    /// stays even when it duplicates — dropping `EASY` from the five training
+    /// paces would leave four rungs and an inference.
+    #[test]
+    fn no_page_restates_its_hero_in_a_body_row() {
+        let rec = fed_snapshot();
+        let e = elev(1_650.0, 540.0, 120.0);
+        let tb = nav_east(500, 6.0);
+        // The training-pace ladder's EASY rung IS the hero, and stays: see the
+        // doc comment. Named here so the exemption is a decision, not a hole.
+        let ladder_pages = [Page::TrainingPaces];
+        let mut p = Page::default();
+        loop {
+            let hero = page_hero(p, Some(152), Some(&rec), Some(&tb));
+            let unit = page_hero_unit(p, Some(&rec), Some(&tb));
+            if let (Some(hero), Some(unit)) = (hero.as_deref(), unit) {
+                if !ladder_pages.contains(&p) {
+                    let mut restated = Row::new();
+                    let _ = write!(restated, "{hero} {unit}");
+                    let rows = page_rows(
+                        p,
+                        Some(&fix()),
+                        Some(152),
+                        Some(&rec),
+                        Some(&e),
+                        NavView::NoCourse,
+                        None,
+                        42,
+                        true,
+                    );
+                    for (r, row) in rows.iter().enumerate().skip(body_top_row(p)) {
+                        assert!(
+                            !row.as_str().contains(restated.as_str()),
+                            "page {p:?} row {r} restates its hero ({:?}): {:?}",
+                            restated.as_str(),
+                            row.as_str()
+                        );
+                    }
+                }
+            }
+            p = p.next();
+            if p == Page::default() {
+                break;
             }
         }
     }
