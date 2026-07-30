@@ -403,6 +403,14 @@ removes.
   Each now headlines the number it is about, and the row that carried it is
   dropped rather than kept as a small copy. `Page::Nav` is exempt structurally,
   not by list — its `body_top_row` is 0, so it reserves nothing.
+- **No page restates its own hero in a body row** (§361). A hero exists so one
+  number is readable at arm's length; the same number again at 8x16 two rows
+  down spends a row of nine saying nothing new. Pinned narrowly — the guard
+  matches a row holding the hero's digits *and* its unit, because a row may
+  legitimately carry the same number as a different quantity, and a rung of an
+  ordered ladder stays even when it duplicates (dropping `EASY` from the five
+  training paces would leave four rungs and an inference, so TrainingPaces is a
+  named exemption).
 - **A hero wide enough to reach the state tag takes the whole tag** (§361).
   `write_tag` refuses rather than truncates, because a half-written `RE` names
   a different state; but the hero is drawn after the rows and is not row text,
