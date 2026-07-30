@@ -4,7 +4,7 @@
 # Nordic nRF52840 DK, and stream defmt logs over RTT until Ctrl-C.
 #
 # Thin wrapper around: cd apps/custom_watch && cargo run --release "$@"
-# Forwards extra args to cargo (e.g. --bin sensor_smoke, or --features=foo).
+# Forwards extra args to cargo (e.g. --bin app, or --features=foo).
 # Builds with the `dev-blink` feature so the bench liveness LED (LED1 @ 2 Hz)
 # is on — it's default-OFF in the crate so a plain `cargo build` stays lean.
 #
@@ -13,7 +13,7 @@
 #
 # Usage:
 #   bin/watch-flash.sh                       # flash the default binary
-#   bin/watch-flash.sh --bin sensor_smoke    # flash a specific test binary
+#   bin/watch-flash.sh --bin app    # flash a named binary (`app` is the only one today)
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
