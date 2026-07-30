@@ -755,6 +755,111 @@ pub fn page_icons(
     icons
 }
 
+/// One headline quantity the watch can state as a number.
+///
+/// This is the run view's vocabulary, factored out of the page it happens to
+/// live on. Every glance page headlines exactly one of these
+/// ([`hero_metric`]), and three pages headline the same one — Distance, Splits
+/// and DistanceBand all lead with distance covered and differ only in the body
+/// beneath. Splitting the *what* from the *where* is what makes that sayable:
+/// while it was all one `match page`, those three were three copies of an arm
+/// rather than one metric named three times, and free to diverge.
+///
+/// **Not a wire format.** These discriminants are not persisted, pushed, or
+/// stored anywhere — the enum is free to be reordered. A phone-authored screen
+/// layout would change that (it would have to name a metric by a stable byte,
+/// the way [`crate::profiles::ActivityProfile::to_byte`] does), and that byte
+/// mapping should be added *with* the frame that needs it, not guessed at now.
+///
+/// The catalogue is closed on purpose: a metric exists here because a page
+/// already headlines it, so every variant has a formatter, a unit and a `--`
+/// fallback that a real page exercises. Adding one for a slot nothing renders
+/// would be adding an untested one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Metric {
+    Elapsed,
+    Distance,
+    AvgPace,
+    LapElapsed,
+    HeartRate,
+    PacerDelta,
+    GuidedRunRemaining,
+    WorkoutRemaining,
+    RacePrediction,
+    CutoffMargin,
+    TrainingStress,
+    RoadbookNext,
+    FuelCarbs,
+    GearWear,
+    EasyPace,
+    Vo2Max,
+    Altitude,
+    DistanceToStart,
+    DaylightCountdown,
+    WaypointDistance,
+    ClimbGain,
+    RecapDistance,
+    CurrentStreak,
+    SyncedMovingTime,
+    PrAge,
+    PlanReplanChanges,
+    PlanAdaptiveChanges,
+    ReadinessScore,
+    GoalPercent,
+    TurnCueDistance,
+    RouteSimplifyDistance,
+    AutoEffortMatched,
+    RouteElevTotal,
+    RaceDayDays,
+}
+
+/// The metric `page` headlines, or `None` for the one page that headlines
+/// nothing — Nav, whose map panel owns the rows a hero would cover.
+///
+/// Matched exhaustively so a new page cannot compile until it has declared what
+/// it leads with, the same discipline [`body_top_row`] uses for the rows it
+/// reserves.
+pub const fn hero_metric(page: Page) -> Option<Metric> {
+    Some(match page {
+        Page::Nav => return None,
+        Page::Dashboard => Metric::Elapsed,
+        Page::Distance | Page::Splits | Page::DistanceBand => Metric::Distance,
+        Page::Pace => Metric::AvgPace,
+        Page::Lap => Metric::LapElapsed,
+        Page::Zones => Metric::HeartRate,
+        Page::Pacer => Metric::PacerDelta,
+        Page::GuidedRun => Metric::GuidedRunRemaining,
+        Page::Workout => Metric::WorkoutRemaining,
+        Page::RacePredictor => Metric::RacePrediction,
+        Page::CutoffEta => Metric::CutoffMargin,
+        Page::TrainingLoad => Metric::TrainingStress,
+        Page::Roadbook => Metric::RoadbookNext,
+        Page::Fuel => Metric::FuelCarbs,
+        Page::GearWear => Metric::GearWear,
+        Page::TrainingPaces => Metric::EasyPace,
+        Page::Fitness => Metric::Vo2Max,
+        Page::ElevationProfile => Metric::Altitude,
+        Page::BackToStart => Metric::DistanceToStart,
+        Page::Daylight => Metric::DaylightCountdown,
+        Page::Waypoint => Metric::WaypointDistance,
+        Page::Climb => Metric::ClimbGain,
+        Page::Recap => Metric::RecapDistance,
+        Page::Streaks => Metric::CurrentStreak,
+        Page::RunStats => Metric::SyncedMovingTime,
+        Page::PrRecency => Metric::PrAge,
+        Page::PlanReplan => Metric::PlanReplanChanges,
+        Page::PlanAdaptive => Metric::PlanAdaptiveChanges,
+        Page::Readiness => Metric::ReadinessScore,
+        Page::Goals => Metric::GoalPercent,
+        Page::TurnCue => Metric::TurnCueDistance,
+        Page::RouteSimplify => Metric::RouteSimplifyDistance,
+        Page::AutoEffort => Metric::AutoEffortMatched,
+        Page::RouteElev => Metric::RouteElevTotal,
+        Page::RaceDay => Metric::RaceDayDays,
+    })
+}
+
 /// The hero string for `page`: elapsed time on the dashboard, the page's
 /// headline metric on a glance page (the live BPM on the zones page, `--`
 /// without a pulse), or `None` when no run is under way. The Nav page never
@@ -775,18 +880,43 @@ pub fn page_hero(
     tz_offset_min: Option<i16>,
 ) -> Option<Row> {
     let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
-    Some(match page {
-        Page::Nav => return None,
-        Page::Dashboard => {
+    let metric = hero_metric(page)?;
+    Some(metric_hero(
+        metric,
+        fix,
+        hr_bpm,
+        snap,
+        tb,
+        uptime_s,
+        tz_offset_min,
+    ))
+}
+
+/// `metric`'s value as the string a hero band draws, given a live run.
+///
+/// The same metric reads the same way wherever it is headlined — which is the
+/// point of naming it — so this is keyed on the metric alone and knows nothing
+/// about which page asked.
+#[allow(clippy::too_many_arguments)]
+pub fn metric_hero(
+    metric: Metric,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
+) -> Row {
+    match metric {
+        Metric::Elapsed => {
             let (h, m, s) = hms(snap.elapsed_s);
             let mut row = Row::new();
             let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
             row
         }
-        Page::Distance => glance_hero(GlanceMetric::Distance, snap),
-        Page::Pace => glance_hero(GlanceMetric::Pace, snap),
-        Page::Lap => split_row(snap.lap_elapsed_s),
-        Page::Zones => {
+        Metric::AvgPace => glance_hero(GlanceMetric::Pace, snap),
+        Metric::LapElapsed => split_row(snap.lap_elapsed_s),
+        Metric::HeartRate => {
             let mut row = Row::new();
             match hr_bpm {
                 Some(bpm) => {
@@ -798,7 +928,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Pacer => match snap.pacer {
+        Metric::PacerDelta => match snap.pacer {
             Some(status) => signed_split(status.ahead_s),
             None => {
                 let mut row = Row::new();
@@ -808,7 +938,7 @@ pub fn page_hero(
         },
         // The guided run's countdown to its own target duration — the number a
         // runner on a scripted coach run glances at; `--` until one is armed.
-        Page::GuidedRun => match snap.guided_run {
+        Metric::GuidedRunRemaining => match snap.guided_run {
             Some(v) => split_row(v.remaining_s),
             None => {
                 let mut row = Row::new();
@@ -819,7 +949,7 @@ pub fn page_hero(
         // What's left of the active step on its own end axis — the number an
         // interval runner glances at mid-rep; DONE once the workout is, `--`
         // until one is pushed.
-        Page::Workout => match snap.workout {
+        Metric::WorkoutRemaining => match snap.workout {
             Some(w) if w.complete => {
                 let mut row = Row::new();
                 let _ = write!(row, "DONE");
@@ -848,7 +978,7 @@ pub fn page_hero(
         // The 10K projection is the headline rung (the anchor reference
         // distance, the most universally-read yardstick); the page's rows carry
         // the whole ladder.
-        Page::RacePredictor => match &snap.race_prediction {
+        Metric::RacePrediction => match &snap.race_prediction {
             Some(pred) => {
                 let (h, m, s) = hms(pred.rungs[1].predicted_s as u32);
                 let mut row = Row::new();
@@ -867,7 +997,7 @@ pub fn page_hero(
         },
         // The margin to the next cut-off: `+` slack, `-` over. `--` when there
         // is no cut-off ahead or the projection is withheld (stale / no pace).
-        Page::CutoffEta => match snap.cutoff.and_then(|c| c.margin_s) {
+        Metric::CutoffMargin => match snap.cutoff.and_then(|c| c.margin_s) {
             Some(margin_s) => signed_split(margin_s),
             None => {
                 let mut row = Row::new();
@@ -878,9 +1008,8 @@ pub fn page_hero(
         // The Splits + DistanceBand heroes both headline the run distance (the
         // number their rows contextualise); the analytics pages headline their
         // one derived value, `--` when inactive.
-        Page::Splits => glance_hero(GlanceMetric::Distance, snap),
-        Page::DistanceBand => glance_hero(GlanceMetric::Distance, snap),
-        Page::TrainingLoad => {
+        Metric::Distance => glance_hero(GlanceMetric::Distance, snap),
+        Metric::TrainingStress => {
             let mut row = Row::new();
             match snap.training_stress {
                 Some(s) => {
@@ -892,7 +1021,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Roadbook => {
+        Metric::RoadbookNext => {
             let mut row = Row::new();
             match snap.roadbook.filter(|rb| rb.upcoming_len > 0) {
                 Some(rb) => {
@@ -905,7 +1034,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Fuel => {
+        Metric::FuelCarbs => {
             let mut row = Row::new();
             match snap.fuel.and_then(|f| f.carry) {
                 Some(c) => {
@@ -917,7 +1046,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::GearWear => {
+        Metric::GearWear => {
             let mut row = Row::new();
             match snap.gear.and_then(|g| g.fraction) {
                 Some(fr) => {
@@ -931,7 +1060,7 @@ pub fn page_hero(
         }
         // The easy pace — the day-to-day training pace runners glance at most —
         // rides the hero as `m:ss`; the page's rows carry the whole zone ladder.
-        Page::TrainingPaces => {
+        Metric::EasyPace => {
             let mut row = Row::new();
             match snap.training_paces {
                 Some(tp) => {
@@ -946,7 +1075,7 @@ pub fn page_hero(
         }
         // The synced VO2 max ceiling — the recognisable fitness number — is the
         // hero, `--` until the phone pushes a snapshot.
-        Page::Fitness => {
+        Metric::Vo2Max => {
             let mut row = Row::new();
             match snap.fitness.and_then(|f| f.vo2_max) {
                 Some(v) => {
@@ -960,7 +1089,7 @@ pub fn page_hero(
         }
         // The current altitude (the run's latest banked sample) headlines the
         // profile; `--` until the first altitude sample lands.
-        Page::ElevationProfile => {
+        Metric::Altitude => {
             let mut row = Row::new();
             let ep = &snap.elev_profile;
             if ep.len > 0 {
@@ -970,7 +1099,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::BackToStart => {
+        Metric::DistanceToStart => {
             let mut row = Row::new();
             match trackback_distance(tb) {
                 Some(d) if d < 1000.0 => {
@@ -987,7 +1116,7 @@ pub fn page_hero(
         }
         // The countdown to the next sun event as H:MM (floored — the page must
         // never promise light it may not have); `--` while unfed or polar.
-        Page::Daylight => {
+        Metric::DaylightCountdown => {
             let mut row = Row::new();
             match daylight_now(fix, uptime_s, tz_offset_min) {
                 Some(daylight::Daylight::Sun(v)) => {
@@ -1002,7 +1131,7 @@ pub fn page_hero(
         // Distance to the newest mark, in the same m-then-km shape the
         // back-to-start hero uses — the two pages answer the same question
         // about different anchors and must not read differently.
-        Page::Waypoint => {
+        Metric::WaypointDistance => {
             let mut row = Row::new();
             match snap.waypoint.map(|w| w.distance_m) {
                 Some(d) if d < 1000.0 => {
@@ -1022,7 +1151,7 @@ pub fn page_hero(
         // when there is no course to look ahead down. Both are metres of
         // ascent, so the hero never changes what it means, only where it was
         // measured from; the label row says which.
-        Page::Climb => {
+        Metric::ClimbGain => {
             let mut row = Row::new();
             match climb_hero_gain(snap) {
                 Some(g) => {
@@ -1042,7 +1171,7 @@ pub fn page_hero(
         // contextualising it. Each hero here is the number the page is *about*,
         // and the row that used to carry it is dropped rather than kept as a
         // small copy of the big one.
-        Page::Recap => {
+        Metric::RecapDistance => {
             let mut row = Row::new();
             match snap.recap {
                 Some(v) => {
@@ -1054,7 +1183,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Streaks => {
+        Metric::CurrentStreak => {
             let mut row = Row::new();
             match snap.streaks {
                 Some(v) => {
@@ -1066,7 +1195,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::RunStats => match snap.run_stats {
+        Metric::SyncedMovingTime => match snap.run_stats {
             Some(v) => {
                 let (h, m, s) = hms(v.moving_s);
                 let mut row = Row::new();
@@ -1079,7 +1208,7 @@ pub fn page_hero(
                 row
             }
         },
-        Page::PrRecency => {
+        Metric::PrAge => {
             let mut row = Row::new();
             match snap.pr_recency {
                 Some(v) => {
@@ -1091,7 +1220,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::PlanReplan => {
+        Metric::PlanReplanChanges => {
             let mut row = Row::new();
             match snap.plan_replan {
                 Some(v) => {
@@ -1103,7 +1232,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::PlanAdaptive => {
+        Metric::PlanAdaptiveChanges => {
             let mut row = Row::new();
             match snap.plan_adaptive {
                 Some(v) => {
@@ -1115,7 +1244,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Readiness => {
+        Metric::ReadinessScore => {
             let mut row = Row::new();
             match snap.readiness {
                 Some(v) => {
@@ -1127,7 +1256,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::Goals => {
+        Metric::GoalPercent => {
             let mut row = Row::new();
             match snap.goals {
                 Some(v) => {
@@ -1141,7 +1270,7 @@ pub fn page_hero(
         }
         // The distance still to run to the turn — the number that counts down.
         // Its direction is a word, so it stays on the label row.
-        Page::TurnCue => {
+        Metric::TurnCueDistance => {
             let mut row = Row::new();
             match snap.turn_cue {
                 Some(v) if v.distance_m >= 1000 => {
@@ -1156,7 +1285,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::RouteSimplify => {
+        Metric::RouteSimplifyDistance => {
             let mut row = Row::new();
             match snap.route_simplify {
                 Some(v) => {
@@ -1168,7 +1297,7 @@ pub fn page_hero(
             }
             row
         }
-        Page::AutoEffort => {
+        Metric::AutoEffortMatched => {
             let mut row = Row::new();
             match snap.auto_effort {
                 Some(v) => {
@@ -1182,7 +1311,7 @@ pub fn page_hero(
         }
         // The course's length, not its climb: the gain / loss pair already has
         // the page's one text row, and rows 3..8 are the drawn profile.
-        Page::RouteElev => {
+        Metric::RouteElevTotal => {
             let mut row = Row::new();
             match snap.route_elev.as_ref() {
                 Some(v) => {
@@ -1202,7 +1331,7 @@ pub fn page_hero(
         // Days either side of the race, unsigned — the row below says which
         // side, because a minus sign in front of a countdown reads as a
         // negative number of days rather than as a date already past.
-        Page::RaceDay => {
+        Metric::RaceDayDays => {
             let mut row = Row::new();
             match snap.race_day {
                 Some(v) => {
@@ -1214,7 +1343,7 @@ pub fn page_hero(
             }
             row
         }
-    })
+    }
 }
 
 /// The back-to-start distance, or `None` before the run has a start anchor.
@@ -1257,31 +1386,43 @@ pub fn page_hero_unit(
     tb: Option<&TrackbackView>,
 ) -> Option<&'static str> {
     let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
-    match page {
-        Page::Distance
-        | Page::Splits
-        | Page::DistanceBand
-        | Page::Roadbook
-        | Page::Recap
-        | Page::RouteSimplify
-        | Page::RouteElev => Some("KM"),
-        Page::Pace | Page::TrainingPaces => Some("/KM"),
-        Page::Zones => Some("BPM"),
-        Page::Streaks | Page::PrRecency | Page::RaceDay => Some("DAYS"),
-        Page::Goals => Some("%"),
-        Page::TurnCue => snap
+    metric_unit(hero_metric(page)?, snap, tb)
+}
+
+/// The unit belonging with `metric`'s value, or `None` when it needs none.
+///
+/// Keyed on the metric rather than the page for the same reason as
+/// [`metric_hero`], and the grouping below is the evidence that the split is
+/// sound: no metric carries two different units, so re-keying could not have
+/// changed a single rendered row.
+pub fn metric_unit(
+    metric: Metric,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+) -> Option<&'static str> {
+    match metric {
+        Metric::Distance
+        | Metric::RoadbookNext
+        | Metric::RecapDistance
+        | Metric::RouteSimplifyDistance
+        | Metric::RouteElevTotal => Some("KM"),
+        Metric::AvgPace | Metric::EasyPace => Some("/KM"),
+        Metric::HeartRate => Some("BPM"),
+        Metric::CurrentStreak | Metric::PrAge | Metric::RaceDayDays => Some("DAYS"),
+        Metric::GoalPercent => Some("%"),
+        Metric::TurnCueDistance => snap
             .turn_cue
             .map(|v| distance_unit(f32::from(v.distance_m))),
         // Both are metres of altitude — ascent still to climb, and the run's
         // latest banked sample.
-        Page::Climb | Page::ElevationProfile => Some("M"),
-        Page::Fuel => Some("G"),
-        Page::GearWear => Some("%"),
-        Page::BackToStart => trackback_distance(tb).map(distance_unit),
-        Page::Waypoint => snap.waypoint.map(|w| distance_unit(w.distance_m)),
+        Metric::ClimbGain | Metric::Altitude => Some("M"),
+        Metric::FuelCarbs => Some("G"),
+        Metric::GearWear => Some("%"),
+        Metric::DistanceToStart => trackback_distance(tb).map(distance_unit),
+        Metric::WaypointDistance => snap.waypoint.map(|w| distance_unit(w.distance_m)),
         // A duration step's hero is a countdown; only the distance axis has a
         // unit, and only while the workout is still running.
-        Page::Workout => snap
+        Metric::WorkoutRemaining => snap
             .workout
             .filter(|w| !w.complete && !w.duration_based)
             .map(|w| distance_unit(w.remaining_m as f32)),
@@ -1290,21 +1431,20 @@ pub fn page_hero_unit(
         // their own meaning; the training-load score, the VO2 ceiling, a
         // readiness score, a change count and a segment-match count are
         // dimensionless as shown; Nav has no hero at all.
-        Page::Dashboard
-        | Page::Lap
-        | Page::Pacer
-        | Page::GuidedRun
-        | Page::CutoffEta
-        | Page::RacePredictor
-        | Page::TrainingLoad
-        | Page::Fitness
-        | Page::Daylight
-        | Page::Nav
-        | Page::RunStats
-        | Page::PlanReplan
-        | Page::PlanAdaptive
-        | Page::Readiness
-        | Page::AutoEffort => None,
+        Metric::Elapsed
+        | Metric::LapElapsed
+        | Metric::PacerDelta
+        | Metric::GuidedRunRemaining
+        | Metric::CutoffMargin
+        | Metric::RacePrediction
+        | Metric::TrainingStress
+        | Metric::Vo2Max
+        | Metric::DaylightCountdown
+        | Metric::SyncedMovingTime
+        | Metric::PlanReplanChanges
+        | Metric::PlanAdaptiveChanges
+        | Metric::ReadinessScore
+        | Metric::AutoEffortMatched => None,
     }
 }
 
@@ -4307,6 +4447,94 @@ mod tests {
             p = p.next();
             if p == Page::default() {
                 break;
+            }
+        }
+    }
+
+    /// Every page declares what it leads with, and only Nav leads with nothing.
+    ///
+    /// `hero_metric` is matched exhaustively, so the compiler already refuses a
+    /// page that has not been classified. What this adds is the *shape* of the
+    /// classification: exactly one page opts out, and it is the one whose map
+    /// panel owns the rows a hero would occupy.
+    #[test]
+    fn every_page_has_a_hero_metric_except_nav() {
+        let mut p = Page::default();
+        loop {
+            assert_eq!(
+                hero_metric(p).is_none(),
+                p == Page::Nav,
+                "{p:?} disagrees with page_hero about whether it has a hero"
+            );
+            p = p.next();
+            if p == Page::default() {
+                break;
+            }
+        }
+    }
+
+    /// No orphans in the catalogue.
+    ///
+    /// [`Metric`] is closed deliberately — a metric earns its place by being
+    /// some page's headline, which is what guarantees it has a formatter, a
+    /// unit and a `--` fallback that a real page exercises. A variant no page
+    /// heads is one nothing renders, and this fails rather than letting it sit
+    /// there looking supported.
+    #[test]
+    fn every_metric_is_the_hero_of_at_least_one_page() {
+        let mut headed: heapless::Vec<Metric, 40> = heapless::Vec::new();
+        let mut p = Page::default();
+        loop {
+            if let Some(m) = hero_metric(p) {
+                if !headed.contains(&m) {
+                    let _ = headed.push(m);
+                }
+            }
+            p = p.next();
+            if p == Page::default() {
+                break;
+            }
+        }
+        assert_eq!(
+            headed.len(),
+            34,
+            "the catalogue and the pages that head it have drifted: {headed:?}"
+        );
+    }
+
+    /// The claim the whole split rests on: a metric reads the same wherever it
+    /// is headlined.
+    ///
+    /// Distance, Splits and DistanceBand all lead with distance covered and
+    /// differ only in the body beneath. While that was three arms of one
+    /// `match page` it was three copies that could silently diverge — one
+    /// rounding change to a single arm and two of the three pages would have
+    /// disagreed about the same number, on the same run, one press apart. Now
+    /// it is one metric named three times, and this is what says so.
+    #[test]
+    fn pages_sharing_a_metric_render_the_same_hero() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        for rec in [&fed, &unfed] {
+            let tb = nav_east(500, 6.0);
+            for pages in [[Page::Distance, Page::Splits, Page::DistanceBand]] {
+                let metric = hero_metric(pages[0]).expect("distance pages head a metric");
+                for p in pages {
+                    assert_eq!(hero_metric(p), Some(metric), "{:?}", p);
+                    assert_eq!(
+                        page_hero(p, Some(152), Some(rec), Some(&tb)),
+                        page_hero(pages[0], Some(152), Some(rec), Some(&tb)),
+                        "{:?} renders a different hero than {:?} for the same metric",
+                        p,
+                        pages[0]
+                    );
+                    assert_eq!(
+                        page_hero_unit(p, Some(rec), Some(&tb)),
+                        page_hero_unit(pages[0], Some(rec), Some(&tb)),
+                        "{:?} labels the same metric with a different unit",
+                        p
+                    );
+                }
             }
         }
     }
