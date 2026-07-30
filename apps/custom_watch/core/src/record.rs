@@ -463,6 +463,14 @@ pub struct Snapshot {
     /// pause demands a button press, everything else resumes itself on the
     /// next moving fix.
     pub manual_paused: bool,
+    /// Whether a `Paused` state came from the fixes drying up rather than from
+    /// the runner slowing down. Always `false` outside `Paused`. The face needs
+    /// this told to it rather than inferred: the min-move artifact and a signal
+    /// void are both non-manual pauses, and the only thing that separates them
+    /// is whether a fix or the clock caused it — [`Snapshot::is_moving`] cannot
+    /// answer that, because it deliberately still reads the last known speed so
+    /// a runner climbing through a void keeps banking barometric vert.
+    pub signal_lost: bool,
     pub distance_m: f64,
     /// Wall-clock seconds since start — includes paused stretches.
     pub elapsed_s: u32,
@@ -642,7 +650,14 @@ impl Snapshot {
     /// climb slower than [`TRACK_THRESHOLD_M`] per second — i.e. every real
     /// climb — banked exactly zero gain.
     ///
-    /// Speed is honest across all three cases: `on_fix` stamps
+    /// A fourth `Paused` meaning joined these: the lost-signal auto-pause in
+    /// [`Recorder::tick`]. Speed is deliberately *not* aged out there — a
+    /// runner climbing through a canyon with no fixes must keep banking
+    /// barometric vert — so this answers "moving" through a void, which is the
+    /// honest answer to what it asks and the wrong one for a `REC`/`AUTO` tag.
+    /// The face reads [`Snapshot::signal_lost`] for that instead.
+    ///
+    /// Speed is honest across all three fix-driven cases: `on_fix` stamps
     /// `current_speed_mps` from the fix before the min-move filter can flip the
     /// state, while [`Recorder::pause`], [`Recorder::stop`] and
     /// [`Recorder::start`] all zero it — so a real stop (aid station, sleep,
@@ -1610,11 +1625,34 @@ impl Recorder {
 
     /// Advance the wall clock without a new fix (the mobile recorder's 1 Hz
     /// tick). Elapsed grows through paused states; idle and finished are inert.
+    ///
+    /// A run whose fixes have dried up auto-pauses here. Every other state
+    /// transition is driven by a fix arriving, so without this the recorder
+    /// held `Recording` across a signal void for as long as the void lasted —
+    /// distance and moving time correctly frozen, but the run view still
+    /// telling the runner it was tracking them. The tick is the only thing
+    /// that runs when nothing is arriving, so it is the only place the absence
+    /// of fixes can be noticed.
+    ///
+    /// Gated on having had a fix at all: `last` is also cleared by
+    /// [`resume`](Recorder::resume), and pausing a just-resumed run before its
+    /// first fix would fight the runner's own button. A run that has never had
+    /// a fix is the acquisition case, which the face reports separately.
+    ///
+    /// Deliberately moves the state and nothing else. It does **not** zero
+    /// `current_speed_mps`, so [`is_moving`](Recorder::is_moving) — and with it
+    /// the barometric vert accumulator — is untouched: banking a climb through
+    /// a signal void is a core ultra case, and ageing the speed out was
+    /// weighed and refused for exactly that reason. A void is a statement
+    /// about the GPS, not about whether the runner is still climbing.
     pub fn tick(&mut self, now_s: u32) {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
         }
         self.advance_now(now_s);
+        if self.state == RecordState::Recording && self.fix_stale() {
+            self.state = RecordState::Paused;
+        }
         self.feed_workout();
     }
 
@@ -1848,6 +1886,9 @@ impl Recorder {
             // Gated on Paused because `stop()` doesn't clear the flag — a
             // Finished snapshot must not carry a stale manual-pause marker.
             manual_paused: self.state == RecordState::Paused && self.manual_paused,
+            signal_lost: self.state == RecordState::Paused
+                && !self.manual_paused
+                && self.fix_stale(),
             distance_m: self.distance_m,
             elapsed_s: self.elapsed_s(),
             moving_s: self.moving_s,
@@ -2211,13 +2252,30 @@ impl Recorder {
     }
 
     /// Is the fed along-course position too old to speak for where the runner
-    /// is now? Stale once it ages past a few fix intervals (scaled to the GNSS
-    /// mode's cadence, so Expedition's 60 s gaps are not "stale"), and a
-    /// position that never arrived counts as stale.
+    /// is now? Stale once it ages past [`fix_stale_budget_s`](Recorder::fix_stale_budget_s),
+    /// and a position that never arrived counts as stale.
     fn route_position_stale(&self) -> bool {
-        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
         self.route_along_m.is_none()
-            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s
+            || self.now_s.saturating_sub(self.route_along_at_s) > self.fix_stale_budget_s()
+    }
+
+    /// How long a fix may go unrefreshed before it stops speaking for now.
+    /// Scaled to the GNSS mode's cadence so Expedition's 60 s gaps are not
+    /// "stale", floored so a 1 Hz mode tolerates a few dropped sentences.
+    /// Shared by the along-course staleness gate and the lost-signal
+    /// auto-pause: the two must agree, or the run view would claim to be
+    /// tracking a runner whose course position it has already disowned.
+    fn fix_stale_budget_s(&self) -> u32 {
+        self.fix_interval_s.saturating_mul(3).max(10)
+    }
+
+    /// Have the fixes dried up? The one predicate behind both the lost-signal
+    /// auto-pause in [`tick`](Recorder::tick) and the [`Snapshot::signal_lost`]
+    /// the face labels it from, so the state and its explanation cannot
+    /// disagree. A run that has never had a fix is not a dropout.
+    fn fix_stale(&self) -> bool {
+        self.last
+            .is_some_and(|l| self.now_s.saturating_sub(l.uptime_s) > self.fix_stale_budget_s())
     }
 
     /// The profile marker's along-course position, withheld while the fed
@@ -4698,6 +4756,120 @@ mod tests {
         assert_eq!(w.step_index, 0);
         assert_eq!(w.transition_seq, 1);
         assert!(!w.complete);
+    }
+
+    #[test]
+    fn a_signal_void_auto_pauses_and_the_next_fix_resumes() {
+        // The dropout guard's claim (2): a stretch with no fixes has to read
+        // paused. State is otherwise only ever written by a fix arriving, so a
+        // void held whatever the last fix left behind — Recording, while
+        // distance and moving time sat frozen.
+        let mut r = Recorder::new();
+        r.start(0);
+        for (i, lat) in [40.0, 40.00005, 40.0001].iter().enumerate() {
+            r.on_fix(&fix(*lat, -105.0, 5.0, i as u32));
+        }
+        assert_eq!(r.state(), RecordState::Recording);
+
+        // The last fix landed at t=2, and the 1 Hz budget is 10 s.
+        r.tick(12);
+        assert_eq!(
+            r.state(),
+            RecordState::Recording,
+            "paused a fix that is still inside its budget"
+        );
+        r.tick(13);
+        assert_eq!(r.state(), RecordState::Paused);
+        assert!(
+            !r.snapshot().manual_paused,
+            "a lost signal is not a manual pause"
+        );
+
+        // ...and the recorder comes back on its own from the next moving fix,
+        // exactly as an auto-pause from a slow stretch does.
+        r.on_fix(&fix(40.0003, -105.0, 5.0, 14));
+        assert_eq!(r.state(), RecordState::Recording);
+    }
+
+    #[test]
+    fn a_throttled_mode_scales_the_void_budget_instead_of_pausing_between_fixes() {
+        // Expedition's 60 s cadence is not a dropout. Sharing one budget with
+        // route_position_stale is what keeps these two agreeing.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.set_fix_interval_s(60);
+        r.on_fix(&fix(40.0, -105.0, 3.0, 1));
+        r.on_fix(&fix(40.0005, -105.0, 3.0, 61));
+        assert_eq!(r.state(), RecordState::Recording);
+        r.tick(61 + 180);
+        assert_eq!(
+            r.state(),
+            RecordState::Recording,
+            "a throttled mode's own cadence read as a signal void"
+        );
+        r.tick(62 + 180);
+        assert_eq!(r.state(), RecordState::Paused);
+    }
+
+    #[test]
+    fn a_void_never_overrides_the_runners_own_pause_button() {
+        // The auto-pause only ever leaves Recording, so it cannot launder a
+        // manual pause into an automatic one — resume() must still be the only
+        // way back, and the face must keep labelling it manual.
+        let mut r = Recorder::new();
+        r.start(0);
+        for (i, lat) in [40.0, 40.00005, 40.0001].iter().enumerate() {
+            r.on_fix(&fix(*lat, -105.0, 5.0, i as u32));
+        }
+        r.pause(3);
+        r.tick(100);
+        assert_eq!(r.state(), RecordState::Paused);
+        assert!(
+            r.snapshot().manual_paused,
+            "the void relabelled the runner's pause as automatic"
+        );
+        r.resume(101);
+        assert_eq!(r.state(), RecordState::Recording);
+    }
+
+    #[test]
+    fn a_void_pause_still_banks_barometric_vert_for_a_runner_climbing_it() {
+        // is_moving() reads current_speed_mps, NOT the state, so the void pause
+        // must not zero the speed: ageing it out was weighed and refused
+        // because it costs a climber their genuine vert in a canyon. Pinning
+        // it here so the auto-pause can't quietly become that refused change.
+        let mut r = Recorder::new();
+        r.start(0);
+        for (i, lat) in [40.0, 40.00005, 40.0001].iter().enumerate() {
+            r.on_fix(&fix(*lat, -105.0, 5.0, i as u32));
+        }
+        r.tick(13);
+        assert_eq!(r.state(), RecordState::Paused);
+        assert!(
+            r.snapshot().is_moving(),
+            "the void pause aged out the speed and stopped the vert accumulator"
+        );
+        // ...which is exactly why the face cannot read the tag off is_moving,
+        // and why the snapshot has to carry the reason explicitly.
+        assert!(r.snapshot().signal_lost);
+
+        // A real stop still reads as stopped — the manual pause zeroes it.
+        r.pause(14);
+        assert!(!r.snapshot().is_moving());
+        assert!(
+            !r.snapshot().signal_lost,
+            "a manual pause is never labelled a lost signal"
+        );
+    }
+
+    #[test]
+    fn a_run_with_no_fix_yet_is_not_paused_by_the_void_gate() {
+        // Acquisition, and the window just after resume() clears the anchor,
+        // are not dropouts — pausing there would fight the runner's button.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.tick(100);
+        assert_eq!(r.state(), RecordState::Recording);
     }
 
     #[test]
