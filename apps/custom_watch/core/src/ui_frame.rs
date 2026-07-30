@@ -183,6 +183,20 @@ pub fn hero_unit_cell(band: HeroBand, hero: &str, unit: &str) -> Option<(usize, 
     (col + unit.len() <= face::COLS).then_some((col, row))
 }
 
+/// Rows the hero band's own pixels cover this frame — the rows
+/// [`face::apply_hero_clearance`] has to check for text the hero would eat.
+/// A banner covers the two-row band whether or not a hero exists behind it.
+pub fn hero_band_rows(band: HeroBand) -> usize {
+    match band {
+        HeroBand::BigNumHero => face::TALL_HERO_BAND_ROWS,
+        HeroBand::MedNumHero
+        | HeroBand::TextHero
+        | HeroBand::AlertBanner
+        | HeroBand::RezeroBanner => face::HERO_BAND_ROWS,
+        HeroBand::None => 0,
+    }
+}
+
 /// Cells of [`face::RUN_MARKER_ROW`] the hero band covers this frame — what a
 /// standing marker on that row has to clear ([`face::apply_run_marker`]).
 ///

@@ -297,6 +297,32 @@ pub fn apply_run_marker(
     let _ = write!(row, "{:>width$}", tag, width = COLS);
 }
 
+/// Blank any hero-band row whose text the hero's own glyphs would overwrite,
+/// given the rows the band covers and how far across them it reaches
+/// ([`crate::ui_frame::hero_band_rows`] + [`crate::ui_frame::hero_row_cells`]).
+///
+/// The band's only text tenant is a right-anchored tag or marker
+/// (`every_page_leaves_its_hero_band_blank` asserts nothing else rides there),
+/// and the hero is drawn *after* the text rows over exactly its own span — so a
+/// hero wide enough to reach the tag eats its leading glyphs and `AUTO` renders
+/// as `UTO`, a tag that reads as some other state rather than as a missing one.
+/// That is precisely what [`write_tag`]'s refuse-rather-than-truncate rule
+/// exists to prevent; it simply could not see the hero, which is not row text.
+///
+/// Not hypothetical: past 100 hours the elapsed hero is nine medium glyphs,
+/// eighteen of the twenty-one cells, which leaves three for `REC` and one too
+/// few for `AUTO` — on the dashboard, on exactly the multi-day runs where
+/// knowing the recorder auto-paused matters most.
+pub fn apply_hero_clearance(rows: &mut [Row; ROWS], hero_rows: usize, hero_cells: usize) {
+    for row in rows.iter_mut().take(hero_rows) {
+        let text = row.as_str();
+        let first_ink = text.len() - text.trim_start().len();
+        if !text.trim().is_empty() && first_ink < hero_cells {
+            row.clear();
+        }
+    }
+}
+
 /// Rows the hero band covers on a page whose body needs row 2 — the 16x32
 /// medium numeral face, the same cell size as the doubled text font.
 pub const HERO_BAND_ROWS: usize = 2;
@@ -3755,6 +3781,46 @@ mod tests {
             hero_row_cells(HeroBand::BigNumHero, "32.40", Some("KM")),
             14
         );
+    }
+
+    /// The tag's refuse-rather-than-truncate rule, extended to the one thing it
+    /// could not see: the hero, which is drawn after the rows and is not row
+    /// text. Past 100 hours the dashboard hero is eighteen of twenty-one cells,
+    /// which `REC` clears and `AUTO` does not — so `AUTO` was rendering as
+    /// `UTO`, a tag naming a state the recorder is not in.
+    #[test]
+    fn a_hero_wide_enough_to_reach_the_state_tag_takes_the_whole_tag() {
+        use crate::ui_frame::{hero_band_rows, hero_row_cells, HeroBand};
+        let band = HeroBand::MedNumHero;
+        let rows_covered = hero_band_rows(band);
+        let hero = "100:05:30";
+        let cells = hero_row_cells(band, hero, None);
+
+        // `AUTO` right-anchors to cell 17, one inside the hero's span.
+        let mut rows: [Row; ROWS] = Default::default();
+        write_tag(&mut rows[0], "AUTO");
+        assert!(rows[0].as_str().ends_with("AUTO"));
+        apply_hero_clearance(&mut rows, rows_covered, cells);
+        assert_eq!(rows[0].as_str(), "", "a clipped tag names the wrong state");
+
+        // `REC` right-anchors to cell 18 and clears the same hero, so it stays.
+        let mut rows: [Row; ROWS] = Default::default();
+        write_tag(&mut rows[0], "REC");
+        apply_hero_clearance(&mut rows, rows_covered, cells);
+        assert!(rows[0].as_str().ends_with("REC"));
+
+        // No hero, no clearance — the band covers nothing.
+        let mut rows: [Row; ROWS] = Default::default();
+        write_tag(&mut rows[0], "AUTO");
+        apply_hero_clearance(&mut rows, hero_band_rows(HeroBand::None), 0);
+        assert!(rows[0].as_str().ends_with("AUTO"));
+
+        // Rows below the band are never touched, whatever they hold — a tall
+        // page's tag rides its header row, outside the band.
+        let mut rows: [Row; ROWS] = Default::default();
+        let _ = write!(rows[TALL_HERO_BAND_ROWS], "DISTANCE");
+        apply_hero_clearance(&mut rows, hero_band_rows(HeroBand::BigNumHero), COLS);
+        assert_eq!(rows[TALL_HERO_BAND_ROWS].as_str(), "DISTANCE");
     }
 
     #[test]

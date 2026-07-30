@@ -374,22 +374,17 @@ pub async fn screen_task(
             ui_frame::alerts_run_active(rec.as_ref()),
             page == Page::Fuel,
         );
+        let hero_cells = ui_frame::hero_row_cells(
+            band,
+            hero.as_deref().unwrap_or(""),
+            hero_unit.map(|(unit, _)| unit),
+        );
         if face::run_view(rec.as_ref()) {
             // A run view carries neither the idle battery icon nor the
             // diagnostics BAT row, so this marker is the only place a runner can
             // learn the cell is going — on a device whose mode picker exists to
             // trade fixes for hours, and whose runs last days.
-            face::apply_run_marker(
-                &mut rows,
-                page,
-                overdue,
-                battery,
-                ui_frame::hero_row_cells(
-                    band,
-                    hero.as_deref().unwrap_or(""),
-                    hero_unit.map(|(unit, _)| unit),
-                ),
-            );
+            face::apply_run_marker(&mut rows, page, overdue, battery, hero_cells);
         } else {
             // The diagnostics face's numeric battery read-out; the idle-face
             // icon is a widget below.
@@ -399,6 +394,11 @@ pub async fn screen_task(
             // from any other — so say so, standing, until the phone has it.
             face::apply_pending_run_marker(&mut rows, idle_view, pending_runs);
         }
+        // Last word on the hero band's text, after every overlay that writes
+        // into it: a hero wide enough to reach the state tag takes the tag's
+        // cells, so the tag yields whole rather than rendering as a different
+        // state's first letters gone.
+        face::apply_hero_clearance(&mut rows, ui_frame::hero_band_rows(band), hero_cells);
         let icons = face::page_icons(
             page,
             latest.as_ref(),
