@@ -108,6 +108,39 @@ fn pipe_is_a_vertical_stroke_not_blank() {
 }
 
 #[test]
+fn bang_is_a_stem_over_a_dot_not_a_second_colon() {
+    // The same lost-hairline failure as '+' and '|', one step short of the
+    // collision that would have caught it: '!' kept its top serif and its dot
+    // but lost the stem between them, packing to two short marks — a colon with
+    // its upper dot raised a row. Distinct bytes, so `no_two_printable_chars_
+    // share_a_bitmap` passed; indistinguishable on the panel, so every alert
+    // banner opened `: DRINK` instead of `! DRINK`. The banner is this device's
+    // loudest treatment and the bang is the whole of what marks it as an alert
+    // rather than a label, so the shape is pinned here and not left to the
+    // generator's collision test, which cannot see it.
+    let bang = glyph(b'!');
+    let colon = glyph(b':');
+    assert_ne!(bang, colon, "'!' and ':' render identically");
+    // A colon is two dots, so its tallest run is one dot tall. A bang has to
+    // beat that outright, or the reader has only dot spacing to go on.
+    assert!(
+        longest_vertical_run(bang) > longest_vertical_run(colon),
+        "'!' has no stem: its tallest vertical run is {} against the colon's \
+         {} — it reads as punctuation, not as an alert",
+        longest_vertical_run(bang),
+        longest_vertical_run(colon)
+    );
+    // And the dot has to stay detached, or the stem runs to the baseline and
+    // the bang reads as '|' — the other glyph it can collapse into.
+    let gaps = bang.windows(2).filter(|w| w[0] != 0 && w[1] == 0).count();
+    assert_eq!(
+        gaps, 2,
+        "'!' has {gaps} ink-to-blank transition(s), not the 2 a stem with a \
+         detached dot below it makes"
+    );
+}
+
+#[test]
 fn horizontal_bar_glyphs_keep_their_shape() {
     // '=' and '_' rasterise correctly at 1x (pure horizontal bars never lose a
     // sub-pixel stroke) and the repair pass must not touch them — if they move,
