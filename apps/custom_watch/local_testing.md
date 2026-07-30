@@ -13,9 +13,9 @@ bin/watch-test.sh      # host-side unit tests, no board required
 bin/watch-sim.sh       # boot the firmware on an emulated nRF52840 DK (Renode), no board required
 ```
 
-No parts yet? `bin/watch-test.sh` and `bin/watch-sim.sh` work today with zero hardware — see [Simulating without a board](#simulating-without-a-board-renode).
+No parts yet? `bin/watch-test.sh`, `bin/watch-sim.sh` and `bin/watch-shots.sh` work today with zero hardware — see [Simulating without a board](#simulating-without-a-board-renode).
 
-All three are thin wrappers around `cargo` and `probe-rs`. If you prefer the unwrapped form, `cd apps/custom_watch && cargo run --release` is what `bin/watch-flash.sh` actually does — same outcome, more typing.
+All four are thin wrappers around `cargo` and `probe-rs`. If you prefer the unwrapped form, `cd apps/custom_watch && cargo run --release` is what `bin/watch-flash.sh` actually does — same outcome, more typing.
 
 ## What "testing" means on embedded vs web/mobile
 
@@ -63,6 +63,7 @@ All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. 
 | Build a release binary | `cargo build --release` | `bin/watch-build.sh` | No |
 | Run host-side unit tests | `cargo test` | `bin/watch-test.sh` | No |
 | Boot the firmware on an emulated DK + stream defmt logs | — | `bin/watch-sim.sh` | No |
+| Screenshot every screen the sim can arm (PNGs + an HTML contact sheet) | — | `bin/watch-shots.sh` | No |
 | Build + flash + stream logs (inner loop) | `cargo run --release` | `bin/watch-flash.sh` | Yes |
 | Flash a specific binary | `cargo run --release --bin sensor_smoke` | `bin/watch-flash.sh --bin sensor_smoke` | Yes |
 | Auto-reflash on file save | `cargo watch -x 'run --release'` | — | Yes |
@@ -197,7 +198,7 @@ Moving parts, all inside [`sim/`](sim/):
 
 - **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the `btn1`..`btn5` injection macros, bridges the phone-link UART to TCP, exposes the GPS UART as a pty.
 - **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
-- **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer, plus clickable BTN1–BTN5 boxes drawn in side bezels at their §81 Fenix-analog positions (the class is also the machine's `IAbsolutePositionPointerInput`, wired to gpio0 via its `buttonPort` constructor arg). `showAnalyzer sysbus.spi3.display` is the window `--gui` opens; `DumpFrame` writes a PPM of the LCD area only (no bezel) for headless checks.
+- **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer, plus clickable BTN1–BTN5 keys drawn in side bezels at their §81 Fenix-analog positions and labelled with their §350 functions (the class is also the machine's `IAbsolutePositionPointerInput`, wired to gpio0 via its `buttonPort` constructor arg). `showAnalyzer sysbus.spi3.display` is the window `--gui` opens. Two dumps, and they are different artifacts: **`DumpFrame`** writes a PPM of the LCD area only (no case), flat black/white — its bytes are what every assertion reads, so they don't move — while **`DumpCanvas`** writes the whole window including the case and keys, in the canvas palette, and asserts nothing (it exists so the shell's own look can be reviewed without a display attached). Per decisions §360.
 - **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever; the GPS task parses it into fixes that drive both the on-screen face and the phone-link frames, so the whole data path is exercised against a deterministic feed. This is the **default** fixture.
 - **`nmea/mountain_loop.nmea`** — a synthetic ~13-minute mountain loop (~800 GGA+RMC pairs, same checksummed 1 Hz format) that climbs the East + North legs and descends the West + South legs of a rectangle, encoding **~200 m of cumulative vert gain and ~200 m of loss** over sustained 18–26 % grades before returning to the valley start. Where `bench_jog` is dead flat, this feed exercises the elevation / vert accumulator (`VERT +gain -loss` on the run dashboard; the idle face keeps its clock row once a fix arrives, per decisions §289) and drives the **grade-adjusted-pace path** hard — on the steep climb legs the Pace page's `GAP` row reads visibly faster than raw pace, and on the descents visibly slower. Satellite count also varies (11 in the valley, dropping to 7–8 near the summit with a correspondingly higher HDOP, re-emitted in periodic `$GPGSV` sets) so the fix-quality path sees movement too. Select it with `--fixture mountain_loop` (or `NMEA_FIXTURE=mountain_loop`). Note the canned `sim-course` breadcrumb is derived from the `bench_jog` rectangle, so the Nav page's off-course geometry only lines up under the default fixture.
 
@@ -323,6 +324,23 @@ python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts --phone-port 9900
 | `alerts` | That the alert path fires from real recorded state and reaches the panel — the `watch_core::alerts` engine's fuel / zone / pace reminders off the recorder's own event cadence, and the `nav` task's off-course latch and re-arm — as an inverse-video banner, without disturbing the recording underneath it (the L4 contract). | Whether a tired runner *notices* it. There is no vibration motor at tier 1, so an alert is display-only by construction and "unmissable" is a bench/wrist claim, never a sim one. |
 
 `--budget` is a hard wall-clock cap for the run, not a per-assertion deadline (those are per-assertion and tighter). It exists so a wedged emulator fails with the harness's own diagnostics — last 40 lines of decoded output plus the tail of `renode.log` — rather than hanging until something outside kills it. Locally you can leave it at the default; in CI it is set per step, and always below the job's own `timeout-minutes`.
+
+### Looking at the UI — `bin/watch-shots.sh`
+
+`ci_smoke.py` dumps panels to assert they are *not blank*; nothing made them viewable. `bin/watch-shots.sh` does — it boots the sim twice, walks every screen it can reach, and writes one PNG per screen plus a self-contained HTML contact sheet you open in a browser. Use it whenever you touch `face.rs`, `widgets.rs`, or anything that decides where a value lands: a bad layout becomes something you can *see* instead of something a human has to notice while paging through thirty-odd screens in `--gui`. Rationale + what it caught on its first run in [decisions.md § 360](../../docs/architecture/decisions.md).
+
+```
+bin/watch-shots.sh                        # both sessions -> /tmp/watch-shots/index.html
+bin/watch-shots.sh --session run          # only the run-view page cycle
+bin/watch-shots.sh --session idle         # only the idle faces + the settings menu
+bin/watch-shots.sh --out-dir /path/shots  # somewhere durable
+```
+
+Two boots, because the run view and the idle faces are disjoint — the page cycle only exists mid-run, and the idle faces are only reachable before one starts. The `run` session uses `mountain_loop` with `scenario_terrain`'s two arming steps (the BMP581 triangle profile and a BTN5-hold waypoint mark), so `CLMB` and `WPT` are in the cycle instead of legitimately filtered out of it; the `idle` session boots `--no-autostart`. Expect ~25 screens and several minutes. Needs ImageMagick 7 (`magick`) on top of the sim's own prerequisites.
+
+Every capture is named by the ui task's own line — `ui: page <Name>`, or `ui: idle <View>` for a face — and each press cross-checks that against the button task's intent exactly as `scenario_pages` does, so a file called `page-Pacer.png` is the panel the composer *said* it composed. Two kinds of bad frame are rejected and re-shot, both measured on the captured pixels rather than inferred from the log: one under an alert banner (a solid inverse-video band over the hero rows — `wait_for_no_alert` is unusable here, since past ~100 s the sim's shortened cadences go banner-to-banner and `record: alert cleared` stops arriving), and one byte-identical to the previous screen (the composer logs its line *before* it draws, so a dump sent the instant that line decodes can read the previous frame — this is how the harness first "proved" the two idle faces render identically). A screen that stays bad after four tries is still captured and says so in its caption.
+
+**A screenshot is *sim-verified* evidence and no more.** Nothing here reads a glyph: a capture says the named screen composed and inked pixels. Layout and value correctness stay host-test claims (`render/src/preview.rs`, `core/`) — see [quality_standards.md](../../docs/custom_watch/quality_standards.md). And the sheet is not the whole UI: thirteen pages have no `SET1` wire field to arm them, so ~25 screens is the ceiling of what the sim can show, not of what the watch renders.
 
 Use `--out-dir` when running more than one scenario by hand: each run clears `sim-output.log`, `frame.ppm` and the `watch-sim.latest` pointer in its out-dir first, so two scenarios sharing one out-dir destroy each other's evidence.
 
