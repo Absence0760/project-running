@@ -399,6 +399,21 @@ nothing was broken behind the hole, it was simply unwatched.
 Workspace host sweep 2140 → 2149; firmware builds; the four Renode scenarios and the 25-screen sheet
 re-run green after the log-ordering change.
 
+## 2026-07-30 — recovery time: the ported projection that reached no surface
+
+The forward half of the Fitness page's recovery pair ([§ 368](../architecture/decisions.md)).
+`fitness::days_until_next_hard_session` had been ported and host-tested since 2026-07-11 and was
+called by nothing, so the page showed a verdict (`REST` / `EASY` / `SWEET`) with no answer to "how
+long am I still paying for yesterday". It now carries a `NEXT HARD ~3 DAYS` row projected from the
+ATL/CTL the `set_load_trend` push has delivered since § 352 — **no new wire field, no new setter, no
+new page**: the inputs were already on the device one page over, and web puts this line on the same
+Fitness card as the verdict. Web's returning-from-a-layoff suppression travels as the pushed
+`RecoveryAdvice::ReturningFromLayoff` verdict rather than the run history the watch does not hold.
+Four host tests (three-day + one-day projections, the already-recovered and the layoff
+suppressions) plus an assertion on the existing no-load case. **Garmin's Training Status is not
+built and is not owed** — web has no such classification, so § 24 forbids the watch pioneering one.
+Host-tested only; no scenario arms the Fitness page.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
