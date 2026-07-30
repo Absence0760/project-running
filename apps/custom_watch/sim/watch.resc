@@ -233,7 +233,18 @@ led.StateChanged += led_changed
 # Phone-link rail: the firmware's status frames leave on uart1 (UARTE1);
 # a TCP server socket exposes them to the host. The mobile app's dev
 # screen connects here (Android emulator: host 10.0.2.2).
-emulation CreateServerSocketTerminal $phone_port "phone" false
+#
+# The args are (port, name, telnetMode, flushOnConnect). telnetMode false
+# because these are raw NDJSON bytes, not a telnet session. flushOnConnect
+# TRUE is the non-default one and is load-bearing: the provider queues
+# everything the UART wrote while no client was attached, so with the default
+# (False) a client opening the socket ten minutes into a run received the
+# frame from uptime_s = 1 and every one since before it caught up. The
+# consumer is a LIVE view — the mobile dev screen's Sim watch link, and
+# `ncat localhost 7788` — and a live view whose first values are ten minutes
+# stale is worse than one that starts empty. Dropping the backlog at connect
+# makes the first frame a client reads the current one.
+emulation CreateServerSocketTerminal $phone_port "phone" false true
 connector Connect sysbus.uart1 phone
 
 # GPS rail: the u-blox breakout's NMEA stream arrives on uart0 (UARTE0).
