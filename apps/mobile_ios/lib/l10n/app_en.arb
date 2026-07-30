@@ -15245,5 +15245,160 @@
   "routeMarkerDistanceAlongLabel": "Distance along route",
   "@routeMarkerDistanceAlongLabel": {"description": "Editor field to place a course marker by distance along the route instead of lat/lng"},
   "routeMarkerDistanceInvalid": "Enter a valid distance along the route.",
-  "@routeMarkerDistanceInvalid": {"description": "Validation when the distance-along-route value can't be parsed"}
+  "@routeMarkerDistanceInvalid": {"description": "Validation when the distance-along-route value can't be parsed"},
+  "watchScreensTitle": "Watch screens",
+  "@watchScreensTitle": {
+    "description": "Title of the composed-watch-screen editor"
+  },
+  "watchScreensAction": "Compose watch screens",
+  "@watchScreensAction": {
+    "description": "Tooltip opening the composed-watch-screen editor"
+  },
+  "watchScreensCount": "{count} of {max} screens",
+  "@watchScreensCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensEmptyTitle": "No screens composed",
+  "watchScreensEmptyBody": "The watch walks its built-in pages until you compose one. Add a screen to choose what it shows.",
+  "@watchScreensEmptyBody": {
+    "description": "Empty state explaining what composing a watch screen does"
+  },
+  "watchScreensAdd": "Add screen",
+  "watchScreensFull": "A watch holds at most {max} screens.",
+  "@watchScreensFull": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensHeading": "Screen {index}",
+  "@watchScreensHeading": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensLayout": "Layout",
+  "watchScreensSlot": "Slot {index}",
+  "@watchScreensSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensMoveUp": "Move up",
+  "watchScreensMoveDown": "Move down",
+  "watchScreensRemove": "Remove screen",
+  "watchScreensRemoveTitle": "Remove screen {index}?",
+  "@watchScreensRemoveTitle": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensRemoveBody": "Its {count} metric(s) go with it.",
+  "@watchScreensRemoveBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensRemoveConfirm": "Remove",
+  "watchScreensCancel": "Cancel",
+  "watchScreensShrinkTitle": "Drop {count} metric(s)?",
+  "@watchScreensShrinkTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensShrinkBody": "A {layout} screen draws {slots} slot(s), so {dropped} would no longer be shown.",
+  "@watchScreensShrinkBody": {
+    "description": "Warning naming the metrics a narrower layout would drop",
+    "placeholders": {
+      "layout": {
+        "type": "String"
+      },
+      "slots": {
+        "type": "int"
+      },
+      "dropped": {
+        "type": "String"
+      }
+    }
+  },
+  "watchScreensShrinkConfirm": "Change layout",
+  "watchScreensPushAction": "Push screens to watch",
+  "@watchScreensPushAction": {
+    "description": "Button that pushes the composed screen set to the watch over BLE"
+  },
+  "watchScreensPushed": "Pushed {count} screen(s) to the watch",
+  "@watchScreensPushed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "watchScreensCleared": "Cleared the composed screens on the watch",
+  "watchScreensPushFailed": "Screens push failed: {error}",
+  "@watchScreensPushFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "watchScreensLoadFailed": "The saved screens couldn't be read.",
+  "watchScreensStartOver": "Start over",
+  "watchLayoutSingle": "Single",
+  "watchLayoutDuo": "Duo",
+  "watchLayoutTrio": "Trio",
+  "watchMetricElapsed": "Elapsed time",
+  "watchMetricDistance": "Distance",
+  "watchMetricAvgPace": "Average pace",
+  "watchMetricLapElapsed": "Lap time",
+  "watchMetricHeartRate": "Heart rate",
+  "watchMetricPacerDelta": "Pacer delta",
+  "watchMetricGuidedRunRemaining": "Guided-run cue",
+  "watchMetricWorkoutRemaining": "Workout step",
+  "watchMetricRacePrediction": "Race prediction",
+  "watchMetricCutoffMargin": "Cut-off margin",
+  "watchMetricTrainingStress": "Training load",
+  "watchMetricRoadbookNext": "Next aid station",
+  "watchMetricFuelCarbs": "Fuel carbs",
+  "watchMetricGearWear": "Gear wear",
+  "watchMetricEasyPace": "Easy pace",
+  "watchMetricVo2Max": "VO2 max",
+  "watchMetricAltitude": "Altitude",
+  "watchMetricDistanceToStart": "Distance to start",
+  "watchMetricDaylightCountdown": "Daylight left",
+  "watchMetricWaypointDistance": "Waypoint distance",
+  "watchMetricClimbGain": "Climb gain",
+  "watchMetricRecapDistance": "Year distance",
+  "watchMetricCurrentStreak": "Current streak",
+  "watchMetricSyncedMovingTime": "Moving time",
+  "watchMetricPrAge": "PR age",
+  "watchMetricPlanReplanChanges": "Re-plan changes",
+  "watchMetricPlanAdaptiveChanges": "Adaptive changes",
+  "watchMetricReadinessScore": "Readiness",
+  "watchMetricGoalPercent": "Goal progress",
+  "watchMetricTurnCueDistance": "Next turn",
+  "watchMetricRouteSimplifyDistance": "Course distance",
+  "watchMetricAutoEffortMatched": "Segments matched",
+  "watchMetricRouteElevTotal": "Route elevation",
+  "watchMetricRaceDayDays": "Days to race"
 }

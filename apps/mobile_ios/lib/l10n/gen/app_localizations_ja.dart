@@ -11288,4 +11288,214 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routeMarkerDistanceInvalid => 'ルート上の有効な距離を入力してください。';
+
+  @override
+  String get watchScreensTitle => 'ウォッチ画面';
+
+  @override
+  String get watchScreensAction => 'ウォッチ画面を作成';
+
+  @override
+  String watchScreensCount(int count, int max) {
+    return '$max 画面中 $count 画面';
+  }
+
+  @override
+  String get watchScreensEmptyTitle => '作成した画面はありません';
+
+  @override
+  String get watchScreensEmptyBody =>
+      '画面を作成するまで、ウォッチは内蔵ページのみを表示します。画面を追加して表示内容を選びましょう。';
+
+  @override
+  String get watchScreensAdd => '画面を追加';
+
+  @override
+  String watchScreensFull(int max) {
+    return 'ウォッチには最大 $max 画面まで登録できます。';
+  }
+
+  @override
+  String watchScreensHeading(int index) {
+    return '画面 $index';
+  }
+
+  @override
+  String get watchScreensLayout => 'レイアウト';
+
+  @override
+  String watchScreensSlot(int index) {
+    return 'スロット $index';
+  }
+
+  @override
+  String get watchScreensMoveUp => '上へ移動';
+
+  @override
+  String get watchScreensMoveDown => '下へ移動';
+
+  @override
+  String get watchScreensRemove => '画面を削除';
+
+  @override
+  String watchScreensRemoveTitle(int index) {
+    return '画面 $index を削除しますか？';
+  }
+
+  @override
+  String watchScreensRemoveBody(int count) {
+    return 'この画面の $count 個の項目も削除されます。';
+  }
+
+  @override
+  String get watchScreensRemoveConfirm => '削除';
+
+  @override
+  String get watchScreensCancel => 'キャンセル';
+
+  @override
+  String watchScreensShrinkTitle(int count) {
+    return '$count 個の項目を削除しますか？';
+  }
+
+  @override
+  String watchScreensShrinkBody(String layout, int slots, String dropped) {
+    return '$layout レイアウトのスロットは $slots 個なので、$dropped は表示されなくなります。';
+  }
+
+  @override
+  String get watchScreensShrinkConfirm => 'レイアウトを変更';
+
+  @override
+  String get watchScreensPushAction => '画面をウォッチに送信';
+
+  @override
+  String watchScreensPushed(int count) {
+    return '$count 個の画面をウォッチに送信しました';
+  }
+
+  @override
+  String get watchScreensCleared => 'ウォッチの作成済み画面を消去しました';
+
+  @override
+  String watchScreensPushFailed(String error) {
+    return '画面の送信に失敗しました: $error';
+  }
+
+  @override
+  String get watchScreensLoadFailed => '保存された画面を読み込めませんでした。';
+
+  @override
+  String get watchScreensStartOver => '最初からやり直す';
+
+  @override
+  String get watchLayoutSingle => 'シングル';
+
+  @override
+  String get watchLayoutDuo => 'デュオ';
+
+  @override
+  String get watchLayoutTrio => 'トリオ';
+
+  @override
+  String get watchMetricElapsed => '経過時間';
+
+  @override
+  String get watchMetricDistance => '距離';
+
+  @override
+  String get watchMetricAvgPace => '平均ペース';
+
+  @override
+  String get watchMetricLapElapsed => 'ラップタイム';
+
+  @override
+  String get watchMetricHeartRate => '心拍数';
+
+  @override
+  String get watchMetricPacerDelta => 'ペーサーとの差';
+
+  @override
+  String get watchMetricGuidedRunRemaining => 'ガイドランの案内';
+
+  @override
+  String get watchMetricWorkoutRemaining => 'ワークアウトのステップ';
+
+  @override
+  String get watchMetricRacePrediction => 'レース予測タイム';
+
+  @override
+  String get watchMetricCutoffMargin => '関門までの余裕';
+
+  @override
+  String get watchMetricTrainingStress => 'トレーニング負荷';
+
+  @override
+  String get watchMetricRoadbookNext => '次のエイド';
+
+  @override
+  String get watchMetricFuelCarbs => '補給の炭水化物';
+
+  @override
+  String get watchMetricGearWear => 'ギアの消耗';
+
+  @override
+  String get watchMetricEasyPace => 'イージーペース';
+
+  @override
+  String get watchMetricVo2Max => 'VO2 Max';
+
+  @override
+  String get watchMetricAltitude => '標高';
+
+  @override
+  String get watchMetricDistanceToStart => 'スタートまでの距離';
+
+  @override
+  String get watchMetricDaylightCountdown => '日没までの時間';
+
+  @override
+  String get watchMetricWaypointDistance => 'ウェイポイントまでの距離';
+
+  @override
+  String get watchMetricClimbGain => '登りの獲得標高';
+
+  @override
+  String get watchMetricRecapDistance => '年間距離';
+
+  @override
+  String get watchMetricCurrentStreak => '連続記録';
+
+  @override
+  String get watchMetricSyncedMovingTime => '動作時間';
+
+  @override
+  String get watchMetricPrAge => '自己ベストの経過';
+
+  @override
+  String get watchMetricPlanReplanChanges => '再計画の変更数';
+
+  @override
+  String get watchMetricPlanAdaptiveChanges => '適応調整の変更数';
+
+  @override
+  String get watchMetricReadinessScore => 'コンディション';
+
+  @override
+  String get watchMetricGoalPercent => '目標の達成率';
+
+  @override
+  String get watchMetricTurnCueDistance => '次の曲がり角';
+
+  @override
+  String get watchMetricRouteSimplifyDistance => 'コース距離';
+
+  @override
+  String get watchMetricAutoEffortMatched => '一致したセグメント';
+
+  @override
+  String get watchMetricRouteElevTotal => 'コースの獲得標高';
+
+  @override
+  String get watchMetricRaceDayDays => 'レースまでの日数';
 }

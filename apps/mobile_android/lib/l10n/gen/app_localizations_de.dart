@@ -11859,4 +11859,216 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get routeMarkerDistanceInvalid =>
       'Gib eine gültige Distanz entlang der Route ein.';
+
+  @override
+  String get watchScreensTitle => 'Uhr-Ansichten';
+
+  @override
+  String get watchScreensAction => 'Uhr-Ansichten zusammenstellen';
+
+  @override
+  String watchScreensCount(int count, int max) {
+    return '$count von $max Ansichten';
+  }
+
+  @override
+  String get watchScreensEmptyTitle => 'Keine Ansichten erstellt';
+
+  @override
+  String get watchScreensEmptyBody =>
+      'Die Uhr durchläuft ihre eingebauten Seiten, bis du eine erstellst. Füge eine Ansicht hinzu, um zu wählen, was sie zeigt.';
+
+  @override
+  String get watchScreensAdd => 'Ansicht hinzufügen';
+
+  @override
+  String watchScreensFull(int max) {
+    return 'Eine Uhr fasst höchstens $max Ansichten.';
+  }
+
+  @override
+  String watchScreensHeading(int index) {
+    return 'Ansicht $index';
+  }
+
+  @override
+  String get watchScreensLayout => 'Layout';
+
+  @override
+  String watchScreensSlot(int index) {
+    return 'Feld $index';
+  }
+
+  @override
+  String get watchScreensMoveUp => 'Nach oben';
+
+  @override
+  String get watchScreensMoveDown => 'Nach unten';
+
+  @override
+  String get watchScreensRemove => 'Ansicht entfernen';
+
+  @override
+  String watchScreensRemoveTitle(int index) {
+    return 'Ansicht $index entfernen?';
+  }
+
+  @override
+  String watchScreensRemoveBody(int count) {
+    return 'Ihre $count Wert(e) gehen mit.';
+  }
+
+  @override
+  String get watchScreensRemoveConfirm => 'Entfernen';
+
+  @override
+  String get watchScreensCancel => 'Abbrechen';
+
+  @override
+  String watchScreensShrinkTitle(int count) {
+    return '$count Wert(e) verwerfen?';
+  }
+
+  @override
+  String watchScreensShrinkBody(String layout, int slots, String dropped) {
+    return 'Ein $layout-Layout zeigt $slots Feld(er), daher würde $dropped nicht mehr angezeigt.';
+  }
+
+  @override
+  String get watchScreensShrinkConfirm => 'Layout ändern';
+
+  @override
+  String get watchScreensPushAction => 'Ansichten an die Uhr senden';
+
+  @override
+  String watchScreensPushed(int count) {
+    return '$count Ansicht(en) an die Uhr gesendet';
+  }
+
+  @override
+  String get watchScreensCleared =>
+      'Zusammengestellte Ansichten auf der Uhr gelöscht';
+
+  @override
+  String watchScreensPushFailed(String error) {
+    return 'Senden der Ansichten fehlgeschlagen: $error';
+  }
+
+  @override
+  String get watchScreensLoadFailed =>
+      'Die gespeicherten Ansichten konnten nicht gelesen werden.';
+
+  @override
+  String get watchScreensStartOver => 'Neu beginnen';
+
+  @override
+  String get watchLayoutSingle => 'Einzeln';
+
+  @override
+  String get watchLayoutDuo => 'Duo';
+
+  @override
+  String get watchLayoutTrio => 'Trio';
+
+  @override
+  String get watchMetricElapsed => 'Verstrichene Zeit';
+
+  @override
+  String get watchMetricDistance => 'Distanz';
+
+  @override
+  String get watchMetricAvgPace => 'Durchschnittstempo';
+
+  @override
+  String get watchMetricLapElapsed => 'Rundenzeit';
+
+  @override
+  String get watchMetricHeartRate => 'Herzfrequenz';
+
+  @override
+  String get watchMetricPacerDelta => 'Pacer-Abweichung';
+
+  @override
+  String get watchMetricGuidedRunRemaining => 'Hinweis für geführten Lauf';
+
+  @override
+  String get watchMetricWorkoutRemaining => 'Trainingsschritt';
+
+  @override
+  String get watchMetricRacePrediction => 'Wettkampfprognose';
+
+  @override
+  String get watchMetricCutoffMargin => 'Cut-off-Puffer';
+
+  @override
+  String get watchMetricTrainingStress => 'Trainingsbelastung';
+
+  @override
+  String get watchMetricRoadbookNext => 'Nächste Verpflegung';
+
+  @override
+  String get watchMetricFuelCarbs => 'Kohlenhydrate';
+
+  @override
+  String get watchMetricGearWear => 'Ausrüstungsverschleiß';
+
+  @override
+  String get watchMetricEasyPace => 'Lockeres Tempo';
+
+  @override
+  String get watchMetricVo2Max => 'VO2max';
+
+  @override
+  String get watchMetricAltitude => 'Höhe';
+
+  @override
+  String get watchMetricDistanceToStart => 'Distanz zum Start';
+
+  @override
+  String get watchMetricDaylightCountdown => 'Restliches Tageslicht';
+
+  @override
+  String get watchMetricWaypointDistance => 'Distanz zum Wegpunkt';
+
+  @override
+  String get watchMetricClimbGain => 'Höhenmeter im Anstieg';
+
+  @override
+  String get watchMetricRecapDistance => 'Jahresdistanz';
+
+  @override
+  String get watchMetricCurrentStreak => 'Aktuelle Serie';
+
+  @override
+  String get watchMetricSyncedMovingTime => 'Bewegungszeit';
+
+  @override
+  String get watchMetricPrAge => 'Alter der Bestzeit';
+
+  @override
+  String get watchMetricPlanReplanChanges => 'Umplanungs-Änderungen';
+
+  @override
+  String get watchMetricPlanAdaptiveChanges => 'Adaptive Änderungen';
+
+  @override
+  String get watchMetricReadinessScore => 'Bereitschaft';
+
+  @override
+  String get watchMetricGoalPercent => 'Zielfortschritt';
+
+  @override
+  String get watchMetricTurnCueDistance => 'Nächste Abbiegung';
+
+  @override
+  String get watchMetricRouteSimplifyDistance => 'Streckendistanz';
+
+  @override
+  String get watchMetricAutoEffortMatched => 'Zugeordnete Segmente';
+
+  @override
+  String get watchMetricRouteElevTotal => 'Streckenhöhenmeter';
+
+  @override
+  String get watchMetricRaceDayDays => 'Tage bis zum Wettkampf';
 }
