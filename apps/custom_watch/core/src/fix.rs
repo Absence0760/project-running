@@ -3,8 +3,24 @@
 //! [`FixAccumulator`] reduces the NMEA sentence stream into [`Fix`] values:
 //! RMC carries validity + position + speed + course, GGA carries quality +
 //! satellite count + altitude, and a usable fix needs the union. The
-//! accumulator keeps the latest of each and emits a merged `Fix` whenever a
-//! sentence completes one.
+//! accumulator keeps the latest of each and emits a merged `Fix` whenever an
+//! **RMC** completes one.
+//!
+//! Only the position-bearing sentence may complete a fix. A GGA enriches the
+//! accumulator for the next merge and returns nothing of its own, because a
+//! `Fix` is a claim about where the runner is *now*: [`Fix::uptime_s`] is what
+//! every consumer ages staleness against, so emitting on a GGA stamped the
+//! last RMC's position with the current uptime and laundered an arbitrarily
+//! old position into a fresh-looking one. Two things fell out of that on the
+//! wrist. The receiver leads each 1 Hz epoch with GGA, so the accumulator
+//! re-published the *previous* epoch's position before the current one
+//! arrived — a zero-displacement sample the recorder reads as a stop, so a
+//! runner at 5 m/s under a clear sky alternated `Recording`/`Paused` every
+//! second. And across any stretch where RMC is absent — the receiver's
+//! power-down window between throttled fixes, a lost sentence — the first
+//! GGA back re-published the pre-gap position as current, which is exactly
+//! what [`crate::elevation::rezero_reference`]'s freshness gate exists to
+//! refuse.
 
 use crate::daylight;
 use ublox_nmea::{GgaData, RmcData, Sentence};
@@ -43,9 +59,11 @@ impl FixAccumulator {
         }
     }
 
-    /// Apply one parsed sentence; returns a merged fix when the accumulated
-    /// state amounts to one. A void RMC (receiver lost the fix) clears the
-    /// accumulator so a stale position can't leak into the next valid fix.
+    /// Apply one parsed sentence; returns a merged fix when a valid RMC
+    /// completes one. A void RMC (receiver lost the fix) clears the
+    /// accumulator so a stale position can't leak into the next valid fix; a
+    /// GGA only enriches the accumulator for the next merge (see the module
+    /// docs for why it may not complete a fix of its own).
     pub fn apply(&mut self, sentence: &Sentence, uptime_s: u32) -> Option<Fix> {
         match sentence {
             Sentence::Rmc(rmc) if rmc.valid => self.rmc = Some(*rmc),
@@ -54,7 +72,10 @@ impl FixAccumulator {
                 self.gga = None;
                 return None;
             }
-            Sentence::Gga(gga) if gga.quality > 0 => self.gga = Some(*gga),
+            Sentence::Gga(gga) if gga.quality > 0 => {
+                self.gga = Some(*gga);
+                return None;
+            }
             _ => return None,
         }
         self.merge(uptime_s)
@@ -96,10 +117,14 @@ mod tests {
         "$GPGGA,073000.00,4000.9000,N,10516.2300,W,1,08,1.02,1624.0,M,-21.3,M,,*52\r\n";
     const RMC: &str = "$GPRMC,073000.00,A,4000.9000,N,10516.2300,W,5.83,90.0,080726,,,A*4B\r\n";
 
-    fn void_rmc() -> String {
-        let body = "GPRMC,073000.00,V,,,,,,,080726,,,N";
+    /// Wrap a sentence body in the `$` framing and its XOR-8 checksum.
+    fn sentence(body: &str) -> String {
         let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
         format!("${}*{:02X}\r\n", body, cksum)
+    }
+
+    fn void_rmc() -> String {
+        sentence("GPRMC,073000.00,V,,,,,,,080726,,,N")
     }
 
     #[test]
@@ -165,9 +190,61 @@ mod tests {
     fn other_sentences_are_ignored() {
         let gsv = "$GPGSV,2,1,08,05,55,120,42,07,34,210,38,13,21,300,35,15,60,045,44*7D\r\n";
         let mut acc = FixAccumulator::new();
-        acc.apply(&parse(RMC), 1);
-        assert!(acc.apply(&parse(gsv), 2).is_none());
-        // ...and don't clear accumulated state.
-        assert!(acc.apply(&parse(GGA), 3).is_some());
+        acc.apply(&parse(GGA), 1);
+        acc.apply(&parse(RMC), 2);
+        assert!(acc.apply(&parse(gsv), 3).is_none());
+        // ...and don't clear accumulated state: the next RMC still merges, and
+        // still carries the GGA's extras. Probed with an RMC rather than a GGA
+        // because a GGA no longer completes a fix at all.
+        let fix = acc.apply(&parse(RMC), 4).expect("fix");
+        assert_eq!(fix.sats, 8);
+    }
+
+    #[test]
+    fn a_gga_never_restamps_the_last_position_as_current() {
+        // The receiver goes quiet — a power-down window between throttled
+        // fixes, or lost sentences — and comes back leading its epoch with a
+        // GGA. Emitting there stamped the pre-gap position with the current
+        // uptime, so nothing downstream could tell a 45-second-old position
+        // from a live one.
+        let mut acc = FixAccumulator::new();
+        assert!(acc.apply(&parse(RMC), 10).is_some());
+        assert_eq!(acc.apply(&parse(GGA), 55), None);
+    }
+
+    #[test]
+    fn a_moving_runners_epochs_never_read_as_a_stop() {
+        // A 1 Hz epoch leads with GGA and closes with RMC, so re-publishing on
+        // the GGA handed the recorder the PREVIOUS epoch's position stamped a
+        // second later: zero displacement over a full second, which the
+        // min-move filter reads as a stop. A runner at ~5 m/s under a clear sky
+        // alternated Recording/Paused every second because of it.
+        use crate::record::{RecordState, Recorder};
+
+        let mut acc = FixAccumulator::new();
+        let mut rec = Recorder::new();
+        rec.start(0);
+        for t in 1..=6u32 {
+            // ~0.0027 minutes of latitude per second is ~5 m.
+            let lat_min = 0.9 + 0.0027 * f64::from(t);
+            for text in [
+                sentence(&format!(
+                    "GPGGA,0730{t:02}.00,40{lat_min:07.4},N,10516.2300,W,1,08,1.02,1624.0,M,-21.3,M,,"
+                )),
+                sentence(&format!(
+                    "GPRMC,0730{t:02}.00,A,40{lat_min:07.4},N,10516.2300,W,9.7,0.0,080726,,,A"
+                )),
+            ] {
+                if let Some(fix) = acc.apply(&parse(&text), t) {
+                    rec.on_fix(&fix);
+                }
+                assert_eq!(
+                    rec.state(),
+                    RecordState::Recording,
+                    "a moving runner read as stopped at t={t}"
+                );
+            }
+        }
+        assert!(rec.snapshot().distance_m > 20.0);
     }
 }
