@@ -254,8 +254,13 @@ Four sits inside that with margin rather than on its edge. The composed pages
 are gated on having actually been composed, so the shipped default cycle *is*
 the 37 the table computes; a watch that has never been pushed a screen walks
 exactly these numbers, and a fully-composed one stays under the same ceilings.
-The rows have not been recomputed for 41, because the ceiling claim is what the
-cap was chosen against and it is the claim this section publishes.
+The ceiling **was** recomputed at 41 rather than assumed: a BFS over the
+wrapping ring with the grammar's own moves puts the symmetric worst at **7 at
+both 37 and 41**, unchanged at 42 and 43, and stepping to 8 only at **44** — so
+`MAX_SCREENS` = 4 lands with two pages of margin, and it is the *cap*, not the
+table, that keeps this section's published number true. The per-page rows below
+are still the 37, because that is the cycle a watch with no composed screens
+actually walks.
 
 
 Actions counted: each tap or hold is one action; the grid's open-hold is one;
