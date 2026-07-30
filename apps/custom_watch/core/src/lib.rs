@@ -63,6 +63,10 @@
 //!   the TTS speaking + `GuidedTranslate` injection are web/mobile-only)
 //! - [`hr_drain`] — the `hr` task's FIFO drain: PPG / ambient / unknown slot
 //!   demux with the ambient latch, plus the between-window wait
+//! - [`hr_source`] — the external BLE heart-rate strap's discovery filter +
+//!   Heart Rate Measurement codec, and the strap-over-optical precedence rule
+//!   the arbitrating task applies (the pure half of the GATT *central* role in
+//!   `app/src/tasks/hr_strap.rs`, which the Renode sim cannot exercise at all)
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
@@ -283,6 +287,7 @@ pub mod grade_adjusted_pace;
 pub mod guided_runs;
 pub mod hr_drain;
 pub mod hr_duty;
+pub mod hr_source;
 pub mod hr_zones;
 pub mod hydration;
 pub mod ice;
