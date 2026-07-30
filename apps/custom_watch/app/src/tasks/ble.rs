@@ -367,9 +367,23 @@ mod imp {
         sd.run().await
     }
 
-    /// SoftDevice enable config. Mirrors nrf-softdevice's nRF52840 example:
-    /// internal RC low-freq clock, one advertising set, peripheral-only roles,
-    /// 256-byte ATT MTU. `gap_device_name` is what a scanner shows.
+    /// SoftDevice enable config: internal RC low-freq clock, one advertising
+    /// set, 256-byte ATT MTU. `gap_device_name` is what a scanner shows.
+    ///
+    /// **Two roles at once.** The watch is a peripheral to the phone (this
+    /// task) and a central to an external HR strap (`hr_strap`, §365), so
+    /// `conn_count` is 2 and one central role is declared. That raises the
+    /// SoftDevice's RAM requirement above the peripheral-only figure; the
+    /// linker script's 31 KiB reservation is a carried-over over-estimate from
+    /// a six-connection example and is expected to still cover it, but only
+    /// the device can say — `Softdevice::enable` prints the true RAM start at
+    /// boot, and confirming it is a bench item (`memory-ble.x`,
+    /// `docs/custom_watch/quality_standards.md` step 6).
+    ///
+    /// `central_sec_count` stays 0: the Heart Rate Service is served
+    /// unencrypted by every strap on the market, and the watch initiates no
+    /// security as a central. A strap that demands encryption is out of scope
+    /// at tier 1 and will simply fail to subscribe.
     pub fn config() -> nrf_softdevice::Config {
         nrf_softdevice::Config {
             clock: Some(raw::nrf_clock_lf_cfg_t {
@@ -379,7 +393,7 @@ mod imp {
                 accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
             }),
             conn_gap: Some(raw::ble_gap_conn_cfg_t {
-                conn_count: 1,
+                conn_count: 2,
                 event_length: 24,
             }),
             conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 256 }),
@@ -389,7 +403,7 @@ mod imp {
             gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
                 adv_set_count: 1,
                 periph_role_count: 1,
-                central_role_count: 0,
+                central_role_count: 1,
                 central_sec_count: 0,
                 _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
             }),
