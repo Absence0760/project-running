@@ -814,6 +814,196 @@ pub enum Metric {
     RaceDayDays,
 }
 
+impl Metric {
+    /// This metric's byte on the `SCR1` wire, in `1..=34`.
+    ///
+    /// **Stable, and hand-written for that reason.** A screen layout names its
+    /// slots by these bytes and that layout is persisted to flash and pushed
+    /// from the phone, so `as u8` would silently re-point every saved screen the
+    /// first time someone reordered the enum for tidiness. This is the same
+    /// hazard — and the same remedy — as
+    /// [`crate::profiles::ActivityProfile::to_byte`].
+    ///
+    /// 0 is deliberately not a metric: it is the empty slot in a layout that
+    /// carries fewer than [`crate::screens::SCREEN_SLOTS`] values.
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            Metric::Elapsed => 1,
+            Metric::Distance => 2,
+            Metric::AvgPace => 3,
+            Metric::LapElapsed => 4,
+            Metric::HeartRate => 5,
+            Metric::PacerDelta => 6,
+            Metric::GuidedRunRemaining => 7,
+            Metric::WorkoutRemaining => 8,
+            Metric::RacePrediction => 9,
+            Metric::CutoffMargin => 10,
+            Metric::TrainingStress => 11,
+            Metric::RoadbookNext => 12,
+            Metric::FuelCarbs => 13,
+            Metric::GearWear => 14,
+            Metric::EasyPace => 15,
+            Metric::Vo2Max => 16,
+            Metric::Altitude => 17,
+            Metric::DistanceToStart => 18,
+            Metric::DaylightCountdown => 19,
+            Metric::WaypointDistance => 20,
+            Metric::ClimbGain => 21,
+            Metric::RecapDistance => 22,
+            Metric::CurrentStreak => 23,
+            Metric::SyncedMovingTime => 24,
+            Metric::PrAge => 25,
+            Metric::PlanReplanChanges => 26,
+            Metric::PlanAdaptiveChanges => 27,
+            Metric::ReadinessScore => 28,
+            Metric::GoalPercent => 29,
+            Metric::TurnCueDistance => 30,
+            Metric::RouteSimplifyDistance => 31,
+            Metric::AutoEffortMatched => 32,
+            Metric::RouteElevTotal => 33,
+            Metric::RaceDayDays => 34,
+        }
+    }
+
+    /// The metric a `SCR1` slot byte names, or `None` for 0 (an empty slot) and
+    /// for every byte this firmware does not know.
+    ///
+    /// An unknown byte is not a blank slot — it rejects the whole frame at the
+    /// caller ([`crate::screens::Screens::decode`]). A screen whose third slot
+    /// silently blanked would read as a complete screen the runner authored, and
+    /// there is nothing on the wrist to say otherwise.
+    pub const fn from_byte(b: u8) -> Option<Metric> {
+        Some(match b {
+            1 => Metric::Elapsed,
+            2 => Metric::Distance,
+            3 => Metric::AvgPace,
+            4 => Metric::LapElapsed,
+            5 => Metric::HeartRate,
+            6 => Metric::PacerDelta,
+            7 => Metric::GuidedRunRemaining,
+            8 => Metric::WorkoutRemaining,
+            9 => Metric::RacePrediction,
+            10 => Metric::CutoffMargin,
+            11 => Metric::TrainingStress,
+            12 => Metric::RoadbookNext,
+            13 => Metric::FuelCarbs,
+            14 => Metric::GearWear,
+            15 => Metric::EasyPace,
+            16 => Metric::Vo2Max,
+            17 => Metric::Altitude,
+            18 => Metric::DistanceToStart,
+            19 => Metric::DaylightCountdown,
+            20 => Metric::WaypointDistance,
+            21 => Metric::ClimbGain,
+            22 => Metric::RecapDistance,
+            23 => Metric::CurrentStreak,
+            24 => Metric::SyncedMovingTime,
+            25 => Metric::PrAge,
+            26 => Metric::PlanReplanChanges,
+            27 => Metric::PlanAdaptiveChanges,
+            28 => Metric::ReadinessScore,
+            29 => Metric::GoalPercent,
+            30 => Metric::TurnCueDistance,
+            31 => Metric::RouteSimplifyDistance,
+            32 => Metric::AutoEffortMatched,
+            33 => Metric::RouteElevTotal,
+            34 => Metric::RaceDayDays,
+            _ => return None,
+        })
+    }
+
+    /// The stable cross-platform name for this metric's wire byte.
+    ///
+    /// Exists so a reorder of the enum trips a test instead of silently
+    /// re-pointing every screen the phone has already pushed — the same guard
+    /// `settings`'s race-phase preset carries, and for the same reason. The
+    /// Dart encoder uses these names for its own byte map.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Metric::Elapsed => "elapsed",
+            Metric::Distance => "distance",
+            Metric::AvgPace => "avg_pace",
+            Metric::LapElapsed => "lap_elapsed",
+            Metric::HeartRate => "heart_rate",
+            Metric::PacerDelta => "pacer_delta",
+            Metric::GuidedRunRemaining => "guided_run_remaining",
+            Metric::WorkoutRemaining => "workout_remaining",
+            Metric::RacePrediction => "race_prediction",
+            Metric::CutoffMargin => "cutoff_margin",
+            Metric::TrainingStress => "training_stress",
+            Metric::RoadbookNext => "roadbook_next",
+            Metric::FuelCarbs => "fuel_carbs",
+            Metric::GearWear => "gear_wear",
+            Metric::EasyPace => "easy_pace",
+            Metric::Vo2Max => "vo2_max",
+            Metric::Altitude => "altitude",
+            Metric::DistanceToStart => "distance_to_start",
+            Metric::DaylightCountdown => "daylight_countdown",
+            Metric::WaypointDistance => "waypoint_distance",
+            Metric::ClimbGain => "climb_gain",
+            Metric::RecapDistance => "recap_distance",
+            Metric::CurrentStreak => "current_streak",
+            Metric::SyncedMovingTime => "synced_moving_time",
+            Metric::PrAge => "pr_age",
+            Metric::PlanReplanChanges => "plan_replan_changes",
+            Metric::PlanAdaptiveChanges => "plan_adaptive_changes",
+            Metric::ReadinessScore => "readiness_score",
+            Metric::GoalPercent => "goal_percent",
+            Metric::TurnCueDistance => "turn_cue_distance",
+            Metric::RouteSimplifyDistance => "route_simplify_distance",
+            Metric::AutoEffortMatched => "auto_effort_matched",
+            Metric::RouteElevTotal => "route_elev_total",
+            Metric::RaceDayDays => "race_day_days",
+        }
+    }
+
+    /// A short label for a slot's value — what the metric is, in the cells a
+    /// multi-field screen can spare beside it.
+    ///
+    /// Deliberately not the glance page's own header text: a page has a whole
+    /// row and says `GRADE ADJ PACE`, a Trio slot has single digits of room
+    /// left after its value and says `GAP`. Kept inside
+    /// [`crate::screens::SLOT_LABEL_CELLS`] by a test rather than by hope.
+    pub const fn slot_label(self) -> &'static str {
+        match self {
+            Metric::Elapsed => "TIME",
+            Metric::Distance => "DIST",
+            Metric::AvgPace => "PACE",
+            Metric::LapElapsed => "LAP",
+            Metric::HeartRate => "HR",
+            Metric::PacerDelta => "PACER",
+            Metric::GuidedRunRemaining => "CUE",
+            Metric::WorkoutRemaining => "STEP",
+            Metric::RacePrediction => "PRED",
+            Metric::CutoffMargin => "CUT",
+            Metric::TrainingStress => "LOAD",
+            Metric::RoadbookNext => "AID",
+            Metric::FuelCarbs => "CARB",
+            Metric::GearWear => "GEAR",
+            Metric::EasyPace => "EASY",
+            Metric::Vo2Max => "VO2",
+            Metric::Altitude => "ALT",
+            Metric::DistanceToStart => "BACK",
+            Metric::DaylightCountdown => "SUN",
+            Metric::WaypointDistance => "WPT",
+            Metric::ClimbGain => "CLMB",
+            Metric::RecapDistance => "YEAR",
+            Metric::CurrentStreak => "STRK",
+            Metric::SyncedMovingTime => "MOVE",
+            Metric::PrAge => "PR",
+            Metric::PlanReplanChanges => "PLAN",
+            Metric::PlanAdaptiveChanges => "ADPT",
+            Metric::ReadinessScore => "RDY",
+            Metric::GoalPercent => "GOAL",
+            Metric::TurnCueDistance => "TURN",
+            Metric::RouteSimplifyDistance => "CRS",
+            Metric::AutoEffortMatched => "SEG",
+            Metric::RouteElevTotal => "ROUTE",
+            Metric::RaceDayDays => "RACE",
+        }
+    }
+}
+
 /// The metric `page` headlines, or `None` for the one page that headlines
 /// nothing — Nav, whose map panel owns the rows a hero would cover.
 ///
