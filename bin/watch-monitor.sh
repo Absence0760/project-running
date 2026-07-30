@@ -55,6 +55,6 @@ if [[ -z "$PORT" ]]; then
 fi
 
 step "Attaching to the Renode monitor on localhost:$PORT"
-dim "buttons: runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page), \$btn4 (lap)"
+dim "buttons: runMacro \$btn1 (start/pause), \$btn2 (stop x2), \$btn3 (page left), \$btn4 (page right), \$btn5 (lap), \$btn3h/\$btn4h (page grid), \$btn5h (mark waypoint)"
 dim "Ctrl-C detaches; the sim keeps running"
 exec ncat localhost "$PORT"
