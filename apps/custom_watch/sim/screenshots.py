@@ -145,9 +145,17 @@ class Shots:
         its page/face line BEFORE it draws and flushes, so a dump sent the
         instant that line decodes can still read the panel's PREVIOUS frame.
         That is not hypothetical: it is how this harness first "proved" the two
-        idle faces render identically. The run walk does not need the check (its
-        elapsed clock changes every frame anyway); the idle faces do, because
-        they are static enough for a stale frame to look like a real one.
+        idle faces render identically — and then, on the very first sheet, how
+        `page-Nav.png` came back byte-identical to `page-Climb.png`. The run walk
+        had been exempted on the grounds that "its elapsed clock changes every
+        frame anyway", which is false: only the dashboard and a handful of pages
+        show a clock, so a Climb frame at 116 s and the same frame at 124 s are
+        the same bytes. Every capture is checked now.
+
+        The race itself is gone at the source (the ui task logs `ui: page` AFTER
+        the flush since § 361, so the line means the panel HAS the screen). This
+        stays as the detector, because it also catches the other cause: a state
+        that never reached the composer at all.
         """
         ppm = f"{slug}.ppm"
         panel = None
@@ -270,7 +278,7 @@ def capture_run(sim, shots: Shots):
     presses = 0
     # The anchor page is on screen now, so shoot it before the first press or
     # the lap-closing test below skips it.
-    shots.take(sim, f"page-{anchor}", anchor, "run view, page cycle")
+    previous = shots.take(sim, f"page-{anchor}", anchor, "run view, page cycle")
     seen.add(anchor)
 
     while presses < MAX_PRESSES:
@@ -282,7 +290,13 @@ def capture_run(sim, shots: Shots):
             )
             break
         seen.add(page)
-        shots.take(sim, f"page-{page}", page, "run view, page cycle")
+        previous = shots.take(
+            sim,
+            f"page-{page}",
+            page,
+            "run view, page cycle",
+            must_differ_from=previous,
+        )
     else:
         ci.announce(f"stopped at the {MAX_PRESSES}-press cap without closing the cycle")
 
