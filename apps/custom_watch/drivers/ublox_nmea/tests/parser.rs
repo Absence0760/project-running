@@ -460,3 +460,63 @@ fn gst_truncated_field_count_dropped() {
         None
     );
 }
+
+#[test]
+fn a_numeric_field_past_f32_range_reads_as_absent() {
+    // The f64 accumulator has no digit bound, so a long enough run of digits
+    // lands past f32::MAX and the narrowing conversion produces an infinity.
+    // Nothing downstream guards a non-finite value: an infinite RMC speed
+    // becomes the recorder's current speed and pace, and an infinite GGA
+    // altitude reaches the elevation profile, where `inf as i32` saturates to
+    // i32::MAX and — since the profile's thinning keeps even indices — that
+    // sample survives every later thinning for the rest of the run.
+    let huge = "9".repeat(39);
+
+    let Some(Sentence::Rmc(rmc)) = parse_one(&checksummed(&format!(
+        "GPRMC,,A,4000.9000,N,10516.2300,W,{huge},,,,,A"
+    ))) else {
+        panic!("expected RMC");
+    };
+    assert_eq!(
+        rmc.speed_mps, None,
+        "an unrepresentable speed must read absent"
+    );
+    assert_eq!(rmc.lat_deg, Some(40.015), "the position is unaffected");
+
+    let Some(Sentence::Gga(gga)) = parse_one(&checksummed(&format!(
+        "GPGGA,,4000.9000,N,10516.2300,W,1,08,1.0,{huge},M,,M,,"
+    ))) else {
+        panic!("expected GGA");
+    };
+    assert_eq!(
+        gga.alt_m, None,
+        "an unrepresentable altitude must read absent"
+    );
+    assert_eq!(gga.sats, 8, "the rest of the sentence is unaffected");
+}
+
+#[test]
+fn representable_numeric_fields_are_untouched_by_the_finite_guard() {
+    // The guard may only ever drop a value the f32 conversion cannot hold;
+    // everything a receiver actually emits still parses.
+    for (speed_knots, expect) in [("0.0", 0.0f32), ("0.01", 0.01), ("999.9", 999.9)] {
+        let Some(Sentence::Rmc(rmc)) = parse_one(&checksummed(&format!(
+            "GPRMC,,A,4000.9000,N,10516.2300,W,{speed_knots},,,,,A"
+        ))) else {
+            panic!("expected RMC");
+        };
+        let got = rmc.speed_mps.expect("speed");
+        assert!(
+            (got - expect * 0.514_444).abs() < 1e-3,
+            "{speed_knots} knots parsed as {got}"
+        );
+    }
+    for alt in ["-431.0", "0.0", "8848.9"] {
+        let Some(Sentence::Gga(gga)) = parse_one(&checksummed(&format!(
+            "GPGGA,,4000.9000,N,10516.2300,W,1,08,1.0,{alt},M,,M,,"
+        ))) else {
+            panic!("expected GGA");
+        };
+        assert!(gga.alt_m.is_some_and(f32::is_finite), "{alt} dropped");
+    }
+}
