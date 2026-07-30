@@ -5,7 +5,8 @@ exist, every button edge between them, and the computed press-cost of getting
 anywhere. Sources of truth: `watch_core::button` (press grammar),
 `watch_core::page` (cycle order, §286), `watch_core::page_grid` (the grid
 modal, §288/§289/§333), `watch_core::record` (run states), `watch_core::face`
-(what each surface renders). Every edge below is host-tested; the flows are
+(what each surface renders), `watch_core::settings_menu` (the idle menu, §351),
+`watch_core::screens` (what a composed data screen holds, §364). Every edge below is host-tested; the flows are
 sim-verified (see `apps/custom_watch/local_testing.md` for the macros).
 
 ## Mode-level graph
@@ -106,7 +107,7 @@ which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
 ```mermaid
 flowchart LR
     subgraph live [live run]
-        DASH --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
+        DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
     end
     subgraph course [course / race ops]
         CLMB --> NAV --> TURN --> CUT --> ROAD --> FUEL
@@ -128,6 +129,12 @@ flowchart LR
     BACK --> DASH
 ```
 
+`SC1`–`SC4` are the runner's own composed data screens (§ 364). They seat
+immediately after the Dashboard — a screen you built is one press from home —
+and each is gated on having actually been composed, so a watch that has never
+been pushed an `SCR1` frame walks straight `DASH --> DIST` and the ring is
+exactly the 37 built-ins. `BACK` stays last in every case.
+
 The page grid (hold either paging key 0.5 s — it opens at the threshold, so
 the grid appearing is the hold's own feedback) shows this same ring as a
 4-column map — codes in cycle order, cursor box on the current page — and
@@ -138,12 +145,13 @@ legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
 therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 37-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
-rather than truncating the tail (§333) — scroll depth 3 at the full mask. Under
-the everyday filtered mask (~12 pages, 3 rows) the whole enabled set fits and
-nothing scrolls.
+rather than truncating the tail (§333) — scroll depth `ceil(37/4) − 7` = 3 at
+the full built-in mask, and 4 on a watch carrying all four composed screens
+(`ceil(41/4) − 7`). Under the everyday filtered mask (~12 pages, 3 rows) the
+whole enabled set fits and nothing scrolls.
 
 The chrome is what makes the modal honest about itself. 37 codes need
-`ceil(37/4)` = 10 rows against a panel of 9 (144 px / 16 px), so the ring has
+`ceil(37/4)` = 10 rows against a panel of 9 (144 px / 16 px) — 11 at 41 — so the ring has
 not merely filled the screen — it now outruns it even with no chrome at all,
 which is precisely what §333's window was built for. Every chrome row is
 bought from body capacity, which only
@@ -218,7 +226,7 @@ no-chord grammar.
 | Pause / resume | 1 tap (BTN1) | yes |
 | Manual lap (doubles as workout-step skip when a workout is armed, §354) | 1 tap (BTN5) | yes |
 | Mark a waypoint mid-run (§357) | 1 hold (0.5 s, BTN5) | yes — the only gesture the grammar had free |
-| Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the §-StopGuard trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
+| Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the `StopGuard` trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
 | Any of 37 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
@@ -329,7 +337,8 @@ removes.
   page's full name, because four glyphs cannot separate 37 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
   `PACR`/`RCAP` are transpositions (computed over all 666 code pairs at 37
-  pages; the figure was 595 at 35). Both the 3 s auto-select and BTN1 therefore
+  pages; the figure was 595 at 35, and is 820 across the full 41-code set once
+  the four composed screens carry `SC1`–`SC4`). Both the 3 s auto-select and BTN1 therefore
   commit on something the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
   `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
@@ -415,7 +424,10 @@ removes.
   reserved two and left them blank while stating their headline in an 8x16 row.
   Each now headlines the number it is about, and the row that carried it is
   dropped rather than kept as a small copy. `Page::Nav` is exempt structurally,
-  not by list — its `body_top_row` is 0, so it reserves nothing.
+  not by list — its `body_top_row` is 0, so it reserves nothing. The four
+  composed `Screen` pages take the same exemption for the same reason (§364):
+  their layout, not the table, decides where each slot's value and label land,
+  so they reserve no band for a body they do not have.
 - **No page restates its own hero in a body row** (§361). A hero exists so one
   number is readable at arm's length; the same number again at 8x16 two rows
   down spends a row of nine saying nothing new. Pinned narrowly — the guard
@@ -471,7 +483,7 @@ scrolls with the upper/lower of its three **right**-side buttons. Three
 brands, three placements — but all of them stack prev/next *vertically on
 one side*, because their page metaphor is a vertical list. No mainstream
 watch splits paging across the case. Ours does, deliberately: this UI's
-page ring is drawn *horizontally* (the §-invariant top-edge position thumb
+page ring is drawn *horizontally* (the §337 top-edge position thumb
 sweeps left→right across the cycle), and stimulus-response compatibility —
 the classic human-factors result that a control congruent with the
 display's motion is faster and less error-prone, especially under load —
