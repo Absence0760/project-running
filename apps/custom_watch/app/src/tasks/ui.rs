@@ -342,15 +342,30 @@ pub async fn screen_task(
             uptime_s,
             tz_offset_min,
         );
+        // The hero's unit, drawn at 1x on the number's own baseline instead of
+        // welded into a string the numeral faces cannot spell (§ 361). Resolved
+        // before the band, because it is part of the width the tall face is
+        // budgeted against — and then to a cell, once, because the standing
+        // marker shares row 1 with it on the two-row faces and has to clear it.
+        let unit = hero
+            .as_deref()
+            .filter(|h| ui_frame::hero_has_value(h))
+            .and(face::page_hero_unit(page, rec.as_ref(), tb.as_ref()));
         let band = ui_frame::hero_band(HeroFrame {
             alert: alert.is_some(),
             rezero_banner: rezero_banner.is_some(),
             hero: hero.is_some(),
             numeral: hero.as_deref().is_some_and(ui_frame::numeral_hero),
-            fits_tall: hero.as_deref().is_some_and(ui_frame::tall_hero_fits),
+            fits_tall: hero
+                .as_deref()
+                .is_some_and(|h| ui_frame::tall_hero_fits(h, unit)),
             stop_pending,
             page,
         });
+        let hero_unit = hero
+            .as_deref()
+            .zip(unit)
+            .and_then(|(h, u)| ui_frame::hero_unit_cell(band, h, u).map(|cell| (u, cell)));
         // Persist the fuel reminder past its transient banner: latch the standing
         // overdue state off the same `alert` value. The Fuel glance page being
         // open is the acknowledgement.
@@ -369,7 +384,11 @@ pub async fn screen_task(
                 page,
                 overdue,
                 battery,
-                ui_frame::hero_row_cells(band, hero.as_deref().unwrap_or("")),
+                ui_frame::hero_row_cells(
+                    band,
+                    hero.as_deref().unwrap_or(""),
+                    hero_unit.map(|(unit, _)| unit),
+                ),
             );
         } else {
             // The diagnostics face's numeric battery read-out; the idle-face
@@ -469,6 +488,11 @@ pub async fn screen_task(
                 }
             }
             HeroBand::None => {}
+        }
+        // After the hero, so the number's own span (composed from scratch, and
+        // therefore destructive) can never erase the unit that labels it.
+        if let Some((unit, (col, row))) = hero_unit {
+            fb.draw_text(col, row, unit);
         }
         // Widget overlays (host-tested in `watch_render`): the render layer
         // paints into the cells the face leaves blank. A run view gets the

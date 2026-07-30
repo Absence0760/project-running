@@ -137,7 +137,8 @@ pub fn tall_hero_cells(text: &str) -> usize {
     med_from * NUMERAL_CELLS + (text.len() - med_from) * NUMERAL_MED_CELLS
 }
 
-/// Whether `text` fits across the panel in the three-row treatment.
+/// Whether `text` — and the `unit` that will be drawn beside it — fit across
+/// the panel in the three-row treatment.
 ///
 /// The driver **drops glyphs past the right edge**, so an over-wide hero does
 /// not overflow — it silently loses its last digits, which on a cut-off margin
@@ -145,8 +146,41 @@ pub fn tall_hero_cells(text: &str) -> usize {
 /// A value that does not fit therefore falls back to the medium face, which is
 /// half the width per glyph and shows the number whole. Smaller and complete
 /// beats larger and truncated.
-pub fn tall_hero_fits(text: &str) -> bool {
-    tall_hero_cells(text) <= face::COLS
+///
+/// The unit is part of the budget for the same reason: a 1000 km hero fits the
+/// tall face on its own but not with its `KM`, and dropping the unit to keep
+/// the size would leave the number unlabelled now that the label row no longer
+/// repeats it (§ 361). Half a size smaller with the unit beats larger without.
+pub fn tall_hero_fits(text: &str, unit: Option<&str>) -> bool {
+    tall_hero_cells(text) + unit.map_or(0, str::len) <= face::COLS
+}
+
+/// Whether `hero` states a measured value rather than an absent one — it holds
+/// at least one digit.
+///
+/// The gate on drawing a hero's unit ([`face::page_hero_unit`]), one rule for
+/// every page: `--`, `--:--` and `DONE` have no digit, and `-- KM` would put a
+/// unit on a number that is not there. `+0:00` does have one, which is right —
+/// level with the virtual partner is a measurement, not an absence.
+pub fn hero_has_value(hero: &str) -> bool {
+    hero.bytes().any(|b| b.is_ascii_digit())
+}
+
+/// The text cell `unit` is drawn in: the column just past the hero's glyphs, on
+/// the hero band's bottom row so the unit sits on the number's own baseline
+/// (the 32x48 face's baseline is row 2, the 16x32 face's is row 1). `None` when
+/// the band draws no hero glyphs, or when the unit would not fit the row —
+/// refused rather than truncated, since a clipped `K` reads as a different unit
+/// rather than as a missing one.
+pub fn hero_unit_cell(band: HeroBand, hero: &str, unit: &str) -> Option<(usize, usize)> {
+    let (col, row) = match band {
+        HeroBand::BigNumHero => (tall_hero_cells(hero), face::TALL_HERO_BAND_ROWS - 1),
+        HeroBand::MedNumHero | HeroBand::TextHero => {
+            (hero.len() * NUMERAL_MED_CELLS, face::HERO_BAND_ROWS - 1)
+        }
+        HeroBand::AlertBanner | HeroBand::RezeroBanner | HeroBand::None => return None,
+    };
+    (col + unit.len() <= face::COLS).then_some((col, row))
 }
 
 /// Cells of [`face::RUN_MARKER_ROW`] the hero band covers this frame — what a
@@ -155,12 +189,19 @@ pub fn tall_hero_fits(text: &str) -> bool {
 /// The hero is drawn after the text rows and composes its span from scratch, so
 /// its span is destructive. A banner owns the whole band, which is the point of
 /// a banner; a hero owns exactly its glyphs; no hero owns nothing.
-pub fn hero_row_cells(band: HeroBand, hero: &str) -> usize {
+///
+/// `unit` is the hero's unit *as the frame will actually draw it* (`None` when
+/// it is suppressed or refused), and it only widens the span on the two-row
+/// faces: those put the unit on [`face::RUN_MARKER_ROW`] itself, while the
+/// three-row face's unit sits a row below the marker and cannot reach it.
+pub fn hero_row_cells(band: HeroBand, hero: &str, unit: Option<&str>) -> usize {
     match band {
         HeroBand::AlertBanner | HeroBand::RezeroBanner => face::COLS,
         HeroBand::BigNumHero => tall_hero_cells(hero),
         // Both draw one doubled cell per character, over rows 0-1.
-        HeroBand::MedNumHero | HeroBand::TextHero => hero.len() * NUMERAL_MED_CELLS,
+        HeroBand::MedNumHero | HeroBand::TextHero => {
+            hero.len() * NUMERAL_MED_CELLS + unit.map_or(0, str::len)
+        }
         HeroBand::None => 0,
     }
 }
@@ -451,7 +492,7 @@ mod tests {
         // Smaller and whole beats larger and truncated: the driver drops the
         // glyphs past the right edge, so an over-wide cut-off margin would
         // render `+10:05:3`.
-        assert!(!tall_hero_fits("+10:05:30"));
+        assert!(!tall_hero_fits("+10:05:30", None));
         assert_eq!(
             hero_band(HeroFrame {
                 fits_tall: false,
@@ -479,17 +520,68 @@ mod tests {
         assert_eq!(tall_hero_cells("+1:05:30"), 2 * 4 + 6 * 2);
         // The widest splits the face can produce are over budget, and so are
         // hour-scale cut-off margins: all honest at medium size instead.
-        assert!(!tall_hero_fits("+999:59:59"));
-        assert!(!tall_hero_fits("999:59:59"));
-        assert!(!tall_hero_fits("+10:05:30"));
+        assert!(!tall_hero_fits("+999:59:59", None));
+        assert!(!tall_hero_fits("999:59:59", None));
+        assert!(!tall_hero_fits("+10:05:30", None));
         // The widest run distance the hero clamps to still fits — the decimals
         // ride the medium face, so four big digits plus two small ones is 20 of
         // the 21 cells.
-        assert!(tall_hero_fits("9999.9"));
+        assert!(tall_hero_fits("9999.9", None));
         // The everyday values a runner actually reads all fit.
         for hero in ["42.20", "6:20", "1:23:45", "-12:30", "52", "250", "100"] {
-            assert!(tall_hero_fits(hero), "{hero}");
+            assert!(tall_hero_fits(hero, None), "{hero}");
         }
+        // The unit rides the same budget: a four-figure ultra distance fits the
+        // tall face bare and does not fit it with the `KM` that now only exists
+        // beside the number, so it steps down a size rather than go unlabelled.
+        assert!(tall_hero_fits("1000.0", None));
+        assert!(!tall_hero_fits("1000.0", Some("KM")));
+        assert!(tall_hero_fits("42.20", Some("KM")));
+    }
+
+    #[test]
+    fn a_unit_is_drawn_only_beside_a_number_that_is_there() {
+        assert!(hero_has_value("32.40"));
+        assert!(hero_has_value("0"));
+        // Level with the virtual partner is a measurement, not an absence.
+        assert!(hero_has_value("+0:00"));
+        for placeholder in ["--", "--:--", "DONE", ""] {
+            assert!(!hero_has_value(placeholder), "{placeholder}");
+        }
+    }
+
+    #[test]
+    fn the_hero_unit_sits_on_the_numbers_own_baseline() {
+        // The three-row face's baseline is row 2, the two-row faces' is row 1 —
+        // so the unit lands level with the bottom of the digits either way,
+        // never floating beside their middle.
+        assert_eq!(
+            hero_unit_cell(HeroBand::BigNumHero, "32.40", "KM"),
+            Some((tall_hero_cells("32.40"), 2))
+        );
+        assert_eq!(
+            hero_unit_cell(HeroBand::MedNumHero, "152", "BPM"),
+            Some((3 * NUMERAL_MED_CELLS, 1))
+        );
+        assert_eq!(
+            hero_unit_cell(HeroBand::TextHero, "152", "BPM"),
+            Some((3 * NUMERAL_MED_CELLS, 1))
+        );
+        // A banner owns the whole band, and no hero means nothing to label.
+        for band in [
+            HeroBand::AlertBanner,
+            HeroBand::RezeroBanner,
+            HeroBand::None,
+        ] {
+            assert_eq!(hero_unit_cell(band, "32.40", "KM"), None, "{band:?}");
+        }
+        // Refused rather than truncated: a clipped `K` reads as a different
+        // unit, not as a missing one. Ten doubled cells leave one column, which
+        // `/KM` does not fit.
+        assert_eq!(
+            hero_unit_cell(HeroBand::MedNumHero, "1234567890", "/KM"),
+            None
+        );
     }
 
     #[test]
@@ -520,7 +612,7 @@ mod tests {
         for page in [Page::Pacer, Page::CutoffEta] {
             for hero in ["+0:42", "-1:05", "--", "+1:05:30"] {
                 assert!(numeral_hero(hero), "{hero}");
-                let fits = tall_hero_fits(hero);
+                let fits = tall_hero_fits(hero, None);
                 let expected = if face::tall_hero(page) && fits {
                     HeroBand::BigNumHero
                 } else {
