@@ -161,6 +161,7 @@ pub async fn screen_task(
     let mut page = Page::default();
     let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
+    let mut logged_idle_view: Option<IdleView> = None;
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
     let mut grid: Option<Page> = None;
@@ -280,6 +281,17 @@ pub async fn screen_task(
         if logged_page != Some(page) {
             debug!("ui: page {}", page);
             logged_page = Some(page);
+        }
+        // The idle faces' equivalent, and change-gated for the same reason. The
+        // button task already logs which face a BTN4 press SELECTED; this is the
+        // separate claim that the composer followed it onto the panel — the pair
+        // the page walk cross-checks, which the idle faces had no way to make.
+        // Without it a screenshot or a scenario can only dump and hope the
+        // repaint already landed, and an idle_view that never reached this task
+        // reads exactly like a face that happens to look the same.
+        if logged_idle_view != Some(idle_view) {
+            debug!("ui: idle {}", idle_view);
+            logged_idle_view = Some(idle_view);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
