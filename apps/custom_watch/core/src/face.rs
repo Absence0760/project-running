@@ -6183,7 +6183,10 @@ mod tests {
         let mut void = snapshot(RecordState::Paused, 100.0);
         void.current_speed_mps = 5.0;
         void.signal_lost = true;
-        assert!(void.is_moving(), "the void must not have aged out the speed");
+        assert!(
+            void.is_moving(),
+            "the void must not have aged out the speed"
+        );
         for uptime_s in [10, 11] {
             assert_eq!(
                 face_rows(None, None, Some(&void), None, uptime_s)[0]
