@@ -392,10 +392,19 @@ pub async fn run(store: &'static SharedStore) {
     let mut last_published = recorder.snapshot();
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
-    // The sim can't wait 15 minutes of moving time for a real reminder, so
-    // the autostart build shortens the fuel cadences (drink 30 s, eat 45 s of
-    // moving time). Hardware keeps the fuel_plan-derived defaults.
-    #[cfg(feature = "sim-autostart")]
+    // The sim can't wait 15 minutes of moving time for a real reminder, so the
+    // sim build shortens the fuel cadences (drink 30 s, eat 45 s of moving time).
+    // Hardware keeps the fuel_plan-derived defaults.
+    //
+    // Its own feature rather than riding `sim-autostart`, because these cadences
+    // are what the `alerts` scenario exists to observe and pure noise to
+    // everything else: past ~100 s they overlap into a continuous banner, and a
+    // banner covers the two hero rows of whatever page is on screen. That made
+    // six of `bin/watch-shots.sh`'s twenty-one run screens unusable as layout
+    // references — including CLMB, whose whole hero is the climb figure — with
+    // no way to ask for a quiet watch short of dropping the demo settings that
+    // arm most of the pages. `--no-alerts` is that way.
+    #[cfg(feature = "sim-alerts")]
     {
         alerts.set_fuel_intervals(30, 45);
         info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");

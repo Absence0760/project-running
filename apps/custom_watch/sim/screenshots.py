@@ -580,7 +580,15 @@ def run(args):
         print(f"\n=== session {name} ===", flush=True)
         shots = Shots(out_dir / name)
         shots.out_dir.mkdir(parents=True, exist_ok=True)
-        launcher = () if name == "run" else ("--no-autostart",)
+        # --no-alerts on both: a banner is a solid inverse-video band over the two
+        # hero rows, so a page photographed under one is a photograph of the
+        # banner. The re-shoot loop below can only wait a banner out if there are
+        # gaps to wait for, and past ~100 s the sim's shortened cadences overlap
+        # into a continuous one — which cost six of twenty-one run screens on the
+        # first sheet, CLMB and the Dashboard among them. Dropping the cadences is
+        # the fix; dropping `sim-autostart` would have worked too and would also
+        # have taken the demo settings that arm most of the pages.
+        launcher = ("--no-alerts",) if name == "run" else ("--no-autostart", "--no-alerts")
         fixture = RUN_FIXTURE if name == "run" else IDLE_FIXTURE
         try:
             with ci.sim_session(

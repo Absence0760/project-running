@@ -28,6 +28,17 @@ single-core-cs = ["cortex-m/critical-section-single-core"]
 # apps/custom_watch/local_testing.md § Simulating without a board.
 sim-autostart = []
 
+# Sim-only shortened alert cadences: fuel at 30 s drink / 45 s eat of moving
+# time, plus the distance / time / pace arms a phone would otherwise have to
+# push. OFF by default — hardware keeps the fuel_plan-derived defaults and leaves
+# the other arms unset until a settings sync. Separate from `sim-autostart`
+# because it is what the `alerts` sim scenario observes and noise to every other
+# one: the cadences overlap into a continuous banner past ~100 s, and a banner
+# covers the hero rows of whatever page is on screen. bin/watch-sim.sh builds
+# with it; `--no-alerts` drops it, which is how bin/watch-shots.sh gets a quiet
+# watch to photograph without also losing the demo settings that arm the pages.
+sim-alerts = []
+
 # Sim-only button task: poll the DK button pin levels instead of waiting on a
 # hardware edge. OFF by default. embassy-nrf's `wait_for_falling_edge` is driven
 # by the nRF52840 GPIO SENSE/DETECT + PORT-event path, which Renode's GPIO model

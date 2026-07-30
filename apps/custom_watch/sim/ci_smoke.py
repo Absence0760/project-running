@@ -7,18 +7,35 @@ waiting for someone to run it by hand. It reuses the launcher rather than
 re-implementing the boot sequence, so a regression in watch-sim.sh itself
 (pty, defmt drain, monitor port, cleanup) also fails here.
 
-Four scenarios, selected with `--scenario` (default `all`):
+Five scenarios, selected with `--scenario` (default `all`):
 
-`smoke` — the original end-to-end pass, unchanged. In order, each assertion
-grounded in the manual evidence under sim/verification-2026-07-19/:
+`smoke` — the end-to-end pass. In order, each assertion grounded in the manual
+evidence under sim/verification-2026-07-19/, except the two marked below:
 
   1. the flash run store arms at boot            run_flash: run store armed
   2. the canned NMEA parses into an accepted fix gps: fix ... sats=N (N>=4)
-  3. that fix starts a recording                 record: sim-autostart
-  4. distance accumulates past a floor           record: recording dist=<m>
-  5. the run face actually renders on the panel  DumpFrame -> non-blank PPM
-  6. two BTN2 presses stop the run and commit    run_flash: stored run
-  7. nothing panicked along the way
+  3. the optical-HR driver reads the AFE model   hr: bpm N          (new)
+  4. that fix starts a recording                 record: sim-autostart
+  5. distance accumulates past a floor           record: recording dist=<m>
+  6. the same fix reaches the PHONE link         tcp status frames  (new)
+  7. the run face actually renders on the panel  DumpFrame -> non-blank PPM
+  8. two BTN2 presses stop the run and commit    run_flash: stored run
+  9. nothing panicked along the way
+
+(3) and (6) are folded in here rather than given scenarios of their own because
+neither needs anything this boot is not already doing, and a scenario costs a
+whole emulator. Both cover a rail that had no assertion at all:
+
+  - The MAX86177 model has existed since 2026-07-19 and was built to take the
+    optical-HR path off the bench gate, but no scenario ever read a BPM off it.
+    The whole chain — TWIM EasyDMA master, the model's tagged MEAS1/MEAS2 sample
+    stream, the driver's AGC and pulse detector — could break and every scenario
+    would still pass.
+  - The phone link is the sim's SECOND rail and the one the mobile app consumes
+    (`emulation CreateServerSocketTerminal` in watch.resc -> the dev-only Sim
+    watch link screen). Nothing here had ever opened that socket, so the panel
+    could be perfect while the link emitted nothing, and the only way to find out
+    was for a human to run the mobile screen against it.
 
 `alerts` — the on-run alert engine reaches the panel. The sim arms its own
 shortened cadences under `sim-autostart` (drink 30 s / eat 45 s of moving time,
@@ -47,6 +64,15 @@ this proves they come INTO an armed one, which is the half a mis-wired
 data-presence bit would pass silently. Note the baro profile is load-bearing:
 `feed_gap` prefers baro altitude over the fix's, so the fixture's GPS ramp
 alone is shadowed by the model's static default.
+
+`dropout` — the recorder across a signal void, on the gps_dropout fixture. The
+one scenario here whose subject is a bug that has actually happened: the fixture
+was written for the 2026-07-19 manual pass and caught the un-ported
+`run_recorder` #330 gap re-anchor, which froze distance for the REST of a run
+after any 1 Hz dropout that displaced the runner past `MAX_JUMP_M`. It was fixed
+that day and has been guarded by two host tests and nothing else since — the
+fixture itself stayed manual, so the end-to-end path that surfaced it had no
+regression guard at all. This is that guard. See `scenario_dropout`.
 
 **What a panel dump does NOT prove.** A dump shows that *something* was drawn,
 not *what*: nothing here reads a glyph. The only evidence that a given page is
@@ -83,7 +109,7 @@ line (a block-buffered decoder could delay observing it past the window).
 Usage:
   apps/custom_watch/sim/ci_smoke.py [--out-dir DIR] [--fixture NAME]
                                     [--phone-port N] [--budget SECONDS]
-                                    [--scenario {smoke,pages,alerts,all}]
+                                    [--scenario {smoke,pages,alerts,terrain,dropout,all}]
 
 Requires: renode + defmt-print on PATH, and the sim-feature ELF already built
 (the launcher builds it if not, but pre-building it in a separate step keeps a
@@ -94,6 +120,8 @@ read debug-level lines, and defmt filters at compile time.
 
 import argparse
 import itertools
+import json
+import math
 import os
 import re
 import shutil
@@ -115,7 +143,35 @@ MIN_WHITE_PIXELS = 200
 MIN_SATS = 4
 STOP_ATTEMPTS = 3
 
-SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain")
+# The band a BPM off the MAX86177 model has to land in. Max86177.cs synthesizes
+# one synthetic beat every `PulsePeriodSamples` at its 100 Hz frame rate and
+# defaults to 83, which is 6000/83 = ~72.3 BPM. The band is wide enough that the
+# detector's own smoothing and the AGC's opening settle do not have to be pinned,
+# and narrow enough that it is a claim: a detector that emitted a constant, a
+# zero, or an ambient-driven 200 fails it. Widen this only by changing the
+# model's period with it.
+HR_BPM_MIN = 55
+HR_BPM_MAX = 95
+HR_TIMEOUT = 120
+
+# The phone link's frame schema — `watch_core::link`, "v": 1. These key names are
+# the contract the mobile decoder (`sim_watch_link.dart`) reads off the same
+# bytes, so they are asserted by name rather than by count.
+LINK_PROTOCOL_VERSION = 1
+LINK_FRAME_KEYS = ("v", "uptime_s", "fix", "elev")
+# Enough frames to see the uptime clock advance across several of them and to
+# reach the first one carrying a fix. The link emits one per second of virtual
+# time and the first fix lands ~5 s in, so this is a handful of seconds of run.
+LINK_FRAMES_WANTED = 12
+LINK_TIMEOUT = 90
+# How far the link's fix may sit from the one the decoded log reported before they
+# are different positions rather than the same one printed twice. defmt prints the
+# f32 lat/lon with fewer digits than the link's %.6f, so byte equality is not
+# available; 0.001 deg is ~110 m, far tighter than the ~2.98 m the fixture steps
+# per fix could ever put between two adjacent published fixes.
+LINK_FIX_TOLERANCE_DEG = 0.001
+
+SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain", "dropout")
 
 # The NMEA fixture each scenario was written against, and a property OF the
 # scenario rather than of the invocation: `terrain` asserts a climb, which the
@@ -127,6 +183,7 @@ SCENARIO_FIXTURES = {
     "alerts": "bench_jog",
     "pages": "bench_jog",
     "terrain": "mountain_loop",
+    "dropout": "gps_dropout",
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -168,6 +225,67 @@ TRIANGLE_DOWN_MM_S = 600
 # TRIANGLE_UP_MM_S the margin is ~12 s of virtual time.
 CLIMB_OPEN_GAIN_M = 25.0
 BARO_GAIN_TIMEOUT = 240
+
+# `dropout`'s numbers. The gps_dropout fixture is 40 clean 1 Hz fixes, then 40 s
+# of void (fix-quality-0 GGA + void RMC), then 40 s of reacquire 122 m downrange
+# of the last good fix — 122 m past `watch_core::record::MAX_JUMP_M` over a gap
+# past `GPS_REANCHOR_AFTER_S`, which is precisely the #330 case.
+#
+# The void floor is the detection threshold, NOT the fixture's 40 s: the gap the
+# firmware experiences is measured on the EMULATOR's clock, and virtual time
+# drifts against the host's under load (the same reason watch.resc times its
+# button holds on `ElapsedVirtualTime`). A loaded runner can compress the void,
+# so the floor sits well above the ~4 s ordinary publish cadence and well below
+# 40 — and the scenario reports a compressed void as a compressed void rather
+# than as a frozen recorder.
+DROPOUT_VOID_MIN_S = 12.0
+# What the pre-void leg has to bank before the void is worth measuring. The
+# fixture steps 2.98 m per fix against the 3.0 m TRACK_THRESHOLD_M, so about
+# half of each pair is absorbed into the next and the leg credits ~113 m of its
+# ~116 m of ground truth; this floor is a third of that, so it pins "the leg
+# accrued" without pinning the filter's exact arithmetic.
+DROPOUT_PRE_VOID_M = 40.0
+# Growth after the reacquire that a stale anchor cannot produce. Set to
+# `watch_core::record::TRACK_THRESHOLD_M`, because that is the smallest credit
+# the recorder can make at all — anything under it was absorbed into the next
+# hop and moved nothing. So a single accepted fix clears this by construction
+# (on this fixture the first one credits ~5.97 m), and the claim stays the
+# minimal one: distance moved AT ALL again, which is the bit #330 broke.
+DROPOUT_RESUME_M = 3.0
+# How long after the void's far edge the resume has to land, in the firmware's
+# own clock. A real re-anchor credits on the FIRST accepted fix past the void —
+# the rebase itself banks nothing, so the credit lands one accepted hop later,
+# measured at 4.0 s. This bound says the resume is prompt rather than eventual,
+# and it makes a broken firmware fail in seconds instead of at a wall-clock
+# timeout. It is a secondary guard: DROPOUT_FIXTURE_RESTART_M below is the one
+# that has to hold, because it does not depend on any clock.
+DROPOUT_RESUME_WITHIN_S = 60.0
+# A jump between consecutive published fixes big enough to be the NMEA feed
+# restarting the fixture rather than a runner moving.
+#
+# This is the load-bearing bound on the resume search, and it exists because the
+# first version of this scenario PASSED against a firmware with the re-anchor
+# deliberately disabled. `bin/watch-sim.sh` loops the fixture; the loop teleports
+# the runner ~354 m back to the start, and from there they walk toward the anchor
+# a broken recorder is still holding, until the delta falls back under
+# `MAX_JUMP_M` over a dt of minutes and is accepted — crediting ~98 m in one
+# lump. Distance resumes, late and for entirely the wrong reason, and an
+# unbounded resume check reads that as the re-anchor working. Measured at
+# t=220.7 s against a void ending at t=126.9 s.
+#
+# 200 m sits between the two jumps this fixture actually contains: the ~354 m
+# restart, and the 122 m the runner covered during the void (which is the
+# reacquire the scenario is FOR, and lands at the void's far edge, before the
+# window opens). Ordinary steps are ~3 m.
+DROPOUT_FIXTURE_RESTART_M = 200.0
+DROPOUT_TIMEOUT = 360
+# A backstop only. The resume verdict comes from the firmware's clock passing
+# DROPOUT_RESUME_WITHIN_S, not from wall time running out — this is here so a
+# wedged emulator that stops producing snapshots altogether still fails.
+DROPOUT_RESUME_TIMEOUT = 120
+# Mirrors `watch_core::record::GPS_REANCHOR_AFTER_S`. Named here so the failure
+# message can say which constant the observed gap has to clear.
+GPS_REANCHOR_AFTER_S = 10
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -218,6 +336,19 @@ ALERT_CLEAR_TIMEOUT = 30
 # sits an order of magnitude under that and well over the handful of pixels a
 # ticking second changes.
 MIN_BANNER_INK_DELTA = 500
+
+# `dropout`'s two lines. The published-fix line is what marks the void's edges —
+# its ABSENCE is the void, so the gap between consecutive matches is the signal —
+# and the recorder's own snapshot line carries the distance the void must freeze.
+# The snapshot line is emitted whenever the snapshot changes, and elapsed_s
+# changes every second, so the void is densely sampled rather than inferred from
+# two endpoints.
+FIX_PUBLISHED = re.compile(r"gps: fix lat=(-?[\d.]+) lon=(-?[\d.]+)")
+RECORD_SNAPSHOT = re.compile(r"record: (\w+) dist=([\d.]+)m")
+# The virtual timestamp defmt-print puts at the head of every decoded line, in
+# seconds. Virtual, not wall: every gap `dropout` reasons about is a gap the
+# FIRMWARE saw, and the two clocks drift apart under host load.
+LINE_STAMP = re.compile(r"^\s*([\d.]+)\s")
 
 Panel = namedtuple("Panel", "path width height dark data")
 
@@ -556,6 +687,180 @@ def sim_session(args, label, deadline, phone_port, fixture, launcher_args=()):
         sim.shutdown()
 
 
+def stamped(tail, pattern):
+    """Every match of `pattern` so far, paired with its line's virtual timestamp.
+
+    The other scenarios only ever need the newest match, which `LogTail.wait`
+    gives them. `dropout` needs the WHOLE series and the times between its
+    entries — a void is a hole in the fix stream, which no single line reports.
+    A line whose stamp will not parse is dropped rather than guessed at: a
+    timestamp is the evidence here, so a missing one must not become a 0.0 that
+    reads as an enormous gap.
+    """
+    tail.poll()
+    out = []
+    for line in tail.lines:
+        m = pattern.search(line)
+        if m is None:
+            continue
+        stamp = LINE_STAMP.match(line)
+        if stamp is not None:
+            out.append((float(stamp.group(1)), m))
+    return out
+
+
+def read_link_frames(sim, wanted, timeout):
+    """Read `wanted` newline-terminated status frames off the phone-link socket.
+
+    Renode's server-socket terminal BUFFERS everything UARTE1 wrote while no
+    client was attached and replays it on connect, so a connection opened minutes
+    into a run still opens on the frame from uptime_s = 1. That is leaned on here
+    rather than worked around: the backlog is the stream, in order and complete,
+    so the first frames off a fresh connection are the run's first seconds — and
+    it is also what the mobile dev screen gets when it attaches mid-run, which is
+    worth knowing before reading its first values as live ones.
+
+    A short read is not an error on its own; running out of time with fewer than
+    `wanted` frames is, and says how many arrived.
+    """
+    deadline = time.monotonic() + timeout
+    frames = []
+    pending = ""
+    with socket.create_connection(("127.0.0.1", sim.phone_port), timeout=10) as sock:
+        sock.settimeout(1.0)
+        while len(frames) < wanted:
+            sim.alive()
+            try:
+                chunk = sock.recv(4096)
+            except socket.timeout:
+                chunk = b""
+            except OSError as exc:
+                raise SmokeFailure(
+                    f"the phone-link socket on port {sim.phone_port} dropped after "
+                    f"{len(frames)} frames: {exc}"
+                ) from exc
+            if chunk:
+                pending += chunk.decode("utf-8", errors="replace")
+                *complete, pending = pending.split("\n")
+                frames.extend(line for line in complete if line.strip())
+            elif time.monotonic() >= deadline:
+                raise SmokeFailure(
+                    f"the phone link produced {len(frames)} of {wanted} status "
+                    f"frames on port {sim.phone_port} within {timeout:.0f}s. "
+                    "watch.resc bridges UARTE1 to that port and the `phone` task "
+                    "writes one watch_core::link frame per second, so either the "
+                    "task is not running (it is compiled out under `--features "
+                    "ble`, which the sim build must not carry) or the bridge is "
+                    "not wired"
+                )
+    return frames[:wanted]
+
+
+def assert_link_frames(sim, frames, log_fix):
+    """The three claims a batch of status frames carries.
+
+    Schema, then clock, then payload. The payload one is the reason the other two
+    are worth making: it cross-checks the SAME fix against the decoded log, so the
+    assertion is that one parsed fix reached both the panel rail and the phone
+    rail — not merely that each rail produced something.
+    """
+    decoded = []
+    for raw in frames:
+        try:
+            decoded.append(json.loads(raw))
+        except ValueError as exc:
+            raise SmokeFailure(
+                f"a phone-link frame is not valid JSON ({exc}): {raw[:120]!r} — the "
+                "frame is built by `write!` into a fixed heapless::String, so a "
+                "truncated one means it overflowed"
+            ) from exc
+
+    for frame in decoded:
+        missing = [k for k in LINK_FRAME_KEYS if k not in frame]
+        if missing:
+            raise SmokeFailure(
+                f"a phone-link frame is missing {', '.join(missing)}: {frame} — "
+                "those key names are what the mobile decoder reads, so dropping "
+                "or renaming one breaks the phone side silently"
+            )
+        if frame["v"] != LINK_PROTOCOL_VERSION:
+            raise SmokeFailure(
+                f"a phone-link frame declares schema v{frame['v']}, not "
+                f"v{LINK_PROTOCOL_VERSION} — a version bump has to land on the "
+                "mobile decoder in the same change"
+            )
+    passed(
+        f"{len(decoded)} phone-link frames carry the v{LINK_PROTOCOL_VERSION} "
+        f"schema ({', '.join(LINK_FRAME_KEYS)})"
+    )
+
+    uptimes = [frame["uptime_s"] for frame in decoded]
+    if any(b <= a for a, b in itertools.pairwise(uptimes)):
+        raise SmokeFailure(
+            f"the link's uptime_s is not strictly increasing: {uptimes} — it is "
+            "`Instant::now().as_secs()`, so a repeat or a step backward is the "
+            "monotonic clock breaking, which is what sim/NRF52840_RTC_Overflow.cs "
+            "exists to prevent (the stock rtc1 model wrapped it every 512 s)"
+        )
+    passed(f"uptime_s advances monotonically across the batch ({uptimes[0]} -> {uptimes[-1]})")
+
+    fixed = [frame for frame in decoded if frame["fix"] is not None]
+    if not fixed:
+        raise SmokeFailure(
+            f"none of the {len(decoded)} frames carried a fix, though the log "
+            f"reported one at lat={log_fix[0]} lon={log_fix[1]} — the link's "
+            "`fix` is fed from state::FIX, so a null through a live fix means the "
+            "phone task is not seeing that watch"
+        )
+    first = fixed[0]["fix"]
+    for key in ("lat", "lon", "speed_mps", "sats", "age_s"):
+        if key not in first:
+            raise SmokeFailure(
+                f"the link's fix object is missing {key}: {first} — the mobile "
+                "decoder reads it by name"
+            )
+    drift = max(abs(first["lat"] - log_fix[0]), abs(first["lon"] - log_fix[1]))
+    if drift > LINK_FIX_TOLERANCE_DEG:
+        raise SmokeFailure(
+            f"the link's first fix is at {first['lat']},{first['lon']} but the "
+            f"decoded log's first was {log_fix[0]},{log_fix[1]} — {drift:.6f} deg "
+            f"apart, past the {LINK_FIX_TOLERANCE_DEG} deg the two rails' print "
+            "precisions can differ by. The two rails are reading different fixes"
+        )
+    if first["sats"] < MIN_SATS:
+        raise SmokeFailure(
+            f"the link's first fix reports sats={first['sats']}, under the "
+            f"{MIN_SATS} the same fix carried on the log rail"
+        )
+    passed(
+        f"the fix reached the phone rail too: lat={first['lat']} lon={first['lon']} "
+        f"sats={first['sats']} age_s={first['age_s']}, within "
+        f"{LINK_FIX_TOLERANCE_DEG} deg of the log's"
+    )
+
+
+def fixture_restart_at(tail, after):
+    """Virtual timestamp of the first published fix past `after` that jumps
+    further than a runner could have moved — the NMEA feed replaying the fixture
+    from its first sentence. None while the feed is still on its first pass.
+
+    Equirectangular, like `watch_core::record`'s own projection and for the same
+    reason: over a few hundred metres it is exact enough, and the number only has
+    to separate ~354 m from ~3 m.
+    """
+    fixes = stamped(tail, FIX_PUBLISHED)
+    for (_, a), (t, b) in zip(fixes, fixes[1:]):
+        if t <= after:
+            continue
+        lat_a, lon_a = float(a.group(1)), float(a.group(2))
+        lat_b, lon_b = float(b.group(1)), float(b.group(2))
+        north = (lat_b - lat_a) * 111_320.0
+        east = (lon_b - lon_a) * 111_320.0 * math.cos(math.radians(lat_a))
+        if math.hypot(north, east) >= DROPOUT_FIXTURE_RESTART_M:
+            return t
+    return None
+
+
 def require_recording(sim):
     """Both run-view scenarios need a run under way: the page cycle only
     exists in a run view (idle, BTN4 toggles diagnostics and BTN3 cycles the
@@ -672,6 +977,37 @@ def scenario_smoke(sim):
         f"sats={sats})"
     )
 
+    # The optical-HR rail. Asserted in two steps for the reason `terrain` splits
+    # the baro the same way: the hr task parks itself on a probe timeout, and a
+    # parked task produces no BPM for a reason that has nothing to do with the
+    # pulse detector. Asking for the streaming line first makes those two
+    # failures say different things.
+    sim.wait(
+        re.compile(r"hr: MAX86177 streaming"),
+        HR_TIMEOUT,
+        "the hr task to reach the MAX86177 model ('hr: MAX86177 streaming') — a "
+        "parked task means the TWIM EasyDMA master never completed the presence "
+        "probe, not that the pulse detector is wrong",
+    )
+    bpm = int(
+        sim.wait(
+            re.compile(r"hr: bpm (\d+)"),
+            HR_TIMEOUT,
+            "a trusted pulse off the MAX86177 model ('hr: bpm N') — the model "
+            "synthesizes a beat every PulsePeriodSamples frames, so a driver that "
+            "reads the tagged MEAS1/MEAS2 stream correctly has to find it",
+        ).group(1)
+    )
+    if not HR_BPM_MIN <= bpm <= HR_BPM_MAX:
+        raise SmokeFailure(
+            f"the driver read {bpm} BPM off a model synthesizing ~72 (6000 / its "
+            f"default 83-frame pulse period), outside the {HR_BPM_MIN}-"
+            f"{HR_BPM_MAX} band — the pulse detector is locking onto something "
+            "other than the model's beat (the ambient channel, the AGC's own "
+            "steps, or a half/double-rate harmonic)"
+        )
+    passed(f"the optical-HR driver read {bpm} BPM off the MAX86177 model")
+
     sim.wait(
         re.compile(r"record: sim-autostart on first fix"),
         60,
@@ -701,6 +1037,16 @@ def scenario_smoke(sim):
             )
         time.sleep(0.5)
     passed(f"distance accumulated to {best:.1f} m while recording")
+
+    # The phone rail. Read here rather than at boot because the point is the
+    # CROSS-CHECK against the fix the log rail already reported above — the two
+    # rails agreeing about one parsed fix is the claim, and it needs that fix to
+    # have happened first.
+    assert_link_frames(
+        sim,
+        read_link_frames(sim, LINK_FRAMES_WANTED, LINK_TIMEOUT),
+        (float(fix.group(1)), float(fix.group(2))),
+    )
 
     panel = sim.dump("frame.ppm", "a panel frame dump")
     assert_rendered(panel, "a rendered face")
@@ -1178,11 +1524,227 @@ def scenario_terrain(sim):
     )
 
 
+def scenario_dropout(sim):
+    """Cross a GPS signal void and prove the recorder comes back from it.
+
+    The gps_dropout fixture is three legs: 40 clean 1 Hz fixes, a 40 s void of
+    fix-quality-0 GGA and void RMC, then 40 s of reacquire 122 m downrange of the
+    last good fix. Those numbers are the point. 122 m clears
+    `watch_core::record::MAX_JUMP_M`, so the reacquire fix fails the one-hop cap;
+    the gap clears `GPS_REANCHOR_AFTER_S`, so it is a real signal gap rather than
+    a corrupt teleport and the anchor must REBASE to it. Before that re-anchor was
+    ported from `run_recorder` (its #330), the stale anchor only ever receded and
+    distance was frozen for the rest of the run.
+
+    That bug is why this scenario exists. It was found by running this exact
+    fixture by hand on 2026-07-19, fixed the same day, and guarded since by two
+    host tests over `Recorder` — never by anything that drives the whole path from
+    NMEA bytes through the parser and the publish cadence into the recorder. The
+    fixture stayed a manual poke. So the class of regression that would slip past
+    the host tests — a parser that stops emitting through the void, a publish
+    cadence that swallows the reacquire, a fix-quality gate that lets the void's
+    empty GGA through as a fix at 0,0 — had no guard at all.
+
+    Three claims, in the order the run produces them:
+
+      1. the pre-void leg banks distance
+      2. the void freezes it, and every sample inside the void reads `paused` —
+         an auto-pause is the honest read of "no fixes", and a recorder that kept
+         crediting distance through a void would be inventing it
+      3. the reacquire moves it again
+
+    (3) is the #330 guard. (2) is what makes (3) mean something: distance that
+    never stopped growing would satisfy (3) trivially.
+
+    **Why the void is measured and not assumed.** The void's length in the
+    FIRMWARE's clock is not the fixture's 40 s — the NMEA feeder is wall-clock
+    driven while the emulator's virtual clock drifts against the host's under
+    load, the same skew `watch.resc` times its button holds around. A host slow
+    enough to compress the void under `GPS_REANCHOR_AFTER_S` would leave the
+    anchor legitimately held and distance legitimately frozen, and reporting that
+    as a frozen recorder would be a lie. So the gap is read off the decoded
+    stream's own timestamps and reported when it is too short.
+
+    **The resume search stops where the fixture restarts.** `watch-sim.sh` loops
+    the NMEA file, and the loop teleports the runner ~354 m back to its start —
+    from where they walk toward the anchor a broken recorder is still holding,
+    until the delta falls back under `MAX_JUMP_M` over a dt of minutes and
+    credits ~98 m in one lump. Distance resumes, for entirely the wrong reason.
+    The first version of this scenario passed against a firmware with the
+    re-anchor disabled on exactly that. The restart is found in the published-fix
+    stream itself (`fixture_restart_at`) rather than timed around, because
+    Renode's virtual clock runs at a ratio to wall time that swings with host
+    load and the loop is paced by the wall.
+    """
+    require_recording(sim)
+
+    # The pre-void leg. Not `MIN_DISTANCE_M`: the freeze below is only meaningful
+    # against a distance that was visibly moving, and this fixture's leg banks
+    # ~113 m before the void, so the floor can sit well clear of the first hop.
+    deadline = time.monotonic() + DROPOUT_TIMEOUT
+    best = 0.0
+    while True:
+        sim.alive()
+        for _, m in stamped(sim.tail, RECORD_SNAPSHOT):
+            best = max(best, float(m.group(2)))
+        if best >= DROPOUT_PRE_VOID_M:
+            break
+        if time.monotonic() >= deadline:
+            raise SmokeFailure(
+                f"the recorder banked only {best:.1f} m before the void, short of "
+                f"the {DROPOUT_PRE_VOID_M:.0f} m floor — the fixture's clean "
+                "opening leg is not reaching the recorder, so nothing below can "
+                "distinguish a freeze from a run that never moved"
+            )
+        time.sleep(0.5)
+    passed(f"the pre-void leg banked {best:.1f} m")
+
+    # The void, found as a hole in the published-fix stream. Polled rather than
+    # waited on a line, because the evidence is the ABSENCE of lines: the gap only
+    # becomes visible once a fix arrives on the far side of it.
+    void = None
+    while void is None:
+        sim.alive()
+        fixes = stamped(sim.tail, FIX_PUBLISHED)
+        for (start, _), (end, _) in itertools.pairwise(fixes):
+            if end - start >= DROPOUT_VOID_MIN_S:
+                void = (start, end)
+                break
+        if void is not None:
+            break
+        if time.monotonic() >= deadline:
+            widest = max(
+                (b[0] - a[0] for a, b in itertools.pairwise(fixes)), default=0.0
+            )
+            raise SmokeFailure(
+                f"no gap of {DROPOUT_VOID_MIN_S:.0f}s or more appeared in the "
+                f"published-fix stream within {DROPOUT_TIMEOUT}s (widest seen: "
+                f"{widest:.1f}s of virtual time over {len(fixes)} fixes). Either "
+                "the fixture's 40 s void never arrived, or the void's empty "
+                "fix-quality-0 GGA sentences are being accepted as fixes — which "
+                "would be the honest-staleness bug, not a missing void — or the "
+                "emulator compressed the void below the floor because the host is "
+                "too slow to run this fixture"
+            )
+        time.sleep(0.5)
+    void_start, void_end = void
+    span = void_end - void_start
+    if span < GPS_REANCHOR_AFTER_S:
+        raise SmokeFailure(
+            f"the void spanned only {span:.1f}s of the firmware's clock, under "
+            f"the {GPS_REANCHOR_AFTER_S}s GPS_REANCHOR_AFTER_S floor — the "
+            "emulator ran the fixture's 40 s void short, so the recorder is right "
+            "to hold its anchor and the re-anchor below cannot be exercised. This "
+            "is a host-speed report, not a firmware verdict"
+        )
+    passed(
+        f"the fixture's void reached the firmware as a {span:.1f}s hole in the "
+        f"published-fix stream (t={void_start:.1f}s to t={void_end:.1f}s), past "
+        f"the {GPS_REANCHOR_AFTER_S}s re-anchor floor"
+    )
+
+    # The freeze. Every snapshot strictly inside the void, not just its endpoints:
+    # a recorder that credited the void's displacement in one lump at the far edge
+    # would pass an endpoint-only check.
+    inside = [
+        (t, m) for t, m in stamped(sim.tail, RECORD_SNAPSHOT) if void_start < t < void_end
+    ]
+    if not inside:
+        raise SmokeFailure(
+            f"the recorder published no snapshot inside the {span:.1f}s void — it "
+            "publishes on every change and elapsed_s changes every second, so a "
+            "void with no snapshots in it means the record task stopped ticking "
+            "when the fixes stopped, which is a stall and not a pause"
+        )
+    frozen = float(inside[0][1].group(2))
+    moved = [(t, float(m.group(2))) for t, m in inside if float(m.group(2)) != frozen]
+    if moved:
+        t, d = moved[0]
+        raise SmokeFailure(
+            f"distance moved from {frozen:.1f} m to {d:.1f} m at t={t:.1f}s, "
+            "inside a void with no fixes in it — the recorder is crediting "
+            "distance it cannot have measured"
+        )
+    running = [(t, m.group(1)) for t, m in inside if m.group(1) != "paused"]
+    if running:
+        t, state = running[0]
+        raise SmokeFailure(
+            f"the recorder read '{state}' at t={t:.1f}s inside the void, not "
+            "'paused' — a stretch with no fixes has to auto-pause, or the run "
+            "view is telling the runner it is still tracking them"
+        )
+    passed(
+        f"distance held at {frozen:.1f} m across the whole void and every one of "
+        f"the {len(inside)} snapshots in it read paused"
+    )
+
+    # The re-anchor. Growth after the far edge of the void, and before the NMEA
+    # feed restarts the fixture — see DROPOUT_FIXTURE_RESTART_M for why that
+    # second bound is the one that has to hold. This is the single bit #330
+    # broke, and the one a host test over `Recorder` alone cannot place at the
+    # end of a real NMEA pipeline.
+    resumed = None
+    window_end = void_end + DROPOUT_RESUME_WITHIN_S
+    resume_deadline = time.monotonic() + DROPOUT_RESUME_TIMEOUT
+    while resumed is None:
+        sim.alive()
+        restart = fixture_restart_at(sim.tail, after=void_end)
+        horizon = min(window_end, restart) if restart is not None else window_end
+        samples = stamped(sim.tail, RECORD_SNAPSHOT)
+        for t, m in samples:
+            if void_end < t <= horizon and float(m.group(2)) - frozen >= DROPOUT_RESUME_M:
+                resumed = (t, float(m.group(2)))
+                break
+        if resumed is not None:
+            break
+        # The verdict is the run's own evidence passing the horizon, not the
+        # host's patience running out: once a snapshot lands past it the answer
+        # is in, whatever the emulator's speed.
+        latest_t = samples[-1][0] if samples else 0.0
+        if latest_t > horizon:
+            held = float(samples[-1][1].group(2))
+            why = (
+                f"the fixture restarted at t={restart:.1f}s"
+                if restart is not None and restart <= window_end
+                else f"the {DROPOUT_RESUME_WITHIN_S:.0f}s after it"
+            )
+            raise SmokeFailure(
+                f"distance stayed at {held:.1f} m from the void's end at "
+                f"t={void_end:.1f}s until {why}, never clearing the frozen "
+                f"{frozen:.1f} m by the {DROPOUT_RESUME_M:.0f} m a single credited "
+                "hop would add. The reacquire fix is 122 m from the last good one "
+                f"over a {span:.1f}s gap, so `Recorder::on_fix` must rebase the "
+                "anchor to it (GPS_REANCHOR_AFTER_S) instead of holding a stale "
+                "one. This is run_recorder's #330 — with the anchor held, every "
+                "later delta only grows and distance is frozen for the rest of the "
+                "run"
+            )
+        if time.monotonic() >= resume_deadline:
+            raise SmokeFailure(
+                f"no recorder snapshot reached t={horizon:.1f}s within "
+                f"{DROPOUT_RESUME_TIMEOUT}s of wall clock — the emulator stopped "
+                "advancing, so neither a resume nor its absence can be read"
+            )
+        time.sleep(0.5)
+    t, dist = resumed
+    passed(
+        f"distance resumed {t - void_end:.1f}s after the void: {frozen:.1f} m -> "
+        f"{dist:.1f} m, so the reacquire rebased the anchor rather than freezing "
+        "behind a stale one (run_recorder #330)"
+    )
+
+    panics = [ln for ln in sim.tail.text().splitlines() if "panicked" in ln.lower()]
+    if panics:
+        raise SmokeFailure("the firmware panicked during the run: " + panics[0].strip())
+    passed("no firmware panic across the void")
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
     "pages": scenario_pages,
     "terrain": scenario_terrain,
+    "dropout": scenario_dropout,
 }
 
 
@@ -1210,8 +1772,8 @@ def plan_sessions(selected, fixture_override=None):
     job finally agree about what is being executed.
 
     `smoke` additionally has to be alone — it stops the run the others need in
-    progress — and `terrain` is on a different fixture, and a boot has exactly
-    one.
+    progress — and `terrain` and `dropout` are each on a different fixture, and a
+    boot has exactly one.
 
     Each session carries its scenario's own fixture. An explicit `--fixture`
     overrides every one of them, which is how a manual session points an
@@ -1309,10 +1871,10 @@ def main():
     )
     parser.add_argument(
         "--scenario",
-        choices=("smoke", "pages", "alerts", "terrain", "all"),
+        choices=("smoke", "pages", "alerts", "terrain", "dropout", "all"),
         default="all",
-        help="which scenario to run; 'all' runs smoke, then alerts + pages, "
-        "then terrain",
+        help="which scenario to run; 'all' boots each of smoke, alerts, pages, "
+        "terrain and dropout in that order, one emulator each",
     )
     args = parser.parse_args()
 

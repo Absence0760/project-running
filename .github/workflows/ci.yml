@@ -382,10 +382,10 @@ jobs:
         run: cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
       - name: Build firmware (sim feature set)
         working-directory: apps/custom_watch
-        run: cargo build --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
       - name: Clippy (sim feature set, no warnings allowed)
         working-directory: apps/custom_watch
-        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink -- -D warnings
+        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink -- -D warnings
       - name: Rustfmt check
         working-directory: apps/custom_watch
         run: cargo fmt --check
@@ -476,7 +476,7 @@ jobs:
       # invocation exactly, or the launcher rebuilds it.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
-        run: cargo build --release --bin app --features sim-autostart,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
       # One step per scenario rather than a single `--scenario all`. A sim
       # failure is the hardest kind to diagnose remotely — Renode is not
       # installable on every contributor machine, so CI is usually the only
@@ -531,12 +531,18 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page, alert + terrain scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert, terrain + dropout scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
     # harness carries its own tighter per-assertion deadlines and a --budget.
-    timeout-minutes: 25
+    #
+    # Raised 25 -> 35 when `dropout` was added: the four budgets below now sum to
+    # 22 min against ~10 min of Renode fetch, toolchain and a cold cargo build, so
+    # 25 no longer left the harness room to fail with its own diagnostics before
+    # the runner was killed bare. The cap is still what it has always been — a
+    # backstop over the budgets, not the thing that ends a healthy run.
+    timeout-minutes: 35
     env:
       RENODE_VERSION: 1.16.1
       # Pinned like every action sha in this file: the portable package is a
@@ -597,7 +603,7 @@ jobs:
       # invocation exactly, or the launcher rebuilds it.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
-        run: cargo build --release --bin app --features sim-autostart,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
       # One step per scenario rather than a single `--scenario all`. A sim
       # failure is the hardest kind to diagnose remotely — Renode is not
       # installable on every contributor machine, so CI is usually the only
@@ -644,6 +650,18 @@ jobs:
           --scenario terrain
           --out-dir "${{ runner.temp }}/watch-sim-ci/terrain"
           --budget 300
+      # The longest of the four, and the only one whose subject is a bug that has
+      # actually happened (run_recorder's #330 gap re-anchor). It has to run the
+      # gps_dropout fixture's clean opening leg, its whole 40 s void, and into
+      # the reacquire before it can assert anything, which is ~200 s of wall
+      # clock locally — so it carries a larger budget than the other three
+      # rather than a tighter one.
+      - name: Renode sim — dropout scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario dropout
+          --out-dir "${{ runner.temp }}/watch-sim-ci/dropout"
+          --budget 420
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
       # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
