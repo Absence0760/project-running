@@ -791,6 +791,61 @@ def scenario_alerts(sim):
     """
     require_recording(sim)
 
+    # A dump taken under a banner proves only that something was on the panel.
+    # The pair is what carries the claim: the same page with no banner, then
+    # with one. The banner is a solid inverse-video band over the two hero rows,
+    # so it has to add far more ink than the hero it replaces.
+    #
+    # The baseline is taken FIRST, in the run's opening quiet window, because
+    # that is the only stretch in which the alert slot going idle is something
+    # the sim's arming makes INEVITABLE rather than something to race for.
+    # `record: alert cleared` is logged solely on the record task's Some -> None
+    # transition, so a slot handed straight from one alert to the next never
+    # emits it; once the sim's cadences overlap (30 s drink / 45 s eat / 60 s
+    # time / 100 m distance / the workout's own step alerts) the chain is
+    # unbroken and the line stops firing altogether — the regime this module's
+    # header already describes. Sampling AFTER waiting on two arbitrary alerts
+    # therefore demanded a guarantee the alert engine does not make, and lost
+    # whenever the second arm to fire was a late one: a run whose arms landed
+    # Drink then Distance never saw another clear inside the timeout.
+    #
+    # The opening window is different in kind. The armed workout raises its
+    # warm-up step within a millisecond of the first fix, that single alert is
+    # the only thing holding the slot, and the earliest competing cadence is
+    # 30 s of MOVING time — so its TTL expiry is due with nothing behind it and
+    # leaves a wide bannerless stretch after it. That is the one `cleared` the
+    # scenario can count on, so it is the one the baseline is taken against.
+    #
+    # Both halves of the pair still race the PANEL the same way, and the
+    # baseline is the half that fails silently: the record task's line leads the
+    # screen task's repaint, so a dump can still carry the banner it is meant to
+    # be the baseline for. Sample a few times and keep the LOWEST — a stale
+    # quiet frame can only ever read too inky, never too clean, so the minimum
+    # is the one that cannot be the lagging one. Sampling stops early if a new
+    # alert takes the slot mid-window, so a late sample cannot quietly inflate
+    # the baseline and blunt the delta the banner assertion below demands.
+    wait_for_no_alert(sim)
+    quiet = None
+    for attempt in range(1, ALERT_QUIET_ATTEMPTS + 1):
+        if latest_alert(sim.tail) not in (None, "cleared"):
+            break
+        shot = sim.dump(
+            f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
+        )
+        if latest_alert(sim.tail) not in (None, "cleared"):
+            break
+        assert_rendered(shot, "the run face between alerts")
+        if quiet is None or shot.dark < quiet.dark:
+            quiet = shot
+    if quiet is None:
+        raise SmokeFailure(
+            "no panel frame could be dumped in the run's opening quiet window — "
+            "an alert took the slot again between the first one clearing and the "
+            "first dump landing, so there is no baseline to measure a banner's "
+            "ink against"
+        )
+    announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
+
     fuel = sim.wait(
         FUEL_ALERT,
         240,
@@ -806,29 +861,6 @@ def scenario_alerts(sim):
         "('record: alert Distance(…)' / 'Time(…)' / 'PaceFast' / 'PaceSlow')",
     )
     passed(f"one of the newer alert arms fired: {other.group(1)}")
-
-    # A dump taken under a banner proves only that something was on the panel.
-    # The pair is what carries the claim: the same page with no banner, then
-    # with one. The banner is a solid inverse-video band over the two hero rows,
-    # so it has to add far more ink than the hero it replaces.
-    # Both halves of the pair race the panel the same way, and the baseline is
-    # the half that fails silently. `wait_for_no_alert` returns on the record
-    # task's `cleared` line, but the screen task repaints a beat later, so a
-    # quiet dump can still be carrying the very banner it is supposed to be the
-    # baseline for — which inflates `quiet` to banner level and makes every
-    # later comparison read as "no banner rendered". Sample it a few times and
-    # keep the LOWEST: a stale quiet frame can only ever read too inky, never
-    # too clean, so the minimum is the one that cannot be the lagging one.
-    quiet = None
-    for attempt in range(1, ALERT_QUIET_ATTEMPTS + 1):
-        wait_for_no_alert(sim)
-        shot = sim.dump(
-            f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
-        )
-        assert_rendered(shot, "the run face between alerts")
-        if quiet is None or shot.dark < quiet.dark:
-            quiet = shot
-    announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
 
     # `ALERT_RAISED` is the RECORD task's line; the banner is painted later by
     # the screen task. So a dump can land after the raise is logged, with the
