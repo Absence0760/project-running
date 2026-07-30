@@ -531,18 +531,20 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page, alert, terrain + dropout scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert, terrain, dropout + screens scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
     # harness carries its own tighter per-assertion deadlines and a --budget.
     #
-    # Raised 25 -> 35 when `dropout` was added: the four budgets below now sum to
-    # 22 min against ~10 min of Renode fetch, toolchain and a cold cargo build, so
-    # 25 no longer left the harness room to fail with its own diagnostics before
-    # the runner was killed bare. The cap is still what it has always been — a
-    # backstop over the budgets, not the thing that ends a healthy run.
-    timeout-minutes: 35
+    # Raised 25 -> 35 when `dropout` was added, then 35 -> 40 when `screens`
+    # was: the five budgets below now sum to 27 min against ~10 min of Renode
+    # fetch, toolchain and a cold cargo build, and 35 no longer left the harness
+    # room to fail with its own diagnostics before the runner was killed bare.
+    # The cap is still what it has always been — a backstop over the budgets,
+    # not the thing that ends a healthy run, so it tracks their sum whenever a
+    # scenario is added.
+    timeout-minutes: 40
     env:
       RENODE_VERSION: 1.16.1
       # Pinned like every action sha in this file: the portable package is a
@@ -616,19 +618,26 @@ jobs:
       # more emulator boots are spent on it.
       #
       # Cost: each step boots its own emulator, so the budgets are what keeps
-      # this inside the cap. 3 x 300 s is 15 min against `timeout-minutes: 25`,
-      # leaving ~10 min for the Renode fetch, the toolchain and a cold cargo
-      # build. Deliberately BELOW the cap: overrunning the budget makes the
+      # this inside the cap. 4 x 300 s + dropout's 420 s is 27 min against
+      # `timeout-minutes: 40`, leaving ~10 min for the Renode fetch, the
+      # toolchain and a cold cargo build. Keep this sum in step with the cap
+      # when adding a scenario — it went stale once already, still describing
+      # three steps and a 25 min cap after `dropout` made it four and 35.
+      # Deliberately BELOW the cap: overrunning the budget makes the
       # harness exit with its own last-40-lines + renode.log dump, where the job
       # timeout would kill it bare with nothing to read.
       #
       # A scenario added to the harness needs a step added here — the harness's
-      # `--scenario all` default is not what runs.
+      # `--scenario all` default is not what runs. `screens` is what happens
+      # when it is not: it shipped with the composed-screen work and ran nowhere
+      # automated until someone ran `--scenario all` by hand, because a harness
+      # knowing about a scenario looks identical to CI running it.
       #
       # No --fixture: the harness binds one to each scenario (SCENARIO_FIXTURES)
-      # and the flag is only an override. `pages` and `alerts` are bench_jog (the
-      # sim-course breadcrumb only lines up there); `terrain` is mountain_loop,
-      # because it asserts a climb and flat ground cannot produce one.
+      # and the flag is only an override. `pages`, `alerts` and `screens` are
+      # bench_jog (the sim-course breadcrumb only lines up there); `terrain` is
+      # mountain_loop, because it asserts a climb and flat ground cannot produce
+      # one; `dropout` is gps_dropout, which is the void it exists to cross.
       - name: Renode sim — pages scenario
         run: >-
           python3 apps/custom_watch/sim/ci_smoke.py
@@ -641,7 +650,8 @@ jobs:
           --scenario alerts
           --out-dir "${{ runner.temp }}/watch-sim-ci/alerts"
           --budget 300
-      # Last of the three: it boots on a different fixture and spends ~60 s of
+      # The dearest of the page-shaped scenarios: it boots on a different
+      # fixture and spends ~60 s of
       # virtual time climbing before it can assert anything, so a failure in the
       # two cheaper page scenarios above should surface first.
       - name: Renode sim — terrain scenario
@@ -650,7 +660,7 @@ jobs:
           --scenario terrain
           --out-dir "${{ runner.temp }}/watch-sim-ci/terrain"
           --budget 300
-      # The longest of the four, and the only one whose subject is a bug that has
+      # The longest of the five, and the only one whose subject is a bug that has
       # actually happened (run_recorder's #330 gap re-anchor). It has to run the
       # gps_dropout fixture's clean opening leg, its whole 40 s void, and into
       # the reacquire before it can assert anything, which is ~200 s of wall
@@ -662,6 +672,18 @@ jobs:
           --scenario dropout
           --out-dir "${{ runner.temp }}/watch-sim-ci/dropout"
           --budget 420
+      # Landed with the composed-screen work (§ 364) into the harness but never
+      # into this workflow, so for four days it ran only when someone typed
+      # `--scenario all` by hand — which is exactly the gap the note at the top
+      # of this block warns about. Same fixture and the same cycle-walking shape
+      # as `pages`, and it measures ~34 s on a quiet box, so it takes `pages`'
+      # budget rather than a bespoke one.
+      - name: Renode sim — screens scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario screens
+          --out-dir "${{ runner.temp }}/watch-sim-ci/screens"
+          --budget 300
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
       # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
