@@ -310,6 +310,59 @@ and 37 are the first to move a grid worst since the § 289 model was built — s
 page 36, forward-only 9 → 10 at page 37, linear 17 → 18 at page 36 (`navigation.md` re-derived).
 The everyday filtered cost is unchanged at worst 4.
 
+## 2026-07-29 (second batch) — the first sheet read back: three kinds of wasted cell, and two bugs behind them
+
+[§ 360](../architecture/decisions.md) made the panel viewable; this is what looking at it produced
+([§ 361](../architecture/decisions.md)). **Measured, not eyeballed** — the first impression ("the
+pages are half empty") was wrong: mean ink was **6.6 of 9 rows** across the 37-page cycle, so the
+waste was concentrated rather than general, and two of the three findings were about cells spent
+saying something twice rather than cells left blank.
+
+**`GPS` was a word on twenty-one pages** — five of twenty-one cells, on the one row whose meaning is
+fixed across the whole cycle, to say what the dashboard's `Icon::Satellite` already said in two.
+`page_icons` labels `GPS_ROW` everywhere now and `write_gps_row` lost its `label` parameter, so the
+glyph and the cleared gutter have no way left to disagree.
+
+**Units had drifted a row from their numbers.** `0.08` over `DISTANCE  KM` reads as a heading and a
+number. They went there because the numeral faces spell only digits and separators, so one letter
+demotes the hero to the pixel-doubled text font — the Workout page's `9.60 KM` was paying exactly
+that. The unit is its own channel now, drawn at 1x on the hero's baseline. It joins the tall face's
+width budget, counts toward the standing marker's clearance, and is suppressed when the hero holds
+no digit.
+
+**Thirteen pages reserved the hero band and left it blank** — a fifth of the panel, at the top, on a
+third of the cycle, while the page's headline sat in an 8x16 row indistinguishable from its context
+rows. Each headlines its own number now; the row that carried it is dropped rather than kept as a
+small copy. Mean ink 6.6 → **7.3**.
+
+**Two real bugs fell out, neither of which any host test could have failed on.**
+A hero wide enough to reach the state tag clipped it — live on the dashboard past 100 hours, where
+`AUTO` rendered as `UTO`, a tag naming a state the recorder is not in, on exactly the multi-day runs
+where an auto-pause matters most. `write_tag`'s refuse-rather-than-truncate rule could not see the
+hero, because the hero is not row text; `apply_hero_clearance` is the same refusal from the other
+side. And the § 360 sheet itself had lied: **`page-Nav.png` was byte-identical to `page-Climb.png`**,
+because the ui task logged `ui: page` *before* it drew. § 360 had added a pixel comparison to catch
+that, then exempted the run walk on the grounds that "its elapsed clock changes every frame anyway"
+— which is false for every page that shows no clock. The line moved to after the flush, so it now
+claims the panel *has* the screen; the comparison stays as the detector for the other cause (a state
+that never reached the composer) and now runs on every capture, not just the idle ones.
+
+**The satellite glyph was redrawn** in the same pass, because it went from one page to thirty-seven.
+It was the lightest icon in the table at 36 ink pixels against 54–110 for its siblings, and
+off-centre (cols 1–10 of 16 where the others span 2–13). Three nested arcs over the shared anchor
+dot now fill the cell like `Mountain` does: 19 → 37 → **59** ink across the three acquiring frames,
+so the search still grows monotonically and `SatSearch0`/`SatSearch1`/`Satellite` stay three
+distinguishable beats.
+
+**Coverage hole found on the way in.** `fed_snapshot()` backs every page-wide guard in `face.rs` and
+only ever filled the *phone-pushed* views — so the Pacer, Workout, CutoffEta, Climb, Waypoint and
+RacePredictor bodies had never been walked by the grid-fit sweep, the hero-band placement guard or
+the state-tag sweep in anything but their empty state. All three pass unchanged with them fed:
+nothing was broken behind the hole, it was simply unwatched.
+
+Workspace host sweep 2140 → 2148; firmware builds; the four Renode scenarios and the 25-screen sheet
+re-run green after the log-ordering change.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

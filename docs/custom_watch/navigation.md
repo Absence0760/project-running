@@ -379,6 +379,39 @@ removes.
 - **The home clock is minute-resolution** so an idle watch owes the panel
   zero per-second redraws; `draw_bignum_band` compare-writes whole lines, so
   a resting clock flushes zero lines (pinned by a `sharp_mip` test).
+- **The bottom row means the same thing on every run page, so a glyph labels
+  it** (§361). Every run page ends on the GPS glance, and `page_icons` blits
+  the satellite into that gutter across the whole cycle — the word `GPS` cost
+  five of twenty-one cells to say what the glyph says in two, and the glyph's
+  search-arc frames additionally say *acquiring* without spending a cell on
+  the word. `write_gps_row` has no label parameter at all, so the icon and the
+  cleared gutter cannot disagree. The idle face is the exception and keeps the
+  spelled label: it has no icon gutter and pairs its GPS row with a dedicated
+  `MODE` row.
+- **A hero's unit sits with its number, not on the label row** (§361).
+  `face::page_hero_unit` is the unit; `ui_frame::hero_unit_cell` draws it at 1x
+  on the hero's own baseline (row 2 under the 32x48 face, row 1 under the
+  16x32). It cannot simply be appended — the numeral faces spell only digits,
+  `.`, `:`, `-` and `+`, so one letter demotes the whole value to the
+  pixel-doubled text font. It joins the tall face's width budget (a 1000 km
+  hero steps down a size rather than go unlabelled), it counts toward the
+  standing marker's clearance on the two-row faces, and it is suppressed
+  whenever the hero holds no digit — `-- KM` labels a number that is not there.
+- **A page that reserves the hero band fills it** (§361). `body_top_row` says
+  which rows a page's own text may write; thirteen phone-pushed summary pages
+  reserved two and left them blank while stating their headline in an 8x16 row.
+  Each now headlines the number it is about, and the row that carried it is
+  dropped rather than kept as a small copy. `Page::Nav` is exempt structurally,
+  not by list — its `body_top_row` is 0, so it reserves nothing.
+- **A hero wide enough to reach the state tag takes the whole tag** (§361).
+  `write_tag` refuses rather than truncates, because a half-written `RE` names
+  a different state; but the hero is drawn after the rows and is not row text,
+  so past 100 hours the dashboard's nine-glyph elapsed hero clipped `AUTO` to
+  `UTO`. `apply_hero_clearance` is the same refusal from the hero's side.
+- **An unfed page states its absence once** (§361). The hero shows `--` at
+  16x32 and the reason row names what is missing; the label row carries no
+  dashes of its own. A per-*row* placeholder is a different claim and keeps
+  them: `HDG  --` says one field is missing on an otherwise fed page.
 
 ## Known gaps (deliberate, tier-1)
 
