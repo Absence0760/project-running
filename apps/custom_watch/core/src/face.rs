@@ -31,7 +31,7 @@ use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::daylight;
 use crate::elevation;
-use crate::fitness::RecoveryAdvice;
+use crate::fitness::{days_until_next_hard_session, RecoveryAdvice};
 use crate::fix::Fix;
 use crate::gear_wear::GearWearStatus;
 use crate::gnss_mode::GnssMode;
@@ -44,6 +44,7 @@ use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RacePhaseView, RecordState, Snapshot};
 use crate::roadbook::CutoffStatus;
 use crate::trackback::{self, TrackbackView};
+use crate::training_load::LoadTrendView;
 use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
 
@@ -2910,8 +2911,38 @@ fn recovery_word(advice: RecoveryAdvice) -> &'static str {
     }
 }
 
+/// Recovery-projection horizon (days) — web's `daysUntilNextHardSession`
+/// default. Past it the hole is too deep for an "in N days" line to mean
+/// anything, and the verdict already reads `REST`.
+const NEXT_HARD_MAX_DAYS: u32 = 21;
+
+/// Recovery time: easy days still owed before a hard session is advisable,
+/// projecting the synced ATL/CTL forward with no added stress. The forward
+/// half of the recovery pair — the verdict says what today is for, this says
+/// how long the runner is still paying for yesterday.
+///
+/// Mirrors the web dashboard's `daysToHard`, including its three withholdings:
+/// no rolling load synced, already recovered (a `0` the verdict beside the
+/// label has already said), and a runner returning from a layoff — whose high
+/// TSB is detraining rather than freshness, so a countdown would read as
+/// permission to go hard. Web tests that last case against the run history the
+/// watch doesn't hold; the pushed verdict is the phone's answer to the same
+/// question, since web feeds `isReturningFromLayoff` into `recoveryAdvice`.
+fn next_hard_session_days(
+    recovery: Option<RecoveryAdvice>,
+    load: Option<LoadTrendView>,
+) -> Option<u32> {
+    if recovery == Some(RecoveryAdvice::ReturningFromLayoff) {
+        return None;
+    }
+    let t = load?;
+    days_until_next_hard_session(Some(t.atl as f64), Some(t.ctl as f64), NEXT_HARD_MAX_DAYS)
+        .filter(|d| *d >= 1)
+}
+
 /// The fitness glance: the synced VO2 max ceiling up large in the hero, with the
-/// recovery-advice verdict beside the label and the VO2 number on its own row.
+/// recovery-advice verdict beside the label and the VO2 number on its own row,
+/// then the days of easy running still owed before the next hard session.
 /// Only what a single synced snapshot honestly holds — the rolling CTL/ATL/TSB
 /// needs multi-day history the watch doesn't keep, so it is deliberately absent.
 /// Unfed until the phone pushes a snapshot.
@@ -2940,6 +2971,10 @@ fn fitness_glance(
                 None => {
                     let _ = write!(rows[4], "{:<9}--", "VO2 MAX");
                 }
+            }
+            if let Some(d) = next_hard_session_days(f.recovery, snap.load_trend) {
+                let unit = if d == 1 { "DAY" } else { "DAYS" };
+                let _ = write!(rows[5], "{:<10}~{} {}", "NEXT HARD", d, unit);
             }
         }
     }
@@ -8469,6 +8504,8 @@ mod tests {
         assert_eq!(rows[0].as_str(), "");
         assert_eq!(rows[3], header("FITNESS SWEET", "REC"));
         assert_eq!(rows[4].as_str(), "VO2 MAX  52");
+        // No rolling load synced, so no recovery-time line to project from.
+        assert_eq!(rows[5].as_str(), "");
         assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         assert_eq!(
             page_hero(Page::Fitness, None, Some(&rec), None)
@@ -8508,6 +8545,74 @@ mod tests {
                 .as_str(),
             "--"
         );
+    }
+
+    fn fitness_rows(recovery: RecoveryAdvice, load: Option<LoadTrendView>) -> [Row; ROWS] {
+        use crate::record::FitnessView;
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.fitness = Some(FitnessView {
+            vo2_max: Some(52.0),
+            recovery: Some(recovery),
+        });
+        rec.load_trend = load;
+        page_rows(
+            Page::Fitness,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        )
+    }
+
+    fn load(atl: f32, ctl: f32) -> Option<LoadTrendView> {
+        Some(LoadTrendView {
+            ctl,
+            atl,
+            tsb: ctl - atl,
+        })
+    }
+
+    #[test]
+    fn fitness_glance_projects_days_to_next_hard_session() {
+        // ATL 90 / CTL 60 is 30 points of form in the hole; resting decays ATL
+        // at the 7-day constant and CTL at the 42-day one, so the -10 threshold
+        // is crossed on the third day.
+        let rows = fitness_rows(RecoveryAdvice::HeavilyLoaded, load(90.0, 60.0));
+        assert_eq!(rows[5].as_str(), "NEXT HARD ~3 DAYS");
+    }
+
+    #[test]
+    fn fitness_glance_days_to_next_hard_session_singular() {
+        let rows = fitness_rows(RecoveryAdvice::LoadedBuildTerritory, load(30.0, 18.0));
+        assert_eq!(rows[5].as_str(), "NEXT HARD ~1 DAY");
+    }
+
+    #[test]
+    fn fitness_glance_hides_recovery_time_when_already_recovered() {
+        // A zero-day answer is what the verdict beside the label already says;
+        // a "~0 DAYS" line would read as a countdown that never started.
+        let rows = fitness_rows(RecoveryAdvice::SweetSpot, load(50.0, 60.0));
+        assert_eq!(rows[5].as_str(), "");
+    }
+
+    #[test]
+    fn fitness_glance_hides_recovery_time_returning_from_layoff() {
+        // Same trend that projects three days without the verdict, so the
+        // suppression is the layoff itself and not the numbers: a returning
+        // runner's form curve is rebuilding from a reset, and any countdown off
+        // it reads as a date on which they are cleared to go hard.
+        let loaded = load(90.0, 60.0);
+        assert_ne!(
+            fitness_rows(RecoveryAdvice::HeavilyLoaded, loaded)[5].as_str(),
+            ""
+        );
+        let rows = fitness_rows(RecoveryAdvice::ReturningFromLayoff, loaded);
+        assert_eq!(rows[3], header("FITNESS LAYOFF", "REC"));
+        assert_eq!(rows[5].as_str(), "");
     }
 
     #[test]
