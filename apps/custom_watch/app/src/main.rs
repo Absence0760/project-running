@@ -237,6 +237,10 @@ async fn main(spawner: Spawner) {
     spawner.spawn(unwrap!(tasks::gps::run(gps_tx, gps_rx)));
     spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
+    // The single publisher of state::HR: the optical sensor and (on the ble
+    // build) an external strap each publish to their own seam, and this
+    // applies the stated precedence rule between them (§365).
+    spawner.spawn(unwrap!(tasks::hr_source::run()));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
     spawner.spawn(unwrap!(tasks::battery::run(battery_adc)));
     spawner.spawn(unwrap!(tasks::record::run(store)));
@@ -270,5 +274,7 @@ async fn main(spawner: Spawner) {
         // Separate from the serve loop so a disconnect racing a fresh bond
         // can't cancel the flash persist mid-write (see bond_persist's doc).
         spawner.spawn(unwrap!(tasks::ble::bond_persist(store, bonder)));
+        // The other radio role: central to an external HR strap (§365).
+        spawner.spawn(unwrap!(tasks::hr_strap::run(sd)));
     }
 }

@@ -11,6 +11,11 @@ pub mod ble;
 pub mod button;
 pub mod gps;
 pub mod hr;
+pub mod hr_source;
+/// GATT central role for an external BLE HR strap — needs the SoftDevice, so
+/// it exists only on the `ble` build (§365).
+#[cfg(feature = "ble")]
+pub mod hr_strap;
 pub mod nav;
 pub mod phone;
 pub mod record;

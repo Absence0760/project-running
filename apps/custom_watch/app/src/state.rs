@@ -32,12 +32,29 @@ use watch_core::workout::{WorkoutStep, MAX_WORKOUT_STEPS};
 pub static FIX: Watch<CriticalSectionRawMutex, Fix, 5> = Watch::new();
 
 /// Latest heart-rate estimate, stamped with the uptime it was produced at:
-/// `hr` publishes; the `ui` face and `record` (to stamp each stored track
-/// point's bpm) subscribe. Both consumers age the sample through
+/// the `hr_source` arbiter publishes — it is the ONLY publisher, so which
+/// sensor won is a stated rule (`watch_core::hr_source::select_hr`) rather
+/// than whichever task wrote last; the `ui` face and `record` (to stamp each
+/// stored track point's bpm) subscribe. Both consumers age the sample through
 /// `hr_duty::shown_bpm`, so a duty-cycled (or wedged) sensor's last reading
 /// holds only within the mode's bounded staleness and then blanks / stops
 /// banking everywhere at once.
 pub static HR: Watch<CriticalSectionRawMutex, HrSample, 2> = Watch::new();
+
+/// The optical (MAX86177) sensor's own estimate: the `hr` task publishes, the
+/// `hr_source` arbiter subscribes. A separate seam from [`HR`] so the wrist
+/// sensor keeps publishing what it sees even while an external strap outranks
+/// it — the arbiter, not the sensor, decides what the watch shows.
+pub static HR_OPTICAL: Watch<CriticalSectionRawMutex, HrSample, 1> = Watch::new();
+
+/// An external BLE heart-rate strap's estimate (§365): the `hr_strap` GATT
+/// central task publishes one per decoded Heart Rate Measurement notification
+/// — and one `bpm: None` on disconnect, so a dropped strap yields immediately
+/// instead of waiting out its staleness budget; the `hr_source` arbiter
+/// subscribes. Only ever written by the `ble` build (the strap task needs the
+/// SoftDevice radio); on every other build it stays empty and the arbiter
+/// forwards the optical sensor unchanged.
+pub static HR_STRAP: Watch<CriticalSectionRawMutex, HrSample, 1> = Watch::new();
 
 /// Live recording totals: `record` publishes on change, the `ui` face, the
 /// `button` task (for the state its toggle keys off), the `gps` task (which

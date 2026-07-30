@@ -1,6 +1,12 @@
 //! HR task — drives the Maxim MAX86177 optical-HR AFE over I²C, runs the
 //! host-tested peak-detect pipeline, and publishes a stamped BPM estimate.
 //!
+//! It publishes to `state::HR_OPTICAL`, not to the shared `state::HR` the face
+//! and recorder read: an external BLE chest strap is a second source (§365),
+//! and which one the watch shows is decided by the `hr_source` arbiter against
+//! a stated rule rather than by whichever task happened to write last. This
+//! task keeps reporting what the wrist sensor sees either way.
+//!
 //! The `max86177` driver is blocking, so a bus that never answers would spin
 //! the executor forever. Optical HR is an auxiliary layer (decisions §80 /
 //! the layered-resilience contract): its absence must not stall GPS, display,
@@ -85,7 +91,7 @@ pub async fn run(mut twim: Twim<'static>) {
         return;
     }
     let mut detector = PeakDetector::new(SAMPLE_RATE_HZ);
-    let sender = state::HR.sender();
+    let sender = state::HR_OPTICAL.sender();
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut mode = GnssMode::default();
     let mut asleep = false;
@@ -241,8 +247,9 @@ pub async fn run(mut twim: Twim<'static>) {
                 logged_bpm = Some(bpm);
             }
             // Publish only what carries new information. The drain runs at
-            // 50 Hz and the screen task waits on this watch, so resending a
-            // byte-identical sample would wake the whole UI 50 times a second
+            // 50 Hz and the arbiter → screen chain hangs off this watch, so
+            // resending a byte-identical sample would wake the UI 50 times a
+            // second
             // — the free-running waker the README's power discipline rules
             // out. `at_s` is whole seconds, so a steady pulse still publishes
             // once per second and `shown_bpm`'s hold budget ages unchanged,
