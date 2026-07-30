@@ -164,9 +164,17 @@ pub const WAYPOINT_RECORD_OFFSET: usize = 128;
 /// live only in the RAM a `SET1` push fills.
 pub const ICE_RECORD_OFFSET: usize = 256;
 
+/// Offset of the persisted composed-screens record ([`crate::screens`] `SCR1`,
+/// §364) within the config page — past the ICE card's extent, word-aligned,
+/// carried forward by the same shared-page rewrite. A runner who built their
+/// screens the night before a race must still have them after the battery pull
+/// at the start line, so the set cannot live only in the RAM a push fills.
+pub const SCREENS_RECORD_OFFSET: usize = 512;
+
 const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
 const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= ICE_RECORD_OFFSET);
-const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= CONFIG_LEN);
+const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= SCREENS_RECORD_OFFSET);
+const _: () = assert!(SCREENS_RECORD_OFFSET + crate::screens::MAX_SCR1_LEN <= CONFIG_LEN);
 
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a
@@ -1517,6 +1525,55 @@ mod tests {
         assert_eq!(
             BondRecord::decode(&page[BOND_RECORD_OFFSET..]),
             Some(a_bond())
+        );
+    }
+
+    /// The whole shared page at once, every record written where
+    /// `rewrite_config_page` puts it.
+    ///
+    /// The const asserts above prove the offsets do not overlap; this proves the
+    /// decoders agree — each reads its own record from the middle of a populated
+    /// page and none is fooled by a neighbour's bytes or by the erased gaps
+    /// between them. `SCR1` sits last and is the one whose extent had not been
+    /// exercised: it is handed the whole tail of the page, `0xFF` run-out and
+    /// all, exactly as `read_screens` hands it the fixed-length flash read.
+    #[test]
+    fn every_config_page_record_reads_back_from_a_populated_page() {
+        use crate::screens::{Layout, Screen, Screens};
+        let mut page = [0xFFu8; CONFIG_LEN];
+        page[..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(1, 0, 0));
+        page[BOND_RECORD_OFFSET..BOND_RECORD_OFFSET + BOND_RECORD_LEN]
+            .copy_from_slice(&a_bond().encode());
+
+        let set = Screens::from_slice(&[
+            Screen::new(
+                Layout::Duo,
+                &[crate::face::Metric::Distance, crate::face::Metric::AvgPace],
+            )
+            .unwrap(),
+            Screen::new(Layout::Single, &[crate::face::Metric::HeartRate]).unwrap(),
+        ])
+        .unwrap();
+        let mut rec = [0u8; crate::screens::MAX_SCR1_LEN];
+        let n = set.encode(&mut rec).unwrap();
+        page[SCREENS_RECORD_OFFSET..SCREENS_RECORD_OFFSET + n].copy_from_slice(&rec[..n]);
+
+        assert_eq!(decode_config(&page), Some((1, 0, 0)));
+        assert_eq!(
+            BondRecord::decode(&page[BOND_RECORD_OFFSET..]),
+            Some(a_bond())
+        );
+        assert_eq!(Screens::decode(&page[SCREENS_RECORD_OFFSET..]), Some(set));
+    }
+
+    /// An erased page hands back no screens rather than a set of zero-byte
+    /// metrics — the fail-closed boot a watch that has never been pushed gets.
+    #[test]
+    fn an_erased_page_yields_no_screens() {
+        let page = [0xFFu8; CONFIG_LEN];
+        assert_eq!(
+            crate::screens::Screens::decode(&page[SCREENS_RECORD_OFFSET..]),
+            None
         );
     }
 

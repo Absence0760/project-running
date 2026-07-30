@@ -339,6 +339,8 @@ pub async fn run(store: &'static SharedStore) {
     let sea_level_tx = state::SEA_LEVEL_PA.sender();
     let tz_offset_tx = state::TZ_OFFSET_MIN.sender();
     let ice_tx = state::ICE.sender();
+    let screens_tx = state::SCREENS.sender();
+    let mut screens_rx = state::SCREENS.receiver().unwrap();
     let mut recorder = Recorder::new();
     // On-run alerts ride this task because it already owns the recorder's
     // event cadence; the engine is pure and fed after the recorder updates,
@@ -361,6 +363,16 @@ pub async fn run(store: &'static SharedStore) {
         info!("record: restored ICE card");
     }
     ice_tx.send(persisted_ice);
+    // The composed data screens the flash record already holds (§364) —
+    // published straight away so the page cycle carries them before any phone
+    // connects, and kept as the comparison so a repeated push never re-erases
+    // the config page. A runner who built their screens the night before a race
+    // has them at the start line, battery pull or not.
+    let mut persisted_screens = store.lock().await.read_screens();
+    if let Some(s) = persisted_screens.as_ref() {
+        info!("record: restored {=usize} composed screen(s)", s.len());
+    }
+    screens_tx.send(persisted_screens.clone());
     let mut open: Option<OpenRun> = None;
     let mut hr: Option<HrSample> = None;
     let mut mode = GnssMode::default();
@@ -645,6 +657,19 @@ pub async fn run(store: &'static SharedStore) {
                     store.lock().await.persist_ice(card).await;
                     persisted_ice = card;
                 }
+            }
+        }
+
+        // Composed data screens arrive as a whole set, so this is a
+        // latest-value read rather than a drained queue: one frame is the
+        // complete answer, and a coalesced intermediate is not a lost edit the
+        // way a dropped settings delta would be. Persisted only when it differs
+        // from what flash already holds — which also means the publication this
+        // task made from flash at boot costs no write when it comes back round.
+        if let Some(set) = screens_rx.try_changed() {
+            if persisted_screens != set {
+                store.lock().await.persist_screens(set.as_ref()).await;
+                persisted_screens = set;
             }
         }
 

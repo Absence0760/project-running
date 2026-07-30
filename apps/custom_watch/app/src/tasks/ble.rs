@@ -91,6 +91,7 @@ mod imp {
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
     use watch_core::run_store::ChunkRequest;
+    use watch_core::screens::{Screens, MAX_SCR1_LEN};
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
     use watch_core::workout_store::{self, WorkoutAssembler, WorkoutPush, WORKOUT_CHUNK_CAP};
 
@@ -172,6 +173,21 @@ mod imp {
             security = "justworks"
         )]
         workout: Vec<u8, WORKOUT_CHUNK_CAP>,
+        /// Composed-data-screen push (the `SCR1` path, §364). The phone WRITES
+        /// one whole `screens::Screens` frame; the watch decodes it and
+        /// publishes it to `state::SCREENS`, where the record task persists it
+        /// and the ui task draws it.
+        ///
+        /// Unchunked, unlike `course` and `workout`: the whole set is
+        /// [`MAX_SCR1_LEN`] bytes, so it fits one ATT write with room to spare
+        /// and an offset-ordered assembler would buy nothing but a
+        /// reset-recovery contract to get wrong.
+        #[characteristic(
+            uuid = "d1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
+        screens: Vec<u8, MAX_SCR1_LEN>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -528,6 +544,17 @@ mod imp {
                             }
                         }
                         None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
+                    },
+                    // Whole-frame fail-closed: a refused set leaves whatever
+                    // the watch already had, which is the 37 built-in pages at
+                    // worst. A partially-applied one would put a screen in the
+                    // cycle the runner never composed.
+                    LinkServiceEvent::ScreensWrite(bytes) => match Screens::decode(&bytes) {
+                        Some(set) => {
+                            info!("ble: screens push ({=usize} screens)", set.len());
+                            state::SCREENS.sender().send(Some(set));
+                        }
+                        None => warn!("ble: bad screens frame ({=usize} B)", bytes.len()),
                     },
                     LinkServiceEvent::CourseWrite(bytes) => {
                         // Feed the reassembler; on completion decode + publish

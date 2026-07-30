@@ -60,6 +60,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::ice;
 use watch_core::profiles::ActivityProfile;
 use watch_core::run_store::ManifestEntry;
+use watch_core::screens;
 use watch_core::waypoints;
 
 use crate::state;
@@ -120,6 +121,7 @@ struct ConfigPage {
     bond: Option<flash_store::BondRecord>,
     waypoints: Option<waypoints::Waypoints>,
     ice: Option<ice::IceCard>,
+    screens: Option<screens::Screens>,
 }
 
 impl RunStore {
@@ -422,6 +424,43 @@ impl RunStore {
         }
     }
 
+    /// Read the composed data screens persisted by
+    /// [`persist_screens`](Self::persist_screens), or `None` when flash is
+    /// unavailable, unreadable, or the record is erased / corrupt — the watch
+    /// then starts with the 37 built-in pages and nothing else, which is the
+    /// L4 answer (fail-closed, and the same whole-frame rule the wire uses).
+    pub fn read_screens(&mut self) -> Option<screens::Screens> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; screens::MAX_SCR1_LEN];
+        let at = CONFIG_OFFSET + flash_store::SCREENS_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: screens read failed {:?}", e);
+            return None;
+        }
+        screens::Screens::decode(&buf)
+    }
+
+    /// Persist the runner's composed data screens (§364) so a reboot keeps
+    /// them. A set built the night before a race is worth nothing if the
+    /// battery pull at the start line forgets it. `None` clears them — the
+    /// record is simply not rewritten after the erase, so a cleared set leaves
+    /// no stale one behind, exactly as [`persist_ice`](Self::persist_ice) does.
+    /// Same best-effort / L4 rules and carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode); a screen set changes when
+    /// a runner redesigns it, which is rarely.
+    pub async fn persist_screens(&mut self, set: Option<&screens::Screens>) {
+        let mut page = self.read_config_page();
+        page.screens = set.cloned();
+        if self.rewrite_config_page(&page).await {
+            match set {
+                Some(s) => info!("run_flash: persisted {=usize} screens", s.len()),
+                None => info!("run_flash: cleared composed screens"),
+            }
+        }
+    }
+
     /// Every record the shared config page currently holds, so a writer can
     /// change one and hand the rest back untouched.
     fn read_config_page(&mut self) -> ConfigPage {
@@ -430,6 +469,7 @@ impl RunStore {
             bond: self.read_bond(),
             waypoints: self.read_waypoints(),
             ice: self.read_ice(),
+            screens: self.read_screens(),
         }
     }
 
@@ -484,6 +524,16 @@ impl RunStore {
             if let Err(e) = self.flash_write(at, &rec).await {
                 warn!("run_flash: ice write failed {:?}", e);
                 return false;
+            }
+        }
+        if let Some(s) = page.screens.as_ref() {
+            let mut buf = [0u8; screens::MAX_SCR1_LEN];
+            if let Some(len) = s.encode(&mut buf) {
+                let at = start + flash_store::SCREENS_RECORD_OFFSET as u32;
+                if let Err(e) = self.flash_write(at, &buf[..len]).await {
+                    warn!("run_flash: screens write failed {:?}", e);
+                    return false;
+                }
             }
         }
         true
