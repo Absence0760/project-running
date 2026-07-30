@@ -134,6 +134,7 @@ class Shots:
     def __init__(self, out_dir: Path):
         self.out_dir = out_dir
         self.items = []
+        self.shell = None
 
     def take(self, sim, slug: str, title: str, note: str, must_differ_from=None):
         """Dump, reject the frame if it is not the one asked for, keep the rest.
@@ -189,6 +190,23 @@ class Shots:
         )
         ci.announce(f"captured {title} ({panel.dark} dark px, {ink:.1f}% ink)")
         return panel.data
+
+    def take_shell(self, sim, slug: str, title: str, note: str):
+        """Capture the whole --gui canvas — case, keys and panel — not the LCD.
+
+        A different artifact from the panel shots, and kept out of the page grid
+        for that reason: it is in colour, it is a different size, and it asserts
+        nothing about the firmware. It is what the window looks like.
+        """
+        ppm = self.out_dir / f"{slug}.ppm"
+        if ppm.exists():
+            ppm.unlink()
+        sim.monitor().send(f"sysbus.spi3.display DumpCanvas @{ppm}")
+        ci.wait_for_file(ppm, 45, f"the {title} canvas dump")
+        png = self.out_dir / f"{slug}.png"
+        subprocess.run(["magick", str(ppm), str(png)], check=True, capture_output=True)
+        self.shell = {"title": title, "note": note, "png": png}
+        ci.announce(f"captured {title} (full canvas)")
 
 
 def capture_run(sim, shots: Shots):
@@ -289,6 +307,12 @@ def capture_idle(sim, shots: Shots):
     ).group(1)
     previous = shots.take(
         sim, f"idle-{anchor}", f"Idle {anchor}", "idle, §291 home face"
+    )
+    shots.take_shell(
+        sim,
+        "shell",
+        "The sim window",
+        "the --gui canvas on the home face: case, five §350 keys, reflective panel",
     )
 
     for n in (1, 2):
@@ -416,6 +440,10 @@ figcaption { margin-top: .8rem; }
 body.mip .panel { background: var(--mip-paper); }
 body.mip .panel img { mix-blend-mode: multiply; filter: sepia(.18) saturate(.55); }
 body.grid-off .grid { grid-template-columns: 1fr; max-width: 34rem; }
+/* The shell shot is already a rendered device in colour — no bezel, no tint. */
+figure.shell { grid-column: 1 / -1; max-width: 40rem; }
+figure.shell img { width: 100%; height: auto; display: block;
+  image-rendering: pixelated; border-radius: .4rem; }
 footer { max-width: 62rem; margin: 3rem auto 0; padding-top: 1.2rem;
   border-top: 1px solid var(--line); color: var(--dim); font-size: .88rem; }
 """
@@ -462,6 +490,20 @@ def contact_sheet(groups, out: Path, generated: str):
         "step=\"50\" value=\"200\"> <span class=\"meta\" id=\"zoomv\"></span></label>",
         "</div></header>",
     ]
+
+    shell = next((s.shell for _, _, s in groups if s.shell), None)
+    if shell:
+        b64 = base64.b64encode(shell["png"].read_bytes()).decode("ascii")
+        parts.append(
+            "<section class=\"group\"><h2>The device</h2>"
+            f"<p>{html.escape(shell['note'])}</p></section>"
+            "<div class=\"grid\"><figure class=\"shell\">"
+            f"<img alt=\"{html.escape(shell['title'])}\" "
+            f"src=\"data:image/png;base64,{b64}\">"
+            f"<figcaption><div class=\"name\">{html.escape(shell['title'])}</div>"
+            "<div class=\"meta\">DumpCanvas &middot; the whole --gui window, in "
+            "colour</div></figcaption></figure></div>"
+        )
 
     total = 0
     for title, blurb, shots in groups:
