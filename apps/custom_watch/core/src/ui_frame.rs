@@ -183,6 +183,113 @@ pub fn hero_unit_cell(band: HeroBand, hero: &str, unit: &str) -> Option<(usize, 
     (col + unit.len() <= face::COLS).then_some((col, row))
 }
 
+/// Where one slot of a composed screen ([`crate::screens`], § 364) is drawn.
+///
+/// Rows, not pixels — the caller multiplies by the cell height, the way every
+/// other geometry decision in this module hands the app a grid position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SlotPlacement {
+    /// Top row of the slot's value.
+    pub value_row: usize,
+    /// Which face draws it.
+    pub band: HeroBand,
+    /// Row the slot's label rides.
+    pub label_row: usize,
+    /// Column the label starts at. Slot 0's label owns its own row from the
+    /// left; the medium slots put theirs to the right of the value, on the
+    /// value's own baseline.
+    pub label_col: usize,
+}
+
+/// Rows a composed screen's leading slot occupies — the same three-row band a
+/// tall-hero glance page uses, which is why slot 0 rides the ordinary hero
+/// pipeline untouched.
+const SLOT0_BAND_ROWS: usize = face::TALL_HERO_BAND_ROWS;
+
+/// The face a slot's value is actually drawn in, given the face its placement
+/// asks for and the glyphs the value turns out to use.
+///
+/// **A placement's band is a nominal request, not the answer.** The numeral
+/// faces carry digits, `.`, `:`, `-` and `+` and nothing else, so a value the
+/// panel cannot spell in them draws as *nothing at all* — the primitive skips
+/// every glyph it has no index for and leaves the row blank. That is not a
+/// hypothetical: an unfed slot renders a class token
+/// ([`crate::unfed::UnfedClass::slot_token`]) and a settled workout step
+/// renders `DONE`, all of them words.
+///
+/// So a non-numeral value falls back to the doubled text face, exactly as
+/// [`hero_band`] already does for a page's own hero off its `numeral` flag.
+/// This is the same decision, made for the slots that do not ride that path.
+pub fn slot_band(nominal: HeroBand, value: &str) -> HeroBand {
+    if numeral_hero(value) {
+        nominal
+    } else {
+        HeroBand::TextHero
+    }
+}
+
+/// Where each slot of a `layout`-shaped composed screen lands on the panel.
+///
+/// **Slot 0 is always the tall hero at row 0**, so it takes the existing band
+/// decision, the existing unit placement and the existing run-marker clearance
+/// with no change at all; only the slots under it are new geometry. That is the
+/// whole reason the layouts were cut this way.
+///
+/// The row budget is nine, and [`face::GPS_ROW`] keeps the last one on every
+/// run page — a composed screen does not get to hide the fix quality:
+///
+/// - **Single** — value rows 0-2, label row 3. Identical to a glance page.
+/// - **Duo** — both values in the 32x48 face: rows 0-2 and 4-6, labels on rows
+///   3 and 7. Two heroes at full size is the layout that costs nothing in
+///   legibility, and it needs no primitive the panel does not already have.
+/// - **Trio** — the hero at rows 0-2 with its label on row 3, then two 16x32
+///   values at rows 4-5 and 6-7, each with its label to the *right* on the
+///   value's own baseline. A six-glyph medium value spans twelve cells, so the
+///   label's [`crate::screens::SLOT_LABEL_CELLS`] fit beside it with room to
+///   spare — which is what that constant was sized for.
+pub fn slot_placements(
+    layout: crate::screens::Layout,
+) -> heapless::Vec<SlotPlacement, { crate::screens::SCREEN_SLOTS }> {
+    use crate::screens::Layout;
+    let mut out = heapless::Vec::new();
+    let hero = SlotPlacement {
+        value_row: 0,
+        band: HeroBand::BigNumHero,
+        label_row: SLOT0_BAND_ROWS,
+        label_col: 0,
+    };
+    let _ = out.push(hero);
+    match layout {
+        Layout::Single => {}
+        Layout::Duo => {
+            let _ = out.push(SlotPlacement {
+                value_row: SLOT0_BAND_ROWS + 1,
+                band: HeroBand::BigNumHero,
+                label_row: SLOT0_BAND_ROWS + 1 + SLOT0_BAND_ROWS,
+                label_col: 0,
+            });
+        }
+        Layout::Trio => {
+            for (i, top) in [SLOT0_BAND_ROWS + 1, SLOT0_BAND_ROWS + 3]
+                .into_iter()
+                .enumerate()
+            {
+                let _ = out.push(SlotPlacement {
+                    value_row: top,
+                    band: HeroBand::MedNumHero,
+                    // The medium face's baseline is the second of its two rows,
+                    // so the label sits level with the digits rather than above
+                    // their tops.
+                    label_row: top + face::HERO_BAND_ROWS - 1,
+                    label_col: face::COLS - crate::screens::SLOT_LABEL_CELLS,
+                });
+                let _ = i;
+            }
+        }
+    }
+    out
+}
+
 /// Rows the hero band's own pixels cover this frame — the rows
 /// [`face::apply_hero_clearance`] has to check for text the hero would eat.
 /// A banner covers the two-row band whether or not a hero exists behind it.

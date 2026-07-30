@@ -1393,6 +1393,7 @@ mod tests {
             IdleView::Home,
             None,
             None,
+            None,
         );
         let mut text = Framebuffer::new();
         for (r, row) in rows.iter().enumerate() {

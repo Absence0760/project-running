@@ -150,6 +150,7 @@ pub async fn screen_task(
     let mut profile_rx = unwrap!(state::PROFILE.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut ice_rx = unwrap!(state::ICE.receiver());
+    let mut screens_rx = unwrap!(state::SCREENS.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr: Option<HrSample> = None;
     let mut rec: Option<Snapshot> = None;
@@ -179,6 +180,9 @@ pub async fn screen_task(
     // The responder card (§358); None until the record task publishes one from
     // flash or a phone push, which the ICE face says honestly.
     let mut ice: Option<IceCard> = None;
+    // The runner's composed data screens (§364); None until the record task
+    // publishes them from flash or a phone push.
+    let mut screens: Option<watch_core::screens::Screens> = None;
     // Latches the transient fuel banner into a standing "fuel overdue" marker
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
@@ -223,6 +227,9 @@ pub async fn screen_task(
         }
         if let Some(c) = ice_rx.try_changed() {
             ice = c;
+        }
+        if let Some(s) = screens_rx.try_changed() {
+            screens = s;
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
@@ -294,6 +301,7 @@ pub async fn screen_task(
             idle_view,
             tz_offset_min,
             ice.as_ref(),
+            screens.as_ref(),
         );
         // The hero band is decided here rather than at its `match` below,
         // because the standing marker shares row 1 with it and has to know how
@@ -312,8 +320,15 @@ pub async fn screen_task(
         // 16x32 numeral faces over rows 0-2, with the label and state tag on row
         // 3; every other numeral hero takes the 16x32 medium face over rows 0-1,
         // and so does a value too wide to render whole at the taller size.
-        let hero = face::page_hero(
+        //
+        // A composed screen (§364) supplies its own slots instead of declaring a
+        // static metric, and its FIRST slot is a tall hero at row 0 — exactly
+        // what a glance page's is. So it feeds the same `hero` here and inherits
+        // the band decision, the unit placement and the run-marker clearance
+        // untouched; only the slots beneath it are new drawing.
+        let screen_slots = face::screen_page_slots(
             page,
+            screens.as_ref(),
             latest.as_ref(),
             hr_bpm,
             rec.as_ref(),
@@ -321,6 +336,18 @@ pub async fn screen_task(
             uptime_s,
             tz_offset_min,
         );
+        let hero = match screen_slots.as_ref() {
+            Some(sc) => sc.slots.first().map(|s| s.value.clone()),
+            None => face::page_hero(
+                page,
+                latest.as_ref(),
+                hr_bpm,
+                rec.as_ref(),
+                tb.as_ref(),
+                uptime_s,
+                tz_offset_min,
+            ),
+        };
         // The hero's unit, drawn at 1x on the number's own baseline instead of
         // welded into a string the numeral faces cannot spell (§ 361). Resolved
         // before the band, because it is part of the width the tall face is
@@ -329,7 +356,10 @@ pub async fn screen_task(
         let unit = hero
             .as_deref()
             .filter(|h| ui_frame::hero_has_value(h))
-            .and(face::page_hero_unit(page, rec.as_ref(), tb.as_ref()));
+            .and(match screen_slots.as_ref() {
+                Some(sc) => sc.slots.first().and_then(|s| s.unit),
+                None => face::page_hero_unit(page, rec.as_ref(), tb.as_ref()),
+            });
         let band = ui_frame::hero_band(HeroFrame {
             alert: alert.is_some(),
             rezero_banner: rezero_banner.is_some(),
@@ -467,6 +497,31 @@ pub async fn screen_task(
                 }
             }
             HeroBand::None => {}
+        }
+        // The composed screen's remaining slots, under the hero that slot 0
+        // already drew. Same two primitives the band above uses, at the row
+        // `slot_placements` puts them on — a Duo's second value in the 32x48
+        // face, a Trio's two in the 16x32 one. Their labels came through the
+        // text rows, to the right of the medium values and clear of the span
+        // these draws overwrite.
+        if let Some(sc) = screen_slots.as_ref() {
+            for (slot, at) in sc
+                .slots
+                .iter()
+                .zip(ui_frame::slot_placements(sc.layout))
+                .skip(1)
+            {
+                let y = at.value_row * CELL_H;
+                // The placement's band is a nominal request; a value the
+                // numeral faces cannot spell — every unfed class token, and
+                // `DONE` — falls back to the doubled text face, or it would
+                // draw as nothing at all.
+                match ui_frame::slot_band(at.band, &slot.value) {
+                    HeroBand::BigNumHero => fb.draw_bignum_hero(y, &slot.value),
+                    HeroBand::MedNumHero => fb.draw_bignum_med_hero(y, &slot.value),
+                    _ => fb.draw_text_2x(0, at.value_row, &slot.value),
+                }
+            }
         }
         // After the hero, so the number's own span (composed from scratch, and
         // therefore destructive) can never erase the unit that labels it.

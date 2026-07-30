@@ -57,6 +57,15 @@ sim-buttons = []
 # bin/watch-sim.sh builds with it.
 sim-course = []
 
+# Canned composed data screens (§364) for the sim: one of each layout, so the
+# Duo's two 32x48 values and the Trio's hero-over-two-medium land on the
+# emulated panel and `bin/watch-shots.sh` can photograph them. Seeded through
+# `state::SCREENS` — the SAME channel a phone push feeds — so the sim exercises
+# the real publish → gate → render path rather than a separate seam. OFF by
+# default: a hardware watch carries no screens until a runner pushes some, and
+# its cycle is the 37 built-ins.
+sim-screens = []
+
 # Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries
 # no gratuitous always-on waker (docs/custom_watch/performance_path.md — "every
 # wake justifiable"). bin/watch-sim.sh and bin/watch-flash.sh enable it so the

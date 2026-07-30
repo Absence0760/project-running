@@ -260,8 +260,10 @@ mod tests {
     fn row_down_drops_a_full_grid_row() {
         let mut g = PageGrid::open(Page::Dashboard, u64::MAX);
         g.row_down(u64::MAX);
-        // Four steps along the full cycle: Dashboard -> Zones.
-        assert_eq!(g.cursor(), Page::Zones);
+        // Four steps along the full cycle. With every page enabled that is
+        // Dashboard -> the four composed-screen seats (§ 364), so the row below
+        // the origin starts at the last of them.
+        assert_eq!(g.cursor(), Page::Screen4);
         assert_eq!(
             grid_cell(u64::MAX, g.cursor(), g.cursor()),
             Some((0, 1)),
@@ -275,7 +277,7 @@ mod tests {
         // cycle rather than falling off the grid.
         let mut g = PageGrid::open(Page::BackToStart, u64::MAX);
         g.row_down(u64::MAX);
-        assert_eq!(g.cursor(), Page::Lap);
+        assert_eq!(g.cursor(), Page::Screen3);
     }
 
     #[test]
@@ -290,7 +292,7 @@ mod tests {
         }
         assert!(rows[GRID_TOP_ROW]
             .as_str()
-            .starts_with("DASH DIST PACE LAP"));
+            .starts_with("DASH SC1  SC2  SC3"));
         // The cycle is two grid rows deeper than the body: the tail is
         // off-window until the cursor reaches its row, and then the window
         // scrolls to it rather than the cell being silently dropped.
@@ -407,7 +409,7 @@ mod tests {
         g.tap(mask);
         assert_eq!(
             grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
-            "DISTANCE"
+            "MY SCREEN 1"
         );
         g.row_down(mask);
         assert_eq!(

@@ -59,6 +59,7 @@ GUI=0
 PHONE_PORT=7788
 AUTOSTART=1
 ALERTS=1
+SCREENS=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -69,7 +70,8 @@ while [[ $# -gt 0 ]]; do
 		--phone-port)   PHONE_PORT="${2:?--phone-port needs a value}"; shift 2 ;;
 		--no-autostart) AUTOSTART=0; shift ;;
 		--no-alerts)    ALERTS=0; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts)" ;;
+		--screens)      SCREENS=1; shift ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --screens)" ;;
 	esac
 done
 
@@ -93,9 +95,13 @@ command -v defmt-print >/dev/null || \
 # so the off-course alert fires each lap). sim-alerts: the shortened fuel /
 # distance / time / pace cadences the `alerts` scenario observes (dropped by
 # --no-alerts, which is how a screenshot walk gets a watch with nothing
-# covering the hero rows). All OFF on the hardware build —
+# covering the hero rows). sim-screens: three canned composed data screens
+# (§364, one per layout), OFF unless --screens asks for them — they seat
+# immediately after the Dashboard, so leaving them on would shift every other
+# scenario's page walk. All OFF on the hardware build —
 # see apps/custom_watch/app/src/tasks/{record,button,nav}.rs.
 FEATURES=sim-buttons,sim-course,dev-blink
+[[ "$SCREENS" == 1 ]] && FEATURES="sim-screens,$FEATURES"
 [[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"
 [[ "$AUTOSTART" == 1 ]] && FEATURES="sim-autostart,$FEATURES"
 step "Building firmware (release, --features $FEATURES)"

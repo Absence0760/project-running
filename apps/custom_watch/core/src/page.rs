@@ -28,6 +28,24 @@ pub enum Page {
     /// The detailed dashboard: elapsed-time hero + every metric row.
     #[default]
     Dashboard,
+    /// The runner's own composed data screens (§ 364) — up to
+    /// [`crate::screens::MAX_SCREENS`] of them, each a layout plus the metrics
+    /// filling it, pushed from the phone as one `SCR1` frame.
+    ///
+    /// **They sit here, immediately after the Dashboard, on purpose.** A screen
+    /// a runner composed is by construction the thing they most want to glance
+    /// at — burying it behind thirty-six built-ins would defeat the feature —
+    /// and inserting at the front rather than the back keeps
+    /// [`Page::BackToStart`] last, one long-press from home, which is the one
+    /// ordering property the safety page cannot lose.
+    ///
+    /// Each is gated on the runner having actually composed it
+    /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
+    /// 37 built-ins and the cycle never carries a blank.
+    Screen1,
+    Screen2,
+    Screen3,
+    Screen4,
     /// Distance up large, with pace / time / HR as context.
     Distance,
     /// Average pace up large, with distance / time / HR / live
@@ -178,6 +196,10 @@ impl Page {
     pub fn code(self) -> &'static str {
         match self {
             Page::Dashboard => "DASH",
+            Page::Screen1 => "SC1",
+            Page::Screen2 => "SC2",
+            Page::Screen3 => "SC3",
+            Page::Screen4 => "SC4",
             Page::Distance => "DIST",
             Page::Pace => "PACE",
             Page::Lap => "LAP",
@@ -224,6 +246,10 @@ impl Page {
     pub fn name(self) -> &'static str {
         match self {
             Page::Dashboard => "DASHBOARD",
+            Page::Screen1 => "MY SCREEN 1",
+            Page::Screen2 => "MY SCREEN 2",
+            Page::Screen3 => "MY SCREEN 3",
+            Page::Screen4 => "MY SCREEN 4",
             Page::Distance => "DISTANCE",
             Page::Pace => "PACE",
             Page::Lap => "LAP TIME",
@@ -300,7 +326,11 @@ impl Page {
     /// The next page in the button's cycle order, wrapping back to the start.
     pub fn next(self) -> Self {
         match self {
-            Page::Dashboard => Page::Distance,
+            Page::Dashboard => Page::Screen1,
+            Page::Screen1 => Page::Screen2,
+            Page::Screen2 => Page::Screen3,
+            Page::Screen3 => Page::Screen4,
+            Page::Screen4 => Page::Distance,
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
             Page::Lap => Page::Zones,
@@ -346,6 +376,33 @@ impl Page {
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
+    /// Which of the runner's composed screens this page shows, or `None` for
+    /// the 37 built-ins.
+    ///
+    /// The index into [`crate::screens::Screens`], so a page and the screen it
+    /// draws are related by exactly one function rather than by four arms
+    /// repeated at every call site.
+    pub const fn screen_index(self) -> Option<usize> {
+        Some(match self {
+            Page::Screen1 => 0,
+            Page::Screen2 => 1,
+            Page::Screen3 => 2,
+            Page::Screen4 => 3,
+            _ => return None,
+        })
+    }
+
+    /// The page showing composed screen `i`, or `None` past the last one.
+    pub const fn of_screen_index(i: usize) -> Option<Page> {
+        Some(match i {
+            0 => Page::Screen1,
+            1 => Page::Screen2,
+            2 => Page::Screen3,
+            3 => Page::Screen4,
+            _ => return None,
+        })
+    }
+
     pub fn prev(self) -> Self {
         let mut p = self;
         // At most ALL-1 forward steps land on the page whose `next` is `self`.
@@ -382,8 +439,12 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 37] = [
+    const ALL: [Page; 41] = [
         Page::Dashboard,
+        Page::Screen1,
+        Page::Screen2,
+        Page::Screen3,
+        Page::Screen4,
         Page::Distance,
         Page::Pace,
         Page::Lap,
@@ -424,7 +485,12 @@ mod tests {
 
     #[test]
     fn next_cycles_every_page_and_wraps() {
-        assert_eq!(Page::Dashboard.next(), Page::Distance);
+        assert_eq!(Page::Dashboard.next(), Page::Screen1);
+        // The four composed-screen pages sit between the Dashboard and the
+        // live-metric cluster (§ 364), so a runner's own screen is one press
+        // from home rather than thirty-six.
+        assert_eq!(Page::Screen1.next(), Page::Screen2);
+        assert_eq!(Page::Screen4.next(), Page::Distance);
         assert_eq!(Page::Pace.next(), Page::Lap);
         assert_eq!(Page::Lap.next(), Page::Zones);
         assert_eq!(Page::Splits.next(), Page::Pacer);
@@ -633,7 +699,8 @@ mod tests {
         // Back-to-start safety page, so "lost" is one long-press from home.
         assert_eq!(Page::Dashboard.prev(), Page::BackToStart);
         assert_eq!(Page::BackToStart.prev(), Page::Waypoint);
-        assert_eq!(Page::Distance.prev(), Page::Dashboard);
+        assert_eq!(Page::Distance.prev(), Page::Screen4);
+        assert_eq!(Page::Screen1.prev(), Page::Dashboard);
         // Walking `prev` from the default visits every page exactly once and
         // returns home.
         let mut p = Page::default();

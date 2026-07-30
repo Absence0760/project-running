@@ -353,6 +353,10 @@ pub fn body_top_row(page: Page) -> usize {
     match page {
         // The map panel owns rows 1..6 and the title rides row 0.
         Page::Nav => 0,
+        // A composed screen owns every row: its layout, not this table, decides
+        // where each slot's value and label land, so it reserves no band for a
+        // body it does not have. Nav's rule, for Nav's reason.
+        Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => 0,
         Page::Distance
         | Page::Pace
         | Page::Lap
@@ -645,6 +649,7 @@ pub fn page_rows(
     view: IdleView,
     tz_offset_min: Option<i16>,
     ice: Option<&ice::IceCard>,
+    screens: Option<&crate::screens::Screens>,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap).map(|tag| (snap, tag))) {
         None => status_face(
@@ -693,6 +698,19 @@ pub fn page_rows(
             Page::Roadbook => roadbook_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Fuel => fuel_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
+            Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => composed_screen(
+                page,
+                screens,
+                fix,
+                hr_bpm,
+                snap,
+                tb,
+                tag,
+                uptime_s,
+                animate,
+                mode,
+                tz_offset_min,
+            ),
             Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate, mode),
             Page::GearWear => gear_wear_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::TrainingPaces => training_paces_glance(fix, snap, tag, uptime_s, animate, mode),
@@ -1013,6 +1031,10 @@ impl Metric {
 pub const fn hero_metric(page: Page) -> Option<Metric> {
     Some(match page {
         Page::Nav => return None,
+        // A composed screen's metrics are the runner's, chosen at push time and
+        // carried in the `SCR1` set — there is nothing static to declare here.
+        // [`screen_page_slots`] answers for these pages instead.
+        Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => return None,
         Page::Dashboard => Metric::Elapsed,
         Page::Distance | Page::Splits | Page::DistanceBand => Metric::Distance,
         Page::Pace => Metric::AvgPace,
@@ -1814,6 +1836,96 @@ pub fn screen_slots(
         });
     }
     out
+}
+
+/// The composed screen `page` shows, rendered slot by slot, or `None` when
+/// `page` is one of the 37 built-ins or the runner has not composed that one.
+///
+/// The app's entry point for a screen page: slot 0 feeds the ordinary hero
+/// pipeline (band, unit, run-marker clearance — all unchanged), and the slots
+/// after it are placed by [`crate::ui_frame::slot_placements`].
+#[allow(clippy::too_many_arguments)]
+pub fn screen_page_slots(
+    page: Page,
+    screens: Option<&crate::screens::Screens>,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    tb: Option<&TrackbackView>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
+) -> Option<ScreenRender> {
+    let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
+    let screen = screens?.get(page.screen_index()?)?;
+    Some(ScreenRender {
+        layout: screen.layout,
+        slots: screen_slots(screen, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min),
+    })
+}
+
+/// A composed screen ready to draw: its layout, and one [`SlotRender`] per slot.
+///
+/// The layout rides along rather than being looked up again by the caller — the
+/// screen was already resolved to produce the slots, and a second lookup is a
+/// second chance to get the index wrong (or to reach for an `unwrap` in the UI
+/// task, where a panic is a black display).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ScreenRender {
+    pub layout: crate::screens::Layout,
+    pub slots: heapless::Vec<SlotRender, { crate::screens::SCREEN_SLOTS }>,
+}
+
+/// A composed screen's text rows: the state tag, each slot's label at the
+/// placement its layout gives it, and the GPS row every run page keeps.
+///
+/// The values themselves are pixels, drawn by the app over these rows from the
+/// same [`SlotRender`] list — so nothing here writes a number, and a label can
+/// never disagree with the value it names.
+#[allow(clippy::too_many_arguments)]
+fn composed_screen(
+    page: Page,
+    screens: Option<&crate::screens::Screens>,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+    tz_offset_min: Option<i16>,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
+    }
+
+    // Unreachable in the ordinary cycle — `available_pages` only admits a
+    // screen page the runner has composed — but a curated mask can pin a page
+    // the runner is parked on, so this says what happened instead of drawing a
+    // panel of nothing.
+    let Some(screen) = screens.and_then(|s| page.screen_index().and_then(|i| s.get(i))) else {
+        write_unfed(&mut rows, page, "SCREEN", Unfed::NotSynced);
+        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+        return rows;
+    };
+
+    let slots = screen_slots(screen, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min);
+    for (slot, at) in slots
+        .iter()
+        .zip(crate::ui_frame::slot_placements(screen.layout))
+    {
+        if at.label_row >= GPS_ROW {
+            continue;
+        }
+        let _ = write!(rows[at.label_row], "{:>1$}", slot.label, {
+            at.label_col + slot.label.len()
+        });
+    }
+
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+    rows
 }
 
 /// The row a glance page's empty-body reason rides, and the row its remedy
@@ -4158,6 +4270,7 @@ mod tests {
             IdleView::Home,
             None,
             None,
+            None,
         )
     }
 
@@ -4819,19 +4932,21 @@ mod tests {
         }
     }
 
-    /// Every page declares what it leads with, and only Nav leads with nothing.
+    /// Every page declares what it leads with, and only two kinds do not.
     ///
     /// `hero_metric` is matched exhaustively, so the compiler already refuses a
     /// page that has not been classified. What this adds is the *shape* of the
-    /// classification: exactly one page opts out, and it is the one whose map
-    /// panel owns the rows a hero would occupy.
+    /// classification: the only pages that opt out are Nav, whose map panel owns
+    /// the rows a hero would occupy, and the four composed screens, whose
+    /// headline is the runner's own choice and therefore cannot be a constant
+    /// here — [`screen_page_slots`] answers for those, off the pushed set.
     #[test]
-    fn every_page_has_a_hero_metric_except_nav() {
+    fn every_page_has_a_hero_metric_except_nav_and_composed_screens() {
         let mut p = Page::default();
         loop {
             assert_eq!(
                 hero_metric(p).is_none(),
-                p == Page::Nav,
+                p == Page::Nav || p.screen_index().is_some(),
                 "{p:?} disagrees with page_hero about whether it has a hero"
             );
             p = p.next();
@@ -5045,6 +5160,208 @@ mod tests {
             p = p.next();
             if p == Page::default() {
                 break;
+            }
+        }
+    }
+
+    /// A composed screen page draws the screen at its own index, and only its
+    /// own — the off-by-one that would silently show a runner screen 2 when
+    /// they pressed to screen 3.
+    #[test]
+    fn each_screen_page_draws_its_own_screen() {
+        use crate::screens::{Layout, Screen, Screens};
+        let fed = fed_snapshot();
+        let tb = nav_east(500, 6.0);
+        // Four screens, each headed by a different metric, so a mis-indexed
+        // page renders a visibly different hero rather than the same one twice.
+        let set = Screens::from_slice(&[
+            Screen::new(Layout::Single, &[Metric::Distance]).unwrap(),
+            Screen::new(Layout::Single, &[Metric::HeartRate]).unwrap(),
+            Screen::new(Layout::Single, &[Metric::Altitude]).unwrap(),
+            Screen::new(Layout::Single, &[Metric::ClimbGain]).unwrap(),
+        ])
+        .unwrap();
+        for (i, want) in [
+            Metric::Distance,
+            Metric::HeartRate,
+            Metric::Altitude,
+            Metric::ClimbGain,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let page = Page::of_screen_index(i).unwrap();
+            assert_eq!(page.screen_index(), Some(i));
+            let render = screen_page_slots(
+                page,
+                Some(&set),
+                Some(&fix()),
+                Some(152),
+                Some(&fed),
+                Some(&tb),
+                42,
+                None,
+            )
+            .expect("a composed page with a screen behind it renders");
+            assert_eq!(render.slots[0].label, want.slot_label(), "page {page:?}");
+        }
+    }
+
+    /// A screen page the runner never composed says so, rather than drawing a
+    /// panel of nothing. It is gated out of the cycle, but a curated mask can
+    /// still park a runner on one.
+    #[test]
+    fn an_uncomposed_screen_page_says_it_was_never_pushed() {
+        let fed = fed_snapshot();
+        let rows = super::page_rows(
+            Page::Screen2,
+            Some(&fix()),
+            Some(152),
+            Some(&fed),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+            GnssMode::default(),
+            IdleView::default(),
+            None,
+            None,
+            None,
+        );
+        assert!(
+            rows.iter().any(|r| r.as_str() == Unfed::NotSynced.reason()),
+            "an unpushed screen page must say why it is empty: {rows:?}"
+        );
+        assert!(
+            screen_page_slots(
+                Page::Screen2,
+                None,
+                Some(&fix()),
+                Some(152),
+                Some(&fed),
+                None,
+                42,
+                None
+            )
+            .is_none(),
+            "there is nothing to draw for a screen that was never pushed"
+        );
+    }
+
+    /// Every slot lands on the panel, none overlaps another, and the GPS row
+    /// survives — the geometry claim the whole layout rests on.
+    ///
+    /// Walked for all three layouts, because the Duo's second 32x48 value is
+    /// the one with no headroom: three rows of hero, a label row, the same
+    /// again, and the fix row is the ninth.
+    #[test]
+    fn no_layout_overruns_the_panel_or_eats_the_gps_row() {
+        use crate::screens::Layout;
+        for layout in [Layout::Single, Layout::Duo, Layout::Trio] {
+            let places = crate::ui_frame::slot_placements(layout);
+            assert_eq!(places.len(), layout.slots(), "{layout:?}");
+            let mut used = [false; ROWS];
+            for at in &places {
+                let rows = crate::ui_frame::hero_band_rows(at.band);
+                for r in at.value_row..at.value_row + rows {
+                    assert!(r < GPS_ROW, "{layout:?} value overruns onto the GPS row");
+                    assert!(!used[r], "{layout:?} draws two values on row {r}");
+                    used[r] = true;
+                }
+                assert!(
+                    at.label_row < GPS_ROW,
+                    "{layout:?} puts a label on the GPS row"
+                );
+                assert!(
+                    at.label_col + crate::screens::SLOT_LABEL_CELLS <= COLS,
+                    "{layout:?} label starts past the panel"
+                );
+            }
+        }
+    }
+
+    /// A Trio's medium values and the labels beside them do not collide.
+    ///
+    /// The medium face draws two cells per glyph from column 0 and its span is
+    /// destructive, so a label inside that span would be erased by the value it
+    /// names. `SLOT_LABEL_CELLS` was sized against exactly this.
+    #[test]
+    fn a_trios_label_sits_clear_of_the_value_it_names() {
+        use crate::screens::Layout;
+        let places = crate::ui_frame::slot_placements(Layout::Trio);
+        // The widest value the medium face renders inside its own row budget.
+        let widest = COLS / crate::ui_frame::NUMERAL_MED_CELLS;
+        for at in places.iter().skip(1) {
+            assert!(
+                at.label_col >= widest.min(6) * crate::ui_frame::NUMERAL_MED_CELLS,
+                "a six-glyph medium value would run under its own label"
+            );
+        }
+    }
+
+    /// Every value a slot can hold is drawn in a face that can spell it.
+    ///
+    /// This is the seam the two halves of § 364 meet at, and it drew a blank
+    /// panel in the simulator before it was closed. A placement asks for a
+    /// numeral face; the numeral faces carry digits, `.`, `:`, `-` and `+` and
+    /// nothing else, and the primitive **skips glyphs it has no index for** —
+    /// so a word does not render badly, it renders as nothing, and the row is
+    /// simply empty. Every unfed slot holds a word (the class tokens) and a
+    /// settled workout step holds `DONE`, so this is the common case, not the
+    /// edge one.
+    ///
+    /// [`crate::ui_frame::slot_band`] is the fallback; this is what says it is
+    /// applied to everything a slot can actually contain.
+    #[test]
+    fn every_value_a_slot_can_hold_lands_in_a_face_that_can_draw_it() {
+        use crate::ui_frame::{numeral_hero, slot_band, HeroBand};
+        let drawable = |band: HeroBand, v: &str| match band {
+            // Both numeral primitives index a glyph table that stops at the
+            // numeral set; anything else is skipped and leaves no pixels.
+            HeroBand::BigNumHero | HeroBand::MedNumHero => numeral_hero(v),
+            // The doubled text face draws the whole ASCII font.
+            HeroBand::TextHero => true,
+            other => panic!("a slot must not resolve to {other:?}"),
+        };
+
+        // Every class token, on every layout, in every slot.
+        for layout in [
+            crate::screens::Layout::Single,
+            crate::screens::Layout::Duo,
+            crate::screens::Layout::Trio,
+        ] {
+            for at in crate::ui_frame::slot_placements(layout) {
+                for class in crate::unfed::UnfedClass::ALL {
+                    let token = class.slot_token();
+                    assert!(
+                        drawable(slot_band(at.band, token), token),
+                        "{layout:?} would draw the token {token:?} in a face that \
+                         cannot spell it — the slot renders blank"
+                    );
+                }
+            }
+        }
+
+        // And every value the fed catalogue actually produces, across a fed and
+        // an unfed run — which is where `DONE` comes from.
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let tb = nav_east(500, 6.0);
+        for rec in [&fed, &unfed] {
+            for hr in [None, Some(152u16)] {
+                for b in 1..=34u8 {
+                    let m = Metric::from_byte(b).unwrap();
+                    let v = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
+                    for nominal in [HeroBand::BigNumHero, HeroBand::MedNumHero] {
+                        assert!(
+                            drawable(slot_band(nominal, v.as_str()), v.as_str()),
+                            "{} renders {:?}, which {nominal:?} cannot spell",
+                            m.wire_name(),
+                            v.as_str()
+                        );
+                    }
+                }
             }
         }
     }
@@ -7108,6 +7425,7 @@ mod tests {
             IdleView::Home,
             None,
             None,
+            None,
         );
         assert_eq!(rows[8].as_str(), "     8 SATS BAL");
     }
@@ -7212,6 +7530,7 @@ mod tests {
                     true,
                     mode,
                     IdleView::Home,
+                    None,
                     None,
                     None,
                 );
@@ -8587,6 +8906,11 @@ mod tests {
             | Page::Zones
             | Page::Splits
             | Page::BackToStart => None,
+            // A composed screen's per-slot empties are class tokens, not reason
+            // lines — but the whole-page empty state, the screen that was never
+            // pushed, still speaks the vocabulary. That page is gated out of the
+            // cycle; a curated mask can still park a runner on it.
+            Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => Some(Unfed::NotSynced),
             Page::Pacer
             | Page::GuidedRun
             | Page::Workout
@@ -8782,6 +9106,7 @@ mod tests {
             IdleView::Home,
             Some(-360),
             None,
+            None,
         );
         assert_eq!(rows[3], header("SUNRISE", "REC"));
         assert_eq!(rows[4].as_str(), "AT       04:34");
@@ -8843,6 +9168,7 @@ mod tests {
             IdleView::Home,
             Some(-360),
             None,
+            None,
         );
         assert_eq!(rows[4].as_str(), "AWAITING FIX");
         assert_eq!(rows[5].as_str(), "", "a sensor wait owes no phone remedy");
@@ -8873,6 +9199,7 @@ mod tests {
                 GnssMode::Performance,
                 IdleView::Home,
                 Some(0),
+                None,
                 None,
             );
             assert_eq!(rows[4].as_str(), reason);
