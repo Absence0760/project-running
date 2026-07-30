@@ -5137,7 +5137,7 @@ Three sim scenarios had run the climb pages for weeks without asserting a single
 **And the demo data pointed the wrong way.** `SIM_COURSE_ELEV_M` put the summit at the course's middle point. Both NMEA fixtures start at that middle point and run the east leg away from it, so the only crest on the course was one the runner had already crossed and `crest_ahead` correctly returned `None` for the entire run — the rail could not be armed in the sim at all, no matter what asserted it. The summit moved to the last point. This is the same fix as the GSA fix-type transitions added to `gps_dropout.nmea` in the 2026-07-19 pass, which the honest signal meter needed before it was testable, and the same lesson: **sim demo data is only demo data if it actually reaches the surface it is demonstrating**, and "the page renders" is not evidence that it does.
 
 The crest is asserted as a falling series — distance and metres-still-to-climb both monotonically decreasing across the approach — rather than as a value. `record.rs`'s own doc comment explains why: a position frozen by a lost signal keeps reporting the crest from where the runner was, so the one number on the page they would act on stops falling while they climb. A single sample cannot tell that from a live read. Mutation-verified by freezing the along-course position: the run yields one reading instead of thirty-two and the guard names the position as the cause.
-## 368. Recovery time is derived on the watch from a number it was already being pushed — and the layoff gate travels as a verdict, not as history
+## 369. Recovery time is derived on the watch from a number it was already being pushed — and the layoff gate travels as a verdict, not as history
 
 **Date:** 2026-07-30
 

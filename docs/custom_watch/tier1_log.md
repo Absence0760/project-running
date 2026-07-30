@@ -401,7 +401,7 @@ re-run green after the log-ordering change.
 
 ## 2026-07-30 — recovery time: the ported projection that reached no surface
 
-The forward half of the Fitness page's recovery pair ([§ 368](../architecture/decisions.md)).
+The forward half of the Fitness page's recovery pair ([§ 369](../architecture/decisions.md)).
 `fitness::days_until_next_hard_session` had been ported and host-tested since 2026-07-11 and was
 called by nothing, so the page showed a verdict (`REST` / `EASY` / `SWEET`) with no answer to "how
 long am I still paying for yesterday". It now carries a `NEXT HARD ~3 DAYS` row projected from the
