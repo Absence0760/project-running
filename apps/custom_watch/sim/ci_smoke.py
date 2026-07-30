@@ -408,13 +408,26 @@ def assert_rendered(panel, what):
 class Sim:
     """One booted launcher session: the process, its decoded log, the monitor."""
 
-    def __init__(self, args, label, out_dir, deadline, phone_port, fixture):
+    def __init__(
+        self,
+        args,
+        label,
+        out_dir,
+        deadline,
+        phone_port,
+        fixture,
+        launcher_args=(),
+    ):
         self.args = args
         self.label = label
         self.out_dir = out_dir
         self.deadline = deadline
         self.phone_port = phone_port
         self.fixture = fixture
+        # Extra flags for bin/watch-sim.sh. No scenario here passes any — this
+        # exists so screenshots.py can boot `--no-autostart` and reach the idle
+        # faces, which every scenario in this file skips past by design.
+        self.launcher_args = list(launcher_args)
         self.combined = out_dir / "sim-output.log"
         self.tail = LogTail(self.combined)
         self.proc = None
@@ -476,6 +489,7 @@ class Sim:
             self.fixture,
             "--phone-port",
             str(self.phone_port),
+            *self.launcher_args,
         ]
         announce(f"launching {' '.join(cmd)}")
         self.log_fh = self.combined.open("w")
@@ -525,8 +539,16 @@ class Sim:
 
 
 @contextmanager
-def sim_session(args, label, deadline, phone_port, fixture):
-    sim = Sim(args, label, Path(args.out_dir) / label, deadline, phone_port, fixture)
+def sim_session(args, label, deadline, phone_port, fixture, launcher_args=()):
+    sim = Sim(
+        args,
+        label,
+        Path(args.out_dir) / label,
+        deadline,
+        phone_port,
+        fixture,
+        launcher_args,
+    )
     try:
         sim.boot()
         yield sim
