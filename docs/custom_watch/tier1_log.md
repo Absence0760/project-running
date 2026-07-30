@@ -347,6 +347,15 @@ that, then exempted the run walk on the grounds that "its elapsed clock changes 
 claims the panel *has* the screen; the comparison stays as the detector for the other cause (a state
 that never reached the composer) and now runs on every capture, not just the idle ones.
 
+**A fourth duplicate class turned up while pinning the third.** Three pages already carried an exact
+small copy of their headline (`WEAR 87 %`, `CARB 0 G`, `DIST 0.08 KM`), and the Zones page still
+labelled its row `HR  BPM` under a hero whose unit is `BPM`. All four go, guarded by
+`no_page_restates_its_hero_in_a_body_row` — narrow on purpose, since a row may legitimately hold the
+same *number* as a different quantity and a ladder rung stays even when it duplicates. Writing that
+guard also caught `fed_snapshot` giving independent fields one value in three places (the three
+paces, both climb gains, both streak counts), which is the quieter bug of a test asserting one field
+while reading another.
+
 **The satellite glyph was redrawn** in the same pass, because it went from one page to thirty-seven.
 It was the lightest icon in the table at 36 ink pixels against 54–110 for its siblings, and
 off-centre (cols 1–10 of 16 where the others span 2–13). Three nested arcs over the shared anchor
@@ -360,7 +369,7 @@ RacePredictor bodies had never been walked by the grid-fit sweep, the hero-band 
 the state-tag sweep in anything but their empty state. All three pass unchanged with them fed:
 nothing was broken behind the hole, it was simply unwatched.
 
-Workspace host sweep 2140 → 2148; firmware builds; the four Renode scenarios and the 25-screen sheet
+Workspace host sweep 2140 → 2149; firmware builds; the four Renode scenarios and the 25-screen sheet
 re-run green after the log-ordering change.
 
 ## Next entry expected
