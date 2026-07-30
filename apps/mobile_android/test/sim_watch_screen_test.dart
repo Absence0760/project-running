@@ -31,6 +31,7 @@ class _FakeSyncTransport implements WatchBleTransport {
   final settingsWrites = <List<int>>[];
   final workoutWrites = <List<int>>[];
   final courseWrites = <List<int>>[];
+  final screensWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -66,6 +67,11 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> writeCourse(List<int> chunk) async {
     courseWrites.add(chunk);
+  }
+
+  @override
+  Future<void> writeScreens(List<int> frame) async {
+    screensWrites.add(frame);
   }
 }
 
@@ -366,6 +372,31 @@ void main() {
         find.text('Workout pushed to the watch (6 steps)'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('composed screens', () {
+    testWidgets('the compose action opens the screen editor', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: _FakeSyncTransport.new,
+            runSink: (_) async {},
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.dashboard_customize));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+
+      expect(find.text('Watch screens'), findsOneWidget);
+      expect(find.text('No screens composed'), findsOneWidget);
     });
   });
 

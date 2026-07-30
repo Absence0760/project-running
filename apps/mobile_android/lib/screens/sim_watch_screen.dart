@@ -19,6 +19,7 @@ import '../watch_course.dart';
 import '../watch_ingest_queue.dart';
 import '../watch_settings.dart';
 import '../watch_workout.dart';
+import 'watch_screens_editor_screen.dart';
 
 class SimWatchScreen extends StatefulWidget {
   final SimWatchLink Function(String host, int port) linkFactory;
@@ -377,6 +378,17 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
                   )
                 : const Icon(Icons.route),
             onPressed: _pushingCourse ? null : _pushCourse,
+          ),
+          IconButton(
+            tooltip: l10n.watchScreensAction,
+            icon: const Icon(Icons.dashboard_customize),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WatchScreensEditorScreen(
+                  transportFactory: widget.transportFactory,
+                ),
+              ),
+            ),
           ),
           IconButton(
             tooltip: l10n.simWatchSyncAction,
