@@ -1034,21 +1034,186 @@ pub fn page_hero(
             }
             row
         }
-        // The phone-pushed synced-summary pages are rows-only (no 2x hero):
-        // each headlines its number in the rows, like the Nav page.
-        Page::Recap
-        | Page::Streaks
-        | Page::RunStats
-        | Page::PrRecency
-        | Page::PlanReplan
-        | Page::PlanAdaptive
-        | Page::Readiness
-        | Page::Goals
-        | Page::TurnCue
-        | Page::RouteSimplify
-        | Page::AutoEffort
-        | Page::RouteElev
-        | Page::RaceDay => return None,
+        // The phone-pushed synced-summary pages headline their number too
+        // (§ 361). They had been rows-only, which meant every one of them
+        // reserved the two-row hero band ([`body_top_row`]) and then left it
+        // blank — a fifth of the panel, at the top, on thirteen pages — while
+        // stating its headline in an 8x16 row indistinguishable from the rows
+        // contextualising it. Each hero here is the number the page is *about*,
+        // and the row that used to carry it is dropped rather than kept as a
+        // small copy of the big one.
+        Page::Recap => {
+            let mut row = Row::new();
+            match snap.recap {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.distance_km);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::Streaks => {
+            let mut row = Row::new();
+            match snap.streaks {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.current_days.min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::RunStats => match snap.run_stats {
+            Some(v) => {
+                let (h, m, s) = hms(v.moving_s);
+                let mut row = Row::new();
+                let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
+                row
+            }
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
+        Page::PrRecency => {
+            let mut row = Row::new();
+            match snap.pr_recency {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.days_ago.min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::PlanReplan => {
+            let mut row = Row::new();
+            match snap.plan_replan {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.changes);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::PlanAdaptive => {
+            let mut row = Row::new();
+            match snap.plan_adaptive {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.changes);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::Readiness => {
+            let mut row = Row::new();
+            match snap.readiness {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.score.min(100));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::Goals => {
+            let mut row = Row::new();
+            match snap.goals {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.percent.min(100));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // The distance still to run to the turn — the number that counts down.
+        // Its direction is a word, so it stays on the label row.
+        Page::TurnCue => {
+            let mut row = Row::new();
+            match snap.turn_cue {
+                Some(v) if v.distance_m >= 1000 => {
+                    let _ = write!(row, "{:.2}", f64::from(v.distance_m) / 1000.0);
+                }
+                Some(v) => {
+                    let _ = write!(row, "{}", v.distance_m);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::RouteSimplify => {
+            let mut row = Row::new();
+            match snap.route_simplify {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.distance_km);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::AutoEffort => {
+            let mut row = Row::new();
+            match snap.auto_effort {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.matched);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // The course's length, not its climb: the gain / loss pair already has
+        // the page's one text row, and rows 3..8 are the drawn profile.
+        Page::RouteElev => {
+            let mut row = Row::new();
+            match snap.route_elev.as_ref() {
+                Some(v) => {
+                    let km = v.total_m / 1000;
+                    if km > 9999 {
+                        let _ = write!(row, "9999");
+                    } else {
+                        let _ = write!(row, "{}.{}", km, (v.total_m % 1000) / 100);
+                    }
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // Days either side of the race, unsigned — the row below says which
+        // side, because a minus sign in front of a countdown reads as a
+        // negative number of days rather than as a date already past.
+        Page::RaceDay => {
+            let mut row = Row::new();
+            match snap.race_day {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.days_until.unsigned_abs().min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
     })
 }
 
@@ -1093,9 +1258,20 @@ pub fn page_hero_unit(
 ) -> Option<&'static str> {
     let snap = rec.filter(|snap| rec_tag(snap).is_some())?;
     match page {
-        Page::Distance | Page::Splits | Page::DistanceBand | Page::Roadbook => Some("KM"),
+        Page::Distance
+        | Page::Splits
+        | Page::DistanceBand
+        | Page::Roadbook
+        | Page::Recap
+        | Page::RouteSimplify
+        | Page::RouteElev => Some("KM"),
         Page::Pace | Page::TrainingPaces => Some("/KM"),
         Page::Zones => Some("BPM"),
+        Page::Streaks | Page::PrRecency | Page::RaceDay => Some("DAYS"),
+        Page::Goals => Some("%"),
+        Page::TurnCue => snap
+            .turn_cue
+            .map(|v| distance_unit(f32::from(v.distance_m))),
         // Both are metres of altitude — ascent still to climb, and the run's
         // latest banked sample.
         Page::Climb | Page::ElevationProfile => Some("M"),
@@ -1110,9 +1286,10 @@ pub fn page_hero_unit(
             .filter(|w| !w.complete && !w.duration_based)
             .map(|w| distance_unit(w.remaining_m as f32)),
         // Times (elapsed, lap, partner delta, cut-off margin, cue countdown,
-        // projected race time, daylight countdown) carry their own meaning; the
-        // training-load score and the VO2 ceiling are dimensionless as shown;
-        // Nav has no hero and the synced-summary pages label theirs in-row.
+        // projected race time, daylight countdown, synced moving time) carry
+        // their own meaning; the training-load score, the VO2 ceiling, a
+        // readiness score, a change count and a segment-match count are
+        // dimensionless as shown; Nav has no hero at all.
         Page::Dashboard
         | Page::Lap
         | Page::Pacer
@@ -1123,19 +1300,11 @@ pub fn page_hero_unit(
         | Page::Fitness
         | Page::Daylight
         | Page::Nav
-        | Page::TurnCue
-        | Page::Recap
-        | Page::Streaks
         | Page::RunStats
-        | Page::PrRecency
         | Page::PlanReplan
         | Page::PlanAdaptive
         | Page::Readiness
-        | Page::Goals
-        | Page::RouteSimplify
-        | Page::AutoEffort
-        | Page::RouteElev
-        | Page::RaceDay => None,
+        | Page::AutoEffort => None,
     }
 }
 
@@ -2326,9 +2495,13 @@ fn recap_glance(
         None => write_unfed(&mut rows, Page::Recap, "RECAP", Unfed::NotSynced),
         Some(v) => {
             let _ = write!(rows[2], "{:<7}{} RUNS", "RECAP", v.runs.min(9999));
-            let _ = write!(rows[4], "{:<7}{} KM", "DIST", v.distance_km);
-            let _ = write!(rows[5], "{:<7}{} KM", "LONGEST", v.longest_km.min(9999));
-            let _ = write!(rows[6], "{:<7}{}D", "STREAK", v.best_streak_days.min(9999));
+            let _ = write!(rows[4], "{:<7}{} KM", "LONGEST", v.longest_km.min(9999));
+            let _ = write!(
+                rows[5],
+                "{:<7}{} DAYS",
+                "STREAK",
+                v.best_streak_days.min(9999)
+            );
         }
     }
     rows
@@ -2349,8 +2522,8 @@ fn streaks_glance(
     match snap.streaks {
         None => write_unfed(&mut rows, Page::Streaks, "STREAK", Unfed::NotSynced),
         Some(v) => {
-            let _ = write!(rows[2], "{:<7}{}D", "CURRENT", v.current_days.min(9999));
-            let _ = write!(rows[4], "{:<7}{}D", "BEST", v.best_days.min(9999));
+            let _ = write!(rows[2], "CURRENT STREAK");
+            let _ = write!(rows[4], "{:<7}{} DAYS", "BEST", v.best_days.min(9999));
         }
     }
     rows
@@ -2371,8 +2544,7 @@ fn run_stats_glance(
     match snap.run_stats {
         None => write_unfed(&mut rows, Page::RunStats, "STATS", Unfed::NotSynced),
         Some(v) => {
-            let (h, m, s) = hms(v.moving_s);
-            let _ = write!(rows[2], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
+            let _ = write!(rows[2], "MOVING TIME");
             let _ = write!(rows[4], "{:<7}{} M", "GAIN", v.gain_m);
             let _ = write!(rows[5], "{:<7}{}", "SPLITS", v.splits.min(9999));
         }
@@ -2401,7 +2573,7 @@ fn pr_recency_glance(
             if d == 0 {
                 let _ = write!(rows[4], "TODAY");
             } else if d < 7 {
-                let _ = write!(rows[4], "{} DAYS", d);
+                // The hero already reads `5 DAYS`; a bucket row would repeat it.
             } else if d < 31 {
                 let _ = write!(rows[4], "{} WEEKS", d / 7);
             } else if d < 365 {
@@ -2430,7 +2602,7 @@ fn plan_replan_glance(
     match snap.plan_replan {
         None => write_unfed(&mut rows, Page::PlanReplan, "REPLAN", Unfed::NotSynced),
         Some(v) => {
-            let _ = write!(rows[2], "{:<8}{}", "REPLAN", v.changes);
+            let _ = write!(rows[2], "REPLAN CHANGES");
             let _ = write!(rows[4], "{:<8}{}", "MAKE-UP", v.make_ups);
             let _ = write!(rows[5], "{:<8}{}", "EASE-OFF", v.ease_offs);
         }
@@ -2466,16 +2638,15 @@ fn plan_adaptive_glance(
                 "{:<8}{}/{}",
                 "WEEKS", v.flagged_weeks, v.window_weeks
             );
-            let _ = write!(rows[5], "{:<8}{}", "CHANGES", v.changes);
             if v.fitness_gated {
-                let _ = write!(rows[6], "HELD FATIGUE");
+                let _ = write!(rows[5], "HELD FATIGUE");
             } else {
                 let conf = match v.confidence {
                     0 => "LOW",
                     1 => "MEDIUM",
                     _ => "HIGH",
                 };
-                let _ = write!(rows[6], "{:<8}{}", "CONF", conf);
+                let _ = write!(rows[5], "{:<8}{}", "CONF", conf);
             }
         }
     }
@@ -2502,7 +2673,7 @@ fn readiness_glance(
                 1 => "MODERATE",
                 _ => "HIGH",
             };
-            let _ = write!(rows[2], "{:<7}{}", "READY", v.score.min(100));
+            let _ = write!(rows[2], "READINESS");
             let _ = write!(rows[4], "{}", band);
         }
     }
@@ -2524,7 +2695,7 @@ fn goals_glance(
     match snap.goals {
         None => write_unfed(&mut rows, Page::Goals, "GOAL", Unfed::NotSynced),
         Some(v) => {
-            let _ = write!(rows[2], "{:<7}{}%", "GOAL", v.percent.min(100));
+            let _ = write!(rows[2], "GOAL");
             let _ = write!(
                 rows[4],
                 "{}",
@@ -2566,8 +2737,7 @@ fn turn_cue_glance(
                 _ => "U-TURN",
             };
             let _ = write!(rows[2], "{:<7}{}", "TURN", dir);
-            let _ = write!(rows[4], "{:<7}{} M", "IN", v.distance_m);
-            let _ = write!(rows[5], "{:<7}{}", "REMAIN", v.remaining);
+            let _ = write!(rows[4], "{:<7}{}", "REMAIN", v.remaining);
         }
     }
     rows
@@ -2588,8 +2758,8 @@ fn route_simplify_glance(
     match snap.route_simplify {
         None => write_unfed(&mut rows, Page::RouteSimplify, "COURSE", Unfed::NotSynced),
         Some(v) => {
-            let _ = write!(rows[2], "{:<7}{} PTS", "COURSE", v.points);
-            let _ = write!(rows[4], "{:<7}{} KM", "LENGTH", v.distance_km);
+            let _ = write!(rows[2], "COURSE LENGTH");
+            let _ = write!(rows[4], "{:<7}{}", "POINTS", v.points);
         }
     }
     rows
@@ -2610,8 +2780,8 @@ fn auto_effort_glance(
     match snap.auto_effort {
         None => write_unfed(&mut rows, Page::AutoEffort, "SEGMENTS", Unfed::NotSynced),
         Some(v) => {
-            let _ = write!(rows[2], "SEGMENTS");
-            let _ = write!(rows[4], "{:<7}{}/{}", "MATCH", v.matched, v.considered);
+            let _ = write!(rows[2], "SEGMENTS MATCHED");
+            let _ = write!(rows[4], "{:<7}{}", "OF", v.considered);
         }
     }
     rows
@@ -2644,13 +2814,7 @@ fn route_elev_glance(
                 "CRS ELEV",
                 Unfed::NoCourseElevation,
             );
-            let _ = write!(
-                rows[5],
-                "{} PTS {}.{} KM",
-                v.points,
-                v.total_m / 1000,
-                (v.total_m % 1000) / 100
-            );
+            let _ = write!(rows[5], "{} PTS", v.points);
         }
         // rows 3..8 are the profile cell the app draws into.
         Some(v) => {
@@ -2678,11 +2842,11 @@ fn race_day_glance(
             let d = v.days_until;
             let _ = write!(rows[2], "RACE DAY");
             if d > 0 {
-                let _ = write!(rows[4], "IN {} DAYS", d.min(9999));
+                let _ = write!(rows[4], "TO GO");
             } else if d == 0 {
                 let _ = write!(rows[4], "TODAY");
             } else {
-                let _ = write!(rows[4], "{} DAYS AGO", (-d).min(9999));
+                let _ = write!(rows[4], "AGO");
             }
             let feas = match v.feasible {
                 0 => "BEHIND",
@@ -4137,6 +4301,37 @@ mod tests {
             p = p.next();
             if p == Page::default() {
                 break;
+            }
+        }
+    }
+
+    /// The other half of [`body_top_row`]'s contract, and the § 361 half: a
+    /// page that reserves the hero band has to *use* it. Thirteen of the
+    /// phone-pushed summary pages reserved two rows and left them blank while
+    /// stating their headline in an 8x16 row — a fifth of the panel, at the
+    /// top, indistinguishable from the rows contextualising it.
+    ///
+    /// [`Page::Nav`] is the one exemption, and a structural one rather than a
+    /// list entry: its `body_top_row` is 0, so it reserves no band to waste.
+    #[test]
+    fn every_page_that_reserves_a_hero_band_fills_it() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        for rec in [&fed, &unfed] {
+            let mut p = Page::default();
+            loop {
+                let hero = page_hero(p, Some(152), Some(rec), Some(&nav_east(500, 6.0)));
+                assert_eq!(
+                    hero.is_some(),
+                    body_top_row(p) > 0,
+                    "page {p:?} reserves {} rows for a hero and has {}",
+                    body_top_row(p),
+                    if hero.is_some() { "one" } else { "none" }
+                );
+                p = p.next();
+                if p == Page::default() {
+                    break;
+                }
             }
         }
     }
@@ -7306,7 +7501,16 @@ mod tests {
             "row2 was {:?}",
             rows[2]
         );
-        assert!(rows[4].as_str().contains("1500 KM"));
+        // The year's distance is the hero now, with its unit beside it; the
+        // rows carry what the hero cannot.
+        assert_eq!(
+            page_hero(Page::Recap, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "1500"
+        );
+        assert_eq!(page_hero_unit(Page::Recap, Some(&rec), None), Some("KM"));
+        assert!(rows[4].as_str().contains("42 KM"));
 
         // Race-day countdown + verdict.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
@@ -7325,7 +7529,17 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[4].as_str(), "IN 3 DAYS");
+        assert_eq!(
+            page_hero(Page::RaceDay, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "3"
+        );
+        assert_eq!(
+            page_hero_unit(Page::RaceDay, Some(&rec), None),
+            Some("DAYS")
+        );
+        assert_eq!(rows[4].as_str(), "TO GO");
         assert_eq!(rows[5].as_str(), "ON TRACK");
 
         // PR recency buckets whole days into a human unit.
@@ -7342,7 +7556,36 @@ mod tests {
             42,
             false,
         );
+        assert_eq!(
+            page_hero(Page::PrRecency, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "60"
+        );
         assert_eq!(rows[4].as_str(), "2 MONTHS");
+
+        // Inside a week the bucket row would only repeat the hero, so it is
+        // left blank rather than saying `5 DAYS` under a big 5 DAYS.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.pr_recency = Some(crate::record::PrRecencyView { days_ago: 5 });
+        let rows = page_rows(
+            Page::PrRecency,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(
+            page_hero(Page::PrRecency, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "5"
+        );
+        assert_eq!(rows[4].as_str(), "");
     }
 
     #[test]
@@ -7380,8 +7623,15 @@ mod tests {
         assert_eq!(rows[2].as_str(), "CRS ELEV --");
         assert_eq!(rows[4].as_str(), "NO COURSE ELEV");
         // Settled, not unfed: the course IS synced, so no sync remedy displaces
-        // the geometry row.
-        assert_eq!(rows[5].as_str(), "48 PTS 42.1 KM");
+        // the geometry row. Its length moved to the hero, so the row keeps only
+        // the point count.
+        assert_eq!(rows[5].as_str(), "48 PTS");
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "42.1"
+        );
 
         // With a profile: the vert totals ride row 2 and rows 3..8 are left to
         // the drawn shape.
@@ -7396,6 +7646,18 @@ mod tests {
         });
         let rows = rows_for(&rec);
         assert_eq!(rows[2].as_str(), "CRS D+1820 D-1755");
+        // The hero is the course's LENGTH — the gain / loss pair already owns
+        // the page's one text row, and rows 3..8 are the drawn shape.
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "42.1"
+        );
+        assert_eq!(
+            page_hero_unit(Page::RouteElev, Some(&rec), None),
+            Some("KM")
+        );
         for r in rows.iter().take(8).skip(3) {
             assert!(r.is_empty(), "row reserved for the profile shape: {:?}", r);
         }
@@ -7442,8 +7704,16 @@ mod tests {
         );
         assert_eq!(rows[2].as_str(), "ADAPT   DO MORE");
         assert_eq!(rows[4].as_str(), "WEEKS   2/3");
-        assert_eq!(rows[5].as_str(), "CHANGES 1");
-        assert_eq!(rows[6].as_str(), "CONF    MEDIUM");
+        // The proposed-change count is the hero; confidence moved up into the
+        // row it vacated.
+        assert_eq!(
+            page_hero(Page::PlanAdaptive, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "1"
+        );
+        assert_eq!(rows[5].as_str(), "CONF    MEDIUM");
+        assert_eq!(rows[6].as_str(), "");
 
         // The fatigue hold: a suppressed do-more shows the hold, not a
         // confidence that pretends a verdict was issued.
@@ -7469,7 +7739,7 @@ mod tests {
         );
         assert_eq!(rows[2].as_str(), "ADAPT   ON TRACK");
         assert_eq!(rows[4].as_str(), "WEEKS   3/3");
-        assert_eq!(rows[6].as_str(), "HELD FATIGUE");
+        assert_eq!(rows[5].as_str(), "HELD FATIGUE");
     }
 
     /// The row a page writes its empty-body reason on: [`UNFED_REASON_ROW`] for
