@@ -9,7 +9,7 @@
 #
 # Usage:
 #   bin/watch-build.sh
-#   bin/watch-build.sh --bin sensor_smoke
+#   bin/watch-build.sh --bin app
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
