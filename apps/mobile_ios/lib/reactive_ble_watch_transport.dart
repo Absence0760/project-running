@@ -37,6 +37,8 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
       Uuid.parse('d1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid workoutCharUuid =
       Uuid.parse('d1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+  static final Uuid screensCharUuid =
+      Uuid.parse('d1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
 
   // Lazy: FlutterReactiveBle() opens a MethodChannel in its constructor,
   // which throws under flutter_test. Deferring construction keeps the
@@ -130,6 +132,10 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeCourse(List<int> chunk) => _ble
       .writeCharacteristicWithResponse(_char(courseCharUuid), value: chunk);
+
+  @override
+  Future<void> writeScreens(List<int> frame) => _ble
+      .writeCharacteristicWithResponse(_char(screensCharUuid), value: frame);
 
   @override
   Future<void> disconnect() async {

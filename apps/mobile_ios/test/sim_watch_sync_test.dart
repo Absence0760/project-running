@@ -190,6 +190,7 @@ class FakeWatchTransport implements WatchBleTransport {
   final settingsWrites = <List<int>>[];
   final workoutWrites = <List<int>>[];
   final courseWrites = <List<int>>[];
+  final screensWrites = <List<int>>[];
 
   FakeWatchTransport({required this.blob, required this.manifest});
 
@@ -228,6 +229,11 @@ class FakeWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeCourse(List<int> chunk) async {
     courseWrites.add(chunk);
+  }
+
+  @override
+  Future<void> writeScreens(List<int> frame) async {
+    screensWrites.add(frame);
   }
 
   @override

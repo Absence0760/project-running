@@ -572,6 +572,12 @@ abstract class WatchBleTransport {
   /// firmware's `CourseAssembler` enforces.
   Future<void> writeCourse(List<int> chunk);
 
+  /// Write a whole `SCR1` composed-screen frame (`encodeWatchScreens` in
+  /// watch_screens.dart) to the watch's screens characteristic. Unchunked:
+  /// the set caps at 28 bytes, so one ATT write carries it and the frame
+  /// the watch decodes is the complete answer to what screens it has.
+  Future<void> writeScreens(List<int> frame);
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
@@ -684,6 +690,22 @@ class WatchSyncClient {
       for (final chunk in chunks) {
         await transport.writeCourse(chunk);
       }
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /// Push a whole `SCR1` composed-screen frame (`encodeWatchScreens` in
+  /// watch_screens.dart — the encoding stays with the wire module, this
+  /// client only carries bytes). Unchunked, so [pushSettings]'s shape
+  /// rather than [pushCourse]'s: one write is the complete set.
+  ///
+  /// A frame carrying a count of 0 is a legitimate push — it is how a
+  /// runner clears the screens already on the watch.
+  Future<void> pushScreens(List<int> frame) async {
+    await transport.scan();
+    try {
+      await transport.writeScreens(frame);
     } finally {
       await transport.disconnect();
     }
