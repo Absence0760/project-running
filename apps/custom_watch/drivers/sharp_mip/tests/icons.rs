@@ -26,6 +26,21 @@ fn ink(icon: Icon) -> usize {
         .sum()
 }
 
+/// Maximal runs of ink down one column of an icon — how many separate bands a
+/// ray drawn through that column crosses.
+fn ink_bands_in_column(icon: Icon, x: usize) -> usize {
+    let mut bands = 0;
+    let mut prev = false;
+    for row in icon.bitmap() {
+        let lit = row[x / 8] & (1 << (x % 8)) != 0;
+        if lit && !prev {
+            bands += 1;
+        }
+        prev = lit;
+    }
+    bands
+}
+
 #[test]
 fn every_icon_has_ink() {
     for icon in Icon::ALL {
@@ -96,6 +111,38 @@ fn the_satellite_search_animation_has_three_distinguishable_frames() {
         ink(Icon::SatSearch1) < ink(Icon::Satellite),
         "the search does not grow from frame 1 to the acquired dish"
     );
+}
+
+#[test]
+fn each_search_frame_shows_its_arcs_as_separate_bands() {
+    // Growing ink is not the same as growing legibility, and the difference is
+    // what the first version of this family got wrong: its three arcs all began
+    // at the anchor dot instead of being concentric about it, so near the origin
+    // they overlapped into one diagonal wedge and only separated at their far
+    // tips. Every check above passed on it — the frames were distinct, the ink
+    // grew — while on the panel all three read as the same hook. Since § 361 put
+    // this glyph on the GPS row of every page, that is the most-repeated
+    // graphic in the UI saying nothing about how many satellites are held.
+    //
+    // The arcs are concentric about the dot, so the icon's vertical centre line
+    // is a ray outward from it and has to cross one band per arc plus the dot
+    // itself. Counting bands is what distinguishes drawn-apart from merged;
+    // ink totals cannot see the difference.
+    for (icon, arcs) in [
+        (Icon::SatSearch0, 1),
+        (Icon::SatSearch1, 2),
+        (Icon::Satellite, 3),
+    ] {
+        let bands = ink_bands_in_column(icon, ICON_SIZE / 2);
+        assert_eq!(
+            bands,
+            arcs + 1,
+            "{icon:?} crosses {bands} ink bands up its centre line, not the \
+             {} its {arcs} arc(s) plus the anchor dot need — the arcs have \
+             merged into each other or into the dot",
+            arcs + 1
+        );
+    }
 }
 
 #[test]

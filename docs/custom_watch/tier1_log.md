@@ -358,10 +358,21 @@ while reading another.
 
 **The satellite glyph was redrawn** in the same pass, because it went from one page to thirty-seven.
 It was the lightest icon in the table at 36 ink pixels against 54–110 for its siblings, and
-off-centre (cols 1–10 of 16 where the others span 2–13). Three nested arcs over the shared anchor
-dot now fill the cell like `Mountain` does: 19 → 37 → **59** ink across the three acquiring frames,
-so the search still grows monotonically and `SatSearch0`/`SatSearch1`/`Satellite` stay three
-distinguishable beats.
+off-centre (cols 1–10 of 16 where the others span 2–13).
+
+The first attempt drew three arcs *from* the shared anchor dot, and rendering the cell showed why
+that does not work: arcs sharing a start point overlap near it and part only at their tips, so at
+16 px they merged into one diagonal wedge reading as a hook — identical in character across all
+three frames. The table's checks passed on it (frames distinct, ink growing 19 → 37 → 59), because
+an ink total cannot see a merge. The arcs are now **concentric about** the dot instead of radiating
+from it, and symmetric about the cell's centre line so their apexes land as flat pixel runs rather
+than stair-steps: 26 → 52 → **84** ink across the three acquiring frames, each arc separated from
+its neighbours by clear panel.
+
+`each_search_frame_shows_its_arcs_as_separate_bands` pins that. Because the fan is concentric, the
+centre line is a ray out of the dot and has to cross one ink band per arc plus the dot — two, three,
+four. It fails on the merged version at frame 0. *Drawn apart* is the property a runner reads;
+monotonic ink never was.
 
 **Coverage hole found on the way in.** `fed_snapshot()` backs every page-wide guard in `face.rs` and
 only ever filled the *phone-pushed* views — so the Pacer, Workout, CutoffEta, Climb, Waypoint and
