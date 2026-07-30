@@ -322,6 +322,7 @@ pub mod route_simplify;
 pub mod run_heatmap;
 pub mod run_stats;
 pub mod run_store;
+pub mod screens;
 pub mod segments;
 pub mod settings;
 pub mod settings_apply;
