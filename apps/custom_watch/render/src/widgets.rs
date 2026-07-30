@@ -8,10 +8,13 @@
 //! renders underneath.
 //!
 //! Placement contract with `watch_core::face`: these overlays draw into cells
-//! the face leaves blank on the matching page (the pacer page's row 3, the fuel
-//! page's row 3, the gear page's row 5, the trailing bar columns of the zone /
-//! split rows, the split page's rows 3..8). Change one side and the other must
-//! follow — the tests here pin the columns each overlay owns.
+//! the face leaves blank on the matching page (the fuel page's row 3, the gear
+//! page's row 5, the trailing bar columns of the zone / split / pacer rows, the
+//! split page's rows 3..8). Change one side and the other must follow — the
+//! tests here pin the columns each overlay owns, and
+//! `overlay_never_paints_over_face_text` sweeps every pair for the collision
+//! that contract exists to prevent, so adding a text row to a page whose bar
+//! already owned it fails here instead of on the glass.
 
 use sharp_mip::{Framebuffer, RowRules, HEIGHT, TEXT_COLS, TEXT_ROWS, WIDTH};
 use watch_core::bar_chart::{bar_chart, Bar};
@@ -227,12 +230,31 @@ pub fn ruled_dashboard_row(fb: &mut Framebuffer, row: usize, text: &str) {
 // Single-value gauges (pacer / gear / fuel pages)
 // ---------------------------------------------------------------------------
 
-/// The pacer page's ahead/behind gauge: a centre-out bar on row 3 fed by
+/// Left edge of the pacer's in-row centre bar — past the widest `DIST` value
+/// the face can write on row 7 (`DIST -99999 M`, 13 cells).
+const PACER_BAR_X: usize = 14 * CELL_W;
+const PACER_BAR_W: usize = WIDTH - PACER_BAR_X - 3;
+
+/// The pacer page's ahead/behind gauge: a centre-out bar fed by
 /// [`gauge::pacer_fill`]. No-op without a configured pacer goal, so the honest
 /// "NO GOAL SET" text the face draws stands alone.
+///
+/// In-row on row 7, beside `DIST`, not full-width on row 3. Row 3 was the
+/// original home — directly under the hero whose signed time the fill encodes —
+/// but § 609 gave that row to the race-phase line, and a full-width bar there
+/// painted straight through it (the collision the `overlay_never_paints_over_*`
+/// guard below now pins). The page carries nine rows of content in nine rows,
+/// so there is no blank row to move to; row 7 is the one whose value agrees with
+/// the bar in sign, which is what a centre-out bar communicates.
 pub fn draw_pacer_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
     if let Some(status) = snap.pacer {
-        fb.draw_center_bar(4, bar_y(3), WIDTH - 8, BAR_H, gauge::pacer_fill(&status));
+        fb.draw_center_bar(
+            PACER_BAR_X,
+            bar_y(7),
+            PACER_BAR_W,
+            BAR_H,
+            gauge::pacer_fill(&status),
+        );
     }
 }
 
@@ -797,10 +819,14 @@ pub fn draw_compass(fb: &mut Framebuffer, cx: usize, cy: usize, r: usize, bearin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use watch_core::face::{IdleView, NavView};
     use watch_core::gear_wear::gear_wear;
+    use watch_core::gnss_mode::GnssMode;
     use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM, ZONE_COUNT};
+    use watch_core::page::Page;
     use watch_core::pacer::{PaceVerdict, PacerGoal, PacerStatus};
     use watch_core::record::{FuelCarryView, FuelView, RecordState, PACE_BUCKET_COUNT};
+    use watch_core::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
 
     // Count set pixels inside a rectangle — the tests assert *where* ink lands.
     fn ink_in(fb: &Framebuffer, x: usize, y: usize, w: usize, h: usize) -> usize {
@@ -1262,18 +1288,185 @@ mod tests {
         let (mut fa, mut fb) = (Framebuffer::new(), Framebuffer::new());
         draw_pacer_overlay(&mut fa, &ahead);
         draw_pacer_overlay(&mut fb, &behind);
-        let y = bar_y(3);
-        let mid = WIDTH / 2;
-        // Ahead fills right of centre; behind fills left of centre.
-        assert!(ink_in(&fa, mid + 2, y, mid - 6, BAR_H) > ink_in(&fa, 6, y, mid - 8, BAR_H));
-        assert!(ink_in(&fb, 6, y, mid - 8, BAR_H) > ink_in(&fb, mid + 2, y, mid - 6, BAR_H));
+        let y = bar_y(7);
+        let half = PACER_BAR_W / 2;
+        let mid = PACER_BAR_X + half;
+        // Ahead fills right of the bar's centre; behind fills left of it.
+        let right = |f: &Framebuffer| ink_in(f, mid + 1, y, half - 1, BAR_H);
+        let left = |f: &Framebuffer| ink_in(f, PACER_BAR_X, y, half - 1, BAR_H);
+        assert!(right(&fa) > left(&fa));
+        assert!(left(&fb) > right(&fb));
+    }
+
+    #[test]
+    fn pacer_overlay_stays_clear_of_the_dist_value_it_sits_beside() {
+        // The widest DIST the face can write is `DIST -99999 M` — 13 cells — so
+        // the bar starting at cell 14 leaves the value intact at full extension.
+        let mut leading = snapshot();
+        leading.pacer = Some(pacer(gauge::PACER_FULL_SCALE_S));
+        let mut trailing = snapshot();
+        trailing.pacer = Some(pacer(-gauge::PACER_FULL_SCALE_S));
+        for snap in [&leading, &trailing] {
+            let mut fb = Framebuffer::new();
+            draw_pacer_overlay(&mut fb, snap);
+            assert_eq!(ink_in(&fb, 0, 7 * CELL_H, PACER_BAR_X, CELL_H), 0);
+        }
     }
 
     #[test]
     fn pacer_overlay_without_goal_draws_nothing() {
         let mut fb = Framebuffer::new();
         draw_pacer_overlay(&mut fb, &snapshot());
-        assert_eq!(ink_in(&fb, 0, bar_y(3), WIDTH, BAR_H), 0);
+        assert_eq!(ink_in(&fb, 0, bar_y(7), WIDTH, BAR_H), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // The placement contract, swept
+    // -----------------------------------------------------------------------
+
+    fn guard_fix() -> Fix {
+        Fix {
+            lat_deg: 40.1,
+            lon_deg: -105.2,
+            speed_mps: 2.6,
+            course_deg: Some(90.0),
+            sats: 9,
+            alt_m: Some(1650.0),
+            time_of_day: Some(12 * 3600),
+            date: None,
+            uptime_s: 100,
+        }
+    }
+
+    fn workout_view() -> WorkoutView {
+        WorkoutView {
+            step_index: 13,
+            step_total: 64,
+            kind: WorkoutStepKind::Rep,
+            rep_index: 7,
+            rep_total: 12,
+            duration_based: false,
+            target_distance_m: 400,
+            target_duration_s: 0,
+            target_pace_s_per_km: 240,
+            step_distance_m: 200,
+            step_elapsed_s: 60,
+            remaining_m: 200,
+            remaining_s: 0,
+            progress_permille: 500,
+            step_pace_s_per_km: Some(250),
+            adherence: PaceAdherence::OnPace,
+            next: None,
+            complete: false,
+            rollup: None,
+            transition_seq: 0,
+            ending_seq: 0,
+        }
+    }
+
+    /// Assert an overlay paints into no cell the face wrote a glyph into.
+    ///
+    /// Cell granularity, not pixel: an in-row bar legitimately shares a *row*
+    /// with text (the workout and zone bars do), but a bar and a glyph in the
+    /// same 8x16 cell is corruption whether or not their ink happens to
+    /// interleave. Draws the two layers into separate framebuffers so the
+    /// question "who owns this cell" has an answer, which a single composed
+    /// buffer cannot give.
+    fn assert_no_overlap(
+        page: Page,
+        snap: &Snapshot,
+        hr: Option<u16>,
+        draw: impl Fn(&mut Framebuffer, &Snapshot),
+    ) {
+        let fix = guard_fix();
+        let rows = face::page_rows(
+            page,
+            Some(&fix),
+            hr,
+            Some(snap),
+            None,
+            NavView::NoCourse,
+            None,
+            100,
+            false,
+            GnssMode::default(),
+            IdleView::Home,
+            None,
+            None,
+        );
+        let mut text = Framebuffer::new();
+        for (r, row) in rows.iter().enumerate() {
+            text.draw_text_row(r, row);
+        }
+        let mut over = Framebuffer::new();
+        draw(&mut over, snap);
+
+        for row in 0..TEXT_ROWS {
+            for col in 0..TEXT_COLS {
+                let (x, y) = (col * CELL_W, row * CELL_H);
+                let t = ink_in(&text, x, y, CELL_W, CELL_H);
+                let o = ink_in(&over, x, y, CELL_W, CELL_H);
+                assert!(
+                    t == 0 || o == 0,
+                    "{page:?}: cell (col {col}, row {row}) carries both face text \
+                     ({t} px) and overlay ink ({o} px) — the overlay paints over the \
+                     glyph. Either move the bar or free the cell; the face row is \
+                     {:?}",
+                    rows[row].as_str()
+                );
+            }
+        }
+    }
+
+    /// Every page whose bar shares the panel with face text, at the widest
+    /// values the face can write — a bar clear of a typical value but not of an
+    /// extreme one is still a collision waiting for a long run.
+    ///
+    /// This is the guard the placement contract never had. § 609 added the
+    /// race-phase line to the pacer page's row 3 while the ahead/behind bar
+    /// already owned that row full-width, and nothing failed: the face tests
+    /// assert row strings, the widget tests assert bar columns, and no test
+    /// composed the two. The bar painted through the phase text on the glass
+    /// for four batches.
+    #[test]
+    fn overlay_never_paints_over_face_text() {
+        let mut pacer_snap = snapshot();
+        // Widest DIST (`DIST -99999 M`) with the bar at full extension.
+        pacer_snap.pacer = Some(PacerStatus {
+            ahead_m: -123_456.0,
+            ..pacer(-gauge::PACER_FULL_SCALE_S)
+        });
+        assert_no_overlap(Page::Pacer, &pacer_snap, Some(150), draw_pacer_overlay);
+
+        let mut gear_snap = snapshot();
+        gear_snap.gear = Some(gear_wear(Some(900_000.0), Some(800_000.0)));
+        assert_no_overlap(Page::GearWear, &gear_snap, None, draw_gear_overlay);
+
+        let mut fuel_snap = snapshot();
+        fuel_snap.fuel = Some(FuelView {
+            carry: Some(FuelCarryView {
+                carbs_g: 120.0,
+                fluid_ml: 1_500.0,
+            }),
+            total_carbs_g: 120.0,
+            total_fluid_ml: 1_500.0,
+        });
+        assert_no_overlap(Page::Fuel, &fuel_snap, None, draw_fuel_overlay);
+
+        let mut workout_snap = snapshot();
+        workout_snap.workout = Some(workout_view());
+        assert_no_overlap(Page::Workout, &workout_snap, None, draw_workout_overlay);
+
+        let mut splits_snap = snapshot();
+        splits_snap.pace_bucket_m = [1_000.0, 4_000.0, 2_000.0, 500.0, 0.0, 0.0];
+        assert_no_overlap(Page::Splits, &splits_snap, None, draw_splits_overlay);
+
+        let mut zones_snap = snapshot();
+        zones_snap.zone_time_s = [6_000, 3_000, 1_200, 600, 60];
+        zones_snap.zone_cutoffs = zone_cutoffs_from_max_hr(190);
+        assert_no_overlap(Page::Zones, &zones_snap, Some(150), |fb, snap| {
+            draw_zones_overlay(fb, snap, Some(150))
+        });
     }
 
     #[test]
