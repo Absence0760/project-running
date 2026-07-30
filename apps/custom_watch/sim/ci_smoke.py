@@ -385,6 +385,17 @@ MENU_STEP_TIMEOUT = 10
 # right sensitivity: a fourth rung should make someone re-read this scenario.
 GNSS_LADDER_RUNGS = 3
 
+# The §359 climb rail. Two independent halves, so two patterns: the detector's
+# own output (baro-fed, works with no course) and the crest read off the pushed
+# course profile. A page dump can show neither — it proves a frame was drawn,
+# never that a number in it is right.
+CLIMB_ACTIVE = re.compile(r"climb: active gain=([\d.]+)m dist=([\d.]+)m grade=(-?[\d.]+)%")
+CLIMB_CREST = re.compile(r"climb: crest dist=([\d.]+)m gain=([\d.]+)m grade=(-?[\d.]+)%")
+# Enough of the approach to see it close rather than to see it exist: a frozen
+# read looks identical to a live one over two samples.
+CLIMB_CREST_MIN_SAMPLES = 5
+CLIMB_TIMEOUT = 180
+
 ALERT_ANY = re.compile(r"record: alert (\S+)")
 ALERT_RAISED = re.compile(r"record: alert (?!cleared\b)(\S+)")
 ALERT_CLEARED = re.compile(r"record: alert cleared")
@@ -1593,6 +1604,64 @@ def scenario_terrain(sim):
             )
         time.sleep(0.5)
     passed(f"baro gain accumulated to {best:.1f} m — past the climb-open floor")
+
+    # The detector's OWN output, which the gain above does not stand in for:
+    # gain is the baro accumulator, and a climb opening is `ClimbDetector`
+    # deciding the accumulated rise is a climb. The Climb page's presence in the
+    # cycle below does not separate them either — the page opens on a live
+    # ascent OR a crest ahead.
+    active = sim.wait(
+        CLIMB_ACTIVE,
+        CLIMB_TIMEOUT,
+        "the climb detector to open a climb ('climb: active gain=<N>m ...')",
+    )
+    passed(
+        f"the detector opened a climb: {float(active.group(1)):.1f} m gained over "
+        f"{float(active.group(2)):.0f} m at {float(active.group(3)):.0f}% average grade"
+    )
+
+    # The crest read off the pushed course profile — the ClimbPro headline, and
+    # the one number on the page a runner acts on. Asserted as a TREND, not a
+    # value: `record.rs`'s own doc warns that a position frozen by a lost signal
+    # keeps reporting the crest from where the runner was, so the metres
+    # remaining stop falling while they climb. A single sample cannot tell that
+    # apart from a live read; a falling series can.
+    deadline = time.monotonic() + CLIMB_TIMEOUT
+    while True:
+        sim.alive()
+        crests = [
+            (float(m.group(1)), float(m.group(2)))
+            for _, m in stamped(sim.tail, CLIMB_CREST)
+        ]
+        if len(crests) >= CLIMB_CREST_MIN_SAMPLES:
+            break
+        if time.monotonic() >= deadline:
+            raise SmokeFailure(
+                f"only {len(crests)} crest reading(s) in {CLIMB_TIMEOUT}s, short of "
+                f"the {CLIMB_CREST_MIN_SAMPLES} needed to see one close — either "
+                "the course profile never reached the recorder, or the runner's "
+                "along-course position did, which is what the crest is measured "
+                "from"
+            )
+        time.sleep(0.5)
+    for (prev_d, prev_g), (dist, gain) in itertools.pairwise(crests):
+        if dist >= prev_d:
+            raise SmokeFailure(
+                f"the crest stopped closing: {prev_d:.1f} m then {dist:.1f} m "
+                "while the runner climbed toward it — a stale along-course "
+                "position reports the crest from where they WERE, which leaves "
+                "the one number on the page they act on stuck"
+            )
+        if gain > prev_g:
+            raise SmokeFailure(
+                f"the metres still to climb ROSE, {prev_g:.0f} m to {gain:.0f} m, "
+                "on an approach to a fixed summit"
+            )
+    passed(
+        f"the crest closes as the runner climbs: {len(crests)} readings from "
+        f"{crests[0][0]:.0f} m / {crests[0][1]:.0f} m to climb, down to "
+        f"{crests[-1][0]:.0f} m / {crests[-1][1]:.0f} m"
+    )
 
     walk = []
     dumps = {}

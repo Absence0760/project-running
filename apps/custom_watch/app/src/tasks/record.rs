@@ -434,6 +434,10 @@ pub async fn run(store: &'static SharedStore) {
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
+    // Tracked apart from `last_published` so the climb lines below fire on a
+    // climb changing rather than on any field of the snapshot changing —
+    // distance ticks every second, which would make them a 1 Hz stream.
+    let mut last_climb = last_published.climb;
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
     // The sim can't wait 15 minutes of moving time for a real reminder, so the
@@ -870,6 +874,30 @@ pub async fn run(store: &'static SharedStore) {
             last_alert = alert;
             alert_sender.send(alert);
         }
+        // The §359 climb rail's only observable: a page dump proves a frame was
+        // drawn, never that a number in it is right, so without these the
+        // detector's output and the crest are unassertable outside host tests.
+        // Each half gates on ITS OWN change — gating both on the view as a
+        // whole re-emitted an unchanged crest every time the baro-fed active
+        // half moved, which downstream reads as a crest that stopped closing,
+        // the exact symptom a stale along-course position produces.
+        if snap.climb.active != last_climb.active {
+            if let Some(c) = snap.climb.active {
+                debug!(
+                    "climb: active gain={}m dist={}m grade={}%",
+                    c.gain_m, c.distance_m, c.avg_grade_pct
+                );
+            }
+        }
+        if snap.climb.ahead != last_climb.ahead {
+            if let Some(a) = snap.climb.ahead {
+                debug!(
+                    "climb: crest dist={}m gain={}m grade={}%",
+                    a.distance_m, a.gain_m, a.avg_grade_pct
+                );
+            }
+        }
+        last_climb = snap.climb;
         if snap != last_published {
             debug!(
                 "record: {} dist={}m moving={}s pacer={}s",
