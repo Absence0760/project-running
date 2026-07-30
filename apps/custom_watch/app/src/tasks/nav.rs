@@ -60,8 +60,17 @@ static SIM_COURSE: [watch_core::course::CoursePoint; 3] = [
 /// the RouteElev page draws a real climb profile under the sim. Hardware carries
 /// none until a phone pushes a v2 course frame that includes elevation — the
 /// page then shows the course's geometry and says NO ELEVATION.
+///
+/// The summit is the LAST point, not the middle one. Both NMEA fixtures start
+/// at the course's middle point and run the east leg away from it, so a middle
+/// summit is a crest the runner has already crossed — `climb::crest_ahead`
+/// correctly returned `None` for the whole run and the §359 crest rail could
+/// not be armed in the sim at all. Same shape of fix as the GSA fix-type
+/// transitions added to `gps_dropout.nmea` so the honest signal meter became
+/// testable: demo data that does not reach the surface it is demoing is not
+/// demo data.
 #[cfg(feature = "sim-course")]
-static SIM_COURSE_ELEV_M: [i16; 3] = [1650, 1662, 1655];
+static SIM_COURSE_ELEV_M: [i16; 3] = [1650, 1655, 1675];
 
 /// The course this build carries, if any — shared by this task (projection)
 /// and the ui task (breadcrumb drawing), so the ~4 KiB point buffer exists
