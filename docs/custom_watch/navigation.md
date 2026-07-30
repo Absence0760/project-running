@@ -23,7 +23,7 @@ stateDiagram-v2
     Ice: name / blood / conditions
     Ice: emergency contact + number
     Run: Run view
-    Run: 37 pages (filtered mask)
+    Run: 37 built-in pages + up to 4 composed (§364), filtered mask
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
@@ -236,6 +236,19 @@ average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
 ## Press cost — computed, from the Dashboard, full 37-page mask
+
+**The table below is the 37 built-in pages.** A runner's composed data screens
+(§ 364) add up to four more seats immediately after the Dashboard, and
+`screens::MAX_SCREENS` is 4 for exactly this reason: § 289's model is a function
+of page count alone, and both published ceilings — 7 for the full-mask grid
+worst, 4 for the everyday filtered worst — hold to 37 + 6 and step at 37 + 7.
+Four sits inside that with margin rather than on its edge. The composed pages
+are gated on having actually been composed, so the shipped default cycle *is*
+the 37 the table computes; a watch that has never been pushed a screen walks
+exactly these numbers, and a fully-composed one stays under the same ceilings.
+The rows have not been recomputed for 41, because the ceiling claim is what the
+cap was chosen against and it is the claim this section publishes.
+
 
 Actions counted: each tap or hold is one action; the grid's open-hold is one;
 the auto-select close is free (BTN1 costs one to jump immediately). `linear` =
