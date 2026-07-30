@@ -1506,13 +1506,15 @@ fn zones_glance(
         write_tag(&mut rows[0], tag);
     }
 
+    // The hero's own `BPM` unit (§ 361) is directly above this row, so the
+    // label names the metric and nothing else.
     match hr_bpm {
         Some(bpm) => {
             let zone = hr_zones::zone_for_bpm(bpm, &snap.zone_cutoffs);
-            let _ = write!(rows[2], "{:<14}ZONE {}", "HR  BPM", zone);
+            let _ = write!(rows[2], "{:<14}ZONE {}", "HR", zone);
         }
         None => {
-            let _ = write!(rows[2], "{:<14}ZONE --", "HR  BPM");
+            let _ = write!(rows[2], "{:<14}ZONE --", "HR");
         }
     }
 
@@ -5568,7 +5570,7 @@ mod tests {
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
         // 152 bpm on the default 190 ladder is the Z3 cutoff itself.
-        assert_eq!(rows[2].as_str(), "HR  BPM       ZONE 3");
+        assert_eq!(rows[2].as_str(), "HR            ZONE 3");
         // The `{:<9}` pad keeps the (app-drawn) pixel bar's start column fixed;
         // the row text itself is now just the label + banked time.
         assert_eq!(rows[3].as_str(), "Z1 10:00    ");
@@ -5600,7 +5602,7 @@ mod tests {
                 .as_str(),
             "--"
         );
-        assert_eq!(rows[2].as_str(), "HR  BPM       ZONE --");
+        assert_eq!(rows[2].as_str(), "HR            ZONE --");
         // Nothing banked: times at zero, no bars drawn.
         for row in &rows[3..8] {
             assert!(row.as_str().ends_with("0:00     "), "row: {:?}", row);
