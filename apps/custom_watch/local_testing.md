@@ -27,7 +27,7 @@ Embedded firmware has a sharper split:
 - **On-target tests** run on the actual nRF52840 DK. Anything that reads a sensor, drives the display, talks to the radio, or relies on hardware timers belongs here. They're slower (you have to flash the board before running) and require a board plugged in. They're the embedded equivalent of mobile e2e tests.
 - **Simulator runs** sit between the two: `bin/watch-sim.sh` boots the real firmware ELF on an emulated nRF52840 DK (Renode) as an interactive bring-up and debugging surface for the peripheral-touching paths host tests can't reach; `sim/ci_smoke.py` drives the same launcher non-interactively and asserts on named observables, which is the tier CI runs. Both stop where Renode does — no BLE radio, no sensor analog, no power. See [Simulating without a board](#simulating-without-a-board-renode).
 
-The line between the two is enforced architecturally: pure-logic crates in `apps/custom_watch/drivers/` build for the host (`x86_64-unknown-linux-gnu`) and `cargo test` normally. The `app/` and `boards/` crates build for `thumbv7em-none-eabihf` and need a board. Aim to keep 60–70% of firmware code host-testable — it's the single most effective lever for keeping the inner loop fast.
+The line between the two is enforced architecturally: the pure-logic crates — `core/` (`watch_core`), `render/` (`watch_render`) and the four crates under `apps/custom_watch/drivers/` — build for the host (`x86_64-unknown-linux-gnu`) and `cargo test` normally. Only the `app/` and `boards/` crates are target-bound; they build for `thumbv7em-none-eabihf` and need a board, which is exactly the `--exclude app --exclude nrf52840_dk` CI runs its test job with. Aim to keep 60–70% of firmware code host-testable — it's the single most effective lever for keeping the inner loop fast.
 
 ## Prerequisites (install once per dev machine)
 
@@ -40,9 +40,9 @@ The line between the two is enforced architecturally: pure-logic crates in `apps
 5. **`cargo-watch` (optional but nice)** — `cargo install cargo-watch`. Lets you auto-reflash on file save with `cargo watch -x 'run --release'`.
 6. **Renode + `defmt-print` (optional, for `bin/watch-sim.sh`)** — Renode installs machine-wide from the GitHub-releases rpm (`sudo dnf install -y ./renode-<version>-1.x86_64.rpm`; the workstation-level CLAUDE.md records the version pin + rationale); `defmt-print` decodes the sim's RTT byte stream: `cargo install defmt-print --locked`. Neither is checked by `bin/watch-doctor.sh` — `bin/watch-sim.sh` verifies both itself and says what's missing.
 
-## First-time setup, after the workspace is scaffolded
+## First-time setup
 
-If `apps/custom_watch/Cargo.toml` doesn't exist yet, see step 2 of [`README.md`](README.md) in this directory — the testing workflow below only becomes useful once that scaffold lands.
+The Cargo workspace at `apps/custom_watch/` landed 2026-05-28 (step 2 of [`README.md`](README.md) in this directory), so everything below runs against a real tree — only the on-board half waits on parts.
 
 After scaffolding:
 
@@ -70,7 +70,7 @@ All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. 
 | Stream logs without reflashing | `probe-rs attach --chip nRF52840_xxAA` | `bin/watch-logs.sh` | Yes |
 | Erase the chip (factory reset) | `probe-rs erase --chip nRF52840_xxAA` | — | Yes |
 
-You can also add Cargo aliases in `apps/custom_watch/.cargo/config.toml` to shorten the bare-cargo commands further — e.g. `cargo flash` as an alias for `cargo run --release` — once the workspace is scaffolded.
+You can also add Cargo aliases in `apps/custom_watch/.cargo/config.toml` to shorten the bare-cargo commands further — e.g. `cargo flash` as an alias for `cargo run --release`.
 
 ## Debugging firmware in real time
 
@@ -151,7 +151,7 @@ You **cannot**:
 
 ## Simulating without a board (Renode)
 
-`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with three sim-only Cargo features — `sim-autostart`, `sim-buttons`, and `sim-course` (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with four sim-only Cargo features by default — `sim-autostart`, `sim-alerts`, `sim-buttons`, `sim-course` — plus `dev-blink`, and a fifth, `sim-screens`, only when `--screens` asks for it (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
 
 **The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press. Pass `--no-autostart` to drop the feature and boot to the idle face instead — needed to exercise anything that only exists *before* a run starts (the BTN3 GNSS-mode picker), with `runMacro $btn1` starting the run when you're ready.
 
@@ -167,18 +167,21 @@ runMacro $btn3    # page LEFT in any run view (Dashboard <- Distance <- Pace <- 
                   # on the idle face: cycle the GNSS recording mode
                   # (Performance -> Balanced -> Expedition)
 runMacro $btn4    # page RIGHT in any run view (Dashboard -> Distance -> Pace -> ...);
-                  # on the idle face: toggle the diagnostics view
+                  # on the idle face: walk the three idle faces one way
+                  # (home -> diagnostics -> ICE -> home, §291 + §358)
 runMacro $btn3h   # hold BTN3 ~0.8 s — run view: open the page-grid overview;
                   # idle face: QNH re-zero
 runMacro $btn4h   # hold BTN4 ~0.8 s — the same grid open, right-hand key
 runMacro $btn5    # take a manual lap; on the idle face: open the settings
                   # menu (§351 — $btn2/$btn3 cursor up/down, $btn5/$btn1
                   # edit left/right, $btn4 exit, 30 s inactivity auto-closes)
+runMacro $btn5h   # hold BTN5 ~0.8 s — mark a waypoint at the recorder's
+                  # current anchor (§357); refused outside a run
 ```
 
-Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3h` / `$btn4h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN4 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` (or `$btn4h`) opens it, `runMacro $btn3` / `runMacro $btn4` step the cursor backward / forward, and `runMacro $btn1` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-course` (below) are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3h` / `$btn4h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN4 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` (or `$btn4h`) opens it, `runMacro $btn3` / `runMacro $btn4` step the cursor backward / forward, and `runMacro $btn1` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-alerts`, `sim-course` (below), `dev-blink`, and `sim-screens` under `--screens` are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
 
-**The `sim-course` feature — the canned breadcrumb course.** The Nav run-view page follows a course (`watch_core::course`), but no course-push path exists yet — so the default-OFF `sim-course` feature bakes in a canned one: the west + south edges of the `bench_jog.nmea` rectangle. The fixture's east + north legs deliberately leave it, so every ~2-minute lap exercises the whole surface — on-course following, `nav: OFF COURSE (41 m off, 179 m along)` (WARN, fires whatever page is up), and `nav: back on course` as the loop closes. Cycle BTN3 to the Nav page to watch the breadcrumb panel, the position marker, and the 2x OFF COURSE banner on the emulated screen. A hardware flash (default features) carries no course and the Nav page reports `NO COURSE LOADED`.
+**The `sim-course` feature — the canned breadcrumb course.** The Nav run-view page follows a course (`watch_core::course`). The real phone→watch push exists — the `CRS1` frame (`watch_core::course_store`, v3, CRC-sealed) over the chunked `course` GATT characteristic, encoded phone-side by `watch_course.dart` — but it is `ble`-only and so unreachable in the sim, so the default-OFF `sim-course` feature bakes in a canned one: the west + south edges of the `bench_jog.nmea` rectangle. The fixture's east + north legs deliberately leave it, so every ~2-minute lap exercises the whole surface — on-course following, `nav: OFF COURSE (41 m off, 179 m along)` (WARN, fires whatever page is up), and `nav: back on course` as the loop closes. Cycle BTN3 to the Nav page to watch the breadcrumb panel, the position marker, and the 2x OFF COURSE banner on the emulated screen. A hardware flash (default features) carries no course and the Nav page reports `NO COURSE LOADED`.
 
 ```
 bin/watch-sim.sh                      # build + boot the default binary, headless
@@ -188,6 +191,11 @@ bin/watch-sim.sh --fixture mountain_loop  # a named fixture from sim/nmea/ (defa
 bin/watch-sim.sh --nmea my_route.nmea # substitute the GPS fixture (full path)
 bin/watch-sim.sh --phone-port 9900    # move the phone-link TCP port (default 7788)
 bin/watch-sim.sh --no-autostart       # boot to the idle face; BTN1 starts the run
+bin/watch-sim.sh --no-alerts          # drop `sim-alerts` for a watch with no
+                                      # banner over the hero rows (what the
+                                      # screenshot walk boots with)
+bin/watch-sim.sh --screens            # add `sim-screens`: three canned composed
+                                      # data screens, one per layout (§364)
 ```
 
 **The NMEA feed loops, and the loop point is not a no-op.** When the feeder reaches the end of the file it starts again from the top, which teleports the runner from the fixture's last position back to its first — metres for a loop fixture like bench_jog, ~354 m for `gps_dropout`. The recorder handles that correctly (a jump past `MAX_JUMP_M` at a one-fix interval is a teleport and credits nothing), but any *assertion* about distance that runs past the loop is reading a scenario the fixture does not describe: it is how a #330-broken recorder eventually resumes, once the runner has walked back inside the stale anchor's jump cap. `ci_smoke.py`'s `dropout` finds the restart in the published-fix stream and refuses to read past it.
@@ -196,15 +204,17 @@ There is deliberately **no flag to stop the feed after one pass.** One was built
 
 What runs for real in the sim, end to end: the Embassy executor and RTC1 time driver; GPIO (LED1 toggles logged at INFO as `gpio0.led0: LED1 on/off`); the GPS pipeline (canned NMEA → UARTE0 → `ublox_nmea` parser → `watch_core` fix accumulator); the Sharp MIP display (SPIM3 → the C# panel model — `--gui` shows the live screen, or dump a frame from the monitor: `sysbus.spi3.display DumpFrame "/tmp/frame.ppm"`); and the phone link (status frames on UARTE1 → TCP, the mobile app's dev Sim Watch screen connects here). What doesn't: BLE, power, and the HR/baro sensor analog side.
 
-**The flash run store in the sim.** At boot you'll see `run_flash: NVMC present, run store armed at 0xfc000` — Renode *does* model the nRF52840 NVMC, so the store's controller probe passes and it arms. The store writes to flash on a run **stop**, which the sim can now trigger via `runMacro $btn2` (the `sim-buttons` feature) — the recorder reaches `Finished` and runs `commit`. Points stage in RAM as the run records; after the tier-1 253-point cap (~4 min at 1 Hz) you'll see a one-shot `record: run N hit tier-1 flash point cap` warning and further points stop staging while the recording totals keep accruing. On a board without an NVMC (or a Renode platform lacking one) the probe would instead log `run_flash: no NVMC controller (sim?) — run store disabled` and every store op no-ops; recording is unaffected either way (L4 best-effort). The `run_manifest` / `run_chunk` sync characteristics are `--features ble`-only and can't run in the sim at all (no SoftDevice).
+**The flash run store in the sim.** At boot you'll see `run_flash: run store armed at 0xfc000, N run(s) recovered (M interrupted)` — Renode *does* model the nRF52840 NVMC, so the store's controller probe passes and it arms. The store writes to flash on a run **stop**, which the sim can now trigger via `runMacro $btn2` (the `sim-buttons` feature) — the recorder reaches `Finished` and runs `commit`. Points stage in RAM as the run records; on reaching the tier-1 253-point cap (~4 min at 1 Hz) the writer **decimates rather than truncates** (run-store v2, §285) — you'll see `record: run N slot full — track thinned to 1/k resolution, whole run kept`, the stored points thin by 2, the incoming stream thins to match, and the wrist shows `! TRACK 1/k RES`. Recording never stops staging. On a board without an NVMC (or a Renode platform lacking one) the probe would instead log `run_flash: no NVMC controller (sim?) — run store disabled, recording unaffected` and every store op no-ops; recording is unaffected either way (L4 best-effort). The `run_manifest` / `run_chunk` sync characteristics are `--features ble`-only and can't run in the sim at all (no SoftDevice).
 
 Moving parts, all inside [`sim/`](sim/):
 
-- **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the `btn1`..`btn5` injection macros, bridges the phone-link UART to TCP, exposes the GPS UART as a pty.
+- **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the eight button-injection macros (`btn1`..`btn5` plus the `btn3h` / `btn4h` / `btn5h` holds), bridges the phone-link UART to TCP with `flushOnConnect` so a client attaching mid-run gets the present rather than the boot, exposes the GPS UART as a pty.
 - **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
 - **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer, plus clickable BTN1–BTN5 keys drawn in side bezels at their §81 Fenix-analog positions and labelled with their §350 functions (the class is also the machine's `IAbsolutePositionPointerInput`, wired to gpio0 via its `buttonPort` constructor arg). `showAnalyzer sysbus.spi3.display` is the window `--gui` opens. Two dumps, and they are different artifacts: **`DumpFrame`** writes a PPM of the LCD area only (no case), flat black/white — its bytes are what every assertion reads, so they don't move — while **`DumpCanvas`** writes the whole window including the case and keys, in the canvas palette, and asserts nothing (it exists so the shell's own look can be reviewed without a display attached). Per decisions §360.
 - **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever; the GPS task parses it into fixes that drive both the on-screen face and the phone-link frames, so the whole data path is exercised against a deterministic feed. This is the **default** fixture.
 - **`nmea/mountain_loop.nmea`** — a synthetic ~13-minute mountain loop (~800 GGA+RMC pairs, same checksummed 1 Hz format) that climbs the East + North legs and descends the West + South legs of a rectangle, encoding **~200 m of cumulative vert gain and ~200 m of loss** over sustained 18–26 % grades before returning to the valley start. Where `bench_jog` is dead flat, this feed exercises the elevation / vert accumulator (`VERT +gain -loss` on the run dashboard; the idle face keeps its clock row once a fix arrives, per decisions §289) and drives the **grade-adjusted-pace path** hard — on the steep climb legs the Pace page's `GAP` row reads visibly faster than raw pace, and on the descents visibly slower. Satellite count also varies (11 in the valley, dropping to 7–8 near the summit with a correspondingly higher HDOP, re-emitted in periodic `$GPGSV` sets) so the fix-quality path sees movement too. Select it with `--fixture mountain_loop` (or `NMEA_FIXTURE=mountain_loop`). Note the canned `sim-course` breadcrumb is derived from the `bench_jog` rectangle, so the Nav page's off-course geometry only lines up under the default fixture.
+- **`nmea/gps_dropout.nmea`** — a ~2-minute jog with a 40 s signal void in the middle (void RMC + fix-quality-0 GGA, with GSA fix-type 3→1→3 transitions and a mid-void GSV so the honest signal meter is exercisable) and a plausible reacquire 122 m downrange. It caught the un-ported `run_recorder` #330 gap re-anchor by hand in the 2026-07-19 pass and now backs `ci_smoke.py`'s `dropout` scenario. Select it with `--fixture gps_dropout`.
+- **`nmea/heat_flat.nmea`** and **`nmea/switchback_descent.nmea`** — two more ~10-minute terrain fixtures, selectable the same way: `heat_flat` holds a dead-flat 305 m for its whole length (the no-vert control against which the climbing fixtures are read), `switchback_descent` drops 2400 m → 2099 m through switchbacks (the descent counterpart to `mountain_loop`'s climb, and the case where a bearing swings hardest between fixes). Neither backs a `ci_smoke` scenario today.
 
 The phone link mirrors the step-6 BLE design without the radio: the firmware's `phone` task writes one `watch_core::link` NDJSON status frame per second to UARTE1, Renode serves it as a TCP socket (`tcp://localhost:7788`; the Android emulator reaches it at `10.0.2.2:7788`), and the mobile app's dev-only **Settings → Developer → Sim watch link** screen (loopback-backend gate) renders the live values. `ncat localhost 7788` shows the raw frames.
 
@@ -222,7 +232,7 @@ Gotchas, learned the slow way:
 
 ## Building + flashing the BLE (SoftDevice) firmware
 
-README step 6 (the real phone radio) lives behind the **`ble` Cargo feature** and is **not** part of the default or sim build — the Renode sim can't run it (the Nordic S140 SoftDevice is proprietary firmware Renode doesn't model), and CI never builds it. It is **compile-and-link-verified only**; nothing on this path has run on hardware yet.
+README step 6 (the real phone radio) lives behind the **`ble` Cargo feature** and is **not** part of the default or sim build — the Renode sim can't run it (the Nordic S140 SoftDevice is proprietary firmware Renode doesn't model). CI *does* build it — the `build-firmware` job has built and clippy-gated the `ble` feature set per PR since 2026-07-25 (see [CI parity](#ci-parity)) — so it is **build-verified**, not merely compilable-in-principle; nothing on this path has run on hardware yet.
 
 Build it:
 
@@ -242,7 +252,7 @@ Bench-verification checklist (none of this is confirmed yet):
 
 - **RAM origin.** `memory-ble.x` over-reserves 31 KiB of RAM. On boot the SoftDevice logs the actual required RAM start (`sd_ble_enable: app RAM start should be 0x200...`). Tune `RAM : ORIGIN` down to that; over-reserving only wastes RAM, it doesn't misbehave.
 - **Interrupt priorities.** The SoftDevice reserves NVIC priorities 0/1/4; `main` puts GPIOTE, the RTC time driver, and every peripheral IRQ on P2. Confirm nothing faults or gets starved.
-- **Advertising + notify.** Scan for "Threkir", connect, subscribe to the `d1f6a7e1-…` characteristic, and confirm one NDJSON status frame per second — the same bytes the UART/sim transport emits. The phone-side BLE decoder (flutter_blue_plus) is not built yet; the sim's TCP Sim Watch screen remains the read surface until it is.
+- **Advertising + notify.** Scan for "Threkir", connect, subscribe to the `d1f6a7e1-…` characteristic, and confirm one NDJSON status frame per second — the same bytes the UART/sim transport emits. The phone-side BLE transport **is** built — `ReactiveBleWatchTransport` in `apps/mobile_android/lib/sim_watch_sync.dart`, over `flutter_reactive_ble` (chosen over `flutter_blue_plus`, decisions §212), unit-tested behind an injectable seam with no radio. What is unconfirmed is that it talks to a real S140, so the sim's TCP Sim Watch screen remains the read surface until a board exists.
 
 ## CI parity
 
@@ -257,8 +267,8 @@ cargo clippy --workspace --release --target thumbv7em-none-eabihf -- -D warnings
 # the two off-by-default feature sets, build + clippy each
 cargo build  --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble
 cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
-cargo build  --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink
-cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-buttons,sim-course,dev-blink -- -D warnings
+cargo build  --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
+cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink -- -D warnings
 
 cargo fmt --check
 ```
@@ -277,7 +287,7 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 curl … renode-1.16.1.linux-portable-dotnet.tar.gz   # sha256-pinned
 cargo install defmt-print --locked --version '^1.1' # cached between runs
 DEFMT_LOG=debug cargo build --release --bin app \
-  --features sim-autostart,sim-buttons,sim-course,dev-blink
+  --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
 
 # one step per scenario, each in its own out-dir
 python3 …/ci_smoke.py --scenario smoke   --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"   --budget 300
@@ -334,10 +344,11 @@ python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts --phone-port 9900
 
 | Scenario | What it proves | What it still doesn't |
 |---|---|---|
-| `smoke` | The recording pipeline end to end: NMEA → parser → fix accumulator → recorder → distance, one run face on glass, and the two-press stop committing a CRC'd blob to a flash slot. | Nothing about the *other* 32 pages, and nothing about an alert firing. |
-| `pages` | That the run-view page cycle actually renders — BTN3 walks the filtered mask and each page produces a non-blank frame instead of a blank or a panic. It is a **render** assertion, so it catches a page whose face code faults, divides by zero on empty data, or draws nothing; it does not check that a number is *right*. | Correctness of any displayed value (that's the host tests on `watch_core`), legibility, glyph shape at a given font tier, or one-handed press ergonomics. |
+| `smoke` | The recording pipeline end to end: NMEA → parser → fix accumulator → recorder → distance, one run face on glass, and the two-press stop committing a CRC'd blob to a flash slot. Since § 362 it also asserts the optical-HR rail (a BPM off the MAX86177 model) and the phone link (v1 NDJSON frames off the TCP socket, schema checked key by key). | Nothing about the *other* built-in pages — the ring is 37 built-ins plus up to four composed — and nothing about an alert firing. |
+| `pages` | That the run-view page cycle actually renders — `$btn4` walks the filtered mask rightward (§ 350), `$btn3` is asserted to be the exact inverse, and each page produces a non-blank frame instead of a blank or a panic. It is a **render** assertion, so it catches a page whose face code faults, divides by zero on empty data, or draws nothing; it does not check that a number is *right*. | Correctness of any displayed value (that's the host tests on `watch_core`), legibility, glyph shape at a given font tier, or one-handed press ergonomics. |
 | `alerts` | That the alert path fires from real recorded state and reaches the panel — the `watch_core::alerts` engine's fuel / zone / pace reminders off the recorder's own event cadence, and the `nav` task's off-course latch and re-arm — as an inverse-video banner, without disturbing the recording underneath it (the L4 contract). | Whether a tired runner *notices* it. There is no vibration motor at tier 1, so an alert is display-only by construction and "unmissable" is a bench/wrist claim, never a sim one. |
 | `terrain` | That the two pages a flat fixture can't arm — `Waypoint` and `Climb` — come **into** the cycle once they are armed (a BTN5 hold marks a point, the BMP581 model's triangle profile climbs past the 20 m a climb opens at) and render. `pages` only ever proved they stay out of an unarmed cycle, which a data-presence bit wired to the wrong field passes silently. | That the WPT page shows the right bearing or the CLMB page the right metres-remaining — those are host-test claims on `core/src/climb.rs` and `core/src/record.rs`. |
+| `screens` | That a runner's own composed data screens (§ 364) reach the panel: `--screens` seeds three (Duo / Trio / Single) through `state::SCREENS` — the same channel a phone `SCR1` push feeds — and the walk asserts they are the first three pages a forward tap reaches after the Dashboard, that each draws a non-blank frame distinct from the others, and that the uncomposed fourth is absent from the cycle. | That a tired runner can read a `Duo` or `Trio` at 45 cm. The arcmin figures are derived; legibility is a step-4 bench claim no simulator settles. |
 | `dropout` | That the recorder survives a GPS void honestly and **comes back from it**: the pre-void leg banks distance, the void freezes it with every snapshot inside reading `paused`, and the reacquire — 122 m downrange past `MAX_JUMP_M`, over a gap past `GPS_REANCHOR_AFTER_S` — moves it again. That last bit is `run_recorder`'s #330 re-anchor, the bug this fixture found by hand on 2026-07-19; it froze distance for the rest of a run and was guarded only by host tests over `Recorder` until this scenario put a guard on the whole NMEA→parser→cadence→recorder path. | Anything about a *throttled* GNSS mode: the re-anchor is the 1 Hz path only (a throttled mode's `MAX_SPEED_MPS * dt` ceiling self-heals by design), and the sim runs the default cadence. |
 
 `--budget` is a hard wall-clock cap for the run, not a per-assertion deadline (those are per-assertion and tighter). It exists so a wedged emulator fails with the harness's own diagnostics — last 40 lines of decoded output plus the tail of `renode.log` — rather than hanging until something outside kills it. Locally you can leave it at the default; in CI it is set per step, and always below the job's own `timeout-minutes`.
@@ -367,15 +378,13 @@ Use `--out-dir` when running more than one scenario by hand: each run clears `si
 
 The rungs are defined in [`docs/custom_watch/quality_standards.md`](../../docs/custom_watch/quality_standards.md). A green run of any scenario earns **sim-verified** for the observable it named, and that rung's ceiling is: *says nothing about real silicon, analog behaviour, the radio, or power*. Concretely, and none of this changes as scenarios are added:
 
-- **BLE can never be sim-verified.** Renode does not model the S140 SoftDevice ([decisions.md § 210](../../docs/architecture/decisions.md)), so the whole radio path — RAM origin, interrupt priorities, connection interval, pairing/bonding, `run_manifest` / `run_chunk` / settings / course-push — jumps host/build-verified straight to bench-verified. There is no sim scenario that could cover it.
+- **BLE can never be sim-verified.** Renode does not model the S140 SoftDevice ([decisions.md § 210](../../docs/architecture/decisions.md)), so the whole radio path — RAM origin, interrupt priorities, connection interval, pairing/bonding, and all seven characteristics (`frame`, `run_manifest`, `run_chunk`, and the four write-only pushes `settings` / `course` / `workout` / `screens`) — jumps host/build-verified straight to bench-verified. There is no sim scenario that could cover it.
 - **The sim models no power at all.** Renode does not simulate current, so a green run is **not a battery claim**. Every power and runtime figure in this workspace — the ~110 / ~180 / ~220 h GNSS-mode projections included — is a derivation awaiting a PPK2.
 - **The sensor models are pinned to the drivers, not to silicon.** The MAX86177 and BMP581 models answer the register sequences the drivers issue, with a deterministic waveform and a scripted altitude. That verifies the *path*; a model built from the driver's beliefs cannot detect a wrong belief. No register semantics, no bus timing, no analog noise or settling.
 - **No SAADC**, so the battery-gauge sampling path is unreachable; only "the task parks cleanly and the faces still render" is checkable.
 - **No RF, no antenna, no thermal, no mechanical, no legibility.** A `pages` pass says a page drew pixels — not that a numeral is readable in direct sun at arm's length, which is a step-4 bench item.
 
 A green `sim-firmware` means the firmware is self-consistent end to end under the emulator. The bench-verify list in [`sim/verification-2026-07-19/README.md`](sim/verification-2026-07-19/README.md) § Model limitations and the tier-1 checklist in `quality_standards.md` are untouched by it. Never write "verified" without the rung and the observable.
-
-**Not in the `CI gate` aggregator yet.** The job is deliberately absent from `ci-gate`'s `needs:` list, so it reports but does not block merges. Promoting it is a follow-up once it has been observed green on a few real runs — Renode is not installable on every contributor machine, so its first hosted-runner execution is its first execution.
 
 ## Common errors
 
