@@ -105,9 +105,18 @@ def baseline_window(bits: bytes, width: int, height: int, ink_width: int, cell_h
     return min(top, max(0, bottom - (cell_h - 1)))
 
 
+# Characters the 1x pass damages without producing a byte-collision, so
+# `repair_collisions`'s equality test cannot see them: the glyph to re-rasterise
+# paired with what it degenerates into on the panel. Kept explicit rather than
+# inferred — see `repair_collisions` for the heuristic that was measured and
+# rejected — and pinned from the other side by the driver's `tests/font.rs`, so
+# a list that falls behind the font fails a test rather than shipping.
+DAMAGED_GLYPHS = [("!", ":")]
+
+
 def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str]:
-    """Re-rasterise any glyph whose 1x bitmap is identical to a *different*
-    glyph's, by supersampling at [`REPAIR_SCALE`] and averaging back down.
+    """Re-rasterise any glyph the 1x pass rendered indistinguishable from
+    another, by supersampling at [`REPAIR_SCALE`] and averaging back down.
 
     Two distinct printable characters that pack to the same pixels are always a
     rasterisation failure, not a font property: the reader cannot tell them
@@ -117,6 +126,21 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     `-`, so every `+` on the watch (the VERT `+gain` row, the Pacer page's
     ahead/behind sign) rendered as a minus. Supersampling gives the stem whole
     pixels to land in.
+
+    Byte-equality is not the whole of "indistinguishable", though, and reading
+    the panel is what showed it: `!` kept its top serif and its dot but lost the
+    stem between them, packing to two short marks — a colon with the upper dot
+    raised a row. It never collided with `:`, so nothing here saw it, while on
+    the panel every alert banner opened `: DRINK` instead of `! DRINK`, with the
+    bang that marks the band as an *alert* rather than a label reading as
+    punctuation. [`DAMAGED_GLYPHS`] names those, and they are repaired outright
+    rather than run through the group machinery: [`_repair_group`] stops as soon
+    as a group is pairwise distinct, and a near-miss like this already is.
+
+    A glyph-wide heuristic was tried instead and rejected: "a stroke the 2x pass
+    renders at more than twice the 1x length" flags 33 of 95 glyphs, because the
+    2x pass puts most stems across two columns where 1x picks one. It measures
+    sub-pixel placement, not damage.
 
     Only the glyphs that were actually broken are touched — see
     [`_repair_group`] — so the rest of the table stays bit-identical to the
@@ -130,7 +154,8 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     for index, rows in enumerate(glyphs):
         groups.setdefault(tuple(rows), []).append(index)
     collided = [members for members in groups.values() if len(members) > 1]
-    if not collided:
+    damaged = [GLYPHS.index(ch) for ch, _ in DAMAGED_GLYPHS]
+    if not collided and not damaged:
         return []
 
     scale = REPAIR_SCALE
@@ -163,6 +188,10 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     repaired = []
     for members in collided:
         repaired += _repair_group(glyphs, members, resample)
+    for index in damaged:
+        if glyphs[index] != resample(index):
+            glyphs[index] = resample(index)
+            repaired.append(GLYPHS[index])
     return repaired
 
 

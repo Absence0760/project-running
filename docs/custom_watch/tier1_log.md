@@ -374,6 +374,22 @@ centre line is a ray out of the dot and has to cross one ink band per arc plus t
 four. It fails on the merged version at frame 0. *Drawn apart* is the property a runner reads;
 monotonic ink never was.
 
+**The bang was rendering as a colon**, found in the same look at the panel. Every alert banner is
+`!` plus a word, and the `!` in the 8x16 table had kept its top serif and its dot while losing the
+stem between them — two short marks, indistinguishable from `:` at a glance. So the banner shown
+when the watch says drink, eat, ease off, or *you are at a cut-off* opened `: DRINK`, the mark that
+separates an alert from a label reading as punctuation. Same lost-hairline failure the `gen_font.py`
+repair pass exists for (`+` packing byte-identical to `-`, `|` shipping blank), one step short of
+the collision that would have caught it: `!` and `:` differ as bytes, so nothing looked.
+
+A glyph-wide heuristic was measured and rejected — "a stroke the 2x pass renders at over twice the
+1x length" flags 33 of 95 glyphs, because 2x puts most stems across two columns where 1x picks one.
+`DAMAGED_GLYPHS` names the near-misses instead and repairs them through the existing supersampler;
+the regenerated table is byte-identical everywhere but `!`.
+`bang_is_a_stem_over_a_dot_not_a_second_colon` pins the shape from the driver side — a taller
+unbroken run than the colon's, and exactly two ink-to-blank transitions so the dot cannot fuse into
+a `|` — so a named list falling behind the font fails a test rather than shipping.
+
 **Coverage hole found on the way in.** `fed_snapshot()` backs every page-wide guard in `face.rs` and
 only ever filled the *phone-pushed* views — so the Pacer, Workout, CutoffEta, Climb, Waypoint and
 RacePredictor bodies had never been walked by the grid-fit sweep, the hero-band placement guard or
