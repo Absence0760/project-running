@@ -241,7 +241,7 @@ const PACER_BAR_W: usize = WIDTH - PACER_BAR_X - 3;
 ///
 /// In-row on row 7, beside `DIST`, not full-width on row 3. Row 3 was the
 /// original home — directly under the hero whose signed time the fill encodes —
-/// but § 609 gave that row to the race-phase line, and a full-width bar there
+/// but #609 gave that row to the race-phase line, and a full-width bar there
 /// painted straight through it (the collision the `overlay_never_paints_over_*`
 /// guard below now pins). The page carries nine rows of content in nine rows,
 /// so there is no blank row to move to; row 7 is the one whose value agrees with
@@ -823,8 +823,8 @@ mod tests {
     use watch_core::gear_wear::gear_wear;
     use watch_core::gnss_mode::GnssMode;
     use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM, ZONE_COUNT};
-    use watch_core::page::Page;
     use watch_core::pacer::{PaceVerdict, PacerGoal, PacerStatus};
+    use watch_core::page::Page;
     use watch_core::record::{FuelCarryView, FuelView, RecordState, PACE_BUCKET_COUNT};
     use watch_core::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
 
@@ -1422,7 +1422,7 @@ mod tests {
     /// values the face can write — a bar clear of a typical value but not of an
     /// extreme one is still a collision waiting for a long run.
     ///
-    /// This is the guard the placement contract never had. § 609 added the
+    /// This is the guard the placement contract never had. #609 added the
     /// race-phase line to the pacer page's row 3 while the ahead/behind bar
     /// already owned that row full-width, and nothing failed: the face tests
     /// assert row strings, the widget tests assert bar columns, and no test
