@@ -1741,8 +1741,20 @@ impl Recorder {
     /// field's `updateGrade` early-out — the live GAP grade, the elevation
     /// sparkline, and the §359 climb segmenter all read the same sample, so a
     /// hill cannot register on one page and not another.
+    ///
+    /// The GPS fallback narrows through [`crate::elevation::plausible_gps`],
+    /// the same terrestrial window the vert filter already refuses to pull its
+    /// bias toward. Without it the three surfaces here were the only consumers
+    /// that trusted a receiver altitude no one else did — the flash track's
+    /// point stamping bounds it too ([`crate::record_cadence::track_point`]) —
+    /// and one out-of-band sample is not transient: the elevation profile thins
+    /// by keeping even indices, so the sample it lands in survives every later
+    /// thinning for the rest of the run.
     fn feed_gap(&mut self, fix: &Fix) {
-        if let Some(alt) = self.baro_alt_m.or(fix.alt_m.map(f64::from)) {
+        if let Some(alt) = self
+            .baro_alt_m
+            .or(crate::elevation::plausible_gps(fix.alt_m).map(f64::from))
+        {
             self.gap.on_sample(self.distance_m, alt);
             self.elev_profile.push(self.distance_m, alt);
             self.climb.on_sample(self.distance_m, alt);
@@ -4686,5 +4698,50 @@ mod tests {
         assert_eq!(w.step_index, 0);
         assert_eq!(w.transition_seq, 1);
         assert!(!w.complete);
+    }
+
+    #[test]
+    fn an_implausible_gps_altitude_never_reaches_the_elevation_surfaces() {
+        // The vert filter already refuses a receiver altitude outside the
+        // terrestrial window, but the GAP grade / elevation sparkline / climb
+        // segmenter took the raw value. One such sample is permanent: the
+        // profile thins by keeping even indices, so sample 0 survives every
+        // later thinning and the sparkline's range is wrong for the whole run.
+        for bad in [
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+            1e9,
+            crate::elevation::GPS_ALT_MAX_M + 1.0,
+            crate::elevation::GPS_ALT_MIN_M - 1.0,
+        ] {
+            let mut r = Recorder::new();
+            r.start(0);
+            r.on_fix(&fix_alt(40.0, -105.0, 3.0, 1, bad));
+            assert_eq!(
+                r.snapshot().elev_profile.len,
+                0,
+                "{bad} was banked as an altitude"
+            );
+        }
+    }
+
+    #[test]
+    fn a_plausible_gps_altitude_still_feeds_the_elevation_surfaces() {
+        // The guard may only ever drop a value the vert filter already
+        // distrusts; the window's own boundaries are inside it.
+        for good in [
+            crate::elevation::GPS_ALT_MIN_M,
+            0.0,
+            1624.0,
+            crate::elevation::GPS_ALT_MAX_M,
+        ] {
+            let mut r = Recorder::new();
+            r.start(0);
+            r.on_fix(&fix_alt(40.0, -105.0, 3.0, 1, good));
+            let p = r.snapshot().elev_profile;
+            assert_eq!(p.len, 1, "{good} was dropped");
+            assert_eq!(p.samples[0], good as i32);
+        }
     }
 }
