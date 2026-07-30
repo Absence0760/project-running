@@ -2,7 +2,7 @@
 
 Research-stage docs for a possible **own-hardware** watch built for ultra-marathon use (100km / 100mi events, multi-day FKTs, backcountry self-supported running). The app is the canonical software surface today and stays so; these docs only describe the path *if* we ever commit to building our own wrist device to compete with Garmin Fenix / COROS Vertix in the ultra niche.
 
-The bench-prototype firmware workspace lives at [`apps/custom_watch/`](../../apps/custom_watch/README.md) — paired with this directory by design so that strategic + research docs sit next to (but separate from) the code. Most of this folder is *research, not commitment*; only the active parts list ([`parts.md`](parts.md)) and the workspace under `apps/custom_watch/` are live.
+The bench-prototype firmware workspace lives at [`apps/custom_watch/`](../../apps/custom_watch/README.md) — paired with this directory by design so that strategic + research docs sit next to (but separate from) the code. Most of this folder is *research, not commitment*. The live artifacts — kept current alongside the code rather than written once — are the active parts list ([`parts.md`](parts.md)), the status + backlog in [`roadmap.md`](roadmap.md), the verification contract in [`quality_standards.md`](quality_standards.md), the milestone record in [`tier1_log.md`](tier1_log.md), the press grammar in [`navigation.md`](navigation.md), and the workspace under `apps/custom_watch/` itself.
 
 | Doc | What it answers |
 |---|---|
@@ -18,6 +18,7 @@ The bench-prototype firmware workspace lives at [`apps/custom_watch/`](../../app
 | [parts.md](parts.md) | Active tier-1 shopping list — MCU dev kit + sensor breakouts + bench tools, with order checkboxes for received items |
 | [tier1_log.md](tier1_log.md) | Dated milestone record of the tier-1 firmware effort — what was built, when, and where the evidence lives (bench evidence lands here) |
 | [navigation.md](navigation.md) | The watch's on-device navigation graph — surfaces, button edges, measured press costs |
+| [vendor_research.md](vendor_research.md) | § 88 Layer-1 findings from free public sources — the ANT+ Alliance program state, NDA-gating on the MAX86177 datasheet, and the BOM assumptions they contradict |
 
 ## Status
 

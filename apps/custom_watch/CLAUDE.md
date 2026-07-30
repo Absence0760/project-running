@@ -90,6 +90,8 @@ no longer applies.
 
 | Concern | File |
 |---|---|
+| **Current status across tiers, the per-step bring-up checklist, and the feature-parity backlog — read this first to orient** | [../../docs/custom_watch/roadmap.md](../../docs/custom_watch/roadmap.md) |
+| Dated milestone record of the tier-1 effort — what was built, when, and where the evidence lives | [../../docs/custom_watch/tier1_log.md](../../docs/custom_watch/tier1_log.md) |
 | Strategic framing — why ultra, who we'd compete with, where we can credibly win | [../../docs/custom_watch/competitive_landscape.md](../../docs/custom_watch/competitive_landscape.md) |
 | Product vision — ultra niche + the 10 product requirements that fall out of it | [../../docs/custom_watch/vision.md](../../docs/custom_watch/vision.md) |
 | Concrete BOM — chip picks per subsystem, ~$110 production BOM at 10k units | [../../docs/custom_watch/bom.md](../../docs/custom_watch/bom.md) |
@@ -100,6 +102,7 @@ no longer applies.
 | **Buttons / navigation / modals — read before touching the press grammar.** Every state, page, and button edge; §350 spatial paging (BTN3/BTN4 tap left/right, BTN5 lap — doubling as workout-step skip when a workout is armed, §354, and its HOLD marking a waypoint since §357; one-tier 0.5 s hold); §351 idle settings menu (BTN2/BTN3 cursor up/down, BTN5/BTN1 directional edits, BTN4 exit, five rows since §358's MEDICAL ID); the three idle faces BTN4 walks (home / diagnostics / ICE, §291 + §358); the computed press-cost model + the "every interaction, priced" floor table | [../../docs/custom_watch/navigation.md](../../docs/custom_watch/navigation.md) |
 | Verification rungs (*host* → *build* → *sim* → *bench*) + the tier-1 bench checklist — what "verified" may claim | [../../docs/custom_watch/quality_standards.md](../../docs/custom_watch/quality_standards.md) |
 | Tier-1 active parts list / shopping checklist (incl. the BTN5 external momentary on P0.02 — the DK has four onboard buttons, the §350 grammar uses five) | [../../docs/custom_watch/parts.md](../../docs/custom_watch/parts.md) |
+| § 88 Layer-1 vendor findings (ANT+ program state, NDA-gated datasheets) — contradicts two assumptions still recorded in `bom.md` | [../../docs/custom_watch/vendor_research.md](../../docs/custom_watch/vendor_research.md) |
 
 For status + next-steps + the active workspace layout, see
 [`README.md`](README.md) in this directory.

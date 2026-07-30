@@ -2,7 +2,7 @@
 
 The dated milestone record of the tier-1 bench-prototype firmware effort. Tier 1's stated deliverable is "knowledge + a credible technical story for ODM conversations" ([roadmap.md § Tier 1](roadmap.md#tier-1--bench-prototype-active-owner-personal)); this log is that story in writing — what was built, when, and where the evidence lives — so the knowledge doesn't stay in one person's head. One entry per milestone, newest last. Current per-step status lives in [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md); this file is the history, not the status.
 
-**Photos / video:** every entry gains a photo or short clip slot once parts arrive (dev kit, breakouts, bench setup, first wearable jog). Everything to date is simulator work, so the visual record so far is Renode screenshots (`bin/watch-sim.sh --gui` shows the live emulated panel).
+**Photos / video:** every entry gains a photo or short clip slot once parts arrive (dev kit, breakouts, bench setup, first wearable jog). Everything to date is simulator work, so the visual record so far is Renode captures: since [§ 360](../architecture/decisions.md) `bin/watch-shots.sh` walks every screen the sim can arm and writes one PNG each plus an HTML contact sheet, which is the record to reach for; `bin/watch-sim.sh --gui` shows the live emulated panel for a one-off look.
 
 ## 2026-05-28 — Workspace scaffold (step 2)
 
