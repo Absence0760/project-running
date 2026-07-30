@@ -159,17 +159,30 @@ HR_TIMEOUT = 120
 # bytes, so they are asserted by name rather than by count.
 LINK_PROTOCOL_VERSION = 1
 LINK_FRAME_KEYS = ("v", "uptime_s", "fix", "elev")
-# Enough frames to see the uptime clock advance across several of them and to
-# reach the first one carrying a fix. The link emits one per second of virtual
-# time and the first fix lands ~5 s in, so this is a handful of seconds of run.
-LINK_FRAMES_WANTED = 12
+# Enough frames to see the uptime clock advance across several of them. The link
+# emits one per second of virtual time, so this is a handful of seconds of run —
+# and since watch.resc sets flushOnConnect, they are the CURRENT seconds rather
+# than the first ones of the boot.
+LINK_FRAMES_WANTED = 6
 LINK_TIMEOUT = 90
 # How far the link's fix may sit from the one the decoded log reported before they
-# are different positions rather than the same one printed twice. defmt prints the
+# are different positions rather than the same one seen twice. defmt prints the
 # f32 lat/lon with fewer digits than the link's %.6f, so byte equality is not
-# available; 0.001 deg is ~110 m, far tighter than the ~2.98 m the fixture steps
-# per fix could ever put between two adjacent published fixes.
+# available, and the two rails sample at different instants — a few seconds of
+# skew is ~10 m at the fixture's ~3 m/s. 0.001 deg is ~110 m: loose enough to
+# absorb that, tight enough that a fix from a different part of the ~350 m
+# fixture, or a fabricated 0,0, fails it.
 LINK_FIX_TOLERANCE_DEG = 0.001
+# How far behind the run's own clock the first frame off a fresh connection may
+# be before the link is replaying its backlog rather than reporting the present.
+#
+# This is the assertion that pins `flushOnConnect` in watch.resc. Without it the
+# provider queues every frame written while no client was attached and replays
+# the lot, so the first frame a client reads is the one from uptime_s = 1 — ten
+# minutes stale on a ten-minute-old sim, on a surface (the mobile dev screen)
+# whose entire job is to show what the watch is doing NOW. The window is wide
+# because it only has to separate "the present" from "the beginning of the run".
+LINK_LIVE_SKEW_S = 20.0
 
 SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain", "dropout")
 
@@ -712,13 +725,11 @@ def stamped(tail, pattern):
 def read_link_frames(sim, wanted, timeout):
     """Read `wanted` newline-terminated status frames off the phone-link socket.
 
-    Renode's server-socket terminal BUFFERS everything UARTE1 wrote while no
-    client was attached and replays it on connect, so a connection opened minutes
-    into a run still opens on the frame from uptime_s = 1. That is leaned on here
-    rather than worked around: the backlog is the stream, in order and complete,
-    so the first frames off a fresh connection are the run's first seconds — and
-    it is also what the mobile dev screen gets when it attaches mid-run, which is
-    worth knowing before reading its first values as live ones.
+    These are the run's CURRENT seconds, not its first: Renode's server-socket
+    provider queues everything UARTE1 wrote while no client was attached, and
+    `watch.resc` passes `flushOnConnect` so that queue is dropped when a client
+    arrives. `assert_link_frames` pins that, because it is the difference between
+    a live view and a replay of the boot.
 
     A short read is not an error on its own; running out of time with fewer than
     `wanted` frames is, and says how many arrived.
@@ -756,13 +767,18 @@ def read_link_frames(sim, wanted, timeout):
     return frames[:wanted]
 
 
-def assert_link_frames(sim, frames, log_fix):
-    """The three claims a batch of status frames carries.
+def assert_link_frames(sim, frames, log_fix, connected_at_s):
+    """The four claims a batch of status frames carries.
 
-    Schema, then clock, then payload. The payload one is the reason the other two
-    are worth making: it cross-checks the SAME fix against the decoded log, so the
-    assertion is that one parsed fix reached both the panel rail and the phone
-    rail — not merely that each rail produced something.
+    Schema, freshness, clock, payload. The payload one is why the others are worth
+    making: it cross-checks the SAME fix against the decoded log, so the assertion
+    is that one parsed fix reached both the panel rail and the phone rail — not
+    merely that each rail produced something.
+
+    `connected_at_s` is the run's own clock read just BEFORE the socket was
+    opened, which is what makes the freshness claim checkable: a link honouring
+    `flushOnConnect` opens on a frame from about then, and one replaying its
+    backlog opens on the frame from uptime_s = 1.
     """
     decoded = []
     for raw in frames:
@@ -795,6 +811,23 @@ def assert_link_frames(sim, frames, log_fix):
     )
 
     uptimes = [frame["uptime_s"] for frame in decoded]
+    behind = connected_at_s - uptimes[0]
+    if behind > LINK_LIVE_SKEW_S:
+        raise SmokeFailure(
+            f"the first frame off a fresh connection reports uptime_s="
+            f"{uptimes[0]}, {behind:.0f}s behind the run's clock at the moment "
+            f"the socket was opened (t={connected_at_s:.0f}s) — the link is "
+            "replaying the frames it queued while nothing was attached instead "
+            "of reporting the present. watch.resc passes flushOnConnect to "
+            "CreateServerSocketTerminal for exactly this; without it the mobile "
+            "dev screen opens on the frame from the first second of the boot"
+        )
+    passed(
+        f"a fresh connection opens on the present: first frame uptime_s="
+        f"{uptimes[0]} against a run clock of t={connected_at_s:.0f}s "
+        f"({behind:+.0f}s), so the backlog was flushed"
+    )
+
     if any(b <= a for a, b in itertools.pairwise(uptimes)):
         raise SmokeFailure(
             f"the link's uptime_s is not strictly increasing: {uptimes} — it is "
@@ -812,30 +845,34 @@ def assert_link_frames(sim, frames, log_fix):
             "`fix` is fed from state::FIX, so a null through a live fix means the "
             "phone task is not seeing that watch"
         )
-    first = fixed[0]["fix"]
+    live = fixed[-1]["fix"]
     for key in ("lat", "lon", "speed_mps", "sats", "age_s"):
-        if key not in first:
+        if key not in live:
             raise SmokeFailure(
-                f"the link's fix object is missing {key}: {first} — the mobile "
+                f"the link's fix object is missing {key}: {live} — the mobile "
                 "decoder reads it by name"
             )
-    drift = max(abs(first["lat"] - log_fix[0]), abs(first["lon"] - log_fix[1]))
+    # The newest of each rail, not the first: the frames are live now, and the
+    # two rails sample at different instants, so the pair that can agree is the
+    # pair taken at about the same moment.
+    drift = max(abs(live["lat"] - log_fix[0]), abs(live["lon"] - log_fix[1]))
     if drift > LINK_FIX_TOLERANCE_DEG:
         raise SmokeFailure(
-            f"the link's first fix is at {first['lat']},{first['lon']} but the "
-            f"decoded log's first was {log_fix[0]},{log_fix[1]} — {drift:.6f} deg "
-            f"apart, past the {LINK_FIX_TOLERANCE_DEG} deg the two rails' print "
-            "precisions can differ by. The two rails are reading different fixes"
+            f"the link's newest fix is at {live['lat']},{live['lon']} but the "
+            f"decoded log's newest was {log_fix[0]},{log_fix[1]} — {drift:.6f} deg "
+            f"apart, past the {LINK_FIX_TOLERANCE_DEG} deg that the two rails' "
+            "print precisions and their few seconds of sampling skew can account "
+            "for. The two rails are reading different fixes"
         )
-    if first["sats"] < MIN_SATS:
+    if live["sats"] < MIN_SATS:
         raise SmokeFailure(
-            f"the link's first fix reports sats={first['sats']}, under the "
-            f"{MIN_SATS} the same fix carried on the log rail"
+            f"the link's newest fix reports sats={live['sats']}, under the "
+            f"{MIN_SATS} the same fixture carries on the log rail"
         )
     passed(
-        f"the fix reached the phone rail too: lat={first['lat']} lon={first['lon']} "
-        f"sats={first['sats']} age_s={first['age_s']}, within "
-        f"{LINK_FIX_TOLERANCE_DEG} deg of the log's"
+        f"the live fix reached the phone rail too: lat={live['lat']} "
+        f"lon={live['lon']} sats={live['sats']} age_s={live['age_s']}, within "
+        f"{LINK_FIX_TOLERANCE_DEG} deg of the log rail's newest"
     )
 
 
@@ -1038,14 +1075,19 @@ def scenario_smoke(sim):
         time.sleep(0.5)
     passed(f"distance accumulated to {best:.1f} m while recording")
 
-    # The phone rail. Read here rather than at boot because the point is the
-    # CROSS-CHECK against the fix the log rail already reported above — the two
-    # rails agreeing about one parsed fix is the claim, and it needs that fix to
-    # have happened first.
+    # The phone rail. Read here rather than at boot for two reasons: the claim is
+    # a CROSS-CHECK against the log rail, which needs a fix to have happened
+    # first; and the connection has to open well into the run for the freshness
+    # assertion to mean anything — a link replaying its backlog and a link
+    # reporting the present are indistinguishable in the first seconds.
+    log_fixes = stamped(sim.tail, FIX_PUBLISHED)
+    connected_at_s = log_fixes[-1][0]
+    newest = log_fixes[-1][1]
     assert_link_frames(
         sim,
         read_link_frames(sim, LINK_FRAMES_WANTED, LINK_TIMEOUT),
-        (float(fix.group(1)), float(fix.group(2))),
+        (float(newest.group(1)), float(newest.group(2))),
+        connected_at_s,
     )
 
     panel = sim.dump("frame.ppm", "a panel frame dump")
