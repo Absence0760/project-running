@@ -184,7 +184,15 @@ LINK_FIX_TOLERANCE_DEG = 0.001
 # because it only has to separate "the present" from "the beginning of the run".
 LINK_LIVE_SKEW_S = 20.0
 
-SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain", "dropout", "screens")
+SCENARIO_ORDER = (
+    "smoke",
+    "alerts",
+    "pages",
+    "terrain",
+    "dropout",
+    "screens",
+    "settings",
+)
 
 # The NMEA fixture each scenario was written against, and a property OF the
 # scenario rather than of the invocation: `terrain` asserts a climb, which the
@@ -198,6 +206,9 @@ SCENARIO_FIXTURES = {
     "terrain": "mountain_loop",
     "dropout": "gps_dropout",
     "screens": "bench_jog",
+    # Idle-only: it never starts a run, so the fixture is just something for the
+    # receiver to chew on while the thumb works the menu.
+    "settings": "bench_jog",
 }
 
 # Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
@@ -210,6 +221,9 @@ SCENARIO_LAUNCHER_ARGS = {
     # cover slot 0 of every screen and make the render assertions below vacuous.
     # The same reason `bin/watch-shots.sh` boots that way.
     "screens": ("--screens", "--no-alerts"),
+    # The whole point of this one: no `sim-autostart`, so the watch stays on the
+    # idle face where the menu lives instead of paging a run view.
+    "settings": ("--no-autostart",),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -340,6 +354,31 @@ MAX_PAGE_PRESSES = 48
 # `record: alert <Kind>` on a raise, `record: alert cleared` when its TTL runs
 # out. The kind carries its payload for the parameterised arms (`Distance(100)`,
 # `Time(60)`).
+# The idle settings menu (§351). Every one of these is the BUTTON task's own
+# statement, which is what makes the pair with `ui: idle` worth asserting: the
+# menu covers the idle face while open, so intent and composition are separate
+# claims here exactly as they are for the run-view page cycle.
+MENU_OPENED = re.compile(r"button: BTN5 -> settings menu")
+MENU_CURSOR = re.compile(r"button: menu cursor -> (\w+)")
+MENU_CLOSED = re.compile(r"button: settings menu closed \(([\w ]+)\)")
+# The GNSS row's edit, and the one menu edit with a cross-checkable payload:
+# the ladder is ordered by projected battery hours, so an edit right has to
+# move the fix interval and the estimate the same way.
+GNSS_MODE_SET = re.compile(r"button: gnss mode -> (\w+) \(fix interval (\d+)s, ~(\d+)h\)")
+# The ui task's idle face, the BTN4 walk's observable (§291 + §358).
+IDLE_VIEW = re.compile(r"ui: idle (\w+)")
+
+# `settings_menu::ITEMS` order. Hard-coded rather than derived because the
+# ORDER is the contract the runner's thumb learns — a reordering that both the
+# firmware and a derived expectation followed would assert nothing.
+MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "QnhRezero", "Ice")
+MENU_STEP_TIMEOUT = 20
+# `GnssMode`'s rungs (Performance / Balanced / Expedition). Only the COUNT is
+# used — enough lefts to park at the end, then one fewer right to walk back —
+# so this survives a rung being renamed but not one being added, which is the
+# right sensitivity: a fourth rung should make someone re-read this scenario.
+GNSS_LADDER_RUNGS = 3
+
 ALERT_ANY = re.compile(r"record: alert (\S+)")
 ALERT_RAISED = re.compile(r"record: alert (?!cleared\b)(\S+)")
 ALERT_CLEARED = re.compile(r"record: alert cleared")
@@ -1870,6 +1909,184 @@ def scenario_screens(sim):
     passed(f"the uncomposed fourth screen is not in the cycle (tap landed on {after})")
 
 
+def press_menu(sim, macro, what, pattern=MENU_CURSOR, timeout=MENU_STEP_TIMEOUT, required=True):
+    """One settings-menu press, resolved by the line the button task emits.
+
+    Retries a silent press exactly like `press_page` does, and for the same
+    reason: a macro drives the GPIO low for a fixed window and the button task
+    samples on a poll, so an injected press can land between polls and be lost.
+    Writing this without the retry made the scenario flaky — the first run
+    passed and the next lost the second BTN3 of the walk. Only a press that
+    produced NOTHING is repeated, so a retry can never double-count a move.
+
+    `required=False` returns None instead of raising, for presses whose whole
+    point is that they may legitimately do nothing (a ladder clamped at its
+    end).
+
+    Unlike `press_page` there is no second task to cross-check: the menu's rows
+    are the button task's own model. What the panel does with them is asserted
+    separately, by the dumps.
+    """
+    for attempt in range(1, PAGE_PRESS_ATTEMPTS + 1):
+        mark = sim.tail.mark()
+        sim.monitor().send(f"runMacro {macro}")
+        try:
+            return sim.wait(pattern, timeout, what, start=mark)
+        except SmokeFailure:
+            if attempt < PAGE_PRESS_ATTEMPTS:
+                announce("no menu line seen — the injected press likely missed a poll")
+                continue
+            if not required:
+                return None
+            raise
+    raise AssertionError("unreachable")
+
+
+def scenario_settings(sim):
+    """Open the idle settings menu, walk it, edit it, and close it (§351).
+
+    Boots `--no-autostart`, which is the point: every other scenario in this
+    file starts a run on the first fix and pages the RUN view, so the idle
+    surfaces — the settings menu here, the faces BTN4 walks — had no scenario
+    at all. The `Sim` docstring says as much ("every scenario in this file skips
+    past by design"); this is the one that does not.
+
+    Four claims, in the order a thumb produces them:
+
+      1. BTN5 on the idle face opens the menu, and the menu reaches the panel
+      2. BTN3 walks all five rows in their documented order and wraps
+      3. an edit on a row does something a second observable confirms
+      4. BTN4 closes it and the idle face comes back
+
+    (3) is the one with teeth. A menu that renders and scrolls but whose edits
+    go nowhere passes (1), (2) and (4) — so the GNSS row is edited and the
+    resulting mode is read back off the button task's own `gnss mode ->` line,
+    including the direction: the ladder is ordered by projected battery hours,
+    so an edit right must not come back with fewer.
+
+    What it does NOT prove: that an edit SURVIVES A REBOOT. `CFG1` persistence
+    is a flash claim and this scenario never power-cycles the emulator; the
+    menu's own writes are best-effort / L4 by design (a flash error warns and
+    the edit still applies), so a green run here says nothing about what comes
+    back after a brown-out. Nor legibility — five rows on a 168x144 1-bit panel
+    read at 45 cm is a step-4 bench claim, per quality_standards.md.
+    """
+    # No `require_recording` — the opposite. The idle face only exists because
+    # this scenario boots without `sim-autostart`, so confirm that is the build
+    # actually running rather than trusting the flag: a scenario that silently
+    # got an autostarting binary would page the run view and every assertion
+    # below would fail in a way that reads like a menu regression.
+    home = sim.wait(
+        IDLE_VIEW, 90, "the ui task to compose an idle face ('ui: idle <View>')"
+    ).group(1)
+    if home != "Home":
+        raise SmokeFailure(
+            f"the watch booted onto the {home} idle face, not Home — the BTN4 "
+            "walk starts from Home and the presses below are counted from it"
+        )
+    idle_panel = sim.dump("idle-home.ppm", "the idle home face")
+    if idle_panel.dark == 0:
+        raise SmokeFailure("the idle home face rendered a blank panel")
+
+    press_menu(sim, "$btn5", "BTN5 to open the settings menu", MENU_OPENED)
+    menu_panel = sim.dump("menu-open.ppm", "the settings menu")
+    if menu_panel.data == idle_panel.data:
+        raise SmokeFailure(
+            "the panel is byte-identical with the menu open and closed — the "
+            "menu opened in the button task but never reached the composer, so "
+            "the runner pressed BTN5 and nothing happened on the glass"
+        )
+    if menu_panel.dark == 0:
+        raise SmokeFailure("the settings menu rendered a blank panel")
+    passed(
+        f"BTN5 opened the settings menu and it reached the panel "
+        f"({menu_panel.dark} dark pixels against {idle_panel.dark} on the idle face)"
+    )
+
+    # The cursor opens on row 0, so a full lap is one press per remaining row
+    # plus one more to wrap back onto the first.
+    walk = [MENU_ROWS[0]]
+    for _ in range(len(MENU_ROWS)):
+        walk.append(press_menu(sim, "$btn3", "BTN3 to step the cursor down").group(1))
+    if walk != [*MENU_ROWS, MENU_ROWS[0]]:
+        raise SmokeFailure(
+            f"BTN3 walked {' -> '.join(walk)}, not "
+            f"{' -> '.join([*MENU_ROWS, MENU_ROWS[0]])} — the row order or the "
+            "wrap is not what §351 documents, and the order is the part a "
+            "runner's thumb learns"
+        )
+    passed(f"BTN3 walked all {len(MENU_ROWS)} rows in order and wrapped: {' -> '.join(walk)}")
+
+    # BTN2 is the opposite slot; one press from the wrapped-to-first row has to
+    # land on the last. A menu whose up and down both stepped the same way would
+    # pass the walk above.
+    back = press_menu(sim, "$btn2", "BTN2 to step the cursor up").group(1)
+    if back != MENU_ROWS[-1]:
+        raise SmokeFailure(
+            f"BTN2 from {MENU_ROWS[0]} landed on {back}, not {MENU_ROWS[-1]} — "
+            "the cursor does not walk back the way it walked forward"
+        )
+    passed(f"BTN2 stepped the cursor back the other way ({MENU_ROWS[0]} -> {back})")
+
+    # Back onto the GNSS row for the edit. One press down from the last row
+    # wraps onto the first, which is GnssMode.
+    row = press_menu(sim, "$btn3", "BTN3 to return to the GNSS row").group(1)
+    if row != "GnssMode":
+        raise SmokeFailure(f"expected to be back on GnssMode, cursor reads {row}")
+
+    # Park the ladder at its left-hand end first (BTN5 = edit left, §351), so
+    # the rights below are measured from a KNOWN rung rather than from whatever
+    # mode the build happens to default to. Clamping at the end is the expected
+    # outcome of the last of these, so a silent press is not a failure here.
+    for _ in range(GNSS_LADDER_RUNGS):
+        press_menu(
+            sim, "$btn5", "BTN5 to edit the GNSS row left", GNSS_MODE_SET, required=False
+        )
+
+    # ...then walk it back up. From the left end at least two rights must move
+    # it, which is what makes the ordering assertion below possible at all: a
+    # single sample cannot show a direction.
+    edits = []
+    for _ in range(GNSS_LADDER_RUNGS - 1):
+        m = press_menu(sim, "$btn1", "BTN1 to edit the GNSS row right", GNSS_MODE_SET)
+        edits.append((m.group(1), int(m.group(2)), int(m.group(3))))
+    for (prev_mode, prev_s, prev_h), (mode, interval_s, hours) in itertools.pairwise(edits):
+        if hours < prev_h or interval_s < prev_s:
+            raise SmokeFailure(
+                f"editing right moved the ladder {prev_mode} -> {mode}, but the "
+                f"projection fell from {prev_s}s / ~{prev_h}h to {interval_s}s / "
+                f"~{hours}h — right is meant to buy battery, so the row is wired "
+                "backwards"
+            )
+    if len({mode for mode, _, _ in edits}) != len(edits):
+        raise SmokeFailure(
+            f"the rights landed on {[m for m, _, _ in edits]} — the ladder "
+            "reported an edit without actually changing rung"
+        )
+    mode, interval_s, hours = edits[-1]
+    passed(
+        f"the GNSS row edits both ways and stays ordered: left to the end, then "
+        f"{' -> '.join(m for m, _, _ in edits)} on the way back "
+        f"(now {interval_s}s fixes, ~{hours}h projected)"
+    )
+
+    why = press_menu(sim, "$btn4", "BTN4 to exit the menu", MENU_CLOSED).group(1)
+    if why != "btn4":
+        raise SmokeFailure(
+            f"the menu closed for '{why}' rather than the BTN4 press — something "
+            "else (the inactivity timeout, a run starting) got there first, so "
+            "this is not an assertion about the exit key"
+        )
+    closed_panel = sim.dump("menu-closed.ppm", "the idle face after the menu closed")
+    if closed_panel.data == menu_panel.data:
+        raise SmokeFailure(
+            "the panel still shows the menu after BTN4 — it closed in the button "
+            "task but the composer never took it down, so the runner is left "
+            "looking at a menu they exited"
+        )
+    passed("BTN4 closed the menu and the idle face came back")
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
@@ -1877,6 +2094,7 @@ SCENARIOS = {
     "terrain": scenario_terrain,
     "dropout": scenario_dropout,
     "screens": scenario_screens,
+    "settings": scenario_settings,
 }
 
 
@@ -2008,7 +2226,16 @@ def main():
     )
     parser.add_argument(
         "--scenario",
-        choices=("smoke", "pages", "alerts", "terrain", "dropout", "screens", "all"),
+        choices=(
+            "smoke",
+            "pages",
+            "alerts",
+            "terrain",
+            "dropout",
+            "screens",
+            "settings",
+            "all",
+        ),
         default="all",
         help="which scenario to run; 'all' boots each of smoke, alerts, pages, "
         "terrain and dropout in that order, one emulator each",
