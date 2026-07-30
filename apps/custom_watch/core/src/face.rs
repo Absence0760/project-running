@@ -1082,6 +1082,124 @@ pub fn page_hero(
     ))
 }
 
+/// Why `metric` has no value right now, or `None` when it has one.
+///
+/// [`metric_hero`] answers *what to draw* and writes `--` for every absence;
+/// this answers *why it is absent*, which is the half a glance page recovers
+/// from its own body ([`write_unfed`]) and a composed screen's slot cannot —
+/// see [`crate::unfed::UnfedClass::slot_token`].
+///
+/// The two are kept honest against each other by
+/// `a_metric_is_unfed_exactly_when_its_hero_is_a_placeholder`, which walks the
+/// whole catalogue fed and unfed: a metric may not claim a reason while
+/// rendering a number, nor render `--` while claiming to be fed.
+#[allow(clippy::too_many_arguments)]
+pub fn metric_unfed(
+    metric: Metric,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
+) -> Option<Unfed> {
+    match metric {
+        // The run itself supplies these from its first tick; a zero here is a
+        // measurement, not an absence.
+        Metric::Elapsed | Metric::Distance | Metric::LapElapsed => None,
+        Metric::AvgPace => snap
+            .avg_pace_s_per_km
+            .is_none()
+            .then_some(Unfed::NeedDistance),
+        Metric::HeartRate => hr_bpm.is_none().then_some(Unfed::AwaitingPulse),
+        Metric::PacerDelta => snap.pacer.is_none().then_some(Unfed::NotSynced),
+        Metric::GuidedRunRemaining => snap.guided_run.is_none().then_some(Unfed::NotSynced),
+        // A complete workout renders `DONE` — a value, and the one hero that
+        // says something without a digit in it.
+        Metric::WorkoutRemaining => snap.workout.is_none().then_some(Unfed::NotSynced),
+        Metric::RacePrediction => snap.race_prediction.is_none().then_some(Unfed::NeedOneKm),
+        // Two distinct absences the page already separates: no course pushed at
+        // all, versus a course whose cut-offs are all behind the runner.
+        Metric::CutoffMargin => match snap.cutoff {
+            None => Some(Unfed::NotSynced),
+            Some(c) => c.margin_s.is_none().then_some(Unfed::NoCutoffAhead),
+        },
+        Metric::TrainingStress => snap
+            .training_stress
+            .is_none()
+            .then_some(Unfed::NeedDistance),
+        Metric::RoadbookNext => match snap.roadbook {
+            None => Some(Unfed::NotSynced),
+            Some(rb) => (rb.upcoming_len == 0).then_some(Unfed::LastAidPassed),
+        },
+        Metric::FuelCarbs => match snap.fuel {
+            None => Some(Unfed::NotSynced),
+            Some(f) => f.carry.is_none().then_some(Unfed::LastAidPassed),
+        },
+        Metric::GearWear => snap
+            .gear
+            .and_then(|g| g.fraction)
+            .is_none()
+            .then_some(Unfed::NotSynced),
+        Metric::EasyPace => snap.training_paces.is_none().then_some(Unfed::NotSynced),
+        Metric::Vo2Max => snap
+            .fitness
+            .and_then(|f| f.vo2_max)
+            .is_none()
+            .then_some(Unfed::NotSynced),
+        Metric::Altitude => (snap.elev_profile.len == 0).then_some(Unfed::AwaitingBaro),
+        // The anchor is laid by the first fix, not by the phone — a runner who
+        // has not yet acquired one is waiting on the sky, not on a sync.
+        Metric::DistanceToStart => trackback_distance(tb)
+            .is_none()
+            .then_some(Unfed::AwaitingFix),
+        // The one metric whose absence spans three classes: no zone offset is a
+        // sync, no fix is the sky, and a polar day genuinely has no sun event.
+        Metric::DaylightCountdown => match daylight_now(fix, uptime_s, tz_offset_min) {
+            Some(daylight::Daylight::Sun(_)) => None,
+            Some(daylight::Daylight::PolarDay) => Some(Unfed::MidnightSun),
+            Some(daylight::Daylight::PolarNight) => Some(Unfed::PolarNight),
+            None if tz_offset_min.is_none() => Some(Unfed::NotSynced),
+            None => Some(Unfed::AwaitingFix),
+        },
+        // Nothing marked is the runner's to fix with a hold; something marked
+        // but unlocated is the sky's. The waypoint page draws the same split.
+        Metric::WaypointDistance => {
+            snap.waypoint
+                .is_none()
+                .then_some(if snap.waypoint_count == 0 {
+                    Unfed::NoWaypoints
+                } else {
+                    Unfed::AwaitingFix
+                })
+        }
+        Metric::ClimbGain => climb_hero_gain(snap).is_none().then_some(Unfed::NoClimb),
+        Metric::RecapDistance => snap.recap.is_none().then_some(Unfed::NotSynced),
+        Metric::CurrentStreak => snap.streaks.is_none().then_some(Unfed::NotSynced),
+        Metric::SyncedMovingTime => snap.run_stats.is_none().then_some(Unfed::NotSynced),
+        Metric::PrAge => snap.pr_recency.is_none().then_some(Unfed::NotSynced),
+        Metric::PlanReplanChanges => snap.plan_replan.is_none().then_some(Unfed::NotSynced),
+        Metric::PlanAdaptiveChanges => snap.plan_adaptive.is_none().then_some(Unfed::NotSynced),
+        Metric::ReadinessScore => snap.readiness.is_none().then_some(Unfed::NotSynced),
+        Metric::GoalPercent => snap.goals.is_none().then_some(Unfed::NotSynced),
+        Metric::TurnCueDistance => snap.turn_cue.is_none().then_some(Unfed::NotSynced),
+        Metric::RouteSimplifyDistance => snap.route_simplify.is_none().then_some(Unfed::NotSynced),
+        Metric::AutoEffortMatched => snap.auto_effort.is_none().then_some(Unfed::NotSynced),
+        Metric::RouteElevTotal => snap.route_elev.is_none().then_some(Unfed::NotSynced),
+        Metric::RaceDayDays => snap.race_day.is_none().then_some(Unfed::NotSynced),
+    }
+}
+
+/// True when `hero` is a placeholder rather than a measurement — the `--` and
+/// `--:--` the catalogue writes when it has nothing to show.
+///
+/// Distinct from [`crate::ui_frame::hero_has_value`], which asks whether a unit
+/// may be drawn beside the string and answers on digits alone: `DONE` carries no
+/// digit and takes no unit, but it is a value and must not read as an absence.
+pub fn is_unfed_hero(hero: &str) -> bool {
+    !hero.is_empty() && hero.bytes().all(|b| b == b'-' || b == b':')
+}
+
 /// `metric`'s value as the string a hero band draws, given a live run.
 ///
 /// The same metric reads the same way wherever it is headlined — which is the
@@ -1636,6 +1754,66 @@ pub fn metric_unit(
         | Metric::ReadinessScore
         | Metric::AutoEffortMatched => None,
     }
+}
+
+/// One slot of a runner-composed screen, ready to draw.
+///
+/// Deliberately strings and not values: every metric in the catalogue already
+/// agrees on how it reads ([`metric_hero`]), and a slot that re-derived its own
+/// formatting is exactly how the same metric comes to read two ways on two
+/// screens.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SlotRender {
+    /// What the slot is — [`Metric::slot_label`], always present.
+    pub label: &'static str,
+    /// The value, or the [`crate::unfed::UnfedClass::slot_token`] standing in
+    /// for one.
+    pub value: Row,
+    /// The value's unit, withheld while `unfed` — `KM` beside `SYNC` measures
+    /// nothing, the same rule [`crate::ui_frame::hero_has_value`] applies to a
+    /// page's hero.
+    pub unit: Option<&'static str>,
+    /// Why the value is missing, `None` when it is not.
+    pub unfed: Option<Unfed>,
+}
+
+/// Render one composed screen's slots in draw order.
+///
+/// The layout's arity decides how many come back, so a `Duo` yields two and a
+/// `Trio` three; where each lands on the panel is [`crate::ui_frame`]'s call,
+/// as it is for a page's hero band.
+#[allow(clippy::too_many_arguments)]
+pub fn screen_slots(
+    screen: &crate::screens::Screen,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tb: Option<&TrackbackView>,
+    uptime_s: u32,
+    tz_offset_min: Option<i16>,
+) -> heapless::Vec<SlotRender, { crate::screens::SCREEN_SLOTS }> {
+    let mut out = heapless::Vec::new();
+    for metric in screen.metrics() {
+        let unfed = metric_unfed(metric, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min);
+        let value = match unfed {
+            Some(why) => {
+                let mut row = Row::new();
+                let _ = write!(row, "{}", why.class().slot_token());
+                row
+            }
+            None => metric_hero(metric, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min),
+        };
+        let _ = out.push(SlotRender {
+            label: metric.slot_label(),
+            value,
+            unit: unfed
+                .is_none()
+                .then(|| metric_unit(metric, snap, tb))
+                .flatten(),
+            unfed,
+        });
+    }
+    out
 }
 
 /// The row a glance page's empty-body reason rides, and the row its remedy
@@ -4726,6 +4904,166 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// The invariant holding the two halves of the catalogue together.
+    ///
+    /// [`metric_hero`] says what to draw, [`metric_unfed`] says why there is
+    /// nothing to — and because they are separate matches over the same 34
+    /// variants, nothing but this stops one drifting from the other. A metric
+    /// that claimed a reason while rendering a number would put `SYNC` on a
+    /// screen beside the very value it says is missing; one that rendered `--`
+    /// while claiming to be fed would take the placeholder into the slot
+    /// vocabulary and defeat the whole point of having one.
+    ///
+    /// Walked fed and unfed, because half the catalogue is only ever unfed in
+    /// one of the two.
+    #[test]
+    fn a_metric_is_unfed_exactly_when_its_hero_is_a_placeholder() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let tb = nav_east(500, 6.0);
+        for rec in [&fed, &unfed] {
+            for hr in [None, Some(152u16)] {
+                for b in 1..=34u8 {
+                    let m = Metric::from_byte(b).unwrap();
+                    let hero = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
+                    let why = super::metric_unfed(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
+                    assert_eq!(
+                        why.is_some(),
+                        is_unfed_hero(hero.as_str()),
+                        "{} renders {:?} but reports {:?}",
+                        m.wire_name(),
+                        hero.as_str(),
+                        why
+                    );
+                }
+            }
+        }
+    }
+
+    /// Every metric can say why it is empty, and says it in the one vocabulary.
+    ///
+    /// The unfed snapshot feeds nothing the phone owns and no sensor, so every
+    /// metric that can be empty is — and each must answer with a sanctioned
+    /// [`Unfed`], never a bare placeholder carried through into a slot.
+    #[test]
+    fn every_unfed_slot_names_a_class_rather_than_shrugging() {
+        let unfed = snapshot(RecordState::Recording, 0.0);
+        for b in 1..=34u8 {
+            let m = Metric::from_byte(b).unwrap();
+            let screen = crate::screens::Screen::new(crate::screens::Layout::Single, &[m]).unwrap();
+            let slots = screen_slots(&screen, Some(&fix()), None, &unfed, None, 42, None);
+            let slot = &slots[0];
+            assert_eq!(slot.label, m.slot_label());
+            if let Some(why) = slot.unfed {
+                assert!(
+                    Unfed::ALL.contains(&why),
+                    "{} invented a reason outside the vocabulary",
+                    m.wire_name()
+                );
+                assert_eq!(
+                    slot.value.as_str(),
+                    why.class().slot_token(),
+                    "{} shows something other than its class token",
+                    m.wire_name()
+                );
+                assert!(
+                    slot.unit.is_none(),
+                    "{} labels a missing value with a unit",
+                    m.wire_name()
+                );
+            } else {
+                assert!(
+                    !is_unfed_hero(slot.value.as_str()),
+                    "{} reports fed but draws a placeholder",
+                    m.wire_name()
+                );
+            }
+        }
+    }
+
+    /// A slot draws exactly the layout's arity, in the order the runner chose —
+    /// the ordering a screen's whole meaning rests on, since two of the same
+    /// metrics in a different order is a different screen.
+    #[test]
+    fn a_screen_renders_its_slots_in_the_runners_order() {
+        use crate::screens::{Layout, Screen};
+        let fed = fed_snapshot();
+        let tb = nav_east(500, 6.0);
+        let screen = Screen::new(
+            Layout::Trio,
+            &[Metric::Distance, Metric::HeartRate, Metric::Altitude],
+        )
+        .unwrap();
+        let slots = screen_slots(&screen, Some(&fix()), Some(152), &fed, Some(&tb), 42, None);
+        assert_eq!(slots.len(), 3);
+        assert_eq!(
+            slots
+                .iter()
+                .map(|s| s.label)
+                .collect::<heapless::Vec<_, 3>>(),
+            ["DIST", "HR", "ALT"].as_slice()
+        );
+        assert_eq!(slots[1].value.as_str(), "152");
+        assert_eq!(slots[1].unit, Some("BPM"));
+
+        let duo = Screen::new(Layout::Duo, &[Metric::HeartRate, Metric::Distance]).unwrap();
+        let two = screen_slots(&duo, Some(&fix()), Some(152), &fed, Some(&tb), 42, None);
+        assert_eq!(two.len(), 2, "a Duo draws two slots, not SCREEN_SLOTS");
+        assert_eq!(two[0].label, "HR");
+    }
+
+    /// A slot reads the same as the page that headlines the same metric — the
+    /// whole reason the catalogue exists. A runner who composes a screen with
+    /// distance on it must not get a different number from the Distance page.
+    #[test]
+    fn a_slot_and_the_page_that_heads_the_metric_agree() {
+        use crate::screens::{Layout, Screen};
+        let fed = fed_snapshot();
+        let tb = nav_east(500, 6.0);
+        let mut p = Page::default();
+        loop {
+            if let Some(m) = hero_metric(p) {
+                let screen = Screen::new(Layout::Single, &[m]).unwrap();
+                let slot =
+                    &screen_slots(&screen, Some(&fix()), Some(152), &fed, Some(&tb), 42, None)[0];
+                if slot.unfed.is_none() {
+                    assert_eq!(
+                        Some(slot.value.clone()),
+                        page_hero(p, Some(152), Some(&fed), Some(&tb)),
+                        "a {m:?} slot and the {p:?} page disagree about the same metric"
+                    );
+                    assert_eq!(
+                        slot.unit,
+                        page_hero_unit(p, Some(&fed), Some(&tb)),
+                        "a {m:?} slot and the {p:?} page disagree about its unit"
+                    );
+                }
+            }
+            p = p.next();
+            if p == Page::default() {
+                break;
+            }
+        }
+    }
+
+    /// The five tokens are distinct.
+    ///
+    /// They exist to separate five remedies; two classes sharing a word would
+    /// silently merge two of them back into the shrug the tokens replaced.
+    #[test]
+    fn every_unfed_class_has_its_own_token() {
+        let tokens = crate::unfed::UnfedClass::ALL.map(|c| c.slot_token());
+        for (i, a) in tokens.iter().enumerate() {
+            for b in &tokens[i + 1..] {
+                assert_ne!(a, b, "two classes share the token {a:?}");
+            }
+            assert!(
+                !is_unfed_hero(a),
+                "{a:?} would read as the placeholder it replaces"
+            );
         }
     }
 

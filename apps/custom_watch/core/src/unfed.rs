@@ -44,6 +44,49 @@ pub enum UnfedClass {
     WatchAction,
 }
 
+impl UnfedClass {
+    /// Every class, for the drift guards below.
+    pub const ALL: [UnfedClass; 5] = [
+        UnfedClass::PhoneFed,
+        UnfedClass::Sensor,
+        UnfedClass::RunGate,
+        UnfedClass::Settled,
+        UnfedClass::WatchAction,
+    ];
+
+    /// The word a slot on a runner-composed screen ([`crate::screens`]) shows
+    /// in place of a value it does not have.
+    ///
+    /// A glance page answers "why is this empty" with a whole [`Unfed::reason`]
+    /// line and, where there is something to do, a [`Unfed::hint`] under it. A
+    /// slot has neither — it is one value and a five-cell label in a layout
+    /// drawing two or three of them — so the question is not *which reason* but
+    /// *how much of one survives*. The answer is the class, because this enum is
+    /// already cut by what the runner can do, and that is the only part of a
+    /// reason a runner acts on.
+    ///
+    /// The alternative was a bare `--` in all five cases, and it is wrong on
+    /// exactly the surface that cannot afford it: it collapses "your phone never
+    /// sent this", "keep running", and "there is genuinely no climb here" into
+    /// one shrug, with no body text to tell them apart. A runner who cannot
+    /// separate a broken sync from a settled answer either chases a fault that
+    /// does not exist or ignores one that does.
+    ///
+    /// These are words, so they draw in the text face rather than a numeral one
+    /// — [`crate::ui_frame::hero_band`] picks on glyphs, and `DONE` on a
+    /// finished workout step is the precedent. That is the point: a slot showing
+    /// a word is visibly not a slot showing a measurement, before it is read.
+    pub const fn slot_token(self) -> &'static str {
+        match self {
+            UnfedClass::PhoneFed => "SYNC",
+            UnfedClass::Sensor => "WAIT",
+            UnfedClass::RunGate => "RUN",
+            UnfedClass::Settled => "NONE",
+            UnfedClass::WatchAction => "MARK",
+        }
+    }
+}
+
 /// The remedy line that follows every [`UnfedClass::PhoneFed`] reason.
 pub const PHONE_SYNC_HINT: &str = "SET VIA PHONE SYNC";
 
@@ -59,6 +102,11 @@ pub enum Unfed {
     NotSynced,
     /// No altitude sample has landed yet (no barometer, or pre-first-sample).
     AwaitingBaro,
+    /// The optical sensor has not produced a first beat (off-wrist, or still
+    /// acquiring). A glance page never needed this one — the zones page draws
+    /// `HR --` inside an otherwise-fed body — but a slot that IS the pulse has
+    /// no body to be fed, so it needs a reason of its own.
+    AwaitingPulse,
     /// No position has been projected onto the loaded course yet.
     AwaitingFix,
     /// The run has banked no distance to derive from.
@@ -89,9 +137,10 @@ impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 13] = [
+    pub const ALL: [Unfed; 14] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
+        Unfed::AwaitingPulse,
         Unfed::AwaitingFix,
         Unfed::NeedDistance,
         Unfed::NeedOneKm,
@@ -109,7 +158,7 @@ impl Unfed {
     pub const fn class(self) -> UnfedClass {
         match self {
             Unfed::NotSynced => UnfedClass::PhoneFed,
-            Unfed::AwaitingBaro | Unfed::AwaitingFix => UnfedClass::Sensor,
+            Unfed::AwaitingBaro | Unfed::AwaitingPulse | Unfed::AwaitingFix => UnfedClass::Sensor,
             Unfed::NeedDistance | Unfed::NeedOneKm => UnfedClass::RunGate,
             Unfed::NoRaceBand
             | Unfed::NoCutoffAhead
@@ -128,6 +177,7 @@ impl Unfed {
         match self {
             Unfed::NotSynced => "NOT SYNCED",
             Unfed::AwaitingBaro => "AWAITING BARO",
+            Unfed::AwaitingPulse => "AWAITING PULSE",
             Unfed::AwaitingFix => "AWAITING FIX",
             Unfed::NeedDistance => "NEED DISTANCE",
             Unfed::NeedOneKm => "NEED 1 KM",
@@ -160,6 +210,14 @@ const _: () = {
     let mut i = 0;
     while i < Unfed::ALL.len() {
         assert!(Unfed::ALL[i].reason().len() <= crate::face::COLS);
+        i += 1;
+    }
+    // A token stands where a slot's value stands, so it may be no wider than
+    // the label sharing that row — the budget a slot is built around.
+    let mut i = 0;
+    while i < UnfedClass::ALL.len() {
+        assert!(!UnfedClass::ALL[i].slot_token().is_empty());
+        assert!(UnfedClass::ALL[i].slot_token().len() <= crate::screens::SLOT_LABEL_CELLS);
         i += 1;
     }
 };
