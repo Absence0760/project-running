@@ -106,12 +106,12 @@ def baseline_window(bits: bytes, width: int, height: int, ink_width: int, cell_h
 
 
 # Characters the 1x pass damages without producing a byte-collision, so
-# `repair_collisions`'s equality test cannot see them: the glyph to re-rasterise
-# paired with what it degenerates into on the panel. Kept explicit rather than
-# inferred — see `repair_collisions` for the heuristic that was measured and
-# rejected — and pinned from the other side by the driver's `tests/font.rs`, so
-# a list that falls behind the font fails a test rather than shipping.
-DAMAGED_GLYPHS = [("!", ":")]
+# `repair_collisions`'s equality test cannot see them. `!` loses the stem
+# between its serif and its dot and comes back as a colon. Kept explicit rather
+# than inferred — see `repair_collisions` for the heuristic that was measured
+# and rejected — and pinned from the other side by the driver's `tests/font.rs`,
+# so a list that falls behind the font fails a test rather than shipping.
+DAMAGED_GLYPHS = "!"
 
 
 def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str]:
@@ -154,7 +154,7 @@ def repair_collisions(glyphs: list[list[int]], tmpdir: pathlib.Path) -> list[str
     for index, rows in enumerate(glyphs):
         groups.setdefault(tuple(rows), []).append(index)
     collided = [members for members in groups.values() if len(members) > 1]
-    damaged = [GLYPHS.index(ch) for ch, _ in DAMAGED_GLYPHS]
+    damaged = [GLYPHS.index(ch) for ch in DAMAGED_GLYPHS]
     if not collided and not damaged:
         return []
 
@@ -241,7 +241,7 @@ def main() -> None:
         glyphs = extract(width, height, bits)
         repaired = repair_collisions(glyphs, tmpdir)
     if repaired:
-        print(f"note: supersampled {len(repaired)} colliding glyph(s): {' '.join(repaired)}",
+        print(f"note: supersampled {len(repaired)} damaged glyph(s): {' '.join(repaired)}",
               file=sys.stderr)
     # Guard the invariant the repair exists for: after it, no two distinct
     # printable glyphs may still pack to the same pixels. Space is included,
