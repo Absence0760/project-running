@@ -20,6 +20,7 @@ use watch_core::ice::IceCard;
 use watch_core::page::Page;
 use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
+use watch_core::screens::Screens;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::trackback::TrackbackView;
@@ -121,6 +122,17 @@ pub static WORKOUT: Watch<
     Option<heapless::Vec<WorkoutStep, MAX_WORKOUT_STEPS>>,
     1,
 > = Watch::new();
+
+/// The runner's composed data screens (the `SCR1` path, §364): the `ble` task
+/// decodes one unchunked phone write and publishes it here; the `record` task
+/// persists it to the config page and the `ui` task draws whichever one the
+/// page cycle has landed on. `None` means none composed — the 37 built-in pages
+/// are the whole cycle, which is the honest starting state.
+///
+/// Latest-value like `WORKOUT` and unlike the `SETTINGS` deltas: one frame
+/// carries the complete set, so a re-push replaces it outright and a coalesced
+/// intermediate value is not a lost edit. Two receivers (`record`, `ui`).
+pub static SCREENS: Watch<CriticalSectionRawMutex, Option<Screens>, 2> = Watch::new();
 
 /// The active course's climb profile for the RouteElev page: the `nav` task —
 /// which already owns the active (boot or pushed) course — shapes one with
