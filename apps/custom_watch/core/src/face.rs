@@ -3888,6 +3888,65 @@ mod tests {
             days_until: -9999,
             feasible: 1,
         });
+        // The live-derived views (no phone push behind them) had been left out,
+        // which quietly kept the Pacer / Workout / CutoffEta / Climb /
+        // Waypoint / RacePredictor bodies out of every guard that walks this
+        // snapshot — those pages were only ever swept in their empty state.
+        rec.pacer = Some(crate::pacer::PacerStatus {
+            goal: crate::pacer::PacerGoal {
+                distance_m: 1_000_000,
+                time_s: 1_000_000,
+            },
+            ahead_m: -9_999_999.0,
+            ahead_s: i32::MIN,
+            projected_finish_s: Some(u32::MAX),
+            verdict: PaceVerdict::Behind,
+            finished: false,
+            terrain_aware: true,
+        });
+        rec.race_phase = Some(RacePhaseView {
+            index: 255,
+            total: 255,
+            intent: RacePhaseIntent::HoldBack,
+            target_pace_s_per_km: Some(99 * 60 + 59),
+        });
+        rec.cutoff = Some(crate::cutoff_eta::CutoffEta {
+            has_cutoff: true,
+            distance_to_m: 999_990.0,
+            projected_arrival_elapsed_s: Some(u32::MAX),
+            margin_s: Some(i32::MIN),
+            required_pace_s_per_km: Some(99.0 * 60.0 + 59.0),
+            limit_passed: false,
+            status: crate::cutoff_eta::CutoffEtaStatus::Behind,
+        });
+        rec.workout = Some(workout_view());
+        rec.race_prediction = Some(
+            crate::race_predictor::predict_race_ladder(&[crate::race_predictor::Effort {
+                distance_m: 5_000.0,
+                duration_s: 1_200,
+                age_days: 0.0,
+            }])
+            .unwrap(),
+        );
+        rec.climb = crate::climb::ClimbView {
+            active: Some(crate::climb::ActiveClimb {
+                gain_m: 99_999.0,
+                distance_m: 999_999.0,
+                avg_grade_pct: 99.0,
+            }),
+            ahead: Some(crate::climb::CrestAhead {
+                gain_m: 99_999.0,
+                distance_m: 999_999.0,
+                avg_grade_pct: 99.0,
+            }),
+        };
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 999_999.0,
+            bearing_deg: 359.0,
+            count: 8,
+            marked_uptime_s: 0,
+        });
+        rec.waypoint_count = 8;
         rec
     }
 
