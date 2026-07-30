@@ -65,7 +65,10 @@ stateDiagram-v2
 
 Run sub-states (the tag top-right of every run page): `REC` blinking while
 recording (steady through the min-move sampling artifact on slow climbs),
-`AUTO` steady during a speed-derived auto-pause (resumes itself), `PAU`
+`AUTO` steady during an auto-pause — speed-derived, or the fixes drying up
+past `fix_interval_s * 3` (min 10 s), since a void that kept reading `REC`
+would claim to be tracking a runner it had lost (§367); both resume
+themselves, `PAU`
 steady only for a manual pause (owes a BTN1 press), `FIN` once stopped
 (decisions §287). `BTN1` from `FIN` returns home and the next run opens on
 the Dashboard (§289) — before §289, `Finished` was a dead end that held the
