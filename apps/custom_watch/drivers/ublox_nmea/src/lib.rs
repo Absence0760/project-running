@@ -475,6 +475,15 @@ fn parse_f64(field: &[u8]) -> Option<f64> {
     Some(if neg { -v } else { v })
 }
 
+/// The `f64` accumulator above has no digit bound, so a field of ~39 or more
+/// significant digits lands past `f32::MAX` and the narrowing conversion turns
+/// it into an infinity. An infinity is not a measurement, and every consumer of
+/// these fields already handles the absent case (an empty NMEA field), whereas
+/// none guards a non-finite one: `RmcData::speed_mps` reaches the recorder's
+/// current speed and pace, and `GgaData::alt_m` reaches the elevation surfaces,
+/// where `inf as i32` saturates to `i32::MAX` and poisons the profile for the
+/// rest of the run. Reporting it absent is the fail-closed reading; a value the
+/// conversion can represent is untouched.
 fn parse_f32(field: &[u8]) -> Option<f32> {
-    parse_f64(field).map(|v| v as f32)
+    parse_f64(field).map(|v| v as f32).filter(|v| v.is_finite())
 }
