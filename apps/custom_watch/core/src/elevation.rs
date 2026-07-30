@@ -120,8 +120,8 @@ const SEED_SAMPLES: u16 = 30;
 
 /// GPS altitude outside this terrestrial window (or non-finite) is treated as
 /// absent, so a spurious receiver altitude cannot wrench the bias.
-const GPS_ALT_MIN_M: f32 = -500.0;
-const GPS_ALT_MAX_M: f32 = 9000.0;
+pub const GPS_ALT_MIN_M: f32 = -500.0;
+pub const GPS_ALT_MAX_M: f32 = 9000.0;
 
 /// A GPS fix older than this cannot back a manual re-zero. Idle fix
 /// publication is de-rated to just under the face's 5 s staleness budget (see
@@ -174,7 +174,10 @@ pub fn rezero_banner(status: RezeroStatus) -> RezeroBanner {
     b
 }
 
-fn plausible_gps(gps_alt_m: Option<f32>) -> Option<f32> {
+/// A receiver altitude worth deriving anything from, or `None`. Shared with
+/// [`crate::record::Recorder`]'s altitude-fed surfaces so the two cannot
+/// disagree about whether the same number is trustworthy.
+pub fn plausible_gps(gps_alt_m: Option<f32>) -> Option<f32> {
     gps_alt_m.filter(|a| a.is_finite() && (GPS_ALT_MIN_M..=GPS_ALT_MAX_M).contains(a))
 }
 
