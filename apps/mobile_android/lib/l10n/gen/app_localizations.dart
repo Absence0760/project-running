@@ -19829,6 +19829,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a valid distance along the route.'**
   String get routeMarkerDistanceInvalid;
+
+  /// Title of the composed-watch-screen editor
+  ///
+  /// In en, this message translates to:
+  /// **'Watch screens'**
+  String get watchScreensTitle;
+
+  /// Tooltip opening the composed-watch-screen editor
+  ///
+  /// In en, this message translates to:
+  /// **'Compose watch screens'**
+  String get watchScreensAction;
+
+  /// No description provided for @watchScreensCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max} screens'**
+  String watchScreensCount(int count, int max);
+
+  /// No description provided for @watchScreensEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No screens composed'**
+  String get watchScreensEmptyTitle;
+
+  /// Empty state explaining what composing a watch screen does
+  ///
+  /// In en, this message translates to:
+  /// **'The watch walks its built-in pages until you compose one. Add a screen to choose what it shows.'**
+  String get watchScreensEmptyBody;
+
+  /// No description provided for @watchScreensAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add screen'**
+  String get watchScreensAdd;
+
+  /// No description provided for @watchScreensFull.
+  ///
+  /// In en, this message translates to:
+  /// **'A watch holds at most {max} screens.'**
+  String watchScreensFull(int max);
+
+  /// No description provided for @watchScreensHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen {index}'**
+  String watchScreensHeading(int index);
+
+  /// No description provided for @watchScreensLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get watchScreensLayout;
+
+  /// No description provided for @watchScreensSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot {index}'**
+  String watchScreensSlot(int index);
+
+  /// No description provided for @watchScreensMoveUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Move up'**
+  String get watchScreensMoveUp;
+
+  /// No description provided for @watchScreensMoveDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Move down'**
+  String get watchScreensMoveDown;
+
+  /// No description provided for @watchScreensRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove screen'**
+  String get watchScreensRemove;
+
+  /// No description provided for @watchScreensRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove screen {index}?'**
+  String watchScreensRemoveTitle(int index);
+
+  /// No description provided for @watchScreensRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Its {count} metric(s) go with it.'**
+  String watchScreensRemoveBody(int count);
+
+  /// No description provided for @watchScreensRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get watchScreensRemoveConfirm;
+
+  /// No description provided for @watchScreensCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get watchScreensCancel;
+
+  /// No description provided for @watchScreensShrinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop {count} metric(s)?'**
+  String watchScreensShrinkTitle(int count);
+
+  /// Warning naming the metrics a narrower layout would drop
+  ///
+  /// In en, this message translates to:
+  /// **'A {layout} screen draws {slots} slot(s), so {dropped} would no longer be shown.'**
+  String watchScreensShrinkBody(String layout, int slots, String dropped);
+
+  /// No description provided for @watchScreensShrinkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Change layout'**
+  String get watchScreensShrinkConfirm;
+
+  /// Button that pushes the composed screen set to the watch over BLE
+  ///
+  /// In en, this message translates to:
+  /// **'Push screens to watch'**
+  String get watchScreensPushAction;
+
+  /// No description provided for @watchScreensPushed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pushed {count} screen(s) to the watch'**
+  String watchScreensPushed(int count);
+
+  /// No description provided for @watchScreensCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared the composed screens on the watch'**
+  String get watchScreensCleared;
+
+  /// No description provided for @watchScreensPushFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Screens push failed: {error}'**
+  String watchScreensPushFailed(String error);
+
+  /// No description provided for @watchScreensLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved screens couldn\'t be read.'**
+  String get watchScreensLoadFailed;
+
+  /// No description provided for @watchScreensStartOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get watchScreensStartOver;
+
+  /// No description provided for @watchLayoutSingle.
+  ///
+  /// In en, this message translates to:
+  /// **'Single'**
+  String get watchLayoutSingle;
+
+  /// No description provided for @watchLayoutDuo.
+  ///
+  /// In en, this message translates to:
+  /// **'Duo'**
+  String get watchLayoutDuo;
+
+  /// No description provided for @watchLayoutTrio.
+  ///
+  /// In en, this message translates to:
+  /// **'Trio'**
+  String get watchLayoutTrio;
+
+  /// No description provided for @watchMetricElapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed time'**
+  String get watchMetricElapsed;
+
+  /// No description provided for @watchMetricDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get watchMetricDistance;
+
+  /// No description provided for @watchMetricAvgPace.
+  ///
+  /// In en, this message translates to:
+  /// **'Average pace'**
+  String get watchMetricAvgPace;
+
+  /// No description provided for @watchMetricLapElapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Lap time'**
+  String get watchMetricLapElapsed;
+
+  /// No description provided for @watchMetricHeartRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Heart rate'**
+  String get watchMetricHeartRate;
+
+  /// No description provided for @watchMetricPacerDelta.
+  ///
+  /// In en, this message translates to:
+  /// **'Pacer delta'**
+  String get watchMetricPacerDelta;
+
+  /// No description provided for @watchMetricGuidedRunRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Guided-run cue'**
+  String get watchMetricGuidedRunRemaining;
+
+  /// No description provided for @watchMetricWorkoutRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Workout step'**
+  String get watchMetricWorkoutRemaining;
+
+  /// No description provided for @watchMetricRacePrediction.
+  ///
+  /// In en, this message translates to:
+  /// **'Race prediction'**
+  String get watchMetricRacePrediction;
+
+  /// No description provided for @watchMetricCutoffMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-off margin'**
+  String get watchMetricCutoffMargin;
+
+  /// No description provided for @watchMetricTrainingStress.
+  ///
+  /// In en, this message translates to:
+  /// **'Training load'**
+  String get watchMetricTrainingStress;
+
+  /// No description provided for @watchMetricRoadbookNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next aid station'**
+  String get watchMetricRoadbookNext;
+
+  /// No description provided for @watchMetricFuelCarbs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel carbs'**
+  String get watchMetricFuelCarbs;
+
+  /// No description provided for @watchMetricGearWear.
+  ///
+  /// In en, this message translates to:
+  /// **'Gear wear'**
+  String get watchMetricGearWear;
+
+  /// No description provided for @watchMetricEasyPace.
+  ///
+  /// In en, this message translates to:
+  /// **'Easy pace'**
+  String get watchMetricEasyPace;
+
+  /// No description provided for @watchMetricVo2Max.
+  ///
+  /// In en, this message translates to:
+  /// **'VO2 max'**
+  String get watchMetricVo2Max;
+
+  /// No description provided for @watchMetricAltitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Altitude'**
+  String get watchMetricAltitude;
+
+  /// No description provided for @watchMetricDistanceToStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance to start'**
+  String get watchMetricDistanceToStart;
+
+  /// No description provided for @watchMetricDaylightCountdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Daylight left'**
+  String get watchMetricDaylightCountdown;
+
+  /// No description provided for @watchMetricWaypointDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Waypoint distance'**
+  String get watchMetricWaypointDistance;
+
+  /// No description provided for @watchMetricClimbGain.
+  ///
+  /// In en, this message translates to:
+  /// **'Climb gain'**
+  String get watchMetricClimbGain;
+
+  /// No description provided for @watchMetricRecapDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Year distance'**
+  String get watchMetricRecapDistance;
+
+  /// No description provided for @watchMetricCurrentStreak.
+  ///
+  /// In en, this message translates to:
+  /// **'Current streak'**
+  String get watchMetricCurrentStreak;
+
+  /// No description provided for @watchMetricSyncedMovingTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving time'**
+  String get watchMetricSyncedMovingTime;
+
+  /// No description provided for @watchMetricPrAge.
+  ///
+  /// In en, this message translates to:
+  /// **'PR age'**
+  String get watchMetricPrAge;
+
+  /// No description provided for @watchMetricPlanReplanChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-plan changes'**
+  String get watchMetricPlanReplanChanges;
+
+  /// No description provided for @watchMetricPlanAdaptiveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive changes'**
+  String get watchMetricPlanAdaptiveChanges;
+
+  /// No description provided for @watchMetricReadinessScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Readiness'**
+  String get watchMetricReadinessScore;
+
+  /// No description provided for @watchMetricGoalPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal progress'**
+  String get watchMetricGoalPercent;
+
+  /// No description provided for @watchMetricTurnCueDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Next turn'**
+  String get watchMetricTurnCueDistance;
+
+  /// No description provided for @watchMetricRouteSimplifyDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Course distance'**
+  String get watchMetricRouteSimplifyDistance;
+
+  /// No description provided for @watchMetricAutoEffortMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Segments matched'**
+  String get watchMetricAutoEffortMatched;
+
+  /// No description provided for @watchMetricRouteElevTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Route elevation'**
+  String get watchMetricRouteElevTotal;
+
+  /// No description provided for @watchMetricRaceDayDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days to race'**
+  String get watchMetricRaceDayDays;
 }
 
 class _AppLocalizationsDelegate
