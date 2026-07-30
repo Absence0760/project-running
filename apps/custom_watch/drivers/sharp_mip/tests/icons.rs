@@ -75,7 +75,7 @@ fn the_heartbeat_animation_has_two_distinguishable_frames() {
 
 #[test]
 fn the_satellite_search_animation_has_three_distinguishable_frames() {
-    // The acquiring-a-fix cycle: bare dish, one arc, two arcs. Two equal frames
+    // The acquiring-a-fix cycle: one arc, two arcs, three. Two equal frames
     // stall the animation, and a runner waiting on GPS at a start line reads a
     // stalled search as a hung watch.
     let frames = [Icon::SatSearch0, Icon::SatSearch1, Icon::Satellite];
