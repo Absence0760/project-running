@@ -272,27 +272,6 @@ pub async fn screen_task(
         if let Some(m) = tz_offset_rx.try_changed() {
             tz_offset_min = Some(m);
         }
-        // Change-gated, not per-render: the loop also runs for every fix,
-        // snapshot, alert and heartbeat tick, and an unconditional log would put
-        // a standing per-second reason to emit back into a task whose whole
-        // design is to sleep between events. `sim/ci_smoke.py` matches this line
-        // to know a BTN3 press reached the panel, so its shape is a contract
-        // with the harness.
-        if logged_page != Some(page) {
-            debug!("ui: page {}", page);
-            logged_page = Some(page);
-        }
-        // The idle faces' equivalent, and change-gated for the same reason. The
-        // button task already logs which face a BTN4 press SELECTED; this is the
-        // separate claim that the composer followed it onto the panel — the pair
-        // the page walk cross-checks, which the idle faces had no way to make.
-        // Without it a screenshot or a scenario can only dump and hope the
-        // repaint already landed, and an idle_view that never reached this task
-        // reads exactly like a face that happens to look the same.
-        if logged_idle_view != Some(idle_view) {
-            debug!("ui: idle {}", idle_view);
-            logged_idle_view = Some(idle_view);
-        }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
@@ -592,6 +571,37 @@ pub async fn screen_task(
         }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
+        }
+
+        // AFTER the flush, so the line is a claim about the panel rather than
+        // about this task's intent. Logged before the draw, it said "I am about
+        // to compose Nav" — and a harness that dumps the instant it decodes
+        // reads the previous screen, which is how `page-Nav.png` came back
+        // byte-identical to `page-Climb.png` on the § 360 sheet: a capture
+        // labelled with the page the composer had not drawn yet. The pixel
+        // comparison in `sim/screenshots.py` was a detector for this; moving
+        // the line removes the race it was detecting.
+        //
+        // Change-gated, not per-render: the loop also runs for every fix,
+        // snapshot, alert and heartbeat tick, and an unconditional log would put
+        // a standing per-second reason to emit back into a task whose whole
+        // design is to sleep between events. `sim/ci_smoke.py` and
+        // `sim/screenshots.py` both match these lines, so their shape is a
+        // contract with the harness.
+        if logged_page != Some(page) {
+            debug!("ui: page {}", page);
+            logged_page = Some(page);
+        }
+        // The idle faces' equivalent. The button task already logs which face a
+        // BTN4 press SELECTED; this is the separate claim that the composer
+        // followed it onto the panel — the pair the page walk cross-checks,
+        // which the idle faces had no way to make. Without it a screenshot or a
+        // scenario can only dump and hope the repaint already landed, and an
+        // idle_view that never reached this task reads exactly like a face that
+        // happens to look the same.
+        if logged_idle_view != Some(idle_view) {
+            debug!("ui: idle {}", idle_view);
+            logged_idle_view = Some(idle_view);
         }
 
         // Sleep until a state change or the next time-based refresh. Recording
