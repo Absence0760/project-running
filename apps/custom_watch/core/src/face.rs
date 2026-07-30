@@ -1315,13 +1315,19 @@ pub fn page_hero_unit(
 const UNFED_REASON_ROW: usize = 4;
 const UNFED_HINT_ROW: usize = 5;
 
-/// Write a page's empty body: the headline label with the absent-value marker
-/// on the page's own header row ([`body_top_row`] — a three-row hero band still
-/// owns rows 0-2 when the value is an honest `--`), then the reason and its
-/// remedy taken from the one sanctioned vocabulary ([`crate::unfed`]) rather
-/// than spelled per page.
+/// Write a page's empty body: the headline label on the page's own header row
+/// ([`body_top_row`]), then the reason and its remedy taken from the one
+/// sanctioned vocabulary ([`crate::unfed`]) rather than spelled per page.
+///
+/// The label carries no `--` of its own. The absent value is already stated, in
+/// the hero band, at 16x32 — every page that calls this has a hero (Nav, which
+/// does not, writes its reason into its own info row instead), and since § 361
+/// every page fills the band it reserves. A second `--` beside the label stacked
+/// three statements of one absence into four rows. A per-ROW placeholder is a
+/// different thing and keeps its dashes: `HDG  --` says that one field is
+/// missing while the rest of the page is fed.
 fn write_unfed(rows: &mut [Row; ROWS], page: Page, label: &str, why: Unfed) {
-    let _ = write!(rows[body_top_row(page)], "{label} --");
+    let _ = write!(rows[body_top_row(page)], "{label}");
     let _ = write!(rows[UNFED_REASON_ROW], "{}", why.reason());
     if let Some(hint) = why.hint() {
         let _ = write!(rows[UNFED_HINT_ROW], "{hint}");
@@ -5857,7 +5863,7 @@ mod tests {
             "--"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "PACER --");
+        assert_eq!(rows[2].as_str(), "PACER");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
@@ -6120,7 +6126,7 @@ mod tests {
                 .as_str(),
             "--"
         );
-        assert_eq!(rows[2], header("WORKOUT --", "REC"));
+        assert_eq!(rows[2], header("WORKOUT", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
     }
@@ -6168,7 +6174,7 @@ mod tests {
                 .as_str(),
             "--"
         );
-        assert_eq!(rows[3], header("GUIDED --", "REC"));
+        assert_eq!(rows[3], header("GUIDED", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
@@ -6749,7 +6755,7 @@ mod tests {
         // SYNCED would send a runner looking for a phone over a page that is
         // working exactly as intended.
         let rows = climb_rows(crate::climb::ClimbView::default());
-        assert_eq!(rows[2].as_str(), "CLIMB --");
+        assert_eq!(rows[2].as_str(), "CLIMB");
         assert_eq!(rows[4].as_str(), "NO CLIMB");
         assert_eq!(rows[5].as_str(), "", "a settled state owes no remedy line");
         assert_eq!(
@@ -6847,7 +6853,7 @@ mod tests {
             20,
             false,
         );
-        assert_eq!(rows[2].as_str(), "WAYPOINT --");
+        assert_eq!(rows[2].as_str(), "WAYPOINT");
         assert_eq!(rows[4].as_str(), "NO WAYPOINTS");
         assert_eq!(rows[5].as_str(), "HOLD BTN5 TO MARK");
         // Marks restored from flash with no anchor this run yet: a different
@@ -7092,7 +7098,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[3], header("CUTOFF --", "REC"));
+        assert_eq!(rows[3], header("CUTOFF", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
@@ -7206,7 +7212,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "PREDICT --");
+        assert_eq!(rows[2].as_str(), "PREDICT");
         assert_eq!(rows[4].as_str(), "NEED 1 KM");
         assert_eq!(
             page_hero(Page::RacePredictor, None, Some(&rec), None)
@@ -7267,7 +7273,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "PACES --");
+        assert_eq!(rows[2].as_str(), "PACES");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
@@ -7355,7 +7361,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[3], header("FITNESS --", "REC"));
+        assert_eq!(rows[3], header("FITNESS", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
@@ -7445,7 +7451,7 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(rows[2].as_str(), "ELEV --");
+        assert_eq!(rows[2].as_str(), "ELEV");
         assert_eq!(rows[4].as_str(), "AWAITING BARO");
         // A sensor the runner is waiting on carries no phone-sync remedy: there
         // is nothing to do but let the barometer produce its first sample.
@@ -7473,7 +7479,7 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[2].as_str(), "RECAP --");
+        assert_eq!(rows[2].as_str(), "RECAP");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
 
@@ -7606,7 +7612,7 @@ mod tests {
 
         // No course pushed at all.
         let rows = rows_for(&snapshot(RecordState::Recording, 5000.0));
-        assert_eq!(rows[2].as_str(), "CRS ELEV --");
+        assert_eq!(rows[2].as_str(), "CRS ELEV");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
 
         // A course pushed WITHOUT elevation: geometry only, no fabricated shape.
@@ -7620,7 +7626,7 @@ mod tests {
             len: 0,
         });
         let rows = rows_for(&rec);
-        assert_eq!(rows[2].as_str(), "CRS ELEV --");
+        assert_eq!(rows[2].as_str(), "CRS ELEV");
         assert_eq!(rows[4].as_str(), "NO COURSE ELEV");
         // Settled, not unfed: the course IS synced, so no sync remedy displaces
         // the geometry row. Its length moved to the hero, so the row keeps only
@@ -7678,7 +7684,7 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[2].as_str(), "ADAPT --");
+        assert_eq!(rows[2].as_str(), "ADAPT");
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
 
         // A sustained under-trend with proposed changes.
@@ -7995,7 +8001,7 @@ mod tests {
             42,
             false,
         );
-        assert_eq!(rows[3], header("DAYLIGHT --", "REC"));
+        assert_eq!(rows[3], header("DAYLIGHT", "REC"));
         assert_eq!(rows[4].as_str(), "NOT SYNCED");
         assert_eq!(rows[5].as_str(), crate::unfed::PHONE_SYNC_HINT);
         assert_eq!(
