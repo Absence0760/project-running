@@ -184,7 +184,7 @@ LINK_FIX_TOLERANCE_DEG = 0.001
 # because it only has to separate "the present" from "the beginning of the run".
 LINK_LIVE_SKEW_S = 20.0
 
-SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain", "dropout")
+SCENARIO_ORDER = ("smoke", "alerts", "pages", "terrain", "dropout", "screens")
 
 # The NMEA fixture each scenario was written against, and a property OF the
 # scenario rather than of the invocation: `terrain` asserts a climb, which the
@@ -197,6 +197,19 @@ SCENARIO_FIXTURES = {
     "pages": "bench_jog",
     "terrain": "mountain_loop",
     "dropout": "gps_dropout",
+    "screens": "bench_jog",
+}
+
+# Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
+# asserts against. `screens` is the only one: the composed data screens (§364)
+# seat immediately after the Dashboard, so building them into every session
+# would shift the page walk `pages` and `terrain` assert on.
+SCENARIO_LAUNCHER_ARGS = {
+    # `--no-alerts` as well: the shortened sim fuel cadences overlap into a
+    # continuous banner past ~100 s, and a banner OWNS the hero band — it would
+    # cover slot 0 of every screen and make the render assertions below vacuous.
+    # The same reason `bin/watch-shots.sh` boots that way.
+    "screens": ("--screens", "--no-alerts"),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -1781,12 +1794,89 @@ def scenario_dropout(sim):
     passed("no firmware panic across the void")
 
 
+def scenario_screens(sim):
+    """Walk to the runner's own composed data screens and prove they render.
+
+    The seam this closes: everything about `SCR1` up to here is host-tested —
+    the frame, the flash record, the slot renders, the placement arithmetic —
+    but nothing had put a Duo or a Trio on a panel. Two claims that only the
+    emulated display can make: the pages are actually IN the cycle (the gate
+    admits exactly the screens the sim seeded), and their multi-value layouts
+    draw without one slot erasing another.
+
+    `--screens` seeds three (Duo / Trio / Single) through `state::SCREENS`, the
+    same channel a phone push feeds, so this exercises the real publish → gate →
+    render path rather than a shortcut into the face.
+
+    What it does NOT prove: that a tired runner can read them at 45 cm. That is
+    a step-4 bench claim by our own quality_standards.md, and no simulator
+    settles it — see decisions § 364.
+    """
+    require_recording(sim)
+
+    anchor = sim.wait(
+        PAGE_LINE, 60, "the ui task's boot-time page anchor ('ui: page <Name>')"
+    ).group(1)
+    if anchor != START_PAGE:
+        raise SmokeFailure(
+            f"the ui task's first page line reports {anchor}, not {START_PAGE}"
+        )
+
+    # The three seeded screens seat immediately after the Dashboard (§364), so
+    # they are the first three pages a forward tap reaches. That ordering IS the
+    # feature — a runner's own screen one press from home — so assert the
+    # sequence, not merely that the pages exist somewhere in the cycle.
+    want = ["Screen1", "Screen2", "Screen3"]
+    dumps = {}
+    for expected in want:
+        got = press_page(sim, "$btn4", "the BTN4 tap")
+        if got != expected:
+            raise SmokeFailure(
+                f"a forward tap landed on {got}, not {expected} — the composed "
+                "screens are not seated immediately after the Dashboard, so a "
+                "runner's own screen is not one press from home"
+            )
+        panel = sim.dump(f"page-{expected}.ppm", f"the {expected} panel dump")
+        if panel.dark == 0:
+            raise SmokeFailure(f"{expected} rendered a blank panel")
+        dumps[expected] = panel
+        announce(f"{expected} rendered ({panel.dark} dark pixels)")
+    passed(
+        "the three composed screens are the first three pages after the "
+        "Dashboard, and each renders a non-blank panel"
+    )
+
+    # A Duo draws two 32x48 values, a Trio one plus two 16x32 — different
+    # amounts of ink. Byte-identical frames would mean a DumpFrame never landed
+    # and the assertions above read a stale file.
+    for a, b in itertools.pairwise(want):
+        if dumps[a].data == dumps[b].data:
+            raise SmokeFailure(
+                f"the {a} and {b} dumps are byte-identical — DumpFrame did not "
+                "write a fresh frame, so the per-screen render assertions above "
+                "prove nothing"
+            )
+    passed("the three screen dumps are distinct frames — each DumpFrame landed fresh")
+
+    # The fourth screen was never composed, so its page must not be in the
+    # cycle: a fourth tap has to leave the composed block for the live-metric
+    # cluster rather than opening a blank Screen4.
+    after = press_page(sim, "$btn4", "the BTN4 tap")
+    if after == "Screen4":
+        raise SmokeFailure(
+            "a fourth tap opened Screen4, which the runner never composed — the "
+            "cycle is carrying a blank seat"
+        )
+    passed(f"the uncomposed fourth screen is not in the cycle (tap landed on {after})")
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
     "pages": scenario_pages,
     "terrain": scenario_terrain,
     "dropout": scenario_dropout,
+    "screens": scenario_screens,
 }
 
 
@@ -1847,7 +1937,12 @@ def run(args):
         )
         try:
             with sim_session(
-                args, label, deadline, args.phone_port + index, fixture
+                args,
+                label,
+                deadline,
+                args.phone_port + index,
+                fixture,
+                launcher_args=SCENARIO_LAUNCHER_ARGS.get(names[0], ()),
             ) as sim:
                 for name in names:
                     print(f"\n--- scenario {name} ---", flush=True)
@@ -1913,7 +2008,7 @@ def main():
     )
     parser.add_argument(
         "--scenario",
-        choices=("smoke", "pages", "alerts", "terrain", "dropout", "all"),
+        choices=("smoke", "pages", "alerts", "terrain", "dropout", "screens", "all"),
         default="all",
         help="which scenario to run; 'all' boots each of smoke, alerts, pages, "
         "terrain and dropout in that order, one emulator each",

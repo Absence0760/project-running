@@ -903,6 +903,11 @@ pub struct Recorder {
     /// appears the moment its data does. Off restores the full fixed cycle
     /// (every empty state stays visitable).
     hide_empty_pages: bool,
+
+    /// How many of the runner's composed screens exist
+    /// ([`set_screen_count`](Recorder::set_screen_count)) — the count alone,
+    /// never the screens.
+    screen_count: usize,
     /// The synced timezone offset — the Daylight page's data presence, fed
     /// via [`set_tz_offset_min`](Recorder::set_tz_offset_min) (the face reads
     /// the live offset from the `state` watch; this is a presence bit, like
@@ -993,6 +998,7 @@ impl Recorder {
             course_loaded: false,
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
+            screen_count: 0,
             tz_offset_min: None,
             climb: ClimbDetector::new(),
             waypoints: Waypoints::new(),
@@ -1023,6 +1029,18 @@ impl Recorder {
     /// Whether the cycle skips data-less pages (see the field doc).
     pub fn set_hide_empty_pages(&mut self, hide: bool) {
         self.hide_empty_pages = hide;
+    }
+
+    /// How many composed screens (§ 364) the runner has, so the cycle carries
+    /// exactly that many `Screen*` pages.
+    ///
+    /// The recorder holds only the count — the screens themselves are drawn
+    /// from the pushed set the face is handed, and duplicating them here would
+    /// put the same data in two places that could disagree about how many there
+    /// are. Clamped, so a caller cannot open a page that has no screen behind
+    /// it.
+    pub fn set_screen_count(&mut self, n: usize) {
+        self.screen_count = n.min(crate::screens::MAX_SCREENS);
     }
 
     /// Presence bit for the Daylight page: the settings sync has delivered a
@@ -1953,6 +1971,16 @@ impl Recorder {
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
         set(Page::Climb, !s.climb.is_empty());
+        // A composed screen is available when the runner has actually composed
+        // it. Keyed on the COUNT rather than on any metric being fed, because a
+        // screen the runner built is a page they asked for — its slots saying
+        // `SYNC` is an answer, not an absence, and hiding it would silently
+        // overrule the composition.
+        for i in 0..self.screen_count {
+            if let Some(p) = Page::of_screen_index(i) {
+                m |= p.bit();
+            }
+        }
         m
     }
 
@@ -3809,6 +3837,44 @@ mod tests {
             u64::MAX,
             "every page visitable, empty states and all"
         );
+    }
+
+    /// The cycle carries exactly the composed screens the runner has, and an
+    /// unpushed watch walks the 37 built-ins with no blank seats among them.
+    #[test]
+    fn the_cycle_carries_exactly_the_composed_screens() {
+        let mut r = Recorder::new();
+        r.start(0);
+        let none = r.snapshot().pages_mask;
+        for i in 0..crate::screens::MAX_SCREENS {
+            let p = Page::of_screen_index(i).unwrap();
+            assert_eq!(none & p.bit(), 0, "{p:?} is in the cycle before any push");
+        }
+
+        r.set_screen_count(2);
+        let two = r.snapshot().pages_mask;
+        assert_ne!(two & Page::Screen1.bit(), 0);
+        assert_ne!(two & Page::Screen2.bit(), 0);
+        assert_eq!(two & Page::Screen3.bit(), 0, "a screen that does not exist");
+        assert_eq!(two & Page::Screen4.bit(), 0);
+
+        // BTN3 from home reaches the runner's own screen in one press — the
+        // whole reason these pages seat where they do.
+        assert_eq!(Page::Dashboard.next_in(two), Page::Screen1);
+        assert_eq!(Page::Screen2.next_in(two), Page::Distance);
+    }
+
+    /// A count past the cap cannot open a page with no screen behind it.
+    #[test]
+    fn a_screen_count_past_the_cap_is_clamped() {
+        let mut r = Recorder::new();
+        r.set_screen_count(99);
+        r.start(0);
+        let mask = r.snapshot().pages_mask;
+        for i in 0..crate::screens::MAX_SCREENS {
+            assert_ne!(mask & Page::of_screen_index(i).unwrap().bit(), 0);
+        }
+        assert!(Page::of_screen_index(crate::screens::MAX_SCREENS).is_none());
     }
 
     #[test]

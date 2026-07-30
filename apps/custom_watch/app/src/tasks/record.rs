@@ -372,6 +372,38 @@ pub async fn run(store: &'static SharedStore) {
     if let Some(s) = persisted_screens.as_ref() {
         info!("record: restored {=usize} composed screen(s)", s.len());
     }
+    // The recorder holds only the count — it decides which `Screen*` pages the
+    // BTN3 cycle carries; the screens themselves reach the face through the
+    // published set, so there is one copy of them and it cannot disagree with
+    // itself about how many there are.
+    recorder.set_screen_count(persisted_screens.as_ref().map_or(0, |s| s.len()));
+    // Sim-only composed screens, published on the SAME channel a phone push
+    // feeds so the whole publish → gate → render path runs, not a shortcut into
+    // the face. One screen per layout, headed by metrics the bench_jog fixture
+    // actually moves, so the panel shows numbers changing rather than three
+    // `SYNC` tokens: distance and pace are fed from the first fix, elapsed and
+    // lap from the clock, and altitude from the sim's baro.
+    #[cfg(feature = "sim-screens")]
+    if persisted_screens.is_none() {
+        use watch_core::face::Metric;
+        use watch_core::screens::{Layout, Screen, Screens};
+        let demo = Screens::from_slice(&[
+            unwrap!(Screen::new(
+                Layout::Duo,
+                &[Metric::Distance, Metric::AvgPace]
+            )),
+            unwrap!(Screen::new(
+                Layout::Trio,
+                &[Metric::Elapsed, Metric::HeartRate, Metric::Altitude]
+            )),
+            unwrap!(Screen::new(Layout::Single, &[Metric::LapElapsed])),
+        ]);
+        if let Some(set) = demo {
+            info!("record: sim composed screens ({=usize})", set.len());
+            persisted_screens = Some(set.clone());
+            recorder.set_screen_count(set.len());
+        }
+    }
     screens_tx.send(persisted_screens.clone());
     let mut open: Option<OpenRun> = None;
     let mut hr: Option<HrSample> = None;
@@ -667,6 +699,7 @@ pub async fn run(store: &'static SharedStore) {
         // from what flash already holds — which also means the publication this
         // task made from flash at boot costs no write when it comes back round.
         if let Some(set) = screens_rx.try_changed() {
+            recorder.set_screen_count(set.as_ref().map_or(0, |s| s.len()));
             if persisted_screens != set {
                 store.lock().await.persist_screens(set.as_ref()).await;
                 persisted_screens = set;
