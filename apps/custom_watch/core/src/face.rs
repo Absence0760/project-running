@@ -545,6 +545,11 @@ fn rec_tag(snap: &Snapshot) -> Option<&'static str> {
         RecordState::Idle => None,
         RecordState::Recording => Some("REC"),
         RecordState::Paused if snap.manual_paused => Some("PAU"),
+        // Before the `is_moving` fallthrough, because a void that begins while
+        // the runner is moving leaves the last known speed above the gate — so
+        // asking `is_moving` would answer `REC` for the whole dropout, which is
+        // the run view claiming to track a runner it has lost.
+        RecordState::Paused if snap.signal_lost => Some("AUTO"),
         RecordState::Paused => {
             if snap.is_moving() {
                 Some("REC")
@@ -4324,6 +4329,7 @@ mod tests {
         Snapshot {
             state,
             manual_paused: false,
+            signal_lost: false,
             distance_m,
             elapsed_s: 0,
             moving_s: 0,
@@ -6167,6 +6173,25 @@ mod tests {
             face_rows(None, None, Some(&artifact), None, 11)[0].as_str(),
             ""
         );
+
+        // Signal void that began mid-stride: indistinguishable from the
+        // artifact by speed alone — the last fix left the runner at 5 m/s and
+        // nothing since has been able to contradict it — so the tag has to
+        // come from `signal_lost`, not `is_moving`. AUTO, and steady, because
+        // a blinking REC through a dropout is the run view claiming to track
+        // a runner it has lost.
+        let mut void = snapshot(RecordState::Paused, 100.0);
+        void.current_speed_mps = 5.0;
+        void.signal_lost = true;
+        assert!(void.is_moving(), "the void must not have aged out the speed");
+        for uptime_s in [10, 11] {
+            assert_eq!(
+                face_rows(None, None, Some(&void), None, uptime_s)[0]
+                    .as_str()
+                    .trim(),
+                "AUTO"
+            );
+        }
     }
 
     #[test]

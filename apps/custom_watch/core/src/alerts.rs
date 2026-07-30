@@ -696,6 +696,7 @@ mod tests {
         Snapshot {
             state,
             manual_paused: false,
+            signal_lost: false,
             distance_m: 0.0,
             elapsed_s: moving_s,
             moving_s,

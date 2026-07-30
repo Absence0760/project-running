@@ -847,6 +847,7 @@ mod tests {
         Snapshot {
             state: RecordState::Recording,
             manual_paused: false,
+            signal_lost: false,
             distance_m: 0.0,
             elapsed_s: 0,
             moving_s: 0,
