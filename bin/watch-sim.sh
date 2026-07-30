@@ -21,12 +21,16 @@
 # Usage:
 #   bin/watch-sim.sh                      # build + simulate the default binary
 #   bin/watch-sim.sh --gui                # also open the live watch-screen window
-#   bin/watch-sim.sh --bin sensor_smoke   # simulate a specific binary
+#   bin/watch-sim.sh --bin app            # simulate a named binary (`app` is the only one today)
 #   bin/watch-sim.sh --fixture mountain_loop  # a named fixture from sim/nmea/
 #   bin/watch-sim.sh --nmea path/to.nmea  # substitute the GPS fixture (full path)
 #   bin/watch-sim.sh --no-autostart       # boot idle; BTN1 starts the run, so the
 #                                         # idle face (BTN3 GNSS-mode cycling) is
 #                                         # reachable before recording begins
+#   bin/watch-sim.sh --no-alerts          # drop the sim's shortened alert
+#                                         # cadences (fuel / distance / time /
+#                                         # pace), so no banner covers the hero
+#                                         # rows — what watch-shots.sh wants
 #
 # The default GPS fixture is sim/nmea/bench_jog.nmea. Select another named
 # fixture from sim/nmea/ with --fixture <name> (or the NMEA_FIXTURE env var);
@@ -54,6 +58,7 @@ NMEA_FILE="$WORKSPACE/sim/nmea/bench_jog.nmea"
 GUI=0
 PHONE_PORT=7788
 AUTOSTART=1
+ALERTS=1
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -63,7 +68,8 @@ while [[ $# -gt 0 ]]; do
 		--nmea)         NMEA_FILE="${2:?--nmea needs a value}"; shift 2 ;;
 		--phone-port)   PHONE_PORT="${2:?--phone-port needs a value}"; shift 2 ;;
 		--no-autostart) AUTOSTART=0; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart)" ;;
+		--no-alerts)    ALERTS=0; shift ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts)" ;;
 	esac
 done
 
@@ -84,9 +90,13 @@ command -v defmt-print >/dev/null || \
 # work (Renode's GPIO models the IN register but not the SENSE/DETECT edge
 # path the hardware button task waits on). sim-course: the canned breadcrumb
 # course the Nav page follows (the bench_jog fixture leaves it on two legs,
-# so the off-course alert fires each lap). All OFF on the hardware build —
+# so the off-course alert fires each lap). sim-alerts: the shortened fuel /
+# distance / time / pace cadences the `alerts` scenario observes (dropped by
+# --no-alerts, which is how a screenshot walk gets a watch with nothing
+# covering the hero rows). All OFF on the hardware build —
 # see apps/custom_watch/app/src/tasks/{record,button,nav}.rs.
 FEATURES=sim-buttons,sim-course,dev-blink
+[[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"
 [[ "$AUTOSTART" == 1 ]] && FEATURES="sim-autostart,$FEATURES"
 step "Building firmware (release, --features $FEATURES)"
 (cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features "$FEATURES")
@@ -181,9 +191,25 @@ grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
 dim "buttons: click BTN1-5 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause/dismiss; grid: GO; menu: edit right), \$btn2 (stop x2; grid: cancel; menu: cursor up), \$btn3 (page left / idle GNSS mode; menu: cursor down), \$btn4 (page right / idle diag toggle; menu: exit), \$btn3h or \$btn4h (page grid; idle \$btn3h: QNH re-zero), \$btn5 (lap / idle: settings menu; menu: edit left)"
 
-# Feed the fixture into the emulated GPS UART on a loop. Sentences come in
-# GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
-# 1 Hz fix rate a real MAX-M10S emits.
+# Feed the fixture into the emulated GPS UART. Sentences come in GGA+RMC pairs
+# per GPS second; two lines per wall-clock second matches the 1 Hz fix rate a
+# real MAX-M10S emits.
+#
+# The feed loops so a short fixture can carry a long session. Note what the loop
+# point IS, because it is not a no-op: it teleports the runner from the fixture's
+# end back to its start, which for bench_jog is metres and for a point-to-point
+# fixture is hundreds of them. The recorder handles that correctly (a jump past
+# MAX_JUMP_M at a one-fix interval is a teleport and credits nothing), but any
+# assertion about distance that runs past the loop is reading a different
+# scenario than the fixture describes — sim/ci_smoke.py's `dropout` finds the
+# restart in the published-fix stream and refuses to read past it.
+#
+# A --nmea-once flag was tried instead and removed: however the feed is stopped,
+# the firmware stops receiving sentences that were written before it stopped, so
+# the fixture silently loses its tail (gps_dropout delivered its clean opening
+# leg and then nothing, and the void never ended). Holding the write fd open past
+# the last line did not change that. Whatever buffers between here and the
+# emulated UARTE only drains while the writer is still writing.
 (
 	exec 3>"$GPS_PTY"
 	while true; do

@@ -65,7 +65,7 @@ All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. 
 | Boot the firmware on an emulated DK + stream defmt logs | — | `bin/watch-sim.sh` | No |
 | Screenshot every screen the sim can arm (PNGs + an HTML contact sheet) | — | `bin/watch-shots.sh` | No |
 | Build + flash + stream logs (inner loop) | `cargo run --release` | `bin/watch-flash.sh` | Yes |
-| Flash a specific binary | `cargo run --release --bin sensor_smoke` | `bin/watch-flash.sh --bin sensor_smoke` | Yes |
+| Flash a specific binary | `cargo run --release --bin app` | `bin/watch-flash.sh --bin app` | Yes |
 | Auto-reflash on file save | `cargo watch -x 'run --release'` | — | Yes |
 | Stream logs without reflashing | `probe-rs attach --chip nRF52840_xxAA` | `bin/watch-logs.sh` | Yes |
 | Erase the chip (factory reset) | `probe-rs erase --chip nRF52840_xxAA` | — | Yes |
@@ -183,12 +183,16 @@ Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it
 ```
 bin/watch-sim.sh                      # build + boot the default binary, headless
 bin/watch-sim.sh --gui                # also open the live watch-screen window
-bin/watch-sim.sh --bin sensor_smoke   # boot a specific binary
+bin/watch-sim.sh --bin app            # boot a named binary (`app` is the only one today)
 bin/watch-sim.sh --fixture mountain_loop  # a named fixture from sim/nmea/ (default: bench_jog)
 bin/watch-sim.sh --nmea my_route.nmea # substitute the GPS fixture (full path)
 bin/watch-sim.sh --phone-port 9900    # move the phone-link TCP port (default 7788)
 bin/watch-sim.sh --no-autostart       # boot to the idle face; BTN1 starts the run
 ```
+
+**The NMEA feed loops, and the loop point is not a no-op.** When the feeder reaches the end of the file it starts again from the top, which teleports the runner from the fixture's last position back to its first — metres for a loop fixture like bench_jog, ~354 m for `gps_dropout`. The recorder handles that correctly (a jump past `MAX_JUMP_M` at a one-fix interval is a teleport and credits nothing), but any *assertion* about distance that runs past the loop is reading a scenario the fixture does not describe: it is how a #330-broken recorder eventually resumes, once the runner has walked back inside the stale anchor's jump cap. `ci_smoke.py`'s `dropout` finds the restart in the published-fix stream and refuses to read past it.
+
+There is deliberately **no flag to stop the feed after one pass.** One was built and removed: however the feed is stopped, the firmware stops receiving sentences that were written before it stopped, so the fixture silently loses its tail — `gps_dropout` delivered its clean opening leg and then nothing, and the void never ended. Holding the writing fd open past the last line did not change it. Whatever buffers between the feeder and the emulated UARTE only drains while the writer is still writing.
 
 What runs for real in the sim, end to end: the Embassy executor and RTC1 time driver; GPIO (LED1 toggles logged at INFO as `gpio0.led0: LED1 on/off`); the GPS pipeline (canned NMEA → UARTE0 → `ublox_nmea` parser → `watch_core` fix accumulator); the Sharp MIP display (SPIM3 → the C# panel model — `--gui` shows the live screen, or dump a frame from the monitor: `sysbus.spi3.display DumpFrame "/tmp/frame.ppm"`); and the phone link (status frames on UARTE1 → TCP, the mobile app's dev Sim Watch screen connects here). What doesn't: BLE, power, and the HR/baro sensor analog side.
 
@@ -265,38 +269,47 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 
 ### The Renode sim in CI
 
-`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); two further jobs defend **sim-verified**. **`sim-firmware`** ("Simulate custom_watch firmware (Renode)") runs the `smoke` scenario and is **in the `CI gate` required-check list**, because that sequence has a manual verification pass behind it (`sim/verification-2026-07-19/`) and a long green history on hosted runners. **`sim-scenarios`** runs `pages` + `alerts` and is deliberately **not** required yet: they first executed 2026-07-26, and blocking every PR in the repo on two-run-old assertions is the risk worth avoiding. It is strict within itself, so a regression still fails loudly — it just does not gate. Fold it into `needs:` once it has run green over a stretch of unrelated PRs. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
+`build-firmware` defends the **build-verified** rung of the four-rung verification contract in [decisions.md § 314](../../docs/architecture/decisions.md); two further jobs defend **sim-verified**. **`sim-firmware`** ("Simulate custom_watch firmware (Renode)") runs the `smoke` scenario and is **in the `CI gate` required-check list**, because that sequence has a manual verification pass behind it (`sim/verification-2026-07-19/`) and a long green history on hosted runners. **`sim-scenarios`** runs `pages` + `alerts` + `terrain` + `dropout`. It was held out of the gate while its assertions were new — they first executed 2026-07-26, and blocking every PR in the repo on two-run-old assertions is the risk worth avoiding — and was folded into `ci-gate`'s `needs:` on 2026-07-27 once the soak had done its job (it caught the alerts scenario racing the panel repaint on both halves of its banner/quiet pair). Both jobs gate today. It installs the pinned Renode portable build + `defmt-print`, builds the sim feature set, boots it under the emulator via the same `bin/watch-sim.sh` the manual sessions use, and asserts on decoded defmt output:
 
 ```
-# on ubuntu-latest, timeout-minutes: 25
+# sim-firmware on ubuntu-latest, timeout-minutes: 25
+# sim-scenarios on ubuntu-latest, timeout-minutes: 35
 curl … renode-1.16.1.linux-portable-dotnet.tar.gz   # sha256-pinned
 cargo install defmt-print --locked --version '^1.1' # cached between runs
 DEFMT_LOG=debug cargo build --release --bin app \
   --features sim-autostart,sim-buttons,sim-course,dev-blink
 
-# one step per scenario, each in its own out-dir; smoke gates, the other two do not
-python3 …/ci_smoke.py --scenario smoke  --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"  --budget 300
-python3 …/ci_smoke.py --scenario pages  --out-dir "$RUNNER_TEMP/watch-sim-ci/pages"  --budget 300
-python3 …/ci_smoke.py --scenario alerts --out-dir "$RUNNER_TEMP/watch-sim-ci/alerts" --budget 300
+# one step per scenario, each in its own out-dir
+python3 …/ci_smoke.py --scenario smoke   --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"   --budget 300
+python3 …/ci_smoke.py --scenario pages   --out-dir "$RUNNER_TEMP/watch-sim-ci/pages"   --budget 300
+python3 …/ci_smoke.py --scenario alerts  --out-dir "$RUNNER_TEMP/watch-sim-ci/alerts"  --budget 300
+python3 …/ci_smoke.py --scenario terrain --out-dir "$RUNNER_TEMP/watch-sim-ci/terrain" --budget 300
+python3 …/ci_smoke.py --scenario dropout --out-dir "$RUNNER_TEMP/watch-sim-ci/dropout" --budget 420
 ```
 
-Three steps rather than one `--scenario all` so a red step *names* the surface that broke without anyone opening a log — which matters more here than anywhere else in CI, because Renode is not installable on every contributor machine and CI is usually the only executor. Keeping `smoke` its own step is the load-bearing part of that split: a red `smoke` beside a green `pages` points at the pipeline, and the reverse points at the new scenario code. The cost is one emulator boot per step, which is what the budgets are sized against: 3 × 300 s = 15 min inside the 25 min cap, leaving ~10 min for the Renode fetch, the toolchain and a cold cargo build. The budget sits *below* the job timeout deliberately — overrunning it exits through the harness's own diagnostic dump, where the job timeout kills the runner bare. **A scenario added to the harness needs a step added to the workflow**; the `all` default is not what CI runs.
+One step per scenario rather than one `--scenario all` so a red step *names* the surface that broke without anyone opening a log — which matters more here than anywhere else in CI, because Renode is not installable on every contributor machine and CI is usually the only executor. Keeping `smoke` its own job is the load-bearing part of that split: a red `smoke` beside a green `pages` points at the pipeline, and the reverse points at the new scenario code. The cost is one emulator boot per step, which is what the budgets are sized against: `sim-scenarios`' four sum to 22 min inside its 35 min cap, leaving ~10 min for the Renode fetch, the toolchain and a cold cargo build. `dropout` carries the larger budget because it has to run the fixture's clean leg, its whole 40 s void, and into the reacquire — ~200 s of wall clock — before it can assert anything. The budget sits *below* the job timeout deliberately — overrunning it exits through the harness's own diagnostic dump, where the job timeout kills the runner bare. **A scenario added to the harness needs a step added to the workflow**; the `all` default is not what CI runs.
 
 Each step writes into its own subdirectory of `$RUNNER_TEMP/watch-sim-ci`, so the single `if: failure()` upload still carries every scenario's evidence and no two scenarios overwrite each other's `sim-output.log` / `frame.ppm` / `renode.log`.
 
 `sim/ci_smoke.py` is the harness — runnable locally too (it needs `renode` + `defmt-print` on PATH, so a Linux dev box, not a Mac). It drives `watch-sim.sh` and fails with a named expectation when an assertion's log line or artifact doesn't arrive.
 
-The `smoke` scenario is the original seven-assertion sequence, and the one with a manual verification pass behind it ([`sim/verification-2026-07-19/`](sim/verification-2026-07-19/README.md)):
+The `smoke` scenario is the end-to-end sequence, and the one with a manual verification pass behind it ([`sim/verification-2026-07-19/`](sim/verification-2026-07-19/README.md)):
 
 | Assertion | Log / artifact it waits on |
 |---|---|
 | flash run store arms at boot | `run_flash: run store armed at 0x…` |
 | the canned NMEA parses into a fix with ≥ 4 satellites | `gps: fix lat=… sats=N` |
+| the optical-HR driver reads a plausible pulse off the AFE model | `hr: MAX86177 streaming` then `hr: bpm N`, 55 ≤ N ≤ 95 against a model synthesizing ~72 |
 | that first fix starts a recording | `record: sim-autostart on first fix` |
 | distance accumulates past 20 m | `record: recording dist=<m>` (DEBUG — hence `DEFMT_LOG=debug`) |
+| the same fix reaches the **phone link** | a TCP connect to the `--phone-port` socket → v1 NDJSON frames whose `uptime_s` strictly increases and whose first `fix` is within 0.001° of the one the log rail reported |
 | the run face renders on the panel | monitor `DumpFrame` → a PPM with ≥ 200 dark **and** ≥ 200 light pixels (all-light = nothing drawn, all-dark = a broken decode) |
 | two BTN2 presses stop the run and commit it | `button: BTN2 armed` then `run_flash: stored run N (M B) in slot S`, M > 0 |
 | nothing panicked | no `panicked` line in the decoded stream |
+
+The HR and phone-link rows are folded into `smoke` rather than given scenarios of their own — neither needs anything that boot isn't already doing, and a scenario costs a whole emulator. Both cover a rail that previously had no assertion at all: the MAX86177 model had never had a BPM read off it by any scenario, and nothing had ever opened the phone-link socket, so the panel could be perfect while the link emitted nothing and only a human running the mobile dev screen would find out.
+
+**Gotcha when you connect to that socket yourself.** Renode's `CreateServerSocketTerminal` buffers everything UARTE1 wrote while no client was attached and replays it on connect — so `ncat localhost 7788` against a sim that has been up ten minutes opens on the frame from `uptime_s: 1`, not on the live one, and flushes ten minutes of history before catching up. The same is true of the mobile Sim watch link screen. The backlog is real, in-order data (the harness reads the run's opening seconds off it deliberately), but don't read the first values you see as live ones.
 
 Every wait is on a specific log line with a per-assertion deadline rather than a fixed sleep, and the fixture + sensor models are virtual-time driven with no randomness (see [`sim/verification-2026-07-19/README.md`](sim/verification-2026-07-19/README.md)), so the run replays identically. The one exception is the ~1.5 s gap between the two BTN2 presses, which has to land inside the firmware's 4 s stop-confirm window and so can't wait on the "armed" line; a missed injected press is retried up to three times. On failure the job uploads the decoded stream, `renode.log`, the raw defmt capture, the monitor transcript, and the panel dump as the `custom-watch-sim-logs` artifact.
 
@@ -309,6 +322,8 @@ python3 apps/custom_watch/sim/ci_smoke.py                        # all of them
 python3 apps/custom_watch/sim/ci_smoke.py --scenario smoke       # just the proven path
 python3 apps/custom_watch/sim/ci_smoke.py --scenario pages
 python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts
+python3 apps/custom_watch/sim/ci_smoke.py --scenario terrain
+python3 apps/custom_watch/sim/ci_smoke.py --scenario dropout
 
 # a named fixture from sim/nmea/, a moved out-dir, a tighter wall-clock cap
 python3 apps/custom_watch/sim/ci_smoke.py --scenario pages \
@@ -322,6 +337,8 @@ python3 apps/custom_watch/sim/ci_smoke.py --scenario alerts --phone-port 9900
 | `smoke` | The recording pipeline end to end: NMEA → parser → fix accumulator → recorder → distance, one run face on glass, and the two-press stop committing a CRC'd blob to a flash slot. | Nothing about the *other* 32 pages, and nothing about an alert firing. |
 | `pages` | That the run-view page cycle actually renders — BTN3 walks the filtered mask and each page produces a non-blank frame instead of a blank or a panic. It is a **render** assertion, so it catches a page whose face code faults, divides by zero on empty data, or draws nothing; it does not check that a number is *right*. | Correctness of any displayed value (that's the host tests on `watch_core`), legibility, glyph shape at a given font tier, or one-handed press ergonomics. |
 | `alerts` | That the alert path fires from real recorded state and reaches the panel — the `watch_core::alerts` engine's fuel / zone / pace reminders off the recorder's own event cadence, and the `nav` task's off-course latch and re-arm — as an inverse-video banner, without disturbing the recording underneath it (the L4 contract). | Whether a tired runner *notices* it. There is no vibration motor at tier 1, so an alert is display-only by construction and "unmissable" is a bench/wrist claim, never a sim one. |
+| `terrain` | That the two pages a flat fixture can't arm — `Waypoint` and `Climb` — come **into** the cycle once they are armed (a BTN5 hold marks a point, the BMP581 model's triangle profile climbs past the 20 m a climb opens at) and render. `pages` only ever proved they stay out of an unarmed cycle, which a data-presence bit wired to the wrong field passes silently. | That the WPT page shows the right bearing or the CLMB page the right metres-remaining — those are host-test claims on `core/src/climb.rs` and `core/src/record.rs`. |
+| `dropout` | That the recorder survives a GPS void honestly and **comes back from it**: the pre-void leg banks distance, the void freezes it with every snapshot inside reading `paused`, and the reacquire — 122 m downrange past `MAX_JUMP_M`, over a gap past `GPS_REANCHOR_AFTER_S` — moves it again. That last bit is `run_recorder`'s #330 re-anchor, the bug this fixture found by hand on 2026-07-19; it froze distance for the rest of a run and was guarded only by host tests over `Recorder` until this scenario put a guard on the whole NMEA→parser→cadence→recorder path. | Anything about a *throttled* GNSS mode: the re-anchor is the 1 Hz path only (a throttled mode's `MAX_SPEED_MPS * dt` ceiling self-heals by design), and the sim runs the default cadence. |
 
 `--budget` is a hard wall-clock cap for the run, not a per-assertion deadline (those are per-assertion and tighter). It exists so a wedged emulator fails with the harness's own diagnostics — last 40 lines of decoded output plus the tail of `renode.log` — rather than hanging until something outside kills it. Locally you can leave it at the default; in CI it is set per step, and always below the job's own `timeout-minutes`.
 
@@ -336,9 +353,11 @@ bin/watch-shots.sh --session idle         # only the idle faces + the settings m
 bin/watch-shots.sh --out-dir /path/shots  # somewhere durable
 ```
 
-Two boots, because the run view and the idle faces are disjoint — the page cycle only exists mid-run, and the idle faces are only reachable before one starts. The `run` session uses `mountain_loop` with `scenario_terrain`'s two arming steps (the BMP581 triangle profile and a BTN5-hold waypoint mark), so `CLMB` and `WPT` are in the cycle instead of legitimately filtered out of it; the `idle` session boots `--no-autostart`. Expect ~25 screens and several minutes. Needs ImageMagick 7 (`magick`) on top of the sim's own prerequisites.
+Two boots, because the run view and the idle faces are disjoint — the page cycle only exists mid-run, and the idle faces are only reachable before one starts. The `run` session uses `mountain_loop` with `scenario_terrain`'s two arming steps (the BMP581 triangle profile and a BTN5-hold waypoint mark), so `CLMB` and `WPT` are in the cycle instead of legitimately filtered out of it; the `idle` session boots `--no-autostart`. Both boot **`--no-alerts`** — see below. Expect ~25 screens and several minutes. Needs ImageMagick 7 (`magick`) on top of the sim's own prerequisites.
 
 Every capture is named by the ui task's own line — `ui: page <Name>`, or `ui: idle <View>` for a face — and each press cross-checks that against the button task's intent exactly as `scenario_pages` does, so a file called `page-Pacer.png` is the panel the composer *said* it composed. Two kinds of bad frame are rejected and re-shot, both measured on the captured pixels rather than inferred from the log: one under an alert banner (a solid inverse-video band over the hero rows — `wait_for_no_alert` is unusable here, since past ~100 s the sim's shortened cadences go banner-to-banner and `record: alert cleared` stops arriving), and one byte-identical to the previous screen (the composer logs its line *before* it draws, so a dump sent the instant that line decodes can read the previous frame — this is how the harness first "proved" the two idle faces render identically). A screen that stays bad after four tries is still captured and says so in its caption.
+
+**Why `--no-alerts`.** The re-shoot loop can only wait a banner out if there are gaps to wait in, and there are none: the sim's shortened cadences (fuel at 30 s / 45 s, plus the distance, time and pace arms) overlap into a continuous banner past ~100 s, which is exactly when a 25-screen walk is still running. On the first sheet that cost **six of the twenty-one run screens** — `page-Dashboard` and `page-Climb` among them, the latter's entire hero replaced by `! DRINK`. Those cadences exist for the `ci_smoke` `alerts` scenario and are noise to everything else, so they now sit behind their own `sim-alerts` Cargo feature that `--no-alerts` drops. Dropping `sim-autostart` instead would also have silenced them, and would have taken with it the demo settings that arm most of the pages worth photographing. Measured on the next sheet: **22 re-shoots and six unusable screens became 2 and none.** The two that remain are the Dashboard waiting out a `WorkoutStep` banner from the demo workout, which stays armed because the Workout page is one of the pages worth photographing — one of those is the shape this is meant to leave behind, a banner the loop can actually wait out.
 
 **A screenshot is *sim-verified* evidence and no more.** Nothing here reads a glyph: a capture says the named screen composed and inked pixels. Layout and value correctness stay host-test claims (`render/src/preview.rs`, `core/`) — see [quality_standards.md](../../docs/custom_watch/quality_standards.md). And the sheet is not the whole UI: thirteen pages have no `SET1` wire field to arm them, so ~25 screens is the ceiling of what the sim can show, not of what the watch renders.
 
