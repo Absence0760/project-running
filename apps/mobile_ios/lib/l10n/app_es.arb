@@ -3457,5 +3457,7 @@
   "watchMetricAutoEffortMatched": "Segmentos detectados",
   "watchMetricRouteElevTotal": "Desnivel del recorrido",
   "watchMetricRaceDayDays": "Días para la carrera",
+  "watchMetricSleepBudget": "Margen de sueño",
+  "watchMetricTimerRemaining": "Temporizador",
   "watchMetricBackyardBell": "Cuenta atrás de la campana"
 }

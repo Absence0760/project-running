@@ -12057,6 +12057,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get watchMetricRaceDayDays => 'Dias até à prova';
 
   @override
+  String get watchMetricSleepBudget => 'Margem de sono';
+
+  @override
+  String get watchMetricTimerRemaining => 'Temporizador';
+
+  @override
   String get watchMetricBackyardBell => 'Contagem decrescente do sino';
 }
 
@@ -24107,6 +24113,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get watchMetricRaceDayDays => 'Dias até a prova';
+
+  @override
+  String get watchMetricSleepBudget => 'Margem de sono';
+
+  @override
+  String get watchMetricTimerRemaining => 'Temporizador';
 
   @override
   String get watchMetricBackyardBell => 'Contagem regressiva do sino';

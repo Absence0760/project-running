@@ -15401,5 +15401,7 @@
   "watchMetricAutoEffortMatched": "Segments matched",
   "watchMetricRouteElevTotal": "Route elevation",
   "watchMetricRaceDayDays": "Days to race",
+  "watchMetricSleepBudget": "Sleep budget",
+  "watchMetricTimerRemaining": "Timer",
   "watchMetricBackyardBell": "Bell countdown"
 }

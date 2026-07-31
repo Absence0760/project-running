@@ -12090,5 +12090,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get watchMetricRaceDayDays => 'Jours avant la course';
 
   @override
+  String get watchMetricSleepBudget => 'Budget de sommeil';
+
+  @override
+  String get watchMetricTimerRemaining => 'Minuteur';
+
+  @override
   String get watchMetricBackyardBell => 'Compte à rebours de la cloche';
 }
