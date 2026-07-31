@@ -76,6 +76,23 @@ sim-course = []
 # its cycle is the 40 built-ins.
 sim-screens = []
 
+# Restores the wearer's own coordinates, heart rate and strap address in the
+# defmt log stream. OFF by default: the RTT/serial stream is not a private
+# channel — it goes wherever the cable, the CI artifact or the bug report goes,
+# and at one line per fix it reconstructs the whole track. A stock build logs
+# fix quality (speed, satellites) and pulse PRESENCE instead, which is what the
+# GNSS and HR chains are actually debugged against.
+#
+# bin/watch-sim.sh enables it, because the sim's fixture coordinates are
+# synthetic (the bench_jog rectangle) and there is no wearer — and because
+# sim/ci_smoke.py asserts on the logged fix coordinates and BPM. The bench
+# build does NOT: bin/watch-flash.sh forwards extra cargo args, so an engineer
+# debugging position maths on their own wrist opts in explicitly with
+# `bin/watch-flash.sh --features log-personal-data`.
+#
+# See docs/custom_watch/privacy.md § What the watch must never log.
+log-personal-data = []
+
 # Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries
 # no gratuitous always-on waker (docs/custom_watch/performance_path.md — "every
 # wake justifiable"). bin/watch-sim.sh and bin/watch-flash.sh enable it so the

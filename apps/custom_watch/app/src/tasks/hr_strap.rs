@@ -107,7 +107,12 @@ async fn session(sd: &Softdevice) -> bool {
     let Some(addr) = find_strap(sd).await else {
         return false;
     };
+    // A strap's BLE address is a stable identifier that follows one wearer
+    // between sessions, so it sits behind the default-off gate too.
+    #[cfg(feature = "log-personal-data")]
     info!("hr_strap: candidate {:?}", addr);
+    #[cfg(not(feature = "log-personal-data"))]
+    info!("hr_strap: candidate found");
     let addrs = [&addr];
     let config = central::ConnectConfig {
         att_mtu: Some(STRAP_ATT_MTU),

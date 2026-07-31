@@ -240,8 +240,18 @@ pub async fn run(mut twim: Twim<'static>) {
             }
             let bpm = reading.valid.then_some(reading.bpm);
             if logged_bpm != Some(bpm) {
+                // Change-gated, so the stream of these IS a heart-rate series.
+                // The value is behind the default-off `log-personal-data` gate;
+                // trusted-vs-not is the part the optical chain is debugged
+                // against and carries no biometric.
+                #[cfg(feature = "log-personal-data")]
                 match bpm {
                     Some(b) => info!("hr: bpm {=u16}", b),
+                    None => info!("hr: no trusted pulse"),
+                }
+                #[cfg(not(feature = "log-personal-data"))]
+                match bpm {
+                    Some(_) => info!("hr: trusted pulse"),
                     None => info!("hr: no trusted pulse"),
                 }
                 logged_bpm = Some(bpm);
