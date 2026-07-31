@@ -2140,6 +2140,44 @@ mod tests {
         );
     }
 
+    /// The auto-lap-only frame. Every earlier version's field has a single-field
+    /// vector; v7 and v8 shipped without one, so the two flags3 fields were
+    /// pinned only inside the all-fields golden where a layout error can hide
+    /// behind its neighbours' offsets. The rung is spelled as `AutoLap::Min10`
+    /// rather than a bare `6` so a reorder of that enum fails here.
+    #[test]
+    fn golden_vector_auto_lap_only() {
+        let s = WatchSettings {
+            auto_lap: Some(AutoLap::Min10.to_byte()),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(
+            &buf[..n],
+            &[0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x00, 0x01, 0x06, 0x8d, 0x63, 0x1f, 0x14]
+        );
+    }
+
+    /// The storm-only frame, the flags3 companion above. An armed threshold is
+    /// tenths of a hectopascal little-endian, so 4.0 hPa is 40 — the sentinel
+    /// nothing armed may collide with is 0, which `storm_alert: Some(None)`
+    /// writes and `a_storm_threshold_travels_as_tenths_and_zero_is_the_disarm`
+    /// covers.
+    #[test]
+    fn golden_vector_storm_only() {
+        let s = WatchSettings {
+            storm_alert: Some(Some(4.0)),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(
+            &buf[..n],
+            &[0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x00, 0x02, 0x28, 0x00, 0x06, 0xb8, 0x5e, 0x48]
+        );
+    }
+
     /// The frozen v2 golden vector (every field, version byte 0x02, no CRC)
     /// must keep decoding into exactly what it decoded into before the v3
     /// bump: a phone that hasn't shipped the checksummed encoder yet still
