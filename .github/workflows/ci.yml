@@ -531,20 +531,20 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens + idle scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens, idle + workout scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
     # harness carries its own tighter per-assertion deadlines and a --budget.
     #
-    # Raised 25 -> 35 when `dropout` was added, 35 -> 40 for `screens`, and
-    # 40 -> 45 for `idle`: the six budgets below now sum to 32 min against ~10 min of Renode
-    # fetch, toolchain and a cold cargo build, and 35 no longer left the harness
-    # room to fail with its own diagnostics before the runner was killed bare.
-    # The cap is still what it has always been — a backstop over the budgets,
-    # not the thing that ends a healthy run, so it tracks their sum whenever a
-    # scenario is added.
-    timeout-minutes: 45
+    # Raised 25 -> 35 when `dropout` was added, 35 -> 40 for `screens`,
+    # 40 -> 45 for `idle` and 45 -> 50 for `workout`: the seven budgets below
+    # now sum to 37 min against ~10 min of Renode fetch, toolchain and a cold
+    # cargo build, and 35 no longer left the harness room to fail with its own
+    # diagnostics before the runner was killed bare. The cap is still what it
+    # has always been — a backstop over the budgets, not the thing that ends a
+    # healthy run, so it tracks their sum whenever a scenario is added.
+    timeout-minutes: 50
     env:
       RENODE_VERSION: 1.16.1
       # Pinned like every action sha in this file: the portable package is a
@@ -618,8 +618,8 @@ jobs:
       # more emulator boots are spent on it.
       #
       # Cost: each step boots its own emulator, so the budgets are what keeps
-      # this inside the cap. 5 x 300 s + dropout's 420 s is 32 min against
-      # `timeout-minutes: 45`, leaving ~10 min for the Renode fetch, the
+      # this inside the cap. 6 x 300 s + dropout's 420 s is 37 min against
+      # `timeout-minutes: 50`, leaving ~10 min for the Renode fetch, the
       # toolchain and a cold cargo build. Keep this sum in step with the cap
       # when adding a scenario — it went stale once already, still describing
       # three steps and a 25 min cap after `dropout` made it four and 35.
@@ -696,6 +696,19 @@ jobs:
           python3 apps/custom_watch/sim/ci_smoke.py
           --scenario idle
           --out-dir "${{ runner.temp }}/watch-sim-ci/idle"
+          --budget 300
+      # The structured-workout rail (§ 354 / § 356) — the last major run-view
+      # rail that had only ever been driven BY HAND in the sim. Boots
+      # `--no-alerts` so the alert slot carries the workout's own edges and
+      # nothing else, which is what lets it count them rather than merely
+      # observe one. Its unaided walk reaches the fourth step transition at
+      # ~110 s of virtual time and the whole scenario measures 2m13 on a quiet
+      # box, so it takes the same 300 s as its siblings rather than `dropout`'s.
+      - name: Renode sim — workout scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario workout
+          --out-dir "${{ runner.temp }}/watch-sim-ci/workout"
           --budget 300
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
