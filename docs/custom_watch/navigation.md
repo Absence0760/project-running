@@ -5,7 +5,8 @@ exist, every button edge between them, and the computed press-cost of getting
 anywhere. Sources of truth: `watch_core::button` (press grammar),
 `watch_core::page` (cycle order, §286), `watch_core::page_grid` (the grid
 modal, §288/§289/§333), `watch_core::record` (run states), `watch_core::face`
-(what each surface renders), `watch_core::settings_menu` (the idle menu, §351),
+(what each surface renders), `watch_core::settings_menu` (the idle menu, §351), `watch_core::erase` (the
+§378 factory-erase guard),
 `watch_core::screens` (what a composed data screen holds, §364). Every edge below is host-tested; the flows are
 sim-verified (see `apps/custom_watch/local_testing.md` for the macros).
 
@@ -30,7 +31,7 @@ stateDiagram-v2
     Grid: one screenful of enabled pages + cursor
     Menu: Settings menu (modal, §351)
     Menu: GNSS mode / hide empty / profile
-    Menu: backyard / re-zero / medical ID
+    Menu: backyard / erase / re-zero / medical ID
     Tmr: Timer (modal, §375)
     Tmr: countdown / stopwatch, one ladder
 
@@ -54,6 +55,9 @@ stateDiagram-v2
     Menu --> Idle: BTN4 — exit (the BACK slot)
     Menu --> Idle: BTN1 on RE-ZERO — fire + close
     Menu --> Ice: BTN1 on MEDICAL ID — show + close
+    Menu --> Menu: BTN1 on FACTORY ERASE — arm ("ERASE ALL? B1", 4 s)
+    Menu --> Menu: BTN1 x2 — wipe (§378); the menu stays open on factory values
+    Menu --> Menu: any other press, or 4 s — cancel the arm
     Menu --> Idle: 30 s inactivity — auto-close
     Idle --> Run: BTN1 — start run
     Run --> Run: BTN1 — pause / resume (REC / PAU / AUTO tag)
@@ -212,7 +216,7 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Six items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+Seven items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
 full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
 Trail → Ultra → Hike ladder, right toward the longer / more-battery
 activities, clamped; selecting a rung *applies* its preset — a curated page
@@ -221,7 +225,10 @@ cycle ride, and the row shows the last-applied profile, `--` until one is
 ever chosen), **BACKYARD** (§372 — right=ON / left=OFF, the HIDE EMPTY
 grammar; arming it puts the `YARD` page in the cycle and re-points the
 auto-lap from 1 km onto the corral bell, which is why it is idle-only: a run
-has to be wholly inside the mode or wholly outside it), **RE-ZERO ALTITUDE**
+has to be wholly inside the mode or wholly outside it), **FACTORY ERASE**
+(§378 — the wearer's own wipe, and the one row that is *guarded*: right arms
+it and a second right inside the stop guard's own 4 s window fires, with any
+other press cancelling; see below), **RE-ZERO ALTITUDE**
 (right fires the idle hold's request and closes; the idle banner answers),
 **MEDICAL ID** (§358 — right closes the menu onto the ICE face, the same
 action-row shape; the card itself is the only useful confirmation the row did
@@ -234,21 +241,54 @@ swallowed, the menu is idle-only, and 30 s of inactivity closes it because it
 covers the home clock. The GNSS mode, the hide-empty choice, the profile
 selection and the backyard arm all persist in the CFG1 flash record and
 restore at boot (the profile restore re-applies its page preset) — whichever
-side wrote last, menu or phone push, wins the reboot.
+side wrote last, menu or phone push, wins the reboot. The erase is the one
+action row that **stays open**, because the menu is its own confirmation: the
+rows above it redraw at their factory values (`GNSS MODE PERF 110H`,
+`PROFILE --`, `BACKYARD OFF`) on the screen the runner pressed from.
 
-**The §351 cost bound survived the sixth row, and the amendment is worth
-stating precisely.** The original wording said a sixth item would break the
-"≤ 2 cursor steps, so ≤ 4 presses" bound. It does not, because the row went
-in at index 3 — the ring's far point — and a 6-ring's step distances from the
-cursor's home are `[0,1,2,3,2,1]` against the 5-ring's `[0,1,2,2,1]`: **every
-pre-existing row keeps its exact cost**, and the new maximum of 3 steps (5
-presses) belongs to the one row a runner touches once per race rather than
-once per hour. That is the real budget: not the row count, but that no row a
-runner reaches for *mid-race* costs more than 4 presses. A seventh item would
-raise an existing row's cost, and it also has nowhere to go — six rows under
-two chrome rows and a spacer fills the 9-row panel exactly (a test pins
-`MENU_TOP_ROW + MENU_ITEMS == ROWS`), so a seventh needs a layout, not a
-push.
+**The §351 cost bound has now survived a sixth AND a seventh row, and both
+amendments are worth stating precisely.** The original wording said a sixth
+item would break the "≤ 2 cursor steps, so ≤ 4 presses" bound. It does not,
+because the row went in at index 3 — the ring's far point — and a 6-ring's
+step distances from the cursor's home are `[0,1,2,3,2,1]` against the
+5-ring's `[0,1,2,2,1]`: **every pre-existing row keeps its exact cost**, and
+the new maximum of 3 steps (5 presses) belongs to the one row a runner touches
+once per race rather than once per hour. That is the real budget: not the row
+count, but that no row a runner reaches for *mid-race* costs more than 4
+presses.
+
+**This section then predicted that "a seventh item would raise an existing
+row's cost". That was wrong, and §378 records why: it assumed appending.** A
+wrapping ring's cursor distance to index `k` is `min(k, n-k)`, so a 6-ring has
+**one** far seat at 3 while a 7-ring has **two** — `[0,1,2,3,3,2,1]`. The
+seventh row takes the *second* far seat and displaces nobody. §378's FACTORY
+ERASE went in at **index 4**, and every pre-existing row keeps its exact
+distance:
+
+| Row | 6-ring index / steps | 7-ring index / steps |
+|---|---|---|
+| GNSS MODE | 0 / 0 | 0 / 0 |
+| HIDE EMPTY | 1 / 1 | 1 / 1 |
+| PROFILE | 2 / 2 | 2 / 2 |
+| BACKYARD | 3 / **3** | 3 / **3** |
+| FACTORY ERASE | — | 4 / **3** |
+| RE-ZERO ALTITUDE | 4 / 2 | 5 / 2 |
+| MEDICAL ID | 5 / 1 | 6 / 1 |
+
+Appending at index 6 is the one placement that would have cost anything
+(RE-ZERO 2→3, MEDICAL ID 1→2) — and it is also the *cheapest* seat on a
+wrapping ring, one BTN2 press from home, which is exactly wrong for a wipe. A
+test computes both rings from `ITEMS` and fails on a reorder that taxes a
+mid-race row.
+
+**The layout, though, really did have to change, and it spends the last
+slack.** Six rows under two chrome rows and a blank spacer filled the 9-row
+panel exactly (a test pins `MENU_TOP_ROW + MENU_ITEMS == ROWS`). §378 moves
+`MENU_TOP_ROW` 3 → 2 and the spacer is gone; the list stays legible because
+every item row is indented two cells behind its cursor marker while the title
+is flush left, so the indentation does the separating the blank row did. An
+**eighth** row has nothing left to reclaim and needs §333's row-scrolling
+window ported from the grid.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
@@ -316,7 +356,7 @@ something one press already answers.
 
 ## Every interaction, priced
 
-The §350/§351/§372/§375 audit: what everything on the device costs, and
+The §350/§351/§372/§375/§378 audit: what everything on the device costs, and
 whether that is the floor. "Floor" for a single discrete action is one press;
 for select-1-of-40 it is what the §289 BFS model computes for a five-key,
 no-chord grammar.
@@ -340,7 +380,9 @@ no-chord grammar.
 | ICE / medical-ID face (§358) | 2 taps (idle BTN4 ×2), or 3 via the menu's named row (BTN5, BTN2 up-wraps to it, BTN1) | **deliberately +1** — the third face on a one-way walk; the named row costs one more press and buys the discoverability a blind walk cannot |
 | Open settings | 1 tap (idle BTN5) | yes |
 | Change any mid-race setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
-| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | the six-row ring's one far seat — every other row kept its exact cost, and this is the row a runner touches once per race rather than once per hour |
+| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | the ring's first far seat — every other row kept its exact cost, and this is the row a runner touches once per race rather than once per hour |
+| Factory-erase the watch (§378) | **6** (open + 3 cursor steps + arm + confirm) | **deliberately +1**, and deliberately on the ring's *second* far seat: the stop guard's trade at the larger stake — one extra press against a fried runner at hour 60 wiping their race with a fumble. Adding it cost no existing row a press (table above) |
+| Cancel an armed erase (§378) | 0 — any other press, or 4 s of nothing | yes; there is no dedicated cancel key because every key already is one |
 | Open the timer (§375) | 1 tap (idle BTN2) | yes — on the last key that was dead |
 | Start / stop / reset a timer once open | 1 tap each (BTN1, BTN1, BTN5) | yes |
 | Set a countdown to a given rung | 1 tap per rung (BTN2 up / BTN3 down), worst 10 to cross the clamped 11-rung ladder | **above the floor, deliberately** — §351's no-wrap rule costs the antipodal rung; a wrapping ladder would halve it and let one press teleport 90 min ↔ stopwatch |
@@ -532,6 +574,25 @@ removes.
   the grid's B2, and the novel edit pair. Its 30 s auto-close is a per-press
   deadline, never a standing wake, and exists because the menu covers the
   home clock.
+- **The factory erase needs two adjacent presses, and everything else
+  cancels** (§378). Right on the row arms `erase::EraseGuard`; only a second
+  right inside `ERASE_CONFIRM_WINDOW_S` — which *is* the stop guard's window,
+  so the device has one learned dwell for its two irreversible actions —
+  wipes. A cursor step, a left press, the exit, the menu closing, and the
+  window lapsing all disarm, so the confirm has to be the very next thing the
+  runner does. The window lapses **visibly**: it borrows the menu's single
+  deadline slot while armed (4 s beats 30 s), so the row returns to
+  `FACTORY ERASE` rather than standing as a prompt for a press that would now
+  only re-arm. And because both presses that resolve an arm change meaning
+  (BTN1 from "edit right" to the commit, BTN4 from a bare exit to the cancel),
+  §337 makes the legend row a *replacement* — `B1 ERASE    B4 CANCEL` — not an
+  append: one changed row of nine can be walked past, a changed chrome row
+  cannot.
+- **No hold tier exists inside an idle modal** (§378, resting on §375). The
+  other guarded-destructive idiom on this device is hold-to-open, and the
+  erase may not use it: *idle gestures are duration-stable* is the invariant
+  above, and a duration split inside the settings menu would be the first
+  gesture to break it. Two presses, not a long one.
 - **The timer modal swallows every button and exists only while idle**
   (§375), on exactly the settings menu's terms: no press inside it can start,
   pause, or lap a run; a run starting under it closes it; the preset ladder is
@@ -679,7 +740,10 @@ backward / forward and `$btn1` to jump (`B1 GO`), `$btn5` lap. The same
 grammar in `FIN`: `$btn4` right, `$btn3` left. While idle, `$btn4` toggles
 the home face against the diagnostics face, `$btn3h` is the QNH re-zero,
 `$btn5` opens the settings menu (`$btn2`/`$btn3` cursor up/down,
-`$btn5`/`$btn1` edit left/right, `$btn4` exit), and `$btn2` opens the timer
+`$btn5`/`$btn1` edit left/right, `$btn4` exit; on the FACTORY ERASE row
+`$btn1` arms and a second `$btn1` within 4 s wipes — `sim/ci_smoke.py
+--scenario idle` walks exactly that, including the cancel), and `$btn2` opens
+the timer
 (`$btn2`/`$btn3` preset longer/shorter, `$btn1` start/stop, `$btn5` reset,
 `$btn4` exit). Or click the bezel buttons
 in the `--gui` window — they sit at the §81 positions (BTN5 upper-left,
