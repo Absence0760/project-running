@@ -466,9 +466,9 @@ mod tests {
                 n += 1;
             }
         }
-        assert_eq!(n, 35, "the catalogue and its byte map have drifted");
+        assert_eq!(n, 37, "the catalogue and its byte map have drifted");
         assert!(Metric::from_byte(0).is_none(), "0 is the empty slot");
-        assert!(Metric::from_byte(36).is_none(), "36 is past the catalogue");
+        assert!(Metric::from_byte(38).is_none(), "38 is past the catalogue");
         // A handful pinned by name, so a reorder cannot quietly renumber them.
         assert_eq!(Metric::from_byte(1).unwrap().wire_name(), "elapsed");
         assert_eq!(Metric::from_byte(2).unwrap().wire_name(), "distance");

@@ -96,6 +96,7 @@ fn base_snapshot() -> Snapshot {
         waypoint: None,
         waypoint_count: 0,
         timer: None,
+        auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,
         track_thinning: 1,
         pages_mask: u64::MAX,
         hide_empty_pages: true,

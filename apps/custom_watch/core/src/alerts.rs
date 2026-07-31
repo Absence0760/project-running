@@ -1939,7 +1939,7 @@ mod tests {
         };
         assert!(matches!(
             e.on_update(&hot, Some(180), 10),
-            Some((Alert::ZoneAbove(_))),
+            Some(Alert::ZoneAbove(_)),
         ));
         // The transition lands while the zone banner holds the slot: dropped.
         let hot_step = Snapshot {

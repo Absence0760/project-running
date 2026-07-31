@@ -468,7 +468,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 42] = [
+    const ALL: [Page; 44] = [
         Page::Dashboard,
         Page::Screen1,
         Page::Screen2,

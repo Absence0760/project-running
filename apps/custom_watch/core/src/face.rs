@@ -5328,7 +5328,7 @@ mod tests {
         }
         assert_eq!(
             headed.len(),
-            35,
+            37,
             "the catalogue and the pages that head it have drifted: {headed:?}"
         );
     }
