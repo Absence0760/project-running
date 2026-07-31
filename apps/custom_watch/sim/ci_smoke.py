@@ -104,10 +104,13 @@ gets all of it and `--scenario all` splits it across every boot.
 Determinism: the altitude and NMEA sources are virtual-time driven with no
 randomness, so a given firmware + fixture replays identically. Every wait here
 is on a specific decoded log line with a deadline, never a fixed sleep — the
-sole exception is the ~1.5 s gap between the two BTN2 presses (`smoke` and
-`workout` both stop a run), which must land inside the firmware's 4 s
-stop-confirm window and so cannot wait on the "armed" line (a block-buffered
-decoder could delay observing it past the window).
+exceptions are the two-press guards, which must land inside the firmware's 4 s
+confirm window and so cannot wait on the "armed" line (a block-buffered decoder
+could delay observing it past the window): the ~1.5 s gap between the two BTN2
+presses (`smoke` and `workout` both stop a run), and the same gap between the
+two BTN1 presses of `idle`'s factory erase, whose guard is that same window.
+Each is delivered as a retried PAIR rather than a single press pair, because a
+press that misses a poll is indistinguishable from one the guard rejected.
 
 Usage:
   apps/custom_watch/sim/ci_smoke.py [--out-dir DIR] [--fixture NAME]
@@ -2513,11 +2516,47 @@ def scenario_idle(sim):
     press_menu(sim, "$btn1", "BTN1 on the re-entered erase row", MENU_ERASE_ARMED)
     passed("stepping off the row cancels the arm — the next press arms again, it does not wipe")
 
-    # Now the wipe. Marked first so the lines read below belong to THIS press.
-    fired = sim.tail.mark()
-    flash = press_menu(
-        sim, "$btn1", "BTN1 to confirm the factory erase", MENU_ERASE_DONE
-    ).group(1)
+    # Now the wipe. The arm asserted just above may already have LAPSED by the
+    # time we get here: that press_menu waits on the armed line, and a
+    # block-buffered decoder can surface it past the guard's window — the hazard
+    # the module docstring records for the BTN2 stop pair, and the same window,
+    # since ERASE_CONFIRM_WINDOW_S is STOP_CONFIRM_WINDOW_S. Gating the
+    # confirming press on having SEEN the arm is therefore a race, and it is the
+    # one that failed in CI while passing on a faster local decoder.
+    #
+    # So put the guard back into a known un-armed state, then deliver both
+    # presses ungated on a fixed gap and retry the pair if one misses a poll,
+    # exactly as `smoke` delivers its stop pair.
+    press_menu(sim, "$btn3", "BTN3 off the erase row before the timed pair")
+    staged = press_menu(sim, "$btn2", "BTN2 back onto the erase row").group(1)
+    if staged != "Erase":
+        raise SmokeFailure(f"expected to be back on Erase, cursor reads {staged}")
+
+    flash = None
+    for attempt in range(1, STOP_ATTEMPTS + 1):
+        announce(f"BTN1 erase pair, attempt {attempt}/{STOP_ATTEMPTS}")
+        # Marked inside the loop so the lines read below belong to THIS pair.
+        fired = sim.tail.mark()
+        sim.monitor().send("runMacro $btn1")
+        # Inside the guard's confirm window; see the module docstring for why
+        # this gap is not gated on a log line.
+        time.sleep(1.5)
+        sim.monitor().send("runMacro $btn1")
+        try:
+            flash = sim.wait(
+                MENU_ERASE_DONE,
+                MENU_STEP_TIMEOUT,
+                "BTN1 to confirm the factory erase",
+                start=fired,
+            ).group(1)
+            break
+        except SmokeFailure as exc:
+            if attempt == STOP_ATTEMPTS:
+                raise SmokeFailure(
+                    f"{exc} — {STOP_ATTEMPTS} BTN1 press pairs were injected and "
+                    "none produced a confirmed erase"
+                ) from exc
+            announce("no erase yet — the injected press likely missed a poll")
     sim.wait(
         RECORD_ERASED,
         MENU_STEP_TIMEOUT,
