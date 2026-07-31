@@ -11,7 +11,8 @@
 //!          confirm the page-grid jump (the START-confirms idiom); settings
 //!          menu: edit right (on / increase / fire)
 //!   BTN2 (mid-left)    — stop (two-press guard); cancel the grid; settings
-//!          menu: cursor up (its §81 slot is literally UP)
+//!          menu: cursor up (its §81 slot is literally UP); idle: open the
+//!          timer modal (§375); timer: one preset rung longer
 //!   BTN3 (lower-left)  — tap pages LEFT in any run view; hold opens the page
 //!          grid; idle: tap cycles the GNSS mode, hold requests the QNH
 //!          re-zero; settings menu: cursor down (the DOWN slot)
@@ -38,8 +39,9 @@ use embassy_time::{Duration, Instant, Timer};
 #[cfg(feature = "sim-buttons")]
 use watch_core::button::classify_page_hold;
 use watch_core::button::{
-    command_for, grid_press, lap_press_command, Button, GridPress, PageBtnPress, RecordCommand,
-    StopGuard, StopPress, PAGE_HOLD_MS, STOP_CONFIRM_WINDOW_S,
+    btn2_action, command_for, grid_press, lap_press_command, timer_key, Btn2Action, Button,
+    GridPress, PageBtnPress, RecordCommand, StopGuard, StopPress, PAGE_HOLD_MS,
+    STOP_CONFIRM_WINDOW_S,
 };
 use watch_core::face::IdleView;
 use watch_core::gnss_mode::GnssMode;
@@ -47,7 +49,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::input_flow::{edge, Edge};
 use watch_core::input_flow::{
     grid_cursor_key, grid_cursor_op, idle_view_toggled, landing_after, paged, paging_action,
-    PagingAction, PagingKey,
+    timer_paging_key, PagingAction, PagingKey,
 };
 use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
@@ -55,6 +57,7 @@ use watch_core::profiles::{self, ActivityProfile};
 use watch_core::record::RecordState;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_menu::{self, Menu, MenuEdit, ValueDir, MENU_TIMEOUT_S};
+use watch_core::timers::{self, TimerKey, TimerPress, TIMER_MENU_TIMEOUT_S};
 use watch_core::ui_frame::{pages_mask, record_state};
 
 use crate::run_flash::SharedStore;
@@ -83,6 +86,12 @@ const GRID_AUTOSELECT: Duration = Duration::from_secs(GRID_AUTOSELECT_S as u64);
 /// not stand forever.
 const MENU_TIMEOUT: Duration = Duration::from_secs(MENU_TIMEOUT_S as u64);
 
+/// The timer modal's inactivity auto-close (`timers::TIMER_MENU_TIMEOUT_S` owns
+/// the number, which derives from the settings menu's) — it covers the home
+/// clock for the same reason and closes for the same one. The instrument keeps
+/// running; only the view goes away.
+const TIMER_TIMEOUT: Duration = Duration::from_secs(TIMER_MENU_TIMEOUT_S as u64);
+
 /// The view/navigation state both task variants thread through the shared
 /// action code: the current run page, the grid modal (this task owns its state
 /// machine and auto-select deadline; the ui task only renders the published
@@ -93,6 +102,11 @@ struct NavState {
     grid_deadline: Option<Instant>,
     menu: Option<Menu>,
     menu_deadline: Option<Instant>,
+    /// The runner's timer (§375). Held whether or not its modal is open — the
+    /// instrument outlives the view, and outlives runs.
+    timer: timers::Timer,
+    timer_open: bool,
+    timer_deadline: Option<Instant>,
     mode: GnssMode,
     profile: Option<ActivityProfile>,
     idle_view: IdleView,
@@ -106,6 +120,9 @@ impl NavState {
             grid_deadline: None,
             menu: None,
             menu_deadline: None,
+            timer: timers::Timer::new(),
+            timer_open: false,
+            timer_deadline: None,
             mode: initial_mode,
             profile: initial_profile,
             idle_view: IdleView::Home,
@@ -139,6 +156,39 @@ impl NavState {
             state::SETTINGS_MENU.sender().send(None);
         }
         self.menu_deadline = None;
+    }
+
+    /// Open the timer modal (§375) — BTN2's meaning while the stop has no run
+    /// to end, the last dead key the §350 grammar had.
+    fn open_timer(&mut self) {
+        info!("button: BTN2 -> timer");
+        self.timer_open = true;
+        state::TIMER_MENU.sender().send(true);
+        self.timer_deadline = Some(Instant::now() + TIMER_TIMEOUT);
+    }
+
+    fn close_timer(&mut self, why: &str) {
+        if self.timer_open {
+            info!("button: timer closed ({=str})", why);
+            self.timer_open = false;
+            state::TIMER_MENU.sender().send(false);
+        }
+        self.timer_deadline = None;
+    }
+
+    /// One press inside the modal. Every key is consumed here, so none of them
+    /// reaches the recorder.
+    fn timer_press(&mut self, key: TimerKey, now_s: u32) {
+        match timers::press(&mut self.timer, key, now_s) {
+            TimerPress::Exit => self.close_timer("btn4"),
+            TimerPress::Changed => {
+                state::TIMER.sender().send(self.timer);
+                self.timer_deadline = Some(Instant::now() + TIMER_TIMEOUT);
+            }
+            // A clamped ladder end still defers the close: the runner is
+            // present and pressing, they simply asked for a state they are in.
+            TimerPress::Nothing => self.timer_deadline = Some(Instant::now() + TIMER_TIMEOUT),
+        }
     }
 
     /// Cursor up — BTN2, the mid-left §81 UP slot, physically above BTN3.
@@ -337,7 +387,7 @@ fn act_grid_press(button: Button, nav: &mut NavState) {
 }
 
 const BOOT_LINE: &str =
-    "button: BTN1 start/pause, BTN2 stop, BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap (hold: mark waypoint) / idle settings";
+    "button: BTN1 start/pause, BTN2 stop (idle: timer), BTN3 page left (hold: grid), BTN4 page right (hold: grid), BTN5 lap (hold: mark waypoint) / idle settings";
 
 #[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
@@ -372,15 +422,21 @@ pub async fn run(
             ),
             btn5.wait_for_falling_edge(),
         );
-        let pressed = if let Some(deadline) = nav.grid_deadline.or(nav.menu_deadline) {
-            // The two modal deadlines share the slot — the grid only exists
-            // in a run view and the menu only on the idle face, so at most
-            // one is armed at a time.
+        let pressed = if let Some(deadline) = nav
+            .grid_deadline
+            .or(nav.menu_deadline)
+            .or(nav.timer_deadline)
+        {
+            // The three modal deadlines share the slot — the grid only exists
+            // in a run view and the two idle modals only on the idle face,
+            // where opening either closes the other, so at most one is armed.
             match select(edges, Timer::at(deadline)).await {
                 Either::First(e) => e,
                 Either::Second(()) => {
                     if nav.grid.is_some() {
                         nav.grid_commit("auto-select");
+                    } else if nav.timer_open {
+                        nav.close_timer("timeout");
                     } else {
                         nav.close_menu("timeout");
                     }
@@ -391,11 +447,14 @@ pub async fn run(
             edges.await
         };
 
-        // A menu only exists on the idle face: if a run started under it
-        // (sim-autostart is the one path that can), the press that arrives
+        // The idle modals only exist on the idle face: if a run started under
+        // one (sim-autostart is the one path that can), the press that arrives
         // closes it first and then acts on whatever surface is really up.
-        if nav.menu.is_some() && record_state(record_rx.try_get().as_ref()) != RecordState::Idle {
+        if (nav.menu.is_some() || nav.timer_open)
+            && record_state(record_rx.try_get().as_ref()) != RecordState::Idle
+        {
             nav.close_menu("run started");
+            nav.close_timer("run started");
         }
 
         // The two paging keys share one timing shape: debounce, then a single
@@ -448,11 +507,23 @@ pub async fn run(
                     }
                     continue;
                 }
+                if nav.timer_open {
+                    // Timer modal: BTN1 start/stop, BTN2 longer, BTN5 reset —
+                    // every press swallowed, none reaches the recorder.
+                    nav.timer_press(timer_key(button), now_s);
+                    continue;
+                }
                 if button == Button::Lap && state == RecordState::Idle {
                     // The lap is dead while idle, so the press opens the
                     // settings menu (§351) — the same dead-key repurposing
                     // that gave FIN its page-back and idle BTN4 diagnostics.
                     nav.open_menu();
+                    continue;
+                }
+                if button == Button::Stop && btn2_action(state) == Btn2Action::OpenTimer {
+                    // The stop has no run to end while idle, so the press opens
+                    // the timer (§375) — the last dead key in the grammar.
+                    nav.open_timer();
                     continue;
                 }
                 // BTN5 mid-run has two tiers (§357), timed exactly like the
@@ -499,6 +570,15 @@ pub async fn run(
                 PagingKey::Left => nav.menu_down(),
                 PagingKey::Right => nav.close_menu("btn4"),
             }
+            if pin.is_low() {
+                pin.wait_for_rising_edge().await;
+            }
+            continue;
+        }
+        if nav.timer_open {
+            // Timer modal: BTN3 shortens the preset, BTN4 exits — the same
+            // BACK slot the settings menu uses, and the same swallowed release.
+            nav.timer_press(timer_paging_key(key), Instant::now().as_secs() as u32);
             if pin.is_low() {
                 pin.wait_for_rising_edge().await;
             }
@@ -662,6 +742,9 @@ pub async fn run(
         if nav.menu.is_some() && nav.menu_deadline.is_some_and(|dl| Instant::now() >= dl) {
             nav.close_menu("timeout");
         }
+        if nav.timer_open && nav.timer_deadline.is_some_and(|dl| Instant::now() >= dl) {
+            nav.close_timer("timeout");
+        }
         for (i, b) in btns.iter().enumerate() {
             let pressed = b.is_low();
             let was = prev[i];
@@ -679,6 +762,17 @@ pub async fn run(
                     PagingKey::Right
                 };
                 if falling {
+                    if nav.timer_open {
+                        if record_state(record_rx.try_get().as_ref()) != RecordState::Idle {
+                            nav.close_timer("run started");
+                        } else {
+                            interaction_tx.send(Instant::now().as_secs() as u32);
+                            nav.timer_press(timer_paging_key(key), Instant::now().as_secs() as u32);
+                            pg_down_at[k] = Some(Instant::now());
+                            pg_handled[k] = true;
+                            continue;
+                        }
+                    }
                     if nav.menu.is_some() {
                         // Menu modal: BTN3 (the DOWN slot) steps the cursor
                         // down on the press itself, BTN4 (the BACK slot)
@@ -838,11 +932,27 @@ pub async fn run(
                     continue;
                 }
             }
+            if nav.timer_open {
+                if state != RecordState::Idle {
+                    nav.close_timer("run started");
+                } else {
+                    // Timer modal: BTN1 start/stop, BTN2 longer, BTN5 reset —
+                    // every press swallowed, none reaches the recorder.
+                    nav.timer_press(timer_key(button), now_s);
+                    continue;
+                }
+            }
             if button == Button::Lap && state == RecordState::Idle {
                 // The lap is dead while idle, so the press opens the settings
                 // menu (§351) — the same dead-key repurposing that gave FIN
                 // its page-back and idle BTN4 diagnostics.
                 nav.open_menu();
+                continue;
+            }
+            if button == Button::Stop && btn2_action(state) == Btn2Action::OpenTimer {
+                // The stop has no run to end while idle, so the press opens the
+                // timer (§375) — the last dead key in the grammar.
+                nav.open_timer();
                 continue;
             }
             if button == Button::Lap {

@@ -15,6 +15,7 @@
 //! (§357, [`lap_press_command`]).
 
 use crate::record::RecordState;
+use crate::timers::TimerKey;
 
 /// A control command for the recording state machine, produced by a button
 /// press and consumed by the record task. One variant per [`crate::record`]
@@ -204,6 +205,43 @@ pub fn grid_press(button: Button) -> GridPress {
     }
 }
 
+/// What a BTN2 press does outside the modals (§375).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Btn2Action {
+    /// Feed the press to the [`StopGuard`] — every state where BTN2 is the
+    /// two-press stop, plus `Finished`, where the guard answers `Inert`.
+    Stop,
+    /// Idle: the stop key has no run to end, so it opens the timer modal — the
+    /// same dead-key repurposing §291 gave idle BTN4 and §351 idle BTN5. It was
+    /// the last dead key the § 350 grammar had, which is why the timer is armed
+    /// from the idle face and nowhere else.
+    OpenTimer,
+}
+
+/// Resolve a BTN2 press against the run state. Pinned equal to
+/// [`command_for`]'s own idea of when BTN2 is dead, so the repurposing can only
+/// ever take a key the recorder does not want.
+pub fn btn2_action(state: RecordState) -> Btn2Action {
+    match state {
+        RecordState::Idle => Btn2Action::OpenTimer,
+        RecordState::Recording | RecordState::Paused | RecordState::Finished => Btn2Action::Stop,
+    }
+}
+
+/// What a non-paging press (BTN1 / BTN2 / BTN5) means inside the timer modal —
+/// the same shape [`grid_press`] gives the page grid, and for the same reason:
+/// every press inside a modal is consumed there, so none of them can reach the
+/// recorder. BTN1 keeps the START verb it carries everywhere; BTN2 is the § 81
+/// UP slot and lengthens; BTN5 clears.
+pub fn timer_key(button: Button) -> TimerKey {
+    match button {
+        Button::Primary => TimerKey::StartStop,
+        Button::Stop => TimerKey::Longer,
+        Button::Lap => TimerKey::Reset,
+    }
+}
+
 /// How long an armed stop stays armed. A first BTN2 press only *arms* the stop;
 /// a second press within this window confirms it. A single stray press expires
 /// harmlessly after this many seconds.
@@ -319,6 +357,35 @@ mod tests {
         );
         assert_eq!(command_for(Button::Stop, RecordState::Idle), None);
         assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
+    }
+
+    #[test]
+    fn the_timer_modal_only_takes_btn2_where_the_recorder_has_no_use_for_it() {
+        // The repurposing rule for every dead key on this device: it may only
+        // claim a press the run states do not want. A BTN2 that opened a modal
+        // while a run was live would cost the stop its key.
+        assert_eq!(btn2_action(RecordState::Idle), Btn2Action::OpenTimer);
+        assert_eq!(
+            command_for(Button::Stop, RecordState::Idle),
+            None,
+            "idle BTN2 has to be dead for the modal to have it"
+        );
+        for state in [
+            RecordState::Recording,
+            RecordState::Paused,
+            RecordState::Finished,
+        ] {
+            assert_eq!(btn2_action(state), Btn2Action::Stop, "{state:?}");
+        }
+    }
+
+    #[test]
+    fn every_non_paging_key_maps_to_a_distinct_timer_action() {
+        // Three buttons, three meanings — an overlap would leave one of the
+        // modal's verbs unreachable.
+        assert_eq!(timer_key(Button::Primary), TimerKey::StartStop);
+        assert_eq!(timer_key(Button::Stop), TimerKey::Longer);
+        assert_eq!(timer_key(Button::Lap), TimerKey::Reset);
     }
 
     #[test]

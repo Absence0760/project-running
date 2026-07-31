@@ -21,6 +21,7 @@ use crate::face::IdleView;
 use crate::page::Page;
 use crate::page_grid::PageGrid;
 use crate::record::RecordState;
+use crate::timers::TimerKey;
 
 /// A level transition on an active-low button pin: a press pulls the line low.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,6 +102,18 @@ pub fn grid_cursor_key(key: PagingKey) -> GridCursorKey {
     match key {
         PagingKey::Left => GridCursorKey::Back,
         PagingKey::Right => GridCursorKey::Forward,
+    }
+}
+
+/// Which timer-modal key a paging press is (§375). The lower-left DOWN slot
+/// shortens the preset — the vertical pair carries the value axis here because
+/// the modal shows one value and no list, the mirror of §351's rule that each
+/// modal is spatially true to what it shows. The lower-right key exits, the §81
+/// BACK slot where the settings menu already puts it.
+pub fn timer_paging_key(key: PagingKey) -> TimerKey {
+    match key {
+        PagingKey::Left => TimerKey::Shorter,
+        PagingKey::Right => TimerKey::Exit,
     }
 }
 
@@ -255,6 +268,15 @@ mod tests {
     fn the_release_classification_matches_the_threshold() {
         assert_eq!(classify_page_hold(PAGE_HOLD_MS - 1), PageBtnPress::Tap);
         assert_eq!(classify_page_hold(PAGE_HOLD_MS), PageBtnPress::Hold);
+    }
+
+    #[test]
+    fn the_timer_modal_puts_exit_where_the_settings_menu_does() {
+        // §337's rule is about surprises: the grid's BTN2-exit is already one
+        // remap a runner has to read. A second modal exiting on a third key
+        // would be another, so the timer takes the settings menu's BACK slot.
+        assert_eq!(timer_paging_key(PagingKey::Right), TimerKey::Exit);
+        assert_eq!(timer_paging_key(PagingKey::Left), TimerKey::Shorter);
     }
 
     #[test]
