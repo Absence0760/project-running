@@ -399,6 +399,56 @@ nothing was broken behind the hole, it was simply unwatched.
 Workspace host sweep 2140 → 2149; firmware builds; the four Renode scenarios and the 25-screen sheet
 re-run green after the log-ordering change.
 
+## 2026-07-30 — Sleep-station mode: the nap the race computes, and the alarm we refused to fake
+
+The 200-mile racer's 3 a.m. question — *how long can I sleep and still make the next cut-off* — turned
+out to need almost no new arithmetic. `cutoff_eta::next_cutoff_eta` already returns
+`(limit − elapsed) − (time still needed)` as its margin; that IS the nap budget before a reserve. So
+`sleep_station` calls the same function once with a different pace and subtracts. The page seats
+directly after `CUT` — page 38 — because the budget is that page's margin, and a runner reading
+`TIGHT` should be one tap from what `TIGHT` costs them in sleep.
+
+**The feature that got deleted by thinking about the clock.** The roadmap row asked for a nap timer,
+a wake alarm, and an elapsed clock. The race clock keeps running through a pause, so a budget
+recomputed each tick falls one second per second while the runner sleeps — the countdown *is* the
+budget, and the honest elapsed clock is the race clock the watch already keeps. That removed the nap
+timer entirely: no nap to arm, no nap state in flash, no reboot recovery, and no new edge in a press
+grammar four other in-flight branches are also touching. A test pins the 1:1 fall.
+
+**Where the honesty had to be inherited rather than invented.** `cutoff_eta` withholds its ETA on a
+stale fix rather than projecting off an old position. A sleep budget is that projection minus a
+reserve, so it inherits the refusal whole. Four states, not two: `NoCutoff` (nothing bounds the nap —
+which is *not* "sleep freely"), `NoBudget` (computed, and the answer is none), `Unknown` (a term is
+missing), `Budget`. A limit already passed resolves to `NoBudget` even with no pace, because "do not
+lie down" is knowable there. And the hero keeps a measured `0` visibly apart from a refused `--`,
+because a runner who reads "no time to sleep" as "the watch does not know" lies down anyway.
+
+Every rounding leans one way, since the error is not symmetric — early costs sleep, late costs the
+race. The projection takes the **slower** of the run's moving pace and its race-including-stops pace;
+the budget floors to whole minutes; a sub-minute budget settles rather than displaying a `0` that
+reads as a broken page. The reserve is `max(30 min, 25 % of the leg ahead)`: the floor is
+`CUTOFF_TIGHT_S` reused (the product already calls that span uncomfortable, and it covers the fixed
+cost of getting up), the fraction covers the error that scales with leg length. The fraction is a
+judgement call and is now in the derived-not-measured register — with the note that the bench cannot
+settle it either; it needs a field corpus.
+
+**What we refused to build.** No alarm. The tier-1 BOM has no vibration motor and no buzzer, so any
+arm added to `alerts` would fire silently onto a screen a sleeping runner cannot see — the appearance
+of a wake without the function, which is precisely the oversleep the feature exists to prevent. Row 7
+carries `WATCH CANNOT WAKE YOU` unconditionally, through the empty states too, because it describes
+the device rather than the data. It is the page's most important line, not its disclaimer. The
+roadmap row stays **unticked** on exactly that ground.
+
+Page 38 moves only the linear worst (18 → 19) — both grid worsts hold at 10 and 7, and the symmetric
+average 4.0541 → 4.0789, still 4.1 where `navigation.md` publishes it. What shrank is margin, not
+cost: the symmetric step to 8 is still page 44, so `MAX_SCREENS` = 4 now lands one page inside it
+rather than two. Recomputed by the same BFS, re-validated against the n = 32 figures the section was
+built on.
+
+Host sweep 2229 → **2258** (22 `sleep_station`, 4 `face`, 2 `record`, 1 preview); firmware release
+build and `clippy` green on both targets. Nothing here is sim-verified or bench-verified — no
+scenario asserts the budget yet, and no hardware exists.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

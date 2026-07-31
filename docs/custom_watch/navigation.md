@@ -24,7 +24,7 @@ stateDiagram-v2
     Ice: name / blood / conditions
     Ice: emergency contact + number
     Run: Run view
-    Run: 37 built-in pages + up to 4 composed (§364), filtered mask
+    Run: 38 built-in pages + up to 4 composed (§364), filtered mask
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
@@ -98,10 +98,14 @@ and `BACK` (Back-to-start) sits last so the safety page is exactly one
 left-tap from home. `WKT` (the pushed structured workout, §354) closes the
 live cluster beside `GUID`, its scripted sibling; `CLMB` (the §359 climb /
 crest view) *heads* the course cluster, because on a mountain course it is
-the question asked most; `SUN` (the Daylight sunset countdown, §355) and
-`WPT` (the §357 marked waypoint) close the back half just ahead of `BACK`,
-which `WPT` sits beside deliberately — the two pages answer the same "which
-way, how far" question about different anchors. The curation mask has been
+the question asked most; `SLP` (the §373 sleep-station nap budget) sits
+immediately after `CUT`, because it IS that page's margin less a safety
+reserve — a runner reading `TIGHT` is one tap from what it costs them in
+sleep, and the two pages come and go together off one projection; `SUN` (the
+Daylight sunset countdown, §355) and `WPT` (the §357 marked waypoint) close
+the back half just ahead of `BACK`, which `WPT` sits beside deliberately —
+the two pages answer the same "which way, how far" question about different
+anchors. The curation mask has been
 64-bit on the wire since `SET1` v4 (§336), so every page the enum declares —
 including `BACK`, and the pages a pre-v4 phone's 32-bit mask cannot name,
 which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
@@ -113,7 +117,7 @@ flowchart LR
         DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
     end
     subgraph course [course / race ops]
-        CLMB --> NAV --> TURN --> CUT --> ROAD --> FUEL
+        CLMB --> NAV --> TURN --> CUT --> SLP --> ROAD --> FUEL
     end
     subgraph effort [effort analysis]
         ELEV --> PRED --> LOAD --> BAND
@@ -136,7 +140,7 @@ flowchart LR
 immediately after the Dashboard — a screen you built is one press from home —
 and each is gated on having actually been composed, so a watch that has never
 been pushed an `SCR1` frame walks straight `DASH --> DIST` and the ring is
-exactly the 37 built-ins. `BACK` stays last in every case.
+exactly the 38 built-ins. `BACK` stays last in every case.
 
 The page grid (hold either paging key 0.5 s — it opens at the threshold, so
 the grid appearing is the hold's own feedback) shows this same ring as a
@@ -146,7 +150,7 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 37-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 38-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
 rather than truncating the tail (§333) — scroll depth `ceil(37/4) − 7` = 3 at
 the full built-in mask, and 4 on a watch carrying all four composed screens
@@ -232,7 +236,7 @@ no-chord grammar.
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the `StopGuard` trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 37 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 38 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
@@ -246,23 +250,23 @@ its floor is the stop, on purpose. The remaining lever on the page-cycle
 average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
-## Press cost — computed, from the Dashboard, full 37-page mask
+## Press cost — computed, from the Dashboard, full 38-page mask
 
-**The table below is the 37 built-in pages.** A runner's composed data screens
+**The table below is the 38 built-in pages.** A runner's composed data screens
 (§ 364) add up to four more seats immediately after the Dashboard, and
 `screens::MAX_SCREENS` is 4 for exactly this reason: § 289's model is a function
 of page count alone, and both published ceilings — 7 for the full-mask grid
-worst, 4 for the everyday filtered worst — hold to 37 + 6 and step at 37 + 7.
+worst, 4 for the everyday filtered worst — hold to 38 + 5 and step at 38 + 6.
 Four sits inside that with margin rather than on its edge. The composed pages
 are gated on having actually been composed, so the shipped default cycle *is*
-the 37 the table computes; a watch that has never been pushed a screen walks
+the 38 the table computes; a watch that has never been pushed a screen walks
 exactly these numbers, and a fully-composed one stays under the same ceilings.
-The ceiling **was** recomputed at 41 rather than assumed: a BFS over the
+The ceiling **was** recomputed at 42 rather than assumed: a BFS over the
 wrapping ring with the grammar's own moves puts the symmetric worst at **7 at
-both 37 and 41**, unchanged at 42 and 43, and stepping to 8 only at **44** — so
-`MAX_SCREENS` = 4 lands with two pages of margin, and it is the *cap*, not the
+both 38 and 42**, unchanged at 43, and stepping to 8 only at **44** — so
+`MAX_SCREENS` = 4 lands with one page of margin, and it is the *cap*, not the
 table, that keeps this section's published number true. The per-page rows below
-are still the 37, because that is the cycle a watch with no composed screens
+are still the 38, because that is the cycle a watch with no composed screens
 actually walks.
 
 
@@ -276,8 +280,8 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 18 | 9.2 |
-| + grid, forward-only movement (§288 as first built) | 10 | 5.2 |
+| Linear walk only (pre-§288) | 19 | 9.5 |
+| + grid, forward-only movement (§288 as first built) | 10 | 5.3 |
 | + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.1** |
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
@@ -289,11 +293,18 @@ validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 9 / 4.7188, 6 / 3.7188 — so the table above re-derives the original measurement
 at the new page count rather than replacing it with a fresh estimate. Both grid
 worsts held through pages 33, 34 and 35; the averages move 4.7188 → 4.8182 →
-4.9118 → 5.0286 → 5.1389 → 5.2432 and 3.7188 → 3.7576 → 3.8235 → 3.8857 →
-3.9722 → 4.0541 across pages 33–37. The linear worst grows 16 → 17 at page 34
-(an even ring's antipode) and 17 → 18 at page 36.
+4.9118 → 5.0286 → 5.1389 → 5.2432 → 5.3421 and 3.7188 → 3.7576 → 3.8235 →
+3.8857 → 3.9722 → 4.0541 → 4.0789 across pages 33–38. The linear worst grows
+16 → 17 at page 34 (an even ring's antipode), 17 → 18 at page 36 and 18 → 19 at
+page 38.
 
-**Pages 36 and 37 are the first to move a grid worst since the model was
+**Page 38 (§373's SleepStation) moves only the linear worst**, 18 → 19; both
+grid worsts hold, and the symmetric average moves 4.0541 → 4.0789, which is
+still 4.1 at the precision this section publishes. The ring's remaining margin
+shrank rather than its cost: the symmetric step to 8 is still at page 44, so the
+four composed seats now land one page inside it instead of two.
+
+**Pages 36 and 37 were the first to move a grid worst since the model was
 built** — the symmetric worst 6 → 7 at page 36 (§357's Waypoint) and the
 forward-only 9 → 10 at page 37 (§359's Climb). Five `{±1, ±4}` moves cover 37
 distinct offsets — everything within ±20 except the gaps the ±4 stride leaves
@@ -342,10 +353,10 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 37 pages: `LOAD`/`ROAD`
+  page's full name, because four glyphs cannot separate 38 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
-  `PACR`/`RCAP` are transpositions (computed over all 666 code pairs at 37
-  pages; the figure was 595 at 35, and is 820 across the full 41-code set once
+  `PACR`/`RCAP` are transpositions (computed over all 703 code pairs at 38
+  pages; the figure was 595 at 35, and is 861 across the full 42-code set once
   the four composed screens carry `SC1`–`SC4`). Both the 3 s auto-select and BTN1 therefore
   commit on something the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
