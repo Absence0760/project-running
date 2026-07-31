@@ -109,7 +109,11 @@ command -v defmt-print >/dev/null || \
 # compressed window would have every other scenario reporting a tendency off a
 # minute of air. All OFF on the hardware build —
 # see apps/custom_watch/app/src/tasks/{record,button,nav}.rs.
-FEATURES=sim-buttons,sim-course,dev-blink
+# log-personal-data: the fix coordinates + BPM in the defmt stream, which
+# sim/ci_smoke.py asserts on. Safe to enable HERE and nowhere else — the sim's
+# fixture coordinates are the synthetic bench_jog rectangle and no one is
+# wearing anything. A bench build keeps it off; see docs/custom_watch/privacy.md.
+FEATURES=sim-buttons,sim-course,dev-blink,log-personal-data
 [[ "$STORM" == 1 ]] && FEATURES="sim-storm,$FEATURES"
 [[ "$SCREENS" == 1 ]] && FEATURES="sim-screens,$FEATURES"
 [[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"

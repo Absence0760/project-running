@@ -128,10 +128,17 @@ impl Pipeline {
                     continue;
                 }
                 self.last_published_s = uptime_s;
+                // One line per published fix is a complete track of whoever is
+                // wearing this, so the coordinates are behind the default-off
+                // `log-personal-data` gate; speed + satellites are what the
+                // GNSS chain is debugged against and identify no one.
+                #[cfg(feature = "log-personal-data")]
                 debug!(
                     "gps: fix lat={} lon={} speed={} sats={}",
                     fix.lat_deg, fix.lon_deg, fix.speed_mps, fix.sats
                 );
+                #[cfg(not(feature = "log-personal-data"))]
+                debug!("gps: fix speed={} sats={}", fix.speed_mps, fix.sats);
                 self.fix_tx.send(fix);
                 published = Some(uptime_s);
             }
