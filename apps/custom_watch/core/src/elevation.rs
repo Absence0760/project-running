@@ -36,6 +36,36 @@ pub fn altitude_m(pressure_pa: f32, sea_level_pa: f32) -> f32 {
     BARO_SCALE_M * (1.0 - libm::powf(pressure_pa / sea_level_pa, BARO_EXPONENT))
 }
 
+/// The sea-level-equivalent (QNH-style) pressure that a station reading of
+/// `pressure_pa` taken at `altitude_m` implies — the exact inverse of
+/// [`altitude_m`], sharing its constants so the pair cannot drift.
+///
+/// [`altitude_m`] answers *how high am I, given a sea-level reference*; this
+/// answers *what is the sea-level reference, given how high I am*. Only the
+/// second can be trended for weather, because it is the one a climb does not
+/// move ([`crate::storm`]).
+///
+/// **The altitude must come from somewhere other than this pressure.** Feeding
+/// back an altitude that was itself derived from `pressure_pa` returns the
+/// reference that derived it, exactly and always — a constant, with the weather
+/// divided back out. The reduction is only a measurement when its altitude is
+/// independent, which on this watch means the GPS receiver's.
+///
+/// `None` when the inversion has nothing to stand on: a non-positive or
+/// non-finite pressure, or an altitude at or past the [`BARO_SCALE_M`]
+/// singularity where the formula's base reaches zero.
+pub fn sea_level_pa(pressure_pa: f32, altitude_m: f32) -> Option<f32> {
+    if !pressure_pa.is_finite() || pressure_pa <= 0.0 || !altitude_m.is_finite() {
+        return None;
+    }
+    let base = 1.0 - altitude_m / BARO_SCALE_M;
+    if base <= 0.0 {
+        return None;
+    }
+    let reduced = pressure_pa / libm::powf(base, 1.0 / BARO_EXPONENT);
+    reduced.is_finite().then_some(reduced)
+}
+
 /// A barometric elevation snapshot the `app/` baro task publishes for the
 /// face and phone link: the latest altitude plus the run's cumulative ascent
 /// and descent. All `f32` to match [`crate::fix::Fix::alt_m`] and the
@@ -390,6 +420,65 @@ mod tests {
     #[test]
     fn sea_level_pressure_is_zero_altitude() {
         assert!(altitude_m(STANDARD_SEA_LEVEL_PA, STANDARD_SEA_LEVEL_PA).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_reduction_is_the_altitude_conversions_exact_inverse() {
+        // The pair has to round-trip, because the storm trend is a difference
+        // of reductions and a systematic error in one direction would look
+        // exactly like weather.
+        for (pa, alt) in [
+            (84_556.0f32, 1_500.0f32),
+            (101_325.0, 0.0),
+            (70_000.0, 3_000.0),
+            (95_000.0, -100.0),
+        ] {
+            let p0 = sea_level_pa(pa, alt).expect("a terrestrial reading reduces");
+            assert!(
+                (altitude_m(pa, p0) - alt).abs() < 0.05,
+                "{pa} Pa at {alt} m reduced to {p0} Pa"
+            );
+        }
+    }
+
+    #[test]
+    fn reducing_a_standard_atmosphere_returns_the_standard_reference() {
+        // 84 556 Pa is the ISA pressure at 1500 m, so its reduction against
+        // that altitude is the ISA sea-level pressure itself.
+        let p0 = sea_level_pa(84_556.0, 1_500.0).unwrap();
+        assert!((p0 - STANDARD_SEA_LEVEL_PA).abs() < 30.0, "{p0}");
+    }
+
+    #[test]
+    fn a_baro_derived_altitude_reduces_back_to_the_reference_it_came_from() {
+        // The circularity the storm tracker exists to avoid, stated as a test:
+        // reduce against an altitude this same pressure produced and the answer
+        // is the reference, whatever the pressure did. A weather front moves
+        // both terms and cancels itself out.
+        for pa in [101_325.0f32, 99_000.0, 96_500.0] {
+            let alt = altitude_m(pa, STANDARD_SEA_LEVEL_PA);
+            let p0 = sea_level_pa(pa, alt).unwrap();
+            assert!(
+                (p0 - STANDARD_SEA_LEVEL_PA).abs() < 1.0,
+                "{pa} Pa fed its own altitude back reduced to {p0}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_reduction_refuses_what_it_cannot_invert() {
+        for (pa, alt) in [
+            (0.0f32, 100.0f32),
+            (-1.0, 100.0),
+            (f32::NAN, 100.0),
+            (f32::INFINITY, 100.0),
+            (90_000.0, f32::NAN),
+            // At and past the 44 330 m scale the formula's base is <= 0.
+            (90_000.0, BARO_SCALE_M),
+            (90_000.0, BARO_SCALE_M + 1.0),
+        ] {
+            assert_eq!(sea_level_pa(pa, alt), None, "{pa} Pa at {alt} m");
+        }
     }
 
     #[test]
