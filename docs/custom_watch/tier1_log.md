@@ -543,9 +543,17 @@ cost: the symmetric step to 8 is still page 44, so `MAX_SCREENS` = 4 now lands o
 rather than two. Recomputed by the same BFS, re-validated against the n = 32 figures the section was
 built on.
 
-Host sweep 2229 → **2258** (22 `sleep_station`, 4 `face`, 2 `record`, 1 preview); firmware release
-build and `clippy` green on both targets. Nothing here is sim-verified or bench-verified — no
-scenario asserts the budget yet, and no hardware exists.
+The rail got an observable in the same pass, for the reason [§ 368](../architecture/decisions.md)
+gave the climb one: a page dump proves a frame was drawn, never that the minutes on it are right. The
+gate is the fields the LINE carries rather than the whole view — the margin ticks with the race clock
+every second, so gating on the struct re-emitted a budget and a reserve that had not moved, which is
+§368's own defect one page along. Twelve lines across a run instead of one a second.
+
+Host sweep 2229 → **2258** (22 `sleep_station`, 4 `face`, 2 `record`, 1 preview); all three firmware
+feature sets build and pass `clippy -D warnings`, `cargo fmt --check` clean. The `pages` scenario
+re-runs green and its walk now traverses `SleepStation` directly after `CutoffEta`, so the page is
+**data-present and reachable in a real cycle** — but by § 314's own rule that is not the budget being
+right, and **nothing asserts the budget yet**. Host-tested; no hardware exists.
 
 ## Next entry expected
 
