@@ -267,7 +267,7 @@ impl Page {
             Page::AutoEffort => "AEFF",
             Page::Timer => "TIMR",
             Page::Daylight => "SUN",
-            Page::Storm => "STRM",
+            Page::Storm => "BARO",
             Page::Waypoint => "WPT",
             Page::BackToStart => "BACK",
         }

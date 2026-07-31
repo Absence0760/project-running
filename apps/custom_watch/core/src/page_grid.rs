@@ -315,7 +315,7 @@ mod tests {
         );
         // A 45-page ring leaves the safety page alone on the last row; the
         // row above it is the one that carries four.
-        assert_eq!(scrolled[ROWS - 2].as_str(), "TIMR SUN  STRM WPT");
+        assert_eq!(scrolled[ROWS - 2].as_str(), "TIMR SUN  BARO WPT");
         assert_eq!(scrolled[ROWS - 1].as_str(), "BACK");
         for row in scrolled.iter() {
             assert!(row.len() <= COLS, "scrolled row too wide: {row:?}");
