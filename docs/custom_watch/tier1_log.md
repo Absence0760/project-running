@@ -726,6 +726,70 @@ the 4 hPa threshold are **chosen, not measured**, and join the register in
 deliberately not exposed, because tuning a number whose centre nobody has
 validated is guessing twice. § 82 is unchanged: nothing here has run on silicon.
 
+## 2026-07-31 — the privacy posture, and the two things it turned out not to be
+
+The roadmap had carried one line for months: the watch records GPS, HR and
+biometrics, and "inherits nothing yet" from a product that takes minimisation,
+retention and export seriously. Reading it against the code showed that
+sentence was wrong in both directions, which is why this entry exists and why
+the fix was mostly a document ([`privacy.md`](privacy.md),
+[decisions § 377](../architecture/decisions.md)).
+
+**Three disciplines were already inherited and simply never written down.** The
+GATT data plane has been fail-closed against unpaired peers since § 285 — all
+seven characteristics require an encrypted link, so a run track never crosses an
+unbonded connection. The ICE card's exposure is bounded to the physical wrist by
+construction: a display face, not a characteristic, absent from the run blob,
+and with a hand-written `defmt::Format` that prints `blank`/`set` and never a
+field. And a synced run inherits Art 20 export, Art 17 deletion and privacy-zone
+clipping **for free**, because `runFromWatchPayload` → `api.saveRun` lands it as
+an ordinary `runs` row — no new table, so the export guard already covers it and
+`delete-account`'s bucket drain already reaches it.
+
+**`privacy.rs` having zero callers is the right answer, not the outstanding
+work.** § 33 makes clipping read-time and viewer-keyed *because* a write-time
+clip is destructive — turn a zone off later and the eaten trace is gone — so the
+durable track is stored raw and clipped only for a non-owner. The watch's only
+egress is to the single phone it is bonded to, its owner's; clipping there would
+mutilate the run before its owner ever saw it, and the device has no zone
+transport anyway (`WatchSettings` carries no zone list). The port stays dormant
+against a named trigger: tier-2 live spectator tracking, where forwarding
+`link::status_frame` makes the watch the **source** of a broadcast to
+non-owners, and § 33's `live_run_pings` precedent says a broadcast drops in-zone
+fixes at the source because a downstream filter cannot unsend.
+
+**The real leak was the log stream.** `gps.rs` logged lat/lon on every published
+fix — one line per fix is a complete track of the wearer — `hr.rs` logged raw
+bpm change-gated, which is a biometric time series, and `hr_strap.rs` logged the
+strap's BLE address, a stable identifier that follows one person between
+sessions. None of that is private: a defmt stream goes wherever the cable, the
+CI artifact or the bug report goes, and the repo's own `/audit/pii-in-logs`
+sweep treats exactly this class as a real finding for its server tiers while
+never having covered this firmware. A stock build now logs fix quality (speed,
+satellites) and pulse presence; the values sit behind `log-personal-data`,
+default off. `bin/watch-sim.sh` turns it on and nothing else does — the sim's
+coordinates are the synthetic `bench_jog` rectangle with nobody behind them, and
+`sim/ci_smoke.py` asserts on the logged fix and BPM, so the sim-verified rails
+were left intact rather than weakened to fit the fix. The bench build keeps it
+off; `bin/watch-flash.sh` forwards cargo args, so seeing your own coordinates is
+an explicit opt-in.
+
+**Rung: build-verified.** `clippy -D warnings` clean on
+`thumbv7em-none-eabihf` across the default, sim, `ble` and
+`ble,log-personal-data` feature sets; `cargo fmt --all --check` clean; 2365 host
+tests unchanged, the change being confined to `app/`, which host tests exclude.
+Nothing here is bench-verified — no hardware exists — and per § 210 the BLE
+encryption this posture leans on can never be sim-verified either.
+
+**What it does not claim.** This is a research prototype with zero users. The
+document is an inventory and a set of rules, not a compliance posture. Retention
+on the device is still a *capacity* bound and not a clock (four run slots, eight
+waypoints, newest-wins), nothing is encrypted at rest, and the largest gap is
+recorded rather than closed: **no wearer can erase their own data from the
+watch.** The primitives exist, but the affordance is a settings-menu row plus a
+destructive-action confirm, which moves the published press-cost model — a
+navigation change as much as a privacy one, and owed in that lane.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
