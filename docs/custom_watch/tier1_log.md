@@ -585,6 +585,54 @@ The roadmap's daily-smartwatch row bundled "alarms / timer / stopwatch / find-my
 
 Workspace host sweep 2229 → 2261 (`cargo test --workspace --exclude app --exclude nrf52840_dk`; +32 — 21 in `timers`, 5 in `alerts`, 2 in `face`, 1 each in `record` / `button` / `input_flow`), plus the six count-pins the 38th page moved. Firmware builds green on the default, `ble` and sim feature sets; `fmt` and the clippy `-D warnings` gate clean. **No sim scenario and no bench evidence** — the modal has no `ci_smoke` step yet and the page cannot be armed from a fixture, so this entry claims host-tested and nothing more.
 
+## 2026-07-30 — Backyard-ultra mode: a bell nobody's watch is anchored to
+
+The first of the roadmap's "nobody ships these" differentiator wedges built on
+the wrist ([roadmap.md § New wedges](roadmap.md#new-wedges--nobody-ships-these),
+[decisions.md § 372](../architecture/decisions.md)). A backyard ultra sends the
+same loop off every hour on the hour and scores on loop count; a runner must
+complete the loop *and* be back in the corral before the next bell, with
+whistles at 3/2/1 minutes. Nothing on a Garmin or a COROS models any of it.
+
+`watch_core::backyard` (24 host tests) holds the whole format: the countdown
+derived from the runner's **local hour boundary** rather than from a lap or a
+run start, so a runner who leaves late on loop 7 gets the same bell as
+everyone else; the corral state, which flips back to "on loop" on the clock
+alone when the bell rings, with no event to miss; the loop length **learned
+from the runner's own first loop** rather than configured on five buttons; and
+the projected return margin, which is withheld outright when the loop is
+unlearned or there is no live pace. It is fed the receiver's UTC clock shifted
+by the pushed timezone — the same shaping the Daylight page uses — and refuses
+a countdown in exactly the two cases that shaping can fail: no timezone reads
+`NOT SYNCED`, no receiver clock reads `AWAITING FIX`, and the hero reads
+`--:--` rather than counting to an hour boundary it cannot locate.
+
+The loop rides the recorder's existing lap: while the mode is armed the
+**corral bell drives the auto-lap in place of the 1 km boundary**, so one lap
+closes per hour and the phone reads loop splits rather than six kilometre
+slices of an identical loop. The runner's BTN5 press keeps its one meaning —
+close a lap — and is read as the corral return, standing that window's bell
+lap down. BTN5 grew no third tier. The whistles ride the existing
+`AlertEngine` slot as drop-not-queue milestones one rung under the zone
+ceiling. Arming is a sixth settings-menu row persisted in a spare `CFG1` flag
+bit, idle-only because re-pointing the auto-lap means a run has to be wholly
+inside the mode or wholly outside it; `SCR1` metric byte 35 carries the
+countdown to the phone's screen composer.
+
+**Rung: host-tested, plus build-verified for the target.** 1892 `watch_core`
+tests green, `clippy -D warnings` clean on `thumbv7em-none-eabihf` across the
+default, `ble` and sim feature sets. **Nothing here is sim-verified** — the
+sim's NMEA fixtures carry no multi-hour clock, so no scenario can reach a bell
+at all; that is the first thing owed. Bench items are in
+[`quality_standards.md`](quality_standards.md).
+
+What it deliberately does **not** do: declare a runner in or out. The corral
+is the race director's and the timing mat is theirs; a watch announcing `DNF`
+at hour 30 off a missed button press would be lying about the only thing that
+matters. The loop count is "bells this run closed a loop on", which for a
+runner still in the race is their loop count and for one who is out is the
+last number the watch saw.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

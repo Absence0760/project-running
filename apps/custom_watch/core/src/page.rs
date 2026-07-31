@@ -401,7 +401,7 @@ impl Page {
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
     /// wrapping from the first page back to the last. With 38 pages a forward-
-    /// only walk needs up to ~37 presses to reach a late page; a reverse
+    /// only walk needs up to ~39 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
