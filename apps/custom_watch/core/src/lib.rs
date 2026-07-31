@@ -42,6 +42,10 @@
 //! - [`elevation`] — barometric altitude, the cumulative-vert accumulator, and
 //!   the quantised gate deciding which 1 Hz sample is worth waking a consumer
 //!   for ([`elevation::should_publish`])
+//! - [`storm`] — baro-driven storm detection: the sea-level pressure reduction
+//!   that separates a front from a climb, its three-hour least-squares
+//!   tendency, and the explicit refusal when no GPS altitude corroborates the
+//!   barometer (watch-native, no web twin — the phone has no barometer)
 //! - [`baro_rezero`] — the `baro` task's manual QNH re-zero decision: the
 //!   barometer's own freshness gate over [`elevation::rezero_reference`], the
 //!   two distinct refusals, and the reading an applied snap publishes past the
@@ -345,6 +349,7 @@ pub mod settings_menu;
 pub mod settings_queue;
 pub mod sleep_station;
 pub mod statusbar;
+pub mod storm;
 pub mod streaks;
 pub mod timers;
 pub mod track_projection;
