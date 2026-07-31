@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:core_models/core_models.dart' show Waypoint;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/sim_watch_sync.dart' show crc32;
@@ -221,6 +223,106 @@ void main() {
       final chunks = chunkCourse(frame);
       expect(chunks, hasLength(1));
       expect(chunks.first.length, frame.length + 2);
+    });
+  });
+
+  group('courseFromWaypoints', () {
+    Waypoint wp(double lat, double lng, {double? ele}) =>
+        Waypoint(lat: lat, lng: lng, elevationMetres: ele);
+
+    test('a short route passes through untouched and unsimplified', () {
+      final result = courseFromWaypoints([
+        wp(40.0158083, -105.2705),
+        wp(40.015, -105.2705),
+        wp(40.015, -105.269445),
+      ]);
+      expect(result.refusal, isNull);
+      expect(result.points, hasLength(3));
+      expect(result.points!.first.lat, 40.0158083);
+      expect(result.points!.last.lng, -105.269445);
+      expect(result.sourcePointCount, 3);
+      expect(result.simplified, isFalse);
+      expect(result.elevationM, isNull);
+    });
+
+    test('a dense route is thinned to the cap, not cut at it', () {
+      final dense = [
+        for (var i = 0; i < 4000; i++)
+          wp(40.0 + math.sin(i / 9) * 0.002, -105.0 + i * 1e-5),
+      ];
+      final result = courseFromWaypoints(dense);
+      expect(result.points, hasLength(kMaxCoursePoints));
+      expect(result.sourcePointCount, 4000);
+      expect(result.simplified, isTrue);
+      // The tail is the route's real end, not point 256 of 4000 — a truncated
+      // course would strand the breadcrumb mid-route.
+      expect(result.points!.last.lng, closeTo(dense.last.lng, 1e-12));
+      expect(result.points!.first.lat, closeTo(dense.first.lat, 1e-12));
+      // And what came back actually encodes.
+      expect(encodeCourse(result.points!), isNotEmpty);
+    });
+
+    test('elevation rides along when every carried point has one', () {
+      final result = courseFromWaypoints([
+        wp(40.0158083, -105.2705, ele: 1650.4),
+        wp(40.015, -105.2705, ele: 1655.5),
+        wp(40.015, -105.269445, ele: 1639.6),
+      ]);
+      expect(result.elevationM, [1650, 1656, 1640]);
+      expect(
+        encodeCourse(result.points!, elevationM: result.elevationM)[7],
+        kCourseFlagElev,
+      );
+    });
+
+    test('one missing elevation drops the whole profile, not just the gap', () {
+      // The firmware wants one sample per point; carrying a partial series by
+      // inventing the gap would draw a climb the route does not have.
+      final result = courseFromWaypoints([
+        wp(40.0158083, -105.2705, ele: 1650),
+        wp(40.015, -105.2705),
+        wp(40.015, -105.269445, ele: 1640),
+      ]);
+      expect(result.points, hasLength(3));
+      expect(result.elevationM, isNull);
+    });
+
+    test('a non-finite elevation drops the profile too', () {
+      final result = courseFromWaypoints([
+        wp(40.0158083, -105.2705, ele: 1650),
+        wp(40.015, -105.2705, ele: double.nan),
+        wp(40.015, -105.269445, ele: 1640),
+      ]);
+      expect(result.elevationM, isNull);
+    });
+
+    test('a thinned route carries the elevation of the points it kept', () {
+      final dense = [
+        for (var i = 0; i < 1000; i++)
+          wp(40.0 + math.sin(i / 6) * 0.002, -105.0 + i * 1e-5,
+              ele: 1600 + i.toDouble()),
+      ];
+      final result = courseFromWaypoints(dense);
+      expect(result.points, hasLength(kMaxCoursePoints));
+      expect(result.elevationM, hasLength(kMaxCoursePoints));
+      expect(result.elevationM!.first, 1600);
+      expect(result.elevationM!.last, 2599);
+      expect(
+        () => encodeCourse(result.points!, elevationM: result.elevationM),
+        returnsNormally,
+      );
+    });
+
+    test('refuses a route with fewer than two positions', () {
+      for (final waypoints in [
+        <Waypoint>[],
+        [wp(40.0, -105.0)],
+      ]) {
+        final result = courseFromWaypoints(waypoints);
+        expect(result.refusal, WatchCourseRefusal.tooFewPoints);
+        expect(result.points, isNull);
+        expect(result.simplified, isFalse);
+      }
     });
   });
 

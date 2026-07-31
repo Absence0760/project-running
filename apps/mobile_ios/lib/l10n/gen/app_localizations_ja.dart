@@ -2589,6 +2589,27 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailShareLink => 'リンクを共有';
 
   @override
+  String get routeDetailSendToWatch => 'ウォッチに送信';
+
+  @override
+  String routeDetailWatchCourseSent(int points) {
+    return 'コースをウォッチに送信しました（$points地点）';
+  }
+
+  @override
+  String routeDetailWatchCourseSimplified(int source, int points) {
+    return 'コースをウォッチに送信しました — 収まるように$source地点から$points地点に間引きました';
+  }
+
+  @override
+  String get routeDetailWatchCourseTooShort => 'このルートは地点が少なすぎてウォッチでたどれません';
+
+  @override
+  String routeDetailWatchCourseFailed(String error) {
+    return 'コースをウォッチに送信できませんでした: $error';
+  }
+
+  @override
   String get routeDetailMadePublicForLink => 'リンクを知っている全員が閲覧できるように公開しました';
 
   @override

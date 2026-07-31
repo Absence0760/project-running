@@ -4631,6 +4631,36 @@ abstract class AppLocalizations {
   /// **'Share link'**
   String get routeDetailShareLink;
 
+  /// Share-menu option that pushes the route to the paired custom watch as a follow-along course
+  ///
+  /// In en, this message translates to:
+  /// **'Send to watch'**
+  String get routeDetailSendToWatch;
+
+  /// Banner after the route was pushed to the watch unchanged
+  ///
+  /// In en, this message translates to:
+  /// **'Course sent to the watch ({points} points)'**
+  String routeDetailWatchCourseSent(int points);
+
+  /// Banner after a route too long for the watch was simplified before being pushed
+  ///
+  /// In en, this message translates to:
+  /// **'Course sent to the watch — thinned from {source} points to {points} to fit'**
+  String routeDetailWatchCourseSimplified(int source, int points);
+
+  /// Banner when a route cannot be sent to the watch because it has fewer than two positions
+  ///
+  /// In en, this message translates to:
+  /// **'This route has too few points to follow on the watch'**
+  String get routeDetailWatchCourseTooShort;
+
+  /// Banner when the BLE course push to the watch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the course to the watch: {error}'**
+  String routeDetailWatchCourseFailed(String error);
+
   /// Banner shown when tapping Share link auto-publishes a private route so its link resolves
   ///
   /// In en, this message translates to:

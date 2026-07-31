@@ -2752,6 +2752,28 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailShareLink => 'Compartir enlace';
 
   @override
+  String get routeDetailSendToWatch => 'Enviar al reloj';
+
+  @override
+  String routeDetailWatchCourseSent(int points) {
+    return 'Recorrido enviado al reloj ($points puntos)';
+  }
+
+  @override
+  String routeDetailWatchCourseSimplified(int source, int points) {
+    return 'Recorrido enviado al reloj: reducido de $source a $points puntos para que quepa';
+  }
+
+  @override
+  String get routeDetailWatchCourseTooShort =>
+      'Esta ruta tiene muy pocos puntos para seguirla en el reloj';
+
+  @override
+  String routeDetailWatchCourseFailed(String error) {
+    return 'No se pudo enviar el recorrido al reloj: $error';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Se hizo pública para que cualquiera con el enlace pueda verla';
 

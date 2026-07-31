@@ -413,6 +413,36 @@ Four host tests (three-day + one-day projections, the already-recovered and the 
 suppressions) plus an assertion on the existing no-load case. **Garmin's Training Status is not
 built and is not owed** — web has no such classification, so § 24 forbids the watch pioneering one.
 Host-tested only; no scenario arms the Fitness page.
+## 2026-07-30 — the generated loop reaches the wrist: a route's own export menu gets a course push
+
+Both ends of this had been built for months. The phone generates loops (the mobile builder's OSRM
+bisection; the `graph_cycle` sidecar behind web's `/api/routes/generate`), and the watch has followed
+a pushed `CRS1` course since v3 sealed it (§ 335) — Nav page, off-course alert, turn cues, climb
+profile, crest ahead. The only `pushCourse` call site in the whole app was the Sim Watch screen's
+canned three-point Boulder rectangle. Nothing a runner had ever saved could reach the watch.
+
+The affordance went into **route detail's share menu**, beside Share link / image / GPX /
+GPX+markers / KML, rather than beside the builder's Generate button. A button on the builder works
+for the ten seconds after a generate and strands every loop generated yesterday, every shared GPX,
+every club route; a course is just another export target for a route, and that menu is where the
+export targets live.
+
+Three things the seam had to get right, none of them transport work. It reads `_displayWaypoints` —
+privacy-clipped for non-owners (§ 33) — because the radio is another way out of the app and the GPX
+exporter already honours that. It meets the 256-point budget by **priority Douglas–Peucker**
+(`simplifyToBudget`: keep the endpoints, restore whichever dropped point sits furthest from the chord
+that replaced it, until the budget is spent), not by even decimation, which spends as much of the
+budget on a straight as on a switchback. And both failure directions are doors: a thinned route says
+from how many points to how many, an unrepresentable one is refused with a sentence, and nothing
+truncates — a course ending at position 256 of 4,000 gives the watch a breadcrumb into nowhere *and*
+an off-course alert calibrated against it, which it has no way to notice.
+
+Gated on the loopback backend like the Sim Watch link (§ 209): there is no watch to send to yet.
+Host-tested only — 10 tests on the budget simplifier, 7 on the shaping, 7 on the screen. The bytes
+leaving the phone are the same `encodeCourse` output the frozen goldens pin against the firmware's,
+but **that a real watch loads a real generated loop is a bench item**, on the same list as every
+other radio claim. Decisions § 370.
+
 ## 2026-07-30 — the structured-workout rail gets a guard instead of a memory
 
 `ci_smoke.py` grows an eighth scenario, `workout` ([§ 371](../architecture/decisions.md)), closing the

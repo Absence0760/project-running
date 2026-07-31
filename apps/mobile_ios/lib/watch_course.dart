@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:core_models/core_models.dart' show Waypoint;
+
+import 'route_simplify.dart' show simplifyToBudget;
 import 'sim_watch_sync.dart' show crc32;
 
 /// Pure Dart mirror of the custom watch's `watch_core::course_store` CRS1 wire
@@ -139,6 +142,82 @@ List<Uint8List> chunkCourse(
     offset = end;
   }
   return chunks;
+}
+
+/// Why a saved route cannot be sent to the watch as a course.
+enum WatchCourseRefusal {
+  /// Fewer than two positions. There is no line to follow, [encodeCourse]
+  /// refuses such a frame, and so does the firmware — so the push is refused
+  /// here, where there is a runner to tell.
+  tooFewPoints,
+}
+
+/// A route shaped for the watch: the positions a `CRS1` push will carry, their
+/// per-point elevation when the route has one for *every* carried position, how
+/// many positions the route started with — or the reason it cannot be sent.
+///
+/// [points] and [refusal] are exclusive. A caller that gets [points] has a
+/// course; a caller that gets a [refusal] has something to say to the runner,
+/// never a silently shortened route.
+class WatchCourseResult {
+  final List<CoursePoint>? points;
+  final List<int>? elevationM;
+
+  /// Positions on the route before any thinning — the denominator behind
+  /// "simplified N of M points to fit".
+  final int sourcePointCount;
+  final WatchCourseRefusal? refusal;
+
+  const WatchCourseResult({
+    required this.points,
+    required this.elevationM,
+    required this.sourcePointCount,
+  }) : refusal = null;
+
+  const WatchCourseResult.refused(this.refusal, this.sourcePointCount)
+      : points = null,
+        elevationM = null;
+
+  /// Whether the polyline had to be thinned to fit the watch's capacity.
+  bool get simplified =>
+      points != null && points!.length < sourcePointCount;
+}
+
+/// Shape a saved route's polyline into the positions a `CRS1` push carries.
+///
+/// A route longer than [kMaxCoursePoints] is thinned by priority
+/// Douglas–Peucker (`simplifyToBudget`), never cut at the cap: a course that
+/// stopped at position 256 would hand the watch a breadcrumb ending in the
+/// middle of nowhere, and an off-course alert calibrated against it — worse
+/// than the honest `NO COURSE LOADED` the watch shows without one.
+///
+/// The elevation series is all-or-nothing. The firmware refuses a profile that
+/// isn't one sample per point, and filling the gaps would draw a climb the
+/// route does not have — so a polyline with any elevation missing is pushed as
+/// a line with no profile and the watch's climb pages stay honestly empty.
+WatchCourseResult courseFromWaypoints(List<Waypoint> waypoints) {
+  if (waypoints.length < 2) {
+    return WatchCourseResult.refused(
+      WatchCourseRefusal.tooFewPoints,
+      waypoints.length,
+    );
+  }
+  final kept = simplifyToBudget(waypoints, maxPoints: kMaxCoursePoints);
+  final points = [for (final w in kept) CoursePoint(w.lat, w.lng)];
+  final elevations = <int>[];
+  for (final w in kept) {
+    final e = w.elevationMetres;
+    if (e == null || !e.isFinite) {
+      elevations.clear();
+      break;
+    }
+    elevations.add(e.round());
+  }
+  return WatchCourseResult(
+    points: points,
+    elevationM: elevations.length == points.length ? elevations : null,
+    sourcePointCount: waypoints.length,
+  );
 }
 
 /// Bring a dense route under [kMaxCoursePoints] by evenly sampling indices,

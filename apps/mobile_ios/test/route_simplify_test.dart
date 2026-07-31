@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/route_simplify.dart';
@@ -247,6 +249,105 @@ void main() {
       // A fresh 200 m start must not be read as a 100 m climb from the old ref.
       acc.addAll([wp(0, 0, ele: 200), wp(0, 0.0001, ele: 201)]);
       expect(acc.gainMetres, 0);
+    });
+  });
+
+  group('simplifyToBudget', () {
+    test('returns a copy unchanged when already within the budget', () {
+      final track = [wp(0, 0), wp(0, 0.001), wp(0.001, 0.001)];
+      final out = simplifyToBudget(track, maxPoints: 8);
+      expect(out, track);
+      expect(identical(out, track), isFalse);
+    });
+
+    test('never exceeds the budget on a dense track', () {
+      final track = [
+        for (var i = 0; i < 2000; i++)
+          wp(math.sin(i / 7) * 0.01, i * 0.0001),
+      ];
+      expect(simplifyToBudget(track, maxPoints: 256), hasLength(256));
+      expect(simplifyToBudget(track, maxPoints: 16), hasLength(16));
+    });
+
+    test('keeps both endpoints exactly, so the tail is never cut off', () {
+      final track = [
+        for (var i = 0; i < 500; i++) wp(math.sin(i / 11) * 0.01, i * 0.0001),
+      ];
+      final out = simplifyToBudget(track, maxPoints: 10);
+      expect(out.first.lat, track.first.lat);
+      expect(out.first.lng, track.first.lng);
+      expect(out.last.lat, track.last.lat);
+      expect(out.last.lng, track.last.lng);
+    });
+
+    test('preserves the original order', () {
+      final track = [
+        for (var i = 0; i < 300; i++) wp(math.cos(i / 5) * 0.01, i * 0.0001),
+      ];
+      final out = simplifyToBudget(track, maxPoints: 32);
+      for (var i = 1; i < out.length; i++) {
+        expect(out[i].lng, greaterThan(out[i - 1].lng));
+      }
+    });
+
+    test('a track with no deviation at all collapses to its endpoints', () {
+      // Nothing deviates from the chord, so spending more of the budget would
+      // add no shape — returning fewer than maxPoints is the right answer.
+      final track = [for (var i = 0; i < 400; i++) wp(0, 0)];
+      expect(simplifyToBudget(track, maxPoints: 64), hasLength(2));
+    });
+
+    test('a collinear track comes back short, on the line, endpoints exact', () {
+      // Float noise leaves a nominally straight line deviating by ~1e-9 m
+      // rather than by zero, so how far the budget runs before every remaining
+      // span reads as flat is not worth pinning to a number. What is worth
+      // pinning: it stops early, stays on the line, and keeps both ends.
+      final track = [for (var i = 0; i < 400; i++) wp(0, i * 0.0001)];
+      final out = simplifyToBudget(track, maxPoints: 64);
+      expect(out.length, lessThan(64));
+      expect(out.length, greaterThanOrEqualTo(2));
+      expect(out.every((w) => w.lat == 0), isTrue);
+      expect(out.first.lng, 0);
+      expect(out.last.lng, track.last.lng);
+    });
+
+    test('spends the budget on the corners, not evenly along the line', () {
+      // A long straight run-in, then a tight zigzag. Even decimation would put
+      // most of its points on the straight; priority DP must put them on the
+      // zigzag, which is the shape a breadcrumb has to show.
+      final track = <Waypoint>[
+        for (var i = 0; i < 200; i++) wp(0, i * 0.0001),
+        for (var i = 0; i < 8; i++)
+          wp(i.isEven ? 0.0005 : -0.0005, (200 + i) * 0.0001),
+        wp(0, 0.0208),
+      ];
+      final out = simplifyToBudget(track, maxPoints: 12);
+      final onZigzag = out.where((w) => w.lat.abs() > 0.0001).length;
+      expect(onZigzag, 8);
+    });
+
+    test('keeps the point that carries the most shape first', () {
+      // A single spike in an otherwise straight line: with a budget of three,
+      // the spike is the only interior point worth keeping.
+      final track = <Waypoint>[
+        for (var i = 0; i < 50; i++) wp(0, i * 0.0001),
+        wp(0.002, 0.005),
+        for (var i = 51; i < 100; i++) wp(0, i * 0.0001),
+      ];
+      final out = simplifyToBudget(track, maxPoints: 3);
+      expect(out, hasLength(3));
+      expect(out[1].lat, 0.002);
+    });
+
+    test('rejects a budget below two points', () {
+      final track = [wp(0, 0), wp(0, 0.001), wp(0, 0.002)];
+      expect(() => simplifyToBudget(track, maxPoints: 1), throwsArgumentError);
+      expect(() => simplifyToBudget(track, maxPoints: 0), throwsArgumentError);
+    });
+
+    test('a track shorter than two points passes straight through', () {
+      expect(simplifyToBudget(const <Waypoint>[], maxPoints: 4), isEmpty);
+      expect(simplifyToBudget([wp(0, 0)], maxPoints: 4), hasLength(1));
     });
   });
 }

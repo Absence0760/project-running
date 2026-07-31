@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../auth_error.dart';
 import '../backend_timeout.dart';
+import '../dev_auto_login.dart' show isLocalSupabaseUrl;
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -19,12 +20,16 @@ import '../local_route_store.dart';
 import '../main.dart' show pendingStartRunWithRoute;
 import '../offline_tile_pack.dart';
 import '../preferences.dart';
+import '../reactive_ble_watch_transport.dart';
 import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../route_gpx.dart';
+import '../sim_watch_link.dart' show maybeDevBackendUrl;
+import '../sim_watch_sync.dart' show WatchBleTransport, WatchSyncClient;
 import '../social_service.dart' show ClubView, SocialService;
 import '../tile_pack.dart' show TileBbox;
+import '../watch_course.dart';
 import 'roadbook_screen.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
@@ -87,6 +92,18 @@ class RouteDetailScreen extends StatefulWidget {
   /// fixed value to drive the Pro vs free branch deterministically.
   final Future<bool> Function()? checkPro;
 
+  /// Backend URL the custom-watch course push is gated on. The watch is
+  /// research-tier with no hardware in anyone's hands ([decisions.md § 71]),
+  /// so the affordance shows only against a loopback backend — the same rail
+  /// the Sim Watch link uses (§ 209). Production reads dotenv; tests pass a
+  /// URL to drive either side of the gate.
+  final String? devBackendUrl;
+
+  /// Injectable BLE transport for the course push. Defaults to the production
+  /// `flutter_reactive_ble` client; tests pass a fake so the push is exercised
+  /// with no radio attached.
+  final WatchBleTransport Function()? watchTransportFactory;
+
   const RouteDetailScreen({
     super.key,
     required this.route,
@@ -97,6 +114,8 @@ class RouteDetailScreen extends StatefulWidget {
     this.social,
     this.describeAi,
     this.checkPro,
+    this.devBackendUrl,
+    this.watchTransportFactory,
   });
 
   @override
@@ -136,6 +155,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool _offlinePinBusy = false;
   bool _publicBusy = false;
   bool _starBusy = false;
+  bool _watchPushBusy = false;
 
   // Waypoints handed to the renderer. For the owner this mirrors
   // widget.route.waypoints from the row; for non-owners this is the
@@ -833,8 +853,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
             tooltip: l10n.routeDetailShare,
-            onSelected: (fmt) =>
-                fmt == 'link' ? _shareLink(context) : _shareAs(context, fmt),
+            onSelected: (fmt) => switch (fmt) {
+              'link' => _shareLink(context),
+              'watch' => _sendCourseToWatch(),
+              _ => _shareAs(context, fmt),
+            },
             itemBuilder: (_) => [
               // "Share link" is the intuitive send-to-someone path: it hands
               // the public /share/route/[id] URL to the OS share sheet. Shown
@@ -851,6 +874,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   value: 'gpx_markers',
                   child: Text(l10n.routeDetailShareAsGpxMarkers)),
               PopupMenuItem(value: 'kml', child: Text(l10n.routeDetailShareAsKml)),
+              // The custom watch is research-tier with no unit in a runner's
+              // hands, so this stays behind the loopback-backend rail the Sim
+              // Watch link uses rather than promising every user a device that
+              // does not exist (decisions §71, §209).
+              if (_watchPushAvailable && !_watchPushBusy)
+                PopupMenuItem(
+                    value: 'watch', child: Text(l10n.routeDetailSendToWatch)),
             ],
           ),
           // Offline-pin affordance — local-only flag (never synced).
@@ -1411,6 +1441,60 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
     await Share.share(routeShareUrl(widget.route.id),
         subject: widget.route.name);
+  }
+
+  /// Whether the custom-watch course push is offered at all. See
+  /// [RouteDetailScreen.devBackendUrl] for why it is gated.
+  bool get _watchPushAvailable =>
+      isLocalSupabaseUrl(widget.devBackendUrl ?? maybeDevBackendUrl());
+
+  /// Send this route to the paired custom watch as a `CRS1` breadcrumb course —
+  /// the last leg of "generate a loop on the phone, follow it on the wrist".
+  ///
+  /// Reads the same clipped polyline the map and the GPX exporter do, so a
+  /// non-owner sending a public route to their own watch can't carry the
+  /// owner's unclipped trace out through the radio (decisions §33).
+  ///
+  /// A route too dense for the frame is thinned to fit and the runner is told
+  /// by how much; a route that cannot be represented at all is refused with a
+  /// reason. Neither path quietly sends a partial course — a breadcrumb that
+  /// ends early is a wrong answer the watch has no way to notice.
+  Future<void> _sendCourseToWatch() async {
+    if (_watchPushBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final course = courseFromWaypoints(_displayWaypoints);
+    final points = course.points;
+    if (points == null) {
+      showTopBanner(context, l10n.routeDetailWatchCourseTooShort);
+      return;
+    }
+    setState(() => _watchPushBusy = true);
+    try {
+      final client = WatchSyncClient(
+        transport: (widget.watchTransportFactory ??
+            ReactiveBleWatchTransport.new)(),
+        // The push path never delivers a run; the sink is the run-sync half of
+        // the same client.
+        onRun: (_) async {},
+      );
+      await client.pushCourse(
+        chunkCourse(encodeCourse(points, elevationM: course.elevationM)),
+      );
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        course.simplified
+            ? l10n.routeDetailWatchCourseSimplified(
+                course.sourcePointCount, points.length)
+            : l10n.routeDetailWatchCourseSent(points.length),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(
+          context, l10n.routeDetailWatchCourseFailed(friendlyError(l10n, e)));
+    } finally {
+      if (mounted) setState(() => _watchPushBusy = false);
+    }
   }
 
   Future<void> _shareAs(BuildContext context, String format) async {

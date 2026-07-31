@@ -2729,6 +2729,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailShareLink => 'Share link';
 
   @override
+  String get routeDetailSendToWatch => 'Send to watch';
+
+  @override
+  String routeDetailWatchCourseSent(int points) {
+    return 'Course sent to the watch ($points points)';
+  }
+
+  @override
+  String routeDetailWatchCourseSimplified(int source, int points) {
+    return 'Course sent to the watch — thinned from $source points to $points to fit';
+  }
+
+  @override
+  String get routeDetailWatchCourseTooShort =>
+      'This route has too few points to follow on the watch';
+
+  @override
+  String routeDetailWatchCourseFailed(String error) {
+    return 'Couldn\'t send the course to the watch: $error';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Made public so anyone with the link can view it';
 
