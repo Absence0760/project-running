@@ -62,6 +62,13 @@
 //!    proxy for the effort HR measures directly. It supersedes a fuel reminder
 //!    but never a zone banner; blocked by one, it stays armed and un-cooled so
 //!    it retries while the excursion lasts, rather than being swallowed.
+//! 2b. **The backyard corral whistle** (§ 372) — the only arm on this engine
+//!    that is not about the runner's body or their kit. Missing the bell ends
+//!    the race outright, with nothing to correct afterwards, so it supersedes
+//!    every reminder and every milestone and yields only to a zone banner. It
+//!    is a milestone in kind, though, so a blocked one is dropped rather than
+//!    owed: `3 MIN` shown at 1:40 is a lie about the clock, and the Backyard
+//!    page carries the live countdown regardless.
 //! 3. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
@@ -162,6 +169,9 @@ pub enum Alert {
     WorkoutEnding,
     /// The structured workout's final step completed.
     WorkoutDone,
+    /// A backyard corral whistle (§ 372) — the minutes left to the bell,
+    /// one of [`crate::backyard::BELL_WARNING_MIN`].
+    BackyardBell(u8),
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -230,6 +240,9 @@ pub fn banner(alert: Alert) -> Banner {
         }
         Alert::WorkoutEnding => write!(b, "! STEP END"),
         Alert::WorkoutDone => write!(b, "! WKT DONE"),
+        // `MIN` rather than a bare number: every other banner is a word or a
+        // unit-tagged value, and `! 3` on a wrist at hour 30 says nothing.
+        Alert::BackyardBell(min) => write!(b, "! {} MIN", min.min(9)),
     };
     b
 }
@@ -271,6 +284,11 @@ pub struct AlertEngine {
     last_workout_transition_seq: u16,
     last_workout_ending_seq: u16,
     workout_done_fired: bool,
+    /// The backyard whistle counter last seen ([`crate::backyard::BackyardView`]'s
+    /// monotonic seq). A blocked whistle is dropped, not owed — the milestone
+    /// rule: `3 MIN` shown at 1:40 is worse than nothing, and the page carries
+    /// the countdown regardless.
+    last_backyard_warning_seq: u16,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
     pending_drink: bool,
@@ -304,6 +322,7 @@ impl AlertEngine {
             last_workout_transition_seq: 0,
             last_workout_ending_seq: 0,
             workout_done_fired: false,
+            last_backyard_warning_seq: 0,
             active: None,
             pending_drink: false,
             pending_eat: false,
@@ -447,6 +466,7 @@ impl AlertEngine {
                         self.active,
                         Some((
                             Alert::ZoneAbove(_)
+                                | Alert::BackyardBell(_)
                                 | Alert::WorkoutStep { .. }
                                 | Alert::WorkoutEnding
                                 | Alert::WorkoutDone,
@@ -481,7 +501,10 @@ impl AlertEngine {
         // carries the current step regardless.
         match snap.workout {
             Some(w) => {
-                let outranked = matches!(self.active, Some((Alert::ZoneAbove(_), _)));
+                let outranked = matches!(
+                    self.active,
+                    Some((Alert::ZoneAbove(_) | Alert::BackyardBell(_), _))
+                );
                 if w.ending_seq != self.last_workout_ending_seq {
                     self.last_workout_ending_seq = w.ending_seq;
                     if !outranked {
@@ -518,6 +541,24 @@ impl AlertEngine {
                 self.last_workout_ending_seq = 0;
                 self.workout_done_fired = false;
             }
+        }
+
+        // The corral whistles (§ 372). The race director's own 3/2/1 warnings,
+        // and the one alert on this engine that is not about the runner's body
+        // or their kit: missing the bell ends the race outright, so it outranks
+        // every milestone and every reminder and is blocked only by a zone
+        // banner — the one thing an ultra runner can afford even less to lose.
+        // Not gated on `Recording`: a runner standing in the corral is exactly
+        // who the whistle is for.
+        if let Some(b) = snap.backyard {
+            if b.warning_seq != self.last_backyard_warning_seq {
+                self.last_backyard_warning_seq = b.warning_seq;
+                if b.warning_min > 0 && !matches!(self.active, Some((Alert::ZoneAbove(_), _))) {
+                    self.take_slot(Alert::BackyardBell(b.warning_min), uptime_s);
+                }
+            }
+        } else {
+            self.last_backyard_warning_seq = 0;
         }
 
         // Milestones advance whether or not they can be shown: a milestone the
@@ -592,6 +633,7 @@ impl AlertEngine {
         self.last_workout_transition_seq = 0;
         self.last_workout_ending_seq = 0;
         self.workout_done_fired = false;
+        self.last_backyard_warning_seq = 0;
         self.in_run = false;
     }
 }
@@ -670,7 +712,8 @@ impl FuelOverdueTracker {
                 | Alert::PaceSlow
                 | Alert::WorkoutStep { .. }
                 | Alert::WorkoutEnding
-                | Alert::WorkoutDone,
+                | Alert::WorkoutDone
+                | Alert::BackyardBell(_),
             )
             | None => {}
         }
@@ -1862,5 +1905,127 @@ mod tests {
         ] {
             assert!(banner(alert).len() <= 10, "{alert:?} overflows the band");
         }
+    }
+
+    /// A snapshot carrying a backyard whistle at `min` minutes with counter
+    /// `seq`.
+    fn backyard_snap(state: RecordState, seq: u16, min: u8) -> Snapshot {
+        Snapshot {
+            backyard: Some(crate::backyard::BackyardView {
+                loops: 12,
+                to_bell_s: Some(u32::from(min) * 60),
+                in_corral: false,
+                loop_distance_m: Some(6_706.0),
+                loop_progress_m: 5_000.0,
+                return_margin_s: None,
+                warning_seq: seq,
+                warning_min: min,
+            }),
+            ..snap(state, 0)
+        }
+    }
+
+    #[test]
+    fn a_corral_whistle_fires_once_per_counter_change() {
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 0, 0), None, 0),
+            None
+        );
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 1, 3), None, 1),
+            Some(Alert::BackyardBell(3))
+        );
+        // The same counter on the next tick is the same whistle still on
+        // screen, not a second one.
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 1, 3), None, 2),
+            Some(Alert::BackyardBell(3))
+        );
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 2, 2), None, 3),
+            Some(Alert::BackyardBell(2))
+        );
+    }
+
+    #[test]
+    fn a_whistle_reaches_a_runner_standing_in_the_corral() {
+        // The one alert deliberately not gated on Recording: the runner it is
+        // most for is the one auto-paused in the corral with 60 s left.
+        let mut e = AlertEngine::new();
+        let mut s = backyard_snap(RecordState::Paused, 1, 1);
+        s.backyard = s.backyard.map(|b| crate::backyard::BackyardView {
+            in_corral: true,
+            ..b
+        });
+        assert_eq!(
+            e.on_update(&s, None, 0),
+            Some(Alert::BackyardBell(1)),
+            "a paused runner is exactly who the bell is calling"
+        );
+    }
+
+    #[test]
+    fn a_whistle_takes_the_slot_from_a_fuel_reminder_which_re_queues() {
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(10, 10);
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 0, 0), None, 0),
+            None
+        );
+        let mut fuelled = backyard_snap(RecordState::Recording, 0, 0);
+        fuelled.moving_s = 20;
+        assert_eq!(e.on_update(&fuelled, None, 1), Some(Alert::Eat));
+        assert_eq!(
+            e.on_update(&backyard_snap(RecordState::Recording, 1, 3), None, 2),
+            Some(Alert::BackyardBell(3))
+        );
+        // Fuel is never silently dropped — the displaced reminder comes back
+        // once the whistle's TTL expires.
+        assert_eq!(
+            e.on_update(
+                &backyard_snap(RecordState::Recording, 1, 3),
+                None,
+                2 + ALERT_TTL_S
+            ),
+            Some(Alert::Eat)
+        );
+    }
+
+    #[test]
+    fn a_zone_banner_blocks_a_whistle_and_the_whistle_is_dropped_not_owed() {
+        // The milestone rule: a whistle shown late is a lie about the clock,
+        // and the page carries the live countdown anyway.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(2));
+        let cutoffs = zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM);
+        let mut hot = backyard_snap(RecordState::Recording, 0, 0);
+        hot.zone_cutoffs = cutoffs;
+        assert!(matches!(
+            e.on_update(&hot, Some(190), 0),
+            Some(Alert::ZoneAbove(_))
+        ));
+        let mut whistling = backyard_snap(RecordState::Recording, 1, 3);
+        whistling.zone_cutoffs = cutoffs;
+        assert!(
+            matches!(
+                e.on_update(&whistling, Some(190), 1),
+                Some(Alert::ZoneAbove(_))
+            ),
+            "over-effort against ground truth outranks even the bell"
+        );
+        // The counter was consumed, so the blocked whistle never resurfaces.
+        assert_eq!(
+            e.on_update(&whistling, None, 1 + ALERT_TTL_S),
+            None,
+            "a stale whistle is dropped, not owed"
+        );
+    }
+
+    #[test]
+    fn an_unarmed_watch_never_whistles() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&snap(RecordState::Recording, 0), None, 0), None);
+        assert_eq!(e.on_update(&snap(RecordState::Recording, 1), None, 1), None);
     }
 }
