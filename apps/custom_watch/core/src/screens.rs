@@ -466,14 +466,15 @@ mod tests {
                 n += 1;
             }
         }
-        assert_eq!(n, 34, "the catalogue and its byte map have drifted");
+        assert_eq!(n, 35, "the catalogue and its byte map have drifted");
         assert!(Metric::from_byte(0).is_none(), "0 is the empty slot");
-        assert!(Metric::from_byte(35).is_none(), "35 is past the catalogue");
+        assert!(Metric::from_byte(36).is_none(), "36 is past the catalogue");
         // A handful pinned by name, so a reorder cannot quietly renumber them.
         assert_eq!(Metric::from_byte(1).unwrap().wire_name(), "elapsed");
         assert_eq!(Metric::from_byte(2).unwrap().wire_name(), "distance");
         assert_eq!(Metric::from_byte(5).unwrap().wire_name(), "heart_rate");
         assert_eq!(Metric::from_byte(34).unwrap().wire_name(), "race_day_days");
+        assert_eq!(Metric::from_byte(35).unwrap().wire_name(), "sleep_budget");
     }
 
     #[test]
@@ -494,7 +495,7 @@ mod tests {
 
     #[test]
     fn every_slot_label_fits_the_cells_a_slot_can_spare() {
-        for b in 1..=34u8 {
+        for b in 1..=35u8 {
             let m = Metric::from_byte(b).unwrap();
             let label = m.slot_label();
             assert!(

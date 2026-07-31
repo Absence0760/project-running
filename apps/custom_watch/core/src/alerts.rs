@@ -713,6 +713,7 @@ mod tests {
             zone_time_s: [0; ZONE_COUNT],
             pacer: None,
             cutoff: None,
+            sleep: None,
             race_prediction: None,
             pace_bucket_m: [0.0; crate::record::PACE_BUCKET_COUNT],
             training_stress: None,

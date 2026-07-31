@@ -43,6 +43,7 @@ use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RacePhaseView, RecordState, Snapshot};
 use crate::roadbook::CutoffStatus;
+use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::trackback::{self, TrackbackView};
 use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
@@ -362,6 +363,7 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::Lap
         | Page::GuidedRun
         | Page::CutoffEta
+        | Page::SleepStation
         | Page::TrainingLoad
         | Page::DistanceBand
         | Page::GearWear
@@ -700,6 +702,7 @@ pub fn page_rows(
             Page::TrainingLoad => training_load_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::DistanceBand => distance_band_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::CutoffEta => cutoff_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::SleepStation => sleep_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Roadbook => roadbook_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Fuel => fuel_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
@@ -835,10 +838,11 @@ pub enum Metric {
     AutoEffortMatched,
     RouteElevTotal,
     RaceDayDays,
+    SleepBudget,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=34`.
+    /// This metric's byte on the `SCR1` wire, in `1..=35`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -885,6 +889,7 @@ impl Metric {
             Metric::AutoEffortMatched => 32,
             Metric::RouteElevTotal => 33,
             Metric::RaceDayDays => 34,
+            Metric::SleepBudget => 35,
         }
     }
 
@@ -931,6 +936,7 @@ impl Metric {
             32 => Metric::AutoEffortMatched,
             33 => Metric::RouteElevTotal,
             34 => Metric::RaceDayDays,
+            35 => Metric::SleepBudget,
             _ => return None,
         })
     }
@@ -977,6 +983,7 @@ impl Metric {
             Metric::AutoEffortMatched => "auto_effort_matched",
             Metric::RouteElevTotal => "route_elev_total",
             Metric::RaceDayDays => "race_day_days",
+            Metric::SleepBudget => "sleep_budget",
         }
     }
 
@@ -1023,6 +1030,7 @@ impl Metric {
             Metric::AutoEffortMatched => "SEG",
             Metric::RouteElevTotal => "ROUTE",
             Metric::RaceDayDays => "RACE",
+            Metric::SleepBudget => "NAP",
         }
     }
 }
@@ -1050,6 +1058,7 @@ pub const fn hero_metric(page: Page) -> Option<Metric> {
         Page::Workout => Metric::WorkoutRemaining,
         Page::RacePredictor => Metric::RacePrediction,
         Page::CutoffEta => Metric::CutoffMargin,
+        Page::SleepStation => Metric::SleepBudget,
         Page::TrainingLoad => Metric::TrainingStress,
         Page::Roadbook => Metric::RoadbookNext,
         Page::Fuel => Metric::FuelCarbs,
@@ -1214,6 +1223,19 @@ pub fn metric_unfed(
         Metric::AutoEffortMatched => snap.auto_effort.is_none().then_some(Unfed::NotSynced),
         Metric::RouteElevTotal => snap.route_elev.is_none().then_some(Unfed::NotSynced),
         Metric::RaceDayDays => snap.race_day.is_none().then_some(Unfed::NotSynced),
+        // Three absences the page keeps apart: no cut-offs pushed, all of them
+        // behind the runner, and a projection withheld — the last splitting
+        // again by which term went missing, because "keep running" and "wait
+        // for the sky" are different instructions.
+        Metric::SleepBudget => match snap.sleep {
+            None => Some(Unfed::NotSynced),
+            Some(s) => match s.status {
+                SleepStatus::Budget | SleepStatus::NoBudget => None,
+                SleepStatus::NoCutoff => Some(Unfed::NoCutoffAhead),
+                SleepStatus::Unknown if s.pace_s_per_km.is_none() => Some(Unfed::NeedDistance),
+                SleepStatus::Unknown => Some(Unfed::AwaitingFix),
+            },
+        },
     }
 }
 
@@ -1678,6 +1700,25 @@ pub fn metric_hero(
             }
             row
         }
+        // Minutes of sleep the race can still afford. `0` is a measurement —
+        // there is no time — and `--` is the refusal to guess at one; the two
+        // must never be confused, which is why a sub-minute budget resolves to
+        // the zero rather than to a placeholder.
+        Metric::SleepBudget => {
+            let mut row = Row::new();
+            match snap.sleep.map(|s| (s.status, s.budget_min())) {
+                Some((_, Some(min))) => {
+                    let _ = write!(row, "{}", min.min(9999));
+                }
+                Some((SleepStatus::NoBudget, None)) => {
+                    let _ = write!(row, "0");
+                }
+                _ => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
     }
 }
 
@@ -1744,6 +1785,7 @@ pub fn metric_unit(
         Metric::AvgPace | Metric::EasyPace => Some("/KM"),
         Metric::HeartRate => Some("BPM"),
         Metric::CurrentStreak | Metric::PrAge | Metric::RaceDayDays => Some("DAYS"),
+        Metric::SleepBudget => Some("MIN"),
         Metric::GoalPercent => Some("%"),
         Metric::TurnCueDistance => snap
             .turn_cue
@@ -1844,7 +1886,7 @@ pub fn screen_slots(
 }
 
 /// The composed screen `page` shows, rendered slot by slot, or `None` when
-/// `page` is one of the 37 built-ins or the runner has not composed that one.
+/// `page` is one of the 38 built-ins or the runner has not composed that one.
 ///
 /// The app's entry point for a screen page: slot 0 feeds the ordinary hero
 /// pipeline (band, unit, run-marker clearance — all unchanged), and the slots
@@ -2591,6 +2633,80 @@ fn cutoff_glance(
     }
     if tag_shown(tag, uptime_s, animate) {
         write_tag(&mut rows[body_top_row(Page::CutoffEta)], tag);
+    }
+
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+    rows
+}
+
+/// The sleep-station glance (§ 373): how many minutes the runner may lie down
+/// and still make the next cut-off, up large in the rows-0-2 hero, then the
+/// verdict word, the cut-off the budget is measured against, the reserve held
+/// back, and the pace the projection assumed.
+///
+/// Row 7 is [`NO_WAKE_NOTICE`] and is **not conditional**. It is the one line
+/// on the page a runner must read before acting on the number above it: the
+/// tier-1 hardware has no motor and no buzzer, so it will be a crew member or
+/// nothing that gets them up. It therefore stays through the empty states too —
+/// it describes the device, not the data.
+///
+/// The pace row exists for the same reason the reserve row does: the budget is
+/// only as good as the pace it was projected from, and a runner who can see
+/// `AT 8:30` can tell at a glance whether the watch is still describing the
+/// race they are in.
+fn sleep_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    match snap.sleep {
+        None => write_unfed(&mut rows, Page::SleepStation, "SLEEP", Unfed::NotSynced),
+        Some(s) if s.status == SleepStatus::NoCutoff => {
+            write_unfed(&mut rows, Page::SleepStation, "SLEEP", Unfed::NoCutoffAhead)
+        }
+        Some(s) => {
+            let verdict = match s.status {
+                SleepStatus::Budget => "OK",
+                SleepStatus::NoBudget if s.limit_passed => "MISSED",
+                SleepStatus::NoBudget => "NONE",
+                SleepStatus::Unknown | SleepStatus::NoCutoff => "--",
+            };
+            let _ = write!(rows[3], "{:<8}{}", "SLEEP", verdict);
+
+            if s.distance_to_m < 1000.0 {
+                let _ = write!(rows[4], "{:<5}{:.0} M", "TO", s.distance_to_m.max(0.0));
+            } else {
+                let km = (s.distance_to_m / 1000.0).min(9999.99);
+                let _ = write!(rows[4], "{:<5}{:.2} KM", "TO", km);
+            }
+
+            match (s.status, s.reserve_s) {
+                (SleepStatus::Unknown, _) => {
+                    let _ = write!(rows[5], "{:<5}--", "HELD");
+                }
+                (_, held) => {
+                    let (h, m, sec) = hms(held);
+                    let _ = write!(rows[5], "{:<5}{}:{:02}:{:02}", "HELD", h.min(999), m, sec);
+                }
+            }
+
+            write_pace(
+                &mut rows[6],
+                "AT",
+                s.pace_s_per_km.map(|p| libm::round(p) as u32),
+            );
+        }
+    }
+
+    let _ = write!(rows[7], "{NO_WAKE_NOTICE}");
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::SleepStation)], tag);
     }
 
     write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
@@ -4355,6 +4471,7 @@ mod tests {
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
+            sleep: None,
             race_prediction: None,
             pace_bucket_m: [0.0; crate::record::PACE_BUCKET_COUNT],
             training_stress: None,
@@ -4842,6 +4959,17 @@ mod tests {
             limit_passed: false,
             status: crate::cutoff_eta::CutoffEtaStatus::Behind,
         });
+        // Widest of everything the sleep body draws: a four-digit hero, a
+        // 999-hour reserve, a 99:59 pace, and a kilometre distance.
+        rec.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::Budget,
+            budget_s: 9999 * 60 + 59,
+            reserve_s: 999 * 3600 + 59 * 60 + 59,
+            margin_s: Some(i32::MAX),
+            pace_s_per_km: Some(99.0 * 60.0 + 59.0),
+            distance_to_m: 999_990.0,
+            limit_passed: false,
+        });
         rec.workout = Some(workout_view());
         rec.race_prediction = Some(
             crate::race_predictor::predict_race_ladder(&[crate::race_predictor::Effort {
@@ -4981,7 +5109,7 @@ mod tests {
     /// there looking supported.
     #[test]
     fn every_metric_is_the_hero_of_at_least_one_page() {
-        let mut headed: heapless::Vec<Metric, 40> = heapless::Vec::new();
+        let mut headed: heapless::Vec<Metric, 48> = heapless::Vec::new();
         let mut p = Page::default();
         loop {
             if let Some(m) = hero_metric(p) {
@@ -4996,7 +5124,7 @@ mod tests {
         }
         assert_eq!(
             headed.len(),
-            34,
+            35,
             "the catalogue and the pages that head it have drifted: {headed:?}"
         );
     }
@@ -5057,7 +5185,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=34u8 {
+                for b in 1..=35u8 {
                     let m = Metric::from_byte(b).unwrap();
                     let hero = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     let why = super::metric_unfed(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
@@ -5082,7 +5210,7 @@ mod tests {
     #[test]
     fn every_unfed_slot_names_a_class_rather_than_shrugging() {
         let unfed = snapshot(RecordState::Recording, 0.0);
-        for b in 1..=34u8 {
+        for b in 1..=35u8 {
             let m = Metric::from_byte(b).unwrap();
             let screen = crate::screens::Screen::new(crate::screens::Layout::Single, &[m]).unwrap();
             let slots = screen_slots(&screen, Some(&fix()), None, &unfed, None, 42, None);
@@ -5366,7 +5494,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=34u8 {
+                for b in 1..=35u8 {
                     let m = Metric::from_byte(b).unwrap();
                     let v = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     for nominal in [HeroBand::BigNumHero, HeroBand::MedNumHero] {
@@ -8363,6 +8491,151 @@ mod tests {
         assert_eq!(rows[6].as_str(), "NEED --");
     }
 
+    fn sleep_rows(rec: &Snapshot) -> [Row; ROWS] {
+        page_rows(
+            Page::SleepStation,
+            Some(&fix()),
+            None,
+            Some(rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        )
+    }
+
+    #[test]
+    fn sleep_glance_shows_the_budget_the_race_affords() {
+        let mut rec = snapshot(RecordState::Recording, 15_000.0);
+        rec.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::Budget,
+            budget_s: 2_400,
+            reserve_s: 1_800,
+            margin_s: Some(4_200),
+            pace_s_per_km: Some(360.0),
+            distance_to_m: 10_000.0,
+            limit_passed: false,
+        });
+        let rows = sleep_rows(&rec);
+        assert_eq!(
+            page_hero(Page::SleepStation, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "40"
+        );
+        assert_eq!(rows[3], header("SLEEP   OK", "REC"));
+        assert_eq!(rows[4].as_str(), "TO   10.00 KM");
+        assert_eq!(rows[5].as_str(), "HELD 0:30:00");
+        assert_eq!(rows[6].as_str(), "AT   6:00 /KM");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        only_the_gps_icon(Page::SleepStation, &rec, 42);
+    }
+
+    /// The page's whole reason for existing is that a runner acts on the number
+    /// while unconscious, so the one thing it may never do is imply an alarm.
+    /// The notice therefore rides every state, fed or not.
+    #[test]
+    fn sleep_glance_always_says_the_watch_cannot_wake_you() {
+        let mut fed = snapshot(RecordState::Recording, 15_000.0);
+        fed.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::Budget,
+            budget_s: 2_400,
+            reserve_s: 1_800,
+            margin_s: Some(4_200),
+            pace_s_per_km: Some(360.0),
+            distance_to_m: 10_000.0,
+            limit_passed: false,
+        });
+        let unfed = snapshot(RecordState::Recording, 500.0);
+        for rec in [&fed, &unfed] {
+            assert_eq!(
+                sleep_rows(rec)[7].as_str(),
+                crate::sleep_station::NO_WAKE_NOTICE
+            );
+        }
+    }
+
+    #[test]
+    fn sleep_glance_honest_inactive_states() {
+        // No cut-off legs pushed: the same absence the cut-off page reads, and
+        // the same refusal to guess which of the two causes it is.
+        let rec = snapshot(RecordState::Recording, 500.0);
+        let rows = sleep_rows(&rec);
+        assert_eq!(rows[3], header("SLEEP", "REC"));
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(
+            page_hero(Page::SleepStation, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+
+        // Past the last cut-off: nothing bounds the nap, which is NOT the same
+        // as an unlimited one — so the page says so rather than showing a
+        // number.
+        let mut past = snapshot(RecordState::Recording, 500.0);
+        past.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::NoCutoff,
+            ..Default::default()
+        });
+        assert_eq!(sleep_rows(&past)[4].as_str(), "NO CUTOFF AHEAD");
+
+        // A withheld projection: `--` everywhere a projected term would sit,
+        // including the reserve, because a reserve against nothing is theatre.
+        let mut stale = snapshot(RecordState::Recording, 500.0);
+        stale.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::Unknown,
+            pace_s_per_km: Some(360.0),
+            distance_to_m: 10_000.0,
+            ..Default::default()
+        });
+        let rows = sleep_rows(&stale);
+        assert_eq!(rows[3], header("SLEEP   --", "REC"));
+        assert_eq!(rows[5].as_str(), "HELD --");
+        assert_eq!(
+            page_hero(Page::SleepStation, None, Some(&stale), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    /// Zero minutes is an answer; `--` is a refusal to give one. A page that
+    /// rendered them alike would let a runner read "no time to sleep" as "the
+    /// watch does not know" — and lie down anyway.
+    #[test]
+    fn sleep_glance_separates_a_zero_budget_from_an_unknown_one() {
+        let mut none = snapshot(RecordState::Recording, 500.0);
+        none.sleep = Some(crate::sleep_station::SleepBudget {
+            status: SleepStatus::NoBudget,
+            budget_s: 0,
+            reserve_s: 1_800,
+            margin_s: Some(600),
+            pace_s_per_km: Some(360.0),
+            distance_to_m: 10_000.0,
+            limit_passed: false,
+        });
+        let rows = sleep_rows(&none);
+        assert_eq!(rows[3], header("SLEEP   NONE", "REC"));
+        assert_eq!(
+            page_hero(Page::SleepStation, None, Some(&none), None)
+                .unwrap()
+                .as_str(),
+            "0"
+        );
+
+        // A limit already behind the clock is a third thing again: not "no time
+        // left" but "no time at all", and no pace recovers it.
+        let mut missed = none;
+        missed.sleep = Some(crate::sleep_station::SleepBudget {
+            limit_passed: true,
+            ..none.sleep.unwrap()
+        });
+        assert_eq!(sleep_rows(&missed)[3], header("SLEEP   MISSED", "REC"));
+    }
+
     #[test]
     fn race_predictor_glance_shows_the_ladder_with_confidence_flags() {
         let mut rec = snapshot(RecordState::Recording, 5_000.0);
@@ -8986,6 +9259,7 @@ mod tests {
             | Page::Nav
             | Page::TurnCue
             | Page::CutoffEta
+            | Page::SleepStation
             | Page::Roadbook
             | Page::Fuel
             | Page::GearWear
