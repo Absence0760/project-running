@@ -516,6 +516,49 @@ impl RunStore {
         }
     }
 
+    /// Wipe every byte of flash this store owns — the config page and all four
+    /// run slots — and forget the directory that indexed them (§378). Returns
+    /// whether the erase actually reached flash.
+    ///
+    /// **This erases bytes, not entries.** [`SlotDir::forget`] would satisfy
+    /// every reader in this firmware while leaving each blob's coordinates and
+    /// heart rates sitting at the address they were written to; the adversary a
+    /// factory erase exists for is whoever holds the device next, and nothing in
+    /// this workspace enables APPROTECT, so a debug probe reads exactly what the
+    /// directory was hiding. The range is [`flash_plan::plan_factory_erase`]'s,
+    /// which is host-tested to cover every record offset and every slot — the
+    /// one guard against a wipe that quietly skips a record added later.
+    ///
+    /// What this does NOT claim: an erase is a return to `0xFF` at every address
+    /// the firmware wrote, with no wear-levelling or copy-back layer underneath
+    /// to leave a shadow copy elsewhere (this store addresses pages directly).
+    /// It is not a claim against charge-remnant recovery on a decapped die, and
+    /// it does nothing about a probe attached *before* the erase — that is
+    /// encryption at rest, which tier 1 does not have.
+    ///
+    /// Best-effort / L4 like every other flash path: a failure warns and the
+    /// caller carries on clearing RAM, because a wipe that half-worked must
+    /// still take everything it can reach.
+    pub async fn factory_erase(&mut self) -> bool {
+        self.dir = SlotDir::new();
+        self.publish_pending();
+        if !self.available {
+            warn!("run_flash: factory erase — flash unavailable, RAM only");
+            return false;
+        }
+        let (from, to) = flash_plan::plan_factory_erase(REGION_OFFSET);
+        if let Err(e) = self.flash_erase(from, to).await {
+            warn!("run_flash: factory erase failed {:?}", e);
+            return false;
+        }
+        info!(
+            "run_flash: factory erase — {=u32} B cleared from {=u32:#x}",
+            to - from,
+            from
+        );
+        true
+    }
+
     /// Every record the shared config page currently holds, so a writer can
     /// change one and hand the rest back untouched.
     fn read_config_page(&mut self) -> ConfigPage {

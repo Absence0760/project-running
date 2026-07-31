@@ -37,7 +37,7 @@
 //! `apps/custom_watch/local_testing.md § Simulating without a board`.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select4, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
@@ -644,16 +644,25 @@ pub async fn run(store: &'static SharedStore) {
                 Either4::Fourth(()) => Event::Settings,
             }
         } else {
-            match select3(
+            // The erase arm is here and not in the branch above because the
+            // §351 menu that raises it exists only while idle. It is a select
+            // arm rather than a `try_changed` at the loop head because this
+            // branch has no ticker: idle, the task sleeps until a fix arrives,
+            // and in Expedition mode that is a minute away — a wipe the runner
+            // just confirmed may not leave a marked stash and a medical ID on
+            // the panel for that long.
+            match select4(
                 fix_rx.changed(),
                 state::RECORD_CMD.receive(),
                 state::SETTINGS.ready_to_receive(),
+                state::FACTORY_ERASE.receive(),
             )
             .await
             {
-                Either3::First(fix) => Event::Fix(fix),
-                Either3::Second(cmd) => Event::Cmd(cmd),
-                Either3::Third(()) => Event::Settings,
+                Either4::First(fix) => Event::Fix(fix),
+                Either4::Second(cmd) => Event::Cmd(cmd),
+                Either4::Third(()) => Event::Settings,
+                Either4::Fourth(()) => Event::Erase,
             }
         };
 
@@ -886,6 +895,46 @@ pub async fn run(store: &'static SharedStore) {
             // The drain above already consumed and applied the frame this wake
             // was for; the loop tail republishes whatever it changed.
             Event::Settings => {}
+            // The RAM half of §378's factory erase — the button task has
+            // already wiped flash and cleared what it owns.
+            //
+            // **The recorder is replaced whole rather than cleared field by
+            // field**, which is the same rule the flash side follows: a wipe
+            // erases a *range*, not an enumerated list of records, so a field
+            // added to `Recorder` next year is covered by default instead of
+            // being covered only if someone remembers to extend an allowlist.
+            // Safe precisely because the erase is idle-only — `Recorder::new()`
+            // would throw away a live run, and there is never one here.
+            //
+            // What that takes with it: the eight marked waypoints (the mark the
+            // runner made at a gear cache, and the only copy left once flash is
+            // gone — `Waypoints::clear` finally has a caller), the pushed max /
+            // resting HR, the pacer goal, the gear, the roadbook and fuel plan,
+            // the curated page mask, the auto-lap rung and the backyard arm.
+            Event::Erase => {
+                recorder = Recorder::new();
+                recorder.set_fix_interval_s(mode.fix_interval_s());
+                // The breadcrumb is a decimated trail of where the runner has
+                // physically been. It survives a stop, so it has to be named.
+                trackback = Trackback::new();
+                crumb_len = 0;
+                trackback_sender.send(trackback.view());
+                alerts = AlertEngine::new();
+                last_alert = None;
+                alert_sender.send(None);
+                open = None;
+                // The comparison copies this task holds against flash: flash is
+                // erased, so every one of them must read as "nothing stored" or
+                // the next push would skip its write believing it was already
+                // there.
+                persisted_hide = None;
+                persisted_auto_lap = None;
+                persisted_ice = None;
+                ice_tx.send(None);
+                persisted_screens = None;
+                screens_tx.send(None);
+                info!("record: factory erase — recorder, waypoints, ICE and screens cleared");
+            }
         }
 
         // Persist any laps this event closed (manual, auto, or a throttled
@@ -1095,4 +1144,8 @@ enum Event {
     Fix(Fix),
     Cmd(RecordCommand),
     Settings,
+    /// A confirmed factory erase (§378). Only reachable from the idle arm of
+    /// the select, because the settings menu that raises it is idle-only — so
+    /// by construction there is no run to lose.
+    Erase,
 }
