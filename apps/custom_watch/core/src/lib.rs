@@ -281,6 +281,7 @@ pub mod cutoff_eta;
 pub mod daylight;
 pub mod distance_bands;
 pub mod elevation;
+pub mod erase;
 pub mod exercise_calories;
 pub mod face;
 pub mod finisher_certificate;

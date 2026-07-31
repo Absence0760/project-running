@@ -149,6 +149,30 @@ pub fn chunk_completes_run(dir: &SlotDir, run_seq: u32, next_offset: u32) -> boo
         .is_some_and(|(_, size)| next_offset >= size)
 }
 
+/// The flash range a factory erase (§378) covers: the config page and every run
+/// slot, as one contiguous span.
+///
+/// **It really is one span.** The config page sits immediately BELOW the run
+/// region (`app/src/run_flash::CONFIG_OFFSET` = `REGION_OFFSET - CONFIG_LEN`),
+/// so there is no gap between them and nothing else of the watch's inside them
+/// — which is why the erase can be a single range rather than a list of records
+/// a future record could be left off. Everything personal the device stores is
+/// in here: the run blobs (coordinates + bpm), the waypoints, the ICE card, the
+/// BLE bond's long-term and identity-resolution keys, and the config.
+///
+/// **This erases bytes, not directory entries.** [`SlotDir::forget`] drops a
+/// slot's entry and leaves its bytes for the next reservation to overwrite,
+/// which is right for a failed write and wrong for a wipe: the adversary a
+/// factory erase exists for is whoever holds the device next, and nothing in
+/// this workspace enables APPROTECT, so a debug probe reads every byte the
+/// firmware's own reader would have skipped.
+pub const fn plan_factory_erase(region_offset: u32) -> (u32, u32) {
+    (
+        region_offset - flash_store::CONFIG_LEN as u32,
+        region_offset + flash_store::REGION_LEN as u32,
+    )
+}
+
 /// Reads one run slot's raw bytes for [`recover_dir`]. `false` reports a flash
 /// read error: that slot recovers nothing rather than the scan trusting a
 /// partially-filled buffer.
@@ -1080,5 +1104,68 @@ mod tests {
         assert_eq!(&pulled[..], &final_blob[..]);
         assert!(verify_blob(&pulled));
         assert!(chunk_completes_run(&dir, 7, cursor));
+    }
+
+    #[test]
+    fn a_factory_erase_covers_every_byte_the_store_ever_writes() {
+        // The claim a wipe stands on: not "the records we remembered to list"
+        // but "every address this crate can put personal data at". Each record
+        // offset below is checked against the range rather than against a copy
+        // of the arithmetic, so a record added at a new offset — or a page
+        // layout that grew — fails here rather than surviving an erase.
+        let (from, to) = plan_factory_erase(BASE);
+        let config = BASE - flash_store::CONFIG_LEN as u32;
+        assert_eq!(from, config, "the erase starts at the config page");
+        assert_eq!(
+            to,
+            BASE + REGION_LEN as u32,
+            "and ends at the top of the run region"
+        );
+        assert_eq!(
+            to - from,
+            (flash_store::CONFIG_LEN + REGION_LEN) as u32,
+            "one contiguous span — the config page abuts the run region, so a \
+             wipe needs no second range and can leave no gap between them"
+        );
+        for (name, at, len) in [
+            ("config", 0, flash_store::CONFIG_RECORD_LEN),
+            (
+                "bond",
+                flash_store::BOND_RECORD_OFFSET,
+                flash_store::BOND_RECORD_LEN,
+            ),
+            (
+                "waypoints",
+                flash_store::WAYPOINT_RECORD_OFFSET,
+                crate::waypoints::MAX_WPT1_LEN,
+            ),
+            (
+                "ice",
+                flash_store::ICE_RECORD_OFFSET,
+                crate::ice::ICE1_RECORD_LEN,
+            ),
+            (
+                "screens",
+                flash_store::SCREENS_RECORD_OFFSET,
+                crate::screens::MAX_SCR1_LEN,
+            ),
+        ] {
+            let start = config + at as u32;
+            assert!(
+                start >= from && start + len as u32 <= to,
+                "the {name} record is outside the factory-erase range"
+            );
+        }
+        for slot in 0..SLOT_COUNT {
+            let start = flash_store::slot_offset(BASE, slot);
+            assert!(
+                start >= from && start + SLOT_LEN as u32 <= to,
+                "run slot {slot} is outside the factory-erase range"
+            );
+        }
+        // Both ends land on an erase-page boundary, or the NVMC would refuse
+        // the range and the wipe would silently do nothing.
+        assert_eq!(from % SLOT_LEN as u32, 0);
+        assert_eq!(to % SLOT_LEN as u32, 0);
     }
 }
