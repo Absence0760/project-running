@@ -76,6 +76,8 @@ not a default.
 
 The release workflow signs every `.aab` with an upload key stored as a GitHub Secret. The Play Console then re-signs with Play App Signing's distribution key — that key never leaves Google.
 
+A consequence worth knowing before anyone offers an APK from the website: **no artifact this repo builds can ever carry the signature an installed Play build expects.** The only signature-compatible download is the universal APK Play itself generates, pulled from the Play Console's App Bundle Explorer. See [decisions.md § 379](../../docs/architecture/decisions.md) for why we keep the app signing key with Google and what that means for direct distribution.
+
 ### Generate the upload keystore (one-time)
 
 ```bash

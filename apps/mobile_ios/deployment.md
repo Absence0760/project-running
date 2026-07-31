@@ -18,7 +18,7 @@ So: `mobile_ios@1.2.3` triggers one CI workflow that ships **both** apps.
 
 ## Provider — Apple App Store Connect
 
-**Distribution:** App Store + TestFlight.
+**Distribution:** App Store + TestFlight. **There is no third option** — Ad Hoc caps at 100 pre-registered devices, the Enterprise program is for an organisation's own employees, and the EU's DMA Web Distribution route requires an EU-established entity with over a million first annual EU installs behind it. The website links to the App Store; it never serves an `.ipa`. See [decisions.md § 379](../../docs/architecture/decisions.md).
 
 **TestFlight first.** Internal testers (up to 100 Apple IDs in the developer team) and external testers (up to 10,000 via a public TestFlight link) can install before the App Store rollout. Treat TestFlight as the equivalent of Play's Internal track.
 
