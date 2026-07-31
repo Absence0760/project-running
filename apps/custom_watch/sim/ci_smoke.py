@@ -348,7 +348,7 @@ PAGE_INTENT_LINES = {
 PAGE_STEP_TIMEOUT = 30
 PAGE_PRESS_ATTEMPTS = 2
 # Enough presses for two-plus laps of the filtered cycle: an unsynced sim watch
-# carries ~12-18 of the 35 pages, and the full cycle is 35.
+# carries ~12-18 of the 38 pages, and the full cycle is 38.
 MAX_PAGE_PRESSES = 48
 
 # `record: alert <Kind>` on a raise, `record: alert cleared` when its TTL runs
