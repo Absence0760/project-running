@@ -34,14 +34,14 @@ pub enum Page {
     ///
     /// **They sit here, immediately after the Dashboard, on purpose.** A screen
     /// a runner composed is by construction the thing they most want to glance
-    /// at — burying it behind thirty-nine built-ins would defeat the feature —
+    /// at — burying it behind forty built-ins would defeat the feature —
     /// and inserting at the front rather than the back keeps
     /// [`Page::BackToStart`] last, one long-press from home, which is the one
     /// ordering property the safety page cannot lose.
     ///
     /// Each is gated on the runner having actually composed it
     /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
-    /// 40 built-ins and the cycle never carries a blank.
+    /// 41 built-ins and the cycle never carries a blank.
     Screen1,
     Screen2,
     Screen3,
@@ -183,6 +183,16 @@ pub enum Page {
     /// offset plus a fix carrying the RMC clock + date; honest states
     /// otherwise.
     Daylight,
+    /// The barometric pressure tendency ([`crate::storm`], § 376): how far the
+    /// sea-level-reduced pressure has moved over the trend window, and whether
+    /// that is a front.
+    ///
+    /// Beside [`Page::Daylight`] because they are the two pages about the
+    /// *world* rather than the run — the sky's clock and the sky's mood — and a
+    /// runner deciding whether to commit to an exposed section reads both in
+    /// the same breath. It is in the cycle exactly while the watch can state a
+    /// reduced pressure, so an indoor or reference-less watch never meets it.
+    Storm,
     /// Distance + bearing back to the newest marked waypoint
     /// ([`crate::waypoints`]) — the gear cache, the water stash, where the
     /// trail was lost. Sits beside [`Page::BackToStart`] because it is the
@@ -257,6 +267,7 @@ impl Page {
             Page::AutoEffort => "AEFF",
             Page::Timer => "TIMR",
             Page::Daylight => "SUN",
+            Page::Storm => "STRM",
             Page::Waypoint => "WPT",
             Page::BackToStart => "BACK",
         }
@@ -310,6 +321,7 @@ impl Page {
             Page::AutoEffort => "AUTO EFFORT",
             Page::Timer => "TIMER",
             Page::Daylight => "DAYLIGHT",
+            Page::Storm => "STORM WATCH",
             Page::Waypoint => "WAYPOINT",
             Page::BackToStart => "BACK TO START",
         }
@@ -393,20 +405,21 @@ impl Page {
             Page::RouteElev => Page::AutoEffort,
             Page::AutoEffort => Page::Timer,
             Page::Timer => Page::Daylight,
-            Page::Daylight => Page::Waypoint,
+            Page::Daylight => Page::Storm,
+            Page::Storm => Page::Waypoint,
             Page::Waypoint => Page::BackToStart,
             Page::BackToStart => Page::Dashboard,
         }
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 40 pages a forward-
-    /// only walk needs up to ~39 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 41 pages a forward-
+    /// only walk needs up to ~40 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
     /// Which of the runner's composed screens this page shows, or `None` for
-    /// the 40 built-ins.
+    /// the 41 built-ins.
     ///
     /// The index into [`crate::screens::Screens`], so a page and the screen it
     /// draws are related by exactly one function rather than by four arms
@@ -468,7 +481,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 44] = [
+    const ALL: [Page; 45] = [
         Page::Dashboard,
         Page::Screen1,
         Page::Screen2,
@@ -511,6 +524,7 @@ mod tests {
         Page::AutoEffort,
         Page::Timer,
         Page::Daylight,
+        Page::Storm,
         Page::Waypoint,
         Page::BackToStart,
     ];
@@ -569,6 +583,11 @@ mod tests {
         assert_eq!(Page::Timer.next(), Page::Daylight);
         assert_eq!(
             Page::Daylight.next(),
+            Page::Storm,
+            "the sky's clock and the sky's mood sit together"
+        );
+        assert_eq!(
+            Page::Storm.next(),
             Page::Waypoint,
             "the two get-me-back-there pages close the cycle together"
         );
@@ -683,7 +702,7 @@ mod tests {
     #[test]
     fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
         // The phone's 32-bit field stops at discriminant 31, so AutoEffort,
-        // Timer, Daylight, Waypoint and BackToStart sit past its reach;
+        // Timer, Daylight, Storm, Waypoint and BackToStart sit past its reach;
         // zero-extending would curate those pages out invisibly on every
         // curation push.
         let curated = mask_from_wire(1u32 << (Page::Pace as u8));

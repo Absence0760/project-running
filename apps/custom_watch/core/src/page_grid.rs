@@ -302,9 +302,9 @@ mod tests {
         );
         assert_eq!(
             grid_cell(u64::MAX, Page::BackToStart, Page::BackToStart),
-            // Column 3 because the full ring is 44 long and the map 4 wide:
-            // index 43 lands on the row's last cell.
-            Some((3, GRID_BODY_ROWS - 1)),
+            // Column 0 because the full ring is 45 long and the map 4 wide:
+            // index 44 opens a row of its own.
+            Some((0, GRID_BODY_ROWS - 1)),
             "the last page seats on the bottom body row once it is the cursor"
         );
         let scrolled = grid_rows(u64::MAX, Page::BackToStart);
@@ -313,7 +313,10 @@ mod tests {
             "the window scrolled off the first row: {:?}",
             scrolled[GRID_TOP_ROW]
         );
-        assert_eq!(scrolled[ROWS - 1].as_str(), "TIMR SUN  WPT  BACK");
+        // A 45-page ring leaves the safety page alone on the last row; the
+        // row above it is the one that carries four.
+        assert_eq!(scrolled[ROWS - 2].as_str(), "TIMR SUN  STRM WPT");
+        assert_eq!(scrolled[ROWS - 1].as_str(), "BACK");
         for row in scrolled.iter() {
             assert!(row.len() <= COLS, "scrolled row too wide: {row:?}");
         }
@@ -520,8 +523,8 @@ mod tests {
         full.row_up(u64::MAX);
         assert_eq!(
             grid_cell(u64::MAX, full.cursor(), full.cursor()),
-            // Four back from home on a 44-page ring is index 40, column 0.
-            Some((0, GRID_BODY_ROWS - 1)),
+            // Four back from home on a 45-page ring is index 41, column 1.
+            Some((1, GRID_BODY_ROWS - 1)),
             "one row up from home wraps into the grid's tail"
         );
     }

@@ -43,6 +43,7 @@ use crate::race_phases::{
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{sleep_budget, SleepBudget};
+use crate::storm::StormView;
 use crate::timers::TimerView;
 use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
@@ -615,6 +616,12 @@ pub struct Snapshot {
     /// until a plan is pushed — the Pacer page then reads "PHASE --" rather than
     /// a phase the runner never asked for.
     pub race_phase: Option<RacePhaseView>,
+    /// The barometric pressure tendency ([`crate::storm`], § 376), or `None`
+    /// on a watch whose barometer never answered. Fed by the `baro` task, which
+    /// owns the raw pressure and the GPS altitude the reduction needs, so the
+    /// recorder only carries it — like the timer, the instrument outlives the
+    /// run and a run start does not reset it.
+    pub storm: Option<StormView>,
     /// The climb underfoot and the crest ahead ([`crate::climb`], §359). Both
     /// halves are independent: the live half needs no course, the crest half
     /// needs the pushed profile, and the page is empty only when neither has
@@ -963,6 +970,10 @@ pub struct Recorder {
     /// the live offset from the `state` watch; this is a presence bit, like
     /// [`course_loaded`](Recorder::set_course_loaded)).
     tz_offset_min: Option<i16>,
+    /// The `baro` task's latest pressure tendency, held for the snapshot.
+    /// Deliberately not cleared by a run boundary: the weather does not restart
+    /// when the runner presses start.
+    storm: Option<StormView>,
     /// Live ascent segmentation ([`crate::climb`]), fed the run distance +
     /// baro-preferred altitude on each accepted fix — the same seam the GAP
     /// grade and the elevation profile ride. Reset on
@@ -1061,6 +1072,7 @@ impl Recorder {
             hide_empty_pages: true,
             screen_count: 0,
             tz_offset_min: None,
+            storm: None,
             climb: ClimbDetector::new(),
             backyard: Backyard::new(),
             last_clock: None,
@@ -1187,6 +1199,14 @@ impl Recorder {
     /// over GPS altitude until the next one arrives.
     pub fn set_baro_altitude(&mut self, alt_m: f32) {
         self.baro_alt_m = Some(alt_m as f64);
+    }
+
+    /// Latest barometric pressure tendency from the `baro` task ([`crate::storm`]).
+    /// `None` is a watch whose barometer never answered, which keeps the Storm
+    /// page out of the cycle entirely; every other state — including both
+    /// refusals — is a [`StormView`] the page renders honestly.
+    pub fn set_storm(&mut self, view: Option<StormView>) {
+        self.storm = view;
     }
 
     /// Latest heart-rate estimate for the zone accumulators. `None` clears it
@@ -2131,6 +2151,7 @@ impl Recorder {
             route_position_permille: self.route_position_permille(),
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
+            storm: self.storm,
             climb: self.climb_snapshot(),
             backyard: self.backyard.armed().then(|| {
                 self.backyard
@@ -2218,6 +2239,15 @@ impl Recorder {
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
         set(Page::Climb, !s.climb.is_empty());
+        // Keyed on the watch being able to state a reduced pressure at all —
+        // which covers `Building`, where the absolute figure is already real
+        // and only its tendency is withheld. A barometer that never answered
+        // and a reference-less one both drop the page rather than seating a
+        // permanent refusal in a cycle whose whole point is that it is short.
+        set(
+            Page::Storm,
+            s.storm.is_some_and(|v| v.sea_level_hpa.is_some()),
+        );
         // Keyed on the instrument being ARMED, not merely configured: a preset
         // dialled and abandoned in the modal is not a page, and a reset gives
         // the seat back.
@@ -4393,7 +4423,7 @@ mod tests {
     }
 
     /// The cycle carries exactly the composed screens the runner has, and an
-    /// unpushed watch walks the 40 built-ins with no blank seats among them.
+    /// unpushed watch walks the 41 built-ins with no blank seats among them.
     #[test]
     fn the_cycle_carries_exactly_the_composed_screens() {
         let mut r = Recorder::new();

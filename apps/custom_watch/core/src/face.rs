@@ -44,6 +44,7 @@ use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RacePhaseView, RecordState, Snapshot};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
+use crate::storm::StormTrend;
 use crate::trackback::{self, TrackbackView};
 use crate::training_load::LoadTrendView;
 use crate::unfed::Unfed;
@@ -397,6 +398,7 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::RaceDay
         | Page::Waypoint
         | Page::Timer
+        | Page::Storm
         | Page::Climb => HERO_BAND_ROWS,
     }
 }
@@ -746,6 +748,7 @@ pub fn page_rows(
             Page::Waypoint => waypoint_glance(fix, snap, tb, tag, uptime_s, animate, mode),
             Page::Timer => timer_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Climb => climb_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Storm => storm_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Backyard => {
                 backyard_glance(fix, snap, tag, uptime_s, animate, mode, tz_offset_min)
             }
@@ -849,10 +852,13 @@ pub enum Metric {
     /// The runner's own countdown / stopwatch reading ([`crate::timers`]).
     TimerRemaining,
     BackyardBell,
+    /// The barometric pressure tendency over the trend window, hPa signed
+    /// ([`crate::storm`]).
+    StormDelta,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=37`.
+    /// This metric's byte on the `SCR1` wire, in `1..=38`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -902,6 +908,7 @@ impl Metric {
             Metric::SleepBudget => 35,
             Metric::TimerRemaining => 36,
             Metric::BackyardBell => 37,
+            Metric::StormDelta => 38,
         }
     }
 
@@ -951,6 +958,7 @@ impl Metric {
             35 => Metric::SleepBudget,
             36 => Metric::TimerRemaining,
             37 => Metric::BackyardBell,
+            38 => Metric::StormDelta,
             _ => return None,
         })
     }
@@ -1000,6 +1008,7 @@ impl Metric {
             Metric::SleepBudget => "sleep_budget",
             Metric::TimerRemaining => "timer_remaining",
             Metric::BackyardBell => "backyard_bell",
+            Metric::StormDelta => "storm_delta",
         }
     }
 
@@ -1049,6 +1058,7 @@ impl Metric {
             Metric::SleepBudget => "NAP",
             Metric::TimerRemaining => "TIMR",
             Metric::BackyardBell => "BELL",
+            Metric::StormDelta => "STORM",
         }
     }
 }
@@ -1103,6 +1113,7 @@ pub const fn hero_metric(page: Page) -> Option<Metric> {
         Page::RaceDay => Metric::RaceDayDays,
         Page::Timer => Metric::TimerRemaining,
         Page::Backyard => Metric::BackyardBell,
+        Page::Storm => Metric::StormDelta,
     })
 }
 
@@ -1230,6 +1241,21 @@ pub fn metric_unfed(
                 })
         }
         Metric::ClimbGain => climb_hero_gain(snap).is_none().then_some(Unfed::NoClimb),
+        // Three absences the page keeps apart: no barometer at all, a
+        // barometer with nothing independent to compensate against, and a
+        // corroborated one whose window is not yet deep enough to state a
+        // tendency from. Only the first is a defect.
+        Metric::StormDelta => match snap.storm {
+            None => Some(Unfed::AwaitingBaro),
+            Some(v) => match v.trend {
+                StormTrend::NoReference => Some(Unfed::NoStormReference),
+                StormTrend::Building => Some(Unfed::StormBuilding),
+                StormTrend::Storm
+                | StormTrend::Falling
+                | StormTrend::Steady
+                | StormTrend::Rising => None,
+            },
+        },
         Metric::RecapDistance => snap.recap.is_none().then_some(Unfed::NotSynced),
         Metric::CurrentStreak => snap.streaks.is_none().then_some(Unfed::NotSynced),
         Metric::SyncedMovingTime => snap.run_stats.is_none().then_some(Unfed::NotSynced),
@@ -1552,6 +1578,23 @@ pub fn metric_hero(
             }
             row
         }
+        // Signed, always: the sign IS the reading, and an unsigned `5.2` on a
+        // falling barometer would say the opposite of what it means. One
+        // decimal because the reduction's own residual is around a tenth of a
+        // hectopascal after both averages — a second would be noise rendered
+        // as precision.
+        Metric::StormDelta => {
+            let mut row = Row::new();
+            match snap.storm.and_then(|s| s.delta_hpa) {
+                Some(d) => {
+                    let _ = write!(row, "{:+.1}", d.clamp(-99.9, 99.9));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
         // The phone-pushed synced-summary pages headline their number too
         // (§ 361). They had been rows-only, which meant every one of them
         // reserved the two-row hero band ([`body_top_row`]) and then left it
@@ -1850,6 +1893,7 @@ pub fn metric_unit(
         // Both are metres of altitude — ascent still to climb, and the run's
         // latest banked sample.
         Metric::ClimbGain | Metric::Altitude => Some("M"),
+        Metric::StormDelta => Some("HPA"),
         Metric::FuelCarbs => Some("G"),
         Metric::GearWear => Some("%"),
         Metric::DistanceToStart => trackback_distance(tb).map(distance_unit),
@@ -1945,7 +1989,7 @@ pub fn screen_slots(
 }
 
 /// The composed screen `page` shows, rendered slot by slot, or `None` when
-/// `page` is one of the 40 built-ins or the runner has not composed that one.
+/// `page` is one of the 41 built-ins or the runner has not composed that one.
 ///
 /// The app's entry point for a screen page: slot 0 feeds the ordinary hero
 /// pipeline (band, unit, run-marker clearance — all unchanged), and the slots
@@ -3877,6 +3921,88 @@ fn write_climb_distance(row: &mut Row, label: &str, m: f32) {
     }
 }
 
+/// The word the trend row leads with. Deliberately the same five words the
+/// [`StormTrend`] enum carries and no synthesis of them: the page states the
+/// measurement, and the judgement about what it means for the next hour is the
+/// runner's.
+fn storm_word(trend: StormTrend) -> &'static str {
+    match trend {
+        StormTrend::Storm => "STORM",
+        StormTrend::Falling => "FALLING",
+        StormTrend::Steady => "STEADY",
+        StormTrend::Rising => "RISING",
+        // Neither reaches this row — both take the unfed body above it.
+        StormTrend::NoReference | StormTrend::Building => "--",
+    }
+}
+
+/// The storm page (§376). The hero is the signed change in sea-level-reduced
+/// pressure over the trend window; the rows say what it is called, what the
+/// absolute pressure is, and how much of the window the measurement actually
+/// spans.
+///
+/// The span row is not decoration. A tendency fitted over 55 minutes and one
+/// fitted over three hours are different claims, and the window thins whenever
+/// the GPS reference lapses, so a runner reading a number this consequential
+/// should be able to see how much air it was measured across.
+///
+/// The closing row states the device's limit the way the sleep page's
+/// `WATCH CANNOT WAKE YOU` does, and for the same reason: a word like STORM
+/// invites a runner to read a forecast off it, and there is no forecast on this
+/// watch — only what the barometer has already done.
+fn storm_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[0], tag);
+    }
+
+    let view = snap.storm;
+    let unfed = match view {
+        None => Some(Unfed::AwaitingBaro),
+        Some(v) => match v.trend {
+            StormTrend::NoReference => Some(Unfed::NoStormReference),
+            StormTrend::Building => Some(Unfed::StormBuilding),
+            _ => None,
+        },
+    };
+    if let Some(why) = unfed {
+        write_unfed(&mut rows, Page::Storm, "PRESSURE", why);
+        // A building trend already knows the absolute pressure — only its
+        // tendency is withheld — so the page shows the half it has rather than
+        // going blank on a barometer that is working perfectly.
+        if let Some(hpa) = view.and_then(|v| v.sea_level_hpa) {
+            let _ = write!(rows[6], "{:<8}{:.0} HPA", "SEA LVL", hpa);
+        }
+        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+        return rows;
+    }
+
+    let v = view.expect("a fed body has a view");
+    let _ = write!(rows[2], "{}", storm_word(v.trend));
+    if let Some(hpa) = v.sea_level_hpa {
+        let _ = write!(rows[3], "{:<8}{:.0} HPA", "SEA LVL", hpa);
+    }
+    let _ = write!(
+        rows[4],
+        "{:<8}{}H{:02}M",
+        "OVER",
+        (v.span_s / 3600).min(99),
+        v.span_s / 60 % 60
+    );
+    let _ = write!(rows[6], "TENDENCY NOT FORECAST");
+
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+    rows
+}
+
 /// The climb page (§359). The hero is metres of ascent — remaining to the
 /// crest when the pushed course names one, banked in the climb underfoot
 /// otherwise — and the label row says which, because the same number measured
@@ -4708,6 +4834,7 @@ mod tests {
             waypoint: None,
             waypoint_count: 0,
             timer: None,
+            storm: None,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,
@@ -5328,7 +5455,7 @@ mod tests {
         }
         assert_eq!(
             headed.len(),
-            37,
+            38,
             "the catalogue and the pages that head it have drifted: {headed:?}"
         );
     }
@@ -8213,6 +8340,101 @@ mod tests {
         }
     }
 
+    fn storm_rows(view: Option<crate::storm::StormView>) -> [Row; ROWS] {
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.storm = view;
+        page_rows(
+            Page::Storm,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        )
+    }
+
+    fn storm_hero(view: Option<crate::storm::StormView>) -> Row {
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.storm = view;
+        page_hero(Page::Storm, None, Some(&rec), None).unwrap()
+    }
+
+    fn storm_view(trend: StormTrend, delta: Option<f32>, span_s: u32) -> crate::storm::StormView {
+        crate::storm::StormView {
+            trend,
+            sea_level_hpa: Some(1_006.4),
+            delta_hpa: delta,
+            span_s,
+        }
+    }
+
+    #[test]
+    fn the_storm_page_states_the_tendency_its_span_and_the_devices_limit() {
+        let rows = storm_rows(Some(storm_view(StormTrend::Storm, Some(-5.2), 10_500)));
+        assert_eq!(rows[2].as_str(), "STORM");
+        assert_eq!(rows[3].as_str(), "SEA LVL 1006 HPA");
+        // The span is the air the fit actually covers, not the window it is
+        // normalised to — 2h55m of banked history, not a flat "3H".
+        assert_eq!(rows[4].as_str(), "OVER    2H55M");
+        assert_eq!(rows[6].as_str(), "TENDENCY NOT FORECAST");
+        assert!(rows[6].len() <= COLS);
+    }
+
+    #[test]
+    fn the_storm_hero_is_always_signed() {
+        // An unsigned 5.2 on a falling barometer says the opposite of what it
+        // means, and the sign is the entire reading.
+        assert_eq!(
+            storm_hero(Some(storm_view(StormTrend::Storm, Some(-5.2), 10_800))).as_str(),
+            "-5.2"
+        );
+        assert_eq!(
+            storm_hero(Some(storm_view(StormTrend::Rising, Some(3.4), 10_800))).as_str(),
+            "+3.4"
+        );
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.storm = Some(storm_view(StormTrend::Storm, Some(-5.2), 10_800));
+        assert_eq!(page_hero_unit(Page::Storm, Some(&rec), None), Some("HPA"));
+    }
+
+    #[test]
+    fn a_building_storm_page_shows_the_pressure_it_already_knows() {
+        // The absolute reduction is real from the first corroborated reading;
+        // only its tendency is withheld. Going blank would misreport a working
+        // barometer as a broken one.
+        let rows = storm_rows(Some(storm_view(StormTrend::Building, None, 0)));
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "TREND BUILDING");
+        assert_eq!(rows[6].as_str(), "SEA LVL 1006 HPA");
+        assert_eq!(
+            storm_hero(Some(storm_view(StormTrend::Building, None, 0))).as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn a_reference_less_storm_page_says_so_and_shows_no_pressure() {
+        // Without a GPS altitude the reduction is circular, so there is no
+        // honest absolute figure either — the page carries neither.
+        let rows = storm_rows(Some(crate::storm::StormView {
+            trend: StormTrend::NoReference,
+            sea_level_hpa: None,
+            delta_hpa: None,
+            span_s: 0,
+        }));
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "NO ALT REFERENCE");
+        assert!(rows[6].is_empty());
+    }
+
+    #[test]
+    fn a_watch_with_no_barometer_says_it_is_waiting_on_one() {
+        let rows = storm_rows(None);
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "AWAITING BARO");
+        assert_eq!(storm_hero(None).as_str(), "--");
+    }
+
     fn climb_rows(view: crate::climb::ClimbView) -> [Row; ROWS] {
         let mut rec = snapshot(RecordState::Recording, 5_000.0);
         rec.climb = view;
@@ -9639,6 +9861,10 @@ mod tests {
             Page::Waypoint => Some(Unfed::NoWaypoints),
             Page::Timer => Some(Unfed::NoTimer),
             Page::Climb => Some(Unfed::NoClimb),
+            // A fresh watch has no barometer answering yet. The other two
+            // refusals (NO ALT REFERENCE, TREND BUILDING) both need a live
+            // barometer, so this is the one a bare fixture meets.
+            Page::Storm => Some(Unfed::AwaitingBaro),
         }
     }
 
