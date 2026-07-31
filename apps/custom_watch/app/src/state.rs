@@ -23,6 +23,7 @@ use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::screens::Screens;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
+use watch_core::timers::Timer;
 use watch_core::trackback::TrackbackView;
 use watch_core::workout::{WorkoutStep, MAX_WORKOUT_STEPS};
 
@@ -107,11 +108,33 @@ pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::n
 /// receiver (the `ui` task).
 pub static SETTINGS_MENU: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
 
+/// The runner's countdown timer / stopwatch (§375). The `button` task owns the
+/// instrument (like the grid and the menu) and publishes it whole on every
+/// change; the `record` task derives the view it feeds the recorder and the `ui`
+/// task the one it draws. The *instrument* travels rather than a rendered view
+/// because every reading is a function of the reader's clock — publishing a view
+/// would need a per-second wake to keep it true, which is exactly what § 328
+/// rules out. Two receivers (`record`, `ui`).
+pub static TIMER: Watch<CriticalSectionRawMutex, Timer, 2> = Watch::new();
+
+/// Whether the timer modal is open (§375) — the same ownership split as
+/// [`SETTINGS_MENU`], and a bare flag rather than a cursor because the modal
+/// shows one instrument and has nothing to point at. One receiver (the `ui`).
+pub static TIMER_MENU: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
+
 /// The last-applied activity profile (§353), `None` until one is ever chosen.
 /// `main` seeds it from the persisted CFG1 record at boot, the `button` task
 /// re-publishes on a menu selection, and the `ui` task renders it on the
 /// menu's PROFILE row. One receiver (the `ui` task).
 pub static PROFILE: Watch<CriticalSectionRawMutex, Option<ActivityProfile>, 1> = Watch::new();
+
+/// Whether backyard-ultra mode is armed (§372). `main` seeds it from the
+/// persisted CFG1 flag at boot and the `button` task re-publishes on a menu
+/// edit; the `record` task applies it to the recorder, which is where it
+/// re-points the auto-lap onto the corral bell. One receiver (`record`) — the
+/// `ui` task reads the arm off the recorder snapshot the menu row already
+/// carries, rather than a second copy that could disagree with it.
+pub static BACKYARD: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
 
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and

@@ -63,7 +63,7 @@ sim-course = []
 # `state::SCREENS` — the SAME channel a phone push feeds — so the sim exercises
 # the real publish → gate → render path rather than a separate seam. OFF by
 # default: a hardware watch carries no screens until a runner pushes some, and
-# its cycle is the 37 built-ins.
+# its cycle is the 40 built-ins.
 sim-screens = []
 
 # Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries

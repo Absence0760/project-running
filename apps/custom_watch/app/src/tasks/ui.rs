@@ -31,6 +31,7 @@ use watch_core::page_grid;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::settings_menu;
 use watch_core::statusbar;
+use watch_core::timers;
 use watch_core::trackback::TrackbackView;
 use watch_core::ui_frame::{self, FrameLayout, HeroBand, HeroFrame, RowPaint};
 use watch_render::widgets;
@@ -147,6 +148,8 @@ pub async fn screen_task(
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut menu_rx = unwrap!(state::SETTINGS_MENU.receiver());
+    let mut timer_rx = unwrap!(state::TIMER.receiver());
+    let mut timer_menu_rx = unwrap!(state::TIMER_MENU.receiver());
     let mut profile_rx = unwrap!(state::PROFILE.receiver());
     let mut tz_offset_rx = unwrap!(state::TZ_OFFSET_MIN.receiver());
     let mut ice_rx = unwrap!(state::ICE.receiver());
@@ -169,6 +172,10 @@ pub async fn screen_task(
     // The idle settings menu's cursor while open (§351) — same ownership
     // split as the grid.
     let mut menu: Option<u8> = None;
+    // The timer instrument and whether its modal is up (§375) — same ownership
+    // split as the menu: the button task drives, this task only draws.
+    let mut timer = watch_core::timers::Timer::new();
+    let mut timer_open = false;
     let mut mode = GnssMode::default();
     let mut profile: Option<watch_core::profiles::ActivityProfile> = None;
     let mut last_interaction_s: u32 = 0;
@@ -268,6 +275,12 @@ pub async fn screen_task(
         }
         if let Some(v) = menu_rx.try_changed() {
             menu = v;
+        }
+        if let Some(t) = timer_rx.try_changed() {
+            timer = t;
+        }
+        if let Some(open) = timer_menu_rx.try_changed() {
+            timer_open = open;
         }
         // No dedicated select arm: a profile only changes on a menu edit,
         // whose preset push always wakes this loop within a tick (the pages
@@ -616,10 +629,20 @@ pub async fn screen_task(
         // live run in the interim.
         if let Some(cursor) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
-            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile)
+            let yard = rec.as_ref().is_some_and(|s| s.backyard.is_some());
+            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile, yard)
                 .iter()
                 .enumerate()
             {
+                fb.draw_text_row(row, text);
+            }
+            panel_cache.invalidate();
+        }
+        // The timer modal, on the same terms as the settings menu above (§375):
+        // idle-only, one render path, and the run_view gate covering the
+        // interim before the button task closes it.
+        if timer_open && !face::run_view(rec.as_ref()) {
+            for (row, text) in timers::timer_rows(&timer, uptime_s).iter().enumerate() {
                 fb.draw_text_row(row, text);
             }
             panel_cache.invalidate();

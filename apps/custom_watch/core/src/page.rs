@@ -34,14 +34,14 @@ pub enum Page {
     ///
     /// **They sit here, immediately after the Dashboard, on purpose.** A screen
     /// a runner composed is by construction the thing they most want to glance
-    /// at — burying it behind thirty-six built-ins would defeat the feature —
+    /// at — burying it behind thirty-nine built-ins would defeat the feature —
     /// and inserting at the front rather than the back keeps
     /// [`Page::BackToStart`] last, one long-press from home, which is the one
     /// ordering property the safety page cannot lose.
     ///
     /// Each is gated on the runner having actually composed it
     /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
-    /// 37 built-ins and the cycle never carries a blank.
+    /// 40 built-ins and the cycle never carries a blank.
     Screen1,
     Screen2,
     Screen3,
@@ -54,6 +54,12 @@ pub enum Page {
     /// Current lap time up large, with lap number / last-lap split / lap
     /// distance / HR as context.
     Lap,
+    /// The corral bell's countdown up large, with the loop count, the corral
+    /// state and the projected return margin as context
+    /// ([`crate::backyard`], § 372). Sits beside [`Page::Lap`] because in this
+    /// mode the lap IS the loop — the bell closes it — so the two pages read
+    /// the same boundary from opposite ends; only an armed watch carries it.
+    Backyard,
     /// Current HR up large, with the live zone and the per-zone moving-time
     /// breakdown as context.
     Zones,
@@ -87,6 +93,14 @@ pub enum Page {
     /// with the distance to it and the projected arrival; an honest inactive
     /// state when no course cutoffs are loaded.
     CutoffEta,
+    /// Sleep-station mode ([`crate::sleep_station`], § 373): how long the
+    /// runner may lie down and still make that same cut-off.
+    ///
+    /// **Directly after [`Page::CutoffEta`] on purpose.** The budget IS that
+    /// page's margin less a safety reserve, so a runner who has just read
+    /// `TIGHT` is one tap from what it costs them in sleep — and the two pages
+    /// go blank and come back together, since one projection feeds both.
+    SleepStation,
     /// The race roadbook: the upcoming checkpoints from the current position,
     /// each with its projected arrival + safe/tight/miss cutoff verdict; an
     /// honest inactive state when no roadbook is loaded
@@ -158,6 +172,12 @@ pub enum Page {
     /// Auto-segment-effort match counts ([`crate::auto_segment_effort`]); empty
     /// until synced.
     AutoEffort,
+    /// The armed countdown timer / stopwatch ([`crate::timers`], §375) — the
+    /// aid-station turnaround, the nap budget, the backyard bell. Heads the
+    /// closing trio because it is the same *what is the clock doing* question
+    /// [`Page::Daylight`] asks about the sun; empty (and out of the cycle)
+    /// until the idle BTN2 modal starts one.
+    Timer,
     /// The sunset/sunrise countdown ([`crate::daylight`]): the next sun event,
     /// how long until it, and today's day length — needs the synced timezone
     /// offset plus a fix carrying the RMC clock + date; honest states
@@ -203,6 +223,7 @@ impl Page {
             Page::Distance => "DIST",
             Page::Pace => "PACE",
             Page::Lap => "LAP",
+            Page::Backyard => "YARD",
             Page::Zones => "ZONE",
             Page::Splits => "SPLT",
             Page::Pacer => "PACR",
@@ -212,6 +233,7 @@ impl Page {
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
+            Page::SleepStation => "SLP",
             Page::Roadbook => "ROAD",
             Page::Fuel => "FUEL",
             Page::ElevationProfile => "ELEV",
@@ -233,6 +255,7 @@ impl Page {
             Page::RouteSimplify => "SMPL",
             Page::RouteElev => "RELV",
             Page::AutoEffort => "AEFF",
+            Page::Timer => "TIMR",
             Page::Daylight => "SUN",
             Page::Waypoint => "WPT",
             Page::BackToStart => "BACK",
@@ -253,6 +276,7 @@ impl Page {
             Page::Distance => "DISTANCE",
             Page::Pace => "PACE",
             Page::Lap => "LAP TIME",
+            Page::Backyard => "BACKYARD",
             Page::Zones => "HR ZONES",
             Page::Splits => "PACE SPLITS",
             Page::Pacer => "VIRTUAL PARTNER",
@@ -262,6 +286,7 @@ impl Page {
             Page::Nav => "COURSE MAP",
             Page::TurnCue => "NEXT TURN",
             Page::CutoffEta => "CUT-OFF ETA",
+            Page::SleepStation => "SLEEP STATION",
             Page::Roadbook => "ROADBOOK",
             Page::Fuel => "FUEL PLAN",
             Page::ElevationProfile => "ELEVATION PROFILE",
@@ -283,6 +308,7 @@ impl Page {
             Page::RouteSimplify => "ROUTE SIMPLIFY",
             Page::RouteElev => "ROUTE ELEVATION",
             Page::AutoEffort => "AUTO EFFORT",
+            Page::Timer => "TIMER",
             Page::Daylight => "DAYLIGHT",
             Page::Waypoint => "WAYPOINT",
             Page::BackToStart => "BACK TO START",
@@ -333,7 +359,8 @@ impl Page {
             Page::Screen4 => Page::Distance,
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
-            Page::Lap => Page::Zones,
+            Page::Lap => Page::Backyard,
+            Page::Backyard => Page::Zones,
             Page::Zones => Page::Splits,
             Page::Splits => Page::Pacer,
             Page::Pacer => Page::GuidedRun,
@@ -342,7 +369,8 @@ impl Page {
             Page::Climb => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
-            Page::CutoffEta => Page::Roadbook,
+            Page::CutoffEta => Page::SleepStation,
+            Page::SleepStation => Page::Roadbook,
             Page::Roadbook => Page::Fuel,
             Page::Fuel => Page::ElevationProfile,
             Page::ElevationProfile => Page::RacePredictor,
@@ -363,7 +391,8 @@ impl Page {
             Page::PrRecency => Page::RouteSimplify,
             Page::RouteSimplify => Page::RouteElev,
             Page::RouteElev => Page::AutoEffort,
-            Page::AutoEffort => Page::Daylight,
+            Page::AutoEffort => Page::Timer,
+            Page::Timer => Page::Daylight,
             Page::Daylight => Page::Waypoint,
             Page::Waypoint => Page::BackToStart,
             Page::BackToStart => Page::Dashboard,
@@ -371,13 +400,13 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 37 pages a forward-
-    /// only walk needs up to ~36 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 40 pages a forward-
+    /// only walk needs up to ~39 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
     /// Which of the runner's composed screens this page shows, or `None` for
-    /// the 37 built-ins.
+    /// the 40 built-ins.
     ///
     /// The index into [`crate::screens::Screens`], so a page and the screen it
     /// draws are related by exactly one function rather than by four arms
@@ -439,7 +468,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 41] = [
+    const ALL: [Page; 44] = [
         Page::Dashboard,
         Page::Screen1,
         Page::Screen2,
@@ -448,6 +477,7 @@ mod tests {
         Page::Distance,
         Page::Pace,
         Page::Lap,
+        Page::Backyard,
         Page::Zones,
         Page::Splits,
         Page::Pacer,
@@ -457,6 +487,7 @@ mod tests {
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
+        Page::SleepStation,
         Page::Roadbook,
         Page::Fuel,
         Page::ElevationProfile,
@@ -478,6 +509,7 @@ mod tests {
         Page::RouteSimplify,
         Page::RouteElev,
         Page::AutoEffort,
+        Page::Timer,
         Page::Daylight,
         Page::Waypoint,
         Page::BackToStart,
@@ -492,7 +524,12 @@ mod tests {
         assert_eq!(Page::Screen1.next(), Page::Screen2);
         assert_eq!(Page::Screen4.next(), Page::Distance);
         assert_eq!(Page::Pace.next(), Page::Lap);
-        assert_eq!(Page::Lap.next(), Page::Zones);
+        assert_eq!(
+            Page::Lap.next(),
+            Page::Backyard,
+            "the bell page reads the same boundary the lap page does"
+        );
+        assert_eq!(Page::Backyard.next(), Page::Zones);
         assert_eq!(Page::Splits.next(), Page::Pacer);
         assert_eq!(
             Page::Pacer.next(),
@@ -511,7 +548,12 @@ mod tests {
         );
         assert_eq!(Page::Climb.next(), Page::Nav);
         assert_eq!(Page::Nav.next(), Page::TurnCue);
-        assert_eq!(Page::CutoffEta.next(), Page::Roadbook);
+        assert_eq!(
+            Page::CutoffEta.next(),
+            Page::SleepStation,
+            "the nap budget is one tap from the margin it is cut from"
+        );
+        assert_eq!(Page::SleepStation.next(), Page::Roadbook);
         assert_eq!(Page::Roadbook.next(), Page::Fuel);
         assert_eq!(Page::Fuel.next(), Page::ElevationProfile);
         assert_eq!(Page::RacePredictor.next(), Page::TrainingLoad);
@@ -519,7 +561,12 @@ mod tests {
         assert_eq!(Page::RaceDay.next(), Page::PlanReplan);
         assert_eq!(Page::PlanReplan.next(), Page::PlanAdaptive);
         assert_eq!(Page::PrRecency.next(), Page::RouteSimplify);
-        assert_eq!(Page::AutoEffort.next(), Page::Daylight);
+        assert_eq!(
+            Page::AutoEffort.next(),
+            Page::Timer,
+            "the runner's own clock heads the closing trio"
+        );
+        assert_eq!(Page::Timer.next(), Page::Daylight);
         assert_eq!(
             Page::Daylight.next(),
             Page::Waypoint,
@@ -636,8 +683,9 @@ mod tests {
     #[test]
     fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
         // The phone's 32-bit field stops at discriminant 31, so AutoEffort,
-        // Daylight, Waypoint and BackToStart sit past its reach; zero-extending
-        // would curate those pages out invisibly on every curation push.
+        // Timer, Daylight, Waypoint and BackToStart sit past its reach;
+        // zero-extending would curate those pages out invisibly on every
+        // curation push.
         let curated = mask_from_wire(1u32 << (Page::Pace as u8));
         assert_ne!(curated & Page::Pace.bit(), 0);
         assert_eq!(curated & Page::Nav.bit(), 0, "an addressed page stays off");

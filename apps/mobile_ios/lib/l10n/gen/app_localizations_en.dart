@@ -11955,4 +11955,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get watchMetricRaceDayDays => 'Days to race';
+
+  @override
+  String get watchMetricSleepBudget => 'Sleep budget';
+
+  @override
+  String get watchMetricTimerRemaining => 'Timer';
+
+  @override
+  String get watchMetricBackyardBell => 'Bell countdown';
 }

@@ -110,6 +110,10 @@ fn a_settings() -> impl Strategy<Value = WatchSettings> {
             }),
             guided_run,
             resting_hr,
+            // Not generated, for the same reason `ice` is not: a closed
+            // eight-rung enum has no numeric edge for a property to explore,
+            // and its wire byte has its own round-trip unit tests.
+            auto_lap: None,
         },
     )
 }

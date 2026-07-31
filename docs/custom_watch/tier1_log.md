@@ -443,6 +443,226 @@ leaving the phone are the same `encodeCourse` output the frozen goldens pin agai
 but **that a real watch loads a real generated loop is a bench item**, on the same list as every
 other radio claim. Decisions § 370.
 
+## 2026-07-30 — the structured-workout rail gets a guard instead of a memory
+
+`ci_smoke.py` grows an eighth scenario, `workout` ([§ 371](../architecture/decisions.md)), closing the
+last major run-view rail that had no asserted one. The § 354 runner's *sim-verified* rung had been
+earned on 2026-07-28 by walking the sim's demo workout **by hand** under `bench_jog` — real evidence,
+and worth nothing two days later, because nothing re-ran it. A hand session certifies the afternoon
+it happened; only a scenario certifies the branch.
+
+Everything that session watched is now asserted on every PR, in the order the run produces it: the
+pushed step list arms the recorder over the same `state::WORKOUT` channel a phone's `WKT1` push lands
+on (`record: workout armed (5 steps)`, which is the *receive* — the queue line beside it is only the
+send); the Workout page enters the BTN4 cycle and renders; the runner auto-advances **in order over
+both end axes**, which the demo plan is shaped to demand (60 / 50 / 50 / 60 m distance steps around a
+30 s duration recovery, so a runner that settles only one axis stalls partway and reports a short
+sequence rather than a wrong one); exactly **one** end-of-step warning fires, in the recovery; a BTN5
+lap press skips the active step and then completes the workout; the runner raises no sixth transition
+for a five-step plan; and the finished trail flushes into the run blob with no step or summary
+dropped — the loss paths are asserted *absent*, which is the only form that claim can take, since
+`push_step_result`'s happy path is silent by design.
+
+Two of those needed conditions the other scenarios do not have, and both are the § 371 record.
+**The skip is timed on the firmware's virtual clock**, because its observable is the observable the
+auto-advance produces for free: press BTN5 and wait for a transition, and a firmware whose press does
+nothing passes — the step ends anyway. On this fixture the displaced steps need ~33 s and ~40 s to
+settle (credited distance accrues at ~1.5 m/s), and the press's edge landed at **0.6 s and 0.4 s**.
+Wall clock could not carry that bound: Renode's virtual clock runs at a ratio to wall time that
+swings with host load, so the gap is read off the decoded stream's own timestamps, the discipline
+`dropout` adopted for its void. **And the warning COUNT needs an empty alert slot**, so the session
+boots `--no-alerts`: with the sim's shortened fuel / distance / time / pace arms in the single slot,
+"exactly one" is a count of traffic rather than a claim about `ENDING_MIN_STEP_M` = 100 m and
+`ENDING_MIN_STEP_S` = 20 s. It also keeps a fuel banner off the two page dumps, which a banner would
+otherwise own.
+
+**Verified to fail as well as pass, on both halves.** Deleting `Recorder::lap`'s `skip_step()` call
+turns the skip assertion red at *30.4 s of virtual time* with the auto-advance named as the cause;
+dropping `ENDING_MIN_STEP_M` from 100 m to 10 m turns the count assertion red at three warnings, and
+the log then shows precisely the defect that gate's own doc comment exists to prevent — a 50 m step is
+already inside the 50 m warning window when it starts, so the runner is told a step is ending 0.9 s
+after it began. The wait for the skipped edge is deliberately **longer** than the step it displaces so
+that the red is *useful*: the first version used a 30 s wait and failed on a bare "no line matched"
+timeout, which says only that something did not arrive. Both sabotages were reverted; no firmware
+behaviour moved in this batch.
+
+CI: the `sim-scenarios` job gains a seventh step (`--budget 300`, the same as its siblings — the
+unaided walk reaches the fourth transition at ~110 s of virtual time and the whole scenario measures
+**2m13** on the authoring workstation), and its cap tracks the budget sum as always, 45 → 50 min.
+Every assertion green in one pass locally under Renode 1.16.1.
+## 2026-07-30 — Auto-lap becomes a chosen trigger, and picks its clock
+
+The recorder's auto-lap had been a constant since 2026-07-09 — `AUTO_LAP_DISTANCE_M = 1000.0`,
+the same kilometre for every runner on every run. The roadmap row counted it as built, which it
+was; what it was not was a *setting*. `watch_core::auto_lap` makes it one: a closed eight-rung
+catalogue (`Off`, 1/5 km, 1/5 mi, 5/10/30 min), armed by `Recorder::set_auto_lap`, defaulting to
+the kilometre the recorder always had.
+
+**Closed, not an arbitrary metre count**, and for a reason particular to this device rather than
+to taste: the flash lap store holds 64 records (`run_store::MAX_STORED_LAPS`). A 1 km trigger
+already loses laps past 64 km, so the coarse rungs are what keep a 100 km run's splits inside the
+store, and `Off` is what lets an ultra runner spend those 64 records on splits they pick by hand.
+An open "any distance" field would have let a 50 m trigger exhaust the whole budget inside 3.2 km
+with nothing warning anyone. The closed set also costs exactly one byte on the wire and three bits
+in flash, which is what made both of the rails below cheap.
+
+**The auto-pause interaction is the decision worth recording** ([§ 374](../architecture/decisions.md)).
+Paused time counts toward nothing on either axis. Distance is structural — it only accrues on a fix
+the acceptance filter takes as movement, so a runner standing at an aid station accrues none. Time
+is a *choice*: the budget is **moving** time, the axis the fuel arms already bank on (§ 214), not
+the elapsed clock. An elapsed-clock auto-lap would turn a 40-minute sleep-station stop into eight
+zero-distance laps at the 5-minute rung, and on a 64-record budget those empty laps *displace real
+ones* — the runner loses splits they ran to laps they slept through. That deliberately differs from
+§ 332's time **alert**, which banks on elapsed on purpose; the difference is that an alert costs a
+banner and a lap evicts a record. The stationary case is pinned rather than argued: a test runs an
+armed distance rung and an armed time rung through an hour of sub-threshold GPS jitter plus 3600
+ticks and asserts the lap counter never moves.
+
+**Two rails carry the choice.** The phone reaches it over **`SET1` v7** — both presence bytes were
+saturated and v6's `KNOWN_FLAGS2 == u8::MAX` const-assert existed precisely to force this bump, so
+`flags3` arrives exactly as `flags2` did at v2; `decode` accepts v1–v7 side by side and the frozen
+v6 golden vector is pinned as still decoding, its absent trigger leaving whatever the watch holds
+standing rather than resetting a race's splits to a default. Flash keeps it in `CFG1`'s flags byte
+behind a set-marker plus three discriminant bits — the §351/§353 drill a third time, no
+config-record version bump, and bit 7 is now the last one free. The record task re-applies the
+stored rung at boot, because the failure that motivates persisting it is specific: a battery pull at
+hour 60 of a 100-miler would otherwise put the rest of the race silently back on 1 km laps.
+
+The Lap page **names the armed trigger** beside the last split (`LAST 4:58    1KM`, or `OFF`). A
+setting that changes what a page counts, on a page with no way to see it, reads as a broken lap
+counter rather than a choice — the same honesty rule the `unfed` states are built on.
+
+`watch_core` host suite 1851 → 1875 (+8 `auto_lap`, +9 recorder, +2 `flash_store`, +1
+`settings_apply`, +4 `settings`/`face`); all three firmware feature sets build and pass
+`clippy -D warnings`; `cargo fmt --check` clean. **Host-tested + build-verified only**
+([§ 314](../architecture/decisions.md)) — the new rungs have had no sim pass, and nothing here has
+run on silicon.
+
+**Owed, and named rather than left implicit:** the phone-side encoder. `watch_settings.dart` still
+emits the pre-v7 frame, so the trigger is on the wire and honoured by the firmware but not yet
+reachable from the app — one optional field plus its golden-vector bytes, mirrored to the iOS twin.
+## 2026-07-30 — Sleep-station mode: the nap the race computes, and the alarm we refused to fake
+
+The 200-mile racer's 3 a.m. question — *how long can I sleep and still make the next cut-off* — turned
+out to need almost no new arithmetic. `cutoff_eta::next_cutoff_eta` already returns
+`(limit − elapsed) − (time still needed)` as its margin; that IS the nap budget before a reserve. So
+`sleep_station` calls the same function once with a different pace and subtracts. The page seats
+directly after `CUT` — page 38 — because the budget is that page's margin, and a runner reading
+`TIGHT` should be one tap from what `TIGHT` costs them in sleep.
+
+**The feature that got deleted by thinking about the clock.** The roadmap row asked for a nap timer,
+a wake alarm, and an elapsed clock. The race clock keeps running through a pause, so a budget
+recomputed each tick falls one second per second while the runner sleeps — the countdown *is* the
+budget, and the honest elapsed clock is the race clock the watch already keeps. That removed the nap
+timer entirely: no nap to arm, no nap state in flash, no reboot recovery, and no new edge in a press
+grammar four other in-flight branches are also touching. A test pins the 1:1 fall.
+
+**Where the honesty had to be inherited rather than invented.** `cutoff_eta` withholds its ETA on a
+stale fix rather than projecting off an old position. A sleep budget is that projection minus a
+reserve, so it inherits the refusal whole. Four states, not two: `NoCutoff` (nothing bounds the nap —
+which is *not* "sleep freely"), `NoBudget` (computed, and the answer is none), `Unknown` (a term is
+missing), `Budget`. A limit already passed resolves to `NoBudget` even with no pace, because "do not
+lie down" is knowable there. And the hero keeps a measured `0` visibly apart from a refused `--`,
+because a runner who reads "no time to sleep" as "the watch does not know" lies down anyway.
+
+Every rounding leans one way, since the error is not symmetric — early costs sleep, late costs the
+race. The projection takes the **slower** of the run's moving pace and its race-including-stops pace;
+the budget floors to whole minutes; a sub-minute budget settles rather than displaying a `0` that
+reads as a broken page. The reserve is `max(30 min, 25 % of the leg ahead)`: the floor is
+`CUTOFF_TIGHT_S` reused (the product already calls that span uncomfortable, and it covers the fixed
+cost of getting up), the fraction covers the error that scales with leg length. The fraction is a
+judgement call and is now in the derived-not-measured register — with the note that the bench cannot
+settle it either; it needs a field corpus.
+
+**What we refused to build.** No alarm. The tier-1 BOM has no vibration motor and no buzzer, so any
+arm added to `alerts` would fire silently onto a screen a sleeping runner cannot see — the appearance
+of a wake without the function, which is precisely the oversleep the feature exists to prevent. Row 7
+carries `WATCH CANNOT WAKE YOU` unconditionally, through the empty states too, because it describes
+the device rather than the data. It is the page's most important line, not its disclaimer. The
+roadmap row stays **unticked** on exactly that ground.
+
+Page 38 moves only the linear worst (18 → 19) — both grid worsts hold at 10 and 7, and the symmetric
+average 4.0541 → 4.0789, still 4.1 where `navigation.md` publishes it. What shrank is margin, not
+cost: the symmetric step to 8 is still page 44, so `MAX_SCREENS` = 4 now lands one page inside it
+rather than two. Recomputed by the same BFS, re-validated against the n = 32 figures the section was
+built on.
+
+The rail got an observable in the same pass, for the reason [§ 368](../architecture/decisions.md)
+gave the climb one: a page dump proves a frame was drawn, never that the minutes on it are right. The
+gate is the fields the LINE carries rather than the whole view — the margin ticks with the race clock
+every second, so gating on the struct re-emitted a budget and a reserve that had not moved, which is
+§368's own defect one page along. Twelve lines across a run instead of one a second.
+
+Host sweep 2229 → **2258** (22 `sleep_station`, 4 `face`, 2 `record`, 1 preview); all three firmware
+feature sets build and pass `clippy -D warnings`, `cargo fmt --check` clean. The `pages` scenario
+re-runs green and its walk now traverses `SleepStation` directly after `CutoffEta`, so the page is
+**data-present and reachable in a real cycle** — but by § 314's own rule that is not the budget being
+right, and **nothing asserts the budget yet**. Host-tested; no hardware exists.
+
+## 2026-07-30 — Countdown timer + stopwatch, and two refusals (§ 375), host-tested
+
+The roadmap's daily-smartwatch row bundled "alarms / timer / stopwatch / find-my-phone" as one trivial item. Two of the four are trivial and are now built; the other two cannot be built honestly at tier 1, and the box stays **unticked** — nothing here is bench-verified.
+
+**Built.** `watch_core::timers` is one instrument, not two: the preset ladder starts at zero and zero *is* the stopwatch, so there is no mode switch and no second key. Eleven rungs, all durations this repo already names (1/3/5 min aid-station turnaround, 10–90 min sleep-station nap, 60 min backyard bell). Armed from a modal on the idle face — **BTN2, the last dead key in the § 350 grammar** — with BTN1 start/stop, BTN2/BTN3 the preset ladder, BTN5 reset (refused while running), BTN4 exit on the settings menu's BACK slot. Every press swallowed, idle-only, 30 s auto-close. It survives run boundaries, and it takes the **38th** built-in page, gated on being armed. The expiry rides the *existing* alert slot as `Alert::TimerDone` at the milestone rung — dropped, never queued, and below fuel per § 214.
+
+**The honesty decision.** No vibration motor, no buzzer: an expired countdown counts **up** past zero (`+2:14`) rather than freezing at `0:00`, because *how long ago* is the only part of a missed expiry that survives being missed. The banner reads `! TIME UP`; the word *alarm* appears nowhere on the device.
+
+**Refused: alarms.** An alarm promises to interrupt you at a time you are not watching, and a display-only device cannot keep that promise. Re-scoped from "trivial, ship opportunistically" to a **T2 item gated on the haptic channel** — the same gate the sleep-station wedge already records.
+
+**Refused: find-my-phone.** The watch is a GATT peripheral (§ 210 / § 211) with no watch-initiated action toward the phone, and the phone side is a pure consumer with no ring handler. It needs a new characteristic, new phone-side code and background-audio permissions, and per § 210 could never rise above build-verified without a dev kit. No stub was written. **T2, with the BLE bench work.**
+
+**Cost, computed not guessed.** Page 38 moves neither grid worst (symmetric stays 7, stepping at 44; forward-only stays 10, stepping at 42); only the linear-walk worst grows 18 → 19. With the four composed-screen seats the full mask is 42, so the 7-press ceiling now has **one page of margin rather than two** — recorded in `navigation.md` rather than rounded away.
+
+Workspace host sweep 2229 → 2261 (`cargo test --workspace --exclude app --exclude nrf52840_dk`; +32 — 21 in `timers`, 5 in `alerts`, 2 in `face`, 1 each in `record` / `button` / `input_flow`), plus the six count-pins the 38th page moved. Firmware builds green on the default, `ble` and sim feature sets; `fmt` and the clippy `-D warnings` gate clean. **No sim scenario and no bench evidence** — the modal has no `ci_smoke` step yet and the page cannot be armed from a fixture, so this entry claims host-tested and nothing more.
+
+## 2026-07-30 — Backyard-ultra mode: a bell nobody's watch is anchored to
+
+The first of the roadmap's "nobody ships these" differentiator wedges built on
+the wrist ([roadmap.md § New wedges](roadmap.md#new-wedges--nobody-ships-these),
+[decisions.md § 372](../architecture/decisions.md)). A backyard ultra sends the
+same loop off every hour on the hour and scores on loop count; a runner must
+complete the loop *and* be back in the corral before the next bell, with
+whistles at 3/2/1 minutes. Nothing on a Garmin or a COROS models any of it.
+
+`watch_core::backyard` (24 host tests) holds the whole format: the countdown
+derived from the runner's **local hour boundary** rather than from a lap or a
+run start, so a runner who leaves late on loop 7 gets the same bell as
+everyone else; the corral state, which flips back to "on loop" on the clock
+alone when the bell rings, with no event to miss; the loop length **learned
+from the runner's own first loop** rather than configured on five buttons; and
+the projected return margin, which is withheld outright when the loop is
+unlearned or there is no live pace. It is fed the receiver's UTC clock shifted
+by the pushed timezone — the same shaping the Daylight page uses — and refuses
+a countdown in exactly the two cases that shaping can fail: no timezone reads
+`NOT SYNCED`, no receiver clock reads `AWAITING FIX`, and the hero reads
+`--:--` rather than counting to an hour boundary it cannot locate.
+
+The loop rides the recorder's existing lap: while the mode is armed the
+**corral bell drives the auto-lap in place of the 1 km boundary**, so one lap
+closes per hour and the phone reads loop splits rather than six kilometre
+slices of an identical loop. The runner's BTN5 press keeps its one meaning —
+close a lap — and is read as the corral return, standing that window's bell
+lap down. BTN5 grew no third tier. The whistles ride the existing
+`AlertEngine` slot as drop-not-queue milestones one rung under the zone
+ceiling. Arming is a sixth settings-menu row persisted in a spare `CFG1` flag
+bit, idle-only because re-pointing the auto-lap means a run has to be wholly
+inside the mode or wholly outside it; `SCR1` metric byte 35 carries the
+countdown to the phone's screen composer.
+
+**Rung: host-tested, plus build-verified for the target.** 1892 `watch_core`
+tests green, `clippy -D warnings` clean on `thumbv7em-none-eabihf` across the
+default, `ble` and sim feature sets. **Nothing here is sim-verified** — the
+sim's NMEA fixtures carry no multi-hour clock, so no scenario can reach a bell
+at all; that is the first thing owed. Bench items are in
+[`quality_standards.md`](quality_standards.md).
+
+What it deliberately does **not** do: declare a runner in or out. The corral
+is the race director's and the timing mat is theirs; a watch announcing `DNF`
+at hour 30 off a missed button press would be lying about the only thing that
+matters. The loop count is "bells this run closed a loop on", which for a
+runner still in the race is their loop count and for one who is out is the
+last number the watch saw.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

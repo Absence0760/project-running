@@ -46,6 +46,7 @@ fn base_snapshot() -> Snapshot {
         state: RecordState::Recording,
         manual_paused: false,
         signal_lost: false,
+        backyard: None,
         distance_m: 32_400.0,
         elapsed_s: 3 * 3600 + 12 * 60 + 5,
         moving_s: 3 * 3600,
@@ -61,6 +62,7 @@ fn base_snapshot() -> Snapshot {
         zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
         zone_time_s: [0; 5],
         cutoff: None,
+        sleep: None,
         race_prediction: None,
         pace_bucket_m: [0.0; PACE_BUCKET_COUNT],
         training_stress: None,
@@ -93,6 +95,8 @@ fn base_snapshot() -> Snapshot {
         climb: Default::default(),
         waypoint: None,
         waypoint_count: 0,
+        timer: None,
+        auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,
         track_thinning: 1,
         pages_mask: u64::MAX,
         hide_empty_pages: true,
@@ -518,6 +522,30 @@ fn preview_cutoff_eta_page() {
         watch_core::statusbar::page_indicator(Page::CutoffEta, u64::MAX),
     );
     show("cut-off eta: +1:05:30 margin in the tall numeral hero", &fb);
+}
+
+#[test]
+fn preview_sleep_station_page() {
+    // The same projection one page along: what that margin buys in sleep, and
+    // the row that stops the number being read as an alarm clock.
+    use watch_core::sleep_station::SleepBudget;
+    let mut snap = base_snapshot();
+    snap.sleep = Some(SleepBudget {
+        status: watch_core::sleep_station::SleepStatus::Budget,
+        budget_s: 35 * 60,
+        reserve_s: 1_800,
+        margin_s: Some(3_930),
+        pace_s_per_km: Some(7.0 * 60.0 + 30.0),
+        distance_to_m: 8_400.0,
+        limit_passed: false,
+    });
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::SleepStation, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::SleepStation, u64::MAX),
+    );
+    show("sleep station: 35 min of nap the race can afford", &fb);
 }
 
 #[test]

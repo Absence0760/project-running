@@ -25,7 +25,7 @@
 //! bytes that produced it. The sinks are independent, so the order carries no
 //! semantics — it is there to make the plan comparable.
 //!
-//! Two guards are not a setter's and so run here, meaning an implausible value
+//! Some guards are not a setter's and so run here, meaning an implausible value
 //! yields NO effect rather than a clamped one: the QNH sea-level reference
 //! ([`crate::record_cadence::plausible_sea_level_pa`], whose sink is a `state`
 //! watch the baro task consumes) and the home-clock timezone offset
@@ -35,6 +35,7 @@
 
 use heapless::Vec;
 
+use crate::auto_lap::AutoLap;
 use crate::ice::IceCard;
 use crate::race_phases::RacePhasePreset;
 use crate::record_cadence::plausible_sea_level_pa;
@@ -101,6 +102,11 @@ pub enum SettingsEffect {
     /// card. Unlike every other effect this one has TWO sinks, because a
     /// medical ID that vanishes on a power cycle is not a medical ID.
     Ice(Option<IceCard>),
+    /// [`crate::record::Recorder::set_auto_lap`], and the `CFG1` flags byte the
+    /// record task persists it in. Two sinks like [`SettingsEffect::Ice`], and
+    /// for the same reason: a trigger that reverts to 1 km on a mid-race
+    /// battery pull silently re-splits the rest of the race.
+    AutoLap(AutoLap),
 }
 
 impl SettingsEffect {
@@ -124,6 +130,7 @@ impl SettingsEffect {
             Self::GuidedRun(_) => EffectKind::GuidedRun,
             Self::RestingHr(_) => EffectKind::RestingHr,
             Self::Ice(_) => EffectKind::Ice,
+            Self::AutoLap(_) => EffectKind::AutoLap,
         }
     }
 }
@@ -151,6 +158,7 @@ pub enum EffectKind {
     GuidedRun,
     RestingHr,
     Ice,
+    AutoLap,
 }
 
 impl EffectKind {
@@ -175,7 +183,8 @@ impl EffectKind {
             Self::RacePhases => Some(Self::GuidedRun),
             Self::GuidedRun => Some(Self::RestingHr),
             Self::RestingHr => Some(Self::Ice),
-            Self::Ice => None,
+            Self::Ice => Some(Self::AutoLap),
+            Self::AutoLap => None,
         }
     }
 
@@ -221,6 +230,7 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         guided_run,
         resting_hr,
         ice,
+        auto_lap,
     } = *s;
 
     let mut plan = SettingsPlan::new();
@@ -299,6 +309,13 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         // frame otherwise — there is nothing left for this seam to reject.
         let _ = plan.push(SettingsEffect::Ice(card));
     }
+    if let Some(trigger) = auto_lap.and_then(AutoLap::from_byte) {
+        // The fourth guard with no setter to live in: the setter takes the
+        // enum, so a byte naming no rung is dropped here — costing only this
+        // field, never the frame, and leaving the trigger already armed alone
+        // rather than resetting a race's splits to a default.
+        let _ = plan.push(SettingsEffect::AutoLap(trigger));
+    }
     plan
 }
 
@@ -316,6 +333,7 @@ mod tests {
     /// compile error here, so the fixture can't quietly stop being full.
     fn fully_populated() -> WatchSettings {
         WatchSettings {
+            auto_lap: Some(AutoLap::Km5.to_byte()),
             max_hr: Some(185),
             pacer: Some(PacerGoalCfg {
                 distance_m: 42_195,
@@ -364,7 +382,7 @@ mod tests {
     fn present_field_count(s: &WatchSettings) -> usize {
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         s.encode(&mut buf).expect("the fixture encodes");
-        (buf[5].count_ones() + buf[6].count_ones()) as usize
+        (buf[5].count_ones() + buf[6].count_ones() + buf[7].count_ones()) as usize
     }
 
     type Kinds = Vec<EffectKind, MAX_SETTINGS_EFFECTS>;
@@ -556,6 +574,13 @@ mod tests {
                     "JAMIE MORGAN",
                     "+1 555 0134",
                 )),
+            ),
+            (
+                WatchSettings {
+                    auto_lap: full.auto_lap,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::AutoLap(AutoLap::Km5),
             ),
         ];
         for (frame, effect) in expected {
@@ -749,6 +774,34 @@ mod tests {
                 ..WatchSettings::default()
             });
             assert_eq!(plan.len(), 1, "preset byte {b} must route");
+        }
+    }
+
+    #[test]
+    fn an_auto_lap_byte_naming_no_rung_costs_only_its_own_field() {
+        // The trigger's guard has no setter to live in either, so it runs here.
+        // A garbage byte must not reset a race's splits to a default, and must
+        // not take the rest of the push down with it.
+        let mut s = fully_populated();
+        s.auto_lap = Some(200);
+        let plan = plan_apply(&s);
+        assert!(!kinds_of(&plan).contains(&EffectKind::AutoLap));
+        assert_eq!(plan.len(), EffectKind::COUNT - 1);
+        for t in [
+            AutoLap::Off,
+            AutoLap::Km1,
+            AutoLap::Mi1,
+            AutoLap::Km5,
+            AutoLap::Mi5,
+            AutoLap::Min5,
+            AutoLap::Min10,
+            AutoLap::Min30,
+        ] {
+            let plan = plan_apply(&WatchSettings {
+                auto_lap: Some(t.to_byte()),
+                ..WatchSettings::default()
+            });
+            assert_eq!(plan.as_slice(), &[SettingsEffect::AutoLap(t)][..]);
         }
     }
 

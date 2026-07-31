@@ -80,6 +80,23 @@ pub const CONFIG_FLAG_HIDE_EMPTY_ON: u8 = 0b0000_0010;
 /// that byte as a reserved zero with this bit clear, so they decode as "no
 /// profile" with no version bump — the §351 flags-byte drill again.
 pub const CONFIG_FLAG_PROFILE_SET: u8 = 0b0000_0100;
+/// Bit 3 (§374): an auto-lap trigger has been explicitly pushed; bits 4-6 carry
+/// its [`crate::auto_lap::AutoLap::to_byte`] discriminant. Pre-§374 records left
+/// all four clear, so they decode as "no stored trigger" and the recorder keeps
+/// its default — the §351 flags-byte drill a third time.
+pub const CONFIG_FLAG_AUTO_LAP_SET: u8 = 0b0000_1000;
+const CONFIG_AUTO_LAP_MASK: u8 = 0b0111_0000;
+const CONFIG_AUTO_LAP_SHIFT: u8 = 4;
+
+const _: () =
+    assert!(crate::auto_lap::AUTO_LAP_MAX_BYTE <= CONFIG_AUTO_LAP_MASK >> CONFIG_AUTO_LAP_SHIFT);
+
+/// Bit 7 (§372): backyard-ultra mode is armed. No companion "set" bit, unlike
+/// hide-empty: the default is off, so a clear bit already means exactly what
+/// an unset choice means, and every pre-§372 record decodes as disarmed. **This
+/// is the last free bit** — §374 took bits 3-6, so the setting after this one
+/// needs a [`CONFIG_VERSION`] bump and a wider record.
+pub const CONFIG_FLAG_BACKYARD_ON: u8 = 0b1000_0000;
 
 /// The flags byte with an explicit hide-empty choice folded in — every other
 /// bit (the profile marker, future flags) carried forward, so persisting one
@@ -96,12 +113,42 @@ pub fn hide_empty_from_flags(flags: u8) -> Option<bool> {
     (flags & CONFIG_FLAG_HIDE_EMPTY_SET != 0).then_some(flags & CONFIG_FLAG_HIDE_EMPTY_ON != 0)
 }
 
+/// The flags byte with the backyard-mode arm folded in, every other bit
+/// carried forward — the [`set_hide_empty_flags`] rule.
+pub fn set_backyard_flags(flags: u8, armed: bool) -> u8 {
+    (flags & !CONFIG_FLAG_BACKYARD_ON) | if armed { CONFIG_FLAG_BACKYARD_ON } else { 0 }
+}
+
+/// Whether the persisted record has backyard-ultra mode armed (§372).
+pub fn backyard_from_flags(flags: u8) -> bool {
+    flags & CONFIG_FLAG_BACKYARD_ON != 0
+}
+
 /// The persisted profile byte carried by a record, or `None` when no profile
 /// was ever selected (every pre-§353 record). The byte itself only speaks
 /// through `profiles::ActivityProfile::from_byte`, so a CRC-valid but unknown
 /// discriminant still reads as "no profile".
 pub fn profile_from_flags(flags: u8, profile_byte: u8) -> Option<u8> {
     (flags & CONFIG_FLAG_PROFILE_SET != 0).then_some(profile_byte)
+}
+
+/// The flags byte with an explicit auto-lap trigger folded in — every other bit
+/// carried forward, like [`set_hide_empty_flags`]. A discriminant wider than the
+/// three-bit field is masked to fit; the const assert above is what keeps that
+/// unreachable for a real rung.
+pub fn set_auto_lap_flags(flags: u8, trigger_byte: u8) -> u8 {
+    (flags & !CONFIG_AUTO_LAP_MASK)
+        | CONFIG_FLAG_AUTO_LAP_SET
+        | ((trigger_byte << CONFIG_AUTO_LAP_SHIFT) & CONFIG_AUTO_LAP_MASK)
+}
+
+/// The persisted auto-lap discriminant carried by a flags byte, or `None` when
+/// the record never stored one (every pre-§374 record). The byte only speaks
+/// through [`crate::auto_lap::AutoLap::from_byte`], so a CRC-valid but unknown
+/// discriminant still reads as "no stored trigger".
+pub fn auto_lap_from_flags(flags: u8) -> Option<u8> {
+    (flags & CONFIG_FLAG_AUTO_LAP_SET != 0)
+        .then_some((flags & CONFIG_AUTO_LAP_MASK) >> CONFIG_AUTO_LAP_SHIFT)
 }
 
 /// Encode the persisted-config record — `magic | version | gnss_mode | flags |
@@ -1720,6 +1767,25 @@ mod tests {
         let flipped = set_hide_empty_flags(both, false);
         assert_eq!(hide_empty_from_flags(flipped), Some(false));
         assert_eq!(profile_from_flags(flipped, 2), Some(2));
+        // And §372's arm joins them without disturbing either.
+        let armed = set_backyard_flags(flipped, true);
+        assert!(backyard_from_flags(armed));
+        assert_eq!(hide_empty_from_flags(armed), Some(false));
+        assert_eq!(profile_from_flags(armed, 2), Some(2));
+        let disarmed = set_hide_empty_flags(armed, true);
+        assert!(backyard_from_flags(disarmed), "hide-empty kept the arm");
+        assert!(!backyard_from_flags(set_backyard_flags(disarmed, false)));
+    }
+
+    #[test]
+    fn a_pre_372_record_reads_as_disarmed_rather_than_as_no_choice() {
+        // Unlike hide-empty there is no companion "set" bit: backyard mode's
+        // default IS off, so a clear bit already says everything an unset
+        // choice would, and every record written before §372 decodes as a
+        // watch that is not in a backyard.
+        assert!(!backyard_from_flags(0));
+        assert!(!backyard_from_flags(CONFIG_FLAG_PROFILE_SET));
+        assert!(!backyard_from_flags(set_hide_empty_flags(0, true)));
     }
 
     #[test]
@@ -1729,6 +1795,60 @@ mod tests {
         // marker clear — "no profile", never a confident RUN.
         assert_eq!(profile_from_flags(0, 0), None);
         assert_eq!(profile_from_flags(set_hide_empty_flags(0, true), 0), None);
+    }
+
+    #[test]
+    fn auto_lap_flags_round_trip_and_a_pre_374_record_reads_as_unset() {
+        use crate::auto_lap::AutoLap;
+        for t in [
+            AutoLap::Off,
+            AutoLap::Km1,
+            AutoLap::Mi1,
+            AutoLap::Km5,
+            AutoLap::Mi5,
+            AutoLap::Min5,
+            AutoLap::Min10,
+            AutoLap::Min30,
+        ] {
+            let flags = set_auto_lap_flags(0, t.to_byte());
+            assert_eq!(auto_lap_from_flags(flags), Some(t.to_byte()));
+            assert_eq!(
+                AutoLap::from_byte(auto_lap_from_flags(flags).unwrap()),
+                Some(t)
+            );
+            // A stored Off must not read as "no stored trigger": the runner
+            // turning auto-lap off is a choice a reboot has to honour, not the
+            // absence of one.
+            assert!(flags & CONFIG_FLAG_AUTO_LAP_SET != 0);
+        }
+        // Pre-§374 records left bits 3-6 clear — "no stored trigger", never a
+        // confident OFF.
+        assert_eq!(auto_lap_from_flags(0), None);
+        assert_eq!(auto_lap_from_flags(set_hide_empty_flags(0, true)), None);
+    }
+
+    #[test]
+    fn persisting_the_trigger_carries_the_other_flags_forward() {
+        // The shared flags byte again: writing a trigger must not erase the
+        // hide-empty choice or the profile marker, and neither may erase it.
+        let base = set_hide_empty_flags(CONFIG_FLAG_PROFILE_SET, true);
+        let with_trigger = set_auto_lap_flags(base, 6);
+        assert_eq!(auto_lap_from_flags(with_trigger), Some(6));
+        assert_eq!(hide_empty_from_flags(with_trigger), Some(true));
+        assert_eq!(profile_from_flags(with_trigger, 2), Some(2));
+        let flipped = set_hide_empty_flags(with_trigger, false);
+        assert_eq!(auto_lap_from_flags(flipped), Some(6));
+        assert_eq!(hide_empty_from_flags(flipped), Some(false));
+        // And a re-push of a different trigger replaces the discriminant
+        // wholesale rather than OR-ing bits into the old one.
+        assert_eq!(
+            auto_lap_from_flags(set_auto_lap_flags(with_trigger, 1)),
+            Some(1)
+        );
+        assert_eq!(
+            auto_lap_from_flags(set_auto_lap_flags(with_trigger, 0)),
+            Some(0)
+        );
     }
 
     #[test]

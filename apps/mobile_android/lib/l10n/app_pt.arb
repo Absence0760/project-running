@@ -3461,5 +3461,8 @@
   "watchMetricRouteSimplifyDistance": "Distância do percurso",
   "watchMetricAutoEffortMatched": "Segmentos correspondidos",
   "watchMetricRouteElevTotal": "Desnível do percurso",
-  "watchMetricRaceDayDays": "Dias até à prova"
+  "watchMetricRaceDayDays": "Dias até à prova",
+  "watchMetricSleepBudget": "Margem de sono",
+  "watchMetricTimerRemaining": "Temporizador",
+  "watchMetricBackyardBell": "Contagem decrescente do sino"
 }

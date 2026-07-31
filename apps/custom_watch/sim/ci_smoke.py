@@ -7,7 +7,9 @@ waiting for someone to run it by hand. It reuses the launcher rather than
 re-implementing the boot sequence, so a regression in watch-sim.sh itself
 (pty, defmt drain, monitor port, cleanup) also fails here.
 
-Five scenarios, selected with `--scenario` (default `all`):
+Eight scenarios, selected with `--scenario` (default `all`). The five below are
+the ones whose framing does not fit on a function docstring; `screens`, `idle`
+and `workout` each carry theirs on their own `scenario_*`.
 
 `smoke` — the end-to-end pass. In order, each assertion grounded in the manual
 evidence under sim/verification-2026-07-19/, except the two marked below:
@@ -97,19 +99,20 @@ its own phone port (`--phone-port` + session index) because watch.resc binds
 that port at a FIXED number and watch-sim.sh aborts if it is still held — a
 sequential re-launch must not race the previous Renode's teardown. `--budget` is
 a cap on the WHOLE process, shared across sessions, so a per-scenario invocation
-gets all of it and `--scenario all` splits it across two boots.
+gets all of it and `--scenario all` splits it across every boot.
 
 Determinism: the altitude and NMEA sources are virtual-time driven with no
 randomness, so a given firmware + fixture replays identically. Every wait here
 is on a specific decoded log line with a deadline, never a fixed sleep — the
-sole exception is the ~1.5 s gap between the two BTN2 presses, which must land
-inside the firmware's 4 s stop-confirm window and so cannot wait on the "armed"
-line (a block-buffered decoder could delay observing it past the window).
+sole exception is the ~1.5 s gap between the two BTN2 presses (`smoke` and
+`workout` both stop a run), which must land inside the firmware's 4 s
+stop-confirm window and so cannot wait on the "armed" line (a block-buffered
+decoder could delay observing it past the window).
 
 Usage:
   apps/custom_watch/sim/ci_smoke.py [--out-dir DIR] [--fixture NAME]
                                     [--phone-port N] [--budget SECONDS]
-                                    [--scenario {smoke,pages,alerts,terrain,dropout,all}]
+                                    [--scenario NAME]   (see SCENARIO_ORDER)
 
 Requires: renode + defmt-print on PATH, and the sim-feature ELF already built
 (the launcher builds it if not, but pre-building it in a separate step keeps a
@@ -192,6 +195,7 @@ SCENARIO_ORDER = (
     "dropout",
     "screens",
     "idle",
+    "workout",
 )
 
 # The NMEA fixture each scenario was written against, and a property OF the
@@ -209,12 +213,19 @@ SCENARIO_FIXTURES = {
     # Idle-only: it never starts a run, so the fixture is just something for the
     # receiver to chew on while the thumb works the menu.
     "idle": "bench_jog",
+    # The sim demo workout's steps are sized against THIS fixture: its ~1.5 m/s
+    # of CREDITED distance (consecutive fixes step ~2.97 m against the 3.0 m
+    # TRACK_THRESHOLD_M, so about half are absorbed) settles the 50-60 m steps
+    # in ~33-40 s each. A slower fixture, or one whose min-move filter thins
+    # harder, stretches the same five steps past this scenario's budget.
+    "workout": "bench_jog",
 }
 
 # Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
-# asserts against. `screens` is the only one: the composed data screens (§364)
-# seat immediately after the Dashboard, so building them into every session
-# would shift the page walk `pages` and `terrain` assert on.
+# asserts against. Three carry them: the composed data screens (§364) seat
+# immediately after the Dashboard, so building them into every session would
+# shift the page walk `pages` and `terrain` assert on; `idle` needs the run
+# never to start; and `workout` needs the alert slot to itself.
 SCENARIO_LAUNCHER_ARGS = {
     # `--no-alerts` as well: the shortened sim fuel cadences overlap into a
     # continuous banner past ~100 s, and a banner OWNS the hero band — it would
@@ -224,6 +235,18 @@ SCENARIO_LAUNCHER_ARGS = {
     # The whole point of this one: no `sim-autostart`, so the watch stays on the
     # idle faces instead of paging a run view.
     "idle": ("--no-autostart",),
+    # `--no-alerts` drops the sim's shortened fuel / distance / time / pace
+    # arms, leaving the hardware defaults (900 s drink, 1500 s eat of MOVING
+    # time) — an order of magnitude past this scenario's ~180 s of run. The
+    # workout's own edges are unconditional (they ride `sim-autostart`, not
+    # `sim-alerts`), so what is left in the alert slot is exactly and only the
+    # workout rail. That is what makes the COUNTING assertion possible: "one
+    # end-of-step warning across the plan, and one only" is a claim about the
+    # `ENDING_MIN_STEP_*` gate solely while nothing else can take the slot.
+    # It also keeps a fuel banner off the two Workout page dumps, which a
+    # banner would otherwise own (it covers the hero band). Arbitration between
+    # a workout banner and a fuel one is `alerts`' surface, not this one's.
+    "workout": ("--no-alerts",),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -348,7 +371,7 @@ PAGE_INTENT_LINES = {
 PAGE_STEP_TIMEOUT = 30
 PAGE_PRESS_ATTEMPTS = 2
 # Enough presses for two-plus laps of the filtered cycle: an unsynced sim watch
-# carries ~12-18 of the 35 pages, and the full cycle is 35.
+# carries ~12-18 of the 38 pages, and the full cycle is 38.
 MAX_PAGE_PRESSES = 48
 
 # `record: alert <Kind>` on a raise, `record: alert cleared` when its TTL runs
@@ -374,7 +397,7 @@ IDLE_FACES = ("Home", "Diagnostics", "Ice")
 # `settings_menu::ITEMS` order. Hard-coded rather than derived because the
 # ORDER is the contract the runner's thumb learns — a reordering that both the
 # firmware and a derived expectation followed would assert nothing.
-MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "QnhRezero", "Ice")
+MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "Backyard", "QnhRezero", "Ice")
 # A menu press lands in well under a second (the button task polls at 50 Hz);
 # 10 s is an order of magnitude of headroom for a loaded runner without making
 # an expected-silent press — a ladder clamped at its end — cost half a minute.
@@ -395,6 +418,91 @@ CLIMB_CREST = re.compile(r"climb: crest dist=([\d.]+)m gain=([\d.]+)m grade=(-?[
 # read looks identical to a live one over two samples.
 CLIMB_CREST_MIN_SAMPLES = 5
 CLIMB_TIMEOUT = 180
+
+# The §354 / §356 structured-workout rail. Every one of these is a task's own
+# statement rather than a reading of the panel: `record: workout armed` is the
+# step list reaching the recorder over the same `state::WORKOUT` channel a
+# phone's `WKT1` push lands on, and the three alert lines are the runner's own
+# edges as the record task reports them (`WorkoutRunner`'s `transition_seq` /
+# `ending_seq` / `complete`). A Workout page dump can show none of this — it
+# says a frame was drawn, never which step it names.
+WORKOUT_ARMED = re.compile(r"record: workout armed \((\d+) steps\)")
+WORKOUT_STEP = re.compile(
+    r"record: alert WorkoutStep \{ kind: (\w+), rep_index: (\d+), rep_total: (\d+) \}"
+)
+WORKOUT_ENDING = re.compile(r"record: alert WorkoutEnding\b")
+WORKOUT_DONE = re.compile(r"record: alert WorkoutDone\b")
+# The flush at stop: the summary that attributes the whole trail to the pushed
+# frame (§356 — without it the phone deliberately discards the step records),
+# and every way the v4 write can lose part of that trail while the run still
+# commits. The loss pattern is asserted ABSENT, which is the only form the
+# claim can take: the happy path of `push_step_result` is silent by design.
+WORKOUT_STORED = re.compile(
+    r"record: run (\d+) workout results stored \((\d+) planned steps\)"
+)
+WORKOUT_STORE_LOSS = re.compile(
+    r"record: run \d+ workout (?:step \d+ dropped from storage"
+    r"|summary (?:already stored|dropped)"
+    r"|trail has no frame CRC)"
+)
+# The button task's own statement that it classified a BTN5 press as the lap
+# command and is sending it (§357's tap tier; §354 makes the recorder double it
+# as the step skip). The "intent" half of the same split `press_page` asserts,
+# and what makes a press LOST between the button task's polls distinguishable
+# from a skip that did not happen — only the first is safe to repeat.
+LAP_PRESS = re.compile(r"button: Lap -> Lap\b")
+
+# The demo workout `app/src/tasks/record.rs` queues under `sim-autostart`, in
+# the order the alert engine reports its transitions: (kind, rep_index,
+# rep_total). Hard-coded rather than derived for the same reason `MENU_ROWS`
+# is — the sequence IS the contract, and an expectation derived from the same
+# source as the behaviour asserts nothing.
+#
+# Note which end axis each step ends on, because the walk below covers both:
+# warmup / reps / cooldown are DISTANCE steps (60 / 50 / 50 / 60 m), the
+# recovery is a DURATION step (30 s). A runner that only ever settles distance
+# steps advances three times and then stalls forever on the recovery.
+WORKOUT_PLAN = (
+    ("Warmup", 0, 0),
+    ("Rep", 1, 2),
+    ("Recovery", 1, 1),
+    ("Rep", 2, 2),
+    ("Cooldown", 0, 0),
+)
+# How much of the plan the recorder's own auto-advance carries before the
+# scenario takes the lap key to the rest. Four transitions means three settled
+# steps — two on distance, one on duration — so both end axes are exercised
+# unaided; the last transition and the completion are then driven by BTN5,
+# which is the §354 claim.
+WORKOUT_AUTO_STEPS = 4
+# Per auto-advanced step. The widest gap the demo workout produces on bench_jog
+# is the ~40 s warmup, so this is several times the observed worst case — loose
+# enough to absorb a loaded runner's virtual-time drift, and irrelevant to a
+# broken firmware, which fails on the WRONG STEP the moment it reports one
+# rather than on this deadline.
+WORKOUT_STEP_TIMEOUT = 180
+# The gap, in the FIRMWARE's own virtual seconds, inside which a lap press has
+# to produce its edge for the press to be what caused it. Deliberately far
+# under the steps BTN5 skips here: 50 m and 60 m, which the fixture's ~1.5 m/s
+# of credited distance settles in ~33 s and ~40 s. Measured on the decoded
+# stream's timestamps rather than on wall clock, because Renode's virtual clock
+# runs at a ratio to wall time that swings with host load — a wall-clock bound
+# would say nothing about how much of the step was left to run.
+WORKOUT_SKIP_MAX_GAP_S = 15.0
+# How long to wait for the edge a lap press produced. Deliberately LONGER than
+# the step the press displaces, which is the opposite of what a deadline
+# usually wants: a firmware whose lap press does nothing still ends the step on
+# schedule, and the run that measured this wants that edge in hand so the gap
+# assertion above can name the cause. Cut to 30 s the same broken firmware
+# fails on a bare "no line matched" timeout instead, which says only that
+# something did not arrive.
+WORKOUT_EDGE_TIMEOUT = 90
+# A lap press's own wait. Short on purpose, unlike `PAGE_STEP_TIMEOUT`: a lost
+# press retried after 30 s would consume the very step window the gap above is
+# measured against. The button task polls at 50 Hz, so the line lands in well
+# under a second and 10 s is an order of magnitude of headroom — the same
+# reasoning `MENU_STEP_TIMEOUT` carries.
+WORKOUT_LAP_TIMEOUT = 10
 
 ALERT_ANY = re.compile(r"record: alert (\S+)")
 ALERT_RAISED = re.compile(r"record: alert (?!cleared\b)(\S+)")
@@ -2036,7 +2144,7 @@ def scenario_idle(sim):
     past by design"); this is the one that does not.
 
     Two rails share one boot. The menu: BTN5 opens it and it reaches the panel,
-    BTN3 walks all five rows in their documented order and wraps, BTN2 walks
+    BTN3 walks all six rows in their documented order and wraps, BTN2 walks
     back, an edit on the GNSS row moves the ladder, BTN4 closes it. Then the
     three faces BTN4 walks — Home, Diagnostics, and the §358 ICE card a
     responder reads off a collapsed runner's wrist — each rendering a distinct
@@ -2058,7 +2166,7 @@ def scenario_idle(sim):
     is a flash claim and this scenario never power-cycles the emulator; the
     menu's own writes are best-effort / L4 by design (a flash error warns and
     the edit still applies), so a green run here says nothing about what comes
-    back after a brown-out. Nor legibility — five rows on a 168x144 1-bit panel
+    back after a brown-out. Nor legibility — six rows on a 168x144 1-bit panel
     read at 45 cm is a step-4 bench claim, per quality_standards.md.
     """
     # No `require_recording` — the opposite. The idle face only exists because
@@ -2258,6 +2366,378 @@ def scenario_idle(sim):
     passed("the menu's MEDICAL ID row fires and hands the screen to the ICE card")
 
 
+def press_lap(sim, what):
+    """One BTN5 tap, resolved by the button task's own `button: Lap -> Lap`.
+
+    Returns the log cursor taken BEFORE the press, so the caller can wait for
+    the workout edge THIS press produced without matching an earlier one.
+
+    Retried like `press_page` and `press_menu`, and the retry is only safe
+    because of the line it waits on. A macro drives the GPIO low for a fixed
+    window and the button task samples on a poll, so an injected press can land
+    between polls and vanish. The button task logs BEFORE it sends the command,
+    so an absent line means the press never became a command at all — nothing
+    was skipped and repeating cannot skip twice. Waiting on the workout edge
+    instead would confuse a slow edge with a lost press and skip two steps on
+    the retry, which is exactly the bug this scenario exists to catch.
+    """
+    for attempt in range(1, PAGE_PRESS_ATTEMPTS + 1):
+        mark = sim.tail.mark()
+        sim.monitor().send("runMacro $btn5")
+        try:
+            sim.wait(
+                LAP_PRESS,
+                WORKOUT_LAP_TIMEOUT,
+                f"the button task to classify {what} as the lap command "
+                "('button: Lap -> Lap') — a press that came back as "
+                "MarkWaypoint was read as the §357 HOLD tier instead",
+                start=mark,
+            )
+            return mark
+        except SmokeFailure:
+            if attempt == PAGE_PRESS_ATTEMPTS:
+                raise
+            announce("no lap line seen — the injected press likely missed a poll")
+    raise AssertionError("unreachable")
+
+
+def workout_transitions(tail):
+    """Every step transition the alert engine has reported so far, in order,
+    each paired with the virtual timestamp of the line that carried it.
+
+    The whole series rather than the newest match, for the reason `dropout`
+    reads its fix stream the same way: the claims are about the SEQUENCE and
+    about the times between its entries, and no single line carries either.
+    """
+    return [
+        (t, (m.group(1), int(m.group(2)), int(m.group(3))))
+        for t, m in stamped(tail, WORKOUT_STEP)
+    ]
+
+
+def assert_lap_skipped(label, started_at, edge, edge_at):
+    """The one claim that separates a §354 skip from a step ending by itself.
+
+    `started_at` is when the step the press displaced began, `edge_at` when the
+    edge the press produced landed — both in the FIRMWARE's virtual seconds.
+    The steps BTN5 skips in this scenario need ~33 s and ~40 s of that clock to
+    settle on their own, so an edge inside `WORKOUT_SKIP_MAX_GAP_S` cannot be
+    the auto-advance arriving on schedule. Without this the scenario would pass
+    on a firmware whose lap press does nothing at all: wait long enough and the
+    step ends regardless.
+    """
+    gap = edge_at - started_at
+    if gap > WORKOUT_SKIP_MAX_GAP_S:
+        raise SmokeFailure(
+            f"{label} landed {gap:.1f}s of virtual time after the step it was "
+            f"meant to cut short began, past the {WORKOUT_SKIP_MAX_GAP_S:.0f}s "
+            "a press can account for — a 50-60 m step on this fixture settles "
+            "by itself in ~33-40 s, so this is the auto-advance arriving on "
+            "schedule and the lap press did nothing. §357 re-tiered BTN5 (tap "
+            "laps, hold marks a waypoint), and a mis-tiered tap is invisible to "
+            "every host test over the runner"
+        )
+    passed(
+        f"{label} {gap:.1f}s in — {edge}, far short of the ~33-40 s that step "
+        f"needed to end by itself, so the advance is the press (§354)"
+    )
+
+
+def scenario_workout(sim):
+    """Run a structured workout end to end and prove each edge reaches a task.
+
+    The last major run-view rail without a scenario. Everything about
+    `watch_core::workout` up to here is host-tested against the mobile runner's
+    own vectors, and the demo workout had been walked BY HAND in the sim — but
+    nothing automated had ever driven a step list through the recorder, the
+    alert engine and into flash on a booted emulator, so the whole seam between
+    the ported state machine and the firmware around it was unguarded.
+
+    Six claims, in the order the run produces them:
+
+      1. the pushed step list ARMS the recorder (`state::WORKOUT`, the same
+         channel the ble task's `WKT1` decode publishes on)
+      2. the Workout page enters the cycle and renders
+      3. the runner auto-advances through the plan IN ORDER, over both end axes
+      4. the end-of-step warning fires on the one step long enough to earn it,
+         and on no other
+      5. a BTN5 lap press skips the active step (§354) and, on the last one,
+         completes the workout
+      6. the completed trail flushes into the run blob with nothing dropped
+
+    (3) and (4) are the two with the most reach. The plan mixes distance steps
+    (60 / 50 / 50 / 60 m) with a duration one (30 s recovery), so a runner that
+    settles only one axis stalls partway and reports a SHORT sequence rather
+    than a wrong one. And the ending window is gated — `ENDING_MIN_STEP_M` is
+    100 m so none of the distance steps qualify, `ENDING_MIN_STEP_S` is 20 s so
+    the recovery alone does — which makes "exactly one warning, inside the
+    recovery" a claim about the gate itself. A runner that warned on every step
+    passes a mere "a warning fired" check and fails this one.
+
+    (5) is the button half, and it is asserted on the FIRMWARE's clock rather
+    than on the harness's: see `assert_lap_skipped`.
+
+    **What this does NOT prove.** Nothing here reads a glyph, so `NOT SYNCED`
+    and `WORKOUT DONE` are not verified as TEXT — the page's presence in the
+    cycle is `Snapshot::pages_mask`'s `workout.is_some()` bit and its content is
+    a host-test claim (`core/src/face.rs`). Nor the real `WKT1` transport: the
+    sim arms over the channel the ble task publishes on, but the GATT
+    characteristic and its chunked reassembly need a SoftDevice, which Renode
+    does not run (decisions §314). And not the negative half — every boot in
+    this file that starts a run also arms the demo workout, so "the Workout page
+    stays OUT of a cycle with no workout" has no session to be asserted in.
+    """
+    require_recording(sim)
+
+    steps = int(
+        sim.wait(
+            WORKOUT_ARMED,
+            120,
+            "the pushed step list to reach the recorder "
+            "('record: workout armed (N steps)') — 'record: sim demo workout "
+            "queued' is the SEND on state::WORKOUT, this line is the receive, "
+            "and only the second one says Recorder::set_workout accepted it",
+        ).group(1)
+    )
+    if steps != len(WORKOUT_PLAN):
+        raise SmokeFailure(
+            f"the recorder armed {steps} steps, not the {len(WORKOUT_PLAN)} the "
+            "sim demo workout queues — `WorkoutRunner::new` truncated or "
+            "rejected part of the list, and every sequence assertion below "
+            "would then be checking a different workout"
+        )
+    passed(f"the pushed step list armed the recorder ({steps} steps)")
+
+    # The page, walked to now rather than at the end: it stays where the walk
+    # leaves it for the rest of the scenario (BTN5 laps, it does not page), so
+    # the second dump after DONE is the same page in a later state and needs no
+    # second walk.
+    walk = []
+    page = None
+    presses = 0
+    while presses < MAX_PAGE_PRESSES and page != "Workout":
+        presses += 1
+        page = press_page(sim, "$btn4", f"BTN4 press {presses}")
+        walk.append(page)
+    if page != "Workout":
+        raise SmokeFailure(
+            f"the Workout page never appeared in the BTN4 cycle over {presses} "
+            f"presses (walked: {' -> '.join(walk)}). The cycle is "
+            "`Snapshot::pages_mask`, whose Workout bit is `s.workout.is_some()` "
+            "— and the arm above is green, so the runner IS armed and the bit "
+            "is reading the wrong field. That failure is silent on the wrist: "
+            "an absent page is indistinguishable from a page with no data"
+        )
+    wait_for_no_alert(sim)
+    active = sim.dump("page-Workout-active.ppm", "the Workout page under a live workout")
+    assert_rendered(active, "the Workout page")
+    passed(
+        f"the Workout page is in the BTN4 cycle and renders "
+        f"({active.dark} dark pixels, reached in {presses} presses)"
+    )
+
+    # The auto-advance. Checked as a growing PREFIX rather than waited out and
+    # compared at the end: a runner that reports the wrong step should say so on
+    # the step it gets wrong, not after the timeout for a step that will never
+    # come.
+    deadline = time.monotonic() + WORKOUT_STEP_TIMEOUT * WORKOUT_AUTO_STEPS
+    while True:
+        sim.alive()
+        got = workout_transitions(sim.tail)
+        for index, (_, step) in enumerate(got[:WORKOUT_AUTO_STEPS]):
+            if step != WORKOUT_PLAN[index]:
+                raise SmokeFailure(
+                    f"transition {index + 1} reported {step}, not "
+                    f"{WORKOUT_PLAN[index]} — the runner is not walking the "
+                    "pushed plan. A wrong KIND means the step list decoded into "
+                    "the wrong order; wrong rep numbering means the banner tells "
+                    "the runner they are on a different rep than they are"
+                )
+        if len(got) >= WORKOUT_AUTO_STEPS:
+            break
+        if time.monotonic() >= deadline:
+            raise SmokeFailure(
+                f"the workout advanced {len(got)} of {WORKOUT_AUTO_STEPS} steps "
+                f"unaided ({' -> '.join(k for _, (k, _, _) in got) or 'none'}) "
+                "before the deadline. Each step ends on ONE axis — the reps and "
+                "the warmup on distance, the recovery on its 30 s — so a stall "
+                "at transition 3 is a runner that never settles a duration step "
+                "and a stall at transition 1 one that never settles a distance "
+                "step"
+            )
+        time.sleep(0.5)
+    passed(
+        "the runner auto-advanced through "
+        + " -> ".join(
+            f"{k}{f' {i}/{n}' if n else ''}"
+            for k, i, n in WORKOUT_PLAN[:WORKOUT_AUTO_STEPS]
+        )
+        + " over both end axes"
+    )
+
+    # The end-of-step warning, and the reason `--no-alerts` is on this session:
+    # nothing else can take the slot, so the COUNT is the assertion. Exactly one
+    # of the plan's steps clears a gate — the 30 s recovery against
+    # ENDING_MIN_STEP_S = 20, where every distance step is 50-60 m against
+    # ENDING_MIN_STEP_M = 100 — so a warning per step and a warning for none
+    # both fail here, where "at least one fired" would let the first through.
+    stamps = [t for t, _ in workout_transitions(sim.tail)]
+    endings = [t for t, _ in stamped(sim.tail, WORKOUT_ENDING)]
+    recovery_at, next_at = stamps[2], stamps[3]
+    if len(endings) != 1:
+        raise SmokeFailure(
+            f"{len(endings)} end-of-step warnings fired across the plan's first "
+            f"{WORKOUT_AUTO_STEPS} transitions, not 1 — only the 30 s recovery "
+            "clears a warning gate (ENDING_MIN_STEP_S = 20 s; the 50-60 m "
+            "distance steps are all under ENDING_MIN_STEP_M = 100 m). More means "
+            "the gate is not being applied; none means the window never opens "
+            "and the runner gets no notice before a step changes under them"
+        )
+    if not recovery_at < endings[0] <= next_at:
+        raise SmokeFailure(
+            f"the end-of-step warning landed at t={endings[0]:.1f}s, outside the "
+            f"recovery step (t={recovery_at:.1f}s to t={next_at:.1f}s) — it is "
+            "warning about a step other than the one that earned a warning"
+        )
+    passed(
+        f"exactly one end-of-step warning fired, {endings[0] - recovery_at:.0f}s "
+        f"into the 30 s recovery — the only step in the plan that clears a gate"
+    )
+
+    # The §354 skip. Two presses: one to leave the step the auto-advance just
+    # entered, one to run off the end of the plan.
+    before = workout_transitions(sim.tail)
+    if len(before) != WORKOUT_AUTO_STEPS:
+        raise SmokeFailure(
+            f"{len(before)} transitions had already fired when the lap press was "
+            f"about to be injected, not {WORKOUT_AUTO_STEPS} — the auto-advance "
+            "settled the step before the harness could reach it, so the press "
+            "below would be skipping a step nobody chose. This is a host-speed "
+            "report, not a firmware verdict"
+        )
+    mark = press_lap(sim, "the BTN5 tap on the last rep")
+    m = sim.wait(
+        WORKOUT_STEP,
+        WORKOUT_EDGE_TIMEOUT,
+        "the lap press to skip the active step ('record: alert WorkoutStep …')",
+        start=mark,
+    )
+    skipped_to = (m.group(1), int(m.group(2)), int(m.group(3)))
+    if skipped_to != WORKOUT_PLAN[WORKOUT_AUTO_STEPS]:
+        raise SmokeFailure(
+            f"the lap press advanced to {skipped_to}, not "
+            f"{WORKOUT_PLAN[WORKOUT_AUTO_STEPS]} — the skip left the plan"
+        )
+    after = workout_transitions(sim.tail)
+    assert_lap_skipped(
+        "a BTN5 lap press skipped the active step",
+        before[-1][0],
+        f"landing on {skipped_to[0]}",
+        after[WORKOUT_AUTO_STEPS][0],
+    )
+
+    mark = press_lap(sim, "the BTN5 tap on the final step")
+    sim.wait(
+        WORKOUT_DONE,
+        WORKOUT_EDGE_TIMEOUT,
+        "skipping the final step to complete the workout "
+        "('record: alert WorkoutDone')",
+        start=mark,
+    )
+    done_stamps = [t for t, _ in stamped(sim.tail, WORKOUT_DONE)]
+    assert_lap_skipped(
+        "skipping the final step completed the workout",
+        after[WORKOUT_AUTO_STEPS][0],
+        "raising DONE",
+        done_stamps[0],
+    )
+
+    # A sixth transition would mean the runner walked off the end of its own
+    # step list and kept going, which the page would render as a step that does
+    # not exist.
+    got = workout_transitions(sim.tail)
+    if len(got) != len(WORKOUT_PLAN):
+        raise SmokeFailure(
+            f"{len(got)} transitions fired for a {len(WORKOUT_PLAN)}-step plan "
+            f"({' -> '.join(k for _, (k, _, _) in got)}) — a completed runner "
+            "must raise no further step edge"
+        )
+    passed(
+        f"the runner raised exactly {len(got)} transitions for a "
+        f"{len(WORKOUT_PLAN)}-step plan"
+    )
+
+    wait_for_no_alert(sim)
+    done = sim.dump("page-Workout-done.ppm", "the Workout page after the workout completed")
+    assert_rendered(done, "the Workout page's completed state")
+    if done.data == active.data:
+        raise SmokeFailure(
+            "the Workout page's live and completed dumps are byte-identical — "
+            "DumpFrame did not write a fresh frame for one of them (the elapsed "
+            "clock alone changes pixels between two frames a minute apart), so "
+            "neither render assertion above proves anything"
+        )
+    passed(
+        f"the page still renders after DONE ({done.dark} dark pixels) — this "
+        "says a frame was drawn, NOT that it reads WORKOUT DONE; no assertion "
+        "here reads a glyph"
+    )
+
+    # The v4 persistence half. `smoke` already asserts this line exists, but it
+    # stops ~20 m into the run with the workout still on its first step, so the
+    # trail it flushes is one in-progress step. This one flushes a COMPLETE
+    # five-step trail plus the summary, which is the shape that can actually run
+    # the stored-step budget out.
+    stored = None
+    for attempt in range(1, STOP_ATTEMPTS + 1):
+        announce(f"BTN2 stop pair, attempt {attempt}/{STOP_ATTEMPTS}")
+        sim.monitor().send("runMacro $btn2")
+        # Inside the firmware's 4 s stop-confirm window, for the same reason
+        # `smoke`'s pair is — see the module docstring.
+        time.sleep(1.5)
+        sim.monitor().send("runMacro $btn2")
+        try:
+            stored = sim.wait(
+                WORKOUT_STORED,
+                25,
+                "the stopped run to flush its workout trail "
+                "('record: run N workout results stored (M planned steps)')",
+            )
+            break
+        except SmokeFailure as exc:
+            if attempt == STOP_ATTEMPTS:
+                raise SmokeFailure(
+                    f"{exc} — {STOP_ATTEMPTS} BTN2 press pairs were injected and "
+                    "none produced a workout flush"
+                ) from exc
+            announce("no flush yet — the injected press likely missed a poll")
+
+    planned = int(stored.group(2))
+    if planned != len(WORKOUT_PLAN):
+        raise SmokeFailure(
+            f"the flushed summary claims {planned} planned steps, not "
+            f"{len(WORKOUT_PLAN)} — the phone reconciles the step records "
+            "against this count, so a wrong one mis-attributes the trail"
+        )
+    loss = sim.tail.search(WORKOUT_STORE_LOSS)
+    if loss is not None:
+        raise SmokeFailure(
+            f"part of the completed trail was lost on the way to flash: "
+            f"{loss.group(0)} — the write is best-effort by design (the run "
+            "still commits), so this never fails the run and is invisible until "
+            "the phone gets a trail with a hole in it"
+        )
+    passed(
+        f"the completed {planned}-step trail flushed into run {stored.group(1)}'s "
+        "blob with no step or summary dropped"
+    )
+
+    panics = [ln for ln in sim.tail.text().splitlines() if "panicked" in ln.lower()]
+    if panics:
+        raise SmokeFailure("the firmware panicked during the run: " + panics[0].strip())
+    passed("no firmware panic across the workout")
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
@@ -2266,6 +2746,7 @@ SCENARIOS = {
     "dropout": scenario_dropout,
     "screens": scenario_screens,
     "idle": scenario_idle,
+    "workout": scenario_workout,
 }
 
 
@@ -2292,9 +2773,11 @@ def plan_sessions(selected, fixture_override=None):
     them (one step per scenario, one process each). `--scenario all` and the CI
     job finally agree about what is being executed.
 
-    `smoke` additionally has to be alone — it stops the run the others need in
-    progress — and `terrain` and `dropout` are each on a different fixture, and a
-    boot has exactly one.
+    `smoke` and `workout` additionally have to be alone — each stops the run the
+    others need in progress — `terrain` and `dropout` are each on a different
+    fixture and a boot has exactly one, and `screens`, `idle` and `workout` each
+    need their own launcher flags (`SCENARIO_LAUNCHER_ARGS`), which are a
+    property of the BUILD a session boots and so cannot be shared either.
 
     Each session carries its scenario's own fixture. An explicit `--fixture`
     overrides every one of them, which is how a manual session points an
@@ -2397,19 +2880,13 @@ def main():
     )
     parser.add_argument(
         "--scenario",
-        choices=(
-            "smoke",
-            "pages",
-            "alerts",
-            "terrain",
-            "dropout",
-            "screens",
-            "idle",
-            "all",
-        ),
+        # Derived from SCENARIO_ORDER rather than restated: the restated list
+        # had already drifted out of step with the scenarios that exist, which
+        # is the same failure mode as a CI job that never learns about one.
+        choices=(*SCENARIO_ORDER, "all"),
         default="all",
-        help="which scenario to run; 'all' boots each of smoke, alerts, pages, "
-        "terrain and dropout in that order, one emulator each",
+        help="which scenario to run; 'all' boots each of "
+        f"{', '.join(SCENARIO_ORDER)} in that order, one emulator each",
     )
     args = parser.parse_args()
 

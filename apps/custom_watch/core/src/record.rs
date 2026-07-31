@@ -16,6 +16,8 @@
 //! dependency and the two agree to well under a millimetre at the metres-apart
 //! spacing of successive fixes.
 
+use crate::auto_lap::{AutoLap, AUTO_LAP_DEFAULT};
+use crate::backyard::{Backyard, BackyardView};
 use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::distance_bands::{band_for_distance, DistanceBand};
@@ -40,6 +42,8 @@ use crate::race_phases::{
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
+use crate::sleep_station::{sleep_budget, SleepBudget};
+use crate::timers::TimerView;
 use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
@@ -84,12 +88,13 @@ pub const MIN_MOVING_SPEED_MPS: f64 = 0.5;
 /// the constant in `run_recorder._distanceToSegmentMetres`.
 pub const METRES_PER_DEGREE_LAT: f64 = 111_320.0;
 
-/// Auto-lap boundary: the current lap closes on the first accepted fix that
-/// carries it past this distance. The tier-1 default mirrors the classic
-/// 1 km auto-lap; a manual lap resets the countdown, so the boundary is
-/// always measured from the current lap's start, not from multiples of the
-/// run total.
+/// Auto-lap boundary of the default trigger ([`AutoLap::Km1`]): the current lap
+/// closes on the first accepted fix that carries it past this distance. A
+/// manual lap resets the countdown, so the boundary is always measured from the
+/// current lap's start, not from multiples of the run total.
 pub const AUTO_LAP_DISTANCE_M: f64 = 1000.0;
+
+const _: () = assert!(matches!(AutoLap::Km1.distance_m(), Some(m) if m == AUTO_LAP_DISTANCE_M));
 
 /// How many cutoff legs the tier-1 recorder holds for the loaded course —
 /// enough for an ultra's aid-station cutoffs. A pushed course with more must be
@@ -498,6 +503,10 @@ pub struct Snapshot {
     pub lap_elapsed_s: u32,
     /// The most recently completed lap, if any — the face's "last lap split".
     pub last_lap: Option<Lap>,
+    /// What closes the next lap without a press. Carried so the Lap page can
+    /// say so: a runner who cannot see that auto-lap is off reads a lap counter
+    /// that never moves as a broken watch.
+    pub auto_lap: AutoLap,
     /// The virtual-partner delta vs a configured goal (see [`crate::pacer`]);
     /// `None` while no goal is set or no run is under way — the pacer page
     /// shows an honest inactive state then, never a fake "on pace at zero".
@@ -517,6 +526,14 @@ pub struct Snapshot {
     /// projection via [`Recorder::set_route_position`]; a stale route position
     /// withholds the projected time rather than fabricate one off an old fix.
     pub cutoff: Option<CutoffEta>,
+    /// How long the runner may sleep and still make the next cut-off
+    /// ([`crate::sleep_station`], §373) — present exactly when
+    /// [`Snapshot::cutoff`] is, since it is that same projection less a reserve.
+    /// Its own [`crate::sleep_station::SleepStatus`] carries the honest empty
+    /// states, so a stale fix
+    /// yields `Unknown` rather than a nap length nothing will wake the runner
+    /// from.
+    pub sleep: Option<SleepBudget>,
     /// The live race-time ladder projected from the current run treated as a
     /// single effort — `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]
     /// and a moving pace exists, so a warm-up shows no fabricated prediction.
@@ -603,6 +620,10 @@ pub struct Snapshot {
     /// needs the pushed profile, and the page is empty only when neither has
     /// anything to say.
     pub climb: ClimbView,
+    /// Backyard-ultra mode ([`crate::backyard`], § 372), or `None` while the
+    /// mode is unarmed — which is also the Backyard page's presence bit, so an
+    /// ordinary run never carries a bell page in its cycle.
+    pub backyard: Option<BackyardView>,
     /// Distance + bearing from the current position back to the newest marked
     /// waypoint (§357), or `None` when nothing is marked or no position anchor
     /// exists — the Waypoint page then reads an honest empty state rather than
@@ -613,6 +634,13 @@ pub struct Snapshot {
     /// between runs, so the page must stay in the cycle while the store is
     /// non-empty even before this run has an anchor to measure from.
     pub waypoint_count: u8,
+    /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
+    /// `None` while nothing is armed. Fed in from the task that owns the
+    /// instrument rather than derived here — the timer outlives runs, so the
+    /// recorder is no more its home than it is the course's ([`set_timer`]).
+    ///
+    /// [`set_timer`]: Recorder::set_timer
+    pub timer: Option<TimerView>,
     /// The flash track's decimation factor: 1 = full resolution, `k` = one
     /// stored point per `k` accepted fixes after slot-full thinning
     /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
@@ -784,6 +812,10 @@ pub struct Recorder {
     lap_start_elapsed_s: u32,
     lap_start_moving_s: u32,
     last_lap: Option<Lap>,
+    /// What closes a lap without a press ([`set_auto_lap`](Recorder::set_auto_lap)).
+    /// Survives `start`/`reset` like the other pushed configuration — a runner
+    /// does not re-choose their lap trigger between the legs of a stage race.
+    auto_lap: AutoLap,
     /// Closed laps awaiting flash persistence, drained by the app's record
     /// task via [`pop_closed_lap`](Recorder::pop_closed_lap). A queue rather
     /// than `last_lap` alone because one throttled-mode fix can close several
@@ -903,6 +935,9 @@ pub struct Recorder {
     /// live distance, so it advances with the run rather than at sync time.
     race_phases: PhasePlan,
     race_phase_goal_pace_s_per_km: Option<f64>,
+    /// The armed countdown / stopwatch reading, fed per tick by the task that
+    /// owns the instrument ([`set_timer`](Recorder::set_timer)).
+    timer: Option<TimerView>,
     /// Whether the nav task holds a loaded course — the Nav page's data
     /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
     /// (the recorder stays course-agnostic; this is a presence bit, not the
@@ -934,6 +969,15 @@ pub struct Recorder {
     /// [`start`](Recorder::start): a new run must not inherit the last one's
     /// foot, which at a lower trailhead would open a climb on the first fix.
     climb: ClimbDetector,
+    /// Backyard-ultra mode (§ 372). Armed from the idle settings menu, so a run
+    /// is wholly inside the mode or wholly outside it.
+    backyard: Backyard,
+    /// The receiver's UTC time-of-day and the uptime second it arrived on —
+    /// the anchor the local wall clock extrapolates from, the same shaping the
+    /// Daylight page's [`crate::daylight::daylight_at`] does. Deliberately NOT
+    /// cleared by a pause the way `last` is: a paused runner's clock has not
+    /// stopped, and the § 372 bell is anchored to it.
+    last_clock: Option<(u32, u32)>,
     /// Positions the runner marked mid-run (§357), newest-last. Deliberately
     /// NOT cleared by [`start`](Recorder::start) or [`reset`](Recorder::reset):
     /// a water stash marked on yesterday's recce is the whole point of the
@@ -968,6 +1012,7 @@ impl Recorder {
             lap_start_elapsed_s: 0,
             lap_start_moving_s: 0,
             last_lap: None,
+            auto_lap: AUTO_LAP_DEFAULT,
             pending_laps: heapless::Deque::new(),
             gap: GapEstimator::new(),
             baro_alt_m: None,
@@ -1010,12 +1055,15 @@ impl Recorder {
             race_day: None,
             race_phases: PhasePlan::new(),
             race_phase_goal_pace_s_per_km: None,
+            timer: None,
             course_loaded: false,
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
             screen_count: 0,
             tz_offset_min: None,
             climb: ClimbDetector::new(),
+            backyard: Backyard::new(),
+            last_clock: None,
             waypoints: Waypoints::new(),
         }
     }
@@ -1061,6 +1109,18 @@ impl Recorder {
     /// Presence bit for the Daylight page: the settings sync has delivered a
     /// timezone offset. Without one the countdown would run against the wrong
     /// midnight, so the page stays out of the cycle rather than empty in it.
+    /// Arm or disarm backyard-ultra mode (§ 372) — the idle settings menu's
+    /// BACKYARD row, re-seeded from the persisted `CFG1` flag at boot.
+    ///
+    /// While armed the bell drives the auto-lap in place of the 1 km boundary:
+    /// a backyard loop crosses six kilometre lines, so leaving the distance
+    /// auto-lap on would bury the loop splits the phone reads as the runner's
+    /// result. Re-arming an armed mode is inert, so the boot re-seed cannot
+    /// wipe a race in progress.
+    pub fn set_backyard_armed(&mut self, armed: bool) {
+        self.backyard.set_armed(armed, self.distance_m);
+    }
+
     pub fn set_tz_offset_min(&mut self, m: i16) {
         self.tz_offset_min = Some(m);
     }
@@ -1449,6 +1509,16 @@ impl Recorder {
 
     /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't render
     /// an unknown verdict label.
+    /// Feed the countdown / stopwatch reading (§375). The same external-input
+    /// shape as [`set_hr`](Recorder::set_hr) and
+    /// [`set_route_position`](Recorder::set_route_position), and for the §215
+    /// reason: the instrument is armed on the idle face and survives every run
+    /// boundary, so the recorder has no business owning it — it only carries
+    /// the reading so the page and the alert engine read one snapshot.
+    pub fn set_timer(&mut self, view: Option<TimerView>) {
+        self.timer = view;
+    }
+
     pub fn set_race_day(&mut self, view: Option<RaceDayView>) {
         self.race_day = view.map(|v| RaceDayView {
             days_until: v.days_until,
@@ -1524,6 +1594,7 @@ impl Recorder {
         self.current_speed_mps = 0.0;
         self.last = None;
         self.track_thinning = 1;
+        self.backyard.on_run_start();
         self.lap_index = 1;
         self.lap_start_distance_m = 0.0;
         self.lap_start_elapsed_s = 0;
@@ -1577,17 +1648,31 @@ impl Recorder {
         self.last = None;
     }
 
+    /// Choose what closes a lap without a press ([`crate::auto_lap`]). Takes
+    /// effect from the lap in progress: the new trigger measures from the
+    /// current lap's start, not from the run total, so switching mid-run cannot
+    /// retroactively close laps that never happened. No plausibility guard —
+    /// the catalogue is closed, and the byte that names a rung is validated
+    /// where it is decoded.
+    pub fn set_auto_lap(&mut self, trigger: AutoLap) {
+        self.auto_lap = trigger;
+    }
+
     /// Close the current lap by hand (the Lap button). Valid whenever a run is
     /// in progress — recording, auto-paused, or manually paused (a lap taken
     /// while paused closes at the frozen totals); inert once idle or finished.
-    /// Also resets the auto-lap countdown: the next 1 km boundary is measured
-    /// from here, not from multiples of the run total.
+    /// Also resets the auto-lap countdown on whichever axis is armed: the next
+    /// boundary is measured from here, not from multiples of the run total.
     pub fn lap(&mut self, now_s: u32) {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
         }
         self.advance_now(now_s);
         self.close_lap();
+        // In backyard mode that same press is the corral return (§ 372) — the
+        // one gesture, marking the loop the runner just finished; it is not a
+        // second meaning for BTN5, only a second reader of the lap it closes.
+        self.backyard.on_corral_return(now_s, self.distance_m);
         // During a workout the lap press doubles as "advance the step" —
         // Garmin's own lap-button semantics — because the §350 grammar has no
         // spare button for a dedicated skip.
@@ -1654,6 +1739,7 @@ impl Recorder {
             self.state = RecordState::Paused;
         }
         self.feed_workout();
+        self.fold_backyard();
     }
 
     /// Consume one GPS fix, using its `uptime_s` as the current time. Ignored
@@ -1661,6 +1747,9 @@ impl Recorder {
     /// entirely, mirroring `run_recorder`'s `if (_paused) return`.
     pub fn on_fix(&mut self, fix: &Fix) {
         self.last_fix_stored = false;
+        if let Some(tod) = fix.time_of_day {
+            self.last_clock = Some((tod, fix.uptime_s));
+        }
         match self.state {
             RecordState::Recording => {}
             RecordState::Paused if !self.manual_paused => {}
@@ -1755,20 +1844,81 @@ impl Recorder {
         self.pacer.on_distance(self.distance_m, self.elapsed_s());
         self.feed_workout();
 
-        // Auto-lap: close one lap per full AUTO_LAP_DISTANCE_M the current lap
-        // has crossed. A single accepted fix in a throttled GNSS mode can span
-        // several kilometre boundaries after a dropout, so this must close more
-        // than one lap — a bare `if` closed only ONE and merged the rest into
-        // one giant lap, silently corrupting the lap counter/index and every
-        // split from that point on. Every boundary but the last lands on the
-        // exact kilometre line (proportional time slice); the last close keeps
-        // the established single-boundary behaviour — the overshoot stays in
-        // the closed lap and the next lap opens at the closing fix's totals.
-        while self.distance_m - self.lap_start_distance_m >= 2.0 * AUTO_LAP_DISTANCE_M {
-            self.close_lap_at(self.lap_start_distance_m + AUTO_LAP_DISTANCE_M);
+        self.check_auto_lap();
+    }
+
+    /// Close whatever laps the armed trigger has come due for. Both axes bank
+    /// only on ground the recorder accepted as movement — distance structurally,
+    /// moving time because that is the axis the budget is measured on — so a
+    /// stationary runner can never close a lap here, however long they stand
+    /// still (§ 374). This is the only place either axis advances, which is why
+    /// it is also the only place the check has to run.
+    ///
+    /// **A backyard bell outranks the chosen trigger entirely** (§ 372 over
+    /// § 374), on both axes and at every rung. The loop is the unit the format
+    /// is scored in, so it has to be exactly one lap record; a 1 km rung spends
+    /// six per 6.706 km loop and a 5 min rung twelve per hour, and on a 64-record
+    /// budget either evicts the loop splits that ARE the result inside the first
+    /// ten loops. The runner's choice is dormant, not cleared — it is a `CFG1`
+    /// setting and disarming the bell restores it — which also makes `Off` and a
+    /// time rung behave the same way here as a distance one, rather than each
+    /// needing its own answer.
+    ///
+    /// A single accepted fix in a throttled GNSS mode can span several
+    /// boundaries after a dropout, so each axis must close MORE than one lap —
+    /// a bare `if` closed only ONE and merged the rest into one giant lap,
+    /// silently corrupting the lap counter/index and every split from that point
+    /// on. Every boundary but the last lands on the exact line (proportional
+    /// slice of the open lap); the last close keeps the established
+    /// single-boundary behaviour — the overshoot stays in the closed lap and the
+    /// next lap opens at the closing fix's totals.
+    fn check_auto_lap(&mut self) {
+        if self.backyard.armed() {
+            return;
         }
-        if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
+        if let Some(boundary) = self.auto_lap.distance_m() {
+            while self.distance_m - self.lap_start_distance_m >= 2.0 * boundary {
+                self.close_lap_at(self.lap_start_distance_m + boundary);
+            }
+            if self.distance_m - self.lap_start_distance_m >= boundary {
+                self.close_lap();
+            }
+        }
+        if let Some(budget) = self.auto_lap.moving_s() {
+            while self.moving_s - self.lap_start_moving_s >= 2 * budget {
+                self.close_lap_at_moving(self.lap_start_moving_s + budget);
+            }
+            if self.moving_s - self.lap_start_moving_s >= budget {
+                self.close_lap();
+            }
+        }
+    }
+
+    /// The runner's local time of day, extrapolated from the receiver's last
+    /// clock and shifted by the pushed timezone offset — `None` until both
+    /// exist, which is what makes the Backyard page refuse a countdown rather
+    /// than count down to the wrong hour.
+    fn local_tod_s(&self) -> Option<u32> {
+        let tz = self.tz_offset_min?;
+        let (tod, at) = self.last_clock?;
+        let aged = u64::from(tod) + u64::from(self.now_s.saturating_sub(at));
+        Some(((aged as i64 + i64::from(tz) * 60).rem_euclid(86_400)) as u32)
+    }
+
+    /// Fold the wall clock into backyard mode and take the bell's lap when it
+    /// asks for one. Called from the 1 Hz tick, which runs through both pause
+    /// kinds for as long as a run is live — so no bell window can pass
+    /// unobserved, which is the assumption the window detector rests on.
+    fn fold_backyard(&mut self) {
+        if !self.backyard.armed() {
+            return;
+        }
+        let Some(tod) = self.local_tod_s() else {
+            return;
+        };
+        if self.backyard.on_clock(tod) {
             self.close_lap();
+            self.backyard.on_bell_lap(self.distance_m);
         }
     }
 
@@ -1846,6 +1996,42 @@ impl Recorder {
         self.lap_start_moving_s = self.lap_start_moving_s.saturating_add(lap_moving);
     }
 
+    /// [`close_lap_at`](Self::close_lap_at) with the axes swapped: close at
+    /// `close_moving_s` seconds of moving time (`lap_start_moving_s <
+    /// close_moving_s <= self.moving_s`), attributing a proportional slice of
+    /// the open lap's distance and elapsed time and re-anchoring there.
+    ///
+    /// A near-twin of the distance close rather than a shared helper over a
+    /// fraction, because each axis has to anchor EXACTLY on its own quantity:
+    /// re-deriving the closing moving-second from a float fraction of the open
+    /// lap would let the anchor drift a second per lap, and a 60-lap race would
+    /// bank a minute of moving time that no lap contains.
+    fn close_lap_at_moving(&mut self, close_moving_s: u32) {
+        let lap_moving = close_moving_s.saturating_sub(self.lap_start_moving_s);
+        let open_moving = self.moving_s - self.lap_start_moving_s;
+        let frac = if open_moving > 0 {
+            (f64::from(lap_moving) / f64::from(open_moving)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let open_elapsed = self.elapsed_s().saturating_sub(self.lap_start_elapsed_s);
+        let open_distance = self.distance_m - self.lap_start_distance_m;
+        let lap_elapsed = libm::round(open_elapsed as f64 * frac) as u32;
+        let lap_distance = open_distance * frac;
+        let closed = Lap {
+            index: self.lap_index,
+            distance_m: lap_distance,
+            elapsed_s: lap_elapsed,
+            moving_s: lap_moving,
+        };
+        self.last_lap = Some(closed);
+        let _ = self.pending_laps.push_back(closed);
+        self.lap_index = self.lap_index.saturating_add(1);
+        self.lap_start_distance_m += lap_distance;
+        self.lap_start_elapsed_s = self.lap_start_elapsed_s.saturating_add(lap_elapsed);
+        self.lap_start_moving_s = close_moving_s;
+    }
+
     fn elapsed_s(&self) -> u32 {
         self.now_s.saturating_sub(self.start_s)
     }
@@ -1900,6 +2086,7 @@ impl Recorder {
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
             last_lap: self.last_lap,
+            auto_lap: self.auto_lap,
             pacer: if self.state == RecordState::Idle {
                 None
             } else {
@@ -1908,6 +2095,7 @@ impl Recorder {
             zone_cutoffs: self.zone_cutoffs,
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
+            sleep: self.sleep_snapshot(),
             race_prediction: self.race_prediction_snapshot(),
             pace_bucket_m: self.pace_bucket_m,
             training_stress: self.training_stress_snapshot().map(|(s, _)| s),
@@ -1944,10 +2132,15 @@ impl Recorder {
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
             climb: self.climb_snapshot(),
+            backyard: self.backyard.armed().then(|| {
+                self.backyard
+                    .view(self.distance_m, self.current_pace(), self.now_s)
+            }),
             waypoint: self
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
             waypoint_count: self.waypoints.len() as u8,
+            timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,
             hide_empty_pages: self.hide_empty_pages,
@@ -1996,6 +2189,7 @@ impl Recorder {
         set(Page::TrainingLoad, s.training_stress.is_some());
         set(Page::DistanceBand, s.band.is_some());
         set(Page::CutoffEta, s.cutoff.is_some());
+        set(Page::SleepStation, s.sleep.is_some());
         set(Page::Roadbook, s.roadbook.is_some());
         set(Page::Fuel, s.fuel.is_some());
         set(Page::Nav, self.course_loaded);
@@ -2024,6 +2218,14 @@ impl Recorder {
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
         set(Page::Climb, !s.climb.is_empty());
+        // Keyed on the instrument being ARMED, not merely configured: a preset
+        // dialled and abandoned in the modal is not a page, and a reset gives
+        // the seat back.
+        set(Page::Timer, s.timer.is_some());
+        // Armed, not fed: an armed watch that cannot yet read a clock must
+        // still carry the page, because `NOT SYNCED` on it is the only place a
+        // runner learns the countdown needs a timezone push.
+        set(Page::Backyard, s.backyard.is_some());
         // A composed screen is available when the runner has actually composed
         // it. Keyed on the COUNT rather than on any metric being fed, because a
         // screen the runner built is a page they asked for — its slots saying
@@ -2310,6 +2512,28 @@ impl Recorder {
         ))
     }
 
+    /// The sleep-station nap budget, on the same gate as the cut-off ETA — the
+    /// two answer one question from one projection, so a course whose cut-offs
+    /// feed one must feed the other.
+    ///
+    /// Both paces are handed over rather than picked here: `avg_pace` is the
+    /// run's MOVING pace, which the cut-off page projects from, and the race
+    /// pace below divides by the elapsed clock so every aid-station stop the
+    /// runner has already taken is priced in. [`sleep_budget`] takes the slower.
+    fn sleep_snapshot(&self) -> Option<SleepBudget> {
+        if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
+            return None;
+        }
+        Some(sleep_budget(
+            self.route_along_m.unwrap_or(0.0),
+            self.elapsed_s(),
+            self.avg_pace().map(f64::from),
+            self.race_pace(),
+            self.route_position_stale(),
+            &self.cutoff_legs,
+        ))
+    }
+
     /// The live race-time ladder, projecting the current run as a single effort
     /// (age 0). `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]; below
     /// that a Riegel projection is noise. `predict_race_ladder` returns `None`
@@ -2330,6 +2554,18 @@ impl Recorder {
             return None;
         }
         Some((self.moving_s as f64 * 1000.0 / self.distance_m) as u32)
+    }
+
+    /// Whole-run pace against the RACE clock rather than the moving one — every
+    /// stop so far divided back into it, so it is never faster than
+    /// [`Recorder::avg_pace`] and is the honest input to a projection a runner
+    /// will make more stops during.
+    fn race_pace(&self) -> Option<f64> {
+        let elapsed = self.elapsed_s();
+        if elapsed == 0 || self.distance_m < 1.0 {
+            return None;
+        }
+        Some(f64::from(elapsed) * 1000.0 / self.distance_m)
     }
 
     fn current_pace(&self) -> Option<u32> {
@@ -2638,6 +2874,193 @@ mod tests {
         assert!(last.distance_m >= AUTO_LAP_DISTANCE_M);
         assert_eq!(s.lap_distance_m, 0.0);
         assert!((s.distance_m - 2500.0).abs() < 60.0);
+    }
+
+    /// Metres north of 40.0, in degrees — the fixtures below are all straight
+    /// northbound legs, so a distance is easier to read than a latitude.
+    fn north(metres: f64) -> f64 {
+        40.0 + metres / METRES_PER_DEGREE_LAT
+    }
+
+    #[test]
+    fn a_fresh_recorder_reports_the_kilometre_default() {
+        let r = Recorder::new();
+        assert_eq!(r.snapshot().auto_lap, AutoLap::Km1);
+    }
+
+    #[test]
+    fn auto_lap_off_closes_nothing_but_the_lap_press_still_does() {
+        // The rung an ultra runner picks to spend the 64-record store on their
+        // own splits: no boundary fires, the button still works.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Off);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        for i in 0..=30u32 {
+            r.on_fix(&fix(north(f64::from(i) * 100.0), -105.0, 4.0, i * 25));
+        }
+        let s = r.snapshot();
+        assert!(s.distance_m > 2900.0);
+        assert_eq!(s.lap, 1, "an off trigger must close no lap");
+        assert!(s.last_lap.is_none());
+        r.lap(800);
+        assert_eq!(r.snapshot().lap, 2);
+    }
+
+    #[test]
+    fn the_mile_trigger_closes_on_the_mile_not_the_kilometre() {
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Mi1);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 4.0, 0));
+        r.on_fix(&fix(north(1200.0), -105.0, 4.0, 300));
+        assert_eq!(r.snapshot().lap, 1, "past a km is not past a mile");
+        r.on_fix(&fix(north(1700.0), -105.0, 4.0, 425));
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        assert!(s.last_lap.unwrap().distance_m >= 1609.344);
+    }
+
+    #[test]
+    fn a_time_trigger_closes_on_moving_time() {
+        // 1 m/s northbound: 300 s of moving time arrives long before any
+        // distance rung would have fired, so the close can only be the clock.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        for i in 0..=5u32 {
+            r.on_fix(&fix(north(f64::from(i) * 60.0), -105.0, 1.0, i * 60));
+        }
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.moving_s, 300);
+        assert!(last.distance_m < 400.0, "well short of any distance rung");
+    }
+
+    #[test]
+    fn a_throttled_time_lap_closes_one_lap_per_boundary_in_a_single_fix() {
+        // The time axis needs the multi-close the distance axis needed: one
+        // accepted fix after a long dropout can bank several budgets at once,
+        // and a bare `if` would merge them into one giant lap.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 1.0, 0));
+        // 700 m over 700 s = 1 m/s: clears the moving gate, inside the
+        // interval-scaled jump ceiling, and banks 700 s against a 300 s budget.
+        r.on_fix(&fix(north(700.0), -105.0, 1.0, 700));
+        let s = r.snapshot();
+        assert_eq!(s.lap, 3, "700 s against a 300 s budget must close two laps");
+        // The intermediate close landed exactly on the boundary; the last one
+        // absorbed the overshoot, mirroring the distance axis.
+        assert_eq!(s.last_lap.unwrap().moving_s, 400);
+        assert_eq!(r.pop_closed_lap().unwrap().moving_s, 300);
+        assert_eq!(r.pop_closed_lap().unwrap().moving_s, 400);
+        assert!(r.pop_closed_lap().is_none());
+    }
+
+    #[test]
+    fn a_stationary_runner_closes_no_lap_on_either_axis() {
+        // The failure this design exists to make impossible: an auto-lap that
+        // banked on the ELAPSED clock would turn a long aid-station stop into a
+        // stream of empty laps, and on the 64-record flash budget those empty
+        // laps displace real ones. Distance cannot accrue below the acceptance
+        // filter and moving time cannot accrue below the moving gate, so an
+        // hour of standing still closes nothing on either rung.
+        for trigger in [AutoLap::Km1, AutoLap::Min5] {
+            let mut r = Recorder::new();
+            r.set_auto_lap(trigger);
+            r.start(0);
+            r.on_fix(&fix(north(0.0), -105.0, 4.0, 0));
+            for t in 1..=3600u32 {
+                // Sub-metre jitter around one spot, plus the 1 Hz clock tick.
+                r.on_fix(&fix(
+                    north(if t % 2 == 0 { 0.0 } else { 0.5 }),
+                    -105.0,
+                    0.0,
+                    t,
+                ));
+                r.tick(t);
+            }
+            let s = r.snapshot();
+            assert_eq!(s.elapsed_s, 3600, "the wall clock still ran ({trigger:?})");
+            assert_eq!(
+                s.moving_s, 0,
+                "nothing cleared the moving gate ({trigger:?})"
+            );
+            assert_eq!(s.lap, 1, "{trigger:?} closed a lap while standing still");
+            assert!(s.last_lap.is_none());
+            assert!(r.pop_closed_lap().is_none());
+        }
+    }
+
+    #[test]
+    fn a_manual_pause_banks_nothing_toward_a_time_lap() {
+        // A manual pause gates fixes out entirely, so the only clock that runs
+        // is elapsed — which the time trigger deliberately does not read.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 1.0, 0));
+        r.on_fix(&fix(north(120.0), -105.0, 1.0, 120));
+        r.pause(120);
+        for t in 121..=1200u32 {
+            r.tick(t);
+        }
+        let s = r.snapshot();
+        assert_eq!(s.elapsed_s, 1200);
+        assert_eq!(s.moving_s, 120);
+        assert_eq!(s.lap, 1, "a paused stretch must not close a lap");
+        r.resume(1200);
+        // Resuming drops the anchor, so the first fix back only re-anchors;
+        // 180 more moving seconds then completes the budget, from the moving
+        // clock the pause froze rather than the 20 minutes the wall clock ran.
+        r.on_fix(&fix(north(120.0), -105.0, 1.0, 1200));
+        r.on_fix(&fix(north(300.0), -105.0, 1.0, 1380));
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        assert_eq!(s.last_lap.unwrap().moving_s, 300);
+    }
+
+    #[test]
+    fn a_manual_lap_restarts_the_time_countdown_too() {
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 1.0, 0));
+        r.on_fix(&fix(north(240.0), -105.0, 1.0, 240));
+        r.lap(240);
+        assert_eq!(r.snapshot().lap, 2);
+        // 240 s already banked, but the countdown restarted: 240 more is not
+        // enough, 300 is.
+        r.on_fix(&fix(north(480.0), -105.0, 1.0, 480));
+        assert_eq!(r.snapshot().lap, 2);
+        r.on_fix(&fix(north(540.0), -105.0, 1.0, 540));
+        assert_eq!(r.snapshot().lap, 3);
+    }
+
+    #[test]
+    fn changing_the_trigger_mid_run_measures_from_the_open_lap() {
+        // Switching must not retroactively close laps that never happened, nor
+        // hold a boundary the runner has already passed.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 4.0, 0));
+        r.on_fix(&fix(north(800.0), -105.0, 4.0, 200));
+        assert_eq!(r.snapshot().lap, 1);
+        r.set_auto_lap(AutoLap::Mi1);
+        assert_eq!(r.snapshot().auto_lap, AutoLap::Mi1);
+        r.on_fix(&fix(north(1100.0), -105.0, 4.0, 275));
+        assert_eq!(r.snapshot().lap, 1, "the kilometre boundary is gone");
+        r.on_fix(&fix(north(1700.0), -105.0, 4.0, 425));
+        assert_eq!(r.snapshot().lap, 2, "the mile boundary applies from lap 1");
     }
 
     #[test]
@@ -3349,6 +3772,50 @@ mod tests {
     }
 
     #[test]
+    fn the_sleep_budget_rides_the_cutoff_gate_and_the_slower_pace() {
+        use crate::sleep_station::SleepStatus;
+
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.00216, -105.0, 4.0, 60));
+        assert_eq!(r.snapshot().sleep, None, "no legs, no budget");
+        assert_eq!(r.snapshot().pages_mask & Page::SleepStation.bit(), 0);
+
+        // A cut-off two hours out, 300 m to go: masses of margin, so a budget.
+        r.set_cutoff_legs(&[CutoffLeg {
+            cum_dist_m: 500.0,
+            limit_elapsed_s: 7_200,
+        }]);
+        r.set_route_position(Some(200.0));
+        let s = r.snapshot();
+        let sleep = s.sleep.expect("budget with legs loaded");
+        assert_eq!(sleep.status, SleepStatus::Budget);
+        assert_ne!(s.pages_mask & Page::SleepStation.bit(), 0);
+
+        // The projection is never faster than the race clock allows: the run
+        // banked 240 m in 60 s of MOVING time but the elapsed clock is what the
+        // cut-off is measured on, so the slower of the two is what it used.
+        let race_pace = f64::from(s.elapsed_s) * 1000.0 / s.distance_m;
+        assert_eq!(sleep.pace_s_per_km, Some(race_pace));
+        assert!(race_pace >= f64::from(s.avg_pace_s_per_km.unwrap()));
+
+        // The position ages out: the budget goes Unknown with the cut-off ETA
+        // rather than counting down off a place the runner has left.
+        r.tick(300);
+        let stale = r.snapshot().sleep.expect("still has the leg");
+        assert_eq!(stale.status, SleepStatus::Unknown);
+        assert_eq!(stale.budget_min(), None);
+    }
+
+    #[test]
+    fn idle_has_no_sleep_budget() {
+        let r = Recorder::new();
+        assert_eq!(r.snapshot().sleep, None);
+    }
+
+    #[test]
     fn the_course_profile_marker_needs_both_a_profile_and_a_fresh_position() {
         let profile = |total_m: u32| RouteElevView {
             gain_m: 100,
@@ -3827,6 +4294,22 @@ mod tests {
     }
 
     #[test]
+    fn the_timer_page_joins_the_cycle_only_while_something_is_armed() {
+        let mut r = Recorder::new();
+        r.start(0);
+        assert_eq!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
+        let mut t = crate::timers::Timer::new();
+        t.start_stop(0);
+        r.set_timer(t.snapshot_view(5));
+        assert_ne!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
+        // Cleared, and the seat goes back — an unarmed instrument is not a page.
+        t.start_stop(5);
+        assert!(t.reset());
+        r.set_timer(t.snapshot_view(6));
+        assert_eq!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
+    }
+
+    #[test]
     fn the_waypoint_page_joins_the_cycle_on_the_first_mark_and_stays() {
         let mut r = Recorder::new();
         r.start(0);
@@ -3910,7 +4393,7 @@ mod tests {
     }
 
     /// The cycle carries exactly the composed screens the runner has, and an
-    /// unpushed watch walks the 37 built-ins with no blank seats among them.
+    /// unpushed watch walks the 40 built-ins with no blank seats among them.
     #[test]
     fn the_cycle_carries_exactly_the_composed_screens() {
         let mut r = Recorder::new();
@@ -4915,5 +5398,193 @@ mod tests {
             assert_eq!(p.len, 1, "{good} was dropped");
             assert_eq!(p.samples[0], good as i32);
         }
+    }
+
+    /// A fix carrying the receiver's UTC clock — what the backyard bell needs
+    /// on top of a pushed timezone.
+    fn fix_at(lat: f64, lon: f64, speed: f32, t: u32, tod_utc_s: u32) -> Fix {
+        Fix {
+            time_of_day: Some(tod_utc_s),
+            ..fix(lat, lon, speed, t)
+        }
+    }
+
+    #[test]
+    fn the_backyard_page_is_absent_until_the_mode_is_armed() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert!(r.snapshot().backyard.is_none());
+        assert_eq!(r.snapshot().pages_mask & Page::Backyard.bit(), 0);
+        r.set_backyard_armed(true);
+        assert!(r.snapshot().backyard.is_some());
+        assert_ne!(r.snapshot().pages_mask & Page::Backyard.bit(), 0);
+    }
+
+    #[test]
+    fn an_armed_backyard_withholds_the_countdown_until_it_has_both_clocks() {
+        // The page is present the moment the mode is armed — `NOT SYNCED` on
+        // it is where a runner learns the countdown needs a timezone — but the
+        // number is withheld until a timezone AND a receiver clock exist.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        r.tick(2);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, None);
+        // A timezone alone is not enough: nothing has told the watch the hour.
+        r.set_tz_offset_min(0);
+        r.tick(3);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, None);
+        r.on_fix(&fix_at(0.0, 0.001, 3.0, 4, 9 * 3600 + 50 * 60));
+        r.tick(5);
+        assert_eq!(
+            r.snapshot().backyard.unwrap().to_bell_s,
+            Some(10 * 60 - 1),
+            "the fix clock aged by the uptime since it landed"
+        );
+    }
+
+    #[test]
+    fn the_pushed_timezone_moves_the_bell_not_just_the_display() {
+        // 09:50 UTC is 15:20 local in a +05:30 zone — twenty past the hour, not
+        // ten to it. A countdown that assumed UTC hours would tell this runner
+        // they had ten minutes when they had forty.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(330);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 50 * 60));
+        r.tick(1);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, Some(40 * 60));
+    }
+
+    #[test]
+    fn the_bell_takes_the_lap_the_runner_did_not() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 58));
+        r.tick(1);
+        assert_eq!(r.snapshot().lap, 1);
+        assert_eq!(r.snapshot().backyard.unwrap().loops, 0);
+        // Two seconds later the hour turns.
+        r.tick(3);
+        let s = r.snapshot();
+        assert_eq!(
+            s.lap, 2,
+            "the bell closed the loop through the lap machinery"
+        );
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(s.last_lap.is_some(), "and it banked a split like any lap");
+    }
+
+    #[test]
+    fn a_corral_press_closes_the_loop_and_stands_the_bell_down() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 50));
+        r.tick(1);
+        r.lap(2);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(s.backyard.unwrap().in_corral, "the press marks the return");
+        // The bell must not close a second loop for the same hour.
+        r.tick(12);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2, "one loop, one lap");
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(
+            !s.backyard.unwrap().in_corral,
+            "and the next loop has been sent off"
+        );
+    }
+
+    #[test]
+    fn the_bell_owns_the_auto_lap_while_armed() {
+        // A backyard loop crosses six kilometre lines. Leaving the distance
+        // auto-lap on would bury the loop splits the phone reads as the result.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.start(0);
+        for i in 1..=250u32 {
+            r.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        let s = r.snapshot();
+        assert!(s.distance_m > 2_000.0, "{}", s.distance_m);
+        assert_eq!(s.lap, 1, "no kilometre lap closed inside the loop");
+        // Disarmed, the same walk closes the usual kilometre laps.
+        let mut r2 = Recorder::new();
+        r2.start(0);
+        for i in 1..=250u32 {
+            r2.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        assert!(r2.snapshot().lap > 1);
+    }
+
+    #[test]
+    fn the_bell_outranks_a_time_rung_too_and_the_choice_comes_back_disarmed() {
+        // § 372 was written against the hard-coded kilometre § 374 replaced, so
+        // the arm has to answer for the rungs § 374 added as well. A 5-minute
+        // rung is the worse of the two on this store: twelve empty closes per
+        // hour-long loop against a 64-record budget, evicting the loop splits
+        // that ARE the result. The choice is dormant, not cleared.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_backyard_armed(true);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        for i in 0..=6u32 {
+            r.on_fix(&fix(north(f64::from(i) * 60.0), -105.0, 1.0, i * 60));
+        }
+        let s = r.snapshot();
+        assert!(s.moving_s >= 300, "{}", s.moving_s);
+        assert_eq!(s.lap, 1, "an armed bell must suppress the time rung too");
+
+        r.set_backyard_armed(false);
+        r.on_fix(&fix(north(7.0 * 60.0), -105.0, 1.0, 7 * 60));
+        assert_eq!(
+            r.snapshot().lap,
+            2,
+            "disarming restores the runner's own trigger"
+        );
+    }
+
+    #[test]
+    fn an_armed_bell_over_an_off_trigger_leaves_only_the_press_and_the_bell() {
+        // `Off` and the bell agree on the automatic axis, so the arm changes
+        // nothing there — what it must not do is take the button as well.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Off);
+        r.set_backyard_armed(true);
+        r.start(0);
+        for i in 1..=250u32 {
+            r.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        assert_eq!(r.snapshot().lap, 1);
+        r.lap(300);
+        assert_eq!(r.snapshot().lap, 2, "the corral return still closes a loop");
+    }
+
+    #[test]
+    fn a_new_run_starts_the_race_over_but_keeps_the_mode() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 50));
+        r.tick(1);
+        r.lap(2);
+        assert_eq!(r.snapshot().backyard.unwrap().loops, 1);
+        r.stop(3);
+        r.reset(4);
+        r.start(5);
+        let s = r.snapshot();
+        assert!(s.backyard.is_some(), "the mode outlives the run");
+        assert_eq!(s.backyard.unwrap().loops, 0);
     }
 }

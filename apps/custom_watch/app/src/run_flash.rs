@@ -54,6 +54,7 @@ use embedded_storage::nor_flash::ReadNorFlash;
 #[cfg(feature = "ble")]
 use embedded_storage_async::nor_flash::NorFlash;
 use heapless::Vec;
+use watch_core::auto_lap::AutoLap;
 use watch_core::flash_plan::{self, SlotReader};
 use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
@@ -259,6 +260,14 @@ impl RunStore {
         flash_store::hide_empty_from_flags(flags)
     }
 
+    /// Whether the persisted record has backyard-ultra mode armed (§372). A
+    /// missing or corrupt record reads as disarmed, which is also the default
+    /// — the fail-closed direction for a mode that re-points the auto-lap.
+    pub fn read_backyard(&mut self) -> bool {
+        self.read_config_bytes()
+            .is_some_and(|(_, flags, _)| flash_store::backyard_from_flags(flags))
+    }
+
     /// Read the activity profile persisted by
     /// [`persist_profile`](Self::persist_profile), or `None` when no profile
     /// was ever selected (every pre-§353 record) or the stored discriminant
@@ -266,6 +275,15 @@ impl RunStore {
     pub fn read_profile(&mut self) -> Option<ActivityProfile> {
         let (_, flags, profile) = self.read_config_bytes()?;
         ActivityProfile::from_byte(flash_store::profile_from_flags(flags, profile)?)
+    }
+
+    /// Read the auto-lap trigger persisted by
+    /// [`persist_auto_lap`](Self::persist_auto_lap), or `None` when none was
+    /// ever pushed (every pre-§374 record) or the stored discriminant names no
+    /// rung — the recorder then keeps its 1 km default, never a wrong rung.
+    pub fn read_auto_lap(&mut self) -> Option<AutoLap> {
+        let (_, flags, _) = self.read_config_bytes()?;
+        AutoLap::from_byte(flash_store::auto_lap_from_flags(flags)?)
     }
 
     /// Read the persisted BLE bond ([`persist_bond`](Self::persist_bond)), or
@@ -322,6 +340,24 @@ impl RunStore {
         }
     }
 
+    /// Persist the backyard-ultra arm (§372) so a runner who armed it at a
+    /// start line still has it after a brown-out at hour 30. Same best-effort
+    /// / L4 rules and carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode).
+    pub async fn persist_backyard(&mut self, armed: bool) {
+        let mut page = self.read_config_page();
+        let (mode_byte, flags, profile) =
+            page.config.unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        page.config = Some((
+            mode_byte,
+            flash_store::set_backyard_flags(flags, armed),
+            profile,
+        ));
+        if self.rewrite_config_page(&page).await {
+            info!("run_flash: persisted backyard mode {}", armed);
+        }
+    }
+
     /// Persist the selected activity profile (§353) so the menu's row — and
     /// the boot-time re-apply of the profile's page preset — survive a
     /// reboot. Same best-effort / L4 rules and carry-everything-forward page
@@ -337,6 +373,25 @@ impl RunStore {
         ));
         if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted activity profile {}", profile);
+        }
+    }
+
+    /// Persist the pushed auto-lap trigger (§374) so a mid-race battery pull
+    /// cannot silently re-split the rest of the run at the 1 km default. Same
+    /// best-effort / L4 rules and carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode); the record task calls
+    /// this only when the pushed value actually changes.
+    pub async fn persist_auto_lap(&mut self, trigger: AutoLap) {
+        let mut page = self.read_config_page();
+        let (mode_byte, flags, profile) =
+            page.config.unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        page.config = Some((
+            mode_byte,
+            flash_store::set_auto_lap_flags(flags, trigger.to_byte()),
+            profile,
+        ));
+        if self.rewrite_config_page(&page).await {
+            info!("run_flash: persisted auto-lap {}", trigger);
         }
     }
 

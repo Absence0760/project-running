@@ -63,6 +63,12 @@ pub enum MenuItem {
     /// GNSS mode, per §353 — and the row shows the last-applied profile
     /// (`--` until one is ever chosen).
     Profile,
+    /// Backyard-ultra mode (§372), edited directionally like the hide-empty
+    /// toggle: right = ON, left = OFF. It lives on the watch rather than on a
+    /// phone push because a runner arms it at a start line in a field, and
+    /// idle-only because arming it re-points the auto-lap onto the corral
+    /// bell — a run has to be wholly inside the mode or wholly outside it.
+    Backyard,
     /// An action row: right (BTN1) fires the same request as the idle BTN3
     /// hold and closes the menu; the idle face's transient banner
     /// (`SET 1610M` / `NO GPS FIX` / `NO BARO`) answers, exactly as it
@@ -76,12 +82,13 @@ pub enum MenuItem {
     Ice,
 }
 
-pub const MENU_ITEMS: usize = 5;
+pub const MENU_ITEMS: usize = 6;
 
 const ITEMS: [MenuItem; MENU_ITEMS] = [
     MenuItem::GnssMode,
     MenuItem::HideEmpty,
     MenuItem::Profile,
+    MenuItem::Backyard,
     MenuItem::QnhRezero,
     MenuItem::Ice,
 ];
@@ -145,6 +152,9 @@ pub enum MenuEdit {
     /// Apply an activity profile's preset (already different from the current
     /// selection — the ladder never re-applies the rung it is on).
     SetProfile(ActivityProfile),
+    /// Arm or disarm backyard-ultra mode (already different from the current
+    /// value).
+    SetBackyard(bool),
     /// Fire the QNH re-zero and close the menu.
     RequestQnhRezero,
     /// Close the menu onto the ICE / medical-ID idle face (§358).
@@ -180,6 +190,7 @@ pub fn edit(
     mode: GnssMode,
     hide_empty: bool,
     profile: Option<ActivityProfile>,
+    backyard: bool,
 ) -> MenuEdit {
     match (item, dir) {
         (MenuItem::GnssMode, ValueDir::Right) => {
@@ -237,6 +248,20 @@ pub fn edit(
                 }
             }
         },
+        (MenuItem::Backyard, ValueDir::Right) => {
+            if backyard {
+                MenuEdit::Nothing
+            } else {
+                MenuEdit::SetBackyard(true)
+            }
+        }
+        (MenuItem::Backyard, ValueDir::Left) => {
+            if backyard {
+                MenuEdit::SetBackyard(false)
+            } else {
+                MenuEdit::Nothing
+            }
+        }
         (MenuItem::QnhRezero, ValueDir::Right) => MenuEdit::RequestQnhRezero,
         (MenuItem::QnhRezero, ValueDir::Left) => MenuEdit::Nothing,
         (MenuItem::Ice, ValueDir::Right) => MenuEdit::ShowIce,
@@ -256,6 +281,7 @@ pub fn menu_rows(
     mode: GnssMode,
     hide_empty: bool,
     profile: Option<ActivityProfile>,
+    backyard: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
@@ -288,6 +314,13 @@ pub fn menu_rows(
                     profile.map_or("--", ActivityProfile::label)
                 );
             }
+            MenuItem::Backyard => {
+                let _ = write!(
+                    rows[row],
+                    "BACKYARD {}",
+                    if backyard { "ON" } else { "OFF" }
+                );
+            }
             MenuItem::QnhRezero => {
                 let _ = rows[row].push_str("RE-ZERO ALTITUDE");
             }
@@ -308,6 +341,28 @@ mod tests {
     use super::*;
     use crate::face::COLS;
 
+    /// The pre-§372 arities, so every case written before the BACKYARD row
+    /// keeps reading as exactly what it pins. Backyard mode is off in all of
+    /// them; the cases that exercise it call `super::` directly.
+    fn edit(
+        item: MenuItem,
+        dir: ValueDir,
+        mode: GnssMode,
+        hide_empty: bool,
+        profile: Option<ActivityProfile>,
+    ) -> MenuEdit {
+        super::edit(item, dir, mode, hide_empty, profile, false)
+    }
+
+    fn menu_rows(
+        cursor: u8,
+        mode: GnssMode,
+        hide_empty: bool,
+        profile: Option<ActivityProfile>,
+    ) -> [Row; ROWS] {
+        super::menu_rows(cursor, mode, hide_empty, profile, false)
+    }
+
     #[test]
     fn the_legend_names_the_exit_and_the_edit_pair() {
         // §337: name what leaves the modal and what is not self-revealing.
@@ -327,6 +382,8 @@ mod tests {
         assert_eq!(m.item(), MenuItem::HideEmpty);
         m.down();
         assert_eq!(m.item(), MenuItem::Profile);
+        m.down();
+        assert_eq!(m.item(), MenuItem::Backyard);
         m.down();
         assert_eq!(m.item(), MenuItem::QnhRezero);
         m.down();
@@ -504,11 +561,53 @@ mod tests {
         assert_eq!(rows[3].as_str(), "> GNSS MODE PERF 110H");
         assert_eq!(rows[4].as_str(), "  HIDE EMPTY ON");
         assert_eq!(rows[5].as_str(), "  PROFILE --");
-        assert_eq!(rows[6].as_str(), "  RE-ZERO ALTITUDE");
+        assert_eq!(rows[6].as_str(), "  BACKYARD OFF");
+        assert_eq!(rows[7].as_str(), "  RE-ZERO ALTITUDE");
+        assert_eq!(rows[8].as_str(), "  MEDICAL ID");
         let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
         assert_eq!(rows[3].as_str(), "  GNSS MODE EXP  220H");
         assert_eq!(rows[4].as_str(), "> HIDE EMPTY OFF");
         assert_eq!(rows[5].as_str(), "  PROFILE ULTRA");
+    }
+
+    #[test]
+    fn the_backyard_row_reads_its_state_and_edits_idempotently() {
+        // The hide-empty grammar, for the same reason: a runner arming this at
+        // a start line presses the side they want, and a double press must not
+        // undo it.
+        let e = |dir, on| {
+            super::edit(
+                MenuItem::Backyard,
+                dir,
+                GnssMode::Performance,
+                true,
+                None,
+                on,
+            )
+        };
+        assert_eq!(e(ValueDir::Right, false), MenuEdit::SetBackyard(true));
+        assert_eq!(e(ValueDir::Right, true), MenuEdit::Nothing);
+        assert_eq!(e(ValueDir::Left, true), MenuEdit::SetBackyard(false));
+        assert_eq!(e(ValueDir::Left, false), MenuEdit::Nothing);
+        let rows = super::menu_rows(3, GnssMode::Performance, true, None, true);
+        assert_eq!(rows[6].as_str(), "> BACKYARD ON");
+    }
+
+    #[test]
+    fn every_menu_row_fits_the_body_it_is_drawn_into() {
+        // Six rows now sit under two chrome rows and a blank — the last one
+        // lands on the final row, so a seventh needs a layout, not a push.
+        let rows = super::menu_rows(
+            0,
+            GnssMode::Expedition,
+            false,
+            Some(ActivityProfile::Ultra),
+            true,
+        );
+        assert_eq!(MENU_TOP_ROW + MENU_ITEMS, ROWS, "the list fills the body");
+        for row in rows.iter() {
+            assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+        }
     }
 
     #[test]

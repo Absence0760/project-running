@@ -146,6 +146,7 @@ mod tests {
     /// [`MAX_SETTINGS_LEN`] bytes — the maximal push the phone can make.
     fn maximal() -> WatchSettings {
         WatchSettings {
+            auto_lap: Some(crate::auto_lap::AutoLap::Min30.to_byte()),
             max_hr: Some(190),
             pacer: Some(PacerGoalCfg {
                 distance_m: 42_195,
@@ -324,6 +325,7 @@ mod tests {
         // the whole span rather than only the first byte's half of it.
         for mask in 0u8..=u8::MAX {
             let s = WatchSettings {
+                auto_lap: (mask & 0x01 != 0).then_some(crate::auto_lap::AutoLap::Min5.to_byte()),
                 max_hr: (mask & 0x01 != 0).then_some(175),
                 pacer: (mask & 0x02 != 0).then_some(PacerGoalCfg {
                     distance_m: 10_000,

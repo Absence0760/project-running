@@ -290,10 +290,10 @@ mod tests {
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        // 37 built-ins plus the four composed-screen seats (§ 364) — the
+        // 40 built-ins plus the four composed-screen seats (§ 364) — the
         // unfiltered count, which is what `u64::MAX` asks for; a real cycle
         // carries only the screens the runner actually composed.
-        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 41);
+        assert_eq!(page_indicator(Page::Dashboard, u64::MAX).total, 44);
     }
 
     #[test]

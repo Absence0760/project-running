@@ -24,13 +24,15 @@ stateDiagram-v2
     Ice: name / blood / conditions
     Ice: emergency contact + number
     Run: Run view
-    Run: 37 built-in pages + up to 4 composed (§364), filtered mask
+    Run: 40 built-in pages + up to 4 composed (§364), filtered mask
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
     Menu: Settings menu (modal, §351)
     Menu: GNSS mode / hide empty / profile
-    Menu: re-zero / medical ID
+    Menu: backyard / re-zero / medical ID
+    Tmr: Timer (modal, §375)
+    Tmr: countdown / stopwatch, one ladder
 
     [*] --> Idle
     Idle --> Idle: BTN3 tap — GNSS mode cycle
@@ -41,6 +43,12 @@ stateDiagram-v2
     Ice --> Run: BTN1 — start run
     Diag --> Run: BTN1 — start run
     Idle --> Menu: BTN5 — settings (§351)
+    Idle --> Tmr: BTN2 — timer (§375)
+    Tmr --> Tmr: BTN1 — start / stop / resume
+    Tmr --> Tmr: BTN2 / BTN3 — preset longer / shorter
+    Tmr --> Tmr: BTN5 — reset (stopped only)
+    Tmr --> Idle: BTN4 — exit (the timer keeps running)
+    Tmr --> Idle: 30 s inactivity — auto-close
     Menu --> Menu: BTN2 / BTN3 — cursor up / down (the UP / DOWN slots)
     Menu --> Menu: BTN5 / BTN1 — edit left / right (off-on, dec-inc)
     Menu --> Idle: BTN4 — exit (the BACK slot)
@@ -86,6 +94,15 @@ ever timed blind. A mark never moves the view: the runner is holding BTN5
 while reading some other page, and being yanked onto the Waypoint page would
 cost a press to undo.
 
+**BTN5 grew no third meaning for the backyard (§372).** In that mode its tap
+is still exactly the lap it always was — the mode simply *reads* the lap the
+press already closes as the runner's corral return, so a backyard runner's
+whole interaction with the format is the same key they would press anyway.
+The per-loop reset rides the same machinery from the other side: while the
+mode is armed the auto-lap fires on the corral bell instead of at 1 km, so a
+runner who marks nothing still gets one lap per hour and the loop count
+cannot silently merge two loops into one.
+
 ## The page cycle (§286 order, §284 filter)
 
 The paging pair walks this ring the way it is drawn — the ring renders
@@ -98,10 +115,16 @@ and `BACK` (Back-to-start) sits last so the safety page is exactly one
 left-tap from home. `WKT` (the pushed structured workout, §354) closes the
 live cluster beside `GUID`, its scripted sibling; `CLMB` (the §359 climb /
 crest view) *heads* the course cluster, because on a mountain course it is
-the question asked most; `SUN` (the Daylight sunset countdown, §355) and
+the question asked most; `SLP` (the §373 sleep-station nap budget) sits
+immediately after `CUT`, because it IS that page's margin less a safety
+reserve — a runner reading `TIGHT` is one tap from what it costs them in
+sleep, and the two pages come and go together off one projection; `TIMR` (the
+§375 countdown / stopwatch), `SUN` (the Daylight sunset countdown, §355) and
 `WPT` (the §357 marked waypoint) close the back half just ahead of `BACK`,
 which `WPT` sits beside deliberately — the two pages answer the same "which
-way, how far" question about different anchors. The curation mask has been
+way, how far" question about different anchors, and `TIMR` heads that trio
+beside `SUN` for the same kind of reason: both are countdowns, one the runner
+set and one the sky did. The curation mask has been
 64-bit on the wire since `SET1` v4 (§336), so every page the enum declares —
 including `BACK`, and the pages a pre-v4 phone's 32-bit mask cannot name,
 which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
@@ -110,10 +133,10 @@ which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
 ```mermaid
 flowchart LR
     subgraph live [live run]
-        DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
+        DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> YARD --> ZONE --> SPLT --> PACR --> GUID --> WKT
     end
     subgraph course [course / race ops]
-        CLMB --> NAV --> TURN --> CUT --> ROAD --> FUEL
+        CLMB --> NAV --> TURN --> CUT --> SLP --> ROAD --> FUEL
     end
     subgraph effort [effort analysis]
         ELEV --> PRED --> LOAD --> BAND
@@ -122,7 +145,7 @@ flowchart LR
         GEAR --> TPCE --> FITN --> REDY --> GOAL --> RDAY --> PLAN --> ADPT
     end
     subgraph summaries [synced summaries]
-        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF --> SUN --> WPT
+        RCAP --> STRK --> STAT --> PR --> SMPL --> RELV --> AEFF --> TIMR --> SUN --> WPT
     end
     WKT --> CLMB
     FUEL --> ELEV
@@ -136,7 +159,12 @@ flowchart LR
 immediately after the Dashboard — a screen you built is one press from home —
 and each is gated on having actually been composed, so a watch that has never
 been pushed an `SCR1` frame walks straight `DASH --> DIST` and the ring is
-exactly the 37 built-ins. `BACK` stays last in every case.
+exactly the 40 built-ins. `BACK` stays last in every case.
+
+`YARD` is the backyard-ultra page (§ 372) and sits beside `LAP` because in
+that mode the lap IS the loop — the corral bell closes it. It carries no
+data-presence bit of its own: it is in the cycle exactly while the mode is
+armed, and off it entirely otherwise, so an ordinary run never meets it.
 
 The page grid (hold either paging key 0.5 s — it opens at the threshold, so
 the grid appearing is the hold's own feedback) shows this same ring as a
@@ -146,15 +174,15 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 37-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 40-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
-rather than truncating the tail (§333) — scroll depth `ceil(37/4) − 7` = 3 at
+rather than truncating the tail (§333) — scroll depth `ceil(40/4) − 7` = 3 at
 the full built-in mask, and 4 on a watch carrying all four composed screens
-(`ceil(41/4) − 7`). Under the everyday filtered mask (~12 pages, 3 rows) the
+(`ceil(44/4) − 7`). Under the everyday filtered mask (~12 pages, 3 rows) the
 whole enabled set fits and nothing scrolls.
 
-The chrome is what makes the modal honest about itself. 37 codes need
-`ceil(37/4)` = 10 rows against a panel of 9 (144 px / 16 px) — 11 at 41 — so the ring has
+The chrome is what makes the modal honest about itself. 40 codes need
+`ceil(40/4)` = 10 rows against a panel of 9 (144 px / 16 px) — 11 at 44 — so the ring has
 not merely filled the screen — it now outruns it even with no chrome at all,
 which is precisely what §333's window was built for. Every chrome row is
 bought from body capacity, which only
@@ -184,28 +212,43 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Five items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+Six items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
 full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
 Trail → Ultra → Hike ladder, right toward the longer / more-battery
 activities, clamped; selecting a rung *applies* its preset — a curated page
 mask plus a GNSS mode — through the same channels a phone push and the quick
 cycle ride, and the row shows the last-applied profile, `--` until one is
-ever chosen), **RE-ZERO ALTITUDE** (right fires the idle hold's request and
-closes; the idle banner answers), **MEDICAL ID** (§358 — right closes the
-menu onto the ICE face, the same action-row shape; the card itself is the
-only useful confirmation the row did anything). The BTN4 idle walk reaches
+ever chosen), **BACKYARD** (§372 — right=ON / left=OFF, the HIDE EMPTY
+grammar; arming it puts the `YARD` page in the cycle and re-points the
+auto-lap from 1 km onto the corral bell, which is why it is idle-only: a run
+has to be wholly inside the mode or wholly outside it), **RE-ZERO ALTITUDE**
+(right fires the idle hold's request and closes; the idle banner answers),
+**MEDICAL ID** (§358 — right closes the menu onto the ICE face, the same
+action-row shape; the card itself is the only useful confirmation the row did
+anything). The BTN4 idle walk reaches
 that face too, but only for someone who already knows it is there — the
 named row is how a runner discovers the card exists and checks it before a
 race. Value rows keep the menu open — the row
 re-rendering with the new value is the confirmation. Every press inside is
 swallowed, the menu is idle-only, and 30 s of inactivity closes it because it
-covers the home clock. The GNSS mode, the hide-empty choice, and the profile
-selection all persist in the CFG1 flash record and restore at boot (the
-profile restore re-applies its page preset) — whichever side wrote last,
-menu or phone push, wins the reboot. The five-item ring holds the §351 cost
-bound: the farthest row is still ≤ 2 cursor steps (the ring wraps both ways),
-so any setting change stays ≤ 4 presses. A sixth item would break it — that
-is the budget the menu is sized against, not the row count.
+covers the home clock. The GNSS mode, the hide-empty choice, the profile
+selection and the backyard arm all persist in the CFG1 flash record and
+restore at boot (the profile restore re-applies its page preset) — whichever
+side wrote last, menu or phone push, wins the reboot.
+
+**The §351 cost bound survived the sixth row, and the amendment is worth
+stating precisely.** The original wording said a sixth item would break the
+"≤ 2 cursor steps, so ≤ 4 presses" bound. It does not, because the row went
+in at index 3 — the ring's far point — and a 6-ring's step distances from the
+cursor's home are `[0,1,2,3,2,1]` against the 5-ring's `[0,1,2,2,1]`: **every
+pre-existing row keeps its exact cost**, and the new maximum of 3 steps (5
+presses) belongs to the one row a runner touches once per race rather than
+once per hour. That is the real budget: not the row count, but that no row a
+runner reaches for *mid-race* costs more than 4 presses. A seventh item would
+raise an existing row's cost, and it also has nowhere to go — six rows under
+two chrome rows and a spacer fills the 9-row panel exactly (a test pins
+`MENU_TOP_ROW + MENU_ITEMS == ROWS`), so a seventh needs a layout, not a
+push.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
@@ -216,11 +259,66 @@ living on B4 here but B2 there — is what the menu's legend row names
 (`B5- B1+       B4 EXIT`); the cursor keys move a visible marker and stay
 unlabelled.
 
+## The timer (idle, §375 — the third modal)
+
+A **BTN2 tap on the idle face** opens it. That was the last dead key in the
+§350 grammar — the stop has no run to end while idle, exactly as the lap has
+no lap to take (§351) and BTN4 no page to turn (§291) — so the modal costs no
+existing gesture. A modal rather than a tap/hold split on BTN2 because *idle
+gestures are duration-stable* is an invariant below, and splitting BTN2 by
+duration would have been the first idle gesture to break it.
+
+Inside, the same rule as the settings menu, applied to a different shape:
+
+- **BTN1** — **start / stop / resume**, the §81 START slot, the same context
+  verb that key carries in every run view.
+- **BTN2 / BTN3** — the preset one rung **longer / shorter**. The settings
+  menu's vertical *cursor* pair, carrying a *value* here because this modal
+  shows one instrument and has no list to walk — each modal true to what it
+  shows, which is §351's own rule. The ladder is clamped (no wrap-teleport)
+  and **refused once the timer is armed**: moving the target under a running
+  countdown would silently shift an expiry the runner is already timing
+  against.
+- **BTN5** — **reset**, refused while running. Stopping first is one extra
+  press and it is the `StopGuard` trade at a much smaller stake: a brushed
+  sleeve may not zero a live timing.
+- **BTN4** — **exit**, the §81 BACK slot, where the settings menu already
+  puts it. Deliberately not a third exit key: §337's rule is about surprises,
+  and the grid's B2 is already one remap a runner has to read.
+
+One ladder, eleven rungs: `0` (which *is* the stopwatch — with nothing to
+count down to it counts up), then 1 / 3 / 5 / 10 / 15 / 20 / 30 / 45 / 60 /
+90 minutes. There is no mode switch and no second key because a stopwatch is
+a countdown from nothing. The legend row names the exit and BTN1's verb (which
+changes with the state it is about to produce, `B1 START` / `B1 STOP`); the two
+ladder keys and the reset are named on a *contextual* row instead, because each
+is live in exactly one state and a legend listing a key that does nothing is
+worse than one that omits it.
+
+Every press inside is swallowed and the modal is idle-only, like the settings
+menu, and 30 s of inactivity closes it for the same reason — it covers the home
+clock. **Exiting does not stop the timer**: the modal is a view of the
+instrument, not its container, and the instrument survives run boundaries and
+reboots-into-the-same-power-cycle alike. Where it is *watched* is the `TIMR`
+run page, which is data-presence gated on the timer being armed, so a watch
+whose owner never opens the modal walks exactly the cycle it walked before.
+
+**What it does not do, and why.** It never says *alarm* — not on a page, not on
+a row, not on the banner (which reads `! TIME UP`). There is no vibration motor
+and no buzzer in the tier-1 BOM, so nothing here can wake or interrupt anyone,
+and a scheduled-time face would promise exactly that. An expired countdown
+therefore counts **up** past zero (`+2:14`) rather than freezing at `0:00`: the
+only part of a missed expiry that survives being missed is *how long ago*. And
+the timer is deliberately **not** shown on the idle home face — that face is
+minute-resolution precisely so a resting clock flushes zero SPI lines, and a
+second-resolution row would make an idle wrist redraw every second for
+something one press already answers.
+
 ## Every interaction, priced
 
-The §350/§351 audit: what everything on the device costs, and whether that
-is the floor. "Floor" for a single discrete action is one press; for
-select-1-of-37 it is what the §289 BFS model computes for a five-key,
+The §350/§351/§372/§375 audit: what everything on the device costs, and
+whether that is the floor. "Floor" for a single discrete action is one press;
+for select-1-of-40 it is what the §289 BFS model computes for a five-key,
 no-chord grammar.
 
 | Interaction | Cost | At floor? |
@@ -229,41 +327,65 @@ no-chord grammar.
 | Pause / resume | 1 tap (BTN1) | yes |
 | Manual lap (doubles as workout-step skip when a workout is armed, §354) | 1 tap (BTN5) | yes |
 | Mark a waypoint mid-run (§357) | 1 hold (0.5 s, BTN5) | yes — the only gesture the grammar had free |
+| Mark a corral return in a backyard (§372) | 1 tap (BTN5) | yes — it IS the lap press; the mode reads the lap it already closes rather than claiming a new edge |
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the `StopGuard` trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 37 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 40 built-in pages | ≤ 7 actions, avg 4.3 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 44, on a fully-composed watch | ≤ 8 actions, avg 4.5 | the four §364 seats now cost the published ceiling one press — see below |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
 | Diagnostics view | 1 tap (idle BTN4) | yes |
 | ICE / medical-ID face (§358) | 2 taps (idle BTN4 ×2), or 3 via the menu's named row (BTN5, BTN2 up-wraps to it, BTN1) | **deliberately +1** — the third face on a one-way walk; the named row costs one more press and buys the discoverability a blind walk cannot |
 | Open settings | 1 tap (idle BTN5) | yes |
-| Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
+| Change any mid-race setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
+| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | the six-row ring's one far seat — every other row kept its exact cost, and this is the row a runner touches once per race rather than once per hour |
+| Open the timer (§375) | 1 tap (idle BTN2) | yes — on the last key that was dead |
+| Start / stop / reset a timer once open | 1 tap each (BTN1, BTN1, BTN5) | yes |
+| Set a countdown to a given rung | 1 tap per rung (BTN2 up / BTN3 down), worst 10 to cross the clamped 11-rung ladder | **above the floor, deliberately** — §351's no-wrap rule costs the antipodal rung; a wrapping ladder would halve it and let one press teleport 90 min ↔ stopwatch |
+| Read an armed timer mid-run | 1 tap to the `TIMR` page from its neighbours, else the grid | — |
 
 Everything that can be one press is one press; the only interaction above
 its floor is the stop, on purpose. The remaining lever on the page-cycle
 average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
-## Press cost — computed, from the Dashboard, full 37-page mask
+## Press cost — computed, from the Dashboard, full 40-page mask
 
-**The table below is the 37 built-in pages.** A runner's composed data screens
+**The table below is the 40 built-in pages.** A runner's composed data screens
 (§ 364) add up to four more seats immediately after the Dashboard, and
-`screens::MAX_SCREENS` is 4 for exactly this reason: § 289's model is a function
-of page count alone, and both published ceilings — 7 for the full-mask grid
-worst, 4 for the everyday filtered worst — hold to 37 + 6 and step at 37 + 7.
-Four sits inside that with margin rather than on its edge. The composed pages
-are gated on having actually been composed, so the shipped default cycle *is*
-the 37 the table computes; a watch that has never been pushed a screen walks
-exactly these numbers, and a fully-composed one stays under the same ceilings.
-The ceiling **was** recomputed at 41 rather than assumed: a BFS over the
-wrapping ring with the grammar's own moves puts the symmetric worst at **7 at
-both 37 and 41**, unchanged at 42 and 43, and stepping to 8 only at **44** — so
-`MAX_SCREENS` = 4 lands with two pages of margin, and it is the *cap*, not the
-table, that keeps this section's published number true. The per-page rows below
-are still the 37, because that is the cycle a watch with no composed screens
-actually walks.
+`screens::MAX_SCREENS` is 4 because § 289's model is a function of page count
+alone, so the cap is what bounds the cycle a real watch walks. The composed
+pages are gated on having actually been composed, so the shipped default cycle
+*is* the 40 the table computes; a watch that has never been pushed a screen
+walks exactly these numbers.
+
+**Three pages landed at once on 2026-07-30 — §373's `SLP`, §375's `TIMR`,
+§372's `YARD` — and the model was recomputed for the ring they make, not
+three times for three rings.** Each branch derived it at n=38 believing it was
+the 38th page; all three derivations are superseded here. The BFS was re-run
+and re-validated against this section's own n=32 table first (16 / 8.0,
+9 / 4.7188, 6 / 3.7188 — reproduced exactly), then evaluated across
+n = 32…50 in one pass.
+
+**The published symmetric ceiling of 7 no longer covers a fully-composed
+watch, and that is the honest headline of this recompute.** At 40 built-ins
+the symmetric worst is still 7; at 40 + 4 = **44** it steps to **8**, and 44
+is exactly where `MAX_SCREENS` = 4 now lands. The earlier claim that "it is
+the *cap*, not the table, that keeps this section's published number true"
+was correct at 38 + 4 = 42 and is **false at 44** — the cap no longer buys the
+margin it was chosen for, because three pages arrived where the model had
+budgeted for one. Recorded rather than rounded away, and stated as two numbers
+rather than one: **7 for the built-in cycle, 8 for a watch carrying all four
+composed screens.** Nothing here is a defect — the four seats were always the
+runner's own choice and a composed screen is by construction the page they
+most want — but the ceiling moved and the doc may not keep publishing the
+smaller half of it. The lever remains phone-side curation (§284), which is a
+content decision, not a grammar one; if the ceiling itself is wanted back,
+that is a `MAX_SCREENS` = 3 decision (43 pages, symmetric worst 7) and it
+would break the `SCR1` cap, its flash record and its golden vectors, so it is
+a decision to take deliberately and not a doc edit.
 
 
 Actions counted: each tap or hold is one action; the grid's open-hold is one;
@@ -276,9 +398,12 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 18 | 9.2 |
-| + grid, forward-only movement (§288 as first built) | 10 | 5.2 |
-| + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.1** |
+| Linear walk only (pre-§288) | 20 | 10.0 |
+| + grid, forward-only movement (§288 as first built) | 10 | 5.55 |
+| + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.25** |
+
+And the same three rows for the 44-page ring a fully-composed watch walks:
+linear **22 / 11.0**, forward-only **11 / 5.9545**, symmetric **8 / 4.5**.
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
 a breadth-first search over the cursor's move set on the enabled cycle
@@ -287,24 +412,31 @@ each page then taking `min(walk, 1 + grid moves)` with `walk = min(k, n-k)`, and
 the average over all `n` pages with the current page at zero. The model is
 validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 9 / 4.7188, 6 / 3.7188 — so the table above re-derives the original measurement
-at the new page count rather than replacing it with a fresh estimate. Both grid
-worsts held through pages 33, 34 and 35; the averages move 4.7188 → 4.8182 →
-4.9118 → 5.0286 → 5.1389 → 5.2432 and 3.7188 → 3.7576 → 3.8235 → 3.8857 →
-3.9722 → 4.0541 across pages 33–37. The linear worst grows 16 → 17 at page 34
-(an even ring's antipode) and 17 → 18 at page 36.
+at the new page count rather than replacing it with a fresh estimate.
 
-**Pages 36 and 37 are the first to move a grid worst since the model was
-built** — the symmetric worst 6 → 7 at page 36 (§357's Waypoint) and the
-forward-only 9 → 10 at page 37 (§359's Climb). Five `{±1, ±4}` moves cover 37
-distinct offsets — everything within ±20 except the gaps the ±4 stride leaves
-near the edges — and a 36-page ring is the first whose furthest cell falls
-outside them, so the cursor needs a sixth move and the page costs `1 + 6 = 7`.
-The ring has outgrown one press. Worth recording plainly rather than rounding
-away: the everyday cost is unchanged (the filtered mask is ~12 pages, worst
-4), but the full-mask ceiling has stopped being flat. The next moves are
-computed, not guessed: the forward-only worst goes 10 → 11 at page 42, and the
-symmetric worst 7 → 8 at page 44. The lever remains phone-side curation
-(§284), which is a content decision, not a grammar one.
+The symmetric average across pages 33–40 runs 3.7188 → 3.7576 → 3.8235 →
+3.8857 → 3.9722 → 4.0541 → 4.0789 → 4.1538 → 4.25, and the forward-only one
+4.7188 → 4.8182 → 4.9118 → 5.0286 → 5.1389 → 5.2432 → 5.3421 → 5.4359 →
+5.55. The linear worst grows 16 → 17 at page 34 (an even ring's antipode),
+17 → 18 at 36, 18 → 19 at 38 and 19 → 20 at 40 — a step every second page,
+which is what an antipode does.
+
+**Where each grid worst actually steps, computed once for the whole ladder:**
+the symmetric worst went 6 → 7 at page 36 (§357's Waypoint) and steps 7 → 8
+at page **44**; the forward-only worst went 9 → 10 at page 37 (§359's Climb)
+and steps 10 → 11 at page **42**. Five `{±1, ±4}` moves cover 37 distinct
+offsets — everything within ±20 except the gaps the ±4 stride leaves near the
+edges — so a 36-page ring was the first whose furthest cell fell outside them
+and needed a sixth move at `1 + 6 = 7`. **None of the three pages added on
+2026-07-30 moves a grid worst on the built-in ring**: 38, 39 and 40 all sit
+between the steps, so `SLP`, `TIMR` and `YARD` are pages the grid absorbs and
+only the linear walk and the averages paid for them. What they moved is the
+*margin*: at 37 built-ins the symmetric step sat seven pages out, at 40 it
+sits four — and the four composed seats reach it exactly.
+
+The everyday cost is unchanged and is the number a runner actually
+experiences: the filtered mask is ~12 pages, symmetric worst 4, average
+2.1667 (26/12).
 
 **§350 does not move these counts — it moves their price in seconds.** The
 action *counts* are identical under the spatial grammar (the walk was already
@@ -342,12 +474,15 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 37 pages: `LOAD`/`ROAD`
-  and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
-  `PACR`/`RCAP` are transpositions (computed over all 666 code pairs at 37
-  pages; the figure was 595 at 35, and is 820 across the full 41-code set once
-  the four composed screens carry `SC1`–`SC4`). Both the 3 s auto-select and BTN1 therefore
-  commit on something the runner has read.
+  page's full name, because four glyphs cannot separate 40 pages: `LOAD`/`ROAD`,
+  `PACE`/`PACR` and `WKT`/`WPT` are one Levenshtein edit apart and `REDY`/`RDAY`
+  and `PACR`/`RCAP` are transpositions (computed over all 780 code pairs at 40
+  pages; the figure was 666 at 37 and 595 at 35, and is 946 across the full
+  44-code set once the four composed screens carry `SC1`–`SC4`). §375's `TIMR`
+  and §372's `YARD` add no new near-collision — each one's nearest neighbour is
+  three edits away — but they do not need to: the row exists because *some* pair
+  always will. Both the 3 s auto-select and BTN1 therefore commit on something
+  the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
   `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
   spending a row on chrome shortens the window and never displaces the cursor.
@@ -391,6 +526,20 @@ removes.
   the grid's B2, and the novel edit pair. Its 30 s auto-close is a per-press
   deadline, never a standing wake, and exists because the menu covers the
   home clock.
+- **The timer modal swallows every button and exists only while idle**
+  (§375), on exactly the settings menu's terms: no press inside it can start,
+  pause, or lap a run; a run starting under it closes it; the preset ladder is
+  clamped and idempotent; its 30 s auto-close is a per-press deadline, never a
+  standing wake. Two additional refusals of its own — the ladder is refused
+  once the instrument is armed (moving the target under a running countdown
+  would shift an expiry the runner is timing against) and the reset is refused
+  while it runs (a brushed sleeve may not zero a live timing).
+- **The device never says *alarm*** (§375). No page, no row, no banner — the
+  expiry banner reads `! TIME UP`. There is no vibration motor and no buzzer
+  in the tier-1 BOM, so nothing here can wake or interrupt anyone, and a
+  surface named for that promise would be read as keeping it. The expired
+  countdown counts **up** past zero instead, because *how long ago* is the
+  only part of a missed expiry that survives being missed.
 - **A hold's action fires at its threshold, not on release** (§350). At
   0.5 s of a run-view paging hold the grid simply opens under the thumb —
   the modal appearing IS the feedback — so no gesture asks the runner to
@@ -468,6 +617,16 @@ removes.
   screen — the one timed wait left without pre-fire feedback. A countdown
   inside the grid would need a per-second wake for as long as the modal is
   open, which §328 rules out.
+- **An armed timer is consulted, not watched, while idle** (§375). Its modal
+  closes after 30 s and the home face does not carry it, because that face is
+  minute-resolution precisely so a resting clock flushes zero SPI lines — the
+  same §328 rule that forbids the grid's countdown. Checking it costs one
+  press. Mid-run it *is* watched, on the `TIMR` page, where the 1 Hz redraw is
+  already paid for.
+- **An expiry while idle raises no banner** (§375). The alert slot is a run
+  surface, so a countdown that lapses between runs is correct on both its
+  surfaces and simply silent — which is the honest behaviour on a device that
+  could not have made a noise anyway.
 
 - The timezone offset is static between pushes: a DST transition or a border
   crossing shifts the home clock only after the phone's next settings push
@@ -513,7 +672,9 @@ precedent that a lap deserves its own dedicated, undelayed tap.
 backward / forward and `$btn1` to jump (`B1 GO`), `$btn5` lap. The same
 grammar in `FIN`: `$btn4` right, `$btn3` left. While idle, `$btn4` toggles
 the home face against the diagnostics face, `$btn3h` is the QNH re-zero,
-and `$btn5` opens the settings menu (`$btn2`/`$btn3` cursor up/down,
-`$btn5`/`$btn1` edit left/right, `$btn4` exit). Or click the bezel buttons
+`$btn5` opens the settings menu (`$btn2`/`$btn3` cursor up/down,
+`$btn5`/`$btn1` edit left/right, `$btn4` exit), and `$btn2` opens the timer
+(`$btn2`/`$btn3` preset longer/shorter, `$btn1` start/stop, `$btn5` reset,
+`$btn4` exit). Or click the bezel buttons
 in the `--gui` window — they sit at the §81 positions (BTN5 upper-left,
 BTN2 mid-left, BTN3 lower-left, BTN1 upper-right, BTN4 lower-right).

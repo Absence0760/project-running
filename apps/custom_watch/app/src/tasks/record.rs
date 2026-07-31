@@ -43,6 +43,7 @@ use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
 use watch_core::alerts::{Alert, AlertEngine};
+use watch_core::auto_lap::AutoLap;
 use watch_core::button::RecordCommand;
 #[cfg(feature = "sim-course")]
 use watch_core::cutoff_eta::CutoffLeg;
@@ -59,6 +60,7 @@ use watch_core::run_store::{
 };
 use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
+use watch_core::sleep_station::SleepStatus;
 use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
@@ -70,6 +72,22 @@ fn state_str(state: RecordState) -> &'static str {
         RecordState::Recording => "recording",
         RecordState::Paused => "paused",
         RecordState::Finished => "finished",
+    }
+}
+
+/// The sleep rail's log line as a comparable tuple — see its emit site for why
+/// the gate is the printed fields rather than the view.
+fn sleep_line(snap: &Snapshot) -> Option<(SleepStatus, u32, u32, f64)> {
+    snap.sleep
+        .map(|b| (b.status, b.budget_s, b.reserve_s, b.distance_to_m))
+}
+
+fn sleep_status_str(status: SleepStatus) -> &'static str {
+    match status {
+        SleepStatus::Unknown => "unknown",
+        SleepStatus::NoCutoff => "no-cutoff",
+        SleepStatus::NoBudget => "none",
+        SleepStatus::Budget => "budget",
     }
 }
 
@@ -331,6 +349,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut timer_rx = unwrap!(state::TIMER.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let mut workout_rx = unwrap!(state::WORKOUT.receiver());
     let sender = state::RECORD.sender();
@@ -355,6 +374,13 @@ pub async fn run(store: &'static SharedStore) {
     // menu's toggle survives a reboot the way the GNSS mode does; None means
     // no explicit choice was ever stored and the recorder keeps its default.
     let mut persisted_hide: Option<bool> = store.lock().await.read_hide_empty();
+    // The auto-lap trigger the flash record already holds (§374). Kept as the
+    // comparison so a repeated push never re-erases the config page, and
+    // re-applied below so a mid-race battery pull cannot silently put the rest
+    // of the run back on 1 km laps.
+    let mut persisted_auto_lap = store.lock().await.read_auto_lap();
+    // §372: a backyard armed before a brown-out is still a backyard after it.
+    let mut backyard_rx = unwrap!(state::BACKYARD.receiver());
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -415,6 +441,14 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_hide_empty_pages(hide);
         info!("record: restored hide-empty-pages {}", hide);
     }
+    if let Some(trigger) = persisted_auto_lap {
+        recorder.set_auto_lap(trigger);
+        info!("record: restored auto-lap {}", trigger);
+    }
+    if store.lock().await.read_backyard() {
+        recorder.set_backyard_armed(true);
+        info!("record: restored backyard mode armed");
+    }
     // Re-apply the persisted activity profile's page preset (§353) — the
     // selection itself is display state (main seeds `state::PROFILE`), but the
     // curated mask lives only in the recorder, so a reboot re-derives it from
@@ -434,10 +468,14 @@ pub async fn run(store: &'static SharedStore) {
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
+    // None until the button task publishes one — the watch boots with nothing
+    // armed, which is what keeps the Timer page out of the cycle.
+    let mut timer: Option<watch_core::timers::Timer> = None;
     // Tracked apart from `last_published` so the climb lines below fire on a
     // climb changing rather than on any field of the snapshot changing —
     // distance ticks every second, which would make them a 1 Hz stream.
     let mut last_climb = last_published.climb;
+    let mut last_sleep = sleep_line(&last_published);
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
     // The sim can't wait 15 minutes of moving time for a real reminder, so the
@@ -610,6 +648,11 @@ pub async fn run(store: &'static SharedStore) {
         // only changes while idle (BTN3 cycles pages once a run is under way),
         // so it is always applied here before the Start command that opens the
         // run reaches the recorder.
+        if let Some(armed) = backyard_rx.try_changed() {
+            // The button task already persisted it; this is the apply side.
+            recorder.set_backyard_armed(armed);
+            info!("record: backyard mode {}", armed);
+        }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
             recorder.set_fix_interval_s(m.fix_interval_s());
@@ -692,6 +735,17 @@ pub async fn run(store: &'static SharedStore) {
                 if persisted_ice != card {
                     store.lock().await.persist_ice(card).await;
                     persisted_ice = card;
+                }
+            }
+            // Same rule for the auto-lap trigger (§374): the choice must
+            // outlive the power cycle, or a battery pull at hour 60 re-splits
+            // the rest of the race at the default. Only a byte that names a
+            // rung is persisted — the fan-out drops the rest, and flash must
+            // not hold what the recorder refused.
+            if let Some(trigger) = s.auto_lap.and_then(AutoLap::from_byte) {
+                if persisted_auto_lap != Some(trigger) {
+                    store.lock().await.persist_auto_lap(trigger).await;
+                    persisted_auto_lap = Some(trigger);
                 }
             }
         }
@@ -833,6 +887,17 @@ pub async fn run(store: &'static SharedStore) {
             }
         }
 
+        // The runner's timer (§375). The instrument travels from the button
+        // task; its READING is a function of the clock, so it is re-derived
+        // here every pass rather than on the change event — a countdown that
+        // only moved when a button was pressed would be a stopped clock.
+        if let Some(t) = timer_rx.try_changed() {
+            timer = Some(t);
+        }
+        recorder.set_timer(timer.and_then(|t: watch_core::timers::Timer| {
+            t.snapshot_view(Instant::now().as_secs() as u32)
+        }));
+
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
         let snap = recorder.snapshot();
@@ -898,6 +963,28 @@ pub async fn run(store: &'static SharedStore) {
             }
         }
         last_climb = snap.climb;
+        // §373's rail, for the same reason §368 gave the climb one: a page dump
+        // proves a frame was drawn, never that the minutes on it are right, so
+        // without this the budget is unassertable outside host tests.
+        //
+        // Gated on the fields the LINE carries, not on the whole view: the
+        // margin ticks with the race clock every second, so gating on the
+        // struct re-emitted a budget and a reserve that had not moved — the
+        // same re-emit §368 caught on the crest, and downstream it reads as a
+        // runner losing sleep they still have.
+        let sleep = sleep_line(&snap);
+        if sleep != last_sleep {
+            if let Some((status, budget_s, reserve_s, to_m)) = sleep {
+                debug!(
+                    "sleep: {} budget={}s reserve={}s to={}m",
+                    sleep_status_str(status),
+                    budget_s,
+                    reserve_s,
+                    to_m
+                );
+            }
+        }
+        last_sleep = sleep;
         if snap != last_published {
             debug!(
                 "record: {} dist={}m moving={}s pacer={}s",
@@ -965,6 +1052,7 @@ fn apply_settings(
             // from, here, and the flash record the drain loop writes — a
             // medical ID that vanishes on a power cycle is not a medical ID.
             SettingsEffect::Ice(card) => ice_tx.send(card),
+            SettingsEffect::AutoLap(trigger) => recorder.set_auto_lap(trigger),
         }
     }
 }

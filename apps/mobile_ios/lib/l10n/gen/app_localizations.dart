@@ -20237,6 +20237,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Days to race'**
   String get watchMetricRaceDayDays;
+
+  /// No description provided for @watchMetricSleepBudget.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep budget'**
+  String get watchMetricSleepBudget;
+
+  /// No description provided for @watchMetricTimerRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Timer'**
+  String get watchMetricTimerRemaining;
+
+  /// No description provided for @watchMetricBackyardBell.
+  ///
+  /// In en, this message translates to:
+  /// **'Bell countdown'**
+  String get watchMetricBackyardBell;
 }
 
 class _AppLocalizationsDelegate
