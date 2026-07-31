@@ -339,8 +339,8 @@ no-chord grammar.
 | Diagnostics view | 1 tap (idle BTN4) | yes |
 | ICE / medical-ID face (§358) | 2 taps (idle BTN4 ×2), or 3 via the menu's named row (BTN5, BTN2 up-wraps to it, BTN1) | **deliberately +1** — the third face on a one-way walk; the named row costs one more press and buys the discoverability a blind walk cannot |
 | Open settings | 1 tap (idle BTN5) | yes |
-| Change any setting via the menu | ≤ 5 (open + ≤ 3 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
-| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | at the six-row menu's own worst — the far seat, given to the one row a runner touches once per race rather than once per hour |
+| Change any mid-race setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
+| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | the six-row ring's one far seat — every other row kept its exact cost, and this is the row a runner touches once per race rather than once per hour |
 | Open the timer (§375) | 1 tap (idle BTN2) | yes — on the last key that was dead |
 | Start / stop / reset a timer once open | 1 tap each (BTN1, BTN1, BTN5) | yes |
 | Set a countdown to a given rung | 1 tap per rung (BTN2 up / BTN3 down), worst 10 to cross the clamped 11-rung ladder | **above the floor, deliberately** — §351's no-wrap rule costs the antipodal rung; a wrapping ladder would halve it and let one press teleport 90 min ↔ stopwatch |
