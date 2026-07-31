@@ -12088,4 +12088,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get watchMetricRaceDayDays => 'Jours avant la course';
+
+  @override
+  String get watchMetricBackyardBell => 'Compte à rebours de la cloche';
 }

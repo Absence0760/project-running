@@ -96,6 +96,8 @@ String watchMetricLabel(AppLocalizations l10n, WatchMetric m) {
       return l10n.watchMetricRouteElevTotal;
     case WatchMetric.raceDayDays:
       return l10n.watchMetricRaceDayDays;
+    case WatchMetric.backyardBell:
+      return l10n.watchMetricBackyardBell;
   }
 }
 

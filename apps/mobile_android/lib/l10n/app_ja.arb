@@ -3456,5 +3456,6 @@
   "watchMetricRouteSimplifyDistance": "コース距離",
   "watchMetricAutoEffortMatched": "一致したセグメント",
   "watchMetricRouteElevTotal": "コースの獲得標高",
-  "watchMetricRaceDayDays": "レースまでの日数"
+  "watchMetricRaceDayDays": "レースまでの日数",
+  "watchMetricBackyardBell": "ベルまでの残り時間"
 }

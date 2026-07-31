@@ -116,21 +116,22 @@ void main() {
 
     /// The guard that makes a reorder of either enum a red test instead of a
     /// silent re-point of every screen already pushed to a watch.
-    test('metric bytes are unique, stable, and cover 1..=34', () {
+    test('metric bytes are unique, stable, and cover 1..=35', () {
       final seen = <int>{};
       for (final m in WatchMetric.values) {
         expect(m.wire, greaterThanOrEqualTo(1));
-        expect(m.wire, lessThanOrEqualTo(34));
+        expect(m.wire, lessThanOrEqualTo(35));
         expect(seen.add(m.wire), isTrue, reason: 'byte ${m.wire} claimed twice');
         expect(m.wireName, isNotEmpty);
       }
-      expect(WatchMetric.values.length, 34,
+      expect(WatchMetric.values.length, 35,
           reason: 'the catalogue and its byte map have drifted from the watch');
       // Pinned by name, so a reorder cannot quietly renumber them.
       expect(WatchMetric.elapsed.wire, 1);
       expect(WatchMetric.distance.wire, 2);
       expect(WatchMetric.heartRate.wire, 5);
       expect(WatchMetric.raceDayDays.wire, 34);
+      expect(WatchMetric.backyardBell.wire, 35);
       expect(WatchMetric.raceDayDays.wireName, 'race_day_days');
     });
 

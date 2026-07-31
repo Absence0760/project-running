@@ -12071,4 +12071,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get watchMetricRaceDayDays => 'Tage bis zum Wettkampf';
+
+  @override
+  String get watchMetricBackyardBell => 'Countdown bis zur Glocke';
 }

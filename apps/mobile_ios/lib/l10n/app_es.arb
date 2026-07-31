@@ -3456,5 +3456,6 @@
   "watchMetricRouteSimplifyDistance": "Distancia del recorrido",
   "watchMetricAutoEffortMatched": "Segmentos detectados",
   "watchMetricRouteElevTotal": "Desnivel del recorrido",
-  "watchMetricRaceDayDays": "Días para la carrera"
+  "watchMetricRaceDayDays": "Días para la carrera",
+  "watchMetricBackyardBell": "Cuenta atrás de la campana"
 }
