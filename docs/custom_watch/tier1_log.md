@@ -569,6 +569,22 @@ re-runs green and its walk now traverses `SleepStation` directly after `CutoffEt
 **data-present and reachable in a real cycle** — but by § 314's own rule that is not the budget being
 right, and **nothing asserts the budget yet**. Host-tested; no hardware exists.
 
+## 2026-07-30 — Countdown timer + stopwatch, and two refusals (§ 375), host-tested
+
+The roadmap's daily-smartwatch row bundled "alarms / timer / stopwatch / find-my-phone" as one trivial item. Two of the four are trivial and are now built; the other two cannot be built honestly at tier 1, and the box stays **unticked** — nothing here is bench-verified.
+
+**Built.** `watch_core::timers` is one instrument, not two: the preset ladder starts at zero and zero *is* the stopwatch, so there is no mode switch and no second key. Eleven rungs, all durations this repo already names (1/3/5 min aid-station turnaround, 10–90 min sleep-station nap, 60 min backyard bell). Armed from a modal on the idle face — **BTN2, the last dead key in the § 350 grammar** — with BTN1 start/stop, BTN2/BTN3 the preset ladder, BTN5 reset (refused while running), BTN4 exit on the settings menu's BACK slot. Every press swallowed, idle-only, 30 s auto-close. It survives run boundaries, and it takes the **38th** built-in page, gated on being armed. The expiry rides the *existing* alert slot as `Alert::TimerDone` at the milestone rung — dropped, never queued, and below fuel per § 214.
+
+**The honesty decision.** No vibration motor, no buzzer: an expired countdown counts **up** past zero (`+2:14`) rather than freezing at `0:00`, because *how long ago* is the only part of a missed expiry that survives being missed. The banner reads `! TIME UP`; the word *alarm* appears nowhere on the device.
+
+**Refused: alarms.** An alarm promises to interrupt you at a time you are not watching, and a display-only device cannot keep that promise. Re-scoped from "trivial, ship opportunistically" to a **T2 item gated on the haptic channel** — the same gate the sleep-station wedge already records.
+
+**Refused: find-my-phone.** The watch is a GATT peripheral (§ 210 / § 211) with no watch-initiated action toward the phone, and the phone side is a pure consumer with no ring handler. It needs a new characteristic, new phone-side code and background-audio permissions, and per § 210 could never rise above build-verified without a dev kit. No stub was written. **T2, with the BLE bench work.**
+
+**Cost, computed not guessed.** Page 38 moves neither grid worst (symmetric stays 7, stepping at 44; forward-only stays 10, stepping at 42); only the linear-walk worst grows 18 → 19. With the four composed-screen seats the full mask is 42, so the 7-press ceiling now has **one page of margin rather than two** — recorded in `navigation.md` rather than rounded away.
+
+Workspace host sweep 2229 → 2261 (`cargo test --workspace --exclude app --exclude nrf52840_dk`; +32 — 21 in `timers`, 5 in `alerts`, 2 in `face`, 1 each in `record` / `button` / `input_flow`), plus the six count-pins the 38th page moved. Firmware builds green on the default, `ble` and sim feature sets; `fmt` and the clippy `-D warnings` gate clean. **No sim scenario and no bench evidence** — the modal has no `ci_smoke` step yet and the page cannot be armed from a fixture, so this entry claims host-tested and nothing more.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
