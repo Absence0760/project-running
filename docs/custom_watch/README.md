@@ -18,6 +18,7 @@ The bench-prototype firmware workspace lives at [`apps/custom_watch/`](../../app
 | [parts.md](parts.md) | Active tier-1 shopping list — MCU dev kit + sensor breakouts + bench tools, with order checkboxes for received items |
 | [tier1_log.md](tier1_log.md) | Dated milestone record of the tier-1 firmware effort — what was built, when, and where the evidence lives (bench evidence lands here) |
 | [navigation.md](navigation.md) | The watch's on-device navigation graph — surfaces, button edges, measured press costs |
+| [privacy.md](privacy.md) | What personal data the device holds, where, for how long, and who can read it — the data inventory, the retention answer ("no clock, only a capacity bound"), the minimisation rules, what the watch inherits from the app for free because it adds no backend surface, why `privacy.rs` is deliberately dormant and what would wire it, and the deferred gaps (no user-reachable erase, nothing encrypted at rest). Research-tier: an inventory, not a compliance claim |
 | [vendor_research.md](vendor_research.md) | § 88 Layer-1 findings from free public sources — the ANT+ Alliance program state, NDA-gating on the MAX86177 datasheet, and the BOM assumptions they contradict |
 
 ## Status
