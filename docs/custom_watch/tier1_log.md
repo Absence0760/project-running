@@ -460,6 +460,57 @@ CI: the `sim-scenarios` job gains a seventh step (`--budget 300`, the same as it
 unaided walk reaches the fourth transition at ~110 s of virtual time and the whole scenario measures
 **2m13** on the authoring workstation), and its cap tracks the budget sum as always, 45 → 50 min.
 Every assertion green in one pass locally under Renode 1.16.1.
+## 2026-07-30 — Auto-lap becomes a chosen trigger, and picks its clock
+
+The recorder's auto-lap had been a constant since 2026-07-09 — `AUTO_LAP_DISTANCE_M = 1000.0`,
+the same kilometre for every runner on every run. The roadmap row counted it as built, which it
+was; what it was not was a *setting*. `watch_core::auto_lap` makes it one: a closed eight-rung
+catalogue (`Off`, 1/5 km, 1/5 mi, 5/10/30 min), armed by `Recorder::set_auto_lap`, defaulting to
+the kilometre the recorder always had.
+
+**Closed, not an arbitrary metre count**, and for a reason particular to this device rather than
+to taste: the flash lap store holds 64 records (`run_store::MAX_STORED_LAPS`). A 1 km trigger
+already loses laps past 64 km, so the coarse rungs are what keep a 100 km run's splits inside the
+store, and `Off` is what lets an ultra runner spend those 64 records on splits they pick by hand.
+An open "any distance" field would have let a 50 m trigger exhaust the whole budget inside 3.2 km
+with nothing warning anyone. The closed set also costs exactly one byte on the wire and three bits
+in flash, which is what made both of the rails below cheap.
+
+**The auto-pause interaction is the decision worth recording** ([§ 374](../architecture/decisions.md)).
+Paused time counts toward nothing on either axis. Distance is structural — it only accrues on a fix
+the acceptance filter takes as movement, so a runner standing at an aid station accrues none. Time
+is a *choice*: the budget is **moving** time, the axis the fuel arms already bank on (§ 214), not
+the elapsed clock. An elapsed-clock auto-lap would turn a 40-minute sleep-station stop into eight
+zero-distance laps at the 5-minute rung, and on a 64-record budget those empty laps *displace real
+ones* — the runner loses splits they ran to laps they slept through. That deliberately differs from
+§ 332's time **alert**, which banks on elapsed on purpose; the difference is that an alert costs a
+banner and a lap evicts a record. The stationary case is pinned rather than argued: a test runs an
+armed distance rung and an armed time rung through an hour of sub-threshold GPS jitter plus 3600
+ticks and asserts the lap counter never moves.
+
+**Two rails carry the choice.** The phone reaches it over **`SET1` v7** — both presence bytes were
+saturated and v6's `KNOWN_FLAGS2 == u8::MAX` const-assert existed precisely to force this bump, so
+`flags3` arrives exactly as `flags2` did at v2; `decode` accepts v1–v7 side by side and the frozen
+v6 golden vector is pinned as still decoding, its absent trigger leaving whatever the watch holds
+standing rather than resetting a race's splits to a default. Flash keeps it in `CFG1`'s flags byte
+behind a set-marker plus three discriminant bits — the §351/§353 drill a third time, no
+config-record version bump, and bit 7 is now the last one free. The record task re-applies the
+stored rung at boot, because the failure that motivates persisting it is specific: a battery pull at
+hour 60 of a 100-miler would otherwise put the rest of the race silently back on 1 km laps.
+
+The Lap page **names the armed trigger** beside the last split (`LAST 4:58    1KM`, or `OFF`). A
+setting that changes what a page counts, on a page with no way to see it, reads as a broken lap
+counter rather than a choice — the same honesty rule the `unfed` states are built on.
+
+`watch_core` host suite 1851 → 1875 (+8 `auto_lap`, +9 recorder, +2 `flash_store`, +1
+`settings_apply`, +4 `settings`/`face`); all three firmware feature sets build and pass
+`clippy -D warnings`; `cargo fmt --check` clean. **Host-tested + build-verified only**
+([§ 314](../architecture/decisions.md)) — the new rungs have had no sim pass, and nothing here has
+run on silicon.
+
+**Owed, and named rather than left implicit:** the phone-side encoder. `watch_settings.dart` still
+emits the pre-v7 frame, so the trigger is on the wire and honoured by the firmware but not yet
+reachable from the app — one optional field plus its golden-vector bytes, mirrored to the iOS twin.
 
 ## Next entry expected
 
