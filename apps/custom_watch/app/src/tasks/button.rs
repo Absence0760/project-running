@@ -304,8 +304,7 @@ async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
     // Back to the factory values, on the same channels a boot restore rides —
     // so the menu the runner is still looking at redraws as a factory watch,
     // which is the confirmation this action row gets instead of a banner.
-    nav.mode = GnssMode::default();
-    state::GNSS_MODE.sender().send(nav.mode);
+    publish_gnss_mode(nav, GnssMode::default());
     nav.profile = None;
     state::PROFILE.sender().send(nav.profile);
     state::BACKYARD.sender().send(false);
@@ -324,6 +323,19 @@ async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
 /// for both routes to the same state (the idle BTN3 quick cycle and the
 /// menu's directional ladder), so they cannot diverge.
 async fn set_gnss_mode(nav: &mut NavState, store: &'static SharedStore, mode: GnssMode) {
+    publish_gnss_mode(nav, mode);
+    // Persist so the choice survives reboot / brown-out. Best-effort / L4: a
+    // flash error only warns; the mode switch is never blocked on flash (and
+    // it no-ops under a sim with no NVMC).
+    store.lock().await.persist_gnss_mode(nav.mode).await;
+}
+
+/// Apply a mode and announce it, without touching flash. The §378 factory erase
+/// takes this half alone: it has just returned the config page to `0xFF`, and
+/// an erased page already decodes as "no saved mode" — writing the default back
+/// onto it would leave a record saying exactly what its absence says, in a page
+/// whose whole point is now to be blank.
+fn publish_gnss_mode(nav: &mut NavState, mode: GnssMode) {
     nav.mode = mode;
     info!(
         "button: gnss mode -> {} (fix interval {=u32}s, ~{=u32}h)",
@@ -332,10 +344,6 @@ async fn set_gnss_mode(nav: &mut NavState, store: &'static SharedStore, mode: Gn
         nav.mode.battery_est_h()
     );
     state::GNSS_MODE.sender().send(nav.mode);
-    // Persist so the choice survives reboot / brown-out. Best-effort / L4: a
-    // flash error only warns; the mode switch is never blocked on flash (and
-    // it no-ops under a sim with no NVMC).
-    store.lock().await.persist_gnss_mode(nav.mode).await;
 }
 
 /// An edit press (BTN5 = left / BTN1 = right) on the menu's cursor row.

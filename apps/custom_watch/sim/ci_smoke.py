@@ -416,7 +416,24 @@ IDLE_FACES = ("Home", "Diagnostics", "Ice")
 # `settings_menu::ITEMS` order. Hard-coded rather than derived because the
 # ORDER is the contract the runner's thumb learns — a reordering that both the
 # firmware and a derived expectation followed would assert nothing.
-MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "Backyard", "QnhRezero", "Ice")
+MENU_ROWS = (
+    "GnssMode",
+    "HideEmpty",
+    "Profile",
+    "Backyard",
+    "Erase",
+    "QnhRezero",
+    "Ice",
+)
+# The §378 factory erase's two-press guard, both halves of it. The arm and the
+# wipe are DIFFERENT lines on purpose: a scenario that matched one pattern for
+# both could not tell an erase that fired on the first press from one that
+# waited, which is the entire safety claim.
+MENU_ERASE_ARMED = re.compile(r"button: menu -> factory erase armed")
+MENU_ERASE_DONE = re.compile(r"button: FACTORY ERASE confirmed \(flash (\w+)\)")
+# The RAM half, from the task that owns the recorder — the waypoints, the
+# biometrics, the ICE card and the composed screens.
+RECORD_ERASED = re.compile(r"record: factory erase")
 # A menu press lands in well under a second (the button task polls at 50 Hz);
 # 10 s is an order of magnitude of headroom for a loaded runner without making
 # an expected-silent press — a ladder clamped at its end — cost half a minute.
@@ -2210,12 +2227,28 @@ def scenario_idle(sim):
     at all. The `Sim` docstring says as much ("every scenario in this file skips
     past by design"); this is the one that does not.
 
-    Two rails share one boot. The menu: BTN5 opens it and it reaches the panel,
-    BTN3 walks all six rows in their documented order and wraps, BTN2 walks
-    back, an edit on the GNSS row moves the ladder, BTN4 closes it. Then the
-    three faces BTN4 walks — Home, Diagnostics, and the §358 ICE card a
+    Three rails share one boot. The menu: BTN5 opens it and it reaches the
+    panel, BTN3 walks all seven rows in their documented order and wraps, BTN2
+    walks back, an edit on the GNSS row moves the ladder, BTN4 closes it. Then
+    the three faces BTN4 walks — Home, Diagnostics, and the §358 ICE card a
     responder reads off a collapsed runner's wrist — each rendering a distinct
     frame, plus the menu's own MEDICAL ID row as the card's second route in.
+    Then §378's factory erase, last because it resets the ladder the middle
+    rail spent its presses walking.
+
+    The erase's assertions are about the GUARD as much as the wipe. One press
+    has to emit the ARM line and change the panel; stepping off the row and
+    back has to leave the next press arming again rather than confirming; only
+    then does the second adjacent press wipe. A row wired straight through
+    would fail the first of those, and a guard that armed but never cancelled
+    would fail the second — which is the whole safety claim, since neither is
+    visible in a scenario that just presses twice and looks for the wipe.
+
+    That the wipe DID something is read off the GNSS mode falling back to its
+    factory rung — a setting this scenario itself walked to the far end of the
+    ladder minutes earlier, so a reset can only be a leftward move and cannot
+    be another edit press misread. It is the one erased thing the sim can
+    observe from outside the firmware's own claim about itself.
 
     The edit is the claim with teeth. A menu that renders and scrolls but whose
     edits go nowhere passes every other assertion here, so the GNSS row is read
@@ -2233,8 +2266,20 @@ def scenario_idle(sim):
     is a flash claim and this scenario never power-cycles the emulator; the
     menu's own writes are best-effort / L4 by design (a flash error warns and
     the edit still applies), so a green run here says nothing about what comes
-    back after a brown-out. Nor legibility — six rows on a 168x144 1-bit panel
-    read at 45 cm is a step-4 bench claim, per quality_standards.md.
+    back after a brown-out. Nor legibility — seven rows on a 168x144 1-bit
+    panel read at 45 cm is a step-4 bench claim, per quality_standards.md.
+
+    **And it proves nothing about bytes leaving flash — read the reported
+    `flash cleared` narrowly.** Renode's flash is plain memory behind an
+    SVD-derived NVMC model: `READY` answers 1, so the store arms itself at boot
+    and the erase path runs to completion, but the `ERASEPAGE` write lands on an
+    "unimplemented register" and is swallowed. The firmware therefore reports
+    success over an emulator that changed nothing. What this scenario earns is
+    the guard, the fan-out, the RAM half, and that the erase path executes and
+    reports rather than silently no-opping. That four run slots and a config
+    page actually read back 0xFF is a bench item (quality_standards.md step 7)
+    — and it is the half that matters for a watch that has left its owner's
+    hands.
     """
     # No `require_recording` — the opposite. The idle face only exists because
     # this scenario boots without `sim-autostart`, so confirm that is the build
@@ -2431,6 +2476,79 @@ def scenario_idle(sim):
             "Ice — the row fired and left the runner somewhere else"
         )
     passed("the menu's MEDICAL ID row fires and hands the screen to the ICE card")
+
+    # --- the §378 factory erase, and the guard in front of it ---
+    #
+    # Last, because it resets the GNSS ladder this scenario spent its middle
+    # walking — which is what makes the wipe checkable at all under a sim with
+    # no NVMC. See the docstring for what this rung does and does not earn.
+    press_menu(sim, "$btn5", "BTN5 to reopen the settings menu", MENU_OPENED)
+    row = None
+    for _ in range(MENU_ROWS.index("Erase")):
+        row = press_menu(sim, "$btn3", "BTN3 to step toward the FACTORY ERASE row").group(1)
+    if row != "Erase":
+        raise SmokeFailure(f"expected the cursor on Erase, it reads {row}")
+    resting_panel = sim.dump("menu-erase-resting.ppm", "the menu on the erase row")
+
+    # One press must NOT wipe. Waiting on the armed line is the assertion: a
+    # row wired straight through would emit the confirm line here and this
+    # would fail naming it.
+    press_menu(sim, "$btn1", "BTN1 to arm the factory erase", MENU_ERASE_ARMED)
+    armed_panel = sim.dump("menu-erase-armed.ppm", "the armed factory erase")
+    if armed_panel.data == resting_panel.data:
+        raise SmokeFailure(
+            "the panel is byte-identical armed and un-armed — the guard armed in "
+            "the button task and never reached the glass, so the runner's next "
+            "press would wipe the watch with nothing on screen having changed"
+        )
+    passed("BTN1 arms the factory erase instead of firing it, and the panel says so")
+
+    # Step off the row and back. The arm must not survive that: a confirm has
+    # to be the very next thing the runner does, or a brush minutes earlier
+    # turns a later deliberate press into a wipe.
+    press_menu(sim, "$btn3", "BTN3 to step off the armed erase row")
+    back = press_menu(sim, "$btn2", "BTN2 to step back onto the erase row").group(1)
+    if back != "Erase":
+        raise SmokeFailure(f"expected to be back on Erase, cursor reads {back}")
+    press_menu(sim, "$btn1", "BTN1 on the re-entered erase row", MENU_ERASE_ARMED)
+    passed("stepping off the row cancels the arm — the next press arms again, it does not wipe")
+
+    # Now the wipe. Marked first so the lines read below belong to THIS press.
+    fired = sim.tail.mark()
+    flash = press_menu(
+        sim, "$btn1", "BTN1 to confirm the factory erase", MENU_ERASE_DONE
+    ).group(1)
+    sim.wait(
+        RECORD_ERASED,
+        MENU_STEP_TIMEOUT,
+        "the record task to drop the RAM the erase covers",
+        start=fired,
+    )
+    # The claim with teeth. Everything above is a state machine talking to
+    # itself; this is the erase reaching a setting the scenario itself moved.
+    # The ladder was walked RIGHT to its clamp earlier, so a reset can only be
+    # a leftward move and cannot be confused with another edit press.
+    mode, interval_s, hours = (
+        lambda m: (m.group(1), int(m.group(2)), int(m.group(3)))
+    )(
+        sim.wait(
+            GNSS_MODE_SET,
+            MENU_STEP_TIMEOUT,
+            "the GNSS mode to fall back to its factory rung",
+            start=fired,
+        )
+    )
+    if hours >= edits[-1][2]:
+        raise SmokeFailure(
+            f"the erase left the GNSS mode at {mode} (~{hours}h) against the "
+            f"{edits[-1][0]} (~{edits[-1][2]}h) the ladder was walked to — the "
+            "wipe reported success without resetting a setting it owns"
+        )
+    passed(
+        f"the confirming press wipes (flash {flash}) and the watch falls back to "
+        f"factory values: GNSS {edits[-1][0]} ~{edits[-1][2]}h -> {mode} "
+        f"{interval_s}s ~{hours}h"
+    )
 
 
 def press_lap(sim, what):
