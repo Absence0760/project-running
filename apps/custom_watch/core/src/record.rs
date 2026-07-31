@@ -18,7 +18,6 @@
 
 use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
-use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::distance_bands::{band_for_distance, DistanceBand};
 use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
@@ -41,6 +40,7 @@ use crate::race_phases::{
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
+use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
