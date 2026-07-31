@@ -349,6 +349,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut timer_rx = unwrap!(state::TIMER.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let mut workout_rx = unwrap!(state::WORKOUT.receiver());
     let sender = state::RECORD.sender();
@@ -461,6 +462,9 @@ pub async fn run(store: &'static SharedStore) {
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
+    // None until the button task publishes one — the watch boots with nothing
+    // armed, which is what keeps the Timer page out of the cycle.
+    let mut timer: Option<watch_core::timers::Timer> = None;
     // Tracked apart from `last_published` so the climb lines below fire on a
     // climb changing rather than on any field of the snapshot changing —
     // distance ticks every second, which would make them a 1 Hz stream.
@@ -871,6 +875,17 @@ pub async fn run(store: &'static SharedStore) {
                 push_step_result(o, &r);
             }
         }
+
+        // The runner's timer (§375). The instrument travels from the button
+        // task; its READING is a function of the clock, so it is re-derived
+        // here every pass rather than on the change event — a countdown that
+        // only moved when a button was pressed would be a stopped clock.
+        if let Some(t) = timer_rx.try_changed() {
+            timer = Some(t);
+        }
+        recorder.set_timer(timer.and_then(|t: watch_core::timers::Timer| {
+            t.snapshot_view(Instant::now().as_secs() as u32)
+        }));
 
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
