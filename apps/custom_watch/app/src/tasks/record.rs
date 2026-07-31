@@ -60,6 +60,7 @@ use watch_core::run_store::{
 };
 use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
+use watch_core::sleep_station::SleepStatus;
 use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
@@ -71,6 +72,22 @@ fn state_str(state: RecordState) -> &'static str {
         RecordState::Recording => "recording",
         RecordState::Paused => "paused",
         RecordState::Finished => "finished",
+    }
+}
+
+/// The sleep rail's log line as a comparable tuple — see its emit site for why
+/// the gate is the printed fields rather than the view.
+fn sleep_line(snap: &Snapshot) -> Option<(SleepStatus, u32, u32, f64)> {
+    snap.sleep
+        .map(|b| (b.status, b.budget_s, b.reserve_s, b.distance_to_m))
+}
+
+fn sleep_status_str(status: SleepStatus) -> &'static str {
+    match status {
+        SleepStatus::Unknown => "unknown",
+        SleepStatus::NoCutoff => "no-cutoff",
+        SleepStatus::NoBudget => "none",
+        SleepStatus::Budget => "budget",
     }
 }
 
@@ -448,6 +465,7 @@ pub async fn run(store: &'static SharedStore) {
     // climb changing rather than on any field of the snapshot changing —
     // distance ticks every second, which would make them a 1 Hz stream.
     let mut last_climb = last_published.climb;
+    let mut last_sleep = sleep_line(&last_published);
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
     // The sim can't wait 15 minutes of moving time for a real reminder, so the
@@ -919,6 +937,28 @@ pub async fn run(store: &'static SharedStore) {
             }
         }
         last_climb = snap.climb;
+        // §373's rail, for the same reason §368 gave the climb one: a page dump
+        // proves a frame was drawn, never that the minutes on it are right, so
+        // without this the budget is unassertable outside host tests.
+        //
+        // Gated on the fields the LINE carries, not on the whole view: the
+        // margin ticks with the race clock every second, so gating on the
+        // struct re-emitted a budget and a reserve that had not moved — the
+        // same re-emit §368 caught on the crest, and downstream it reads as a
+        // runner losing sleep they still have.
+        let sleep = sleep_line(&snap);
+        if sleep != last_sleep {
+            if let Some((status, budget_s, reserve_s, to_m)) = sleep {
+                debug!(
+                    "sleep: {} budget={}s reserve={}s to={}m",
+                    sleep_status_str(status),
+                    budget_s,
+                    reserve_s,
+                    to_m
+                );
+            }
+        }
+        last_sleep = sleep;
         if snap != last_published {
             debug!(
                 "record: {} dist={}m moving={}s pacer={}s",
