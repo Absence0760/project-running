@@ -334,6 +334,7 @@ pub mod settings_apply;
 pub mod settings_frame;
 pub mod settings_menu;
 pub mod settings_queue;
+pub mod sleep_station;
 pub mod statusbar;
 pub mod streaks;
 pub mod track_projection;
