@@ -2748,6 +2748,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailShareLink => 'Compartilhar link';
 
   @override
+  String get routeDetailSendToWatch => 'Enviar para o relógio';
+
+  @override
+  String routeDetailWatchCourseSent(int points) {
+    return 'Percurso enviado para o relógio ($points pontos)';
+  }
+
+  @override
+  String routeDetailWatchCourseSimplified(int source, int points) {
+    return 'Percurso enviado para o relógio — reduzido de $source para $points pontos para caber';
+  }
+
+  @override
+  String get routeDetailWatchCourseTooShort =>
+      'Esta rota tem pontos de menos para ser seguida no relógio';
+
+  @override
+  String routeDetailWatchCourseFailed(String error) {
+    return 'Não foi possível enviar o percurso para o relógio: $error';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Tornada pública para que qualquer pessoa com o link possa vê-la';
 
@@ -14798,6 +14820,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailShareLink => 'Compartilhar link';
+
+  @override
+  String get routeDetailSendToWatch => 'Enviar para o relógio';
+
+  @override
+  String routeDetailWatchCourseSent(int points) {
+    return 'Percurso enviado para o relógio ($points pontos)';
+  }
+
+  @override
+  String routeDetailWatchCourseSimplified(int source, int points) {
+    return 'Percurso enviado para o relógio — reduzido de $source para $points pontos para caber';
+  }
+
+  @override
+  String get routeDetailWatchCourseTooShort =>
+      'Esta rota tem pontos de menos para ser seguida no relógio';
+
+  @override
+  String routeDetailWatchCourseFailed(String error) {
+    return 'Não foi possível enviar o percurso para o relógio: $error';
+  }
 
   @override
   String get routeDetailMadePublicForLink =>

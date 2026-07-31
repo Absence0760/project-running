@@ -27,6 +27,92 @@ List<Waypoint> simplifyTrack(
   return out;
 }
 
+/// Reduce [points] to at most [maxPoints] by *priority* Douglas–Peucker: keep
+/// the two endpoints, then repeatedly restore whichever dropped point lies
+/// furthest from the chord that replaced it, until the budget is spent or no
+/// dropped point deviates from its chord at all.
+///
+/// This is [simplifyTrack] inverted. That one takes a tolerance and returns
+/// however many points survive it; a fixed-capacity consumer needs the opposite
+/// — a fixed point count, with the tolerance falling out of it. The custom
+/// watch's `CRS1` course frame carries a bounded number of positions and
+/// refuses a longer one outright, so the phone has to arrive at a count.
+///
+/// Even decimation would also fit under a cap, but it spends the budget
+/// uniformly — as much of it on a straight as on a switchback — and the
+/// switchbacks are the geometry a breadcrumb exists to show. Both endpoints are
+/// always kept, so the result is never the head of a route with its tail cut
+/// off.
+///
+/// Mobile-only, outside the `route_simplify.ts` parity pair (like
+/// [computeElevationLoss]) — web has no fixed-capacity course consumer.
+List<Waypoint> simplifyToBudget(
+  List<Waypoint> points, {
+  required int maxPoints,
+}) {
+  if (maxPoints < 2) {
+    throw ArgumentError.value(maxPoints, 'maxPoints', 'must be at least 2');
+  }
+  if (points.length <= maxPoints) return List.of(points);
+
+  final keep = List<bool>.filled(points.length, false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  var kept = 2;
+
+  final pending = <_Split>[];
+  final seed = _splitOf(points, 0, points.length - 1);
+  if (seed != null) pending.add(seed);
+
+  while (kept < maxPoints && pending.isNotEmpty) {
+    var bestAt = 0;
+    for (var i = 1; i < pending.length; i++) {
+      if (pending[i].distance > pending[bestAt].distance) bestAt = i;
+    }
+    final best = pending.removeAt(bestAt);
+    // The winner deviates by nothing, so neither does anything still pending —
+    // every remaining point lies on a chord already kept and adds no shape.
+    if (best.distance <= 0) break;
+    keep[best.index] = true;
+    kept++;
+    final left = _splitOf(points, best.first, best.index);
+    if (left != null) pending.add(left);
+    final right = _splitOf(points, best.index, best.last);
+    if (right != null) pending.add(right);
+  }
+
+  final out = <Waypoint>[];
+  for (int i = 0; i < points.length; i++) {
+    if (keep[i]) out.add(points[i]);
+  }
+  return out;
+}
+
+class _Split {
+  final int first;
+  final int last;
+  final int index;
+  final double distance;
+
+  const _Split(this.first, this.last, this.index, this.distance);
+}
+
+/// The interior point of `points[first..last]` furthest from the chord between
+/// them, or null when the span has no interior.
+_Split? _splitOf(List<Waypoint> points, int first, int last) {
+  if (last <= first + 1) return null;
+  double maxDist = 0;
+  int maxIndex = first + 1;
+  for (int i = first + 1; i < last; i++) {
+    final d = _perpDistanceMetres(points[i], points[first], points[last]);
+    if (d > maxDist) {
+      maxDist = d;
+      maxIndex = i;
+    }
+  }
+  return _Split(first, last, maxIndex, maxDist);
+}
+
 void _dpStep(
   List<Waypoint> points,
   int first,

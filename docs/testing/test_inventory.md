@@ -345,13 +345,36 @@ Pure-function tests for `evaluateGoal` and `RunGoal` JSON serialisation in `lib/
 
 Round-trips the `lib/fit_export.dart` writer that produces FIT files for sharing recorded runs to Garmin Connect / TrainingPeaks. Pins the binary header layout (`.FIT` magic, protocol version, profile version, data record schema) and a small synthetic-track encode → decode → equality assertion.
 
-### `apps/mobile_android/test/route_simplify_test.dart` — 8 tests
+### `apps/mobile_android/test/route_simplify_test.dart` — 28 tests
 
 Tests for Ramer-Douglas-Peucker track simplification in `lib/route_simplify.dart`:
 
 - Fewer than 3 points returned unchanged
 - Collinear points dropped
 - `computeElevationGain` accumulates only positive deltas
+- `simplifyToBudget` (the mobile-only priority-DP simplifier behind the watch course push, decisions §370): never exceeds the point budget, keeps both endpoints exactly so the tail is never cut, preserves order, spends the budget on the corners rather than evenly along the line, collapses a fully degenerate track, and rejects a budget below two
+
+### `apps/mobile_android/test/watch_course_test.dart` — 23 tests
+
+The `CRS1` course wire format in `lib/watch_course.dart` — the phone's encode side of the watch course push:
+
+- `encodeCourse` against the frozen goldens shared byte-for-byte with the firmware's `watch_core::course_store` tests, with and without the elevation series
+- The v3 CRC trailer is derived (not a pinned literal) and changes when one point moves
+- Signed lat/lon and below-sea-level / out-of-range elevation encoding
+- Refusals: an elevation series that isn't one sample per point, fewer than two points, more than `kMaxCoursePoints`
+- `chunkCourse` offsets reassemble the frame, including a full-capacity elevation frame across many chunks
+- `courseFromWaypoints` shaping: a short route passes through, a dense one is thinned to the cap with its real endpoints intact (never cut), elevation rides along only when every carried point has one (a single missing or non-finite sample drops the whole profile), and fewer than two positions is refused with a reason
+
+### `apps/mobile_android/test/route_detail_watch_course_test.dart` — 7 tests
+
+Widget tests for the Send-to-watch entry in `lib/screens/route_detail_screen.dart`'s share menu, over a fake `WatchBleTransport` and a `devBackendUrl` driving both sides of the dev gate:
+
+- The action shows against a loopback backend and is absent against a production one (decisions §71 / §209 — no hardware exists)
+- A short route pushes every point, scans once, disconnects once, and reports the count
+- An over-long route is thinned to `kMaxCoursePoints` with the route's real end on the wire, and the banner names both counts
+- A one-position route is refused with nothing written and no scan
+- A failed write surfaces the failure (never a success banner) and still disconnects
+- A non-owner's push carries the privacy-CLIPPED trace, not the stored polyline (decisions §33)
 
 ### `apps/mobile_android/test/ble_heart_rate_test.dart` — 9 tests
 
