@@ -9,7 +9,7 @@ import '../lib/watch_settings.dart';
 /// `watch_core::settings` test vector so a wire-format drift on either side
 /// is caught here.
 const _goldenHex =
-    '5345543106ffffbe00d3a40000403800000024f448005043490380e6c54784030000dc0500'
+    '5345543108ffff03be00d3a40000403800000024f448005043490380e6c54784030000dc0500'
     '00'
     'ffc0000000000000'
     '01'
@@ -27,7 +27,9 @@ const _goldenHex =
     '50454e4943494c4c494e2c20415354484d41000000'
     '4a414d4945204d4f5247414e000000000000000000'
     '2b3120353535203031333400000000000000000000'
-    '2dc5385a';
+    '02'
+    '2800'
+    '1c26d5df';
 
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
@@ -67,27 +69,32 @@ void main() {
           contact: 'JAMIE MORGAN',
           phone: '+1 555 0134',
         ),
+        autoLap: WatchAutoLap.mi1,
+        stormAlertHpa: 4.0,
       );
       final frame = settings.encode();
       expect(frame, _hex(_goldenHex));
-      expect(frame, hasLength(192));
+      expect(frame, hasLength(196));
     });
 
-    test('empty frame is header + crc with zero flags in both bytes', () {
+    test('empty frame is header + crc with zero flags in all three bytes', () {
       const settings = WatchSettings();
-      expect(settings.encode(), _hex('53455431' '06' '00' '00' 'f63d4d51'));
+      expect(settings.encode(), _hex('53455431' '08' '00' '00' '00' 'aa825266'));
     });
 
     test('maxHr-only frame sets bit0 and carries the u16', () {
       const settings = WatchSettings(maxHr: 190);
-      expect(settings.encode(), _hex('53455431' '06' '01' '00' 'be00' 'cbadad99'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '01' '00' '00' 'be00' '4468a151'),
+      );
     });
 
     test('pacer-only frame sets bit1 and carries distance then time', () {
       const settings = WatchSettings(pacer: (distanceM: 42195, timeS: 14400));
       expect(
         settings.encode(),
-        _hex('53455431' '06' '02' '00' 'd3a40000' '40380000' '5543c8ad'),
+        _hex('53455431' '08' '02' '00' '00' 'd3a40000' '40380000' 'b12764c4'),
       );
     });
 
@@ -97,7 +104,7 @@ void main() {
       );
       expect(
         settings.encode(),
-        _hex('53455431' '06' '04' '00' '0024f448' '00504349' 'cfc7564f'),
+        _hex('53455431' '08' '04' '00' '00' '0024f448' '00504349' '2f1951c3'),
       );
     });
 
@@ -105,44 +112,56 @@ void main() {
       const settings = WatchSettings(gear: (baselineM: 500000.0, targetM: null));
       expect(
         settings.encode(),
-        _hex('53455431' '06' '04' '00' '0024f448' '00000000' '8d0cbef7'),
+        _hex('53455431' '08' '04' '00' '00' '0024f448' '00000000' '6dd2b97b'),
       );
     });
 
     test('zoneCeiling 0 clears the ceiling and still sets bit3', () {
       const settings = WatchSettings(zoneCeiling: 0);
-      expect(settings.encode(), _hex('53455431' '06' '08' '00' '00' '21a49e88'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '08' '00' '00' '00' '16dfd321'),
+      );
     });
 
     test('zoneCeiling 4 encodes the top ceiling zone', () {
       const settings = WatchSettings(zoneCeiling: 4);
-      expect(settings.encode(), _hex('53455431' '06' '08' '00' '04' '3860f38f'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '08' '00' '00' '04' '0f1bbe26'),
+      );
     });
 
     test('seaLevelPa-only frame sets bit4 and carries the f32', () {
       const settings = WatchSettings(seaLevelPa: 101325.0);
-      expect(settings.encode(), _hex('53455431' '06' '10' '00' '80e6c547' '045f94ea'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '10' '00' '00' '80e6c547' 'f763a2b4'),
+      );
     });
 
     test('fuel-only frame sets bit5 and carries drink then eat', () {
       const settings = WatchSettings(fuel: (drinkIntervalS: 900, eatIntervalS: 1500));
       expect(
         settings.encode(),
-        _hex('53455431' '06' '20' '00' '84030000' 'dc050000' '58afaae0'),
+        _hex('53455431' '08' '20' '00' '00' '84030000' 'dc050000' '472e5e1c'),
       );
     });
 
     test('present fields are laid out in bit order regardless of set subset',
         () {
       const settings = WatchSettings(maxHr: 190, zoneCeiling: 3);
-      expect(settings.encode(), _hex('53455431' '06' '09' '00' 'be00' '03' '63435477'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '09' '00' '00' 'be00' '03' 'bb18b8d6'),
+      );
     });
 
     test('sea-level and fuel keep bit order after the earlier fields', () {
       const settings = WatchSettings(maxHr: 190, seaLevelPa: 101325.0);
       expect(
         settings.encode(),
-        _hex('53455431' '06' '11' '00' 'be00' '80e6c547' '564d6aa1'),
+        _hex('53455431' '08' '11' '00' '00' 'be00' '80e6c547' '44c9456a'),
       );
     });
 
@@ -152,15 +171,15 @@ void main() {
       const settings = WatchSettings(pages: 0x0000c0ff);
       expect(
         settings.encode(),
-        _hex('53455431' '06' '40' '00' 'ffc0000000000000' '3267cb57'),
+        _hex('53455431' '08' '40' '00' '00' 'ffc0000000000000' '65740c2a'),
       );
     });
 
     test('hideEmptyPages sets bit7 and encodes as one byte', () {
       const on = WatchSettings(hideEmptyPages: true);
-      expect(on.encode(), _hex('53455431' '06' '80' '00' '01' '8fdebf10'));
+      expect(on.encode(), _hex('53455431' '08' '80' '00' '00' '01' '5471397e'));
       const off = WatchSettings(hideEmptyPages: false);
-      expect(off.encode(), _hex('53455431' '06' '80' '00' '00' '19eeb867'));
+      expect(off.encode(), _hex('53455431' '08' '80' '00' '00' '00' 'c2413e09'));
     });
 
     test('pages and hideEmpty keep bit order after the earlier fields', () {
@@ -171,7 +190,8 @@ void main() {
       );
       expect(
         settings.encode(),
-        _hex('53455431' '06' 'c1' '00' 'be00' 'ffffffffffffffff' '00' '4cd90acc'),
+        _hex('53455431' '08' 'c1' '00' '00' 'be00' 'ffffffffffffffff' '00'
+            '830596a2'),
       );
     });
 
@@ -179,34 +199,40 @@ void main() {
       // -570 (Marquesas, -9:30) pins the two's-complement i16 encoding; the
       // same vector is frozen in the Rust `golden_vector_tz_only` test.
       const settings = WatchSettings(tzOffsetMin: -570);
-      expect(settings.encode(), _hex('53455431' '06' '00' '01' 'c6fd' 'c6dd3904'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '00' '01' '00' 'c6fd' 'ce5b97f0'),
+      );
     });
 
     test('a positive tz offset encodes as i16 LE after every flags field', () {
       const settings = WatchSettings(maxHr: 190, tzOffsetMin: 345);
       expect(
         settings.encode(),
-        _hex('53455431' '06' '01' '01' 'be00' '5901' 'b9a5aee0'),
+        _hex('53455431' '08' '01' '01' '00' 'be00' '5901' '1b258741'),
       );
     });
 
     test('a zero tz offset (UTC zone) is still a present field', () {
       const settings = WatchSettings(tzOffsetMin: 0);
-      expect(settings.encode(), _hex('53455431' '06' '00' '01' '0000' 'af23955a'));
+      expect(
+        settings.encode(),
+        _hex('53455431' '08' '00' '01' '00' '0000' 'a7a53bae'),
+      );
     });
 
     test('distanceIntervalM sets flags2 bit1 and 0 disarms the alert', () {
       const armed = WatchSettings(distanceIntervalM: 1000);
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '02' 'e8030000' '60340c9c'),
+        _hex('53455431' '08' '00' '02' '00' 'e8030000' 'ad643a91'),
       );
       // A present field carrying the zero sentinel, not an omitted one: the
       // phone has to be able to turn the alert off, not only on.
       const off = WatchSettings(distanceIntervalM: 0);
       expect(
         off.encode(),
-        _hex('53455431' '06' '00' '02' '00000000' 'eee3818d'),
+        _hex('53455431' '08' '00' '02' '00' '00000000' '23b3b780'),
       );
       expect(off.encode(), isNot(const WatchSettings().encode()));
     });
@@ -215,12 +241,12 @@ void main() {
       const armed = WatchSettings(timeIntervalS: 1800);
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '04' '08070000' '24283ac2'),
+        _hex('53455431' '08' '00' '04' '00' '08070000' '546e1596'),
       );
       const off = WatchSettings(timeIntervalS: 0);
       expect(
         off.encode(),
-        _hex('53455431' '06' '00' '04' '00000000' '4e16c102'),
+        _hex('53455431' '08' '00' '04' '00' '00000000' '3e50ee56'),
       );
     });
 
@@ -233,13 +259,13 @@ void main() {
       const armed = WatchSettings(paceBand: (fastSPerKm: 300, slowSPerKm: 420));
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '08' '2c01' 'a401' '85c87b91'),
+        _hex('53455431' '08' '00' '08' '00' '2c01' 'a401' '8fa36677'),
       );
-      expect(armed.encode(), hasLength(7 + 4 + 4));
+      expect(armed.encode(), hasLength(8 + 4 + 4));
       const off = WatchSettings(paceBand: (fastSPerKm: 0, slowSPerKm: 0));
       expect(
         off.encode(),
-        _hex('53455431' '06' '00' '08' '0000' '0000' '4ffb31c7'),
+        _hex('53455431' '08' '00' '08' '00' '0000' '0000' '45902c21'),
       );
     });
 
@@ -254,7 +280,8 @@ void main() {
       );
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '10' 'd3a40000' '38310000' '00' '185ec602'),
+        _hex('53455431' '08' '00' '10' '00' 'd3a40000' '38310000' '00'
+            '60b6c798'),
       );
       // A null distance IS the clear the watch setter takes; a null goal time
       // builds the phases with no target pace.
@@ -267,7 +294,8 @@ void main() {
       );
       expect(
         clear.encode(),
-        _hex('53455431' '06' '00' '10' '00000000' '00000000' '02' '3dc78336'),
+        _hex('53455431' '08' '00' '10' '00' '00000000' '00000000' '02'
+            '452f82ac'),
       );
     });
 
@@ -285,14 +313,14 @@ void main() {
       const armed = WatchSettings(guidedRunId: 'easy-30');
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '20' '656173792d3330' '00000000000000000000000000000000' '00' 'df2b466c'),
+        _hex('53455431' '08' '00' '20' '00' '656173792d3330' '00000000000000000000000000000000' '00' '8a72a40f'),
       );
-      expect(armed.encode(), hasLength(7 + guidedRunIdLen + 4));
+      expect(armed.encode(), hasLength(8 + guidedRunIdLen + 4));
       // An empty id deselects — still a present field, all-zero payload.
       const off = WatchSettings(guidedRunId: '');
       expect(
         off.encode(),
-        _hex('53455431' '06' '00' '20' '00000000000000000000000000000000' '0000000000000000' '05f450c9'),
+        _hex('53455431' '08' '00' '20' '00' '00000000000000000000000000000000' '0000000000000000' '50adb2aa'),
       );
     });
 
@@ -302,7 +330,7 @@ void main() {
       final tooLong = WatchSettings(guidedRunId: 'x' * (guidedRunIdLen + 1));
       expect(tooLong.encode, throwsArgumentError);
       final exact = WatchSettings(guidedRunId: 'x' * guidedRunIdLen);
-      expect(exact.encode(), hasLength(7 + guidedRunIdLen + 4));
+      expect(exact.encode(), hasLength(8 + guidedRunIdLen + 4));
     });
 
     test('the five v4 fields keep flags2 bit order', () {
@@ -321,7 +349,7 @@ void main() {
       );
       expect(
         armed.encode(),
-        _hex('53455431' '06' '00' '3e' 'e8030000' '08070000' '2c01a401' 'd3a4000038310000' '00' '656173792d333000000000000000000000000000000000' '00' '6357ee9d'),
+        _hex('53455431' '08' '00' '3e' '00' 'e8030000' '08070000' '2c01a401' 'd3a4000038310000' '00' '656173792d333000000000000000000000000000000000' '00' '96d47178'),
       );
     });
 
@@ -331,7 +359,7 @@ void main() {
       const settings = WatchSettings(restingHr: 48);
       expect(
         settings.encode(),
-        _hex('53455431' '06' '00' '40' '3000' 'abf28bf4'),
+        _hex('53455431' '08' '00' '40' '00' '3000' '0cacd552'),
       );
     });
 
@@ -341,12 +369,12 @@ void main() {
       const pair = WatchSettings(maxHr: 190, restingHr: 48);
       expect(
         pair.encode(),
-        _hex('53455431' '06' '01' '40' 'be00' '3000' '38340546'),
+        _hex('53455431' '08' '01' '40' '00' 'be00' '3000' 'aa1cbb46'),
       );
       const afterGuided = WatchSettings(guidedRunId: 'easy-30', restingHr: 48);
       expect(
         afterGuided.encode(),
-        _hex('53455431' '06' '00' '60' '656173792d3330' '00000000000000000000000000000000' '00' '3000' 'cfc32096'),
+        _hex('53455431' '08' '00' '60' '00' '656173792d3330' '00000000000000000000000000000000' '00' '3000' '390c878c'),
       );
     });
 
@@ -366,13 +394,13 @@ void main() {
       expect(
         settings.encode(),
         _hex(
-          '53455431' '06' '00' '80'
+          '53455431' '08' '00' '80' '00'
           '414c45580000000000000000000000000000000000'
           '4f204e4547000000'
           '415354484d41000000000000000000000000000000'
           '4a414d494500000000000000000000000000000000'
           '353535203031333400000000000000000000000000'
-          '729c3de9',
+          '831e0d7c',
         ),
       );
     });
@@ -382,10 +410,10 @@ void main() {
       // standing — a runner removing their details has to be able to say so.
       const settings = WatchSettings(ice: WatchIceCard());
       final frame = settings.encode();
-      expect(frame, hasLength(7 + iceWireLen + 4));
+      expect(frame, hasLength(8 + iceWireLen + 4));
       expect(frame[6] & 0x80, 0x80, reason: 'the presence bit is still set');
       expect(
-        frame.sublist(7, 7 + iceWireLen).every((b) => b == 0),
+        frame.sublist(8, 8 + iceWireLen).every((b) => b == 0),
         isTrue,
         reason: 'an all-blank payload is what the watch reads as a clear',
       );
@@ -412,6 +440,127 @@ void main() {
       );
     });
 
+    test('autoLap sets flags3 bit0 and carries the rung as one byte', () {
+      const km1 = WatchSettings(autoLap: WatchAutoLap.km1);
+      expect(
+        km1.encode(),
+        _hex('53455431' '08' '00' '00' '01' '01' '2ef67b8a'),
+      );
+      // OFF is a real trigger the runner chose, not an absent field: it spends
+      // the 64-record lap store on hand-marked splits only.
+      const off = WatchSettings(autoLap: WatchAutoLap.off);
+      expect(
+        off.encode(),
+        _hex('53455431' '08' '00' '00' '01' '00' 'b8c67cfd'),
+      );
+      expect(off.encode(), isNot(const WatchSettings().encode()));
+      const min30 = WatchSettings(autoLap: WatchAutoLap.min30);
+      expect(
+        min30.encode(),
+        _hex('53455431' '08' '00' '00' '01' '07' '1b531863'),
+      );
+    });
+
+    test('the auto-lap rung index is the wire contract, in firmware order', () {
+      // The watch reads this byte as its `AutoLap` declaration index, so
+      // reordering this enum re-points every trigger already pushed — and the
+      // same discriminant is packed into three bits of the CFG1 flash record.
+      expect(WatchAutoLap.off.index, 0);
+      expect(WatchAutoLap.km1.index, 1);
+      expect(WatchAutoLap.mi1.index, 2);
+      expect(WatchAutoLap.km5.index, 3);
+      expect(WatchAutoLap.mi5.index, 4);
+      expect(WatchAutoLap.min5.index, 5);
+      expect(WatchAutoLap.min10.index, 6);
+      expect(WatchAutoLap.min30.index, 7);
+      expect(WatchAutoLap.values, hasLength(8));
+      for (final rung in WatchAutoLap.values) {
+        expect(rung.index, lessThanOrEqualTo(7),
+            reason: 'CFG1 carries the rung in three bits');
+      }
+    });
+
+    test('stormAlertHpa sets flags3 bit1, travels as tenths, and 0 disarms', () {
+      const armed = WatchSettings(stormAlertHpa: 4.0);
+      expect(
+        armed.encode(),
+        _hex('53455431' '08' '00' '00' '02' '2800' '06b85e48'),
+      );
+      const fractional = WatchSettings(stormAlertHpa: 2.5);
+      expect(
+        fractional.encode(),
+        _hex('53455431' '08' '00' '00' '02' '1900' 'b4bf038e'),
+      );
+      // Disarming is a real update, not an absence — the same distinction the
+      // zone ceiling has carried since v1.
+      const off = WatchSettings(stormAlertHpa: 0.0);
+      expect(
+        off.encode(),
+        _hex('53455431' '08' '00' '00' '02' '0000' 'ac160315'),
+      );
+      expect(off.encode(), isNot(const WatchSettings().encode()));
+    });
+
+    test('an armed threshold never rounds into the disarm sentinel', () {
+      // The watch's own trend window would reject 0.02 hPa, but a wire that
+      // silently turned "arm" into "off" would be a different bug in a
+      // different place, with nothing left to reject it.
+      const tiny = WatchSettings(stormAlertHpa: 0.02);
+      expect(
+        tiny.encode(),
+        _hex('53455431' '08' '00' '00' '02' '0100' 'ed27180c'),
+      );
+    });
+
+    test('the flags3 fields lay out last, in bit order after the ice card', () {
+      const both = WatchSettings(
+        autoLap: WatchAutoLap.mi1,
+        stormAlertHpa: 4.0,
+      );
+      expect(
+        both.encode(),
+        _hex('53455431' '08' '00' '00' '03' '02' '2800' 'f91e12eb'),
+      );
+      const afterIce = WatchSettings(
+        ice: WatchIceCard(
+          holder: 'ALEX',
+          blood: 'O NEG',
+          conditions: 'ASTHMA',
+          contact: 'JAMIE',
+          phone: '555 0134',
+        ),
+        autoLap: WatchAutoLap.mi1,
+      );
+      expect(
+        afterIce.encode(),
+        _hex(
+          '53455431' '08' '00' '80' '01'
+          '414c45580000000000000000000000000000000000'
+          '4f204e4547000000'
+          '415354484d41000000000000000000000000000000'
+          '4a414d494500000000000000000000000000000000'
+          '353535203031333400000000000000000000000000'
+          '02'
+          'ff37fb2c',
+        ),
+      );
+    });
+
+    test('every frame stamps v8, so a v8 field can never ride a v7 header', () {
+      // The watch refuses a frame whose version does not know its own presence
+      // bits — an unknown bit is how it tells a corrupt push from a
+      // forward-compatible one. The phone cannot produce that frame because
+      // the version byte is a constant, not derived from which fields are set.
+      for (final s in const [
+        WatchSettings(),
+        WatchSettings(maxHr: 190),
+        WatchSettings(autoLap: WatchAutoLap.km1),
+        WatchSettings(stormAlertHpa: 4.0),
+      ]) {
+        expect(s.encode()[4], 0x08);
+      }
+    });
+
     test('the trailer is the crc32 of every byte before it', () {
       // The goldens above pin the trailer as literal bytes; this pins that it
       // is actually derived, so a frame the goldens do not cover still carries
@@ -424,6 +573,8 @@ void main() {
         paceBand: (fastSPerKm: 300, slowSPerKm: 420),
         guidedRunId: 'first-timer-15',
         restingHr: 48,
+        autoLap: WatchAutoLap.km5,
+        stormAlertHpa: 6.0,
       );
       final frame = settings.encode();
       final body = frame.sublist(0, frame.length - 4);

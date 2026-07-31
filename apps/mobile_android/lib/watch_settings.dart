@@ -7,7 +7,8 @@ import 'sim_watch_sync.dart' show crc32;
 /// The phone pushes the user's config to the watch as a fixed little-endian
 /// frame the firmware decodes:
 ///
-///   magic("SET1", 4) | version(1) | flags(1) | flags2(1) | fields | crc32(4)
+///   magic("SET1", 4) | version(1) | flags(1) | flags2(1) | flags3(1)
+///     | fields | crc32(4)
 ///
 /// `flags` is a bitfield of which optional fields follow, in bit order:
 /// bit0 max_hr, bit1 pacer, bit2 gear, bit3 zone_ceiling, bit4 sea_level_pa,
@@ -28,13 +29,19 @@ import 'sim_watch_sync.dart' show crc32;
 /// the watch's single-run training stress upgrades from the distance proxy to
 /// Banister TRIMP. Version 6 (2026-07-29) takes `flags2`'s LAST free bit —
 /// bit 7 — for the ICE / medical-ID card a responder reads off the wrist
-/// (five NUL-padded ASCII fields, 92 bytes). Both presence bytes are now
-/// saturated, so the next field needs a third one and a version of its own.
-/// Only the present fields are written, so a partial update is a shorter
-/// frame; a fully populated frame is 192 bytes, still one write at the
-/// watch's 256-byte ATT MTU, with ~64 bytes of headroom left. The firmware
-/// still decodes v1-v5 frames, but the phone always encodes the current
-/// version.
+/// (five NUL-padded ASCII fields, 92 bytes), saturating both presence bytes.
+/// Version 7 (2026-07-30) is the bump that saturation forced: the auto-lap
+/// trigger rides a THIRD presence byte `flags3` — bit 0 — exactly as
+/// `flags2` arrived with v2. Version 8 (2026-07-31) takes `flags3` bit 1 for
+/// the storm-alert threshold. `flags3` had six bits free after v7, so nothing
+/// about the layout forced that bump — the discipline did: a set bit outside
+/// the mask for a frame's own version is how the firmware tells a corrupt
+/// push from a forward-compatible one, and that only works while a version
+/// names exactly one field set. Only the present fields are written, so a
+/// partial update is a shorter frame; a fully populated frame is 196 bytes,
+/// still one write at the watch's 256-byte ATT MTU, with ~60 bytes of
+/// headroom left. The firmware still decodes v1-v7 frames, but the phone
+/// always encodes the current version.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.
@@ -42,7 +49,7 @@ import 'sim_watch_sync.dart' show crc32;
 /// run-sync path (`sim_watch_sync.dart`) is the phone's decode side — and it
 /// reuses that module's [crc32], the same checksum the firmware shares
 /// between `run_store` and `settings`.
-const int _settingsVersion = 0x06;
+const int _settingsVersion = 0x08;
 
 /// Width of the CRC32 trailer, present since v3.
 const int _crcLen = 4;
@@ -70,6 +77,9 @@ const int _flag2GuidedRun = 0x20;
 const int _flag2RestingHr = 0x40;
 const int _flag2Ice = 0x80;
 
+const int _flag3AutoLap = 0x01;
+const int _flag3StormAlert = 0x02;
+
 /// Width of an ICE text field on the wire — one full watch face row, so a
 /// value never needs abbreviating to fit. The blood field is narrower.
 const int iceFieldLen = 21;
@@ -84,6 +94,19 @@ const int iceWireLen = iceFieldLen + iceBloodLen + iceFieldLen * 3;
 /// union's. The wire carries the index, so this list's ORDER is the contract;
 /// reordering it re-points every plan already pushed.
 enum WatchRacePhasePreset { tenTenTen, negativeSplit, even }
+
+/// What closes a lap on the watch without a BTN5 press, in the firmware
+/// `AutoLap` enum's declaration order — which is also its wire discriminant,
+/// so this list's ORDER is the contract; reordering it re-points every
+/// trigger already pushed.
+///
+/// A closed catalogue rather than an arbitrary metre count because the
+/// watch's flash lap store holds 64 records: a 1 km trigger already overflows
+/// it on a 100 km run, the coarse rungs are what keep an ultra's splits
+/// inside it, and [off] is what lets a runner spend those records on splits
+/// they mark by hand. Each rung names its own unit — the watch has no km/mi
+/// preference to derive one from, so the phone, which does, picks the rung.
+enum WatchAutoLap { off, km1, mi1, km5, mi5, min5, min10, min30 }
 
 class WatchSettings {
   final int? maxHr;
@@ -169,6 +192,19 @@ class WatchSettings {
   /// than shipping a frame the watch will silently drop.
   final WatchIceCard? ice;
 
+  /// What closes a lap on the watch without a BTN5 press. Null leaves the
+  /// trigger the watch already holds standing — a phone that says nothing
+  /// must not put a race back on the 1 km default mid-run.
+  final WatchAutoLap? autoLap;
+
+  /// The fall in sea-level-reduced pressure, in hectopascals over the watch's
+  /// trend window, that raises the storm banner. Null leaves the watch's
+  /// current threshold standing; 0 disarms the banner — the same
+  /// present-field-carrying-a-zero-sentinel shape as [distanceIntervalM], so
+  /// the phone can turn the alert off and not only on. On the wire it travels
+  /// as tenths of a hectopascal.
+  final double? stormAlertHpa;
+
   const WatchSettings({
     this.maxHr,
     this.pacer,
@@ -186,10 +222,12 @@ class WatchSettings {
     this.guidedRunId,
     this.restingHr,
     this.ice,
+    this.autoLap,
+    this.stormAlertHpa,
   });
 
   Uint8List encode() {
-    var len = 7 + _crcLen;
+    var len = 8 + _crcLen;
     if (maxHr != null) len += 2;
     if (pacer != null) len += 8;
     if (gear != null) len += 8;
@@ -206,6 +244,8 @@ class WatchSettings {
     if (guidedRunId != null) len += guidedRunIdLen;
     if (restingHr != null) len += 2;
     if (ice != null) len += iceWireLen;
+    if (autoLap != null) len += 1;
+    if (stormAlertHpa != null) len += 2;
 
     final out = ByteData(len);
     out.setUint8(0, 0x53); // S
@@ -236,7 +276,12 @@ class WatchSettings {
     if (ice != null) flags2 |= _flag2Ice;
     out.setUint8(6, flags2);
 
-    var off = 7;
+    var flags3 = 0;
+    if (autoLap != null) flags3 |= _flag3AutoLap;
+    if (stormAlertHpa != null) flags3 |= _flag3StormAlert;
+    out.setUint8(7, flags3);
+
+    var off = 8;
     if (maxHr != null) {
       out.setUint16(off, maxHr!, Endian.little);
       off += 2;
@@ -322,6 +367,20 @@ class WatchSettings {
         out.setUint8(off, b);
         off += 1;
       }
+    }
+    if (autoLap != null) {
+      out.setUint8(off, autoLap!.index);
+      off += 1;
+    }
+    if (stormAlertHpa != null) {
+      // An armed threshold must never round down into the 0 disarm sentinel,
+      // however small it is: the watch would read "arm" as "off" and there
+      // would be nothing left to reject.
+      final tenths = stormAlertHpa! <= 0
+          ? 0
+          : (stormAlertHpa! * 10).round().clamp(1, 0xffff);
+      out.setUint16(off, tenths, Endian.little);
+      off += 2;
     }
 
     final frame = out.buffer.asUint8List();

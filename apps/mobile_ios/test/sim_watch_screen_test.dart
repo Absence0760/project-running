@@ -307,25 +307,31 @@ void main() {
       await tester.pump();
 
       expect(transport.settingsWrites, hasLength(1));
-      expect(transport.settingsWrites.single, hasLength(34));
-      expect(transport.settingsWrites.single.sublist(0, 7),
-          [0x53, 0x45, 0x54, 0x31, 0x06, 0x0f, 0x41]);
+      expect(transport.settingsWrites.single, hasLength(38));
+      expect(transport.settingsWrites.single.sublist(0, 8),
+          [0x53, 0x45, 0x54, 0x31, 0x08, 0x0f, 0x41, 0x03]);
       // The injected +5:45 phone zone rides as i16 LE 345, then the demo
-      // resting HR (the v5 TRIMP half), ahead of the crc32 trailer.
+      // resting HR (the v5 TRIMP half), the v7 auto-lap rung and the v8 storm
+      // threshold in tenths of a hPa, ahead of the crc32 trailer.
       expect(
-        transport.settingsWrites.single.sublist(26, 28),
+        transport.settingsWrites.single.sublist(27, 29),
         [0x59, 0x01],
       );
       expect(
-        transport.settingsWrites.single.sublist(28, 30),
+        transport.settingsWrites.single.sublist(29, 31),
         [0x32, 0x00],
       );
+      expect(transport.settingsWrites.single[31], 0x02);
+      expect(
+        transport.settingsWrites.single.sublist(32, 34),
+        [0x28, 0x00],
+      );
       final frame = transport.settingsWrites.single;
-      final trailer = frame[30] |
-          (frame[31] << 8) |
-          (frame[32] << 16) |
-          (frame[33] << 24);
-      expect(trailer, crc32(frame.sublist(0, 30)));
+      final trailer = frame[34] |
+          (frame[35] << 8) |
+          (frame[36] << 16) |
+          (frame[37] << 24);
+      expect(trailer, crc32(frame.sublist(0, 34)));
       expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });
   });
