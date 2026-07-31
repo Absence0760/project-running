@@ -41,7 +41,7 @@ pub enum Page {
     ///
     /// Each is gated on the runner having actually composed it
     /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
-    /// 37 built-ins and the cycle never carries a blank.
+    /// 38 built-ins and the cycle never carries a blank.
     Screen1,
     Screen2,
     Screen3,
@@ -380,13 +380,13 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 37 pages a forward-
+    /// wrapping from the first page back to the last. With 38 pages a forward-
     /// only walk needs up to ~36 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
     /// Which of the runner's composed screens this page shows, or `None` for
-    /// the 37 built-ins.
+    /// the 38 built-ins.
     ///
     /// The index into [`crate::screens::Screens`], so a page and the screen it
     /// draws are related by exactly one function rather than by four arms

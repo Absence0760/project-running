@@ -3989,7 +3989,7 @@ mod tests {
     }
 
     /// The cycle carries exactly the composed screens the runner has, and an
-    /// unpushed watch walks the 37 built-ins with no blank seats among them.
+    /// unpushed watch walks the 38 built-ins with no blank seats among them.
     #[test]
     fn the_cycle_carries_exactly_the_composed_screens() {
         let mut r = Recorder::new();

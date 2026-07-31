@@ -30,7 +30,7 @@ stateDiagram-v2
     Grid: one screenful of enabled pages + cursor
     Menu: Settings menu (modal, §351)
     Menu: GNSS mode / hide empty / profile
-    Menu: re-zero / medical ID
+    Menu: backyard / re-zero / medical ID
 
     [*] --> Idle
     Idle --> Idle: BTN3 tap — GNSS mode cycle
@@ -86,6 +86,15 @@ ever timed blind. A mark never moves the view: the runner is holding BTN5
 while reading some other page, and being yanked onto the Waypoint page would
 cost a press to undo.
 
+**BTN5 grew no third meaning for the backyard (§372).** In that mode its tap
+is still exactly the lap it always was — the mode simply *reads* the lap the
+press already closes as the runner's corral return, so a backyard runner's
+whole interaction with the format is the same key they would press anyway.
+The per-loop reset rides the same machinery from the other side: while the
+mode is armed the auto-lap fires on the corral bell instead of at 1 km, so a
+runner who marks nothing still gets one lap per hour and the loop count
+cannot silently merge two loops into one.
+
 ## The page cycle (§286 order, §284 filter)
 
 The paging pair walks this ring the way it is drawn — the ring renders
@@ -110,7 +119,7 @@ which `mask_from_wire` leaves *enabled* rather than hiding invisibly (§333)
 ```mermaid
 flowchart LR
     subgraph live [live run]
-        DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> ZONE --> SPLT --> PACR --> GUID --> WKT
+        DASH --> SC1 --> SC2 --> SC3 --> SC4 --> DIST --> PACE --> LAP --> YARD --> ZONE --> SPLT --> PACR --> GUID --> WKT
     end
     subgraph course [course / race ops]
         CLMB --> NAV --> TURN --> CUT --> ROAD --> FUEL
@@ -136,7 +145,12 @@ flowchart LR
 immediately after the Dashboard — a screen you built is one press from home —
 and each is gated on having actually been composed, so a watch that has never
 been pushed an `SCR1` frame walks straight `DASH --> DIST` and the ring is
-exactly the 37 built-ins. `BACK` stays last in every case.
+exactly the 38 built-ins. `BACK` stays last in every case.
+
+`YARD` is the backyard-ultra page (§ 372) and sits beside `LAP` because in
+that mode the lap IS the loop — the corral bell closes it. It carries no
+data-presence bit of its own: it is in the cycle exactly while the mode is
+armed, and off it entirely otherwise, so an ordinary run never meets it.
 
 The page grid (hold either paging key 0.5 s — it opens at the threshold, so
 the grid appearing is the hold's own feedback) shows this same ring as a
@@ -146,7 +160,7 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 37-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 38-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
 rather than truncating the tail (§333) — scroll depth `ceil(37/4) − 7` = 3 at
 the full built-in mask, and 4 on a watch carrying all four composed screens
@@ -184,28 +198,43 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Five items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+Six items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
 full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
 Trail → Ultra → Hike ladder, right toward the longer / more-battery
 activities, clamped; selecting a rung *applies* its preset — a curated page
 mask plus a GNSS mode — through the same channels a phone push and the quick
 cycle ride, and the row shows the last-applied profile, `--` until one is
-ever chosen), **RE-ZERO ALTITUDE** (right fires the idle hold's request and
-closes; the idle banner answers), **MEDICAL ID** (§358 — right closes the
-menu onto the ICE face, the same action-row shape; the card itself is the
-only useful confirmation the row did anything). The BTN4 idle walk reaches
+ever chosen), **BACKYARD** (§372 — right=ON / left=OFF, the HIDE EMPTY
+grammar; arming it puts the `YARD` page in the cycle and re-points the
+auto-lap from 1 km onto the corral bell, which is why it is idle-only: a run
+has to be wholly inside the mode or wholly outside it), **RE-ZERO ALTITUDE**
+(right fires the idle hold's request and closes; the idle banner answers),
+**MEDICAL ID** (§358 — right closes the menu onto the ICE face, the same
+action-row shape; the card itself is the only useful confirmation the row did
+anything). The BTN4 idle walk reaches
 that face too, but only for someone who already knows it is there — the
 named row is how a runner discovers the card exists and checks it before a
 race. Value rows keep the menu open — the row
 re-rendering with the new value is the confirmation. Every press inside is
 swallowed, the menu is idle-only, and 30 s of inactivity closes it because it
-covers the home clock. The GNSS mode, the hide-empty choice, and the profile
-selection all persist in the CFG1 flash record and restore at boot (the
-profile restore re-applies its page preset) — whichever side wrote last,
-menu or phone push, wins the reboot. The five-item ring holds the §351 cost
-bound: the farthest row is still ≤ 2 cursor steps (the ring wraps both ways),
-so any setting change stays ≤ 4 presses. A sixth item would break it — that
-is the budget the menu is sized against, not the row count.
+covers the home clock. The GNSS mode, the hide-empty choice, the profile
+selection and the backyard arm all persist in the CFG1 flash record and
+restore at boot (the profile restore re-applies its page preset) — whichever
+side wrote last, menu or phone push, wins the reboot.
+
+**The §351 cost bound survived the sixth row, and the amendment is worth
+stating precisely.** The original wording said a sixth item would break the
+"≤ 2 cursor steps, so ≤ 4 presses" bound. It does not, because the row went
+in at index 3 — the ring's far point — and a 6-ring's step distances from the
+cursor's home are `[0,1,2,3,2,1]` against the 5-ring's `[0,1,2,2,1]`: **every
+pre-existing row keeps its exact cost**, and the new maximum of 3 steps (5
+presses) belongs to the one row a runner touches once per race rather than
+once per hour. That is the real budget: not the row count, but that no row a
+runner reaches for *mid-race* costs more than 4 presses. A seventh item would
+raise an existing row's cost, and it also has nowhere to go — six rows under
+two chrome rows and a spacer fills the 9-row panel exactly (a test pins
+`MENU_TOP_ROW + MENU_ITEMS == ROWS`), so a seventh needs a layout, not a
+push.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
@@ -229,17 +258,19 @@ no-chord grammar.
 | Pause / resume | 1 tap (BTN1) | yes |
 | Manual lap (doubles as workout-step skip when a workout is armed, §354) | 1 tap (BTN5) | yes |
 | Mark a waypoint mid-run (§357) | 1 hold (0.5 s, BTN5) | yes — the only gesture the grammar had free |
+| Mark a corral return in a backyard (§372) | 1 tap (BTN5) | yes — it IS the lap press; the mode reads the lap it already closes rather than claiming a new edge |
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the `StopGuard` trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 37 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 38 pages | ≤ 7 actions, avg 4.1 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
 | Diagnostics view | 1 tap (idle BTN4) | yes |
 | ICE / medical-ID face (§358) | 2 taps (idle BTN4 ×2), or 3 via the menu's named row (BTN5, BTN2 up-wraps to it, BTN1) | **deliberately +1** — the third face on a one-way walk; the named row costs one more press and buys the discoverability a blind walk cannot |
 | Open settings | 1 tap (idle BTN5) | yes |
-| Change any setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
+| Change any mid-race setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
+| Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | **deliberately +1** — the ring's far seat, given to the one row a runner touches once per race rather than once per hour, so no existing row's cost moved |
 
 Everything that can be one press is one press; the only interaction above
 its floor is the stop, on purpose. The remaining lever on the page-cycle
@@ -342,7 +373,7 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 37 pages: `LOAD`/`ROAD`
+  page's full name, because four glyphs cannot separate 38 pages: `LOAD`/`ROAD`
   and `PACE`/`PACR` are one Levenshtein edit apart and `REDY`/`RDAY` and
   `PACR`/`RCAP` are transpositions (computed over all 666 code pairs at 37
   pages; the figure was 595 at 35, and is 820 across the full 41-code set once

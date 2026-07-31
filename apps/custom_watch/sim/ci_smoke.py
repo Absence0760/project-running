@@ -374,7 +374,7 @@ IDLE_FACES = ("Home", "Diagnostics", "Ice")
 # `settings_menu::ITEMS` order. Hard-coded rather than derived because the
 # ORDER is the contract the runner's thumb learns — a reordering that both the
 # firmware and a derived expectation followed would assert nothing.
-MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "QnhRezero", "Ice")
+MENU_ROWS = ("GnssMode", "HideEmpty", "Profile", "Backyard", "QnhRezero", "Ice")
 # A menu press lands in well under a second (the button task polls at 50 Hz);
 # 10 s is an order of magnitude of headroom for a loaded runner without making
 # an expected-silent press — a ladder clamped at its end — cost half a minute.
@@ -2036,7 +2036,7 @@ def scenario_idle(sim):
     past by design"); this is the one that does not.
 
     Two rails share one boot. The menu: BTN5 opens it and it reaches the panel,
-    BTN3 walks all five rows in their documented order and wraps, BTN2 walks
+    BTN3 walks all six rows in their documented order and wraps, BTN2 walks
     back, an edit on the GNSS row moves the ladder, BTN4 closes it. Then the
     three faces BTN4 walks — Home, Diagnostics, and the §358 ICE card a
     responder reads off a collapsed runner's wrist — each rendering a distinct
@@ -2058,7 +2058,7 @@ def scenario_idle(sim):
     is a flash claim and this scenario never power-cycles the emulator; the
     menu's own writes are best-effort / L4 by design (a flash error warns and
     the edit still applies), so a green run here says nothing about what comes
-    back after a brown-out. Nor legibility — five rows on a 168x144 1-bit panel
+    back after a brown-out. Nor legibility — six rows on a 168x144 1-bit panel
     read at 45 cm is a step-4 bench claim, per quality_standards.md.
     """
     # No `require_recording` — the opposite. The idle face only exists because
