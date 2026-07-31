@@ -790,6 +790,66 @@ watch.** The primitives exist, but the affordance is a settings-menu row plus a
 destructive-action confirm, which moves the published press-cost model — a
 navigation change as much as a privacy one, and owed in that lane.
 
+## 2026-07-31 — the phone catches up: `SET1` v6 → v8, and the two fields that were only ever half-built
+
+Two firmware versions had shipped with the phone's encoder standing still. `settings.rs` was
+at **v8**; `watch_settings.dart` was at **v6**. That is not a cosmetic lag — it is the difference
+between a feature existing and a feature being reachable. The § 374 auto-lap trigger and the § 376
+storm-alert threshold were both on the wire, both decoded, both honoured by the recorder and the
+alert engine, and neither could be set by anything a runner touches. Both ADRs said so in their own
+"still owed" lines; this entry closes both.
+
+**Nothing about the format was designed here — it was mirrored.** `settings.rs` is the authority and
+the Dart side is a port, so the work was reading it exactly: the third presence byte `flags3` in the
+header (every v8 frame carries all three, even all-zero), the auto-lap rung as one raw byte on bit 0,
+the storm threshold as a `u16` of **tenths** of a hectopascal on bit 1, both after the 92-byte ICE
+card, then the CRC32 over everything before it. A fully-populated push is now **196 bytes** — four
+more than v6, still one write inside the 256-byte ATT MTU, ~60 bytes of headroom left rather than
+~64.
+
+**Two shapes had to be chosen rather than copied, and both followed precedent already in the file.**
+The trigger is a `WatchAutoLap` enum whose declaration order IS its wire discriminant, which is the
+`WatchRacePhasePreset` drill from v4 and carries the same warning: reordering it re-points every
+trigger a phone has already pushed. The threshold is where the two languages genuinely differ —
+Rust models it as `Option<Option<f32>>`, an absent field versus a present disarm versus a present
+arm, and Dart has no second layer of optionality to spend on it. It flattens to a nullable `double`
+over a zero sentinel, exactly as `distanceIntervalM` and `timeIntervalS` already do: null leaves the
+watch's threshold standing, `0` disarms the banner, positive arms it. The one guard that had to be
+carried across by hand is the floor: an armed threshold rounds up to at least one tenth, because a
+value small enough to round to zero would arrive as the **disarm** and there would be nothing left
+downstream to reject it — arm silently becoming off, which is the failure mode a fail-closed decoder
+cannot catch.
+
+**The version byte stays a constant, and that is the whole of the v8-discipline mirror.** § 376 spent
+a version bump `flags3`'s six free bits did not require, because an unknown presence bit is how
+`decode` tells a corrupt push from a newer one, and that only holds while a version names exactly one
+field set — so a v7-stamped frame carrying the v8 bit is refused whole. The phone's half of that
+contract is simply that it never derives the stamp from which fields happen to be set. A test walks
+an empty frame, a v1-field frame, a v7-field frame and a v8-field frame and asserts byte 4 is `0x08`
+on all four: the phone cannot construct the frame the watch refuses.
+
+**Evidence.** Five golden vectors are byte-identical to the firmware's own `settings.rs` tests — the
+fully-populated 196-byte frame (which carries both new fields at their real offsets, `0x02` for the
+`1MI` rung and `0x2800` for 4.0 hPa, under CRC `1c26d5df`) plus the v4-arms, resting-HR, ICE and
+timezone vectors, each of which moved when the header grew. The remaining 37 are Dart-side and were
+re-derived through the same CRC-32 the run-sync path already shares with `run_store`; every one of
+them is additionally checked *as* a checksum rather than only as a literal. `watch_settings_test.dart`
+goes 32 → 38 tests, mirrored byte-identically to the iOS twin per § 39.
+
+**Reachability, and one thing that deliberately did not get built.** The only push surface is the
+dev-only Sim Watch screen (§ 209), and its demo frame now carries both fields — the `1MI` rung and
+the 4 hPa storm centre — so the bench has something to measure against the day the parts arrive.
+That is **not** the runner-facing threshold control § 376 refused, and it should not be read as one:
+§ 376's argument was that letting a runner tune a number whose centre nobody has validated is
+guessing twice, and that still stands. A fixed dev value on a screen with no product surface is the
+opposite claim — it exists so the constant can eventually be *checked*.
+
+**Rung: host-tested, and not by us.** The Dart suite is CI's to run — this workstation OOMs on
+`flutter test`, and no test run backs this entry locally. What was verified here is narrower and
+worth stating precisely: the golden bytes were computed by an independent encoder and validated
+against five Rust vectors it had no part in producing, and twin parity was checked with `diff -rq`.
+No Rust changed. Nothing here has executed on silicon; § 82 is untouched.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

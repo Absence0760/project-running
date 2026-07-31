@@ -5267,6 +5267,8 @@ It is **not** a § 351 idle-settings-menu row, and the reason is what the settin
 
 **Still owed:** the phone-side encoder. `watch_settings.dart` still emits v7's predecessor, so the field is on the wire and honoured by the firmware but not yet reachable from the app — a single optional field plus its golden-vector bytes, on both twins. Nothing here is bench-verified; § 82 outranks all of it.
 
+**That debt was paid on 2026-07-31, at v8 rather than v7** — recorded here because the paragraph above names a version the encoder skipped. By the time the phone caught up, § 376's storm threshold had taken `flags3` bit 1, so `watch_settings.dart` and its iOS twin went straight to the current version; a v7 frame is now something only the firmware's decoder will ever see. The trigger crosses as a `WatchAutoLap` enum whose declaration order IS the wire discriminant — the `WatchRacePhasePreset` drill, and the same reason: a reorder re-points every trigger already pushed. Nothing about the rung guard moved: the byte still travels raw and `settings_apply` still refuses one that names no rung. The bench claim is unchanged — § 82 still outranks all of it.
+
 ## 375. A countdown timer and a stopwatch are honest on a watch with no buzzer; an alarm and a find-my-phone are not
 
 **Date:** 2026-07-30
