@@ -413,6 +413,53 @@ Four host tests (three-day + one-day projections, the already-recovered and the 
 suppressions) plus an assertion on the existing no-load case. **Garmin's Training Status is not
 built and is not owed** — web has no such classification, so § 24 forbids the watch pioneering one.
 Host-tested only; no scenario arms the Fitness page.
+## 2026-07-30 — the structured-workout rail gets a guard instead of a memory
+
+`ci_smoke.py` grows an eighth scenario, `workout` ([§ 371](../architecture/decisions.md)), closing the
+last major run-view rail that had no asserted one. The § 354 runner's *sim-verified* rung had been
+earned on 2026-07-28 by walking the sim's demo workout **by hand** under `bench_jog` — real evidence,
+and worth nothing two days later, because nothing re-ran it. A hand session certifies the afternoon
+it happened; only a scenario certifies the branch.
+
+Everything that session watched is now asserted on every PR, in the order the run produces it: the
+pushed step list arms the recorder over the same `state::WORKOUT` channel a phone's `WKT1` push lands
+on (`record: workout armed (5 steps)`, which is the *receive* — the queue line beside it is only the
+send); the Workout page enters the BTN4 cycle and renders; the runner auto-advances **in order over
+both end axes**, which the demo plan is shaped to demand (60 / 50 / 50 / 60 m distance steps around a
+30 s duration recovery, so a runner that settles only one axis stalls partway and reports a short
+sequence rather than a wrong one); exactly **one** end-of-step warning fires, in the recovery; a BTN5
+lap press skips the active step and then completes the workout; the runner raises no sixth transition
+for a five-step plan; and the finished trail flushes into the run blob with no step or summary
+dropped — the loss paths are asserted *absent*, which is the only form that claim can take, since
+`push_step_result`'s happy path is silent by design.
+
+Two of those needed conditions the other scenarios do not have, and both are the § 371 record.
+**The skip is timed on the firmware's virtual clock**, because its observable is the observable the
+auto-advance produces for free: press BTN5 and wait for a transition, and a firmware whose press does
+nothing passes — the step ends anyway. On this fixture the displaced steps need ~33 s and ~40 s to
+settle (credited distance accrues at ~1.5 m/s), and the press's edge landed at **0.6 s and 0.4 s**.
+Wall clock could not carry that bound: Renode's virtual clock runs at a ratio to wall time that
+swings with host load, so the gap is read off the decoded stream's own timestamps, the discipline
+`dropout` adopted for its void. **And the warning COUNT needs an empty alert slot**, so the session
+boots `--no-alerts`: with the sim's shortened fuel / distance / time / pace arms in the single slot,
+"exactly one" is a count of traffic rather than a claim about `ENDING_MIN_STEP_M` = 100 m and
+`ENDING_MIN_STEP_S` = 20 s. It also keeps a fuel banner off the two page dumps, which a banner would
+otherwise own.
+
+**Verified to fail as well as pass, on both halves.** Deleting `Recorder::lap`'s `skip_step()` call
+turns the skip assertion red at *30.4 s of virtual time* with the auto-advance named as the cause;
+dropping `ENDING_MIN_STEP_M` from 100 m to 10 m turns the count assertion red at three warnings, and
+the log then shows precisely the defect that gate's own doc comment exists to prevent — a 50 m step is
+already inside the 50 m warning window when it starts, so the runner is told a step is ending 0.9 s
+after it began. The wait for the skipped edge is deliberately **longer** than the step it displaces so
+that the red is *useful*: the first version used a 30 s wait and failed on a bare "no line matched"
+timeout, which says only that something did not arrive. Both sabotages were reverted; no firmware
+behaviour moved in this batch.
+
+CI: the `sim-scenarios` job gains a seventh step (`--budget 300`, the same as its siblings — the
+unaided walk reaches the fourth transition at ~110 s of virtual time and the whole scenario measures
+**2m13** on the authoring workstation), and its cap tracks the budget sum as always, 45 → 50 min.
+Every assertion green in one pass locally under Renode 1.16.1.
 
 ## Next entry expected
 
