@@ -24,7 +24,7 @@ stateDiagram-v2
     Ice: name / blood / conditions
     Ice: emergency contact + number
     Run: Run view
-    Run: 40 built-in pages + up to 4 composed (§364), filtered mask
+    Run: 41 built-in pages + up to 4 composed (§364), filtered mask
     Grid: Page grid (modal)
     Grid: button legend + cursor page name
     Grid: one screenful of enabled pages + cursor
@@ -159,7 +159,7 @@ flowchart LR
 immediately after the Dashboard — a screen you built is one press from home —
 and each is gated on having actually been composed, so a watch that has never
 been pushed an `SCR1` frame walks straight `DASH --> DIST` and the ring is
-exactly the 40 built-ins. `BACK` stays last in every case.
+exactly the 41 built-ins. `BACK` stays last in every case.
 
 `YARD` is the backyard-ultra page (§ 372) and sits beside `LAP` because in
 that mode the lap IS the loop — the corral bell closes it. It carries no
@@ -174,15 +174,15 @@ backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
 name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
-therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 40-page ring, so it
+therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 41-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
-rather than truncating the tail (§333) — scroll depth `ceil(40/4) − 7` = 3 at
-the full built-in mask, and 4 on a watch carrying all four composed screens
-(`ceil(44/4) − 7`). Under the everyday filtered mask (~12 pages, 3 rows) the
+rather than truncating the tail (§333) — scroll depth `ceil(41/4) − 7` = 4 at
+the full built-in mask, and 5 on a watch carrying all four composed screens
+(`ceil(45/4) − 7`). Under the everyday filtered mask (~12 pages, 3 rows) the
 whole enabled set fits and nothing scrolls.
 
-The chrome is what makes the modal honest about itself. 40 codes need
-`ceil(40/4)` = 10 rows against a panel of 9 (144 px / 16 px) — 11 at 44 — so the ring has
+The chrome is what makes the modal honest about itself. 41 codes need
+`ceil(41/4)` = 11 rows against a panel of 9 (144 px / 16 px) — 12 at 45 — so the ring has
 not merely filled the screen — it now outruns it even with no chrome at all,
 which is precisely what §333's window was built for. Every chrome row is
 bought from body capacity, which only
@@ -331,8 +331,8 @@ no-chord grammar.
 | Stop | 2 taps (BTN2 ×2, 4 s window) | **deliberately +1** — the `StopGuard` trade: one extra press vs. a brushed sleeve ending a 100-mile recording |
 | Dismiss a finished run | 1 tap (BTN1) | yes |
 | Page one step left / right | 1 tap (BTN3 / BTN4) | yes |
-| Any of 40 built-in pages | ≤ 7 actions, avg 4.3 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
-| Any of 44, on a fully-composed watch | ≤ 8 actions, avg 4.5 | the four §364 seats now cost the published ceiling one press — see below |
+| Any of 41 built-in pages | ≤ 7 actions, avg 4.3 (table below); ≤ 4 / ~2.2 on a typical curated mask | computed optimum for the grammar |
+| Any of 45, on a fully-composed watch | ≤ 8 actions, avg 4.6 | the four §364 seats cost the published ceiling one press — see below |
 | Open the page grid | 1 hold (0.5 s, either paging key) | yes |
 | GNSS mode, quick path | 1 tap per step (idle BTN3) | yes |
 | QNH re-zero, quick path | 1 hold (idle BTN3) | yes |
@@ -351,14 +351,14 @@ its floor is the stop, on purpose. The remaining lever on the page-cycle
 average is the phone-side mask curation (§284), which is a content decision,
 not a grammar one.
 
-## Press cost — computed, from the Dashboard, full 40-page mask
+## Press cost — computed, from the Dashboard, full 41-page mask
 
-**The table below is the 40 built-in pages.** A runner's composed data screens
+**The table below is the 41 built-in pages.** A runner's composed data screens
 (§ 364) add up to four more seats immediately after the Dashboard, and
 `screens::MAX_SCREENS` is 4 because § 289's model is a function of page count
 alone, so the cap is what bounds the cycle a real watch walks. The composed
 pages are gated on having actually been composed, so the shipped default cycle
-*is* the 40 the table computes; a watch that has never been pushed a screen
+*is* the 41 the table computes; a watch that has never been pushed a screen
 walks exactly these numbers.
 
 **Three pages landed at once on 2026-07-30 — §373's `SLP`, §375's `TIMR`,
@@ -370,9 +370,10 @@ and re-validated against this section's own n=32 table first (16 / 8.0,
 n = 32…50 in one pass.
 
 **The published symmetric ceiling of 7 no longer covers a fully-composed
-watch, and that is the honest headline of this recompute.** At 40 built-ins
-the symmetric worst is still 7; at 40 + 4 = **44** it steps to **8**, and 44
-is exactly where `MAX_SCREENS` = 4 now lands. The earlier claim that "it is
+watch, and that is the honest headline of this recompute.** At 41 built-ins
+(§ 376's `BARO` joined on 2026-07-31) the symmetric worst is still 7; it
+stepped to **8** at 40 + 4 = **44**, and 41 + 4 = **45** sits past that step
+without moving it again. The earlier claim that "it is
 the *cap*, not the table, that keeps this section's published number true"
 was correct at 38 + 4 = 42 and is **false at 44** — the cap no longer buys the
 margin it was chosen for, because three pages arrived where the model had
@@ -398,12 +399,12 @@ worse than the linear row, and why the grid's own worst *cell* is not the worst
 
 | Mechanism | Worst page | Average |
 |---|---|---|
-| Linear walk only (pre-§288) | 20 | 10.0 |
-| + grid, forward-only movement (§288 as first built) | 10 | 5.55 |
-| + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.25** |
+| Linear walk only (pre-§288) | 20 | 10.2439 |
+| + grid, forward-only movement (§288 as first built) | 10 | 5.6585 |
+| + grid, symmetric ±1/±4 (§289; §350 keys) | **7** | **4.2927** |
 
-And the same three rows for the 44-page ring a fully-composed watch walks:
-linear **22 / 11.0**, forward-only **11 / 5.9545**, symmetric **8 / 4.5**.
+And the same three rows for the 45-page ring a fully-composed watch walks:
+linear **22 / 11.2444**, forward-only **11 / 6.0667**, symmetric **8 / 4.5778**.
 
 Every figure is **computed from the cycle and cursor rules, not hand-measured**:
 a breadth-first search over the cursor's move set on the enabled cycle
@@ -414,12 +415,13 @@ validated by reproducing the pre-page-33 table exactly at `n = 32` — 16 / 8.0,
 9 / 4.7188, 6 / 3.7188 — so the table above re-derives the original measurement
 at the new page count rather than replacing it with a fresh estimate.
 
-The symmetric average across pages 33–40 runs 3.7188 → 3.7576 → 3.8235 →
-3.8857 → 3.9722 → 4.0541 → 4.0789 → 4.1538 → 4.25, and the forward-only one
-4.7188 → 4.8182 → 4.9118 → 5.0286 → 5.1389 → 5.2432 → 5.3421 → 5.4359 →
-5.55. The linear worst grows 16 → 17 at page 34 (an even ring's antipode),
-17 → 18 at 36, 18 → 19 at 38 and 19 → 20 at 40 — a step every second page,
-which is what an antipode does.
+The symmetric average across pages 33–41 runs 3.7188 → 3.7576 → 3.8235 →
+3.8857 → 3.9722 → 4.0541 → 4.0789 → 4.1538 → 4.25 → 4.2927, and the
+forward-only one 4.7188 → 4.8182 → 4.9118 → 5.0286 → 5.1389 → 5.2432 →
+5.3421 → 5.4359 → 5.55 → 5.6585. The linear worst grows 16 → 17 at page 34
+(an even ring's antipode), 17 → 18 at 36, 18 → 19 at 38 and 19 → 20 at 40 — a
+step every second page, which is what an antipode does, and 41 holds at 20
+because an odd ring's furthest page is the one before its antipode.
 
 **Where each grid worst actually steps, computed once for the whole ladder:**
 the symmetric worst went 6 → 7 at page 36 (§357's Waypoint) and steps 7 → 8
@@ -427,12 +429,14 @@ at page **44**; the forward-only worst went 9 → 10 at page 37 (§359's Climb)
 and steps 10 → 11 at page **42**. Five `{±1, ±4}` moves cover 37 distinct
 offsets — everything within ±20 except the gaps the ±4 stride leaves near the
 edges — so a 36-page ring was the first whose furthest cell fell outside them
-and needed a sixth move at `1 + 6 = 7`. **None of the three pages added on
-2026-07-30 moves a grid worst on the built-in ring**: 38, 39 and 40 all sit
-between the steps, so `SLP`, `TIMR` and `YARD` are pages the grid absorbs and
-only the linear walk and the averages paid for them. What they moved is the
-*margin*: at 37 built-ins the symmetric step sat seven pages out, at 40 it
-sits four — and the four composed seats reach it exactly.
+and needed a sixth move at `1 + 6 = 7`. **Neither the three pages added on
+2026-07-30 nor § 376's `BARO` the day after moves a grid worst on the built-in
+ring**: 38, 39, 40 and 41 all sit between the steps, so `SLP`, `TIMR`, `YARD`
+and `BARO` are pages the grid absorbs and only the linear walk and the
+averages paid for them. What they moved is the *margin*: at 37 built-ins the
+symmetric step sat seven pages out, at 41 it sits three — and the four
+composed seats now carry the ring past it to 45, where the fully-composed
+worst is 8.
 
 The everyday cost is unchanged and is the number a runner actually
 experiences: the filtered mask is ~12 pages, symmetric worst 4, average
@@ -474,14 +478,16 @@ removes.
   read, not discovered; the run view's `STOP? BTN2` banner picks the chain up on
   the other side. The legend is static, so it can never dirty a panel line.
 - **No jump commits off a code alone** (§337). Row 1 spells out the cursor
-  page's full name, because four glyphs cannot separate 40 pages: `LOAD`/`ROAD`,
+  page's full name, because four glyphs cannot separate 41 pages: `LOAD`/`ROAD`,
   `PACE`/`PACR` and `WKT`/`WPT` are one Levenshtein edit apart and `REDY`/`RDAY`
-  and `PACR`/`RCAP` are transpositions (computed over all 780 code pairs at 40
-  pages; the figure was 666 at 37 and 595 at 35, and is 946 across the full
-  44-code set once the four composed screens carry `SC1`–`SC4`). §375's `TIMR`
-  and §372's `YARD` add no new near-collision — each one's nearest neighbour is
-  three edits away — but they do not need to: the row exists because *some* pair
-  always will. Both the 3 s auto-select and BTN1 therefore commit on something
+  and `PACR`/`RCAP` are transpositions (computed over all 820 code pairs at 41
+  pages; the figure was 666 at 37 and 595 at 35, and is 990 across the full
+  45-code set once the four composed screens carry `SC1`–`SC4`). §375's `TIMR`,
+  §372's `YARD` and §376's `BARO` add no new near-collision — each one's nearest
+  neighbour is at least two edits away, and `BARO` was chosen over the obvious
+  `STRM` for exactly that reason (`STRM`/`STRK` would have been one substitution
+  apart, and Streaks is a page nobody looking for the weather wants to land on)
+  — but they do not need to: the row exists because *some* pair always will. Both the 3 s auto-select and BTN1 therefore commit on something
   the runner has read.
 - **No cell can land on the chrome rows** — the cursor box is drawn from
   `GRID_TOP_ROW`, and `window_origin_row` derives from `GRID_BODY_ROWS`, so
