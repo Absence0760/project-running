@@ -54,6 +54,12 @@ pub enum Page {
     /// Current lap time up large, with lap number / last-lap split / lap
     /// distance / HR as context.
     Lap,
+    /// The corral bell's countdown up large, with the loop count, the corral
+    /// state and the projected return margin as context
+    /// ([`crate::backyard`], § 372). Sits beside [`Page::Lap`] because in this
+    /// mode the lap IS the loop — the bell closes it — so the two pages read
+    /// the same boundary from opposite ends; only an armed watch carries it.
+    Backyard,
     /// Current HR up large, with the live zone and the per-zone moving-time
     /// breakdown as context.
     Zones,
@@ -203,6 +209,7 @@ impl Page {
             Page::Distance => "DIST",
             Page::Pace => "PACE",
             Page::Lap => "LAP",
+            Page::Backyard => "YARD",
             Page::Zones => "ZONE",
             Page::Splits => "SPLT",
             Page::Pacer => "PACR",
@@ -253,6 +260,7 @@ impl Page {
             Page::Distance => "DISTANCE",
             Page::Pace => "PACE",
             Page::Lap => "LAP TIME",
+            Page::Backyard => "BACKYARD",
             Page::Zones => "HR ZONES",
             Page::Splits => "PACE SPLITS",
             Page::Pacer => "VIRTUAL PARTNER",
@@ -333,7 +341,8 @@ impl Page {
             Page::Screen4 => Page::Distance,
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
-            Page::Lap => Page::Zones,
+            Page::Lap => Page::Backyard,
+            Page::Backyard => Page::Zones,
             Page::Zones => Page::Splits,
             Page::Splits => Page::Pacer,
             Page::Pacer => Page::GuidedRun,
@@ -439,7 +448,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 41] = [
+    const ALL: [Page; 42] = [
         Page::Dashboard,
         Page::Screen1,
         Page::Screen2,
@@ -448,6 +457,7 @@ mod tests {
         Page::Distance,
         Page::Pace,
         Page::Lap,
+        Page::Backyard,
         Page::Zones,
         Page::Splits,
         Page::Pacer,
@@ -492,7 +502,12 @@ mod tests {
         assert_eq!(Page::Screen1.next(), Page::Screen2);
         assert_eq!(Page::Screen4.next(), Page::Distance);
         assert_eq!(Page::Pace.next(), Page::Lap);
-        assert_eq!(Page::Lap.next(), Page::Zones);
+        assert_eq!(
+            Page::Lap.next(),
+            Page::Backyard,
+            "the bell page reads the same boundary the lap page does"
+        );
+        assert_eq!(Page::Backyard.next(), Page::Zones);
         assert_eq!(Page::Splits.next(), Page::Pacer);
         assert_eq!(
             Page::Pacer.next(),

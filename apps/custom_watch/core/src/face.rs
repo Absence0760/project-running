@@ -366,6 +366,7 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::DistanceBand
         | Page::GearWear
         | Page::Fitness
+        | Page::Backyard
         | Page::Daylight => TALL_HERO_BAND_ROWS,
         Page::Dashboard
         | Page::Zones
@@ -739,6 +740,9 @@ pub fn page_rows(
             Page::Daylight => daylight_glance(fix, tag, uptime_s, animate, mode, tz_offset_min),
             Page::Waypoint => waypoint_glance(fix, snap, tb, tag, uptime_s, animate, mode),
             Page::Climb => climb_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Backyard => {
+                backyard_glance(fix, snap, tag, uptime_s, animate, mode, tz_offset_min)
+            }
         },
     }
 }
@@ -835,10 +839,11 @@ pub enum Metric {
     AutoEffortMatched,
     RouteElevTotal,
     RaceDayDays,
+    BackyardBell,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=34`.
+    /// This metric's byte on the `SCR1` wire, in `1..=35`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -885,6 +890,7 @@ impl Metric {
             Metric::AutoEffortMatched => 32,
             Metric::RouteElevTotal => 33,
             Metric::RaceDayDays => 34,
+            Metric::BackyardBell => 35,
         }
     }
 
@@ -931,6 +937,7 @@ impl Metric {
             32 => Metric::AutoEffortMatched,
             33 => Metric::RouteElevTotal,
             34 => Metric::RaceDayDays,
+            35 => Metric::BackyardBell,
             _ => return None,
         })
     }
@@ -977,6 +984,7 @@ impl Metric {
             Metric::AutoEffortMatched => "auto_effort_matched",
             Metric::RouteElevTotal => "route_elev_total",
             Metric::RaceDayDays => "race_day_days",
+            Metric::BackyardBell => "backyard_bell",
         }
     }
 
@@ -1023,6 +1031,7 @@ impl Metric {
             Metric::AutoEffortMatched => "SEG",
             Metric::RouteElevTotal => "ROUTE",
             Metric::RaceDayDays => "RACE",
+            Metric::BackyardBell => "BELL",
         }
     }
 }
@@ -1074,6 +1083,7 @@ pub const fn hero_metric(page: Page) -> Option<Metric> {
         Page::AutoEffort => Metric::AutoEffortMatched,
         Page::RouteElev => Metric::RouteElevTotal,
         Page::RaceDay => Metric::RaceDayDays,
+        Page::Backyard => Metric::BackyardBell,
     })
 }
 
@@ -1214,6 +1224,15 @@ pub fn metric_unfed(
         Metric::AutoEffortMatched => snap.auto_effort.is_none().then_some(Unfed::NotSynced),
         Metric::RouteElevTotal => snap.route_elev.is_none().then_some(Unfed::NotSynced),
         Metric::RaceDayDays => snap.race_day.is_none().then_some(Unfed::NotSynced),
+        // The bell needs a timezone AND a receiver clock, and the two absences
+        // are different remedies — exactly the split the Daylight countdown
+        // draws, for the same reason: an hour boundary read against the wrong
+        // midnight is thirty minutes wrong in a half-hour-offset zone.
+        Metric::BackyardBell => match snap.backyard.and_then(|b| b.to_bell_s) {
+            Some(_) => None,
+            None if tz_offset_min.is_none() => Some(Unfed::NotSynced),
+            None => Some(Unfed::AwaitingFix),
+        },
     }
 }
 
@@ -1678,6 +1697,16 @@ pub fn metric_hero(
             }
             row
         }
+        // The countdown to the corral bell. A full window reads `60:00`, which
+        // is the format's own number and not an overflow.
+        Metric::BackyardBell => match snap.backyard.and_then(|b| b.to_bell_s) {
+            Some(s) => split_row(s),
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--:--");
+                row
+            }
+        },
     }
 }
 
@@ -1779,6 +1808,7 @@ pub fn metric_unit(
         | Metric::PlanReplanChanges
         | Metric::PlanAdaptiveChanges
         | Metric::ReadinessScore
+        | Metric::BackyardBell
         | Metric::AutoEffortMatched => None,
     }
 }
@@ -3683,6 +3713,85 @@ fn climb_glance(
     rows
 }
 
+/// The backyard-ultra glance (§372): the countdown to the corral bell up large
+/// in the tall hero, then the loop count — the stat the format is scored on —
+/// the corral state, and the projected return margin.
+///
+/// The countdown leads rather than the loop count on purpose. The loop count
+/// is what a backyard runner *reports*, and it changes once an hour; the
+/// margin to the bell is what they *act on*, and it changes every second. A
+/// hero is for the number a glance is spent on.
+///
+/// The margin row is the page's honesty seam. On the loop it reads a signed
+/// projection, and `--` whenever the projection has no ground to stand on — an
+/// unlearned loop (loop 1) or no live pace. In the corral it is replaced
+/// outright, because there is nothing left to project: the countdown in the
+/// hero already IS the rest the runner has.
+#[allow(clippy::too_many_arguments)]
+fn backyard_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+    tz_offset_min: Option<i16>,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let Some(b) = snap.backyard.filter(|b| b.to_bell_s.is_some()) else {
+        let why = if tz_offset_min.is_none() {
+            Unfed::NotSynced
+        } else {
+            Unfed::AwaitingFix
+        };
+        write_unfed(&mut rows, Page::Backyard, "BACKYARD", why);
+        if tag_shown(tag, uptime_s, animate) {
+            write_tag(&mut rows[body_top_row(Page::Backyard)], tag);
+        }
+        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+        return rows;
+    };
+
+    let _ = write!(rows[3], "{:<10}{}", "LOOP", b.loops);
+    let _ = rows[4].push_str(if b.in_corral { "IN CORRAL" } else { "ON LOOP" });
+    if !b.in_corral {
+        match b.return_margin_s {
+            Some(m) => {
+                let _ = write!(rows[5], "{:<10}{}", "MARGIN", signed_split(m).as_str());
+            }
+            None => {
+                let _ = write!(rows[5], "{:<10}--", "MARGIN");
+            }
+        }
+    }
+    let _ = write!(
+        rows[6],
+        "{:<10}{:.2} KM",
+        "THIS LOOP",
+        (b.loop_progress_m / 1000.0).min(99.99)
+    );
+    match b.loop_distance_m {
+        Some(m) => {
+            let _ = write!(
+                rows[7],
+                "{:<10}{:.2} KM",
+                "LOOP LEN",
+                (m / 1000.0).min(99.99)
+            );
+        }
+        None => {
+            let _ = write!(rows[7], "{:<10}--", "LOOP LEN");
+        }
+    }
+
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(Page::Backyard)], tag);
+    }
+    write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
+    rows
+}
+
 /// The marked-waypoint page (§357): distance to the NEWEST mark up large,
 /// then the same heading / bearing pair [`back_to_start_glance`] shows — the
 /// two pages answer "which way, and how far" about different anchors, so they
@@ -4330,6 +4439,7 @@ mod tests {
             state,
             manual_paused: false,
             signal_lost: false,
+            backyard: None,
             distance_m,
             elapsed_s: 0,
             moving_s: 0,
@@ -4986,7 +5096,7 @@ mod tests {
         }
         assert_eq!(
             headed.len(),
-            34,
+            35,
             "the catalogue and the pages that head it have drifted: {headed:?}"
         );
     }
@@ -8962,7 +9072,12 @@ mod tests {
             | Page::RouteSimplify
             | Page::RouteElev
             | Page::AutoEffort
-            | Page::Daylight => Some(Unfed::NotSynced),
+            | Page::Daylight
+            // Armed but clockless. The other refusal (AWAITING FIX, a pushed
+            // timezone with no receiver clock yet) is the Daylight page's
+            // split too, and this table declares the first one a fresh watch
+            // meets.
+            | Page::Backyard => Some(Unfed::NotSynced),
             Page::ElevationProfile => Some(Unfed::AwaitingBaro),
             Page::RacePredictor => Some(Unfed::NeedOneKm),
             Page::TrainingLoad => Some(Unfed::NeedDistance),
@@ -9247,5 +9362,124 @@ mod tests {
                 "--"
             );
         }
+    }
+
+    fn backyard_rows(view: Option<crate::backyard::BackyardView>, tz: Option<i16>) -> [Row; ROWS] {
+        let mut rec = snapshot(RecordState::Recording, 20_000.0);
+        rec.backyard = view;
+        super::page_rows(
+            Page::Backyard,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+            GnssMode::Performance,
+            IdleView::Home,
+            tz,
+            None,
+            None,
+        )
+    }
+
+    fn backyard_hero(view: Option<crate::backyard::BackyardView>, tz: Option<i16>) -> Row {
+        let mut rec = snapshot(RecordState::Recording, 20_000.0);
+        rec.backyard = view;
+        super::page_hero(Page::Backyard, Some(&fix()), None, Some(&rec), None, 42, tz).unwrap()
+    }
+
+    const ON_LOOP: crate::backyard::BackyardView = crate::backyard::BackyardView {
+        loops: 27,
+        to_bell_s: Some(12 * 60 + 34),
+        in_corral: false,
+        loop_distance_m: Some(6_706.0),
+        loop_progress_m: 4_200.0,
+        return_margin_s: Some(-95),
+        warning_seq: 3,
+        warning_min: 2,
+    };
+
+    #[test]
+    fn the_backyard_page_leads_with_the_bell_and_names_the_loop() {
+        // The loop count is what the format is scored on; the countdown is what
+        // a glance is spent on, so it takes the hero and the count the row
+        // under it.
+        let rows = backyard_rows(Some(ON_LOOP), Some(0));
+        assert_eq!(backyard_hero(Some(ON_LOOP), Some(0)).as_str(), "12:34");
+        // The state tag rides the header row, as it does on every tall-hero
+        // page — the hero band itself stays the app's.
+        assert_eq!(rows[3].as_str(), "LOOP      27      REC");
+        assert_eq!(rows[4].as_str(), "ON LOOP");
+        // A projection that misses the bell keeps its sign — the whole point of
+        // the number is that it can be negative.
+        assert_eq!(rows[5].as_str(), "MARGIN    -1:35");
+        assert_eq!(rows[6].as_str(), "THIS LOOP 4.20 KM");
+        assert_eq!(rows[7].as_str(), "LOOP LEN  6.71 KM");
+    }
+
+    #[test]
+    fn the_corral_row_replaces_the_margin_rather_than_zeroing_it() {
+        // Back in the corral there is nothing left to project, and a `0:00`
+        // margin would read as "you only just made it".
+        let rows = backyard_rows(
+            Some(crate::backyard::BackyardView {
+                in_corral: true,
+                return_margin_s: None,
+                ..ON_LOOP
+            }),
+            Some(0),
+        );
+        assert_eq!(rows[4].as_str(), "IN CORRAL");
+        assert_eq!(rows[5].as_str(), "");
+    }
+
+    #[test]
+    fn a_margin_with_nothing_behind_it_reads_as_absent() {
+        // Loop 1: the loop has not been learned, so there is no remaining
+        // distance to project over. `--`, never a confident number.
+        let rows = backyard_rows(
+            Some(crate::backyard::BackyardView {
+                loops: 0,
+                loop_distance_m: None,
+                return_margin_s: None,
+                ..ON_LOOP
+            }),
+            Some(0),
+        );
+        assert_eq!(rows[5].as_str(), "MARGIN    --");
+        assert_eq!(rows[7].as_str(), "LOOP LEN  --");
+    }
+
+    #[test]
+    fn an_armed_backyard_with_no_clock_asks_for_the_right_one() {
+        // Two absences, two remedies — the same split the Daylight countdown
+        // draws, because the bell needs the same two inputs.
+        let clockless = crate::backyard::BackyardView {
+            to_bell_s: None,
+            ..ON_LOOP
+        };
+        let rows = backyard_rows(Some(clockless), None);
+        assert_eq!(rows[3].as_str(), "BACKYARD          REC");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        let rows = backyard_rows(Some(clockless), Some(0));
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        assert_eq!(
+            backyard_hero(Some(clockless), Some(0)).as_str(),
+            "--:--",
+            "a hero that guessed an hour boundary would be the whole bug"
+        );
+    }
+
+    #[test]
+    fn an_unarmed_watch_still_renders_the_page_honestly_if_parked_on_it() {
+        // Data presence keeps it out of the cycle, but a curated mask can park
+        // a runner on any page, so it may not render a bell it does not have.
+        let rows = backyard_rows(None, Some(0));
+        assert_eq!(rows[3].as_str(), "BACKYARD          REC");
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
     }
 }

@@ -16,6 +16,7 @@
 //! dependency and the two agree to well under a millimetre at the metres-apart
 //! spacing of successive fixes.
 
+use crate::backyard::{Backyard, BackyardView};
 use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::distance_bands::{band_for_distance, DistanceBand};
@@ -603,6 +604,10 @@ pub struct Snapshot {
     /// needs the pushed profile, and the page is empty only when neither has
     /// anything to say.
     pub climb: ClimbView,
+    /// Backyard-ultra mode ([`crate::backyard`], § 372), or `None` while the
+    /// mode is unarmed — which is also the Backyard page's presence bit, so an
+    /// ordinary run never carries a bell page in its cycle.
+    pub backyard: Option<BackyardView>,
     /// Distance + bearing from the current position back to the newest marked
     /// waypoint (§357), or `None` when nothing is marked or no position anchor
     /// exists — the Waypoint page then reads an honest empty state rather than
@@ -934,6 +939,15 @@ pub struct Recorder {
     /// [`start`](Recorder::start): a new run must not inherit the last one's
     /// foot, which at a lower trailhead would open a climb on the first fix.
     climb: ClimbDetector,
+    /// Backyard-ultra mode (§ 372). Armed from the idle settings menu, so a run
+    /// is wholly inside the mode or wholly outside it.
+    backyard: Backyard,
+    /// The receiver's UTC time-of-day and the uptime second it arrived on —
+    /// the anchor the local wall clock extrapolates from, the same shaping the
+    /// Daylight page's [`crate::daylight::daylight_at`] does. Deliberately NOT
+    /// cleared by a pause the way `last` is: a paused runner's clock has not
+    /// stopped, and the § 372 bell is anchored to it.
+    last_clock: Option<(u32, u32)>,
     /// Positions the runner marked mid-run (§357), newest-last. Deliberately
     /// NOT cleared by [`start`](Recorder::start) or [`reset`](Recorder::reset):
     /// a water stash marked on yesterday's recce is the whole point of the
@@ -1016,6 +1030,8 @@ impl Recorder {
             screen_count: 0,
             tz_offset_min: None,
             climb: ClimbDetector::new(),
+            backyard: Backyard::new(),
+            last_clock: None,
             waypoints: Waypoints::new(),
         }
     }
@@ -1061,6 +1077,18 @@ impl Recorder {
     /// Presence bit for the Daylight page: the settings sync has delivered a
     /// timezone offset. Without one the countdown would run against the wrong
     /// midnight, so the page stays out of the cycle rather than empty in it.
+    /// Arm or disarm backyard-ultra mode (§ 372) — the idle settings menu's
+    /// BACKYARD row, re-seeded from the persisted `CFG1` flag at boot.
+    ///
+    /// While armed the bell drives the auto-lap in place of the 1 km boundary:
+    /// a backyard loop crosses six kilometre lines, so leaving the distance
+    /// auto-lap on would bury the loop splits the phone reads as the runner's
+    /// result. Re-arming an armed mode is inert, so the boot re-seed cannot
+    /// wipe a race in progress.
+    pub fn set_backyard_armed(&mut self, armed: bool) {
+        self.backyard.set_armed(armed, self.distance_m);
+    }
+
     pub fn set_tz_offset_min(&mut self, m: i16) {
         self.tz_offset_min = Some(m);
     }
@@ -1524,6 +1552,7 @@ impl Recorder {
         self.current_speed_mps = 0.0;
         self.last = None;
         self.track_thinning = 1;
+        self.backyard.on_run_start();
         self.lap_index = 1;
         self.lap_start_distance_m = 0.0;
         self.lap_start_elapsed_s = 0;
@@ -1588,6 +1617,10 @@ impl Recorder {
         }
         self.advance_now(now_s);
         self.close_lap();
+        // In backyard mode that same press is the corral return (§ 372) — the
+        // one gesture, marking the loop the runner just finished; it is not a
+        // second meaning for BTN5, only a second reader of the lap it closes.
+        self.backyard.on_corral_return(now_s, self.distance_m);
         // During a workout the lap press doubles as "advance the step" —
         // Garmin's own lap-button semantics — because the §350 grammar has no
         // spare button for a dedicated skip.
@@ -1654,6 +1687,7 @@ impl Recorder {
             self.state = RecordState::Paused;
         }
         self.feed_workout();
+        self.fold_backyard();
     }
 
     /// Consume one GPS fix, using its `uptime_s` as the current time. Ignored
@@ -1661,6 +1695,9 @@ impl Recorder {
     /// entirely, mirroring `run_recorder`'s `if (_paused) return`.
     pub fn on_fix(&mut self, fix: &Fix) {
         self.last_fix_stored = false;
+        if let Some(tod) = fix.time_of_day {
+            self.last_clock = Some((tod, fix.uptime_s));
+        }
         match self.state {
             RecordState::Recording => {}
             RecordState::Paused if !self.manual_paused => {}
@@ -1764,11 +1801,45 @@ impl Recorder {
         // exact kilometre line (proportional time slice); the last close keeps
         // the established single-boundary behaviour — the overshoot stays in
         // the closed lap and the next lap opens at the closing fix's totals.
-        while self.distance_m - self.lap_start_distance_m >= 2.0 * AUTO_LAP_DISTANCE_M {
-            self.close_lap_at(self.lap_start_distance_m + AUTO_LAP_DISTANCE_M);
+        //
+        // In backyard mode the bell owns the auto-lap instead (§ 372): the loop
+        // is the unit the format is scored in, and six kilometre closes per
+        // loop would leave the phone no loop split to read.
+        if !self.backyard.armed() {
+            while self.distance_m - self.lap_start_distance_m >= 2.0 * AUTO_LAP_DISTANCE_M {
+                self.close_lap_at(self.lap_start_distance_m + AUTO_LAP_DISTANCE_M);
+            }
+            if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
+                self.close_lap();
+            }
         }
-        if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
+    }
+
+    /// The runner's local time of day, extrapolated from the receiver's last
+    /// clock and shifted by the pushed timezone offset — `None` until both
+    /// exist, which is what makes the Backyard page refuse a countdown rather
+    /// than count down to the wrong hour.
+    fn local_tod_s(&self) -> Option<u32> {
+        let tz = self.tz_offset_min?;
+        let (tod, at) = self.last_clock?;
+        let aged = u64::from(tod) + u64::from(self.now_s.saturating_sub(at));
+        Some(((aged as i64 + i64::from(tz) * 60).rem_euclid(86_400)) as u32)
+    }
+
+    /// Fold the wall clock into backyard mode and take the bell's lap when it
+    /// asks for one. Called from the 1 Hz tick, which runs through both pause
+    /// kinds for as long as a run is live — so no bell window can pass
+    /// unobserved, which is the assumption the window detector rests on.
+    fn fold_backyard(&mut self) {
+        if !self.backyard.armed() {
+            return;
+        }
+        let Some(tod) = self.local_tod_s() else {
+            return;
+        };
+        if self.backyard.on_clock(tod) {
             self.close_lap();
+            self.backyard.on_bell_lap(self.distance_m);
         }
     }
 
@@ -1944,6 +2015,10 @@ impl Recorder {
             race_day: self.race_day,
             race_phase: self.race_phase_snapshot(),
             climb: self.climb_snapshot(),
+            backyard: self.backyard.armed().then(|| {
+                self.backyard
+                    .view(self.distance_m, self.current_pace(), self.now_s)
+            }),
             waypoint: self
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
@@ -2024,6 +2099,10 @@ impl Recorder {
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
         set(Page::Climb, !s.climb.is_empty());
+        // Armed, not fed: an armed watch that cannot yet read a clock must
+        // still carry the page, because `NOT SYNCED` on it is the only place a
+        // runner learns the countdown needs a timezone push.
+        set(Page::Backyard, s.backyard.is_some());
         // A composed screen is available when the runner has actually composed
         // it. Keyed on the COUNT rather than on any metric being fed, because a
         // screen the runner built is a page they asked for — its slots saying
@@ -4915,5 +4994,149 @@ mod tests {
             assert_eq!(p.len, 1, "{good} was dropped");
             assert_eq!(p.samples[0], good as i32);
         }
+    }
+
+    /// A fix carrying the receiver's UTC clock — what the backyard bell needs
+    /// on top of a pushed timezone.
+    fn fix_at(lat: f64, lon: f64, speed: f32, t: u32, tod_utc_s: u32) -> Fix {
+        Fix {
+            time_of_day: Some(tod_utc_s),
+            ..fix(lat, lon, speed, t)
+        }
+    }
+
+    #[test]
+    fn the_backyard_page_is_absent_until_the_mode_is_armed() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        assert!(r.snapshot().backyard.is_none());
+        assert_eq!(r.snapshot().pages_mask & Page::Backyard.bit(), 0);
+        r.set_backyard_armed(true);
+        assert!(r.snapshot().backyard.is_some());
+        assert_ne!(r.snapshot().pages_mask & Page::Backyard.bit(), 0);
+    }
+
+    #[test]
+    fn an_armed_backyard_withholds_the_countdown_until_it_has_both_clocks() {
+        // The page is present the moment the mode is armed — `NOT SYNCED` on
+        // it is where a runner learns the countdown needs a timezone — but the
+        // number is withheld until a timezone AND a receiver clock exist.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.start(0);
+        r.on_fix(&fix(0.0, 0.0, 3.0, 1));
+        r.tick(2);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, None);
+        // A timezone alone is not enough: nothing has told the watch the hour.
+        r.set_tz_offset_min(0);
+        r.tick(3);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, None);
+        r.on_fix(&fix_at(0.0, 0.001, 3.0, 4, 9 * 3600 + 50 * 60));
+        r.tick(5);
+        assert_eq!(
+            r.snapshot().backyard.unwrap().to_bell_s,
+            Some(10 * 60 - 1),
+            "the fix clock aged by the uptime since it landed"
+        );
+    }
+
+    #[test]
+    fn the_pushed_timezone_moves_the_bell_not_just_the_display() {
+        // 09:50 UTC is 15:20 local in a +05:30 zone — twenty past the hour, not
+        // ten to it. A countdown that assumed UTC hours would tell this runner
+        // they had ten minutes when they had forty.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(330);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 50 * 60));
+        r.tick(1);
+        assert_eq!(r.snapshot().backyard.unwrap().to_bell_s, Some(40 * 60));
+    }
+
+    #[test]
+    fn the_bell_takes_the_lap_the_runner_did_not() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 58));
+        r.tick(1);
+        assert_eq!(r.snapshot().lap, 1);
+        assert_eq!(r.snapshot().backyard.unwrap().loops, 0);
+        // Two seconds later the hour turns.
+        r.tick(3);
+        let s = r.snapshot();
+        assert_eq!(
+            s.lap, 2,
+            "the bell closed the loop through the lap machinery"
+        );
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(s.last_lap.is_some(), "and it banked a split like any lap");
+    }
+
+    #[test]
+    fn a_corral_press_closes_the_loop_and_stands_the_bell_down() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 50));
+        r.tick(1);
+        r.lap(2);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(s.backyard.unwrap().in_corral, "the press marks the return");
+        // The bell must not close a second loop for the same hour.
+        r.tick(12);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2, "one loop, one lap");
+        assert_eq!(s.backyard.unwrap().loops, 1);
+        assert!(
+            !s.backyard.unwrap().in_corral,
+            "and the next loop has been sent off"
+        );
+    }
+
+    #[test]
+    fn the_bell_owns_the_auto_lap_while_armed() {
+        // A backyard loop crosses six kilometre lines. Leaving the distance
+        // auto-lap on would bury the loop splits the phone reads as the result.
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.start(0);
+        for i in 1..=250u32 {
+            r.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        let s = r.snapshot();
+        assert!(s.distance_m > 2_000.0, "{}", s.distance_m);
+        assert_eq!(s.lap, 1, "no kilometre lap closed inside the loop");
+        // Disarmed, the same walk closes the usual kilometre laps.
+        let mut r2 = Recorder::new();
+        r2.start(0);
+        for i in 1..=250u32 {
+            r2.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        assert!(r2.snapshot().lap > 1);
+    }
+
+    #[test]
+    fn a_new_run_starts_the_race_over_but_keeps_the_mode() {
+        let mut r = Recorder::new();
+        r.set_backyard_armed(true);
+        r.set_tz_offset_min(0);
+        r.start(0);
+        r.on_fix(&fix_at(0.0, 0.0, 3.0, 1, 9 * 3600 + 59 * 60 + 50));
+        r.tick(1);
+        r.lap(2);
+        assert_eq!(r.snapshot().backyard.unwrap().loops, 1);
+        r.stop(3);
+        r.reset(4);
+        r.start(5);
+        let s = r.snapshot();
+        assert!(s.backyard.is_some(), "the mode outlives the run");
+        assert_eq!(s.backyard.unwrap().loops, 0);
     }
 }

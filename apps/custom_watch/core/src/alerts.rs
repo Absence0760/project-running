@@ -697,6 +697,7 @@ mod tests {
             state,
             manual_paused: false,
             signal_lost: false,
+            backyard: None,
             distance_m: 0.0,
             elapsed_s: moving_s,
             moving_s,
