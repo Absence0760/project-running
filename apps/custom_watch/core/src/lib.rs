@@ -244,6 +244,10 @@
 //!   `runs/pr_recency.ts`; ISO dates collapsed to a day index)
 //! - [`turn_cues`] — offline turn-by-turn cues from a route polyline's bearing
 //!   deltas at each interior vertex (port of web `routes/turn_cues.ts`)
+//! - [`timers`] — the countdown timer / stopwatch behind the idle BTN2 modal
+//!   and [`page::Page::Timer`]: one instrument whose preset ladder starts at a
+//!   stopwatch, whose expiry counts UP past zero because nothing on this device
+//!   can notify anyone, and which raises no alarm (§ 375)
 
 #![cfg_attr(not(test), no_std)]
 
@@ -338,6 +342,7 @@ pub mod settings_queue;
 pub mod sleep_station;
 pub mod statusbar;
 pub mod streaks;
+pub mod timers;
 pub mod track_projection;
 pub mod trackback;
 pub mod training_load;
