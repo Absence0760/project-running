@@ -7,9 +7,9 @@ waiting for someone to run it by hand. It reuses the launcher rather than
 re-implementing the boot sequence, so a regression in watch-sim.sh itself
 (pty, defmt drain, monitor port, cleanup) also fails here.
 
-Eight scenarios, selected with `--scenario` (default `all`). The five below are
-the ones whose framing does not fit on a function docstring; `screens`, `idle`
-and `workout` each carry theirs on their own `scenario_*`.
+Nine scenarios, selected with `--scenario` (default `all`). The five below are
+the ones whose framing does not fit on a function docstring; `screens`, `idle`,
+`workout` and `storm` each carry theirs on their own `scenario_*`.
 
 `smoke` — the end-to-end pass. In order, each assertion grounded in the manual
 evidence under sim/verification-2026-07-19/, except the two marked below:
@@ -196,6 +196,7 @@ SCENARIO_ORDER = (
     "screens",
     "idle",
     "workout",
+    "storm",
 )
 
 # The NMEA fixture each scenario was written against, and a property OF the
@@ -219,6 +220,9 @@ SCENARIO_FIXTURES = {
     # in ~33-40 s each. A slower fixture, or one whose min-move filter thins
     # harder, stretches the same five steps past this scenario's budget.
     "workout": "bench_jog",
+    # Flat ground and a constant GPS altitude, which is what makes the scripted
+    # weather the ONLY thing moving the reduced pressure — see `scenario_storm`.
+    "storm": "bench_jog",
 }
 
 # Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
@@ -247,6 +251,13 @@ SCENARIO_LAUNCHER_ARGS = {
     # banner would otherwise own (it covers the hero band). Arbitration between
     # a workout banner and a fuel one is `alerts`' surface, not this one's.
     "workout": ("--no-alerts",),
+    # `--storm` compresses the § 376 trend window from three hours to 60 s, so a
+    # front is readable inside a scenario's budget, and arms the banner through
+    # the same setter a phone push feeds. `--no-alerts` for the same reason
+    # `workout` takes it: the COUNT assertion below is a claim about the storm
+    # arm's once-per-front hysteresis, and it only means that while nothing else
+    # can take the single banner slot.
+    "storm": ("--storm", "--no-alerts"),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
@@ -407,6 +418,37 @@ MENU_STEP_TIMEOUT = 10
 # so this survives a rung being renamed but not one being added, which is the
 # right sensitivity: a fourth rung should make someone re-read this scenario.
 GNSS_LADDER_RUNGS = 3
+
+# The §376 storm rail. The tracker's own defmt line, which is the only thing
+# that can speak to a NUMBER — a page dump proves a frame was drawn, never that
+# the tendency in it is right.
+STORM_LINE = re.compile(
+    r"baro: storm (\w+) delta=(-?[\d.]+)hPa qnh=(-?[\d.]+)hPa span=(\d+)s"
+)
+STORM_UNMEASURED = re.compile(r"baro: storm (Building|NoReference)")
+STORM_RAISED = re.compile(
+    r"baro: storm Storm delta=(-?[\d.]+)hPa qnh=(-?[\d.]+)hPa span=(\d+)s"
+)
+# The sea-level reference is dropped this many Pa per virtual second. Under
+# `--storm` the trend window is 60 s, so this is -8 x 60 = -480 Pa = -4.8 hPa
+# over the window — 20% past `watch_core::storm::STORM_FALL_HPA`, which is the
+# margin that keeps the scenario off the threshold rather than on it.
+STORM_FALL_PA_PER_S = 8
+# The threshold the sim arms (watch_core::storm::STORM_FALL_HPA). Mirrored here
+# because the assertion is about the FIRMWARE's constant, so a change to it
+# reads as a scenario that needs re-thinking rather than one that quietly still
+# passes.
+STORM_FALL_HPA = 4.0
+# A quiet atmosphere's residual. The BMP581 model serves a scripted pressure
+# with no noise and bench_jog's GGA altitude is constant, so the only movement
+# in the reduced pressure is float rounding — an order of magnitude under the
+# steady band, and more than this means something is feeding the tracker an
+# altitude it should not have.
+STORM_QUIET_HPA = 0.5
+# Two windows plus the minimum span, in seconds, is the least a 60 s-window
+# tracker needs to have banked a full window of a scripted fall. Generous
+# against emulator time drift, for the same reason `dropout`'s floor is.
+STORM_TIMEOUT = 300
 
 # The §359 climb rail. Two independent halves, so two patterns: the detector's
 # own output (baro-fed, works with no course) and the crest read off the pushed
@@ -2738,6 +2780,179 @@ def scenario_workout(sim):
     passed("no firmware panic across the workout")
 
 
+def scenario_storm(sim):
+    """Drive a front past the barometer and prove the watch names it.
+
+    The § 376 rail end to end: the BMP581 model's SEA-LEVEL reference is ramped
+    down while its altitude stays put, which is a weather change and not a
+    movement one — the station pressure falls, the GPS altitude the firmware
+    reduces against does not, and the reduced pressure therefore falls with it.
+    That is the signal the whole module exists to isolate.
+
+    Four claims, in order, and each grounded in the baro task's own line rather
+    than in a panel:
+
+    1. **The tracker refuses before it can measure.** A window is three hours on
+       hardware and 60 s under `--storm`; until a third of it is banked the
+       answer is `Building`, not a tendency extrapolated from a minute of air.
+    2. **A quiet atmosphere is quiet.** Before the ramp starts, the tendency
+       reads `Steady` with a residual under `STORM_QUIET_HPA`. This is the
+       assertion a false positive would fail, and it is worth more than the
+       storm one: a watch that cries wolf on a calm day is worse than one with
+       no storm page at all.
+    3. **A scripted fall reaches `Storm`,** with a delta past the armed
+       threshold and the right sign.
+    4. **The banner fires exactly once,** which is a claim about the arm's
+       once-per-front hysteresis and only holds because `--no-alerts` leaves it
+       alone in the single banner slot.
+
+    Then the page: it enters the BTN4 cycle (its presence bit is "a reduced
+    pressure can be stated") and renders non-blank.
+
+    **What this scenario deliberately does NOT prove.** The separation of a
+    climb from a front — the module's entire reason for existing — cannot be
+    scripted here: the firmware's altitude reference comes from the NMEA
+    fixture, which the harness cannot ramp independently of the barometer, so a
+    "climb" in-sim is a baro ramp against a flat GPS altitude, which IS weather
+    as far as any correct implementation can tell. That separation is
+    host-tested instead (`core/src/storm.rs`:
+    `a_climb_at_constant_weather_is_not_a_storm` and
+    `a_falling_front_while_climbing_still_reads_the_front`), and this scenario
+    guards the rail those tests cannot reach: sensor to reduction to trend to
+    alert slot to page.
+    """
+    sim.wait(
+        re.compile(r"baro: BMP581 streaming"),
+        120,
+        "the baro task to reach the BMP581 model ('baro: BMP581 streaming') — a "
+        "parked task publishes no tendency at all, so every assertion below "
+        "would be waiting on a task that is not running",
+    )
+    passed("the baro task is streaming from the BMP581 model")
+
+    sim.wait(
+        re.compile(r"record: sim storm alert armed at"),
+        60,
+        "the record task to arm the storm banner through the same setter a "
+        "phone push feeds ('record: sim storm alert armed at <N> hPa')",
+    )
+    passed("the storm banner is armed")
+
+    # (1) The refusal. It has to be observed BEFORE the window fills, so it is
+    # waited on rather than searched for after the fact.
+    sim.wait(
+        STORM_UNMEASURED,
+        60,
+        "the tracker to report an unmeasured tendency ('baro: storm Building') "
+        "before a third of its window is banked — a verdict this early would "
+        "mean the minimum-span gate is not gating",
+    )
+    passed("the tracker withholds a tendency until its window is deep enough")
+
+    require_recording(sim)
+
+    # (2) The quiet atmosphere. Wait for the first MEASURED line, then check it
+    # is a calm one — the scripted pressure carries no noise and the fixture's
+    # altitude is constant, so anything past the residual is the reduction
+    # picking up something it should not.
+    quiet = sim.wait(
+        STORM_LINE,
+        STORM_TIMEOUT,
+        "the tracker's first measured tendency ('baro: storm <Trend> delta=...') "
+        "on a quiet atmosphere",
+    )
+    quiet_delta = float(quiet.group(2))
+    if quiet.group(1) != "Steady" or abs(quiet_delta) > STORM_QUIET_HPA:
+        raise SmokeFailure(
+            f"a still atmosphere read {quiet.group(1)} at {quiet_delta:+.2f} hPa "
+            f"over {quiet.group(4)}s, past the {STORM_QUIET_HPA} hPa a scripted "
+            "constant pressure can produce. Something is moving the reduction "
+            "that is not weather — which is the false alarm this feature must "
+            "not have"
+        )
+    passed(
+        f"a still atmosphere reads Steady at {quiet_delta:+.2f} hPa "
+        f"(QNH {float(quiet.group(3)):.0f} hPa)"
+    )
+
+    # (3) The front. The altitude source is untouched, so nothing about the
+    # runner changes — only the air.
+    mark = sim.tail.mark()
+    sim.monitor().send(f"sysbus.twi1.bmp581 StartSeaLevelTrend -{STORM_FALL_PA_PER_S}")
+    announce(f"sea-level reference falling {STORM_FALL_PA_PER_S} Pa/s (the front)")
+
+    stormy = sim.wait(
+        STORM_RAISED,
+        STORM_TIMEOUT,
+        f"the tendency to reach Storm under a {STORM_FALL_PA_PER_S} Pa/s fall "
+        "('baro: storm Storm delta=...') — the reduction, its window and the "
+        "classifier all have to be right for this line to exist",
+        start=mark,
+    )
+    delta = float(stormy.group(1))
+    if delta > -STORM_FALL_HPA:
+        raise SmokeFailure(
+            f"the trend was classified Storm at {delta:+.2f} hPa, which is "
+            f"inside the {STORM_FALL_HPA} hPa threshold it was armed at — the "
+            "classifier and the threshold disagree"
+        )
+    passed(
+        f"the front reads Storm at {delta:+.2f} hPa over {stormy.group(3)}s "
+        f"(QNH now {float(stormy.group(2)):.0f} hPa)"
+    )
+
+    # (4) One front, one banner. The arm disarms itself on firing and re-arms
+    # only on a MEASURED recovery, and nothing here recovers.
+    sim.wait(
+        re.compile(r"record: alert Storm"),
+        STORM_TIMEOUT,
+        "the storm banner to take the alert slot ('record: alert Storm')",
+        start=mark,
+    )
+    banners = [ln for ln in sim.tail.text().splitlines() if "record: alert Storm" in ln]
+    if len(banners) != 1:
+        raise SmokeFailure(
+            f"the storm banner fired {len(banners)} times for one front. It is "
+            "raised once per front and re-arms only on a MEASURED recovery, so "
+            "more than one here means either the hysteresis or the re-arm "
+            "condition is wrong — and a banner that repeats is a banner a "
+            "runner stops reading"
+        )
+    passed("one front raised exactly one banner")
+
+    # The page. Its presence bit is "a reduced pressure can be stated", which
+    # every step above has already proved the watch had.
+    wait_for_no_alert(sim)
+    walk = []
+    presses = 0
+    frame = None
+    while presses < MAX_PAGE_PRESSES and frame is None:
+        presses += 1
+        page = press_page(sim, "$btn4", f"BTN4 press {presses}")
+        walk.append(page)
+        if page == "Storm":
+            wait_for_no_alert(sim)
+            frame = sim.dump("page-Storm.ppm", "the Storm page's panel frame")
+            assert_rendered(frame, "the Storm page")
+    if frame is None:
+        raise SmokeFailure(
+            f"the Storm page never appeared in the BTN4 cycle over {presses} "
+            f"presses (walked: {' -> '.join(walk)}). Its data-presence bit is a "
+            "statable reduced pressure, which the measured tendencies above "
+            "prove the watch had — so a page missing HERE is a data-presence "
+            "bug and not an unarmed fixture"
+        )
+    passed(
+        f"the Storm page is in the cycle and renders ({frame.dark} dark pixels, "
+        f"{presses} presses: {' -> '.join(walk)})"
+    )
+
+    panics = [ln for ln in sim.tail.text().splitlines() if "panicked" in ln.lower()]
+    if panics:
+        raise SmokeFailure("the firmware panicked during the run: " + panics[0].strip())
+    passed("no firmware panic across the front")
+
+
 SCENARIOS = {
     "smoke": scenario_smoke,
     "alerts": scenario_alerts,
@@ -2747,6 +2962,7 @@ SCENARIOS = {
     "screens": scenario_screens,
     "idle": scenario_idle,
     "workout": scenario_workout,
+    "storm": scenario_storm,
 }
 
 

@@ -20,7 +20,10 @@
 // static altitude (SetAltitudeMeters) or a triangle profile
 // (StartTriangleProfile) advanced by a 1 Hz LimitTimer on the machine's
 // virtual-time clock source, so a given firmware + fixture + profile run is
-// reproducible. Altitude converts to pressure by inverting the same
+// reproducible. The same timer can ramp the sea-level reference
+// (StartSeaLevelTrend) — a WEATHER change rather than a movement one, which is
+// the only way to make the station pressure fall while the altitude the
+// firmware sees from GPS stays put. Altitude converts to pressure by inverting the same
 // international-barometric-formula constants the firmware applies
 // (watch_core::elevation::altitude_m — scale 44330 m, exponent 0.190295),
 // referenced to a settable sea-level pressure (default: the ISA standard
@@ -39,6 +42,11 @@
 //       # altitude clamped into [low, high].
 //   sysbus.twi1.bmp581 StopProfile                     # freeze where it is
 //   sysbus.twi1.bmp581 SetSeaLevelPa 101800            # move the QNH reference
+//   sysbus.twi1.bmp581 StartSeaLevelTrend -8           # a front arriving: drop
+//       # the sea-level reference 8 Pa per virtual second. The altitude source
+//       # is untouched, so this is weather and not movement — which is exactly
+//       # the distinction watch_core::storm exists to make.
+//   sysbus.twi1.bmp581 StopSeaLevelTrend               # freeze the reference
 //   sysbus.twi1.bmp581 AltitudeMeters                  # inspect
 //
 // The default altitude is 1600 m — inside the canned fixtures' terrain
@@ -70,8 +78,9 @@ namespace Antmicro.Renode.Peripherals.Sensors
         public void Reset()
         {
             // Chip state resets; the scripted environment (altitude source,
-            // sea-level reference, a running profile) deliberately survives a
-            // machine reset — the atmosphere is not part of the chip.
+            // sea-level reference, a running profile or weather trend)
+            // deliberately survives a machine reset — the atmosphere is not
+            // part of the chip.
             regPointer = 0;
             SoftReset();
         }
@@ -162,12 +171,43 @@ namespace Antmicro.Renode.Peripherals.Sensors
             this.Log(LogLevel.Info, "triangle profile {0}..{1} m, +{2}/-{3} mm/s", lowMetres, highMetres, upMmPerSecond, downMmPerSecond);
         }
 
+        // Ramp the sea-level reference by paPerSecond each virtual second — a
+        // front moving in (negative) or clearing (positive). Deliberately
+        // separate from the altitude profile and driven by the same timer, so a
+        // scenario can run weather and movement together or either alone.
+        public void StartSeaLevelTrend(int paPerSecond)
+        {
+            lock(sourceLock)
+            {
+                seaLevelTrendPaPerS = paPerSecond;
+                seaLevelTrendActive = true;
+                profileTimer.Enabled = true;
+            }
+            this.Log(LogLevel.Info, "sea-level trend {0} Pa/s from {1} Pa", paPerSecond, seaLevelPa);
+        }
+
+        public void StopSeaLevelTrend()
+        {
+            lock(sourceLock)
+            {
+                seaLevelTrendActive = false;
+                if(!profileActive)
+                {
+                    profileTimer.Enabled = false;
+                }
+            }
+            this.Log(LogLevel.Info, "sea-level trend stopped at {0} Pa", seaLevelPa);
+        }
+
         public void StopProfile()
         {
             lock(sourceLock)
             {
-                profileTimer.Enabled = false;
                 profileActive = false;
+                if(!seaLevelTrendActive)
+                {
+                    profileTimer.Enabled = false;
+                }
             }
             this.Log(LogLevel.Info, "profile stopped at {0} m", (decimal)altitudeMm / 1000m);
         }
@@ -200,6 +240,13 @@ namespace Antmicro.Renode.Peripherals.Sensors
         {
             lock(sourceLock)
             {
+                if(seaLevelTrendActive)
+                {
+                    // Clamped well inside a terrestrial range so a scenario
+                    // left running cannot walk the reference into the
+                    // altitude formula's singularity.
+                    seaLevelPa = Math.Min(Math.Max(seaLevelPa + seaLevelTrendPaPerS, 87000.0), 110000.0);
+                }
                 if(!profileActive)
                 {
                     return;
@@ -334,6 +381,8 @@ namespace Antmicro.Renode.Peripherals.Sensors
         private long altitudeMm;
         private double seaLevelPa;
         private bool profileActive;
+        private bool seaLevelTrendActive;
+        private int seaLevelTrendPaPerS;
         private bool profileClimbing;
         private long profileLowMm;
         private long profileHighMm;
