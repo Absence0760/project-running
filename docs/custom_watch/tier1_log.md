@@ -704,7 +704,7 @@ a bump nothing about the layout required, taken because a version has to name
 exactly one field set for an unknown presence bit to mean anything.
 
 **Rung: host-tested, build-verified, and sim-verified for what one scenario
-names.** 2407 workspace tests green (2352 → 2407), `clippy -D warnings` clean on
+names.** 2407 workspace tests green (2365 → 2407, 42 new), `clippy -D warnings` clean on
 `thumbv7em-none-eabihf` across the default, `ble` and sim feature sets. The new
 `storm` Renode scenario ramps the BMP581 model's **sea-level reference** while
 its altitude stays put — a weather change, not a movement one — and asserts the
