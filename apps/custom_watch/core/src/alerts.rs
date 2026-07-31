@@ -58,22 +58,22 @@
 //!
 //! 1. **Zone** — over-effort against physiological ground truth. Supersedes
 //!    anything below it.
-//! 2. **Pace** — the same correct-it-now class one rung down, because pace is a
-//!    proxy for the effort HR measures directly. It supersedes a fuel reminder
-//!    but never a zone banner; blocked by one, it stays armed and un-cooled so
-//!    it retries while the excursion lasts, rather than being swallowed.
-//! 2b. **The backyard corral whistle** (§ 372) — the only arm on this engine
-//!    that is not about the runner's body or their kit. Missing the bell ends
-//!    the race outright, with nothing to correct afterwards, so it supersedes
-//!    every reminder and every milestone and yields only to a zone banner. It
-//!    is a milestone in kind, though, so a blocked one is dropped rather than
-//!    owed: `3 MIN` shown at 1:40 is a lie about the clock, and the Backyard
-//!    page carries the live countdown regardless.
-//! 3. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//! 2. **The backyard corral whistle** (§ 372) — the only arm here that is not
+//!    about the runner's body or their kit. Missing the bell ends the race
+//!    outright, with nothing left to correct afterwards, so it yields to a zone
+//!    banner and to nothing else. It is a milestone in kind, though, so a
+//!    blocked one is dropped rather than owed: `3 MIN` shown at 1:40 is a lie
+//!    about the clock, and the Backyard page carries the live countdown anyway.
+//! 3. **Pace** — the same correct-it-now class as the zone alert one rung down,
+//!    because pace is a proxy for the effort HR measures directly. It
+//!    supersedes a fuel reminder but never a zone banner or a corral whistle;
+//!    blocked by one, it stays armed and un-cooled so it retries while the
+//!    excursion lasts, rather than being swallowed.
+//! 4. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 4. **Distance**, then **Time** — milestones, and the only arms that are
+//! 5. **Distance**, then **Time** — milestones, and the only arms that are
 //!    *dropped* rather than queued when the slot is busy. A milestone banner is
 //!    meaningful only at the moment it is reached; showing "5.0 KM" once the
 //!    runner is at 5.4 km is worse than not showing it, and unlike fuel there is

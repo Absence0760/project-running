@@ -80,6 +80,10 @@ pub const CONFIG_FLAG_HIDE_EMPTY_ON: u8 = 0b0000_0010;
 /// that byte as a reserved zero with this bit clear, so they decode as "no
 /// profile" with no version bump — the §351 flags-byte drill again.
 pub const CONFIG_FLAG_PROFILE_SET: u8 = 0b0000_0100;
+/// Bit 3 (§372): backyard-ultra mode is armed. No companion "set" bit, unlike
+/// hide-empty: the default is off, so a clear bit already means exactly what
+/// an unset choice means, and every pre-§372 record decodes as disarmed.
+pub const CONFIG_FLAG_BACKYARD_ON: u8 = 0b0000_1000;
 
 /// The flags byte with an explicit hide-empty choice folded in — every other
 /// bit (the profile marker, future flags) carried forward, so persisting one
@@ -94,6 +98,17 @@ pub fn set_hide_empty_flags(flags: u8, hide: bool) -> u8 {
 /// the record never stored one (every pre-§351 record).
 pub fn hide_empty_from_flags(flags: u8) -> Option<bool> {
     (flags & CONFIG_FLAG_HIDE_EMPTY_SET != 0).then_some(flags & CONFIG_FLAG_HIDE_EMPTY_ON != 0)
+}
+
+/// The flags byte with the backyard-mode arm folded in, every other bit
+/// carried forward — the [`set_hide_empty_flags`] rule.
+pub fn set_backyard_flags(flags: u8, armed: bool) -> u8 {
+    (flags & !CONFIG_FLAG_BACKYARD_ON) | if armed { CONFIG_FLAG_BACKYARD_ON } else { 0 }
+}
+
+/// Whether the persisted record has backyard-ultra mode armed (§372).
+pub fn backyard_from_flags(flags: u8) -> bool {
+    flags & CONFIG_FLAG_BACKYARD_ON != 0
 }
 
 /// The persisted profile byte carried by a record, or `None` when no profile
@@ -1720,6 +1735,25 @@ mod tests {
         let flipped = set_hide_empty_flags(both, false);
         assert_eq!(hide_empty_from_flags(flipped), Some(false));
         assert_eq!(profile_from_flags(flipped, 2), Some(2));
+        // And §372's arm joins them without disturbing either.
+        let armed = set_backyard_flags(flipped, true);
+        assert!(backyard_from_flags(armed));
+        assert_eq!(hide_empty_from_flags(armed), Some(false));
+        assert_eq!(profile_from_flags(armed, 2), Some(2));
+        let disarmed = set_hide_empty_flags(armed, true);
+        assert!(backyard_from_flags(disarmed), "hide-empty kept the arm");
+        assert!(!backyard_from_flags(set_backyard_flags(disarmed, false)));
+    }
+
+    #[test]
+    fn a_pre_372_record_reads_as_disarmed_rather_than_as_no_choice() {
+        // Unlike hide-empty there is no companion "set" bit: backyard mode's
+        // default IS off, so a clear bit already says everything an unset
+        // choice would, and every record written before §372 decodes as a
+        // watch that is not in a backyard.
+        assert!(!backyard_from_flags(0));
+        assert!(!backyard_from_flags(CONFIG_FLAG_PROFILE_SET));
+        assert!(!backyard_from_flags(set_hide_empty_flags(0, true)));
     }
 
     #[test]

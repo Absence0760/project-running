@@ -355,6 +355,8 @@ pub async fn run(store: &'static SharedStore) {
     // menu's toggle survives a reboot the way the GNSS mode does; None means
     // no explicit choice was ever stored and the recorder keeps its default.
     let mut persisted_hide: Option<bool> = store.lock().await.read_hide_empty();
+    // §372: a backyard armed before a brown-out is still a backyard after it.
+    let mut backyard_rx = unwrap!(state::BACKYARD.receiver());
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -414,6 +416,10 @@ pub async fn run(store: &'static SharedStore) {
     if let Some(hide) = persisted_hide {
         recorder.set_hide_empty_pages(hide);
         info!("record: restored hide-empty-pages {}", hide);
+    }
+    if store.lock().await.read_backyard() {
+        recorder.set_backyard_armed(true);
+        info!("record: restored backyard mode armed");
     }
     // Re-apply the persisted activity profile's page preset (§353) — the
     // selection itself is display state (main seeds `state::PROFILE`), but the
@@ -610,6 +616,11 @@ pub async fn run(store: &'static SharedStore) {
         // only changes while idle (BTN3 cycles pages once a run is under way),
         // so it is always applied here before the Start command that opens the
         // run reaches the recorder.
+        if let Some(armed) = backyard_rx.try_changed() {
+            // The button task already persisted it; this is the apply side.
+            recorder.set_backyard_armed(armed);
+            info!("record: backyard mode {}", armed);
+        }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
             recorder.set_fix_interval_s(m.fix_interval_s());
