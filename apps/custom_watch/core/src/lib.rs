@@ -8,6 +8,9 @@
 //!
 //! - [`alerts`] — on-run alerts: drink / eat reminders on the `fuel_plan`
 //!   moving-time cadence + the HR-zone ceiling alert
+//! - [`backyard`] — backyard-ultra mode: the wall-clock-anchored corral bell,
+//!   the loop count riding the recorder's lap, the projected return margin,
+//!   and the 3/2/1-minute whistles (watch-native, no web twin)
 //! - [`auto_segment_effort`] — pick the route a route-less run followed +
 //!   batch its segment-effort rows (port of web
 //!   `segments/auto_segment_effort.ts`; reuses [`segments`])
@@ -255,6 +258,7 @@ pub mod age_grade;
 pub mod alerts;
 pub mod auto_lap;
 pub mod auto_segment_effort;
+pub mod backyard;
 pub mod badges;
 pub mod bar_chart;
 pub mod baro_rezero;
