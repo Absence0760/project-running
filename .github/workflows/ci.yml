@@ -531,20 +531,21 @@ jobs:
   sim-scenarios:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens, idle + workout scenarios (Renode)
+    name: Simulate custom_watch firmware — page, alert, terrain, dropout, screens, idle, workout + storm scenarios (Renode)
     runs-on: ubuntu-latest
     # The whole sim run is ~3-5 min of virtual time on top of the build; the cap
     # is here so a wedged emulator cannot burn a runner for six hours. The
     # harness carries its own tighter per-assertion deadlines and a --budget.
     #
     # Raised 25 -> 35 when `dropout` was added, 35 -> 40 for `screens`,
-    # 40 -> 45 for `idle` and 45 -> 50 for `workout`: the seven budgets below
-    # now sum to 37 min against ~10 min of Renode fetch, toolchain and a cold
-    # cargo build, and 35 no longer left the harness room to fail with its own
-    # diagnostics before the runner was killed bare. The cap is still what it
-    # has always been — a backstop over the budgets, not the thing that ends a
-    # healthy run, so it tracks their sum whenever a scenario is added.
-    timeout-minutes: 50
+    # 40 -> 45 for `idle`, 45 -> 50 for `workout` and 50 -> 55 for `storm`: the
+    # eight budgets below now sum to 42 min against ~10 min of Renode fetch,
+    # toolchain and a cold cargo build, and a cap that only just covered them
+    # left the harness no room to fail with its own diagnostics before the
+    # runner was killed bare. The cap is still what it has always been — a
+    # backstop over the budgets, not the thing that ends a healthy run, so it
+    # tracks their sum whenever a scenario is added.
+    timeout-minutes: 55
     env:
       RENODE_VERSION: 1.16.1
       # Pinned like every action sha in this file: the portable package is a
@@ -710,6 +711,19 @@ jobs:
           --scenario workout
           --out-dir "${{ runner.temp }}/watch-sim-ci/workout"
           --budget 300
+      # The § 376 storm rail. Boots `--storm` (which compresses the trend window
+      # from three hours to 60 s and arms the banner) and `--no-alerts`, so the
+      # single banner slot carries the storm arm and nothing else — which is
+      # what makes its one-front-one-banner COUNT a claim about the hysteresis
+      # rather than an observation. It has to bank a quiet window before it can
+      # assert calm and then a full falling one after, so it is the second
+      # longest here and takes `dropout`'s budget rather than its siblings'.
+      - name: Renode sim — storm scenario
+        run: >-
+          python3 apps/custom_watch/sim/ci_smoke.py
+          --scenario storm
+          --out-dir "${{ runner.temp }}/watch-sim-ci/storm"
+          --budget 420
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
       # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
