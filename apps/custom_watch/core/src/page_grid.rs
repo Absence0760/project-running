@@ -302,7 +302,9 @@ mod tests {
         );
         assert_eq!(
             grid_cell(u64::MAX, Page::BackToStart, Page::BackToStart),
-            Some((0, GRID_BODY_ROWS - 1)),
+            // Column 1 because the ring is 42 long and the map is 4 wide; a new
+            // page walks the tail one cell right.
+            Some((1, GRID_BODY_ROWS - 1)),
             "the last page seats on the bottom body row once it is the cursor"
         );
         let scrolled = grid_rows(u64::MAX, Page::BackToStart);
@@ -311,7 +313,7 @@ mod tests {
             "the window scrolled off the first row: {:?}",
             scrolled[GRID_TOP_ROW]
         );
-        assert_eq!(scrolled[ROWS - 1].as_str(), "BACK");
+        assert_eq!(scrolled[ROWS - 1].as_str(), "WPT  BACK");
         for row in scrolled.iter() {
             assert!(row.len() <= COLS, "scrolled row too wide: {row:?}");
         }
@@ -518,7 +520,8 @@ mod tests {
         full.row_up(u64::MAX);
         assert_eq!(
             grid_cell(u64::MAX, full.cursor(), full.cursor()),
-            Some((1, GRID_BODY_ROWS - 1)),
+            // Four back from home on a 42-page ring is index 38, column 2.
+            Some((2, GRID_BODY_ROWS - 1)),
             "one row up from home wraps into the grid's tail"
         );
     }

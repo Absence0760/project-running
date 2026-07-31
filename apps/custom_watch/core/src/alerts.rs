@@ -66,12 +66,17 @@
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 4. **Distance**, then **Time** — milestones, and the only arms that are
-//!    *dropped* rather than queued when the slot is busy. A milestone banner is
-//!    meaningful only at the moment it is reached; showing "5.0 KM" once the
-//!    runner is at 5.4 km is worse than not showing it, and unlike fuel there is
-//!    nothing left to act on later — the totals are on the page. Distance leads
-//!    the tie because distance is what the race is measured in.
+//! 4. **Timer**, then **Distance**, then **Time** — milestones, and the only
+//!    arms that are *dropped* rather than queued when the slot is busy. A
+//!    milestone banner is meaningful only at the moment it is reached; showing
+//!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
+//!    unlike fuel there is nothing left to act on later — the totals are on the
+//!    page. The [`crate::timers`] expiry leads the group because it is the one
+//!    the runner set themselves, and the two automatic ones tie-break on
+//!    distance, which is what the race is measured in. The timer sits *below*
+//!    fuel deliberately: a missed timer banner costs nothing recoverable (the
+//!    Timer page counts the overrun up), whereas §214 says a missed gel is the
+//!    one reminder that must never be silently dropped.
 //!
 //! Display-only by design: the DK has no vibration motor, and alerts are an
 //! L4 auxiliary — the engine is pure and fed *after* the recorder updates, so
@@ -162,6 +167,10 @@ pub enum Alert {
     WorkoutEnding,
     /// The structured workout's final step completed.
     WorkoutDone,
+    /// The runner's countdown reached zero ([`crate::timers`], §375). Carries
+    /// nothing: the duration is on the Timer page and the banner's whole job is
+    /// to say *now*.
+    TimerDone,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -230,6 +239,9 @@ pub fn banner(alert: Alert) -> Banner {
         }
         Alert::WorkoutEnding => write!(b, "! STEP END"),
         Alert::WorkoutDone => write!(b, "! WKT DONE"),
+        // Not "ALARM": nothing on this device can wake anyone, and the word
+        // would promise exactly that (§375).
+        Alert::TimerDone => write!(b, "! TIME UP"),
     };
     b
 }
@@ -271,6 +283,11 @@ pub struct AlertEngine {
     last_workout_transition_seq: u16,
     last_workout_ending_seq: u16,
     workout_done_fired: bool,
+    /// The last [`crate::timers::TimerView::expiry_seq`] announced. Deliberately
+    /// NOT cleared by [`Self::reset`]: the instrument outlives the run, so a
+    /// countdown that expired during one run must not re-announce itself at the
+    /// start of the next. It is configuration-lifetime, like the intervals.
+    last_timer_expiry_seq: u16,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
     pending_drink: bool,
@@ -304,6 +321,7 @@ impl AlertEngine {
             last_workout_transition_seq: 0,
             last_workout_ending_seq: 0,
             workout_done_fired: false,
+            last_timer_expiry_seq: 0,
             active: None,
             pending_drink: false,
             pending_eat: false,
@@ -520,6 +538,19 @@ impl AlertEngine {
             }
         }
 
+        // The timer edge is consumed whether or not it can be shown — the
+        // milestone rule, and the reason it is safe here: the Timer page counts
+        // the overrun up, so a dropped banner loses nothing the runner cannot
+        // still read. Not gated on Recording: a countdown set at an aid station
+        // is running precisely while the recorder is paused.
+        let mut timer_due = false;
+        if let Some(t) = snap.timer {
+            if t.expiry_seq != 0 && t.expiry_seq != self.last_timer_expiry_seq {
+                self.last_timer_expiry_seq = t.expiry_seq;
+                timer_due = true;
+            }
+        }
+
         // Milestones advance whether or not they can be shown: a milestone the
         // busy slot swallows is gone, not owed, so the next one must still be
         // measured from where the run actually is.
@@ -555,6 +586,8 @@ impl AlertEngine {
             } else if self.pending_drink {
                 self.pending_drink = false;
                 self.active = Some((Alert::Drink, uptime_s));
+            } else if timer_due {
+                self.active = Some((Alert::TimerDone, uptime_s));
             } else if let Some(milestone_m) = distance_due {
                 self.active = Some((Alert::Distance(milestone_m), uptime_s));
             } else if let Some(milestone_s) = time_due {
@@ -670,7 +703,8 @@ impl FuelOverdueTracker {
                 | Alert::PaceSlow
                 | Alert::WorkoutStep { .. }
                 | Alert::WorkoutEnding
-                | Alert::WorkoutDone,
+                | Alert::WorkoutDone
+                | Alert::TimerDone,
             )
             | None => {}
         }
@@ -744,6 +778,7 @@ mod tests {
             climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
+            timer: None,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,
@@ -766,6 +801,103 @@ mod tests {
             current_pace_s_per_km: Some(pace_s_per_km),
             ..rec(moving_s)
         }
+    }
+
+    /// A recording snapshot carrying a timer that has expired on arming `seq`
+    /// (0 = armed but still counting).
+    fn timed(seq: u16, moving_s: u32) -> Snapshot {
+        Snapshot {
+            timer: Some(crate::timers::TimerView {
+                preset_s: 300,
+                elapsed_s: 300,
+                display_s: 0,
+                running: true,
+                expired: seq != 0,
+                expiry_seq: seq,
+            }),
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_timer_expiry_raises_one_banner_and_never_says_alarm() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&timed(0, 10), None, 10), None);
+        assert_eq!(e.on_update(&timed(1, 11), None, 11), Some(Alert::TimerDone));
+        assert_eq!(banner(Alert::TimerDone).as_str(), "! TIME UP");
+        // Still expired on every later tick, and silent: one countdown, one
+        // banner.
+        for t in 12..200 {
+            let shown = e.on_update(&timed(1, t), None, t);
+            assert!(
+                shown.is_none() || t < 11 + ALERT_TTL_S,
+                "re-fired for the same arming at t={t}"
+            );
+        }
+        // A fresh arming is a different edge and does fire again.
+        assert_eq!(
+            e.on_update(&timed(2, 200), None, 200),
+            Some(Alert::TimerDone)
+        );
+    }
+
+    #[test]
+    fn a_timer_expiry_is_dropped_by_a_busy_slot_never_queued() {
+        // The milestone rule: the Timer page counts the overrun up, so a banner
+        // the runner missed costs nothing that cannot still be read.
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(300, 1_000_000);
+        assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Drink));
+        let mut busy = timed(1, 301);
+        busy.moving_s = 301;
+        assert_eq!(
+            e.on_update(&busy, None, 301),
+            Some(Alert::Drink),
+            "fuel keeps the slot — §214 says a gel is the one thing never dropped"
+        );
+        // The edge was consumed, not owed: nothing surfaces once the slot frees.
+        let after = 301 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&timed(1, after), None, after), None);
+    }
+
+    #[test]
+    fn a_timer_expiry_outranks_the_automatic_milestones() {
+        let mut e = AlertEngine::new();
+        e.set_distance_interval(Some(1_000));
+        let mut both = timed(1, 300);
+        both.distance_m = 1_000.0;
+        assert_eq!(
+            e.on_update(&both, None, 300),
+            Some(Alert::TimerDone),
+            "the milestone the runner set themselves leads the group"
+        );
+    }
+
+    #[test]
+    fn a_timer_that_expired_in_a_previous_run_does_not_re_announce() {
+        // The instrument outlives the run, so the edge tracker has to as well —
+        // a nap timer left expired must not greet the next run with a banner.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&timed(1, 10), None, 10), Some(Alert::TimerDone));
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 10), None, 30),
+            None
+        );
+        assert_eq!(e.on_update(&snap(RecordState::Idle, 0), None, 31), None);
+        assert_eq!(e.on_update(&timed(1, 0), None, 100), None);
+    }
+
+    #[test]
+    fn a_timer_expiry_fires_through_a_pause() {
+        // An aid-station countdown is running precisely while the recorder is
+        // not, so gating this arm on Recording would silence it exactly when it
+        // is the reason the timer exists.
+        let mut e = AlertEngine::new();
+        let paused = Snapshot {
+            timer: timed(1, 0).timer,
+            ..snap(RecordState::Paused, 0)
+        };
+        assert_eq!(e.on_update(&paused, None, 10), Some(Alert::TimerDone));
     }
 
     #[test]

@@ -95,6 +95,12 @@ pub const PHONE_SYNC_HINT: &str = "SET VIA PHONE SYNC";
 /// page is the only place the runner can learn it exists.
 pub const WAYPOINT_MARK_HINT: &str = "HOLD BTN5 TO MARK";
 
+/// The remedy line for [`Unfed::NoTimer`] — the §375 modal, named with the key
+/// that opens it and the surface it opens on. Both halves are load-bearing: the
+/// timer is armed from the idle face and nowhere else, so a runner told only
+/// "BTN2" would hunt for it mid-run, where that key arms the stop.
+pub const TIMER_SET_HINT: &str = "BTN2 ON IDLE FACE";
+
 /// The complete set of reasons a page may give for an empty body.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Unfed {
@@ -131,13 +137,16 @@ pub enum Unfed {
     NoWaypoints,
     /// Neither underfoot nor ahead is there an ascent to report.
     NoClimb,
+    /// No countdown or stopwatch has been started, so there is no clock to
+    /// read (§375).
+    NoTimer,
 }
 
 impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 14] = [
+    pub const ALL: [Unfed; 15] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
         Unfed::AwaitingPulse,
@@ -152,6 +161,7 @@ impl Unfed {
         Unfed::PolarNight,
         Unfed::NoWaypoints,
         Unfed::NoClimb,
+        Unfed::NoTimer,
     ];
 
     /// What the runner can do about it.
@@ -167,7 +177,7 @@ impl Unfed {
             | Unfed::MidnightSun
             | Unfed::PolarNight
             | Unfed::NoClimb => UnfedClass::Settled,
-            Unfed::NoWaypoints => UnfedClass::WatchAction,
+            Unfed::NoWaypoints | Unfed::NoTimer => UnfedClass::WatchAction,
         }
     }
 
@@ -189,17 +199,28 @@ impl Unfed {
             Unfed::PolarNight => "POLAR NIGHT",
             Unfed::NoWaypoints => "NO WAYPOINTS",
             Unfed::NoClimb => "NO CLIMB",
+            Unfed::NoTimer => "NO TIMER SET",
         }
     }
 
     /// The follow-up line, present only where the runner has something to do
     /// off the watch — the three other classes resolve themselves, and telling
     /// a runner to sync a course that IS synced would be a lie.
+    /// A [`UnfedClass::WatchAction`] hint names the gesture, so it is per-reason
+    /// rather than per-class: the two watch actions live on different keys and
+    /// different surfaces, and one hint for both would send half the runners to
+    /// the wrong button.
     pub const fn hint(self) -> Option<&'static str> {
-        match self.class() {
-            UnfedClass::PhoneFed => Some(PHONE_SYNC_HINT),
-            UnfedClass::WatchAction => Some(WAYPOINT_MARK_HINT),
-            UnfedClass::Sensor | UnfedClass::RunGate | UnfedClass::Settled => None,
+        match self {
+            Unfed::NoWaypoints => Some(WAYPOINT_MARK_HINT),
+            Unfed::NoTimer => Some(TIMER_SET_HINT),
+            _ => match self.class() {
+                UnfedClass::PhoneFed => Some(PHONE_SYNC_HINT),
+                UnfedClass::Sensor
+                | UnfedClass::RunGate
+                | UnfedClass::Settled
+                | UnfedClass::WatchAction => None,
+            },
         }
     }
 }
@@ -207,6 +228,7 @@ impl Unfed {
 const _: () = {
     assert!(PHONE_SYNC_HINT.len() <= crate::face::COLS);
     assert!(WAYPOINT_MARK_HINT.len() <= crate::face::COLS);
+    assert!(TIMER_SET_HINT.len() <= crate::face::COLS);
     let mut i = 0;
     while i < Unfed::ALL.len() {
         assert!(Unfed::ALL[i].reason().len() <= crate::face::COLS);
