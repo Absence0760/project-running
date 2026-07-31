@@ -41,7 +41,7 @@ pub enum Page {
     ///
     /// Each is gated on the runner having actually composed it
     /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
-    /// 37 built-ins and the cycle never carries a blank.
+    /// 38 built-ins and the cycle never carries a blank.
     Screen1,
     Screen2,
     Screen3,
@@ -87,6 +87,14 @@ pub enum Page {
     /// with the distance to it and the projected arrival; an honest inactive
     /// state when no course cutoffs are loaded.
     CutoffEta,
+    /// Sleep-station mode ([`crate::sleep_station`], § 373): how long the
+    /// runner may lie down and still make that same cut-off.
+    ///
+    /// **Directly after [`Page::CutoffEta`] on purpose.** The budget IS that
+    /// page's margin less a safety reserve, so a runner who has just read
+    /// `TIGHT` is one tap from what it costs them in sleep — and the two pages
+    /// go blank and come back together, since one projection feeds both.
+    SleepStation,
     /// The race roadbook: the upcoming checkpoints from the current position,
     /// each with its projected arrival + safe/tight/miss cutoff verdict; an
     /// honest inactive state when no roadbook is loaded
@@ -212,6 +220,7 @@ impl Page {
             Page::Nav => "NAV",
             Page::TurnCue => "TURN",
             Page::CutoffEta => "CUT",
+            Page::SleepStation => "SLP",
             Page::Roadbook => "ROAD",
             Page::Fuel => "FUEL",
             Page::ElevationProfile => "ELEV",
@@ -262,6 +271,7 @@ impl Page {
             Page::Nav => "COURSE MAP",
             Page::TurnCue => "NEXT TURN",
             Page::CutoffEta => "CUT-OFF ETA",
+            Page::SleepStation => "SLEEP STATION",
             Page::Roadbook => "ROADBOOK",
             Page::Fuel => "FUEL PLAN",
             Page::ElevationProfile => "ELEVATION PROFILE",
@@ -342,7 +352,8 @@ impl Page {
             Page::Climb => Page::Nav,
             Page::Nav => Page::TurnCue,
             Page::TurnCue => Page::CutoffEta,
-            Page::CutoffEta => Page::Roadbook,
+            Page::CutoffEta => Page::SleepStation,
+            Page::SleepStation => Page::Roadbook,
             Page::Roadbook => Page::Fuel,
             Page::Fuel => Page::ElevationProfile,
             Page::ElevationProfile => Page::RacePredictor,
@@ -371,13 +382,13 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 37 pages a forward-
-    /// only walk needs up to ~36 presses to reach a late page; a reverse
+    /// wrapping from the first page back to the last. With 38 pages a forward-
+    /// only walk needs up to ~37 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
     /// Which of the runner's composed screens this page shows, or `None` for
-    /// the 37 built-ins.
+    /// the 38 built-ins.
     ///
     /// The index into [`crate::screens::Screens`], so a page and the screen it
     /// draws are related by exactly one function rather than by four arms
@@ -439,7 +450,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 41] = [
+    const ALL: [Page; 42] = [
         Page::Dashboard,
         Page::Screen1,
         Page::Screen2,
@@ -457,6 +468,7 @@ mod tests {
         Page::Nav,
         Page::TurnCue,
         Page::CutoffEta,
+        Page::SleepStation,
         Page::Roadbook,
         Page::Fuel,
         Page::ElevationProfile,
@@ -511,7 +523,12 @@ mod tests {
         );
         assert_eq!(Page::Climb.next(), Page::Nav);
         assert_eq!(Page::Nav.next(), Page::TurnCue);
-        assert_eq!(Page::CutoffEta.next(), Page::Roadbook);
+        assert_eq!(
+            Page::CutoffEta.next(),
+            Page::SleepStation,
+            "the nap budget is one tap from the margin it is cut from"
+        );
+        assert_eq!(Page::SleepStation.next(), Page::Roadbook);
         assert_eq!(Page::Roadbook.next(), Page::Fuel);
         assert_eq!(Page::Fuel.next(), Page::ElevationProfile);
         assert_eq!(Page::RacePredictor.next(), Page::TrainingLoad);

@@ -863,6 +863,7 @@ mod tests {
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
+            sleep: None,
             race_prediction: None,
             pace_bucket_m: [0.0; PACE_BUCKET_COUNT],
             training_stress: None,

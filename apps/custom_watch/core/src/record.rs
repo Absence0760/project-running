@@ -18,6 +18,7 @@
 
 use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
+use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::distance_bands::{band_for_distance, DistanceBand};
 use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
@@ -517,6 +518,14 @@ pub struct Snapshot {
     /// projection via [`Recorder::set_route_position`]; a stale route position
     /// withholds the projected time rather than fabricate one off an old fix.
     pub cutoff: Option<CutoffEta>,
+    /// How long the runner may sleep and still make the next cut-off
+    /// ([`crate::sleep_station`], §373) — present exactly when
+    /// [`Snapshot::cutoff`] is, since it is that same projection less a reserve.
+    /// Its own [`crate::sleep_station::SleepStatus`] carries the honest empty
+    /// states, so a stale fix
+    /// yields `Unknown` rather than a nap length nothing will wake the runner
+    /// from.
+    pub sleep: Option<SleepBudget>,
     /// The live race-time ladder projected from the current run treated as a
     /// single effort — `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]
     /// and a moving pace exists, so a warm-up shows no fabricated prediction.
@@ -1908,6 +1917,7 @@ impl Recorder {
             zone_cutoffs: self.zone_cutoffs,
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
+            sleep: self.sleep_snapshot(),
             race_prediction: self.race_prediction_snapshot(),
             pace_bucket_m: self.pace_bucket_m,
             training_stress: self.training_stress_snapshot().map(|(s, _)| s),
@@ -1996,6 +2006,7 @@ impl Recorder {
         set(Page::TrainingLoad, s.training_stress.is_some());
         set(Page::DistanceBand, s.band.is_some());
         set(Page::CutoffEta, s.cutoff.is_some());
+        set(Page::SleepStation, s.sleep.is_some());
         set(Page::Roadbook, s.roadbook.is_some());
         set(Page::Fuel, s.fuel.is_some());
         set(Page::Nav, self.course_loaded);
@@ -2310,6 +2321,28 @@ impl Recorder {
         ))
     }
 
+    /// The sleep-station nap budget, on the same gate as the cut-off ETA — the
+    /// two answer one question from one projection, so a course whose cut-offs
+    /// feed one must feed the other.
+    ///
+    /// Both paces are handed over rather than picked here: `avg_pace` is the
+    /// run's MOVING pace, which the cut-off page projects from, and the race
+    /// pace below divides by the elapsed clock so every aid-station stop the
+    /// runner has already taken is priced in. [`sleep_budget`] takes the slower.
+    fn sleep_snapshot(&self) -> Option<SleepBudget> {
+        if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
+            return None;
+        }
+        Some(sleep_budget(
+            self.route_along_m.unwrap_or(0.0),
+            self.elapsed_s(),
+            self.avg_pace().map(f64::from),
+            self.race_pace(),
+            self.route_position_stale(),
+            &self.cutoff_legs,
+        ))
+    }
+
     /// The live race-time ladder, projecting the current run as a single effort
     /// (age 0). `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]; below
     /// that a Riegel projection is noise. `predict_race_ladder` returns `None`
@@ -2330,6 +2363,18 @@ impl Recorder {
             return None;
         }
         Some((self.moving_s as f64 * 1000.0 / self.distance_m) as u32)
+    }
+
+    /// Whole-run pace against the RACE clock rather than the moving one — every
+    /// stop so far divided back into it, so it is never faster than
+    /// [`Recorder::avg_pace`] and is the honest input to a projection a runner
+    /// will make more stops during.
+    fn race_pace(&self) -> Option<f64> {
+        let elapsed = self.elapsed_s();
+        if elapsed == 0 || self.distance_m < 1.0 {
+            return None;
+        }
+        Some(f64::from(elapsed) * 1000.0 / self.distance_m)
     }
 
     fn current_pace(&self) -> Option<u32> {
@@ -3349,6 +3394,50 @@ mod tests {
     }
 
     #[test]
+    fn the_sleep_budget_rides_the_cutoff_gate_and_the_slower_pace() {
+        use crate::sleep_station::SleepStatus;
+
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.00216, -105.0, 4.0, 60));
+        assert_eq!(r.snapshot().sleep, None, "no legs, no budget");
+        assert_eq!(r.snapshot().pages_mask & Page::SleepStation.bit(), 0);
+
+        // A cut-off two hours out, 300 m to go: masses of margin, so a budget.
+        r.set_cutoff_legs(&[CutoffLeg {
+            cum_dist_m: 500.0,
+            limit_elapsed_s: 7_200,
+        }]);
+        r.set_route_position(Some(200.0));
+        let s = r.snapshot();
+        let sleep = s.sleep.expect("budget with legs loaded");
+        assert_eq!(sleep.status, SleepStatus::Budget);
+        assert_ne!(s.pages_mask & Page::SleepStation.bit(), 0);
+
+        // The projection is never faster than the race clock allows: the run
+        // banked 240 m in 60 s of MOVING time but the elapsed clock is what the
+        // cut-off is measured on, so the slower of the two is what it used.
+        let race_pace = f64::from(s.elapsed_s) * 1000.0 / s.distance_m;
+        assert_eq!(sleep.pace_s_per_km, Some(race_pace));
+        assert!(race_pace >= f64::from(s.avg_pace_s_per_km.unwrap()));
+
+        // The position ages out: the budget goes Unknown with the cut-off ETA
+        // rather than counting down off a place the runner has left.
+        r.tick(300);
+        let stale = r.snapshot().sleep.expect("still has the leg");
+        assert_eq!(stale.status, SleepStatus::Unknown);
+        assert_eq!(stale.budget_min(), None);
+    }
+
+    #[test]
+    fn idle_has_no_sleep_budget() {
+        let r = Recorder::new();
+        assert_eq!(r.snapshot().sleep, None);
+    }
+
+    #[test]
     fn the_course_profile_marker_needs_both_a_profile_and_a_fresh_position() {
         let profile = |total_m: u32| RouteElevView {
             gain_m: 100,
@@ -3910,7 +3999,7 @@ mod tests {
     }
 
     /// The cycle carries exactly the composed screens the runner has, and an
-    /// unpushed watch walks the 37 built-ins with no blank seats among them.
+    /// unpushed watch walks the 38 built-ins with no blank seats among them.
     #[test]
     fn the_cycle_carries_exactly_the_composed_screens() {
         let mut r = Recorder::new();
