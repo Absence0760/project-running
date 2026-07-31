@@ -198,6 +198,8 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
         zoneCeiling: 3,
         tzOffsetMin: widget.tzOffset().inMinutes,
         restingHr: 50,
+        autoLap: WatchAutoLap.mi1,
+        stormAlertHpa: 4.0,
       ));
       if (!mounted) return;
       setState(() => _syncMessage = l10n.simWatchSettingsPushed);
