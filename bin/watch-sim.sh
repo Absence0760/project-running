@@ -27,6 +27,10 @@
 #   bin/watch-sim.sh --no-autostart       # boot idle; BTN1 starts the run, so the
 #                                         # idle face (BTN3 GNSS-mode cycling) is
 #                                         # reachable before recording begins
+#   bin/watch-sim.sh --storm              # compress the § 376 storm window to 60 s
+#                                         and arm the banner, so a scripted
+#                                         pressure fall is readable inside a
+#                                         scenario's budget
 #   bin/watch-sim.sh --no-alerts          # drop the sim's shortened alert
 #                                         # cadences (fuel / distance / time /
 #                                         # pace), so no banner covers the hero
@@ -60,6 +64,7 @@ PHONE_PORT=7788
 AUTOSTART=1
 ALERTS=1
 SCREENS=0
+STORM=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -71,7 +76,8 @@ while [[ $# -gt 0 ]]; do
 		--no-autostart) AUTOSTART=0; shift ;;
 		--no-alerts)    ALERTS=0; shift ;;
 		--screens)      SCREENS=1; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --screens)" ;;
+		--storm)        STORM=1; shift ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --screens, --storm)" ;;
 	esac
 done
 
@@ -98,9 +104,13 @@ command -v defmt-print >/dev/null || \
 # covering the hero rows). sim-screens: three canned composed data screens
 # (§364, one per layout), OFF unless --screens asks for them — they seat
 # immediately after the Dashboard, so leaving them on would shift every other
-# scenario's page walk. All OFF on the hardware build —
+# scenario's page walk. sim-storm: the § 376 tracker on a 60 s window instead
+# of three hours, plus the banner armed, OFF unless --storm asks — a
+# compressed window would have every other scenario reporting a tendency off a
+# minute of air. All OFF on the hardware build —
 # see apps/custom_watch/app/src/tasks/{record,button,nav}.rs.
 FEATURES=sim-buttons,sim-course,dev-blink
+[[ "$STORM" == 1 ]] && FEATURES="sim-storm,$FEATURES"
 [[ "$SCREENS" == 1 ]] && FEATURES="sim-screens,$FEATURES"
 [[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"
 [[ "$AUTOSTART" == 1 ]] && FEATURES="sim-autostart,$FEATURES"

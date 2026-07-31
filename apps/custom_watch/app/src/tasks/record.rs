@@ -352,10 +352,12 @@ pub async fn run(store: &'static SharedStore) {
     let mut timer_rx = unwrap!(state::TIMER.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let mut workout_rx = unwrap!(state::WORKOUT.receiver());
+    let mut storm_rx = unwrap!(state::STORM.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
     let sea_level_tx = state::SEA_LEVEL_PA.sender();
+    let storm_threshold_tx = state::STORM_THRESHOLD_HPA.sender();
     let tz_offset_tx = state::TZ_OFFSET_MIN.sender();
     let ice_tx = state::ICE.sender();
     let screens_tx = state::SCREENS.sender();
@@ -490,6 +492,17 @@ pub async fn run(store: &'static SharedStore) {
     // references — including CLMB, whose whole hero is the climb figure — with
     // no way to ask for a quiet watch short of dropping the demo settings that
     // arm most of the pages. `--no-alerts` is that way.
+    // The § 376 banner is off on hardware until a `SET1` push arms it, so the
+    // sim arms it through the same public setter, at the same threshold the
+    // wire's default would carry.
+    #[cfg(feature = "sim-storm")]
+    {
+        alerts.set_storm_alert(true);
+        info!(
+            "record: sim storm alert armed at {} hPa",
+            watch_core::storm::STORM_FALL_HPA
+        );
+    }
     #[cfg(feature = "sim-alerts")]
     {
         alerts.set_fuel_intervals(30, 45);
@@ -554,6 +567,7 @@ pub async fn run(store: &'static SharedStore) {
             &mut recorder,
             &mut alerts,
             &sea_level_tx,
+            &storm_threshold_tx,
             &tz_offset_tx,
             &ice_tx,
         );
@@ -714,6 +728,7 @@ pub async fn run(store: &'static SharedStore) {
                 &mut recorder,
                 &mut alerts,
                 &sea_level_tx,
+                &storm_threshold_tx,
                 &tz_offset_tx,
                 &ice_tx,
             );
@@ -898,6 +913,13 @@ pub async fn run(store: &'static SharedStore) {
             t.snapshot_view(Instant::now().as_secs() as u32)
         }));
 
+        // The § 376 tendency, published by the baro task on a change worth
+        // waking for. Folded in here rather than in the fix arm because the
+        // barometer keeps trending while the receiver is quiet.
+        if let Some(view) = storm_rx.try_changed() {
+            recorder.set_storm(view);
+        }
+
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
         let snap = recorder.snapshot();
@@ -1011,6 +1033,7 @@ fn apply_settings(
     recorder: &mut Recorder,
     alerts: &mut AlertEngine,
     sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
+    storm_threshold_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
     tz_offset_tx: &Sender<'static, CriticalSectionRawMutex, i16, 1>,
     ice_tx: &Sender<'static, CriticalSectionRawMutex, Option<IceCard>, 1>,
 ) {
@@ -1053,6 +1076,16 @@ fn apply_settings(
             // medical ID that vanishes on a power cycle is not a medical ID.
             SettingsEffect::Ice(card) => ice_tx.send(card),
             SettingsEffect::AutoLap(trigger) => recorder.set_auto_lap(trigger),
+            // Two sinks, and the second only when the banner is being armed: a
+            // disarm silences the alert and deliberately leaves the tracker's
+            // threshold alone, because the Storm page keeps classifying and a
+            // runner switching the banner off has not re-calibrated anything.
+            SettingsEffect::StormAlert(threshold) => {
+                alerts.set_storm_alert(threshold.is_some());
+                if let Some(hpa) = threshold {
+                    storm_threshold_tx.send(hpa);
+                }
+            }
         }
     }
 }

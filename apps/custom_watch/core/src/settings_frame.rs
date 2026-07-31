@@ -147,6 +147,7 @@ mod tests {
     fn maximal() -> WatchSettings {
         WatchSettings {
             auto_lap: Some(crate::auto_lap::AutoLap::Min30.to_byte()),
+            storm_alert: Some(Some(crate::storm::STORM_FALL_HPA)),
             max_hr: Some(190),
             pacer: Some(PacerGoalCfg {
                 distance_m: 42_195,
@@ -326,6 +327,7 @@ mod tests {
         for mask in 0u8..=u8::MAX {
             let s = WatchSettings {
                 auto_lap: (mask & 0x01 != 0).then_some(crate::auto_lap::AutoLap::Min5.to_byte()),
+                storm_alert: (mask & 0x02 != 0).then_some(Some(3.0)),
                 max_hr: (mask & 0x01 != 0).then_some(175),
                 pacer: (mask & 0x02 != 0).then_some(PacerGoalCfg {
                     distance_m: 10_000,

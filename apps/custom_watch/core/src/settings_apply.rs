@@ -107,6 +107,16 @@ pub enum SettingsEffect {
     /// for the same reason: a trigger that reverts to 1 km on a mid-race
     /// battery pull silently re-splits the rest of the race.
     AutoLap(AutoLap),
+    /// [`crate::alerts::AlertEngine::set_storm_alert`], and — when armed — the
+    /// baro task's threshold watch (`state::STORM_THRESHOLD_HPA`), which is
+    /// where [`crate::storm::StormTracker::set_fall_threshold_hpa`]'s
+    /// plausibility guard runs. The third two-sink effect, and the only one
+    /// whose second sink is conditional: a disarm turns the banner off and
+    /// deliberately leaves the tracker's threshold where it is, because the
+    /// page keeps classifying and a disarm is not a re-calibration.
+    /// `None` disarms, which is a real update and not the same as the field
+    /// being absent.
+    StormAlert(Option<f32>),
 }
 
 impl SettingsEffect {
@@ -131,6 +141,7 @@ impl SettingsEffect {
             Self::RestingHr(_) => EffectKind::RestingHr,
             Self::Ice(_) => EffectKind::Ice,
             Self::AutoLap(_) => EffectKind::AutoLap,
+            Self::StormAlert(_) => EffectKind::StormAlert,
         }
     }
 }
@@ -159,6 +170,7 @@ pub enum EffectKind {
     RestingHr,
     Ice,
     AutoLap,
+    StormAlert,
 }
 
 impl EffectKind {
@@ -184,7 +196,8 @@ impl EffectKind {
             Self::GuidedRun => Some(Self::RestingHr),
             Self::RestingHr => Some(Self::Ice),
             Self::Ice => Some(Self::AutoLap),
-            Self::AutoLap => None,
+            Self::AutoLap => Some(Self::StormAlert),
+            Self::StormAlert => None,
         }
     }
 
@@ -231,6 +244,7 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         resting_hr,
         ice,
         auto_lap,
+        storm_alert,
     } = *s;
 
     let mut plan = SettingsPlan::new();
@@ -316,6 +330,13 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         // rather than resetting a race's splits to a default.
         let _ = plan.push(SettingsEffect::AutoLap(trigger));
     }
+    if let Some(threshold) = storm_alert {
+        // No guard here: an armed threshold's plausibility window lives on the
+        // tracker's setter, which leaves the current threshold standing rather
+        // than clamping — routing it unconditionally keeps this seam a pure
+        // fan-out, the same as every other alert cadence.
+        let _ = plan.push(SettingsEffect::StormAlert(threshold));
+    }
     plan
 }
 
@@ -372,6 +393,7 @@ mod tests {
                 "JAMIE MORGAN",
                 "+1 555 0134",
             )),
+            storm_alert: Some(Some(crate::storm::STORM_FALL_HPA)),
         }
     }
 
@@ -582,6 +604,13 @@ mod tests {
                 },
                 SettingsEffect::AutoLap(AutoLap::Km5),
             ),
+            (
+                WatchSettings {
+                    storm_alert: full.storm_alert,
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::StormAlert(Some(crate::storm::STORM_FALL_HPA)),
+            ),
         ];
         for (frame, effect) in expected {
             let plan = plan_apply(&frame);
@@ -727,6 +756,13 @@ mod tests {
                     ..WatchSettings::default()
                 },
                 SettingsEffect::GuidedRun(None),
+            ),
+            (
+                WatchSettings {
+                    storm_alert: Some(None),
+                    ..WatchSettings::default()
+                },
+                SettingsEffect::StormAlert(None),
             ),
             (
                 WatchSettings {
