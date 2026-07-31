@@ -360,6 +360,14 @@ DROPOUT_RESUME_TIMEOUT = 120
 # Mirrors `watch_core::record::GPS_REANCHOR_AFTER_S`. Named here so the failure
 # message can say which constant the observed gap has to clear.
 GPS_REANCHOR_AFTER_S = 10
+# Mirrors `Recorder::fix_stale_budget_s` — `max(fix_interval_s * 3, 10)`, which
+# is 10 at the sim's 1 Hz cadence — and `fix_stale` compares STRICTLY past it.
+# The recorder therefore cannot be paused at the instant the fixes stop, and the
+# first seconds of a void legitimately still read `recording`. Equal to
+# GPS_REANCHOR_AFTER_S today by coincidence, not by derivation: they answer
+# different questions and are named apart so a change to one cannot silently
+# move the other.
+FIX_STALE_BUDGET_S = 10
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -1984,17 +1992,34 @@ def scenario_dropout(sim):
             "inside a void with no fixes in it — the recorder is crediting "
             "distance it cannot have measured"
         )
-    running = [(t, m.group(1)) for t, m in inside if m.group(1) != "paused"]
+    # The pause is owed once the fix-stale budget has elapsed, not at the instant
+    # the fixes stop: `fix_stale` compares strictly past `fix_stale_budget_s`, so
+    # the opening seconds of a void honestly still read `recording` and the frozen
+    # distance above is what holds them to account. Asserting this from void_start
+    # made the verdict depend on where the first snapshot happened to land against
+    # the last fix — it passed locally and failed on a CI runner from that alone.
+    pause_deadline = void_start + FIX_STALE_BUDGET_S
+    settled = [(t, m) for t, m in inside if t > pause_deadline]
+    if not settled:
+        raise SmokeFailure(
+            f"the {span:.1f}s void produced no snapshot past the "
+            f"{FIX_STALE_BUDGET_S}s fix-stale budget (deadline t="
+            f"{pause_deadline:.1f}s), so the auto-pause this scenario exists to "
+            "prove was never observable"
+        )
+    running = [(t, m.group(1)) for t, m in settled if m.group(1) != "paused"]
     if running:
         t, state = running[0]
         raise SmokeFailure(
-            f"the recorder read '{state}' at t={t:.1f}s inside the void, not "
-            "'paused' — a stretch with no fixes has to auto-pause, or the run "
-            "view is telling the runner it is still tracking them"
+            f"the recorder read '{state}' at t={t:.1f}s, {t - void_start:.1f}s into "
+            f"a void with no fixes and past the {FIX_STALE_BUDGET_S}s fix-stale "
+            "budget, not 'paused' — a stretch with no fixes has to auto-pause, or "
+            "the run view is telling the runner it is still tracking them"
         )
     passed(
-        f"distance held at {frozen:.1f} m across the whole void and every one of "
-        f"the {len(inside)} snapshots in it read paused"
+        f"distance held at {frozen:.1f} m across all {len(inside)} snapshots in the "
+        f"void, and every one of the {len(settled)} past the "
+        f"{FIX_STALE_BUDGET_S}s fix-stale budget read paused"
     )
 
     # The re-anchor. Growth after the far edge of the void, and before the NMEA
