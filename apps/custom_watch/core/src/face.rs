@@ -2061,9 +2061,10 @@ fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
 
 /// The lap glance page: the current lap's running time up large in the
 /// rows-0-2 hero (drawn by the app from [`page_hero`] via [`split_row`]), the
-/// lap number as the label, then last-lap split / lap distance / HR / GPS as 1x
-/// context — what a runner checks right after pressing Lap (or hearing the 1 km
-/// auto-lap tick over): which lap am I on, and what did the last one take.
+/// lap number as the label, then last-lap split + the armed auto-lap trigger /
+/// lap distance / HR / GPS as 1x context — what a runner checks right after
+/// pressing Lap (or watching the auto-lap tick over): which lap am I on, what
+/// did the last one take, and what closes the next one.
 #[allow(clippy::too_many_arguments)]
 fn lap_glance(
     fix: Option<&Fix>,
@@ -2081,19 +2082,27 @@ fn lap_glance(
         write_tag(&mut rows[3], tag);
     }
 
+    // LAST + the widest split (999:59:59) + the widest trigger label fill the
+    // row to the column, so the two fields are width-pinned rather than
+    // whitespace-separated: an over-wide split would otherwise push the trigger
+    // silently off the end of a `heapless::String`.
     match snap.last_lap {
         Some(lap) => {
             let _ = write!(
                 rows[4],
-                "{:<5}{}",
+                "{:<5}{:<10}",
                 "LAST",
                 split_row(lap.elapsed_s).as_str()
             );
         }
         None => {
-            let _ = write!(rows[4], "{:<5}--", "LAST");
+            let _ = write!(rows[4], "{:<5}{:<10}", "LAST", "--");
         }
     }
+    // What closes the NEXT lap. Without it a runner who turned auto-lap off (or
+    // onto a mile) reads a lap counter that will not move where they expect and
+    // has no way to tell configuration from breakage.
+    let _ = write!(rows[4], "{:>6}", snap.auto_lap.label());
 
     let km = (snap.lap_distance_m / 1000.0).min(9999.99);
     let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
@@ -4376,6 +4385,7 @@ mod tests {
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,
             last_lap: None,
+            auto_lap: crate::auto_lap::AUTO_LAP_DEFAULT,
             pacer: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
@@ -6512,7 +6522,7 @@ mod tests {
         // Rows 0-2 are the tall hero band; the label row carries the tag.
         assert_eq!(rows[0].as_str(), "");
         assert_eq!(rows[3], header("LAP 4", "REC"));
-        assert_eq!(rows[4].as_str(), "LAST 4:58");
+        assert_eq!(rows[4].as_str(), "LAST 4:58         1KM");
         assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
         assert_eq!(rows[8].as_str(), "     8 SATS PERF");
@@ -6534,7 +6544,8 @@ mod tests {
             true,
         );
         assert_eq!(rows[3], header("LAP 1", "REC"));
-        assert_eq!(rows[4].as_str(), "LAST --");
+        assert_eq!(rows[4].as_str(), "LAST --           1KM");
+        assert_eq!(rows[4].len(), COLS);
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(
             page_hero(Page::Lap, None, Some(&rec), None)
@@ -6542,6 +6553,36 @@ mod tests {
                 .as_str(),
             "0:00"
         );
+    }
+
+    #[test]
+    fn lap_glance_names_an_off_trigger_and_still_fits_at_its_widest() {
+        // The honest half of the row: a runner who turned auto-lap off must be
+        // able to tell configuration from a broken lap counter. Pinned at the
+        // worst case — the widest split a `split_row` can produce beside the
+        // widest label — because the two fields are width-pinned and an
+        // overflow drops the trigger silently off a `heapless::String`.
+        let mut rec = snapshot(RecordState::Recording, 3_400.0);
+        rec.auto_lap = crate::auto_lap::AutoLap::Off;
+        rec.last_lap = Some(crate::record::Lap {
+            index: 1,
+            distance_m: 1.0,
+            elapsed_s: 999 * 3600 + 59 * 60 + 59,
+            moving_s: 0,
+        });
+        let rows = page_rows(
+            Page::Lap,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            2,
+            true,
+        );
+        assert_eq!(rows[4].as_str(), "LAST 999:59:59    OFF");
+        assert!(rows[4].len() <= COLS);
     }
 
     #[test]
