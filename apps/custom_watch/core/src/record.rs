@@ -5527,6 +5527,50 @@ mod tests {
     }
 
     #[test]
+    fn the_bell_outranks_a_time_rung_too_and_the_choice_comes_back_disarmed() {
+        // § 372 was written against the hard-coded kilometre § 374 replaced, so
+        // the arm has to answer for the rungs § 374 added as well. A 5-minute
+        // rung is the worse of the two on this store: twelve empty closes per
+        // hour-long loop against a 64-record budget, evicting the loop splits
+        // that ARE the result. The choice is dormant, not cleared.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_backyard_armed(true);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        for i in 0..=6u32 {
+            r.on_fix(&fix(north(f64::from(i) * 60.0), -105.0, 1.0, i * 60));
+        }
+        let s = r.snapshot();
+        assert!(s.moving_s >= 300, "{}", s.moving_s);
+        assert_eq!(s.lap, 1, "an armed bell must suppress the time rung too");
+
+        r.set_backyard_armed(false);
+        r.on_fix(&fix(north(7.0 * 60.0), -105.0, 1.0, 7 * 60));
+        assert_eq!(
+            r.snapshot().lap,
+            2,
+            "disarming restores the runner's own trigger"
+        );
+    }
+
+    #[test]
+    fn an_armed_bell_over_an_off_trigger_leaves_only_the_press_and_the_bell() {
+        // `Off` and the bell agree on the automatic axis, so the arm changes
+        // nothing there — what it must not do is take the button as well.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Off);
+        r.set_backyard_armed(true);
+        r.start(0);
+        for i in 1..=250u32 {
+            r.on_fix(&fix(f64::from(i) * 0.00008, 0.0, 9.0, i));
+        }
+        assert_eq!(r.snapshot().lap, 1);
+        r.lap(300);
+        assert_eq!(r.snapshot().lap, 2, "the corral return still closes a loop");
+    }
+
+    #[test]
     fn a_new_run_starts_the_race_over_but_keeps_the_mode() {
         let mut r = Recorder::new();
         r.set_backyard_armed(true);
