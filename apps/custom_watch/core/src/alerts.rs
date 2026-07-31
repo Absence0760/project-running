@@ -2134,6 +2134,23 @@ mod tests {
     }
 
     #[test]
+    fn a_whistle_outranks_a_timer_expiry_on_the_same_tick() {
+        // §372 and §375 arrived on separate branches and each stated its own
+        // rung against arms that existed then; this is the pair they never met
+        // in. The bell wins: a missed corral ends the race outright, while the
+        // Timer page counts its own overrun up, so the countdown's banner is
+        // the one of the two that costs nothing to lose.
+        let mut e = AlertEngine::new();
+        let mut both = backyard_snap(RecordState::Recording, 1, 2);
+        both.timer = timed(1, 0).timer;
+        assert_eq!(e.on_update(&both, None, 5), Some(Alert::BackyardBell(2)));
+        // And the timer edge was consumed, not owed: it never resurfaces.
+        let mut after = backyard_snap(RecordState::Recording, 1, 2);
+        after.timer = both.timer;
+        assert_eq!(e.on_update(&after, None, 5 + ALERT_TTL_S), None);
+    }
+
+    #[test]
     fn a_zone_banner_blocks_a_whistle_and_the_whistle_is_dropped_not_owed() {
         // The milestone rule: a whistle shown late is a lie about the clock,
         // and the page carries the live countdown anyway.
