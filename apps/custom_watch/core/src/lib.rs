@@ -249,6 +249,7 @@
 
 pub mod age_grade;
 pub mod alerts;
+pub mod auto_lap;
 pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
