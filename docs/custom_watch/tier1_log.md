@@ -850,6 +850,98 @@ worth stating precisely: the golden bytes were computed by an independent encode
 against five Rust vectors it had no part in producing, and twin parity was checked with `diff -rq`.
 No Rust changed. Nothing here has executed on silicon; § 82 is untouched.
 
+## 2026-07-31 — A factory erase, on the settings menu's second far seat
+
+**Decision:** [§ 378](../architecture/decisions.md). **Closes** the gap the
+2026-07-31 privacy entry above left open and named as the largest on the page:
+no wearer could erase their own data from the device. There was no factory
+reset, no clear-all-runs, no wipe; `Waypoints::clear()` had zero callers; the
+ICE card could only be cleared by a *phone* push, and the run slots and the BLE
+bond could not be cleared at all. A lost, stolen or handed-on watch could not be
+sanitised by the person who had been wearing it.
+
+**The seat was computed, not chosen.** § 351's budget is that no row a runner
+reaches for *mid-race* costs more than 4 presses, and `navigation.md` predicted
+a seventh row would break it. It does not, and the reason is worth keeping: the
+prediction assumed **appending**. A wrapping ring's cursor distance to index `k`
+is `min(k, n-k)`, so a 6-ring has one far seat at 3 and a 7-ring has **two**
+(`[0,1,2,3,3,2,1]`). FACTORY ERASE went in at index 4 — the second far seat —
+and every pre-existing row keeps its exact cost, verified by a test that
+computes both rings from `ITEMS` rather than restating them. Appending at index
+6 would have cost RE-ZERO and MEDICAL ID a press each *and* put the wipe on the
+cheapest seat on the ring, one BTN2 press from the cursor's home. The far seat
+is where a wipe belongs on both grounds. The published press-cost table was
+re-derived rather than adjusted: the § 289 BFS was first reproduced against
+`navigation.md`'s own anchors (n = 32 → 16 / 8.0, 9 / 4.7188, 6 / 3.7188;
+n = 41 → 20 / 10.2439, 10 / 5.6585, 7 / 4.2927; n = 45 → 22 / 11.2444,
+11 / 6.0667, 8 / 4.5778, all matching to the published digit) to confirm the
+model, and it does **not** move — a settings row is not a page.
+
+**The layout change § 372 predicted did happen.** Six rows filled the nine-row
+panel exactly, so `MENU_TOP_ROW` moved 3 → 2 and the blank spacer under the
+title is gone. That was the last slack: an eighth row needs § 333's
+row-scrolling window ported from the grid, which is stated in `navigation.md`
+so the next person reads a design rather than rediscovering a wall.
+
+**The confirm is the stop guard's, and a hold was refused.** `EraseGuard` is
+`StopGuard`'s shape and shares its 4 s window, so the device has one learned
+dwell for its two irreversible actions. Hold-to-confirm — the other
+guarded-destructive idiom here — is unavailable: *idle gestures are
+duration-stable* is a pinned navigation invariant, and a duration split inside
+an idle modal would be the first gesture to break it (§ 375 declined the same
+split for the same reason). Right arms, a second right inside the window wipes,
+**everything else cancels** — a cursor step, a left press, the exit, the menu
+closing, the window lapsing. The arm borrows the menu's single deadline slot
+while live, so it lapses visibly back to `FACTORY ERASE` rather than standing as
+a prompt for a press that would now only re-arm.
+
+**What it takes.** The four run slots, the eight waypoints, the config record,
+the composed screens, the ICE card, the BLE bond, the pushed course and workout,
+the trackback breadcrumb, and the recorder's pushed biometrics / pacer goal /
+gear / roadbook / fuel plan / page mask / auto-lap rung / backyard arm. The two
+arguable ones are argued in § 378 and tabulated in
+[`privacy.md`](privacy.md#the-erase-378): the **ICE card** goes because it is
+the only third-party personal data on the device (a next-of-kin who never
+consented to the next holder) and is re-pushable in one action, and the **bond**
+goes because it is a live credential whose IRK defeats the previous owner's
+address privacy permanently — a watch that keeps it lets the old phone read the
+new owner's runs. The timezone offset deliberately stays (not personal,
+RAM-only, and the channel has no propagating "unset", so writing `0` would make
+the home clock claim `LOCAL` while showing UTC).
+
+**It erases bytes, not directory entries** — `SlotDir::forget` would satisfy
+every reader in this firmware while leaving the blobs where they were written,
+and the adversary here is whoever holds the device next, with no APPROTECT
+between them and a probe. Both halves follow the same rule: the flash side
+erases a *range* (`plan_factory_erase`, one contiguous span whose test checks
+every published record offset and every slot against it), and the RAM side
+replaces the `Recorder` whole. **Erase by default, not by allowlist** — a
+personal field added to either side next year is covered without anyone
+remembering to extend a list.
+
+**Rung: host-tested + sim-verified, in named parts.** 11 new host tests, 2407 →
+2418 passed / 0 failed on `bin/watch-test.sh`. `cargo fmt --all --check` clean;
+`clippy -D warnings` clean for `thumbv7em-none-eabihf` on the workspace default,
+`-p app --no-default-features --features ble`, and the
+`sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink` set. The `idle`
+Renode scenario (`sim/ci_smoke.py --scenario idle --budget 400`, 12/12 green)
+walks the row into the cycle, asserts one press **arms and changes the panel**,
+asserts stepping off the row and back leaves the next press arming again rather
+than confirming, and only then confirms — after which the GNSS mode falls back
+from the `Expedition ~220h` the scenario itself walked the ladder to, down to
+`Performance 1s ~110h`.
+
+**What is NOT verified, and it is the half that matters.** Renode's flash is
+plain memory behind an SVD-derived NVMC model that answers `READY` and swallows
+the `ERASEPAGE` write, so the firmware reports a success over an emulator that
+changed no byte. That four run slots and a config page actually read back
+`0xFF`, and that a previously paired phone really has to re-pair, are **bench**
+items — added to [`quality_standards.md`](quality_standards.md) step 7 with a
+read-the-flash-back pass criterion, because "the manifest is empty" is what a
+directory drop also produces and is exactly the distinction this erase exists to
+make. The bond half can never be sim-verified at all (§ 210). Nothing here is
+bench-verified, because no hardware exists.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.

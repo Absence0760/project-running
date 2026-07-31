@@ -14,7 +14,11 @@ is a decision rather than an accident. Every rung claimed below is
 [`quality_standards.md`](quality_standards.md) defines; **nothing on this page
 is bench-verified, because no hardware exists.**
 
-Recorded as [decisions § 377](../architecture/decisions.md).
+Recorded as [decisions § 377](../architecture/decisions.md), and amended by
+[§ 378](../architecture/decisions.md), which closed the largest gap this page
+opened with: **there is now a user-reachable factory erase** — a guarded
+settings-menu row, reachable on the device alone. See
+[*The erase*](#the-erase-378) below.
 
 ## What the watch holds
 
@@ -75,7 +79,8 @@ What exists is a *capacity* bound, which is not the same thing:
   readable in full over `run_chunk`. Four quiet weeks after a race, the race is
   still on the wrist.
 - `SlotDir::forget` drops a slot's **directory entry**, not its bytes. The page
-  is erased when a later reservation takes it, not when the entry goes.
+  is erased when a later reservation takes it, not when the entry goes. The
+  § 378 erase deliberately does **not** use it — see below.
 - A **waypoint** survives until eight newer marks push it out
   (`waypoints.rs`). The first eight marks of a device's life can sit in flash
   indefinitely.
@@ -87,8 +92,58 @@ The main app, by contrast, has a real per-category policy in
 are kept *until the user deletes them*, and only ephemeral broadcast data
 (`live_run_pings`, `race_pings`) carries a clock, at 48 hours. The watch's
 flash holds the owner's own record, so "until the user deletes it" is the
-correct target for it too — **except that the watch has no delete.** That gap
-is the first item under *Deferred*, below.
+correct target for it too — and since § 378 the watch **has** a delete. It is
+an all-or-nothing one: a factory erase, not a per-run one.
+
+## The erase (§ 378)
+
+**The wearer can sanitise the device with no phone in reach.** A seventh
+settings-menu row, `FACTORY ERASE`, on the ring's far seat — 5 presses to arm,
+6 to complete. A right press arms `erase::EraseGuard` and the row reads
+`ERASE ALL? B1` under a replaced legend row (`B1 ERASE    B4 CANCEL`); a second
+right inside the stop guard's own 4 s window wipes. Any other press cancels,
+and so does the window lapsing. The button edges and the recomputed press costs
+are in [`navigation.md`](navigation.md).
+
+| What | Cleared? | Why |
+|---|---|---|
+| The four run slots — every coordinate and every bpm | yes | the payload |
+| The eight waypoints | yes | saved coordinates the runner chose; `Waypoints::clear` finally has a caller |
+| The **ICE card** | yes | the only *third-party* personal data here — a next-of-kin who never consented to the next holder — and special-category health data. Phone-authored, so the recovery cost is one push against an unbounded exposure |
+| The **BLE bond** (LTK, IRK, peer address) | yes | a live **credential**, not a stale record: a kept bond lets the previous owner's phone read the new owner's runs and live position, and the IRK resolves that phone's random addresses forever. Re-pairing costs one phone-side action and loses nothing |
+| The config record (GNSS mode, filter, profile, backyard, auto-lap) | yes | a *factory* erase, not a runs-only clear |
+| Composed data screens | yes | same |
+| Pushed max HR / resting HR, pacer goal, gear, roadbook, fuel plan | yes | biometrics and race config, held in the recorder, which is replaced whole |
+| The pushed course, workout, and the trackback breadcrumb | yes (RAM) | where the runner planned to be, and where they went; all drawn on pages a next holder would page straight to |
+| The **timezone offset** | **no** | not personal — a UTC offset is shared by a continent — RAM-only, and the channel has no propagating "unset", so writing `0` would make the home clock claim `LOCAL` while showing UTC. A false label is worse than a retained offset |
+| A **live BLE connection** | **no** | the durable bond is gone, so the next boot has no peer; the only window is until power-cycle, during which the wearer is holding the watch. Tearing a SoftDevice link down needs a `ble`-only seam that can be neither host- nor sim-verified (§ 210) |
+
+**It erases bytes, not directory entries.** `SlotDir::forget` would satisfy
+every reader in this firmware while leaving each blob's coordinates and heart
+rates at the address they were written to — and the adversary a factory erase
+exists for is whoever holds the device next, with no APPROTECT between them and
+a debug probe (item 6 under *Deferred*). `flash_plan::plan_factory_erase`
+returns one contiguous range covering the config page and all four slots, and
+its host test checks every published record offset against that range rather
+than against a copy of the arithmetic — so a record added at a new offset fails
+the test rather than surviving a wipe.
+
+**What that claim is bounded to.** The erase returns every address the firmware
+wrote to `0xFF`, and this store addresses pages directly with no wear-levelling
+or copy-back layer underneath to leave a shadow copy elsewhere. It is **not** a
+claim against charge-remnant recovery on a decapped die, and it does nothing
+about a probe attached *before* the erase. That is encryption at rest, which
+tier 1 does not have.
+
+**Rung.** Host-tested (the guard, the row's placement, the range's coverage)
+and sim-verified for the guard, the fan-out and the RAM half — the `idle`
+scenario asserts that one press arms rather than wipes, that stepping off the
+row cancels the arm, and that the confirming press resets a setting the
+scenario itself moved. **The flash wipe is not sim-verified**: Renode answers
+`NVMC:READY` from its SVD and swallows the `ERASEPAGE` write, so the firmware
+reports success over an emulator that changed no byte. That the slots really
+read back `0xFF` is a bench item, and it is the half that matters for a watch
+that has left its owner's hands.
 
 ## What the watch inherits for free
 
@@ -119,7 +174,10 @@ arrive as a table with an owner FK (so the export guard sees it) and either an
 
 **None of this reaches the copy still on the watch.** A user who deletes their
 account still has up to four runs, eight waypoints, a medical ID and a bond key
-on their wrist.
+on their wrist — until they run the § 378 erase, which is a *separate,
+device-local* action and is not driven by the account deletion. Nothing in this
+firmware learns that an account went away, and nothing should: the watch holds
+no account identity to match against, which is a property worth keeping.
 
 ## Why `privacy.rs` is dormant, and what would wire it
 
@@ -191,18 +249,14 @@ deleting.
 
 ## Deferred, with reasons
 
-1. **No user-reachable erase — the largest gap on this page.** There is no
-   factory reset, no "clear all runs", no wipe. `Waypoints::clear()` exists and
-   has no caller outside its own test. The ICE card can be cleared only by a
-   *phone* push of `ice: Some(None)`; the bond and the run slots cannot be
-   cleared at all. **A lost, stolen, or resold watch cannot be sanitised by the
-   person wearing it.** The fix is not hard — the primitives are all present —
-   but the affordance is a settings-menu row plus a destructive-action confirm,
-   which lands in the navigation lane: it moves the menu's row count and
-   therefore the published press-cost model in
-   [`navigation.md`](navigation.md), and the device has no confirm-modal idiom
-   outside § 375's timer. It is tier-1-sized work, and it is a navigation
-   change as much as a privacy one. **Owed.**
+1. ~~**No user-reachable erase — the largest gap on this page.**~~ **Closed
+   2026-07-31 by [§ 378](../architecture/decisions.md)** — see
+   [*The erase*](#the-erase-378) above. What is left of it is one bench item
+   (that the page erase really returns the slots to `0xFF`, which Renode cannot
+   settle) and one bounded limit (a live BLE connection is not torn down; the
+   durable bond is). Kept as item 1 rather than deleted, because the two items
+   below reference it and because a reader arriving from § 377 will look here
+   for it.
 2. **No erase-on-sync — deliberate, not an oversight.**
    `mark_synced_if_complete` fires when the phone has *pulled* the bytes, but
    the phone then queues them to disk and uploads later, retrying across
