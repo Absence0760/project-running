@@ -43,6 +43,7 @@ use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
 use watch_core::alerts::{Alert, AlertEngine};
+use watch_core::auto_lap::AutoLap;
 use watch_core::button::RecordCommand;
 #[cfg(feature = "sim-course")]
 use watch_core::cutoff_eta::CutoffLeg;
@@ -355,6 +356,11 @@ pub async fn run(store: &'static SharedStore) {
     // menu's toggle survives a reboot the way the GNSS mode does; None means
     // no explicit choice was ever stored and the recorder keeps its default.
     let mut persisted_hide: Option<bool> = store.lock().await.read_hide_empty();
+    // The auto-lap trigger the flash record already holds (§374). Kept as the
+    // comparison so a repeated push never re-erases the config page, and
+    // re-applied below so a mid-race battery pull cannot silently put the rest
+    // of the run back on 1 km laps.
+    let mut persisted_auto_lap = store.lock().await.read_auto_lap();
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -414,6 +420,10 @@ pub async fn run(store: &'static SharedStore) {
     if let Some(hide) = persisted_hide {
         recorder.set_hide_empty_pages(hide);
         info!("record: restored hide-empty-pages {}", hide);
+    }
+    if let Some(trigger) = persisted_auto_lap {
+        recorder.set_auto_lap(trigger);
+        info!("record: restored auto-lap {}", trigger);
     }
     // Re-apply the persisted activity profile's page preset (§353) — the
     // selection itself is display state (main seeds `state::PROFILE`), but the
@@ -694,6 +704,17 @@ pub async fn run(store: &'static SharedStore) {
                     persisted_ice = card;
                 }
             }
+            // Same rule for the auto-lap trigger (§374): the choice must
+            // outlive the power cycle, or a battery pull at hour 60 re-splits
+            // the rest of the race at the default. Only a byte that names a
+            // rung is persisted — the fan-out drops the rest, and flash must
+            // not hold what the recorder refused.
+            if let Some(trigger) = s.auto_lap.and_then(AutoLap::from_byte) {
+                if persisted_auto_lap != Some(trigger) {
+                    store.lock().await.persist_auto_lap(trigger).await;
+                    persisted_auto_lap = Some(trigger);
+                }
+            }
         }
 
         // Composed data screens arrive as a whole set, so this is a
@@ -965,6 +986,7 @@ fn apply_settings(
             // from, here, and the flash record the drain loop writes — a
             // medical ID that vanishes on a power cycle is not a medical ID.
             SettingsEffect::Ice(card) => ice_tx.send(card),
+            SettingsEffect::AutoLap(trigger) => recorder.set_auto_lap(trigger),
         }
     }
 }
