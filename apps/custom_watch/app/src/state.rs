@@ -128,6 +128,14 @@ pub static TIMER_MENU: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
 /// menu's PROFILE row. One receiver (the `ui` task).
 pub static PROFILE: Watch<CriticalSectionRawMutex, Option<ActivityProfile>, 1> = Watch::new();
 
+/// Whether backyard-ultra mode is armed (§372). `main` seeds it from the
+/// persisted CFG1 flag at boot and the `button` task re-publishes on a menu
+/// edit; the `record` task applies it to the recorder, which is where it
+/// re-points the auto-lap onto the corral bell. One receiver (`record`) — the
+/// `ui` task reads the arm off the recorder snapshot the menu row already
+/// carries, rather than a second copy that could disagree with it.
+pub static BACKYARD: Watch<CriticalSectionRawMutex, bool, 1> = Watch::new();
+
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
 /// (or once at boot when no course is loaded); the `ui` task renders it and
 /// `record` reads the distance-along-course it feeds the recorder for the

@@ -629,7 +629,8 @@ pub async fn screen_task(
         // live run in the interim.
         if let Some(cursor) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
-            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile)
+            let yard = rec.as_ref().is_some_and(|s| s.backyard.is_some());
+            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile, yard)
                 .iter()
                 .enumerate()
             {

@@ -848,6 +848,7 @@ mod tests {
             state: RecordState::Recording,
             manual_paused: false,
             signal_lost: false,
+            backyard: None,
             distance_m: 0.0,
             elapsed_s: 0,
             moving_s: 0,

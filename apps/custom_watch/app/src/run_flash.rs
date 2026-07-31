@@ -260,6 +260,14 @@ impl RunStore {
         flash_store::hide_empty_from_flags(flags)
     }
 
+    /// Whether the persisted record has backyard-ultra mode armed (§372). A
+    /// missing or corrupt record reads as disarmed, which is also the default
+    /// — the fail-closed direction for a mode that re-points the auto-lap.
+    pub fn read_backyard(&mut self) -> bool {
+        self.read_config_bytes()
+            .is_some_and(|(_, flags, _)| flash_store::backyard_from_flags(flags))
+    }
+
     /// Read the activity profile persisted by
     /// [`persist_profile`](Self::persist_profile), or `None` when no profile
     /// was ever selected (every pre-§353 record) or the stored discriminant
@@ -329,6 +337,24 @@ impl RunStore {
         ));
         if self.rewrite_config_page(&page).await {
             info!("run_flash: persisted hide-empty-pages {}", hide);
+        }
+    }
+
+    /// Persist the backyard-ultra arm (§372) so a runner who armed it at a
+    /// start line still has it after a brown-out at hour 30. Same best-effort
+    /// / L4 rules and carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode).
+    pub async fn persist_backyard(&mut self, armed: bool) {
+        let mut page = self.read_config_page();
+        let (mode_byte, flags, profile) =
+            page.config.unwrap_or((GnssMode::default().to_byte(), 0, 0));
+        page.config = Some((
+            mode_byte,
+            flash_store::set_backyard_flags(flags, armed),
+            profile,
+        ));
+        if self.rewrite_config_page(&page).await {
+            info!("run_flash: persisted backyard mode {}", armed);
         }
     }
 

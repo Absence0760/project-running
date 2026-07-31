@@ -46,6 +46,7 @@ fn base_snapshot() -> Snapshot {
         state: RecordState::Recording,
         manual_paused: false,
         signal_lost: false,
+        backyard: None,
         distance_m: 32_400.0,
         elapsed_s: 3 * 3600 + 12 * 60 + 5,
         moving_s: 3 * 3600,

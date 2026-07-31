@@ -379,6 +379,8 @@ pub async fn run(store: &'static SharedStore) {
     // re-applied below so a mid-race battery pull cannot silently put the rest
     // of the run back on 1 km laps.
     let mut persisted_auto_lap = store.lock().await.read_auto_lap();
+    // §372: a backyard armed before a brown-out is still a backyard after it.
+    let mut backyard_rx = unwrap!(state::BACKYARD.receiver());
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -442,6 +444,10 @@ pub async fn run(store: &'static SharedStore) {
     if let Some(trigger) = persisted_auto_lap {
         recorder.set_auto_lap(trigger);
         info!("record: restored auto-lap {}", trigger);
+    }
+    if store.lock().await.read_backyard() {
+        recorder.set_backyard_armed(true);
+        info!("record: restored backyard mode armed");
     }
     // Re-apply the persisted activity profile's page preset (§353) — the
     // selection itself is display state (main seeds `state::PROFILE`), but the
@@ -642,6 +648,11 @@ pub async fn run(store: &'static SharedStore) {
         // only changes while idle (BTN3 cycles pages once a run is under way),
         // so it is always applied here before the Start command that opens the
         // run reaches the recorder.
+        if let Some(armed) = backyard_rx.try_changed() {
+            // The button task already persisted it; this is the apply side.
+            recorder.set_backyard_armed(armed);
+            info!("record: backyard mode {}", armed);
+        }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
             recorder.set_fix_interval_s(m.fix_interval_s());

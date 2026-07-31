@@ -235,11 +235,17 @@ async fn set_gnss_mode(nav: &mut NavState, store: &'static SharedStore, mode: Gn
 /// `settings_menu::edit` resolves the press against exactly the state the
 /// runner just read — a clamped ladder end or an idempotent on/on comes back
 /// `Nothing` and only refreshes the timeout.
-async fn menu_edit(nav: &mut NavState, dir: ValueDir, hide_now: bool, store: &'static SharedStore) {
+async fn menu_edit(
+    nav: &mut NavState,
+    dir: ValueDir,
+    hide_now: bool,
+    backyard_now: bool,
+    store: &'static SharedStore,
+) {
     let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
         return;
     };
-    match settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile) {
+    match settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile, backyard_now) {
         MenuEdit::SetGnssMode(mode) => set_gnss_mode(nav, store, mode).await,
         MenuEdit::SetProfile(p) => {
             // A profile is a macro over the existing knobs (§353): the pages
@@ -262,6 +268,15 @@ async fn menu_edit(nav: &mut NavState, dir: ValueDir, hide_now: bool, store: &'s
             nav.profile = Some(p);
             state::PROFILE.sender().send(nav.profile);
             store.lock().await.persist_profile(p).await;
+        }
+        MenuEdit::SetBackyard(armed) => {
+            // A dedicated channel rather than the settings queue: this is a
+            // watch-only mode with no `SET1` field, and folding it into a
+            // pushed-settings frame would invent wire meaning the phone does
+            // not have.
+            info!("button: menu -> backyard mode {}", armed);
+            state::BACKYARD.sender().send(armed);
+            store.lock().await.persist_backyard(armed).await;
         }
         MenuEdit::SetHideEmpty(hide) => {
             info!("button: menu -> hide empty pages {}", hide);
@@ -500,10 +515,16 @@ pub async fn run(
                     // BTN1/BTN5 are the right/left edit pair — every press
                     // swallowed, none reaches the recorder.
                     let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
+                    // The recorder's own view of the arm, so the row the runner
+                    // reads and the value the press resolves against are one
+                    // fact rather than two that can drift.
+                    let yard = snap.as_ref().is_some_and(|s| s.backyard.is_some());
                     match button {
-                        Button::Primary => menu_edit(&mut nav, ValueDir::Right, hide, store).await,
+                        Button::Primary => {
+                            menu_edit(&mut nav, ValueDir::Right, hide, yard, store).await
+                        }
                         Button::Stop => nav.menu_up(),
-                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, store).await,
+                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, yard, store).await,
                     }
                     continue;
                 }
@@ -924,10 +945,16 @@ pub async fn run(
                     // BTN1/BTN5 are the right/left edit pair — every press
                     // swallowed, none reaches the recorder.
                     let hide = snap.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
+                    // The recorder's own view of the arm, so the row the runner
+                    // reads and the value the press resolves against are one
+                    // fact rather than two that can drift.
+                    let yard = snap.as_ref().is_some_and(|s| s.backyard.is_some());
                     match button {
-                        Button::Primary => menu_edit(&mut nav, ValueDir::Right, hide, store).await,
+                        Button::Primary => {
+                            menu_edit(&mut nav, ValueDir::Right, hide, yard, store).await
+                        }
                         Button::Stop => nav.menu_up(),
-                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, store).await,
+                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, yard, store).await,
                     }
                     continue;
                 }
