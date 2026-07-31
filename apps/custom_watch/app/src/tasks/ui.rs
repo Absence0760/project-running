@@ -171,7 +171,7 @@ pub async fn screen_task(
     let mut grid: Option<Page> = None;
     // The idle settings menu's cursor while open (§351) — same ownership
     // split as the grid.
-    let mut menu: Option<u8> = None;
+    let mut menu: Option<settings_menu::MenuView> = None;
     // The timer instrument and whether its modal is up (§375) — same ownership
     // split as the menu: the button task drives, this task only draws.
     let mut timer = watch_core::timers::Timer::new();
@@ -627,10 +627,10 @@ pub async fn screen_task(
         // construction (the button task closes it when a run starts); the
         // run_view gate keeps a not-yet-closed cursor from painting over a
         // live run in the interim.
-        if let Some(cursor) = menu.filter(|_| !face::run_view(rec.as_ref())) {
+        if let Some(view) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
             let yard = rec.as_ref().is_some_and(|s| s.backyard.is_some());
-            for (row, text) in settings_menu::menu_rows(cursor, mode, hide, profile, yard)
+            for (row, text) in settings_menu::menu_rows(view, mode, hide, profile, yard)
                 .iter()
                 .enumerate()
             {

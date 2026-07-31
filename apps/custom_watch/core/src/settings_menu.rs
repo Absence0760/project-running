@@ -31,6 +31,7 @@
 
 use core::fmt::Write;
 
+use crate::erase::{ERASE_LEGEND_ARMED, ERASE_ROW, ERASE_ROW_ARMED};
 use crate::face::{Row, ROWS};
 use crate::gnss_mode::GnssMode;
 use crate::profiles::ActivityProfile;
@@ -69,6 +70,15 @@ pub enum MenuItem {
     /// idle-only because arming it re-points the auto-lap onto the corral
     /// bell — a run has to be wholly inside the mode or wholly outside it.
     Backyard,
+    /// The factory erase (§378) — the wearer's own way to sanitise a watch they
+    /// are about to lose, sell, or hand on, with no phone in reach. An action
+    /// row like the two below it, but guarded: right (BTN1) *arms*
+    /// [`crate::erase::EraseGuard`] and only a second right inside its window
+    /// wipes. Seated here, at the ring's second far point, for two reasons that
+    /// agree — it is the row a fumbling hand should be least likely to land on,
+    /// and index 4 is one of the only two seats a seventh row can take without
+    /// raising any existing row's cursor cost (§378).
+    Erase,
     /// An action row: right (BTN1) fires the same request as the idle BTN3
     /// hold and closes the menu; the idle face's transient banner
     /// (`SET 1610M` / `NO GPS FIX` / `NO BARO`) answers, exactly as it
@@ -82,16 +92,27 @@ pub enum MenuItem {
     Ice,
 }
 
-pub const MENU_ITEMS: usize = 6;
+pub const MENU_ITEMS: usize = 7;
 
 const ITEMS: [MenuItem; MENU_ITEMS] = [
     MenuItem::GnssMode,
     MenuItem::HideEmpty,
     MenuItem::Profile,
     MenuItem::Backyard,
+    MenuItem::Erase,
     MenuItem::QnhRezero,
     MenuItem::Ice,
 ];
+
+/// What the ui task needs to draw the menu: where the cursor is, and whether
+/// the erase row is armed. Travels as one value because both are modal state
+/// the button task owns and the composer only renders — publishing them
+/// separately would let the panel show an armed legend over an un-armed row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuView {
+    pub cursor: u8,
+    pub erase_armed: bool,
+}
 
 /// The open menu: a cursor over [`ITEMS`]. The button task owns it (like the
 /// grid state machine); the ui task renders the published cursor.
@@ -155,6 +176,11 @@ pub enum MenuEdit {
     /// Arm or disarm backyard-ultra mode (already different from the current
     /// value).
     SetBackyard(bool),
+    /// A right press on the factory-erase row (§378). Deliberately *not* an
+    /// answer — this module has no clock, and whether the press arms or wipes
+    /// is [`crate::erase::EraseGuard`]'s call, exactly as BTN2's stop is
+    /// [`crate::button::StopGuard`]'s rather than [`crate::button::command_for`]'s.
+    EraseRow,
     /// Fire the QNH re-zero and close the menu.
     RequestQnhRezero,
     /// Close the menu onto the ICE / medical-ID idle face (§358).
@@ -262,6 +288,12 @@ pub fn edit(
                 MenuEdit::Nothing
             }
         }
+        // Left is inert on every action row, and on this one that inertness is
+        // load-bearing rather than incidental: the task disarms the guard on
+        // every press that is not the confirming right, so BTN5 on an armed
+        // erase row is exactly the cancel its legend names.
+        (MenuItem::Erase, ValueDir::Right) => MenuEdit::EraseRow,
+        (MenuItem::Erase, ValueDir::Left) => MenuEdit::Nothing,
         (MenuItem::QnhRezero, ValueDir::Right) => MenuEdit::RequestQnhRezero,
         (MenuItem::QnhRezero, ValueDir::Left) => MenuEdit::Nothing,
         (MenuItem::Ice, ValueDir::Right) => MenuEdit::ShowIce,
@@ -276,19 +308,28 @@ pub fn edit(
 /// it is changed. The cursor keys go unlabelled, exactly like the grid's:
 /// they move something visible and commit nothing, so they are discovered
 /// for free.
+///
+/// While the §378 erase is armed the legend row is *replaced* rather than
+/// appended to: both of the presses it names change meaning for the duration,
+/// and a whole changed chrome row is what keeps the arm from being missed on a
+/// nine-row panel where the row itself is one line.
 pub fn menu_rows(
-    cursor: u8,
+    view: MenuView,
     mode: GnssMode,
     hide_empty: bool,
     profile: Option<ActivityProfile>,
     backyard: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
-    let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
+    if view.erase_armed {
+        let _ = rows[0].push_str(ERASE_LEGEND_ARMED);
+    } else {
+        let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
+    }
     let _ = rows[1].push_str("SETTINGS");
     for (i, item) in ITEMS.iter().enumerate() {
         let row = MENU_TOP_ROW + i;
-        let marker = if cursor as usize == i { '>' } else { ' ' };
+        let marker = if view.cursor as usize == i { '>' } else { ' ' };
         let _ = rows[row].push(marker);
         let _ = rows[row].push(' ');
         match item {
@@ -321,6 +362,13 @@ pub fn menu_rows(
                     if backyard { "ON" } else { "OFF" }
                 );
             }
+            MenuItem::Erase => {
+                let _ = rows[row].push_str(if view.erase_armed {
+                    ERASE_ROW_ARMED
+                } else {
+                    ERASE_ROW
+                });
+            }
             MenuItem::QnhRezero => {
                 let _ = rows[row].push_str("RE-ZERO ALTITUDE");
             }
@@ -332,9 +380,16 @@ pub fn menu_rows(
     rows
 }
 
-/// First row of the item list — row 2 stays blank so the title band reads as
-/// chrome, mirroring the grid's two chrome rows over a body.
-const MENU_TOP_ROW: usize = 3;
+/// First row of the item list, directly under the legend and title.
+///
+/// It was row 3 until §378, with row 2 held blank so the title band read as
+/// chrome. Seven rows spend that blank: `MENU_TOP_ROW + MENU_ITEMS == ROWS` is
+/// pinned by a test, so the spacer was the last slack in the layout and an
+/// eighth row needs §333's row-scrolling window rather than another reclaimed
+/// line. The list is still legible without it — every item row is indented two
+/// cells behind its cursor marker and the title is flush left, so the
+/// indentation does the separating the blank row did.
+const MENU_TOP_ROW: usize = 2;
 
 #[cfg(test)]
 mod tests {
@@ -360,7 +415,16 @@ mod tests {
         hide_empty: bool,
         profile: Option<ActivityProfile>,
     ) -> [Row; ROWS] {
-        super::menu_rows(cursor, mode, hide_empty, profile, false)
+        super::menu_rows(view(cursor), mode, hide_empty, profile, false)
+    }
+
+    /// An un-armed cursor — what every case written before §378's erase row
+    /// means by a bare cursor index.
+    fn view(cursor: u8) -> MenuView {
+        MenuView {
+            cursor,
+            erase_armed: false,
+        }
     }
 
     #[test]
@@ -384,6 +448,8 @@ mod tests {
         assert_eq!(m.item(), MenuItem::Profile);
         m.down();
         assert_eq!(m.item(), MenuItem::Backyard);
+        m.down();
+        assert_eq!(m.item(), MenuItem::Erase);
         m.down();
         assert_eq!(m.item(), MenuItem::QnhRezero);
         m.down();
@@ -558,16 +624,97 @@ mod tests {
     fn the_value_rows_read_the_current_state() {
         let rows = menu_rows(0, GnssMode::Performance, true, None);
         assert_eq!(rows[1].as_str(), "SETTINGS");
-        assert_eq!(rows[3].as_str(), "> GNSS MODE PERF 110H");
-        assert_eq!(rows[4].as_str(), "  HIDE EMPTY ON");
-        assert_eq!(rows[5].as_str(), "  PROFILE --");
-        assert_eq!(rows[6].as_str(), "  BACKYARD OFF");
+        assert_eq!(rows[2].as_str(), "> GNSS MODE PERF 110H");
+        assert_eq!(rows[3].as_str(), "  HIDE EMPTY ON");
+        assert_eq!(rows[4].as_str(), "  PROFILE --");
+        assert_eq!(rows[5].as_str(), "  BACKYARD OFF");
+        assert_eq!(rows[6].as_str(), "  FACTORY ERASE");
         assert_eq!(rows[7].as_str(), "  RE-ZERO ALTITUDE");
         assert_eq!(rows[8].as_str(), "  MEDICAL ID");
         let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
-        assert_eq!(rows[3].as_str(), "  GNSS MODE EXP  220H");
-        assert_eq!(rows[4].as_str(), "> HIDE EMPTY OFF");
-        assert_eq!(rows[5].as_str(), "  PROFILE ULTRA");
+        assert_eq!(rows[2].as_str(), "  GNSS MODE EXP  220H");
+        assert_eq!(rows[3].as_str(), "> HIDE EMPTY OFF");
+        assert_eq!(rows[4].as_str(), "  PROFILE ULTRA");
+    }
+
+    #[test]
+    fn the_erase_row_arms_on_right_and_is_inert_left() {
+        // The action-row grammar, unchanged: right fires, left has no "off".
+        // What is NOT here is the arm/confirm decision — this module has no
+        // clock, so the press only reports which row it landed on and
+        // `erase::EraseGuard` decides, exactly as `StopGuard` does for BTN2.
+        let e = |dir| edit(MenuItem::Erase, dir, GnssMode::Performance, true, None);
+        assert_eq!(e(ValueDir::Right), MenuEdit::EraseRow);
+        assert_eq!(e(ValueDir::Left), MenuEdit::Nothing);
+    }
+
+    #[test]
+    fn an_armed_erase_replaces_the_legend_and_names_the_key_that_wipes() {
+        // An arm that showed only in one row of nine could be missed on the
+        // way past; the legend row is the whole width of the panel and it is
+        // where §337 says a changed press meaning has to be read.
+        let armed = MenuView {
+            cursor: 4,
+            erase_armed: true,
+        };
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false);
+        assert_eq!(rows[0].as_str(), "B1 ERASE    B4 CANCEL");
+        assert_eq!(rows[6].as_str(), "> ERASE ALL? B1");
+        // Nothing else moves: the runner reads the rest of the menu unchanged,
+        // so the arm reads as one row's state and not as a new screen.
+        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false);
+        assert_eq!(rows[1], resting[1]);
+        for row in 2..ROWS {
+            if row != 6 {
+                assert_eq!(rows[row], resting[row], "row {row} moved under the arm");
+            }
+        }
+        assert_eq!(resting[6].as_str(), "> FACTORY ERASE");
+    }
+
+    #[test]
+    fn the_erase_row_sits_where_no_existing_row_pays_for_it() {
+        // §378's press-cost argument, pinned rather than restated: on a
+        // wrapping ring the cursor distance to index k is min(k, n - k), and
+        // the seventh row went in at one of the only two seats where every
+        // pre-existing row keeps its exact distance. Computed here from the
+        // ITEMS array, so a reorder that quietly taxes a mid-race row fails.
+        let steps = |n: usize, k: usize| k.min(n - k);
+        let before = [
+            MenuItem::GnssMode,
+            MenuItem::HideEmpty,
+            MenuItem::Profile,
+            MenuItem::Backyard,
+            MenuItem::QnhRezero,
+            MenuItem::Ice,
+        ];
+        for (was, item) in before.iter().enumerate() {
+            let now = ITEMS.iter().position(|i| i == item).expect("row kept");
+            assert_eq!(
+                steps(MENU_ITEMS, now),
+                steps(before.len(), was),
+                "{item:?} costs more cursor steps than it did at six rows"
+            );
+        }
+        let erase = ITEMS
+            .iter()
+            .position(|i| *i == MenuItem::Erase)
+            .expect("the erase row exists");
+        assert_eq!(
+            steps(MENU_ITEMS, erase),
+            3,
+            "the erase belongs on the ring's far seat — the hardest row to \
+             land on by accident"
+        );
+        // Every mid-race row (one the runner reaches for during a run) still
+        // costs open + steps + edit <= 4, which is §351's real budget.
+        for item in [MenuItem::GnssMode, MenuItem::HideEmpty, MenuItem::Profile] {
+            let k = ITEMS.iter().position(|i| *i == item).expect("row exists");
+            assert!(
+                steps(MENU_ITEMS, k) + 2 <= 4,
+                "{item:?} broke the ≤ 4 bound"
+            );
+        }
     }
 
     #[test]
@@ -589,25 +736,32 @@ mod tests {
         assert_eq!(e(ValueDir::Right, true), MenuEdit::Nothing);
         assert_eq!(e(ValueDir::Left, true), MenuEdit::SetBackyard(false));
         assert_eq!(e(ValueDir::Left, false), MenuEdit::Nothing);
-        let rows = super::menu_rows(3, GnssMode::Performance, true, None, true);
-        assert_eq!(rows[6].as_str(), "> BACKYARD ON");
+        let rows = super::menu_rows(view(3), GnssMode::Performance, true, None, true);
+        assert_eq!(rows[5].as_str(), "> BACKYARD ON");
     }
 
     #[test]
     fn every_menu_row_fits_the_body_it_is_drawn_into() {
-        // Six rows now sit under two chrome rows and a blank — the last one
-        // lands on the final row, so a seventh needs a layout, not a push.
-        let rows = super::menu_rows(
-            0,
-            GnssMode::Expedition,
-            false,
-            Some(ActivityProfile::Ultra),
-            true,
-        );
-        assert_eq!(MENU_TOP_ROW + MENU_ITEMS, ROWS, "the list fills the body");
-        for row in rows.iter() {
-            assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+        // Seven rows now sit directly under the two chrome rows — §378 spent
+        // the blank spacer that used to separate them, and the last item still
+        // lands on the final row, so an EIGHTH needs §333's scrolling window
+        // rather than another line to reclaim.
+        for armed in [false, true] {
+            let rows = super::menu_rows(
+                MenuView {
+                    cursor: 0,
+                    erase_armed: armed,
+                },
+                GnssMode::Expedition,
+                false,
+                Some(ActivityProfile::Ultra),
+                true,
+            );
+            for row in rows.iter() {
+                assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+            }
         }
+        assert_eq!(MENU_TOP_ROW + MENU_ITEMS, ROWS, "the list fills the body");
     }
 
     #[test]

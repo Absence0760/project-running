@@ -43,6 +43,7 @@ use watch_core::button::{
     GridPress, PageBtnPress, RecordCommand, StopGuard, StopPress, PAGE_HOLD_MS,
     STOP_CONFIRM_WINDOW_S,
 };
+use watch_core::erase::{EraseGuard, ErasePress, ERASE_CONFIRM_WINDOW_S};
 use watch_core::face::IdleView;
 use watch_core::gnss_mode::GnssMode;
 #[cfg(feature = "sim-buttons")]
@@ -56,7 +57,7 @@ use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
 use watch_core::profiles::{self, ActivityProfile};
 use watch_core::record::RecordState;
 use watch_core::settings::WatchSettings;
-use watch_core::settings_menu::{self, Menu, MenuEdit, ValueDir, MENU_TIMEOUT_S};
+use watch_core::settings_menu::{self, Menu, MenuEdit, MenuView, ValueDir, MENU_TIMEOUT_S};
 use watch_core::timers::{self, TimerKey, TimerPress, TIMER_MENU_TIMEOUT_S};
 use watch_core::ui_frame::{pages_mask, record_state};
 
@@ -92,6 +93,14 @@ const MENU_TIMEOUT: Duration = Duration::from_secs(MENU_TIMEOUT_S as u64);
 /// running; only the view goes away.
 const TIMER_TIMEOUT: Duration = Duration::from_secs(TIMER_MENU_TIMEOUT_S as u64);
 
+/// The armed factory erase's confirm window as a `Duration` (§378 —
+/// `erase::ERASE_CONFIRM_WINDOW_S` owns the number, and it is the stop guard's).
+/// It borrows the menu's single deadline slot while armed, because the arm is
+/// the shorter of the two and must lapse *visibly*: a row still reading
+/// `ERASE ALL? B1` after its window closed would be a prompt for a press that
+/// no longer confirms.
+const ERASE_CONFIRM: Duration = Duration::from_secs(ERASE_CONFIRM_WINDOW_S as u64);
+
 /// The view/navigation state both task variants thread through the shared
 /// action code: the current run page, the grid modal (this task owns its state
 /// machine and auto-select deadline; the ui task only renders the published
@@ -102,6 +111,12 @@ struct NavState {
     grid_deadline: Option<Instant>,
     menu: Option<Menu>,
     menu_deadline: Option<Instant>,
+    /// The §378 factory-erase confirm, held beside the menu because that is the
+    /// only surface it exists on — closing the menu disarms it.
+    erase: EraseGuard,
+    /// Last view published to [`state::SETTINGS_MENU`], so an edit that leaves
+    /// the cursor and the arm alone wakes the composer not at all.
+    menu_published: Option<MenuView>,
     /// The runner's timer (§375). Held whether or not its modal is open — the
     /// instrument outlives the view, and outlives runs.
     timer: timers::Timer,
@@ -120,6 +135,8 @@ impl NavState {
             grid_deadline: None,
             menu: None,
             menu_deadline: None,
+            erase: EraseGuard::new(),
+            menu_published: None,
             timer: timers::Timer::new(),
             timer_open: false,
             timer_deadline: None,
@@ -145,17 +162,49 @@ impl NavState {
     fn open_menu(&mut self) {
         let m = Menu::new();
         info!("button: BTN5 -> settings menu");
-        state::SETTINGS_MENU.sender().send(Some(m.cursor()));
         self.menu = Some(m);
-        self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+        self.erase.disarm();
+        self.publish_menu();
     }
 
     fn close_menu(&mut self, why: &str) {
         if self.menu.take().is_some() {
             info!("button: settings menu closed ({=str})", why);
             state::SETTINGS_MENU.sender().send(None);
+            self.menu_published = None;
         }
+        // An arm may never outlive the screen that shows it: a menu reopened
+        // later must not inherit a live confirm from the one before it.
+        self.erase.disarm();
         self.menu_deadline = None;
+    }
+
+    /// Publish the menu's view and re-arm its deadline. The deadline is the
+    /// erase's short confirm window while one is armed and the menu's own long
+    /// inactivity close otherwise — one slot, because the arm can only exist
+    /// inside the menu and is always the shorter wait.
+    ///
+    /// Change-gated (the `run_flash::publish_pending` rule): a value edit moves
+    /// the row through the channel its value already travels on, so
+    /// re-publishing an unchanged cursor would wake the composer for nothing.
+    fn publish_menu(&mut self) {
+        let Some(m) = self.menu else { return };
+        let view = MenuView {
+            cursor: m.cursor(),
+            erase_armed: self.erase.armed(Instant::now().as_secs() as u32),
+        };
+        if self.menu_published != Some(view) {
+            self.menu_published = Some(view);
+            state::SETTINGS_MENU.sender().send(Some(view));
+        }
+        self.menu_deadline = Some(
+            Instant::now()
+                + if view.erase_armed {
+                    ERASE_CONFIRM
+                } else {
+                    MENU_TIMEOUT
+                },
+        );
     }
 
     /// Open the timer modal (§375) — BTN2's meaning while the stop has no run
@@ -191,13 +240,34 @@ impl NavState {
         }
     }
 
+    /// The menu's deadline elapsed. While an erase is armed that deadline IS
+    /// the confirm window, so it lapses the arm and leaves the menu standing —
+    /// the row goes back to `FACTORY ERASE` under the runner's thumb rather
+    /// than staying a prompt for a press that would now only re-arm. Otherwise
+    /// it is the menu's own inactivity close.
+    ///
+    /// Which one it was is read off the published view rather than off the
+    /// clock: `publish_menu` sets the short deadline exactly when it publishes
+    /// an armed view, so the two can never disagree about which timer fired.
+    fn menu_deadline_fired(&mut self) {
+        if self.menu_published.is_some_and(|v| v.erase_armed) {
+            info!("button: factory erase disarmed (confirm window lapsed)");
+            self.erase.disarm();
+            self.publish_menu();
+        } else {
+            self.close_menu("timeout");
+        }
+    }
+
     /// Cursor up — BTN2, the mid-left §81 UP slot, physically above BTN3.
     fn menu_up(&mut self) {
         if let Some(m) = self.menu.as_mut() {
             m.up();
             info!("button: menu cursor -> {}", m.item());
-            state::SETTINGS_MENU.sender().send(Some(m.cursor()));
-            self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+            // Stepping off the row cancels its arm: the confirm has to be the
+            // very next thing the runner does, or it is not a confirm.
+            self.erase.disarm();
+            self.publish_menu();
         }
     }
 
@@ -206,10 +276,48 @@ impl NavState {
         if let Some(m) = self.menu.as_mut() {
             m.down();
             info!("button: menu cursor -> {}", m.item());
-            state::SETTINGS_MENU.sender().send(Some(m.cursor()));
-            self.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+            self.erase.disarm();
+            self.publish_menu();
         }
     }
+}
+
+/// Wipe the watch (§378) and drop every copy of what was wiped that this task
+/// can reach. The menu is idle-only, so nothing is recording and nothing is
+/// lost that the runner did not just ask to lose.
+///
+/// Flash first, then RAM: flash is what a watch carries out of its owner's
+/// hands, and the RAM clears exist so the runner is not left reading a medical
+/// ID and a marked stash off a watch they were told is erased.
+///
+/// The recorder's own state — waypoints, biometrics, page curation, breadcrumb
+/// — and the ICE card and composed screens belong to the `record` task, which
+/// clears them on [`state::FACTORY_ERASE`] rather than having them reached into
+/// from here.
+async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
+    let wiped = store.lock().await.factory_erase().await;
+    // The pushed course is where the runner PLANS to be; the pushed workout is
+    // their session. Both are RAM-only, and both are drawn on a page a next
+    // holder would page straight to.
+    state::COURSE.sender().send(None);
+    state::WORKOUT.sender().send(None);
+    // Back to the factory values, on the same channels a boot restore rides —
+    // so the menu the runner is still looking at redraws as a factory watch,
+    // which is the confirmation this action row gets instead of a banner.
+    nav.mode = GnssMode::default();
+    state::GNSS_MODE.sender().send(nav.mode);
+    nav.profile = None;
+    state::PROFILE.sender().send(nav.profile);
+    state::BACKYARD.sender().send(false);
+    nav.timer = timers::Timer::new();
+    state::TIMER.sender().send(nav.timer);
+    if state::FACTORY_ERASE.try_send(()).is_err() {
+        warn!("button: factory erase — record task already has one pending");
+    }
+    info!(
+        "button: FACTORY ERASE confirmed (flash {=str})",
+        if wiped { "cleared" } else { "unavailable" }
+    );
 }
 
 /// Set the GNSS recording mode and persist the choice — one implementation
@@ -240,12 +348,36 @@ async fn menu_edit(
     dir: ValueDir,
     hide_now: bool,
     backyard_now: bool,
+    now_s: u32,
     store: &'static SharedStore,
 ) {
     let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
         return;
     };
-    match settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile, backyard_now) {
+    let edit = settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile, backyard_now);
+    // Every press that is not the confirming right on the erase row cancels the
+    // arm — including a left on that row, which is what its legend's `B4
+    // CANCEL` sibling promises the runner. One rule, applied before the
+    // dispatch, so no later branch can forget it.
+    if edit != MenuEdit::EraseRow {
+        nav.erase.disarm();
+    }
+    match edit {
+        MenuEdit::EraseRow => {
+            match nav.erase.press(now_s) {
+                ErasePress::Armed => info!(
+                    "button: menu -> factory erase armed, press again within {=u32}s",
+                    ERASE_CONFIRM_WINDOW_S
+                ),
+                ErasePress::Confirmed => factory_erase(nav, store).await,
+            }
+            // The menu stays open either way: armed, it is showing the prompt;
+            // confirmed, it is showing every row back at its factory value,
+            // which is a better answer than a banner and the only one that
+            // says what the erase actually took.
+            nav.publish_menu();
+            return;
+        }
         MenuEdit::SetGnssMode(mode) => set_gnss_mode(nav, store, mode).await,
         MenuEdit::SetProfile(p) => {
             // A profile is a macro over the existing knobs (§353): the pages
@@ -313,7 +445,7 @@ async fn menu_edit(
     }
     // A value row stays open — the row re-rendering with the new value is
     // the confirmation.
-    nav.menu_deadline = Some(Instant::now() + MENU_TIMEOUT);
+    nav.publish_menu();
 }
 
 fn key_label(key: PagingKey) -> &'static str {
@@ -453,7 +585,7 @@ pub async fn run(
                     } else if nav.timer_open {
                         nav.close_timer("timeout");
                     } else {
-                        nav.close_menu("timeout");
+                        nav.menu_deadline_fired();
                     }
                     continue;
                 }
@@ -521,10 +653,12 @@ pub async fn run(
                     let yard = snap.as_ref().is_some_and(|s| s.backyard.is_some());
                     match button {
                         Button::Primary => {
-                            menu_edit(&mut nav, ValueDir::Right, hide, yard, store).await
+                            menu_edit(&mut nav, ValueDir::Right, hide, yard, now_s, store).await
                         }
                         Button::Stop => nav.menu_up(),
-                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, yard, store).await,
+                        Button::Lap => {
+                            menu_edit(&mut nav, ValueDir::Left, hide, yard, now_s, store).await
+                        }
                     }
                     continue;
                 }
@@ -761,7 +895,7 @@ pub async fn run(
         // The menu's inactivity auto-close — it covers the home clock, so an
         // abandoned menu hands the screen back on its own.
         if nav.menu.is_some() && nav.menu_deadline.is_some_and(|dl| Instant::now() >= dl) {
-            nav.close_menu("timeout");
+            nav.menu_deadline_fired();
         }
         if nav.timer_open && nav.timer_deadline.is_some_and(|dl| Instant::now() >= dl) {
             nav.close_timer("timeout");
@@ -951,10 +1085,12 @@ pub async fn run(
                     let yard = snap.as_ref().is_some_and(|s| s.backyard.is_some());
                     match button {
                         Button::Primary => {
-                            menu_edit(&mut nav, ValueDir::Right, hide, yard, store).await
+                            menu_edit(&mut nav, ValueDir::Right, hide, yard, now_s, store).await
                         }
                         Button::Stop => nav.menu_up(),
-                        Button::Lap => menu_edit(&mut nav, ValueDir::Left, hide, yard, store).await,
+                        Button::Lap => {
+                            menu_edit(&mut nav, ValueDir::Left, hide, yard, now_s, store).await
+                        }
                     }
                     continue;
                 }

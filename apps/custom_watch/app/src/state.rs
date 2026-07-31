@@ -22,6 +22,7 @@ use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::screens::Screens;
 use watch_core::settings::WatchSettings;
+use watch_core::settings_menu::MenuView;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
 use watch_core::storm::StormView;
 use watch_core::timers::Timer;
@@ -103,11 +104,26 @@ pub static PAGE_GRID: Watch<CriticalSectionRawMutex, Option<Page>, 1> = Watch::n
 /// rendering). One receiver (the `ui` task).
 pub static STOP_ARMED: Watch<CriticalSectionRawMutex, Option<u32>, 1> = Watch::new();
 
-/// The idle settings menu's cursor while it is open (`None` = closed) —
-/// §351. The `button` task owns the menu state machine (like the page grid);
-/// the `ui` task only renders the published cursor over the idle face. One
-/// receiver (the `ui` task).
-pub static SETTINGS_MENU: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new();
+/// The idle settings menu while it is open (`None` = closed) — §351. The
+/// `button` task owns the menu state machine (like the page grid); the `ui`
+/// task only renders the published view over the idle face. Carries the §378
+/// erase arm alongside the cursor because both are one modal state: split
+/// across two channels the panel could show an armed legend over an un-armed
+/// row. One receiver (the `ui` task).
+pub static SETTINGS_MENU: Watch<CriticalSectionRawMutex, Option<MenuView>, 1> = Watch::new();
+
+/// A confirmed factory erase (§378). The `button` task sends one once its
+/// [`watch_core::erase::EraseGuard`] confirms and the flash wipe has run; the
+/// `record` task receives and drops the RAM that mirrors what was just erased —
+/// the recorder (waypoints, biometrics, curation), the breadcrumb, the ICE card
+/// and the composed screens.
+///
+/// A dedicated channel rather than a `SET1` field, for §372's reason verbatim:
+/// this is a watch-only action with no wire meaning, and folding it into a
+/// pushed-settings frame would invent a "wipe this watch" command the phone
+/// does not have and no one asked for. Capacity 1 — a second erase while one is
+/// pending has nothing extra to ask for.
+pub static FACTORY_ERASE: Channel<CriticalSectionRawMutex, (), 1> = Channel::new();
 
 /// The runner's countdown timer / stopwatch (§375). The `button` task owns the
 /// instrument (like the grid and the menu) and publishes it whole on every
