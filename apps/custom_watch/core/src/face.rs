@@ -5389,7 +5389,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=35u8 {
+                for b in 1..=37u8 {
                     let m = Metric::from_byte(b).unwrap();
                     let hero = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     let why = super::metric_unfed(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
@@ -5414,7 +5414,7 @@ mod tests {
     #[test]
     fn every_unfed_slot_names_a_class_rather_than_shrugging() {
         let unfed = snapshot(RecordState::Recording, 0.0);
-        for b in 1..=35u8 {
+        for b in 1..=37u8 {
             let m = Metric::from_byte(b).unwrap();
             let screen = crate::screens::Screen::new(crate::screens::Layout::Single, &[m]).unwrap();
             let slots = screen_slots(&screen, Some(&fix()), None, &unfed, None, 42, None);
@@ -5698,7 +5698,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=35u8 {
+                for b in 1..=37u8 {
                     let m = Metric::from_byte(b).unwrap();
                     let v = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     for nominal in [HeroBand::BigNumHero, HeroBand::MedNumHero] {

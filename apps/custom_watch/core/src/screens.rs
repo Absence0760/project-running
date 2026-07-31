@@ -1,7 +1,7 @@
 //! Runner-composed data screens: a small grid of slots, each naming one
 //! [`Metric`] from the run view's catalogue.
 //!
-//! The 37 built-in glance pages each headline exactly one metric and fill the
+//! The 40 built-in glance pages each headline exactly one metric and fill the
 //! rest of the panel with context chosen for that metric. That is the right
 //! shape for a page about *one* thing — and the wrong shape for the question a
 //! runner asks most often, which is two or three things at once. The Dashboard
@@ -43,7 +43,7 @@
 //! **whole frame**, exactly as [`crate::ice`] refuses a whole card rather than
 //! blanking one field. The reason is the same: a screen whose third slot
 //! silently emptied reads as a complete screen the runner authored, and there
-//! is nothing on the wrist to say otherwise. Refusing the set leaves the 37
+//! is nothing on the wrist to say otherwise. Refusing the set leaves the 40
 //! built-in pages working, which is the L4 answer.
 //!
 //! Bytes past the record are ignored, so the caller hands the whole
@@ -57,10 +57,17 @@ use crate::run_store::crc32;
 ///
 /// Four, and the ceiling is navigation rather than storage — the config page
 /// has kilobytes free. Every screen is a page in the § 350 cycle, and § 289's
-/// press-cost model is a function of page count alone: at 37 + 6 the grid's
-/// symmetric worst is still 7 presses and the everyday filtered worst still 4,
-/// and both step at 37 + 7. Four sits inside that with margin rather than on
-/// its edge.
+/// press-cost model is a function of page count alone.
+///
+/// **Four was chosen against a 37-page ring and the ring is now 40** (§ 373,
+/// § 375 and § 372 each added one on 2026-07-30). At 37 + 4 the grid's
+/// symmetric worst was 7; at 40 + 4 = 44 it is 8, which is the first count
+/// where it steps. The cap therefore no longer keeps `navigation.md`'s
+/// published ceiling — that doc now publishes both numbers rather than the
+/// smaller one. Left at 4 deliberately: dropping to 3 would buy the ceiling
+/// back and cost the `SCR1` frame's capacity, its flash record's size and its
+/// golden vectors, which is a decision to take on its own and not a side
+/// effect of counting pages. The everyday filtered worst is unmoved at 4.
 pub const MAX_SCREENS: usize = 4;
 
 /// Slots per screen — the widest layout's arity.
@@ -495,7 +502,7 @@ mod tests {
 
     #[test]
     fn every_slot_label_fits_the_cells_a_slot_can_spare() {
-        for b in 1..=35u8 {
+        for b in 1..=37u8 {
             let m = Metric::from_byte(b).unwrap();
             let label = m.slot_label();
             assert!(
