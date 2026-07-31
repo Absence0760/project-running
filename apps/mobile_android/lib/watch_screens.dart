@@ -120,11 +120,12 @@ enum WatchMetric {
   routeSimplifyDistance(31, 'route_simplify_distance'),
   autoEffortMatched(32, 'auto_effort_matched'),
   routeElevTotal(33, 'route_elev_total'),
-  raceDayDays(34, 'race_day_days');
+  raceDayDays(34, 'race_day_days'),
+  sleepBudget(35, 'sleep_budget');
 
   const WatchMetric(this.wire, this.wireName);
 
-  /// This metric's byte on the SCR1 wire, in `1..=34`.
+  /// This metric's byte on the SCR1 wire, in `1..=35`.
   final int wire;
 
   /// The stable cross-platform name for the byte, pinned test-for-test against
