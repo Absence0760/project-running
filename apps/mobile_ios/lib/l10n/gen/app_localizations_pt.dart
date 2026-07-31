@@ -12055,6 +12055,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get watchMetricRaceDayDays => 'Dias até à prova';
+
+  @override
+  String get watchMetricBackyardBell => 'Contagem decrescente do sino';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24104,4 +24107,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get watchMetricRaceDayDays => 'Dias até a prova';
+
+  @override
+  String get watchMetricBackyardBell => 'Contagem regressiva do sino';
 }

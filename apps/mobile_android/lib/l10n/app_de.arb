@@ -3456,5 +3456,6 @@
   "watchMetricRouteSimplifyDistance": "Streckendistanz",
   "watchMetricAutoEffortMatched": "Zugeordnete Segmente",
   "watchMetricRouteElevTotal": "Streckenhöhenmeter",
-  "watchMetricRaceDayDays": "Tage bis zum Wettkampf"
+  "watchMetricRaceDayDays": "Tage bis zum Wettkampf",
+  "watchMetricBackyardBell": "Countdown bis zur Glocke"
 }

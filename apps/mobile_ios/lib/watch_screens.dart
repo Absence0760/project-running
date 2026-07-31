@@ -5,7 +5,7 @@ import 'sim_watch_sync.dart' show crc32;
 /// Pure Dart mirror of the custom watch's `watch_core::screens` SCR1 wire
 /// format — the phone → watch composed-data-screen push.
 ///
-/// The watch ships 37 fixed single-purpose glance pages and one multi-field
+/// The watch ships 40 built-in glance pages, one of them a multi-field
 /// dashboard. A composed screen is the runner's own: a [WatchLayout] plus the
 /// [WatchMetric]s to fill it, authored on the phone and pushed as one frame.
 ///
@@ -121,11 +121,13 @@ enum WatchMetric {
   autoEffortMatched(32, 'auto_effort_matched'),
   routeElevTotal(33, 'route_elev_total'),
   raceDayDays(34, 'race_day_days'),
-  sleepBudget(35, 'sleep_budget');
+  sleepBudget(35, 'sleep_budget'),
+  timerRemaining(36, 'timer_remaining'),
+  backyardBell(37, 'backyard_bell');
 
   const WatchMetric(this.wire, this.wireName);
 
-  /// This metric's byte on the SCR1 wire, in `1..=35`.
+  /// This metric's byte on the SCR1 wire, in `1..=37`.
   final int wire;
 
   /// The stable cross-platform name for the byte, pinned test-for-test against

@@ -116,15 +116,15 @@ void main() {
 
     /// The guard that makes a reorder of either enum a red test instead of a
     /// silent re-point of every screen already pushed to a watch.
-    test('metric bytes are unique, stable, and cover 1..=35', () {
+    test('metric bytes are unique, stable, and cover 1..=37', () {
       final seen = <int>{};
       for (final m in WatchMetric.values) {
         expect(m.wire, greaterThanOrEqualTo(1));
-        expect(m.wire, lessThanOrEqualTo(35));
+        expect(m.wire, lessThanOrEqualTo(37));
         expect(seen.add(m.wire), isTrue, reason: 'byte ${m.wire} claimed twice');
         expect(m.wireName, isNotEmpty);
       }
-      expect(WatchMetric.values.length, 35,
+      expect(WatchMetric.values.length, 37,
           reason: 'the catalogue and its byte map have drifted from the watch');
       // Pinned by name, so a reorder cannot quietly renumber them.
       expect(WatchMetric.elapsed.wire, 1);
@@ -132,8 +132,14 @@ void main() {
       expect(WatchMetric.heartRate.wire, 5);
       expect(WatchMetric.raceDayDays.wire, 34);
       expect(WatchMetric.raceDayDays.wireName, 'race_day_days');
+      // The three 2026-07-30 metrics landed on three branches that each
+      // believed 35 was free; the bytes below are the arbitration.
       expect(WatchMetric.sleepBudget.wire, 35);
       expect(WatchMetric.sleepBudget.wireName, 'sleep_budget');
+      expect(WatchMetric.timerRemaining.wire, 36);
+      expect(WatchMetric.timerRemaining.wireName, 'timer_remaining');
+      expect(WatchMetric.backyardBell.wire, 37);
+      expect(WatchMetric.backyardBell.wireName, 'backyard_bell');
     });
 
     test('layout bytes round-trip and reserve the Quad seat', () {
