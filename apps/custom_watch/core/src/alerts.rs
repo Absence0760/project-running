@@ -69,11 +69,21 @@
 //!    supersedes a fuel reminder but never a zone banner or a corral whistle;
 //!    blocked by one, it stays armed and un-cooled so it retries while the
 //!    excursion lasts, rather than being swallowed.
-//! 4. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//! 4. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
+//!    the world rather than the runner, and it sits here because of *when* the
+//!    thing it warns of arrives. A zone excursion, a corral bell and a pace
+//!    drift all want a decision inside seconds; a front measured over three
+//!    hours wants one inside the next hour, so it yields to all three. But it
+//!    fires perhaps once in a race and there is no later reminder, so it is in
+//!    the **re-queued** class rather than the dropped one — and it leads that
+//!    class, ahead of fuel: a missed gel is re-offered a cadence later, a
+//!    missed front is not. It rides the run's own alert slot, so like every
+//!    other arm it is silent between runs.
+//! 5. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 5. **Timer**, then **Distance**, then **Time** — milestones, and the only
+//! 6. **Timer**, then **Distance**, then **Time** — milestones, and the only
 //!    arms that are *dropped* rather than queued when the slot is busy. A
 //!    milestone banner is meaningful only at the moment it is reached; showing
 //!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
@@ -96,6 +106,7 @@ use core::fmt::Write;
 
 use crate::hr_zones;
 use crate::record::{RecordState, Snapshot};
+use crate::storm::StormTrend;
 use crate::workout::WorkoutStepKind;
 
 /// Drink reminder cadence, seconds of moving time: `fuel_plan`'s 500 ml/hr
@@ -182,6 +193,11 @@ pub enum Alert {
     /// A backyard corral whistle (§ 372) — the minutes left to the bell,
     /// one of [`crate::backyard::BELL_WARNING_MIN`].
     BackyardBell(u8),
+    /// The sea-level-reduced pressure has fallen past the storm threshold over
+    /// the trend window ([`crate::storm`], § 376). Carries nothing: the number
+    /// is on the Storm page and a ten-cell banner cannot say `-5.2 HPA/3H`
+    /// legibly anyway — the banner's job is to send the runner to the page.
+    Storm,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -256,6 +272,7 @@ pub fn banner(alert: Alert) -> Banner {
         // `MIN` rather than a bare number: every other banner is a word or a
         // unit-tagged value, and `! 3` on a wrist at hour 30 says nothing.
         Alert::BackyardBell(min) => write!(b, "! {} MIN", min.min(9)),
+        Alert::Storm => write!(b, "! STORM"),
     };
     b
 }
@@ -307,10 +324,26 @@ pub struct AlertEngine {
     /// rule: `3 MIN` shown at 1:40 is worse than nothing, and the page carries
     /// the countdown regardless.
     last_backyard_warning_seq: u16,
+    /// Whether the storm arm is armed at all. `false` = off, the hardware
+    /// default until a `SET1` push arms it.
+    storm_alert: bool,
+    /// Set while the trend is not a storm; a fire disarms it until a MEASURED
+    /// trend says the front has passed — the once-per-front hysteresis. There
+    /// is deliberately no cooldown beside it: unlike a BPM crossing a zone
+    /// boundary, the signal is already hysteretic
+    /// ([`crate::storm::STORM_CLEAR_FRACTION`]) and moves over hours, so a
+    /// second timer would guard nothing.
+    storm_armed: bool,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
     pending_drink: bool,
     pending_eat: bool,
+    /// A raised storm waiting for the slot. Like [`Self::storm_armed`] and
+    /// unlike the fuel pair, it is NOT cleared by [`Self::reset`]: the weather
+    /// outlives the run, so a front raised between runs is still owed when the
+    /// next one starts — the same reasoning [`Self::last_timer_expiry_seq`]
+    /// carries in the opposite direction.
+    pending_storm: bool,
     in_run: bool,
 }
 
@@ -342,9 +375,12 @@ impl AlertEngine {
             workout_done_fired: false,
             last_timer_expiry_seq: 0,
             last_backyard_warning_seq: 0,
+            storm_alert: false,
+            storm_armed: true,
             active: None,
             pending_drink: false,
             pending_eat: false,
+            pending_storm: false,
             in_run: false,
         }
     }
@@ -421,6 +457,19 @@ impl AlertEngine {
             }
             Some(_) => {}
         }
+    }
+
+    /// Arm or disarm the storm banner. Off by default — the watch never warns
+    /// about the weather until a runner asks it to, because the arm's whole
+    /// value is that it is rare.
+    ///
+    /// A bool rather than a threshold: the threshold lives with the
+    /// measurement ([`crate::storm::StormTracker::set_fall_threshold_hpa`],
+    /// which is where its plausibility guard and its release hysteresis are),
+    /// so this engine only ever reads a verdict it did not compute — the same
+    /// shape the workout, timer and backyard arms have.
+    pub fn set_storm_alert(&mut self, on: bool) {
+        self.storm_alert = on;
     }
 
     /// Feed one recorder snapshot (plus the live BPM, which the snapshot does
@@ -599,6 +648,27 @@ impl AlertEngine {
             self.last_backyard_warning_seq = 0;
         }
 
+        // The storm arm (§ 376). Not gated on `Recording`: a runner standing at
+        // an aid station deciding whether to go back up onto the ridge is
+        // exactly who the warning is for. It sets a pending flag rather than
+        // taking the slot, so the precedence chain at the tail places it — one
+        // rung under pace, one above fuel — and a displaced one re-queues.
+        //
+        // Only a MEASURED recovery re-arms it. A trend withdrawn because the
+        // GPS reference went stale is the watch losing sight of the weather,
+        // not the weather clearing, and re-arming on that would let one canyon
+        // turn one front into two banners.
+        if let Some(storm) = snap.storm {
+            if storm.trend == StormTrend::Storm {
+                if self.storm_armed && self.storm_alert {
+                    self.pending_storm = true;
+                    self.storm_armed = false;
+                }
+            } else if storm.trend.is_measured() {
+                self.storm_armed = true;
+            }
+        }
+
         // Milestones advance whether or not they can be shown: a milestone the
         // busy slot swallows is gone, not owed, so the next one must still be
         // measured from where the run actually is.
@@ -628,7 +698,10 @@ impl AlertEngine {
         }
 
         if self.active.is_none() {
-            if self.pending_eat {
+            if self.pending_storm {
+                self.pending_storm = false;
+                self.active = Some((Alert::Storm, uptime_s));
+            } else if self.pending_eat {
                 self.pending_eat = false;
                 self.active = Some((Alert::Eat, uptime_s));
             } else if self.pending_drink {
@@ -646,13 +719,15 @@ impl AlertEngine {
         self.active.map(|(alert, _)| alert)
     }
 
-    /// Put `alert` on the display slot, re-queueing the fuel reminder it may
-    /// be displacing (a superseded milestone / pace / workout banner is simply
-    /// gone — §214's re-queue rule is fuel's alone).
+    /// Put `alert` on the display slot, re-queueing the fuel reminder or the
+    /// storm banner it may be displacing (a superseded milestone / pace /
+    /// workout banner is simply gone — §214's re-queue rule is fuel's, and
+    /// § 376 extends it to the one warning that never comes round again).
     fn take_slot(&mut self, alert: Alert, uptime_s: u32) {
         match self.active {
             Some((Alert::Drink, _)) => self.pending_drink = true,
             Some((Alert::Eat, _)) => self.pending_eat = true,
+            Some((Alert::Storm, _)) => self.pending_storm = true,
             _ => {}
         }
         self.active = Some((alert, uptime_s));
@@ -754,7 +829,8 @@ impl FuelOverdueTracker {
                 | Alert::WorkoutEnding
                 | Alert::WorkoutDone
                 | Alert::TimerDone
-                | Alert::BackyardBell(_),
+                | Alert::BackyardBell(_)
+                | Alert::Storm,
             )
             | None => {}
         }
@@ -832,6 +908,7 @@ mod tests {
             waypoint: None,
             waypoint_count: 0,
             timer: None,
+            storm: None,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,
@@ -2185,5 +2262,186 @@ mod tests {
         let mut e = AlertEngine::new();
         assert_eq!(e.on_update(&snap(RecordState::Recording, 0), None, 0), None);
         assert_eq!(e.on_update(&snap(RecordState::Recording, 1), None, 1), None);
+    }
+
+    /// A recording snapshot carrying a storm trend.
+    fn stormy(trend: StormTrend, moving_s: u32) -> Snapshot {
+        Snapshot {
+            storm: Some(crate::storm::StormView {
+                trend,
+                sea_level_hpa: Some(1_006.0),
+                delta_hpa: trend.is_measured().then_some(-5.2),
+                span_s: 10_800,
+            }),
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn the_storm_arm_is_off_by_default() {
+        // The whole value of this banner is that it is rare, so the watch does
+        // not volunteer it.
+        let mut e = AlertEngine::new();
+        for t in 0..30 {
+            assert_eq!(e.on_update(&stormy(StormTrend::Storm, t), None, t), None);
+        }
+    }
+
+    #[test]
+    fn an_armed_storm_raises_one_banner_per_front() {
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 10), None, 10),
+            Some(Alert::Storm)
+        );
+        assert_eq!(banner(Alert::Storm).as_str(), "! STORM");
+        // The trend stays latched for the rest of the front; one front, one
+        // banner.
+        for t in 11..600 {
+            let shown = e.on_update(&stormy(StormTrend::Storm, t), None, t);
+            assert!(
+                shown.is_none() || t < 10 + ALERT_TTL_S,
+                "re-fired inside one front at t={t}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_measured_recovery_re_arms_the_banner_and_a_withdrawn_trend_does_not() {
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 10), None, 10),
+            Some(Alert::Storm)
+        );
+        // Losing the GPS reference is the watch losing sight of the weather,
+        // not the weather clearing — re-arming on it would turn one front into
+        // two banners every time the runner enters a canyon.
+        let mut t = 10 + ALERT_TTL_S;
+        for withdrawn in [StormTrend::NoReference, StormTrend::Building] {
+            assert_eq!(e.on_update(&stormy(withdrawn, t), None, t), None);
+            t += 1;
+            assert_eq!(e.on_update(&stormy(StormTrend::Storm, t), None, t), None);
+            t += 1;
+        }
+        // A measured recovery is the front passing, and the next one is news.
+        assert_eq!(e.on_update(&stormy(StormTrend::Steady, t), None, t), None);
+        t += 1;
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, t), None, t),
+            Some(Alert::Storm)
+        );
+    }
+
+    #[test]
+    fn a_storm_banner_leads_the_fuel_reminders() {
+        // One rung above eat: a missed gel is re-offered a cadence later, a
+        // missed front is not.
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 300), None, 300),
+            Some(Alert::Storm)
+        );
+        let a = 300 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, a), None, a),
+            Some(Alert::Eat)
+        );
+        let b = a + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, b), None, b),
+            Some(Alert::Drink)
+        );
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_a_storm_which_re_queues_rather_than_dropping() {
+        // The §214 re-queue rule, extended to the one warning that never comes
+        // round again: over-effort still outranks it, but it must not vanish.
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 10), None, 10),
+            Some(Alert::Storm)
+        );
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, after), Some(150), after),
+            Some(Alert::Storm),
+            "the displaced storm came back"
+        );
+    }
+
+    #[test]
+    fn a_storm_fires_through_a_pause() {
+        // A runner standing at an aid station deciding whether to go back up
+        // onto the ridge is exactly who this is for.
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        let paused = Snapshot {
+            storm: stormy(StormTrend::Storm, 0).storm,
+            ..snap(RecordState::Paused, 0)
+        };
+        assert_eq!(e.on_update(&paused, None, 10), Some(Alert::Storm));
+    }
+
+    #[test]
+    fn a_storm_raised_before_a_run_boundary_is_still_owed_after_it() {
+        // The sky did not reset when the runner pressed stop. Unlike the fuel
+        // cadences — which re-base per run — the pending storm and its arming
+        // are configuration-lifetime, like the timer's expiry counter.
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        e.set_zone_ceiling(Some(3));
+        // Raised, then immediately displaced, then the run ends before the TTL.
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 10), None, 10),
+            Some(Alert::Storm)
+        );
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 11), None, 12),
+            None
+        );
+        assert_eq!(e.on_update(&snap(RecordState::Idle, 0), None, 13), None);
+        assert_eq!(
+            e.on_update(&stormy(StormTrend::Storm, 0), None, 100),
+            Some(Alert::Storm),
+            "the front the runner was never shown is still out there"
+        );
+        // ...and it is still one banner per front, not one per run.
+        let t = 100 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&stormy(StormTrend::Storm, t), None, t), None);
+    }
+
+    #[test]
+    fn a_watch_with_no_barometer_never_storms() {
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        for t in 0..30 {
+            assert_eq!(e.on_update(&rec(t), None, t), None);
+        }
+    }
+
+    #[test]
+    fn a_storm_banner_never_latches_the_fuel_marker() {
+        let mut t = FuelOverdueTracker::new();
+        assert_eq!(t.observe(Some(Alert::Eat), true, false), FuelOverdue::Eat);
+        assert_eq!(
+            t.observe(Some(Alert::Storm), true, false),
+            FuelOverdue::Eat,
+            "a storm supersedes the banner, never the standing fuel marker"
+        );
     }
 }
