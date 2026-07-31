@@ -1945,7 +1945,7 @@ pub fn screen_slots(
 }
 
 /// The composed screen `page` shows, rendered slot by slot, or `None` when
-/// `page` is one of the 38 built-ins or the runner has not composed that one.
+/// `page` is one of the 40 built-ins or the runner has not composed that one.
 ///
 /// The app's entry point for a screen page: slot 0 feeds the ordinary hero
 /// pipeline (band, unit, run-marker clearance — all unchanged), and the slots

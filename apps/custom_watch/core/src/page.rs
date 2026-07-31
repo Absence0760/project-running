@@ -34,14 +34,14 @@ pub enum Page {
     ///
     /// **They sit here, immediately after the Dashboard, on purpose.** A screen
     /// a runner composed is by construction the thing they most want to glance
-    /// at — burying it behind thirty-six built-ins would defeat the feature —
+    /// at — burying it behind thirty-nine built-ins would defeat the feature —
     /// and inserting at the front rather than the back keeps
     /// [`Page::BackToStart`] last, one long-press from home, which is the one
     /// ordering property the safety page cannot lose.
     ///
     /// Each is gated on the runner having actually composed it
     /// (`Recorder::set_screen_count`), so an unpushed watch walks exactly the
-    /// 38 built-ins and the cycle never carries a blank.
+    /// 40 built-ins and the cycle never carries a blank.
     Screen1,
     Screen2,
     Screen3,
@@ -400,13 +400,13 @@ impl Page {
     }
 
     /// The previous page in the cycle — the exact inverse of [`Page::next`],
-    /// wrapping from the first page back to the last. With 38 pages a forward-
+    /// wrapping from the first page back to the last. With 40 pages a forward-
     /// only walk needs up to ~39 presses to reach a late page; a reverse
     /// traversal (the app maps it to a BTN3 long-press) puts the last pages one
     /// press away. Defined as the inverse of `next` rather than a second hand-
     /// written chain so the two can't drift.
     /// Which of the runner's composed screens this page shows, or `None` for
-    /// the 38 built-ins.
+    /// the 40 built-ins.
     ///
     /// The index into [`crate::screens::Screens`], so a page and the screen it
     /// draws are related by exactly one function rather than by four arms
