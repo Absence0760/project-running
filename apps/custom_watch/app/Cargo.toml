@@ -39,6 +39,16 @@ sim-autostart = []
 # watch to photograph without also losing the demo settings that arm the pages.
 sim-alerts = []
 
+# Sim-only storm cadence + arm: the § 376 tracker banks 5 s buckets over a 60 s
+# window instead of 5 min over 3 h, and the record task arms the banner through
+# the same setter a phone push feeds. OFF by default — hardware trends the real
+# synoptic three hours and leaves the banner disarmed until a `SET1` push arms
+# it. Its own feature rather than riding `sim-alerts` because a compressed
+# window is a *measurement* change, not a cadence one: every other scenario
+# would start reporting tendencies off a minute of air, and `alerts` and
+# `workout` both count what reaches the single banner slot.
+sim-storm = []
+
 # Sim-only button task: poll the DK button pin levels instead of waiting on a
 # hardware edge. OFF by default. embassy-nrf's `wait_for_falling_edge` is driven
 # by the nRF52840 GPIO SENSE/DETECT + PORT-event path, which Renode's GPIO model

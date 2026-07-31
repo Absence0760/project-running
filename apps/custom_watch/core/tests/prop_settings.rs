@@ -114,6 +114,11 @@ fn a_settings() -> impl Strategy<Value = WatchSettings> {
             // eight-rung enum has no numeric edge for a property to explore,
             // and its wire byte has its own round-trip unit tests.
             auto_lap: None,
+            // Not generated either: a tenths-of-a-hectopascal threshold is a
+            // narrow integer domain the codec's own round-trip tests cover, and
+            // fixing it absent keeps the generator on the fields it was
+            // written for.
+            storm_alert: None,
         },
     )
 }

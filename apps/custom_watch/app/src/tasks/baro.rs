@@ -17,6 +17,16 @@
 //! `watch_core::baro_rezero::rezero`. The outcome is published to
 //! `state::QNH_REZERO` for the face's transient banner.
 //!
+//! It also owns the § 376 storm tracker, because this is the only task holding
+//! both halves the sea-level reduction needs: the raw pressure, and the GPS
+//! altitude to compensate it against. That altitude is fed **raw** rather than
+//! taken from the complementary filter's corrected output — the filter's whole
+//! job is to remove weather drift from the altitude, which is exactly the
+//! signal the storm trend is looking for (see `watch_core::storm`'s module
+//! doc). A sample with no fresh GPS altitude beside it contributes nothing, so
+//! a signal void degrades the trend to an explicit refusal rather than to a
+//! climb read as a front.
+//!
 //! Publication is **gated on a change worth waking for**
 //! (`watch_core::elevation::should_publish`). `Watch::send` wakes every
 //! receiver whatever the value, and the screen task waits on this watch, so
@@ -37,17 +47,61 @@ use watch_core::elevation::{
     altitude_m, should_publish, Reading, RezeroStatus, VertAccumulator, STANDARD_SEA_LEVEL_PA,
 };
 use watch_core::fix::Fix;
+use watch_core::storm::{StormTracker, StormView};
 
 use crate::state;
 
 const SAMPLE: Duration = Duration::from_secs(1);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
 
+/// The storm tracker's cadence. Hardware banks a five-minute bucket and trends
+/// three hours of them, the synoptic tendency interval. The sim cannot spend
+/// three hours of virtual time watching a front, so `sim-storm` compresses the
+/// same arithmetic into a minute of buckets — the module's logic is
+/// cadence-independent by construction, and only these two numbers move.
+#[cfg(not(feature = "sim-storm"))]
+const STORM_CADENCE_S: (u32, u32) = (
+    watch_core::storm::STORM_BUCKET_S,
+    watch_core::storm::STORM_WINDOW_S,
+);
+#[cfg(feature = "sim-storm")]
+const STORM_CADENCE_S: (u32, u32) = (5, 60);
+
+/// Whether a freshly computed tendency is worth publishing, given the last one
+/// sent. The reason the gate exists is the reason
+/// [`should_publish`] exists one field over: the barometer samples at 1 Hz and
+/// `Watch::send` wakes every receiver whatever the value, so an unconditional
+/// publish would make a present BMP581 a per-second waker again.
+///
+/// Gated on the fields a CONSUMER can tell apart — the trend word, the tenth of
+/// a hectopascal the page renders, and whether the pressure is known at all —
+/// rather than on the struct, whose `span_s` advances on every banked bucket
+/// and whose `delta_hpa` is a float that is almost never bit-identical twice.
+fn storm_worth_publishing(last: Option<Option<StormView>>, next: Option<StormView>) -> bool {
+    let Some(prev) = last else { return true };
+    let key = |v: Option<StormView>| {
+        v.map(|v| {
+            (
+                v.trend,
+                // Truncation, not rounding, because the point is only that
+                // two readings a consumer renders identically do not both wake
+                // it — and truncation needs no float helper here.
+                v.delta_hpa.map(|d| (d * 10.0) as i32),
+                v.sea_level_hpa.map(|p| p as i32),
+            )
+        })
+    };
+    key(prev) != key(next)
+}
+
 /// Parked stand-in when no BMP581 answered: keep draining manual re-zero
 /// requests with an honest NO BARO instead of leaving a press silently
 /// unanswered (the request channel would otherwise have no consumer).
 async fn park_without_sensor() {
     let status_tx = state::QNH_REZERO.sender();
+    // A watch with no barometer has no tendency, and says so rather than
+    // leaving the Storm page's presence bit at whatever it booted with.
+    state::STORM.sender().send(None);
     loop {
         state::QNH_REZERO_REQ.receive().await;
         status_tx.send((RezeroStatus::NoBaro, Instant::now().as_secs() as u32));
@@ -94,6 +148,10 @@ pub async fn run(mut twim: Twim<'static>) {
     let mut last_fix: Option<Fix> = None;
     let mut last_alt: Option<BaroSample> = None;
     let mut published: Option<Reading> = None;
+    let storm_tx = state::STORM.sender();
+    let mut storm_threshold_rx = unwrap!(state::STORM_THRESHOLD_HPA.receiver());
+    let mut storm = StormTracker::with_cadence(STORM_CADENCE_S.0, STORM_CADENCE_S.1);
+    let mut storm_published: Option<Option<StormView>> = None;
     // QNH reference for the altitude conversion. Defaults to the ISA standard
     // until a phone settings push recalibrates it (state::SEA_LEVEL_PA) — the
     // weather-front case where the fixed standard drifts the whole altitude.
@@ -135,6 +193,13 @@ pub async fn run(mut twim: Twim<'static>) {
         if let Some(pa) = sea_level_rx.try_changed() {
             sea_level_pa = pa;
         }
+        // ...and a pushed storm threshold, whose plausibility guard is the
+        // tracker's own — an implausible one leaves the current threshold
+        // standing rather than clamping to an edge.
+        if let Some(hpa) = storm_threshold_rx.try_changed() {
+            storm.set_fall_threshold_hpa(hpa);
+            info!("baro: storm threshold {} hPa", storm.fall_threshold_hpa());
+        }
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
                 let alt = altitude_m(pa, sea_level_pa);
@@ -161,6 +226,27 @@ pub async fn run(mut twim: Twim<'static>) {
                 if should_publish(published, reading) {
                     elevation_tx.send(reading);
                     published = Some(reading);
+                }
+                // The storm tracker takes the RAW pressure and the RAW GPS
+                // altitude — never `corrected`, which has had the weather
+                // filtered out of it by design (watch_core::storm).
+                let now_s = Instant::now().as_secs() as u32;
+                storm.on_sample(pa, gps_alt, now_s);
+                let view = storm.view(now_s);
+                storm.on_view(&view);
+                let next = Some(view);
+                if storm_worth_publishing(storm_published, next) {
+                    // The task's own line, so a sim scenario can assert the
+                    // tendency rather than a panel reading of it.
+                    match (view.trend, view.delta_hpa, view.sea_level_hpa) {
+                        (t, Some(d), Some(p)) => info!(
+                            "baro: storm {} delta={}hPa qnh={}hPa span={}s",
+                            t, d, p, view.span_s
+                        ),
+                        (t, _, p) => info!("baro: storm {} qnh={:?}hPa", t, p),
+                    }
+                    storm_tx.send(next);
+                    storm_published = Some(next);
                 }
             }
             Ok(None) => {}

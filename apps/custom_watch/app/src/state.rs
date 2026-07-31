@@ -23,6 +23,7 @@ use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::screens::Screens;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_queue::SETTINGS_QUEUE_DEPTH;
+use watch_core::storm::StormView;
 use watch_core::timers::Timer;
 use watch_core::trackback::TrackbackView;
 use watch_core::workout::{WorkoutStep, MAX_WORKOUT_STEPS};
@@ -242,6 +243,23 @@ pub static BATTERY: Watch<CriticalSectionRawMutex, Option<u8>, 1> = Watch::new()
 /// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
 /// baro task keeps its default reference. One receiver (the `baro` task).
 pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
+
+/// The barometric pressure tendency (§376): the `baro` task owns the tracker —
+/// it is the only task holding both the raw pressure and the GPS altitude the
+/// sea-level reduction needs — and publishes on a change worth waking for; the
+/// `record` task folds it into the snapshot, which is what puts the Storm page
+/// in the cycle and feeds the alert engine's storm arm. `None` is a barometer
+/// that never answered. One receiver (the `record` task).
+pub static STORM: Watch<CriticalSectionRawMutex, Option<StormView>, 1> = Watch::new();
+
+/// The storm-alert threshold in hPa over the trend window: the `record` task
+/// publishes it when a pushed settings frame arms the banner; the `baro` task
+/// hands it to the tracker, whose setter owns the plausibility guard. Same
+/// dedicated-watch seam as `SEA_LEVEL_PA` and for the same reason — the value
+/// belongs to a task the settings frame does not otherwise touch. No value
+/// published means the tracker keeps its default threshold. One receiver (the
+/// `baro` task).
+pub static STORM_THRESHOLD_HPA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();
 
 /// Local-time offset (minutes east of UTC) for the home clock: the `record`
 /// task publishes the plausibility-guarded value when a pushed settings frame

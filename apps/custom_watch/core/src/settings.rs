@@ -2,12 +2,14 @@
 //! (max HR, pacer goal, gear baseline/target, HR-zone ceiling, QNH sea-level
 //! reference, fuel-reminder cadences, run-view page curation, home-clock
 //! timezone offset, the distance / time / pace-band alert cadences, the
-//! race-phase plan, the guided-run selection, and the resting HR) into the
+//! race-phase plan, the guided-run selection, the resting HR, and the storm-alert
+//! threshold) into the
 //! recorder's + baro task's + alert engine's existing settings-sync hooks
 //! (`Recorder::set_max_hr` / `set_resting_hr` / `set_pacer_goal` / `set_gear` /
 //! `set_pages_enabled` / `set_hide_empty_pages` / `set_race_phases` /
 //! `set_guided_run`, `AlertEngine::set_zone_ceiling` / `set_fuel_intervals` /
-//! `set_distance_interval` / `set_time_interval` / `set_pace_band`,
+//! `set_distance_interval` / `set_time_interval` / `set_pace_band` /
+//! `set_storm_alert` beside `state::STORM_THRESHOLD_HPA`,
 //! `state::SEA_LEVEL_PA` for the baro altitude reference, and
 //! `state::TZ_OFFSET_MIN` for the home clock).
 //!
@@ -28,13 +30,20 @@ use crate::run_store::crc32;
 
 pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
 
+/// Version 8 (2026-07-31): the storm-alert threshold ([`crate::storm`], § 376)
+/// takes `flags3` bit 1. The byte had six bits free after v7, so nothing about
+/// the layout forced this bump — the **discipline** did: a set bit outside the
+/// mask for a frame's own version is how `decode` tells a corrupt push from a
+/// forward-compatible one, and that only works while a version names exactly
+/// one field set. `decode` accepts every earlier version alongside v8, so an
+/// old phone's push keeps working; the encoder always emits v8.
+pub const SETTINGS_VERSION: u8 = 8;
+
 /// Version 7 (2026-07-30): the auto-lap trigger ([`crate::auto_lap`]) is the
 /// field v6's saturation assert was waiting for — both presence bytes were
 /// full, so it rides a THIRD presence byte (`flags3`) and the version bump that
-/// comes with it, exactly as v2 did for `flags2` (§ 374). `decode` accepts every
-/// earlier version alongside v7, so an old phone's push keeps working; the
-/// encoder always emits v7.
-pub const SETTINGS_VERSION: u8 = 7;
+/// comes with it, exactly as v2 did for `flags2` (§ 374).
+const SETTINGS_VERSION_V7: u8 = 7;
 
 /// Version 6 (2026-07-29): the ICE / medical-ID card ([`crate::ice`]) took
 /// `flags2`'s LAST free bit — the card a responder reads off a collapsed
@@ -130,12 +139,16 @@ const KNOWN_FLAGS2_V5: u8 = KNOWN_FLAGS2_V4 | FLAG2_RESTING_HR;
 const KNOWN_FLAGS2: u8 = KNOWN_FLAGS2_V5 | FLAG2_ICE;
 
 /// Presence bits in the `flags3` byte, which arrived with v7 because both
-/// earlier bytes were saturated. Seven bits are still free, so the field after
-/// this one needs no further version bump.
+/// earlier bytes were saturated. Six bits are still free — but a free bit is
+/// not a licence to skip the version bump: see [`SETTINGS_VERSION`].
 pub const FLAG3_AUTO_LAP: u8 = 1 << 0;
+pub const FLAG3_STORM_ALERT: u8 = 1 << 1;
+
+/// Every presence bit `flags3` defines at version 7.
+const KNOWN_FLAGS3_V7: u8 = FLAG3_AUTO_LAP;
 
 /// Every presence bit `flags3` defines at the current version.
-const KNOWN_FLAGS3: u8 = FLAG3_AUTO_LAP;
+const KNOWN_FLAGS3: u8 = KNOWN_FLAGS3_V7 | FLAG3_STORM_ALERT;
 
 /// v1 header: magic (4) + version (1) + flags (1). v2 appends `flags2`, v7
 /// `flags3`.
@@ -163,11 +176,11 @@ pub const GUIDED_RUN_ID_LEN: usize = 24;
 /// max_hr(2), pacer(8), gear(8), zone_ceiling(1), sea_level_pa(4), fuel(8),
 /// pages(8), hide_empty(1), tz_offset(2), distance_interval(4),
 /// time_interval(4), pace_band(4), race_phases(9), guided_run(24),
-/// resting_hr(2), ice(92), auto_lap(1), and the CRC trailer. 194 bytes — the
-/// ICE card is far the widest field, and it is what leaves the frame still
-/// inside one write at the 256-byte ATT MTU the `ble` task configures, so a
-/// settings push still never needs chunking. A field group wider than the ~62
-/// bytes of headroom left would.
+/// resting_hr(2), ice(92), auto_lap(1), storm_alert(2), and the CRC trailer.
+/// 196 bytes — the ICE card is far the widest field, and it is what leaves the
+/// frame still inside one write at the 256-byte ATT MTU the `ble` task
+/// configures, so a settings push still never needs chunking. A field group
+/// wider than the ~60 bytes of headroom left would.
 pub const MAX_SETTINGS_LEN: usize = V7_HEADER_LEN
     + 2
     + 8
@@ -186,6 +199,7 @@ pub const MAX_SETTINGS_LEN: usize = V7_HEADER_LEN
     + 2
     + ICE_WIRE_LEN
     + 1
+    + 2
     + CRC_LEN;
 
 const _: () = assert!(MAX_SETTINGS_LEN <= 244);
@@ -406,6 +420,19 @@ pub struct WatchSettings {
     /// from `settings_apply`) and costs only this field. Absent leaves the
     /// trigger the watch already holds standing.
     pub auto_lap: Option<u8>,
+    /// The storm-alert threshold ([`crate::storm`], § 376) — the fall in
+    /// sea-level-reduced pressure over the trend window that raises the banner.
+    /// Doubly-optional like [`WatchSettings::distance_interval_m`]:
+    /// `Some(None)` disarms the banner, `Some(Some(hpa))` arms it at that
+    /// threshold. On the wire it is tenths of a hectopascal and 0 encodes the
+    /// disarm, so an armed threshold is always positive.
+    ///
+    /// One field, two sinks, because to a runner it is one control: the arm is
+    /// the alert engine's ([`crate::alerts::AlertEngine::set_storm_alert`]) and
+    /// the threshold the tracker's
+    /// ([`crate::storm::StormTracker::set_fall_threshold_hpa`], where the
+    /// plausibility guard and the release hysteresis live).
+    pub storm_alert: Option<Option<f32>>,
 }
 
 /// The pushed timezone offset when it is a plausible UTC offset, `None` when
@@ -450,6 +477,13 @@ impl WatchSettings {
             SETTINGS_VERSION_V4 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2_V4, 0),
             SETTINGS_VERSION_V5 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2_V5, 0),
             SETTINGS_VERSION_V6 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2, 0),
+            SETTINGS_VERSION_V7 => (
+                V7_HEADER_LEN,
+                PAGES_LEN,
+                true,
+                KNOWN_FLAGS2,
+                KNOWN_FLAGS3_V7,
+            ),
             SETTINGS_VERSION => (V7_HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2, KNOWN_FLAGS3),
             _ => return None,
         };
@@ -638,6 +672,13 @@ impl WatchSettings {
             out.auto_lap = Some(*b.get(off)?);
             off += 1;
         }
+        if flags3 & FLAG3_STORM_ALERT != 0 {
+            let end = off + 2;
+            let raw = b.get(off..end)?;
+            let tenths = u16::from_le_bytes([raw[0], raw[1]]);
+            out.storm_alert = Some((tenths != 0).then(|| f32::from(tenths) / 10.0));
+            off = end;
+        }
         // Bytes left over past the fields the flags claim mean a corrupt or
         // misframed push (data present for a bit that wasn't set); reject it
         // rather than silently apply a frame the phone didn't mean to send.
@@ -647,7 +688,7 @@ impl WatchSettings {
         Some(out)
     }
 
-    /// Encode a version-7 frame into `out`, returning the byte length written,
+    /// Encode a version-8 frame into `out`, returning the byte length written,
     /// or `None` if `out` is smaller than the frame needs. Only present fields
     /// are written, in flag order, then the CRC32 trailer over everything
     /// before it — the mirror the phone encoder pins to.
@@ -706,6 +747,9 @@ impl WatchSettings {
         if self.auto_lap.is_some() {
             flags3 |= FLAG3_AUTO_LAP;
         }
+        if self.storm_alert.is_some() {
+            flags3 |= FLAG3_STORM_ALERT;
+        }
 
         let len = V7_HEADER_LEN
             + CRC_LEN
@@ -725,7 +769,8 @@ impl WatchSettings {
             + self.guided_run.map_or(0, |_| GUIDED_RUN_ID_LEN)
             + self.resting_hr.map_or(0, |_| 2)
             + self.ice.map_or(0, |_| ICE_WIRE_LEN)
-            + self.auto_lap.map_or(0, |_| 1);
+            + self.auto_lap.map_or(0, |_| 1)
+            + self.storm_alert.map_or(0, |_| 2);
         if out.len() < len {
             return None;
         }
@@ -822,6 +867,11 @@ impl WatchSettings {
             out[off] = trigger;
             off += 1;
         }
+        if let Some(threshold) = self.storm_alert {
+            let tenths = threshold.map_or(0u16, |hpa| libm::roundf(hpa * 10.0).max(1.0) as u16);
+            out[off..off + 2].copy_from_slice(&tenths.to_le_bytes());
+            off += 2;
+        }
         let crc = crc32(&out[..off]).to_le_bytes();
         out[off..off + CRC_LEN].copy_from_slice(&crc);
         Some(off + CRC_LEN)
@@ -879,6 +929,7 @@ mod tests {
     fn every_field_roundtrips() {
         let s = WatchSettings {
             auto_lap: Some(AutoLap::Mi1.to_byte()),
+            storm_alert: Some(Some(6.0)),
             max_hr: Some(190),
             pacer: Some(PacerGoalCfg {
                 distance_m: 42_195,
@@ -1522,6 +1573,7 @@ mod tests {
                     let s = WatchSettings {
                         auto_lap: (flags3 & FLAG3_AUTO_LAP != 0)
                             .then_some(AutoLap::Min10.to_byte()),
+                        storm_alert: (flags3 & FLAG3_STORM_ALERT != 0).then_some(Some(4.0)),
                         max_hr: (mask & FLAG_MAX_HR != 0).then_some(190),
                         pacer: (mask & FLAG_PACER != 0).then_some(PacerGoalCfg {
                             distance_m: 21_097,
@@ -1577,6 +1629,7 @@ mod tests {
                     assert_eq!(back.guided_run.is_some(), flags2 & FLAG2_GUIDED_RUN != 0);
                     assert_eq!(back.resting_hr.is_some(), flags2 & FLAG2_RESTING_HR != 0);
                     assert_eq!(back.auto_lap.is_some(), flags3 & FLAG3_AUTO_LAP != 0);
+                    assert_eq!(back.storm_alert.is_some(), flags3 & FLAG3_STORM_ALERT != 0);
                 }
             }
         }
@@ -1624,10 +1677,100 @@ mod tests {
             resting_hr: Some(48),
             ice: Some(ice_card()),
             auto_lap: Some(2),
+            storm_alert: Some(Some(4.0)),
         };
         let mut buf = [0u8; MAX_SETTINGS_LEN];
         let n = s.encode(&mut buf).unwrap();
         let expected: [u8; MAX_SETTINGS_LEN] = [
+            0x53, 0x45, 0x54, 0x31, // "SET1"
+            0x08, // version
+            0xff, // flags: every version-1 field
+            0xff, // flags2: tz|distance|time|pace|race|guided|resting|ice — saturated
+            0x03, // flags3: auto_lap|storm_alert
+            0xbe, 0x00, // max_hr = 190
+            0xd3, 0xa4, 0x00, 0x00, // pacer distance_m = 42195
+            0x40, 0x38, 0x00, 0x00, // pacer time_s = 14400
+            0x00, 0x24, 0xf4, 0x48, // gear baseline_m = 500000.0 (f32 LE)
+            0x00, 0x50, 0x43, 0x49, // gear target_m = 800000.0 (f32 LE)
+            0x03, // zone_ceiling = 3
+            0x80, 0xe6, 0xc5, 0x47, // sea_level_pa = 101325.0 (f32 LE)
+            0x84, 0x03, 0x00, 0x00, // fuel drink_interval_s = 900
+            0xdc, 0x05, 0x00, 0x00, // fuel eat_interval_s = 1500
+            0xff, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pages = 0xc0ff (u64 LE)
+            0x01, // hide_empty_pages = true
+            0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
+            0xe8, 0x03, 0x00, 0x00, // distance_interval_m = 1000
+            0x08, 0x07, 0x00, 0x00, // time_interval_s = 1800
+            0x2c, 0x01, // pace_band fast = 300 s/km
+            0xa4, 0x01, // pace_band slow = 420 s/km
+            0xd3, 0xa4, 0x00, 0x00, // race_phases distance_m = 42195
+            0x38, 0x31, 0x00, 0x00, // race_phases goal_time_s = 12600
+            0x00, // race_phases preset = ten_ten_ten
+            0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, // guided_run id "easy-30"
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // NUL padding to 24
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30,
+            0x00, // resting_hr = 48
+            // ice: holder "ALEX MORGAN", NUL-padded to 21
+            0x41, 0x4c, 0x45, 0x58, 0x20, 0x4d, 0x4f, 0x52, 0x47, 0x41, 0x4e, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            // ice: blood "O NEG", NUL-padded to 8
+            0x4f, 0x20, 0x4e, 0x45, 0x47, 0x00, 0x00, 0x00, //
+            // ice: conditions "PENICILLIN, ASTHMA", NUL-padded to 21
+            0x50, 0x45, 0x4e, 0x49, 0x43, 0x49, 0x4c, 0x4c, 0x49, 0x4e, 0x2c, 0x20, 0x41, 0x53,
+            0x54, 0x48, 0x4d, 0x41, 0x00, 0x00, 0x00, //
+            // ice: contact "JAMIE MORGAN", NUL-padded to 21
+            0x4a, 0x41, 0x4d, 0x49, 0x45, 0x20, 0x4d, 0x4f, 0x52, 0x47, 0x41, 0x4e, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            // ice: phone "+1 555 0134", NUL-padded to 21
+            0x2b, 0x31, 0x20, 0x35, 0x35, 0x35, 0x20, 0x30, 0x31, 0x33, 0x34, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            0x02, // auto_lap = 1 mi
+            0x28, 0x00, // storm_alert = 4.0 hPa, in tenths
+            0x1c, 0x26, 0xd5, 0xdf, // crc32 over every byte above (u32 LE)
+        ];
+        assert_eq!(n, MAX_SETTINGS_LEN);
+        assert_eq!(buf, expected);
+    }
+
+    #[test]
+    fn a_storm_threshold_travels_as_tenths_and_zero_is_the_disarm() {
+        for hpa in [1.0f32, 2.5, 4.0, 6.0, 20.0] {
+            let s = WatchSettings {
+                storm_alert: Some(Some(hpa)),
+                ..Default::default()
+            };
+            assert_eq!(roundtrip(&s).storm_alert, Some(Some(hpa)), "{hpa} hPa");
+        }
+        // Disarming is a real update, not an absence — the same distinction the
+        // zone ceiling has carried since v1.
+        assert_eq!(
+            roundtrip(&WatchSettings {
+                storm_alert: Some(None),
+                ..Default::default()
+            })
+            .storm_alert,
+            Some(None)
+        );
+        assert_eq!(roundtrip(&WatchSettings::default()).storm_alert, None);
+        // An armed threshold must never round to the disarm sentinel however
+        // small it is: the tracker's own window would reject 0.02 hPa, but a
+        // wire that silently turned "arm" into "off" would be a different bug
+        // in a different place, with nothing to reject.
+        let tiny = WatchSettings {
+            storm_alert: Some(Some(0.02)),
+            ..Default::default()
+        };
+        assert_eq!(roundtrip(&tiny).storm_alert, Some(Some(0.1)));
+    }
+
+    /// The frozen v7 golden vector (every v7 field, version byte 0x07) must
+    /// keep decoding into exactly what it decoded into before the v8 bump: a
+    /// phone that hasn't shipped the storm-alert encoder yet still configures
+    /// the watch, and the banner it never mentioned stays as the watch has it
+    /// rather than being armed or disarmed by omission.
+    #[test]
+    fn v7_golden_vector_still_decodes() {
+        let v7: [u8; 194] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
             0x07, // version
             0xff, // flags: every version-1 field
@@ -1673,8 +1816,34 @@ mod tests {
             0x02, // auto_lap = 1 mi
             0xff, 0x55, 0x93, 0xbc, // crc32 over every byte above (u32 LE)
         ];
-        assert_eq!(n, MAX_SETTINGS_LEN);
-        assert_eq!(buf, expected);
+        let s = WatchSettings::decode(&v7).expect("a v7 frame decodes");
+        assert_eq!(s.storm_alert, None, "a v7 phone names no storm threshold");
+        assert_eq!(s.auto_lap, Some(2));
+        assert_eq!(s.max_hr, Some(190));
+        assert_eq!(s.ice, Some(ice_card()));
+    }
+
+    /// The reason the v8 bump exists at all, given `flags3` had six free bits:
+    /// an unknown presence bit is how [`WatchSettings::decode`] tells a corrupt
+    /// push from a legitimate one, and that only holds while a version names
+    /// exactly one field set. A v7-stamped frame carrying the v8 bit is
+    /// therefore refused whole — not read as a v7 frame with a trailing
+    /// surprise.
+    #[test]
+    fn a_v7_stamped_frame_cannot_carry_the_v8_field() {
+        let s = WatchSettings {
+            storm_alert: Some(Some(4.0)),
+            ..WatchSettings::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(WatchSettings::decode(&buf[..n]), Some(s));
+        // Re-stamp the version and re-seal the CRC, so the ONLY thing wrong
+        // with the frame is that its version does not know its own field.
+        buf[4] = 7;
+        let crc = crc32(&buf[..n - CRC_LEN]).to_le_bytes();
+        buf[n - CRC_LEN..n].copy_from_slice(&crc);
+        assert_eq!(WatchSettings::decode(&buf[..n]), None);
     }
 
     /// The frozen v6 golden vector (every v6 field, version byte 0x06) must
@@ -1852,9 +2021,11 @@ mod tests {
         assert_eq!(
             WatchSettings::decode(&v4),
             Some(WatchSettings {
-                // A pre-v7 phone cannot name a trigger, so the watch keeps the
-                // one it already holds rather than being reset to a default.
+                // A pre-v7 phone cannot name a trigger, and a pre-v8 one
+                // cannot arm the storm banner, so the watch keeps what it
+                // already holds rather than being reset to a default.
                 auto_lap: None,
+                storm_alert: None,
                 max_hr: Some(190),
                 pacer: Some(PacerGoalCfg {
                     distance_m: 42_195,
@@ -1901,11 +2072,11 @@ mod tests {
         assert_eq!(
             &buf[..n],
             &[
-                0x53, 0x45, 0x54, 0x31, 0x07, 0x00, 0x3e, 0x00, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07,
+                0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x3e, 0x00, 0xe8, 0x03, 0x00, 0x00, 0x08, 0x07,
                 0x00, 0x00, 0x2c, 0x01, 0xa4, 0x01, 0xd3, 0xa4, 0x00, 0x00, 0x38, 0x31, 0x00, 0x00,
                 0x00, 0x65, 0x61, 0x73, 0x79, 0x2d, 0x33, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x73, 0x78, 0xfc,
-                0xc3
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x96, 0xd4, 0x71,
+                0x78
             ]
         );
     }
@@ -1922,7 +2093,7 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x07, 0x00, 0x40, 0x00, 0x30, 0x00, 0xd9, 0x1e, 0x83, 0xa3]
+            &[0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x40, 0x00, 0x30, 0x00, 0x0c, 0xac, 0xd5, 0x52]
         );
     }
 
@@ -1940,14 +2111,14 @@ mod tests {
         assert_eq!(
             &buf[..n],
             &[
-                0x53, 0x45, 0x54, 0x31, 0x07, 0x00, 0x80, 0x00, 0x41, 0x4c, 0x45, 0x58, 0x00, 0x00,
+                0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x80, 0x00, 0x41, 0x4c, 0x45, 0x58, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x4f, 0x20, 0x4e, 0x45, 0x47, 0x00, 0x00, 0x00, 0x41, 0x53, 0x54, 0x48, 0x4d,
                 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x4a, 0x41, 0x4d, 0x49, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x35, 0x35, 0x20, 0x30,
                 0x31, 0x33, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x5b, 0xc4, 0x0e, 0x42
+                0x00, 0x00, 0x83, 0x1e, 0x0d, 0x7c
             ]
         );
     }
@@ -1965,7 +2136,7 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         assert_eq!(
             &buf[..n],
-            &[0x53, 0x45, 0x54, 0x31, 0x07, 0x00, 0x01, 0x00, 0xc6, 0xfd, 0x1b, 0xe9, 0xc1, 0x01]
+            &[0x53, 0x45, 0x54, 0x31, 0x08, 0x00, 0x01, 0x00, 0xc6, 0xfd, 0xce, 0x5b, 0x97, 0xf0]
         );
     }
 
@@ -1996,9 +2167,11 @@ mod tests {
         assert_eq!(
             WatchSettings::decode(&v2),
             Some(WatchSettings {
-                // A pre-v7 phone cannot name a trigger, so the watch keeps the
-                // one it already holds rather than being reset to a default.
+                // A pre-v7 phone cannot name a trigger, and a pre-v8 one
+                // cannot arm the storm banner, so the watch keeps what it
+                // already holds rather than being reset to a default.
                 auto_lap: None,
+                storm_alert: None,
                 max_hr: Some(190),
                 pacer: Some(PacerGoalCfg {
                     distance_m: 42_195,
@@ -2058,6 +2231,7 @@ mod tests {
             s,
             WatchSettings {
                 auto_lap: None,
+                storm_alert: None,
                 max_hr: Some(190),
                 pacer: Some(PacerGoalCfg {
                     distance_m: 42_195,
