@@ -730,7 +730,6 @@ mod tests {
         v.delta_hpa = Some(-1.9);
         t.on_view(&v);
         assert_eq!(t.classify(-1.9), StormTrend::Falling);
-        v.delta_hpa = Some(-3.0);
         assert_eq!(t.classify(-3.0), StormTrend::Falling);
     }
 
