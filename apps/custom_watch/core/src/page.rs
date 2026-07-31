@@ -166,6 +166,12 @@ pub enum Page {
     /// Auto-segment-effort match counts ([`crate::auto_segment_effort`]); empty
     /// until synced.
     AutoEffort,
+    /// The armed countdown timer / stopwatch ([`crate::timers`], §375) — the
+    /// aid-station turnaround, the nap budget, the backyard bell. Heads the
+    /// closing trio because it is the same *what is the clock doing* question
+    /// [`Page::Daylight`] asks about the sun; empty (and out of the cycle)
+    /// until the idle BTN2 modal starts one.
+    Timer,
     /// The sunset/sunrise countdown ([`crate::daylight`]): the next sun event,
     /// how long until it, and today's day length — needs the synced timezone
     /// offset plus a fix carrying the RMC clock + date; honest states
@@ -242,6 +248,7 @@ impl Page {
             Page::RouteSimplify => "SMPL",
             Page::RouteElev => "RELV",
             Page::AutoEffort => "AEFF",
+            Page::Timer => "TIMR",
             Page::Daylight => "SUN",
             Page::Waypoint => "WPT",
             Page::BackToStart => "BACK",
@@ -293,6 +300,7 @@ impl Page {
             Page::RouteSimplify => "ROUTE SIMPLIFY",
             Page::RouteElev => "ROUTE ELEVATION",
             Page::AutoEffort => "AUTO EFFORT",
+            Page::Timer => "TIMER",
             Page::Daylight => "DAYLIGHT",
             Page::Waypoint => "WAYPOINT",
             Page::BackToStart => "BACK TO START",
@@ -374,7 +382,8 @@ impl Page {
             Page::PrRecency => Page::RouteSimplify,
             Page::RouteSimplify => Page::RouteElev,
             Page::RouteElev => Page::AutoEffort,
-            Page::AutoEffort => Page::Daylight,
+            Page::AutoEffort => Page::Timer,
+            Page::Timer => Page::Daylight,
             Page::Daylight => Page::Waypoint,
             Page::Waypoint => Page::BackToStart,
             Page::BackToStart => Page::Dashboard,
@@ -490,6 +499,7 @@ mod tests {
         Page::RouteSimplify,
         Page::RouteElev,
         Page::AutoEffort,
+        Page::Timer,
         Page::Daylight,
         Page::Waypoint,
         Page::BackToStart,
@@ -536,7 +546,12 @@ mod tests {
         assert_eq!(Page::RaceDay.next(), Page::PlanReplan);
         assert_eq!(Page::PlanReplan.next(), Page::PlanAdaptive);
         assert_eq!(Page::PrRecency.next(), Page::RouteSimplify);
-        assert_eq!(Page::AutoEffort.next(), Page::Daylight);
+        assert_eq!(
+            Page::AutoEffort.next(),
+            Page::Timer,
+            "the runner's own clock heads the closing trio"
+        );
+        assert_eq!(Page::Timer.next(), Page::Daylight);
         assert_eq!(
             Page::Daylight.next(),
             Page::Waypoint,
@@ -653,8 +668,9 @@ mod tests {
     #[test]
     fn a_wire_mask_leaves_the_pages_it_cannot_address_enabled() {
         // The phone's 32-bit field stops at discriminant 31, so AutoEffort,
-        // Daylight, Waypoint and BackToStart sit past its reach; zero-extending
-        // would curate those pages out invisibly on every curation push.
+        // Timer, Daylight, Waypoint and BackToStart sit past its reach;
+        // zero-extending would curate those pages out invisibly on every
+        // curation push.
         let curated = mask_from_wire(1u32 << (Page::Pace as u8));
         assert_ne!(curated & Page::Pace.bit(), 0);
         assert_eq!(curated & Page::Nav.bit(), 0, "an addressed page stays off");

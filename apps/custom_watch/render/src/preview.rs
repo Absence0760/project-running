@@ -94,6 +94,7 @@ fn base_snapshot() -> Snapshot {
         climb: Default::default(),
         waypoint: None,
         waypoint_count: 0,
+        timer: None,
         track_thinning: 1,
         pages_mask: u64::MAX,
         hide_empty_pages: true,

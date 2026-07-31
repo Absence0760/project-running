@@ -42,6 +42,7 @@ use crate::race_phases::{
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{sleep_budget, SleepBudget};
+use crate::timers::TimerView;
 use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
@@ -628,6 +629,13 @@ pub struct Snapshot {
     /// between runs, so the page must stay in the cycle while the store is
     /// non-empty even before this run has an anchor to measure from.
     pub waypoint_count: u8,
+    /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
+    /// `None` while nothing is armed. Fed in from the task that owns the
+    /// instrument rather than derived here — the timer outlives runs, so the
+    /// recorder is no more its home than it is the course's ([`set_timer`]).
+    ///
+    /// [`set_timer`]: Recorder::set_timer
+    pub timer: Option<TimerView>,
     /// The flash track's decimation factor: 1 = full resolution, `k` = one
     /// stored point per `k` accepted fixes after slot-full thinning
     /// ([`crate::run_store::RunWriter::push_point_bounded`]). Lets the face
@@ -922,6 +930,9 @@ pub struct Recorder {
     /// live distance, so it advances with the run rather than at sync time.
     race_phases: PhasePlan,
     race_phase_goal_pace_s_per_km: Option<f64>,
+    /// The armed countdown / stopwatch reading, fed per tick by the task that
+    /// owns the instrument ([`set_timer`](Recorder::set_timer)).
+    timer: Option<TimerView>,
     /// Whether the nav task holds a loaded course — the Nav page's data
     /// presence, fed via [`set_course_loaded`](Recorder::set_course_loaded)
     /// (the recorder stays course-agnostic; this is a presence bit, not the
@@ -1030,6 +1041,7 @@ impl Recorder {
             race_day: None,
             race_phases: PhasePlan::new(),
             race_phase_goal_pace_s_per_km: None,
+            timer: None,
             course_loaded: false,
             pages_enabled: u64::MAX,
             hide_empty_pages: true,
@@ -1469,6 +1481,16 @@ impl Recorder {
 
     /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't render
     /// an unknown verdict label.
+    /// Feed the countdown / stopwatch reading (§375). The same external-input
+    /// shape as [`set_hr`](Recorder::set_hr) and
+    /// [`set_route_position`](Recorder::set_route_position), and for the §215
+    /// reason: the instrument is armed on the idle face and survives every run
+    /// boundary, so the recorder has no business owning it — it only carries
+    /// the reading so the page and the alert engine read one snapshot.
+    pub fn set_timer(&mut self, view: Option<TimerView>) {
+        self.timer = view;
+    }
+
     pub fn set_race_day(&mut self, view: Option<RaceDayView>) {
         self.race_day = view.map(|v| RaceDayView {
             days_until: v.days_until,
@@ -2036,6 +2058,7 @@ impl Recorder {
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
             waypoint_count: self.waypoints.len() as u8,
+            timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,
             hide_empty_pages: self.hide_empty_pages,
@@ -2113,6 +2136,10 @@ impl Recorder {
         // page must not vanish from the cycle the moment the fix does.
         set(Page::Waypoint, s.waypoint_count > 0);
         set(Page::Climb, !s.climb.is_empty());
+        // Keyed on the instrument being ARMED, not merely configured: a preset
+        // dialled and abandoned in the modal is not a page, and a reset gives
+        // the seat back.
+        set(Page::Timer, s.timer.is_some());
         // A composed screen is available when the runner has actually composed
         // it. Keyed on the COUNT rather than on any metric being fed, because a
         // screen the runner built is a page they asked for — its slots saying
@@ -4178,6 +4205,22 @@ mod tests {
         let s = r.snapshot();
         assert_eq!(s.waypoint_count, 1);
         assert!(s.waypoint.is_none());
+    }
+
+    #[test]
+    fn the_timer_page_joins_the_cycle_only_while_something_is_armed() {
+        let mut r = Recorder::new();
+        r.start(0);
+        assert_eq!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
+        let mut t = crate::timers::Timer::new();
+        t.start_stop(0);
+        r.set_timer(t.snapshot_view(5));
+        assert_ne!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
+        // Cleared, and the seat goes back — an unarmed instrument is not a page.
+        t.start_stop(5);
+        assert!(t.reset());
+        r.set_timer(t.snapshot_view(6));
+        assert_eq!(r.snapshot().pages_mask & Page::Timer.bit(), 0);
     }
 
     #[test]

@@ -223,10 +223,7 @@ impl Timer {
             }
             None => {
                 if self.banked_s == 0 {
-                    self.arm_seq = match self.arm_seq.checked_add(1) {
-                        Some(n) => n,
-                        None => 1,
-                    };
+                    self.arm_seq = self.arm_seq.checked_add(1).unwrap_or(1);
                 }
                 self.running_since_s = Some(now_s);
             }

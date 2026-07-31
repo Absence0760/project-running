@@ -395,6 +395,7 @@ pub fn body_top_row(page: Page) -> usize {
         | Page::RouteElev
         | Page::RaceDay
         | Page::Waypoint
+        | Page::Timer
         | Page::Climb => HERO_BAND_ROWS,
     }
 }
@@ -742,6 +743,7 @@ pub fn page_rows(
             Page::RaceDay => race_day_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Daylight => daylight_glance(fix, tag, uptime_s, animate, mode, tz_offset_min),
             Page::Waypoint => waypoint_glance(fix, snap, tb, tag, uptime_s, animate, mode),
+            Page::Timer => timer_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Climb => climb_glance(fix, snap, tag, uptime_s, animate, mode),
         },
     }
@@ -840,10 +842,12 @@ pub enum Metric {
     RouteElevTotal,
     RaceDayDays,
     SleepBudget,
+    /// The runner's own countdown / stopwatch reading ([`crate::timers`]).
+    TimerRemaining,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=35`.
+    /// This metric's byte on the `SCR1` wire, in `1..=36`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -891,6 +895,7 @@ impl Metric {
             Metric::RouteElevTotal => 33,
             Metric::RaceDayDays => 34,
             Metric::SleepBudget => 35,
+            Metric::TimerRemaining => 36,
         }
     }
 
@@ -938,6 +943,7 @@ impl Metric {
             33 => Metric::RouteElevTotal,
             34 => Metric::RaceDayDays,
             35 => Metric::SleepBudget,
+            36 => Metric::TimerRemaining,
             _ => return None,
         })
     }
@@ -985,6 +991,7 @@ impl Metric {
             Metric::RouteElevTotal => "route_elev_total",
             Metric::RaceDayDays => "race_day_days",
             Metric::SleepBudget => "sleep_budget",
+            Metric::TimerRemaining => "timer_remaining",
         }
     }
 
@@ -1032,6 +1039,7 @@ impl Metric {
             Metric::RouteElevTotal => "ROUTE",
             Metric::RaceDayDays => "RACE",
             Metric::SleepBudget => "NAP",
+            Metric::TimerRemaining => "TIMR",
         }
     }
 }
@@ -1084,6 +1092,7 @@ pub const fn hero_metric(page: Page) -> Option<Metric> {
         Page::AutoEffort => Metric::AutoEffortMatched,
         Page::RouteElev => Metric::RouteElevTotal,
         Page::RaceDay => Metric::RaceDayDays,
+        Page::Timer => Metric::TimerRemaining,
     })
 }
 
@@ -1237,6 +1246,9 @@ pub fn metric_unfed(
                 SleepStatus::Unknown => Some(Unfed::AwaitingFix),
             },
         },
+        // Nothing armed is the runner's to fix on the idle face; a running
+        // clock always has a number, even at exactly zero.
+        Metric::TimerRemaining => snap.timer.is_none().then_some(Unfed::NoTimer),
     }
 }
 
@@ -1720,6 +1732,21 @@ pub fn metric_hero(
             }
             row
         }
+        // Time left, or — past zero — time over, carrying the `+` the module
+        // draws it with. The sign is the whole point: with no way to notify the
+        // runner, an expiry that read `0:00` forever would be a stopped clock.
+        Metric::TimerRemaining => {
+            let mut row = Row::new();
+            match snap.timer {
+                Some(v) => {
+                    let _ = write!(row, "{}", v.display());
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
     }
 }
 
@@ -1822,7 +1849,8 @@ pub fn metric_unit(
         | Metric::PlanReplanChanges
         | Metric::PlanAdaptiveChanges
         | Metric::ReadinessScore
-        | Metric::AutoEffortMatched => None,
+        | Metric::AutoEffortMatched
+        | Metric::TimerRemaining => None,
     }
 }
 
@@ -3639,6 +3667,36 @@ fn race_day_glance(
     rows
 }
 
+/// The Timer page (§375): the hero carries the reading, so the body says the
+/// two things the number alone cannot — which instrument this is (a countdown
+/// and a stopwatch read identically at a glance) and what it is doing.
+///
+/// A stopped or expired clock is deliberately still a full page rather than an
+/// empty state: the runner armed it, and an overrun is the reading that matters
+/// most on a device that could not tell them at the time.
+fn timer_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.timer {
+        None => write_unfed(&mut rows, Page::Timer, "TIMER", Unfed::NoTimer),
+        Some(v) => {
+            let _ = write!(rows[2], "{}", v.title());
+            let _ = write!(rows[4], "{}", v.state_word());
+            if v.preset_s > 0 {
+                let _ = write!(rows[5], "SET {}", crate::timers::format_clock(v.preset_s));
+            }
+        }
+    }
+    rows
+}
+
 /// The Nav page: the breadcrumb map panel on rows [`NAV_PANEL_TOP_ROW`]..+
 /// [`NAV_PANEL_ROWS`] (left empty here — the app draws the course polyline +
 /// position marker into those pixels, and the 2x [`nav_alert_row`] overlay on
@@ -4539,6 +4597,7 @@ mod tests {
             climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
+            timer: None,
             track_thinning: 1,
             pages_mask: u64::MAX,
             hide_empty_pages: true,
@@ -8146,6 +8205,81 @@ mod tests {
     }
 
     #[test]
+    fn the_timer_page_names_the_instrument_and_signs_an_overrun() {
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        let mut t = crate::timers::Timer::new();
+        for _ in 0..3 {
+            t.preset_up();
+        }
+        t.start_stop(0);
+        rec.timer = t.snapshot_view(100);
+        let page = |rec: &Snapshot| {
+            page_rows(
+                Page::Timer,
+                Some(&fix()),
+                None,
+                Some(rec),
+                None,
+                NavView::NoCourse,
+                None,
+                20,
+                false,
+            )
+        };
+        let rows = page(&rec);
+        assert_eq!(rows[2].as_str(), "TIMER");
+        assert_eq!(rows[4].as_str(), "RUNNING");
+        assert_eq!(rows[5].as_str(), "SET 5:00");
+        assert_eq!(
+            page_hero(Page::Timer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "3:20"
+        );
+        // Past zero the hero signs itself and keeps counting — the reading a
+        // runner who missed the banner needs.
+        rec.timer = t.snapshot_view(434);
+        let rows = page(&rec);
+        assert_eq!(rows[4].as_str(), "TIME UP");
+        assert_eq!(
+            page_hero(Page::Timer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "+2:14"
+        );
+    }
+
+    #[test]
+    fn an_unarmed_timer_page_points_at_the_key_that_arms_it() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        assert!(rec.timer.is_none());
+        let rows = page_rows(
+            Page::Timer,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            20,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TIMER");
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "NO TIMER SET");
+        assert_eq!(
+            rows[UNFED_REASON_ROW + 1].as_str(),
+            crate::unfed::TIMER_SET_HINT,
+            "a modal on the idle face is undiscoverable without being named"
+        );
+        assert_eq!(
+            page_hero(Page::Timer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    #[test]
     fn waypoint_page_reads_like_back_to_start_about_a_different_anchor() {
         let mut rec = snapshot(RecordState::Recording, 100.0);
         rec.waypoint = Some(crate::waypoints::WaypointView {
@@ -9388,6 +9522,7 @@ mod tests {
             Page::TrainingLoad => Some(Unfed::NeedDistance),
             Page::DistanceBand => Some(Unfed::NoRaceBand),
             Page::Waypoint => Some(Unfed::NoWaypoints),
+            Page::Timer => Some(Unfed::NoTimer),
             Page::Climb => Some(Unfed::NoClimb),
         }
     }
