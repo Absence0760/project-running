@@ -140,13 +140,20 @@ pub enum Unfed {
     /// No countdown or stopwatch has been started, so there is no clock to
     /// read (§375).
     NoTimer,
+    /// No GPS altitude has corroborated the barometer recently, so the pressure
+    /// tendency has nothing independent to compensate against and a climb would
+    /// be indistinguishable from a front (§376).
+    NoStormReference,
+    /// The barometer is corroborated, but too little of the trend window is
+    /// banked to state a tendency from (§376).
+    StormBuilding,
 }
 
 impl Unfed {
     /// Every sanctioned reason. The register a drift test asserts against, so
     /// a new page cannot invent wording without adding a variant here and
     /// choosing its class.
-    pub const ALL: [Unfed; 15] = [
+    pub const ALL: [Unfed; 17] = [
         Unfed::NotSynced,
         Unfed::AwaitingBaro,
         Unfed::AwaitingPulse,
@@ -162,13 +169,19 @@ impl Unfed {
         Unfed::NoWaypoints,
         Unfed::NoClimb,
         Unfed::NoTimer,
+        Unfed::NoStormReference,
+        Unfed::StormBuilding,
     ];
 
     /// What the runner can do about it.
     pub const fn class(self) -> UnfedClass {
         match self {
             Unfed::NotSynced => UnfedClass::PhoneFed,
-            Unfed::AwaitingBaro | Unfed::AwaitingPulse | Unfed::AwaitingFix => UnfedClass::Sensor,
+            Unfed::AwaitingBaro
+            | Unfed::AwaitingPulse
+            | Unfed::AwaitingFix
+            | Unfed::NoStormReference
+            | Unfed::StormBuilding => UnfedClass::Sensor,
             Unfed::NeedDistance | Unfed::NeedOneKm => UnfedClass::RunGate,
             Unfed::NoRaceBand
             | Unfed::NoCutoffAhead
@@ -200,6 +213,8 @@ impl Unfed {
             Unfed::NoWaypoints => "NO WAYPOINTS",
             Unfed::NoClimb => "NO CLIMB",
             Unfed::NoTimer => "NO TIMER SET",
+            Unfed::NoStormReference => "NO ALT REFERENCE",
+            Unfed::StormBuilding => "TREND BUILDING",
         }
     }
 

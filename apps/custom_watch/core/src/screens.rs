@@ -1,7 +1,7 @@
 //! Runner-composed data screens: a small grid of slots, each naming one
 //! [`Metric`] from the run view's catalogue.
 //!
-//! The 40 built-in glance pages each headline exactly one metric and fill the
+//! The 41 built-in glance pages each headline exactly one metric and fill the
 //! rest of the panel with context chosen for that metric. That is the right
 //! shape for a page about *one* thing — and the wrong shape for the question a
 //! runner asks most often, which is two or three things at once. The Dashboard
@@ -43,7 +43,7 @@
 //! **whole frame**, exactly as [`crate::ice`] refuses a whole card rather than
 //! blanking one field. The reason is the same: a screen whose third slot
 //! silently emptied reads as a complete screen the runner authored, and there
-//! is nothing on the wrist to say otherwise. Refusing the set leaves the 40
+//! is nothing on the wrist to say otherwise. Refusing the set leaves the 41
 //! built-in pages working, which is the L4 answer.
 //!
 //! Bytes past the record are ignored, so the caller hands the whole
@@ -59,15 +59,17 @@ use crate::run_store::crc32;
 /// has kilobytes free. Every screen is a page in the § 350 cycle, and § 289's
 /// press-cost model is a function of page count alone.
 ///
-/// **Four was chosen against a 37-page ring and the ring is now 40** (§ 373,
-/// § 375 and § 372 each added one on 2026-07-30). At 37 + 4 the grid's
-/// symmetric worst was 7; at 40 + 4 = 44 it is 8, which is the first count
-/// where it steps. The cap therefore no longer keeps `navigation.md`'s
-/// published ceiling — that doc now publishes both numbers rather than the
-/// smaller one. Left at 4 deliberately: dropping to 3 would buy the ceiling
-/// back and cost the `SCR1` frame's capacity, its flash record's size and its
-/// golden vectors, which is a decision to take on its own and not a side
-/// effect of counting pages. The everyday filtered worst is unmoved at 4.
+/// **Four was chosen against a 37-page ring and the ring is now 41** (§ 373,
+/// § 375 and § 372 each added one on 2026-07-30; § 376's Storm page a day
+/// later). At 37 + 4 the grid's symmetric worst was 7; at 40 + 4 = 44 it
+/// became 8, which is the first count where it steps, and 41 + 4 = 45 sits
+/// past that step without moving it again. The cap therefore no longer keeps
+/// `navigation.md`'s published ceiling — that doc now publishes both numbers
+/// rather than the smaller one. Left at 4 deliberately: dropping to 3 would
+/// buy the ceiling back and cost the `SCR1` frame's capacity, its flash
+/// record's size and its golden vectors, which is a decision to take on its
+/// own and not a side effect of counting pages. The everyday filtered worst is
+/// unmoved at 4.
 pub const MAX_SCREENS: usize = 4;
 
 /// Slots per screen — the widest layout's arity.
@@ -473,9 +475,9 @@ mod tests {
                 n += 1;
             }
         }
-        assert_eq!(n, 37, "the catalogue and its byte map have drifted");
+        assert_eq!(n, 38, "the catalogue and its byte map have drifted");
         assert!(Metric::from_byte(0).is_none(), "0 is the empty slot");
-        assert!(Metric::from_byte(38).is_none(), "38 is past the catalogue");
+        assert!(Metric::from_byte(39).is_none(), "39 is past the catalogue");
         // A handful pinned by name, so a reorder cannot quietly renumber them.
         assert_eq!(Metric::from_byte(1).unwrap().wire_name(), "elapsed");
         assert_eq!(Metric::from_byte(2).unwrap().wire_name(), "distance");
