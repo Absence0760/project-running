@@ -1,7 +1,9 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/roadbook.dart';
 import '../lib/sim_watch_sync.dart' show crc32;
 import '../lib/watch_roadbook.dart';
 
@@ -295,6 +297,262 @@ void main() {
         rebuilt.addAll(chunk.sublist(2));
       }
       expect(Uint8List.fromList(rebuilt), equals(frame));
+    });
+  });
+
+  group('watchRoadbookFromRoadbook', () {
+    /// A straight west-to-east line at a fixed latitude, `count` legs of
+    /// roughly `legM` metres, flat so the effort model degrades to even pace and
+    /// the projected arrivals are exactly proportional to distance.
+    List<RoadbookWaypoint> line(int count, double legM) {
+      // ~85.4 m per 0.001° of longitude at 40°N; close enough — the tests
+      // assert on relative structure, not on absolute metres.
+      final step = legM / (111320 * 0.766);
+      return [
+        for (var i = 0; i <= count; i++)
+          RoadbookWaypoint(lat: 40, lng: -105 + i * step),
+      ];
+    }
+
+    RoadbookMarker aid(double posM, {String kind = 'aid_station'}) =>
+        RoadbookMarker(
+          positionM: posM,
+          kind: kind,
+          label: 'stop $posM',
+          meta: const {'services': ['water']},
+        );
+
+    RoadbookMarker cutoff(double posM, int limitS) => RoadbookMarker(
+          positionM: posM,
+          kind: 'cutoff',
+          label: 'barrier $posM',
+          meta: {'cutoff_elapsed_s': limitS},
+        );
+
+    Roadbook build(List<RoadbookMarker> markers,
+            {int count = 40, double legM = 1000, double goal = 36000}) =>
+        buildRoadbook(
+          line(count, legM),
+          markers,
+          goalSeconds: goal,
+          model: PacingModel.effort,
+        );
+
+    test('the synthetic start is dropped and the finish always survives', () {
+      final rb = build([aid(10000), aid(20000)]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.refusal, isNull);
+      expect(out.checkpoints, hasLength(3));
+      expect(out.checkpoints!.first.cumDistanceM, greaterThan(0),
+          reason: 'the 0 m / 0 s start row carries nothing the watch lacks');
+      expect(out.checkpoints!.last.cumDistanceM,
+          closeTo(rb.totalDistM.roundToDouble(), 1));
+      expect(out.reduced, isFalse);
+    });
+
+    test('a route with no distance is refused, not pushed empty', () {
+      final out = watchRoadbookFromRoadbook(build(const [], count: 0));
+      expect(out.refusal, WatchRoadbookRefusal.noSchedule);
+      expect(out.checkpoints, isNull);
+      expect(out.cutoffs, isNull);
+    });
+
+    test('an over-cap route is reduced to exactly the cap, keeping the end',
+        () {
+      // 30 aid stations plus the finish — comfortably past the 16 cap.
+      final rb = build([for (var i = 1; i <= 30; i++) aid(i * 1000)]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.refusal, isNull);
+      expect(out.checkpoints, hasLength(kMaxRoadbookCheckpoints));
+      expect(out.reduced, isTrue);
+      expect(out.sourceCheckpointCount, 31);
+      expect(out.checkpoints!.last.cumDistanceM,
+          closeTo(rb.totalDistM.roundToDouble(), 1),
+          reason: 'a schedule that ends mid-race is the worst answer');
+      // The frame must still encode — the cap is what the firmware refuses past.
+      expect(encodeRoadbook(out.checkpoints!, out.cutoffs!).length,
+          lessThanOrEqualTo(364));
+    });
+
+    test('every cut-off survives a reduction, even a late-clumped one', () {
+      // 24 aid stations spread out, plus 5 cut-offs bunched in the last 4 km —
+      // even index-sampling would drop most of them.
+      final rb = build([
+        for (var i = 1; i <= 24; i++) aid(i * 1000),
+        for (var i = 0; i < 5; i++) cutoff(26000 + i * 1000, 30000 + i * 1000),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.checkpoints, hasLength(kMaxRoadbookCheckpoints));
+      expect(out.cutoffs, hasLength(5));
+      final withCutoff =
+          out.checkpoints!.where((c) => c.cutoff != null).toList();
+      expect(withCutoff, hasLength(5),
+          reason: 'a dropped cut-off makes the CutoffEta page confidently '
+              'wrong about which limit is next');
+      for (final leg in out.cutoffs!) {
+        expect(
+          out.checkpoints!.any((c) => c.cumDistanceM == leg.cumDistanceM),
+          isTrue,
+        );
+      }
+    });
+
+    test('a sparse mid-course stop outranks one of a dense clump', () {
+      // 40 stops crammed into the first 2 km, then 4 lonely ones spread across
+      // the remaining 38 km of a 40 km course. Even index-sampling over the
+      // distance-ordered list would spend almost the whole budget inside the
+      // clump and leave most of the race unscheduled; farthest-point sampling
+      // must take the lonely ones first, because they are the rows that break
+      // up the longest stretches with nothing on them.
+      final sparse = [10000.0, 18000.0, 26000.0, 34000.0];
+      final rb = build([
+        for (var i = 1; i <= 40; i++) aid(i * 50),
+        for (final p in sparse) aid(p),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.checkpoints, hasLength(kMaxRoadbookCheckpoints));
+      final at = out.checkpoints!.map((c) => c.cumDistanceM).toSet();
+      for (final p in sparse) {
+        expect(at, contains(p),
+            reason: 'the $p m stop is the only thing scheduled for kilometres '
+                'either side of it');
+      }
+      // And the clump still gets the leftover budget, spread through it.
+      expect(out.checkpoints!.where((c) => c.cumDistanceM <= 2000).length,
+          kMaxRoadbookCheckpoints - sparse.length - 1);
+
+      // The anti-clump property, stated directly: no scheduled row is further
+      // than one sparse spacing from its predecessor.
+      var prev = 0.0;
+      var widest = 0.0;
+      for (final c in out.checkpoints!) {
+        widest = math.max(widest, c.cumDistanceM - prev);
+        prev = c.cumDistanceM;
+      }
+      expect(widest, lessThanOrEqualTo(8000));
+    });
+
+    test('more cut-offs than the wire carries is refused, never trimmed', () {
+      final rb = build([
+        for (var i = 1; i <= kMaxRoadbookCutoffs + 1; i++)
+          cutoff(i * 1000, 3000 + i * 1000),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.refusal, WatchRoadbookRefusal.tooManyCutoffs);
+      expect(out.checkpoints, isNull);
+      expect(out.sourceCutoffCount, kMaxRoadbookCutoffs + 1);
+    });
+
+    test('a full 16 cut-offs plus a separate finish is refused too', () {
+      // 16 cut-offs fit the cut-off series, but with the finish they need 17
+      // checkpoint slots — and neither a cut-off nor the end may be dropped.
+      final rb = build([
+        for (var i = 1; i <= kMaxRoadbookCutoffs; i++)
+          cutoff(i * 1000, 3000 + i * 1000),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+      expect(out.refusal, WatchRoadbookRefusal.tooManyCutoffs);
+    });
+
+    test('two markers sharing a position collapse, the cut-off winning', () {
+      // An aid station that IS the barrier — normal on a mountain ultra, and a
+      // non-monotonic schedule the firmware's pacer would reject whole.
+      final rb = build([aid(10000), cutoff(10000, 12000), aid(20000)]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      final at10k =
+          out.checkpoints!.where((c) => c.cumDistanceM == 10000).toList();
+      expect(at10k, hasLength(1), reason: 'one wire row per position');
+      expect(at10k.single.cutoff, isNotNull);
+      expect(out.cutoffs, hasLength(1));
+    });
+
+    test('the emitted series is strictly increasing in distance and time', () {
+      final rb = build([
+        for (var i = 1; i <= 30; i++) aid(i * 1000),
+        // Two stops a metre apart: same wire second, so one must go.
+        aid(15001),
+        cutoff(25000, 28000),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      var prevDist = -1.0;
+      var prevElapsed = -1;
+      for (final c in out.checkpoints!) {
+        expect(c.cumDistanceM, greaterThan(prevDist));
+        expect(c.projectedElapsedSec, greaterThan(prevElapsed));
+        prevDist = c.cumDistanceM;
+        prevElapsed = c.projectedElapsedSec;
+      }
+    });
+
+    test('leg distances are recomputed against the surviving predecessor', () {
+      final rb = build([for (var i = 1; i <= 30; i++) aid(i * 1000)]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      var cum = 0.0;
+      for (final c in out.checkpoints!) {
+        expect(c.legDistanceM, closeTo(c.cumDistanceM - cum, 0.001),
+            reason: 'a reduced schedule whose legs sum short would misreport '
+                'every remaining leg on the watch');
+        cum = c.cumDistanceM;
+      }
+      expect(cum, closeTo(out.checkpoints!.last.cumDistanceM, 0.001));
+    });
+
+    test('a clock-only cut-off with no start time is counted, not swallowed',
+        () {
+      final rb = buildRoadbook(
+        line(20, 1000),
+        [
+          RoadbookMarker(
+            positionM: 10000,
+            kind: 'cutoff',
+            label: 'barrier',
+            meta: const {'cutoff_clock': '14:00'},
+          ),
+        ],
+        goalSeconds: 36000,
+        model: PacingModel.effort,
+      );
+      final out = watchRoadbookFromRoadbook(rb);
+
+      expect(out.unresolvedCutoffCount, 1);
+      expect(out.cutoffs, isEmpty,
+          reason: 'no start time means no limit to project against');
+      expect(out.refusal, isNull,
+          reason: 'the course schedule is still worth pushing');
+    });
+
+    test('an aid station is flagged a refill point, a plain note is not', () {
+      final rb = build([
+        aid(10000),
+        RoadbookMarker(
+            positionM: 20000, kind: 'note', label: 'gate', meta: const {}),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+
+      final at10k =
+          out.checkpoints!.firstWhere((c) => c.cumDistanceM == 10000);
+      final at20k =
+          out.checkpoints!.firstWhere((c) => c.cumDistanceM == 20000);
+      expect(at10k.isRefill, isTrue);
+      expect(at20k.isRefill, isFalse);
+    });
+
+    test('a reduced schedule still chunks into at most two writes', () {
+      final rb = build([
+        for (var i = 1; i <= 24; i++) aid(i * 1000),
+        for (var i = 0; i < 8; i++) cutoff(26000 + i * 500, 30000 + i * 600),
+      ]);
+      final out = watchRoadbookFromRoadbook(rb);
+      final frame = encodeRoadbook(out.checkpoints!, out.cutoffs!);
+      expect(chunkRoadbook(frame).length, lessThanOrEqualTo(2));
     });
   });
 }
