@@ -5330,6 +5330,19 @@ mod tests {
         }
     }
 
+    /// Every metric in the catalogue, derived from the wire table rather than a
+    /// hand-kept bound.
+    ///
+    /// The catalogue-walking invariants below had each hardcoded `1..=37`, which
+    /// silently stopped covering the catalogue the moment it grew past 37 — so
+    /// `storm_delta` (38) and `gap` (39) were exempt from all three, and the
+    /// held-GAP honesty bug § 389 fixed on the text rows went unnoticed on the
+    /// composed screens. Deriving the set means a new metric is covered by
+    /// adding its byte, with no test bound to remember.
+    fn every_metric() -> impl Iterator<Item = Metric> {
+        (1..=u8::MAX).filter_map(Metric::from_byte)
+    }
+
     /// An active run with every page's data present, at extreme values — the
     /// widest each row and hero can render.
     fn fed_snapshot() -> Snapshot {
@@ -5726,8 +5739,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=37u8 {
-                    let m = Metric::from_byte(b).unwrap();
+                for m in every_metric() {
                     let hero = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     let why = super::metric_unfed(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     assert_eq!(
@@ -5751,8 +5763,7 @@ mod tests {
     #[test]
     fn every_unfed_slot_names_a_class_rather_than_shrugging() {
         let unfed = snapshot(RecordState::Recording, 0.0);
-        for b in 1..=37u8 {
-            let m = Metric::from_byte(b).unwrap();
+        for m in every_metric() {
             let screen = crate::screens::Screen::new(crate::screens::Layout::Single, &[m]).unwrap();
             let slots = screen_slots(&screen, Some(&fix()), None, &unfed, None, 42, None);
             let slot = &slots[0];
@@ -6035,8 +6046,7 @@ mod tests {
         let tb = nav_east(500, 6.0);
         for rec in [&fed, &unfed] {
             for hr in [None, Some(152u16)] {
-                for b in 1..=37u8 {
-                    let m = Metric::from_byte(b).unwrap();
+                for m in every_metric() {
                     let v = super::metric_hero(m, Some(&fix()), hr, rec, Some(&tb), 42, None);
                     for nominal in [HeroBand::BigNumHero, HeroBand::MedNumHero] {
                         assert!(
