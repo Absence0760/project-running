@@ -20255,6 +20255,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bell countdown'**
   String get watchMetricBackyardBell;
+
+  /// No description provided for @watchMetricStormDelta.
+  ///
+  /// In en, this message translates to:
+  /// **'Storm trend'**
+  String get watchMetricStormDelta;
+
+  /// No description provided for @watchMetricGap.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-adjusted pace'**
+  String get watchMetricGap;
 }
 
 class _AppLocalizationsDelegate

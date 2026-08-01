@@ -15441,5 +15441,7 @@
   "watchMetricRaceDayDays": "Days to race",
   "watchMetricSleepBudget": "Sleep budget",
   "watchMetricTimerRemaining": "Timer",
-  "watchMetricBackyardBell": "Bell countdown"
+  "watchMetricBackyardBell": "Bell countdown",
+  "watchMetricStormDelta": "Storm trend",
+  "watchMetricGap": "Grade-adjusted pace"
 }

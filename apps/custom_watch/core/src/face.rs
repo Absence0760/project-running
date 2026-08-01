@@ -855,10 +855,15 @@ pub enum Metric {
     /// The barometric pressure tendency over the trend window, hPa signed
     /// ([`crate::storm`]).
     StormDelta,
+    /// Live grade-adjusted pace ([`crate::grade_adjusted_pace`]) — the effort
+    /// pace the vert personas run on. No built-in page leads with it (the
+    /// Pace page's hero is the whole-run average), so the composed screens
+    /// are how a runner puts GAP in the 32x48 face.
+    Gap,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=38`.
+    /// This metric's byte on the `SCR1` wire, in `1..=39`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -909,6 +914,7 @@ impl Metric {
             Metric::TimerRemaining => 36,
             Metric::BackyardBell => 37,
             Metric::StormDelta => 38,
+            Metric::Gap => 39,
         }
     }
 
@@ -959,6 +965,7 @@ impl Metric {
             36 => Metric::TimerRemaining,
             37 => Metric::BackyardBell,
             38 => Metric::StormDelta,
+            39 => Metric::Gap,
             _ => return None,
         })
     }
@@ -1009,6 +1016,7 @@ impl Metric {
             Metric::TimerRemaining => "timer_remaining",
             Metric::BackyardBell => "backyard_bell",
             Metric::StormDelta => "storm_delta",
+            Metric::Gap => "gap",
         }
     }
 
@@ -1059,6 +1067,7 @@ impl Metric {
             Metric::TimerRemaining => "TIMR",
             Metric::BackyardBell => "BELL",
             Metric::StormDelta => "STORM",
+            Metric::Gap => "GAP",
         }
     }
 }
@@ -1256,6 +1265,9 @@ pub fn metric_unfed(
                 | StormTrend::Rising => None,
             },
         },
+        // GAP holds through short signal wobbles ([`crate::grade_adjusted_pace`])
+        // but starts, like pace, only once the run banks movement.
+        Metric::Gap => snap.gap_s_per_km.is_none().then_some(Unfed::NeedDistance),
         Metric::RecapDistance => snap.recap.is_none().then_some(Unfed::NotSynced),
         Metric::CurrentStreak => snap.streaks.is_none().then_some(Unfed::NotSynced),
         Metric::SyncedMovingTime => snap.run_stats.is_none().then_some(Unfed::NotSynced),
@@ -1595,6 +1607,18 @@ pub fn metric_hero(
             }
             row
         }
+        Metric::Gap => {
+            let mut row = Row::new();
+            match snap.gap_s_per_km {
+                Some(p) => {
+                    let _ = write!(row, "{}:{:02}", (p / 60).min(99), p % 60);
+                }
+                None => {
+                    let _ = write!(row, "--:--");
+                }
+            }
+            row
+        }
         // The phone-pushed synced-summary pages headline their number too
         // (§ 361). They had been rows-only, which meant every one of them
         // reserved the two-row hero band ([`body_top_row`]) and then left it
@@ -1894,6 +1918,7 @@ pub fn metric_unit(
         // latest banked sample.
         Metric::ClimbGain | Metric::Altitude => Some("M"),
         Metric::StormDelta => Some("HPA"),
+        Metric::Gap => Some("/KM"),
         Metric::FuelCarbs => Some("G"),
         Metric::GearWear => Some("%"),
         Metric::DistanceToStart => trackback_distance(tb).map(distance_unit),

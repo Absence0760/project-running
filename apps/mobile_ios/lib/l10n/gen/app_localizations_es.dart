@@ -12091,4 +12091,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'Cuenta atrás de la campana';
+
+  @override
+  String get watchMetricStormDelta => 'Tendencia de tormenta';
+
+  @override
+  String get watchMetricGap => 'Ritmo ajustado por pendiente';
 }
