@@ -107,6 +107,33 @@ const FRAME_GAP: Duration = Duration::from_millis(FRAME_GAP_MS);
 /// so a sim push exercises the real `apply_settings` path. Every framing
 /// decision lives in [`watch_core::settings_frame`]; this drives it, waiting
 /// for the next byte with no gap timer armed while no frame is open.
+///
+/// **The one-byte reads are deliberate, and a burst buffer here would lose
+/// frames.** `gps.rs` reads its UART a burst at a time (its `RX_BURST`, 32)
+/// and its module doc holds that up as the wake-count lever, so this loop reads
+/// as the leftover of the same anti-pattern. It is not, because of how the two
+/// framings differ:
+///
+/// - `UarteRx::read` resolves only when the buffer is **full**. A settings frame
+///   carries no length prefix (`watch_core::settings_frame`) and is almost never
+///   a multiple of a burst size, so the read at a frame's end cannot complete —
+///   the gap timer has to cancel it.
+/// - A cancelled `read` reports **no count**. It stops the DMA and returns
+///   nothing; the bytes are in the buffer but how many is only in the
+///   peripheral's `RXD.AMOUNT`, which the safe API does not surface. So every
+///   push whose tail is a partial burst would be silently truncated, then
+///   rejected by the codec's CRC — fail-closed, but the settings pipe dead.
+/// - `gps.rs` can burst *because* NMEA tolerates exactly that loss: its stream
+///   always tops the buffer up, and the parser resynchronises on the next `$`.
+///   A dropped sentence costs one fix. A dropped frame tail costs the push.
+///
+/// The API that returns a count on a short read is `read_until_idle`, and it
+/// lives only on the `split_with_idle` receiver — which needs a spare TIMER + 2
+/// PPI channels supplied where the UARTE is built, in `main`. That is the
+/// durable fix and the only safe way to burst this pipe; until it lands, one
+/// byte per read is the correct driver. Settings pushes are rare, so what the
+/// byte loop costs is a few hundred wakes per push and nothing at rest — the
+/// `is_empty()` branch arms no timer while no frame is open.
 #[embassy_executor::task]
 pub async fn settings_rx(mut rx: UarteRx<'static>) {
     let mut framer = SettingsFramer::new();
