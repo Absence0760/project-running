@@ -704,6 +704,7 @@ pub async fn run(store: &'static SharedStore) {
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
             recorder.set_fix_interval_s(m.fix_interval_s());
+            trackback.set_fix_interval_s(m.fix_interval_s());
         }
 
         // Feed the nav task's course projection to the recorder for the cut-off
@@ -949,6 +950,7 @@ pub async fn run(store: &'static SharedStore) {
                 // The breadcrumb is a decimated trail of where the runner has
                 // physically been. It survives a stop, so it has to be named.
                 trackback = Trackback::new();
+                trackback.set_fix_interval_s(mode.fix_interval_s());
                 crumb_len = 0;
                 trackback_sender.send(trackback.view());
                 alerts = AlertEngine::new();
