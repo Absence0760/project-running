@@ -476,6 +476,20 @@ mod tests {
         &frame[..frame.len() - ROADBOOK_CRC_LEN]
     }
 
+    /// The decoded schedule lives in a `state::ROADBOOK` watch for the life of
+    /// the device, so its footprint is a standing RAM cost, not a transient.
+    /// Pinned the way § 405 pinned `size_of::<Course>()`: the next field added
+    /// to either struct should be a deliberate decision rather than a surprise.
+    #[test]
+    fn the_pushed_schedules_ram_cost_is_pinned() {
+        assert_eq!(core::mem::size_of::<PushedRoadbook>(), 656);
+        // 16 checkpoints at 24 B + 16 cut-off legs at 16 B, plus each `Vec`'s
+        // length word — under 1 KiB of the 256 KiB budget, against the ~4.5 KiB
+        // the course polyline it describes already costs.
+        assert_eq!(core::mem::size_of::<RoadbookCheckpoint>(), 24);
+        assert_eq!(core::mem::size_of::<CutoffLeg>(), 16);
+    }
+
     #[test]
     fn round_trips_the_sim_schedule() {
         let frame = encode_vec(&sim_checkpoints(), &sim_cutoffs());
