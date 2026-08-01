@@ -54,6 +54,7 @@ fn base_snapshot() -> Snapshot {
         avg_pace_s_per_km: Some(6 * 60 + 20),
         current_pace_s_per_km: Some(6 * 60 + 5),
         gap_s_per_km: Some(5 * 60 + 55),
+        gap_held: false,
         lap: 5,
         lap_distance_m: 400.0,
         lap_elapsed_s: 150,
