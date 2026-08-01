@@ -1031,18 +1031,21 @@ void main() {
       expect(transport.disconnectCount, 1);
     });
 
-    test('an over-cap series is refused before any write', () async {
+    test('an over-cap series is refused before the radio is opened', () async {
       final transport = FakeWatchTransport(
         blob: _goldenBlob(),
         manifest: _goldenManifest(),
       );
       final client = WatchSyncClient(transport: transport, onRun: (_) async {});
 
+      // The encoder refuses rather than trimming (matching the firmware), so a
+      // caller that chunks-then-pushes throws before pushRoadbook is reached —
+      // no scan, no partial schedule left on the watch.
       expect(
-        () => encodeRoadbook(
+        () => client.pushRoadbook(chunkRoadbook(encodeRoadbook(
           [for (var i = 0; i <= kMaxRoadbookCheckpoints; i++) cp(i)],
           const [],
-        ),
+        ))),
         throwsArgumentError,
       );
       expect(transport.roadbookWrites, isEmpty);
