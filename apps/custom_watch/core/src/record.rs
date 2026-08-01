@@ -2323,6 +2323,8 @@ impl Recorder {
             gap_s_per_km: self.gap.gap_s_per_km(self.current_speed_mps as f64),
             // After the sampling line above — struct literals evaluate in
             // source order, and the hold flag describes that call's answer.
+            // `gap_held_is_read_after_this_snapshots_own_sample_not_before`
+            // fails if these two swap.
             gap_held: self.gap.held(),
             lap: self.lap_index,
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
@@ -3814,6 +3816,46 @@ mod tests {
         let s = r.snapshot();
         assert_eq!(s.gap_s_per_km, None);
         assert!(!s.gap_held);
+    }
+
+    /// The hold flag's correctness is an evaluation-order one, and a silent one.
+    /// [`GapEstimator::held`] reports the answer the *last* sampling call left
+    /// behind — the bookkeeping advances inside `gap_s_per_km`, through a `Cell`
+    /// because [`Recorder::snapshot`] takes `&self` — so the flag has to be read
+    /// after this snapshot's own sample. It is, because Rust evaluates struct
+    /// literal fields in source order, which is a real guarantee and an
+    /// invisible one: swapping the two lines compiles, keeps every type, and
+    /// makes the flag describe the previous tick.
+    ///
+    /// The first sub-gate tick is the only one where the two orders disagree, so
+    /// it is the whole test.
+    #[test]
+    fn gap_held_is_read_after_this_snapshots_own_sample_not_before() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=2u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let live = r.snapshot();
+        assert_eq!(live.gap_s_per_km, Some(200));
+        assert!(!live.gap_held, "a live sample is not a hold");
+
+        // A crawl inside the hold band (0.15 < 0.3 < 0.4 m/s). Entering it, the
+        // estimator's dip counter is still 0 — so a read taken above the
+        // sampling line reports this tick's held value as live.
+        r.on_fix(&fix(40.00024, -105.0, 0.3, 3));
+        let first_dip = r.snapshot();
+        assert_eq!(
+            first_dip.gap_s_per_km,
+            Some(200),
+            "the held value is what shows"
+        );
+        assert!(
+            first_dip.gap_held,
+            "gap_held must be read AFTER this snapshot's gap_s_per_km call — \
+             read before it, the flag describes the previous tick and a held \
+             estimate passes as a live sample on the tick it appears"
+        );
     }
 
     #[test]
