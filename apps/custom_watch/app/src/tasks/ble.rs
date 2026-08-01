@@ -32,6 +32,14 @@
 //!   `course_store::decode` turns it into a `Course`, and it is published to the
 //!   `nav` task via `state::COURSE`, which switches off `NO COURSE LOADED`.
 //!
+//! The roadbook push rides the same transport on one more write characteristic:
+//! - `roadbook` (write): the phone WRITES a chunked `roadbook_store` frame; the
+//!   watch reassembles + decodes it and publishes both series to the `record`
+//!   task via `state::ROADBOOK`, which loads the recorder's roadbook
+//!   checkpoints + cut-off legs. Until this landed the Roadbook / CutoffEta /
+//!   Fuel / SleepStation pages could only ever show the canned `sim-course`
+//!   schedule — the compute was built and host-tested, the wire was missing.
+//!
 //! Also UNVERIFIED on hardware, but flash access IS SoftDevice-coordinated:
 //! on this build `run_flash`'s backend is `nrf_softdevice::Flash`, so every
 //! erase/write is arbitrated by the S140 (see the `run_flash` module doc's
@@ -107,6 +115,7 @@ mod imp {
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
+    use watch_core::roadbook_store::{self, RoadbookAssembler, RoadbookPush, ROADBOOK_CHUNK_CAP};
     use watch_core::run_store::ChunkRequest;
     use watch_core::screens::{Screens, MAX_SCR1_LEN};
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
@@ -205,6 +214,26 @@ mod imp {
             security = "justworks"
         )]
         screens: Vec<u8, MAX_SCR1_LEN>,
+        /// Roadbook + cut-off schedule push (the `RBK1` path). The phone WRITES
+        /// chunked `roadbook_store` frame bytes (the same `offset | payload`
+        /// transport as `course` and `workout`); the watch reassembles, decodes
+        /// both series, and publishes them to the record task via
+        /// `state::ROADBOOK`, which is what makes the Roadbook / CutoffEta /
+        /// Fuel / SleepStation pages read live data on hardware instead of only
+        /// under `sim-course`.
+        ///
+        /// Chunked, unlike `screens`: a full schedule is 364 B, and one ATT
+        /// write at the 256-byte MTU carries `MTU - 3` = 253.
+        ///
+        /// **Take the next free suffix; never renumber a row above.** § 410 was
+        /// a whole broken run-sync path caused by inserting a characteristic
+        /// ahead of existing ones without the phone client following.
+        #[characteristic(
+            uuid = "d1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
+        roadbook: Vec<u8, ROADBOOK_CHUNK_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -636,6 +665,7 @@ mod imp {
             // Cell/Signal above; the single-threaded executor makes it sound.
             let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
             let workout_asm: RefCell<WorkoutAssembler> = RefCell::new(WorkoutAssembler::new());
+            let roadbook_asm: RefCell<RoadbookAssembler> = RefCell::new(RoadbookAssembler::new());
             // Every way a course push can fail funnels through here, because
             // each leaves state::COURSE holding the OLD course while the
             // runner's phone just said "sent" — the warn! beside each site
@@ -744,6 +774,36 @@ mod imp {
                             }
                         } else {
                             warn!("ble: short workout chunk ({=usize} B)", bytes.len());
+                        }
+                    }
+                    LinkServiceEvent::RoadbookWrite(bytes) => {
+                        if let Some((offset, payload)) = ble_sync::parse_push_chunk(&bytes) {
+                            let mut asm = roadbook_asm.borrow_mut();
+                            match asm.push(offset, payload) {
+                                RoadbookPush::Complete => {
+                                    match roadbook_store::decode(asm.frame()) {
+                                        Some(rb) => {
+                                            info!(
+                                                "ble: roadbook push complete ({} checkpoints, {} cutoffs)",
+                                                rb.checkpoints.len(),
+                                                rb.cutoffs.len()
+                                            );
+                                            state::ROADBOOK.sender().send(Some(rb));
+                                            asm.reset();
+                                        }
+                                        None => {
+                                            warn!("ble: roadbook frame failed to decode");
+                                            asm.reset();
+                                        }
+                                    }
+                                }
+                                RoadbookPush::More => {}
+                                RoadbookPush::Rejected => {
+                                    warn!("ble: bad roadbook chunk @ {=usize}", offset)
+                                }
+                            }
+                        } else {
+                            warn!("ble: short roadbook chunk ({=usize} B)", bytes.len());
                         }
                     }
                 },
