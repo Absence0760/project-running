@@ -526,12 +526,35 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
 
-      final loadMoreRect = tester.getRect(find.text('Load 20 more'));
+      // The clearance contract holds at the END of the scroll extent —
+      // mid-scroll, a docked FAB legitimately covers whatever row is
+      // passing underneath it. Asserted structurally (list padding vs
+      // the FAB's measured footprint) rather than positionally: a
+      // builder list's end-of-scroll geometry in a widget test rests on
+      // estimated extents for unbuilt rows, which drift with framework
+      // versions — the positional form of this assertion went red on an
+      // environment bump with no code change.
+      expect(
+        find.ancestor(
+          of: find.text('Load 20 more'),
+          matching: find.byType(ListView),
+        ),
+        findsOneWidget,
+        reason: 'The Load-more footer must live inside the padded list — '
+            'a footer rendered outside it never benefits from the FAB '
+            'clearance.',
+      );
+      final listRect = tester.getRect(find.byType(ListView).first);
       final fabRect = tester.getRect(find.byType(FloatingActionButton));
-      expect(loadMoreRect.overlaps(fabRect), isFalse,
+      final padding = tester
+          .widget<ListView>(find.byType(ListView).first)
+          .padding!
+          .resolve(TextDirection.ltr);
+      expect(padding.bottom >= listRect.bottom - fabRect.top, isTrue,
           reason: 'The Add Run FAB must not sit on top of the Load-more '
               'button — the list needs bottom padding that clears the '
-              "FAB's footprint.");
+              "FAB's footprint (padding ${padding.bottom}px, FAB needs "
+              '${listRect.bottom - fabRect.top}px).');
     });
 
     testWidgets('Load more button hidden when fewer rows than page size',
