@@ -387,10 +387,10 @@ jobs:
         run: cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
       - name: Build firmware (sim feature set)
         working-directory: apps/custom_watch
-        run: cargo build --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
       - name: Clippy (sim feature set, no warnings allowed)
         working-directory: apps/custom_watch
-        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink -- -D warnings
+        run: cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink -- -D warnings
       - name: Rustfmt check
         working-directory: apps/custom_watch
         run: cargo fmt --check
@@ -481,7 +481,7 @@ jobs:
       # invocation exactly, or the launcher rebuilds it.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
-        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
       # One step per scenario rather than a single `--scenario all`. A sim
       # failure is the hardest kind to diagnose remotely — Renode is not
       # installable on every contributor machine, so CI is usually the only
@@ -611,7 +611,7 @@ jobs:
       # invocation exactly, or the launcher rebuilds it.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
-        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
+        run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
       # One step per scenario rather than a single `--scenario all`. A sim
       # failure is the hardest kind to diagnose remotely — Renode is not
       # installable on every contributor machine, so CI is usually the only

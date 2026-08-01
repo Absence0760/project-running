@@ -243,13 +243,17 @@ SCENARIO_LAUNCHER_ARGS = {
     # The same reason `bin/watch-shots.sh` boots that way.
     "screens": ("--screens", "--no-alerts"),
     # The whole point of this one: no `sim-autostart`, so the watch stays on the
-    # idle faces instead of paging a run view.
-    "idle": ("--no-autostart",),
+    # idle faces instead of paging a run view. `--no-workout` keeps the boot
+    # exactly what it was when the demo workout rode `sim-autostart` (before
+    # `sim-workout` split out): nothing here records, so an armed workout could
+    # only ever be noise.
+    "idle": ("--no-autostart", "--no-workout"),
     # `--no-alerts` drops the sim's shortened fuel / distance / time / pace
     # arms, leaving the hardware defaults (900 s drink, 1500 s eat of MOVING
     # time) — an order of magnitude past this scenario's ~180 s of run. The
-    # workout's own edges are unconditional (they ride `sim-autostart`, not
-    # `sim-alerts`), so what is left in the alert slot is exactly and only the
+    # workout's own edges are unconditional (they ride `sim-workout`, which the
+    # launcher keeps on by default, not `sim-alerts`), so what is left in the
+    # alert slot is exactly and only the
     # workout rail. That is what makes the COUNTING assertion possible: "one
     # end-of-step warning across the plan, and one only" is a claim about the
     # `ENDING_MIN_STEP_*` gate solely while nothing else can take the slot.
@@ -272,7 +276,15 @@ SCENARIO_LAUNCHER_ARGS = {
     # `--no-course` for the same §380/§381 reason as `workout` — this is the
     # scenario that caught it: the OffCourse / workout-edge handoff chain
     # never let the slot clear before the Storm page dump.
-    "storm": ("--storm", "--no-alerts", "--no-course"),
+    # `--no-workout` closed the remaining leak (CI run 30709260463): the demo
+    # workout's step banners are alerts too, each one displaces the storm
+    # banner, and a displaced storm RE-QUEUES (§376 — no later reminder
+    # exists), so the slot went banner-to-banner — Storm at 79 s,
+    # WorkoutEnding at 86 s, Storm again at 94 s, WorkoutStep at 96 s, Storm
+    # again at 104 s — and neither the once-per-front COUNT below nor
+    # `wait_for_no_alert` could hold. With every non-storm arm unarmed, one
+    # front is one banner and the TTL clear is deterministic.
+    "storm": ("--storm", "--no-alerts", "--no-course", "--no-workout"),
     # `--no-course` for the same §380/§381 reason — the off-course arm rides
     # data presence, so it fires within the opening quiet window and the
     # baseline dump never lands on a bannerless frame. This scenario keeps
@@ -390,6 +402,18 @@ GPS_REANCHOR_AFTER_S = 10
 # different questions and are named apart so a change to one cannot silently
 # move the other.
 FIX_STALE_BUDGET_S = 10
+# How far past the budget the flip may honestly land, derived from the
+# firmware's clocks rather than measured and rounded up. `fix_stale` compares
+# WHOLE seconds (`now_s` and the fix anchor are both `Instant::as_secs`
+# truncations), so `> 10` first holds at an integer delta of 11 — up to one
+# second past the budget (runs 30706635377 and 30712529705 each caught
+# `recording` inside that second, at 10.3 s and 10.9 s). The anchor adds up to
+# one more: `void_start` is the decoded stamp of the last `gps: fix` line,
+# while the recorder stamps its whole-second anchor when it CONSUMES that fix
+# off the channel, which can cross the next second boundary. Assertions about
+# the settled state start after budget + slack; the frozen-distance check above
+# them still covers the void from its first snapshot.
+FIX_STALE_FLIP_SLACK_S = 2
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -2037,12 +2061,18 @@ def scenario_dropout(sim):
     # distance above is what holds them to account. Asserting this from void_start
     # made the verdict depend on where the first snapshot happened to land against
     # the last fix — it passed locally and failed on a CI runner from that alone.
-    pause_deadline = void_start + FIX_STALE_BUDGET_S
+    # The deadline carries FIX_STALE_FLIP_SLACK_S on top of the budget for the
+    # same reason one comment block up: the strict `>` runs on whole-second
+    # clocks, so a bare `void_start + budget` deadline re-created that lottery
+    # one second later and lost it twice in one day (runs 30706635377,
+    # 30712529705).
+    pause_deadline = void_start + FIX_STALE_BUDGET_S + FIX_STALE_FLIP_SLACK_S
     settled = [(t, m) for t, m in inside if t > pause_deadline]
     if not settled:
         raise SmokeFailure(
             f"the {span:.1f}s void produced no snapshot past the "
-            f"{FIX_STALE_BUDGET_S}s fix-stale budget (deadline t="
+            f"{FIX_STALE_BUDGET_S}s fix-stale budget plus its "
+            f"{FIX_STALE_FLIP_SLACK_S}s whole-second flip slack (deadline t="
             f"{pause_deadline:.1f}s), so the auto-pause this scenario exists to "
             "prove was never observable"
         )
@@ -2052,13 +2082,16 @@ def scenario_dropout(sim):
         raise SmokeFailure(
             f"the recorder read '{state}' at t={t:.1f}s, {t - void_start:.1f}s into "
             f"a void with no fixes and past the {FIX_STALE_BUDGET_S}s fix-stale "
-            "budget, not 'paused' — a stretch with no fixes has to auto-pause, or "
-            "the run view is telling the runner it is still tracking them"
+            f"budget plus the {FIX_STALE_FLIP_SLACK_S}s the whole-second clocks "
+            "can honestly add, not 'paused' — a stretch with no fixes has to "
+            "auto-pause, or the run view is telling the runner it is still "
+            "tracking them"
         )
     passed(
         f"distance held at {frozen:.1f} m across all {len(inside)} snapshots in the "
         f"void, and every one of the {len(settled)} past the "
-        f"{FIX_STALE_BUDGET_S}s fix-stale budget read paused"
+        f"{FIX_STALE_BUDGET_S}s(+{FIX_STALE_FLIP_SLACK_S}s) fix-stale budget "
+        "read paused"
     )
 
     # The re-anchor. Growth after the far edge of the void, and before the NMEA
@@ -3051,6 +3084,28 @@ def scenario_storm(sim):
     passed("the tracker withholds a tendency until its window is deep enough")
 
     require_recording(sim)
+
+    # The precondition every slot assertion below rests on, checked as early as
+    # it can be checked reliably so a regression fails HERE with a name instead
+    # of downstream as a timing lottery: this session boots with every
+    # non-storm alert arm unarmed (`--no-alerts --no-course --no-workout`). The
+    # demo workout is the one that leaked before (CI run 30709260463) — its
+    # step banners displaced the storm banner, each displacement re-queued it
+    # (§376, no later reminder exists), and the slot went banner-to-banner, so
+    # "one front, one banner" and the TTL clear both depended on phase
+    # alignment. The queued line logs at boot, well before the first accepted
+    # fix the wait above decoded past, so by now it is either present or never
+    # coming.
+    if sim.tail.search(re.compile(r"record: sim demo workout queued")):
+        raise SmokeFailure(
+            "the demo workout is armed in the storm session — its step banners "
+            "share the single alert slot with the storm banner, which re-queues "
+            "on every displacement, so the once-per-front count and the "
+            "TTL-clear wait below stop meaning anything. The storm session "
+            "boots with --no-workout (`sim-workout` off); if the workout is "
+            "back, the feature gate in app/src/tasks/record.rs regressed"
+        )
+    passed("the storm session booted with the demo workout unarmed")
 
     # (2) The quiet atmosphere. Wait for the first MEASURED line, then check it
     # is a calm one — the scripted pressure carries no noise and the fixture's

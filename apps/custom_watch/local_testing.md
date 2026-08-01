@@ -151,7 +151,7 @@ You **cannot**:
 
 ## Simulating without a board (Renode)
 
-`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with four sim-only Cargo features by default — `sim-autostart`, `sim-alerts`, `sim-buttons`, `sim-course` — plus `dev-blink`, and a fifth, `sim-screens`, only when `--screens` asks for it (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with five sim-only Cargo features by default — `sim-autostart`, `sim-alerts`, `sim-buttons`, `sim-course`, `sim-workout` — plus `dev-blink`, and a sixth, `sim-screens`, only when `--screens` asks for it (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
 
 **The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press. Pass `--no-autostart` to drop the feature and boot to the idle face instead — needed to exercise anything that only exists *before* a run starts (the BTN3 GNSS-mode picker), with `runMacro $btn1` starting the run when you're ready.
 
@@ -179,7 +179,9 @@ runMacro $btn5h   # hold BTN5 ~0.8 s — mark a waypoint at the recorder's
                   # current anchor (§357); refused outside a run
 ```
 
-Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3h` / `$btn4h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN4 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` (or `$btn4h`) opens it, `runMacro $btn3` / `runMacro $btn4` step the cursor backward / forward, and `runMacro $btn1` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-alerts`, `sim-course` (below), `dev-blink`, and `sim-screens` under `--screens` are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+Each macro pulls the button's input pin low via `gpio0 OnGPIO`, then releases it — ~0.3 s for a press, the `$btn3h` / `$btn4h` holds longer; a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN4 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. To drive the grid: `runMacro $btn3h` (or `$btn4h`) opens it, `runMacro $btn3` / `runMacro $btn4` step the cursor backward / forward, and `runMacro $btn1` jumps — or wait ~3 s and it auto-selects the cursor. These two features plus `sim-alerts`, `sim-course`, `sim-workout` (both below), `dev-blink`, and `sim-screens` under `--screens` are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+
+**The `sim-workout` feature — the canned demo workout.** The §354 structured-workout rail executes phone-pushed steps (`WKT1`, `ble`-only like the course push), so the default-ON-in-the-launcher `sim-workout` feature arms a canned 5-step plan over the same `state::WORKOUT` channel: warmup, 2 x (50 m rep / 30 s timed recovery), cooldown, short enough that bench_jog walks it in ~2 minutes with the `! REP 1/2` / `! STEP END` / `! WKT DONE` banners firing. Pass `--no-workout` to drop it — its step banners are unconditional alerts sharing the single banner slot, so any session that needs a quiet slot (the `storm` scenario is one; a displaced storm banner re-queues, and the slot went banner-to-banner in CI run 30709260463) sheds the workout the same way `--no-course` sheds the course arms. A hardware flash carries no workout until a real push and its Workout page reads `NOT SYNCED`.
 
 **The `sim-course` feature — the canned breadcrumb course.** The Nav run-view page follows a course (`watch_core::course`). The real phone→watch push exists — the `CRS1` frame (`watch_core::course_store`, v3, CRC-sealed) over the chunked `course` GATT characteristic, encoded phone-side by `watch_course.dart` — but it is `ble`-only and so unreachable in the sim, so the default-OFF `sim-course` feature bakes in a canned one: the west + south edges of the `bench_jog.nmea` rectangle. The fixture's east + north legs deliberately leave it, so every ~2-minute lap exercises the whole surface — on-course following, `nav: OFF COURSE (41 m off, 179 m along)` (WARN, fires whatever page is up), and `nav: back on course` as the loop closes. Cycle BTN3 to the Nav page to watch the breadcrumb panel, the position marker, and the 2x OFF COURSE banner on the emulated screen. A hardware flash (default features) carries no course and the Nav page reports `NO COURSE LOADED`.
 
@@ -267,8 +269,8 @@ cargo clippy --workspace --release --target thumbv7em-none-eabihf -- -D warnings
 # the two off-by-default feature sets, build + clippy each
 cargo build  --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble
 cargo clippy --release --target thumbv7em-none-eabihf -p app --no-default-features --features ble -- -D warnings
-cargo build  --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
-cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink -- -D warnings
+cargo build  --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
+cargo clippy --release --target thumbv7em-none-eabihf -p app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink -- -D warnings
 
 cargo fmt --check
 ```
@@ -287,7 +289,7 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 curl … renode-1.16.1.linux-portable-dotnet.tar.gz   # sha256-pinned
 cargo install defmt-print --locked --version '^1.1' # cached between runs
 DEFMT_LOG=debug cargo build --release --bin app \
-  --features sim-autostart,sim-alerts,sim-buttons,sim-course,dev-blink
+  --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
 
 # one step per scenario, each in its own out-dir
 python3 …/ci_smoke.py --scenario smoke   --out-dir "$RUNNER_TEMP/watch-sim-ci/smoke"   --budget 300
