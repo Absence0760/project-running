@@ -131,6 +131,14 @@ pub struct Course {
     bounds: CourseBounds,
 }
 
+/// A course is one of the largest structures the firmware holds, and it is held
+/// more than once at a time — the `COURSE` watch plus the `nav` and `ui` tasks'
+/// own copies — so every byte added here costs that multiple. This is the same
+/// 8,784 B on the host and on `thumbv7em-none-eabihf` (f64 alignment absorbs the
+/// length fields' padding on both). Adding a field is allowed; doing it without
+/// noticing the RAM it multiplies into is not, so the figure is pinned.
+const _: () = assert!(core::mem::size_of::<Course>() == 8784);
+
 impl Course {
     /// `None` when the polyline is too short to follow (< 2 points) or over
     /// the tier-1 capacity (> [`MAX_COURSE_POINTS`]).
