@@ -758,6 +758,60 @@
   "routeDetailWatchCourseSimplified": "Recorrido enviado al reloj: reducido de {source} a {points} puntos para que quepa",
   "routeDetailWatchCourseTooShort": "Esta ruta tiene muy pocos puntos para seguirla en el reloj",
   "routeDetailWatchCourseFailed": "No se pudo enviar el recorrido al reloj: {error}",
+  "routeDetailWatchCourseAndScheduleSent": "Ruta ({points} puntos) y plan de carrera ({checkpoints} puntos de control) enviados al reloj",
+  "@routeDetailWatchCourseAndScheduleSent": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when both the course and its full race schedule reached the watch"
+  },
+  "routeDetailWatchScheduleThinned": "Ruta ({points} puntos) enviada. Plan de carrera reducido de {source} a {checkpoints} puntos de control para caber en el reloj",
+  "@routeDetailWatchScheduleThinned": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "source": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the race schedule had to be reduced to the watch's checkpoint cap"
+  },
+  "routeDetailWatchScheduleClockCutoffs": "Plan de carrera enviado ({checkpoints} puntos de control), pero {unresolved} cortes por hora necesitan una hora de salida — defínela en la hoja de equipo para que lleguen al reloj",
+  "@routeDetailWatchScheduleClockCutoffs": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "unresolved": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when clock-only cutoffs could not be resolved without a race start time"
+  },
+  "routeDetailWatchScheduleTooManyCutoffs": "Ruta ({points} puntos) enviada, pero el plan de carrera tiene {cutoffs} cortes y el reloj admite {max} — elimina algunos para enviarlo",
+  "@routeDetailWatchScheduleTooManyCutoffs": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the route has more cutoffs than the watch frame carries, so the schedule was refused"
+  },
   "routeDetailMadePublicForLink": "Se hizo pública para que cualquiera con el enlace pueda verla",
   "routeDetailShareConfirmTitle": "¿Hacer pública esta ruta?",
   "routeDetailShareConfirmBody": "Compartir un enlace hace pública esta ruta: cualquier persona con el enlace puede abrirla y puede aparecer en Explorar. Puedes volver a hacerla privada cuando quieras.",

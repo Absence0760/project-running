@@ -78,6 +78,28 @@ class _FakeCourseTransport implements WatchBleTransport {
   int get pointCount =>
       ByteData.sublistView(frame).getUint16(5, Endian.little);
 
+  /// Rebuild the RBK1 frame from the offset-tagged roadbook chunks.
+  Uint8List get roadbookFrame => _reassemble(roadbookWrites);
+
+  int get checkpointCount => roadbookFrame[5];
+  int get cutoffCount => roadbookFrame[6];
+
+  static Uint8List _reassemble(List<List<int>> writes) {
+    var length = 0;
+    for (final c in writes) {
+      final off = ByteData.sublistView(Uint8List.fromList(c))
+          .getUint16(0, Endian.little);
+      length = math.max(length, off + c.length - 2);
+    }
+    final out = Uint8List(length);
+    for (final c in writes) {
+      final off = ByteData.sublistView(Uint8List.fromList(c))
+          .getUint16(0, Endian.little);
+      out.setRange(off, off + c.length - 2, c.sublist(2));
+    }
+    return out;
+  }
+
   ({double lat, double lng}) pointAt(int i) {
     final view = ByteData.sublistView(frame);
     return (
@@ -86,6 +108,51 @@ class _FakeCourseTransport implements WatchBleTransport {
     );
   }
 }
+
+/// Owner viewer that serves a canned course-marker set, so the roadbook half of
+/// the push has something to schedule. [failMarkers] models the offline / RLS
+/// case the push must degrade through rather than sink on.
+class _MarkersApi extends ApiClient {
+  final List<cm.RouteMarkerRow> markers;
+  final bool failMarkers;
+  int fetchCount = 0;
+  _MarkersApi(this.markers, {this.failMarkers = false});
+
+  @override
+  String? get userId => 'owner-uuid';
+
+  @override
+  Future<List<cm.RouteMarkerRow>> fetchRouteMarkers(String routeId) async {
+    fetchCount++;
+    if (failMarkers) throw StateError('rls said no');
+    return markers;
+  }
+}
+
+cm.RouteMarkerRow _marker(
+  String id, {
+  required double positionM,
+  String kind = 'aid_station',
+  int? cutoffElapsedS,
+  String? cutoffClock,
+}) =>
+    cm.RouteMarkerRow(
+      id: id,
+      routeId: 'r1',
+      userId: 'owner-uuid',
+      kind: kind,
+      label: 'stop $id',
+      lat: 40,
+      lng: -105,
+      positionM: positionM,
+      meta: {
+        if (cutoffElapsedS != null) 'cutoff_elapsed_s': cutoffElapsedS,
+        if (cutoffClock != null) 'cutoff_clock': cutoffClock,
+        if (kind == 'aid_station') 'services': const ['water'],
+      },
+      createdAt: DateTime.utc(2026, 1, 1),
+      updatedAt: DateTime.utc(2026, 1, 1),
+    );
 
 /// Non-owner viewer whose clip RPC returns a privacy-clipped subset.
 class _ClippingApi extends ApiClient {
@@ -122,12 +189,29 @@ List<cm.Waypoint> _loop(int n, {bool withElevation = false}) => [
         ),
     ];
 
+/// A west-to-east line of [km] legs of ~1 km each at 40°N, so a course-marker
+/// position in whole kilometres lands where the test means it to. `_loop` is a
+/// ~450 m circle, short enough that every schedule marker would clamp onto the
+/// finish and collapse.
+List<cm.Waypoint> _longLine(int km) {
+  const metresPerDegLng = 111320 * 0.766;
+  return [
+    for (var i = 0; i <= km; i++)
+      cm.Waypoint(
+        lat: 40,
+        lng: -105 + i * 1000 / metresPerDegLng,
+        elevationMetres: 1600 + i * 3.0,
+      ),
+  ];
+}
+
 Future<void> _pump(
   WidgetTester tester,
   cm.Route route, {
   required _FakeCourseTransport transport,
   String backendUrl = _localBackend,
   ApiClient? api,
+  bool? isOwner,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = Preferences();
@@ -142,7 +226,7 @@ Future<void> _pump(
         routeStore: LocalRouteStore(),
         preferences: prefs,
         apiClient: api,
-        isOwner: api == null,
+        isOwner: isOwner ?? api == null,
         devBackendUrl: backendUrl,
         watchTransportFactory: () => transport,
       ),
@@ -292,6 +376,151 @@ void main() {
         transport.pointAt(clipped.length - 1).lng,
         closeTo(clipped.last.lng, 1e-6),
       );
+      await _drainBanner(tester);
+    });
+  });
+
+  group('RouteDetailScreen — the race schedule rides the course push', () {
+    testWidgets('markers become an RBK1 schedule on the same action',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          _marker('a', positionM: 2000),
+          _marker('b', positionM: 5000, kind: 'cutoff', cutoffElapsedS: 3600),
+          _marker('c', positionM: 7000),
+        ]),
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.courseWrites, isNotEmpty,
+          reason: 'the schedule is useless without the course it indexes into');
+      expect(transport.roadbookWrites, isNotEmpty);
+      // Three markers plus the finish; the synthetic start is dropped.
+      expect(transport.checkpointCount, 4);
+      expect(transport.cutoffCount, 1);
+      expect(find.textContaining('race schedule'), findsOneWidget);
+      expect(find.textContaining('4 checkpoints'), findsOneWidget);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('a route with no markers pushes the course alone',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi(const []),
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.courseWrites, isNotEmpty);
+      expect(transport.roadbookWrites, isEmpty,
+          reason: 'nothing to schedule is not a failure');
+      expect(find.textContaining('Course sent to the watch'), findsOneWidget);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('an over-cap schedule is thinned and the banner says by how much',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          for (var i = 1; i <= 25; i++) _marker('m$i', positionM: i * 200),
+        ]),
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.checkpointCount, 16);
+      expect(find.textContaining('thinned from 26 to 16 checkpoints'),
+          findsOneWidget);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('too many cut-offs refuses the schedule, the course still lands',
+        (tester) async {
+      // Cut-offs are never trimmed — a dropped one makes the watch confidently
+      // wrong about which limit is next, so the whole schedule is refused and
+      // the runner is told to remove some.
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          for (var i = 1; i <= 17; i++)
+            _marker('c$i',
+                positionM: i * 200, kind: 'cutoff', cutoffElapsedS: i * 600),
+        ]),
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.courseWrites, isNotEmpty);
+      expect(transport.roadbookWrites, isEmpty);
+      expect(find.textContaining('17 cut-offs'), findsOneWidget);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('clock-only cut-offs are disclosed, never silently missing',
+        (tester) async {
+      // No start clock is available headlessly, so a clock-only cut-off cannot
+      // resolve into a limit. It must be reported — a cut-off that quietly
+      // fails to reach the watch is the exact failure this schedule prevents.
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          _marker('a', positionM: 2000),
+          _marker('b', positionM: 5000, kind: 'cutoff', cutoffClock: '14:00'),
+        ]),
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.roadbookWrites, isNotEmpty);
+      expect(transport.cutoffCount, 0);
+      expect(find.textContaining('need a race start time'), findsOneWidget);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('a marker-fetch failure degrades to a course-only push',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      final api = _MarkersApi(const [], failMarkers: true);
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: api,
+        isOwner: true,
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(api.fetchCount, 1);
+      expect(transport.courseWrites, isNotEmpty,
+          reason: 'the course already landed; an auxiliary failure must not '
+              'retroactively report it as failed');
+      expect(transport.roadbookWrites, isEmpty);
+      expect(find.textContaining('Course sent to the watch'), findsOneWidget);
       await _drainBanner(tester);
     });
   });

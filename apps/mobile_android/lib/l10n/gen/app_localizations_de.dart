@@ -2781,6 +2781,34 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
+    return 'Strecke ($points Punkte) und Rennplan ($checkpoints Kontrollpunkte) an die Uhr gesendet';
+  }
+
+  @override
+  String routeDetailWatchScheduleThinned(
+    int points,
+    int source,
+    int checkpoints,
+  ) {
+    return 'Strecke ($points Punkte) gesendet. Rennplan von $source auf $checkpoints Kontrollpunkte reduziert, damit er auf die Uhr passt';
+  }
+
+  @override
+  String routeDetailWatchScheduleClockCutoffs(int checkpoints, int unresolved) {
+    return 'Rennplan gesendet ($checkpoints Kontrollpunkte), aber $unresolved Uhrzeit-Cutoffs brauchen eine Startzeit — lege sie im Crew-Blatt fest, damit sie auf die Uhr kommen';
+  }
+
+  @override
+  String routeDetailWatchScheduleTooManyCutoffs(
+    int points,
+    int cutoffs,
+    int max,
+  ) {
+    return 'Strecke ($points Punkte) gesendet, aber der Rennplan hat $cutoffs Cutoffs und die Uhr fasst $max — entferne einige, um ihn zu senden';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Öffentlich gemacht, damit jeder mit dem Link sie ansehen kann';
 

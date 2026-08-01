@@ -12,6 +12,15 @@ import '../roadbook.dart';
 import '../route_markers.dart' show kindSpec;
 import '../widgets/top_banner.dart';
 
+/// The goal pace a schedule opens at before the runner sets their own — 6:30/km.
+///
+/// Lives here rather than in `roadbook.dart` because that module is a
+/// TS↔Dart parity twin and a Dart-only export would put the pair out of
+/// lockstep. Shared with the route-detail watch push, which builds the same
+/// schedule headlessly: two independent defaults would put a different set of
+/// projected arrivals on the wrist than the crew sheet shows.
+const int kRoadbookDefaultSecPerKm = 390;
+
 /// Race roadbook — the crew sheet for a route's course markers + a goal time.
 /// Flutter twin of the web `/routes/[id]/roadbook` page. Controls (goal /
 /// start / pacing model) are screen-local (mobile has no URL to encode them);
@@ -43,7 +52,7 @@ class RoadbookScreen extends StatefulWidget {
 }
 
 class _RoadbookScreenState extends State<RoadbookScreen> {
-  static const _defaultSecPerKm = 390; // 6:30/km starting point
+  static const _defaultSecPerKm = kRoadbookDefaultSecPerKm;
 
   List<cm.RouteMarkerRow> _markers = const [];
   List<double>? _fetchedEle;
