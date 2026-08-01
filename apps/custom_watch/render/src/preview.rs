@@ -96,6 +96,8 @@ fn base_snapshot() -> Snapshot {
         climb: Default::default(),
         waypoint: None,
         waypoint_count: 0,
+        waypoint_mark_seq: 0,
+        waypoint_refuse_seq: 0,
         timer: None,
         storm: None,
         auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,
