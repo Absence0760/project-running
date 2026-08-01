@@ -36,6 +36,8 @@ use crate::hr_zones::{
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
 use crate::page::Page;
+use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
+use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::{
     build_phase_plan, goal_pace_s_per_km, phase_at, phase_target_pace_s_per_km, PhasePlan,
     RacePhaseIntent, RacePhasePreset,
@@ -329,6 +331,10 @@ pub struct PlanReplanView {
 /// 2 over — ease off), its confidence (0 low / 1 medium / 2 high), the flagged
 /// weeks over the trailing window, the proposed future-change count, and
 /// whether a do-more suggestion was withheld for a fatigued runner.
+///
+/// Build the two code bytes with [`PlanAdaptiveView::trend_code`] /
+/// [`PlanAdaptiveView::confidence_code`], never by casting the source enum:
+/// neither code space is that enum's declaration order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlanAdaptiveView {
     pub trend: u8,
@@ -337,6 +343,34 @@ pub struct PlanAdaptiveView {
     pub window_weeks: u8,
     pub changes: u8,
     pub fitness_gated: bool,
+}
+
+impl PlanAdaptiveView {
+    /// The byte [`PlanAdaptiveView::trend`] carries for `reason` — an explicit,
+    /// total map onto the three codes the face renders (`ON TRACK` / `DO MORE` /
+    /// `EASE OFF`), which is **not** [`AdaptiveReason`]'s declaration order:
+    /// that declares `TrendUnderfitness` first, so `reason as u8` would render a
+    /// runner who needs to do more as already on track, and an on-track runner
+    /// as needing to ease off.
+    pub const fn trend_code(reason: AdaptiveReason) -> u8 {
+        match reason {
+            AdaptiveReason::OnTrack => 0,
+            AdaptiveReason::TrendUnderfitness => 1,
+            AdaptiveReason::TrendOvertraining => 2,
+        }
+    }
+
+    /// The byte [`PlanAdaptiveView::confidence`] carries for `confidence` — the
+    /// face's ladder runs `LOW` / `MEDIUM` / `HIGH` while
+    /// [`AdaptiveConfidence`] declares `High` first, so a cast reads every
+    /// verdict at exactly the opposite strength.
+    pub const fn confidence_code(confidence: AdaptiveConfidence) -> u8 {
+        match confidence {
+            AdaptiveConfidence::Low => 0,
+            AdaptiveConfidence::Medium => 1,
+            AdaptiveConfidence::High => 2,
+        }
+    }
 }
 
 /// Where the run has got to in the armed guided run ([`crate::guided_runs`]):
@@ -414,10 +448,35 @@ pub struct RouteElevView {
 /// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]):
 /// signed days until the race (negative once past) and `feasible` 0 behind /
 /// 1 on-track / 2 ahead.
+///
+/// Build `feasible` with [`RaceDayView::feasible_code`], never by casting the
+/// source enum: the code space is not that enum's declaration order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RaceDayView {
     pub days_until: i16,
     pub feasible: u8,
+}
+
+impl RaceDayView {
+    /// The byte [`RaceDayView::feasible`] carries for `verdict` — an explicit,
+    /// total map onto the three codes the face renders (`BEHIND` / `ON TRACK` /
+    /// `AHEAD`), which is **not** [`GoalFeasibilityVerdict`]'s declaration
+    /// order: that declares `Ahead` first, so `verdict as u8` would render an
+    /// ahead-of-goal runner as behind and a behind one as ahead.
+    ///
+    /// [`GoalFeasibilityVerdict::FarBehind`] shares `Behind`'s byte. The page
+    /// has one word for both and the reading a runner acts on is the same, so
+    /// the fourth variant is folded rather than truncated — the map is total
+    /// onto 0..=2, which is what keeps
+    /// [`set_race_day`](Recorder::set_race_day)'s clamp from ever having to
+    /// decide what an unknown verdict looks like.
+    pub const fn feasible_code(verdict: GoalFeasibilityVerdict) -> u8 {
+        match verdict {
+            GoalFeasibilityVerdict::Behind | GoalFeasibilityVerdict::FarBehind => 0,
+            GoalFeasibilityVerdict::OnTrack => 1,
+            GoalFeasibilityVerdict::Ahead => 2,
+        }
+    }
 }
 
 /// The pacing-strategy phase the run is currently in ([`crate::race_phases`]),
@@ -1505,7 +1564,10 @@ impl Recorder {
 
     /// The trend + confidence are clamped to their 0..=2 code spaces and the
     /// week counts to the trend window, so a corrupt push can't render an
-    /// unknown verdict or an impossible "9/3 weeks".
+    /// unknown verdict or an impossible "9/3 weeks". Every byte
+    /// [`PlanAdaptiveView::trend_code`] / [`PlanAdaptiveView::confidence_code`]
+    /// can produce is already in range, so the clamps only ever fire on a wire
+    /// value no verdict produced.
     pub fn set_plan_adaptive(&mut self, view: Option<PlanAdaptiveView>) {
         self.plan_adaptive = view.map(|v| {
             let window = v
@@ -1667,8 +1729,6 @@ impl Recorder {
         self.route_elev = view;
     }
 
-    /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't render
-    /// an unknown verdict label.
     /// Feed the countdown / stopwatch reading (§375). The same external-input
     /// shape as [`set_hr`](Recorder::set_hr) and
     /// [`set_route_position`](Recorder::set_route_position), and for the §215
@@ -1679,6 +1739,10 @@ impl Recorder {
         self.timer = view;
     }
 
+    /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't
+    /// render an unknown verdict label. Every byte
+    /// [`RaceDayView::feasible_code`] can produce is already in range, so this
+    /// only ever fires on a wire value no verdict produced.
     pub fn set_race_day(&mut self, view: Option<RaceDayView>) {
         self.race_day = view.map(|v| RaceDayView {
             days_until: v.days_until,
@@ -4941,6 +5005,102 @@ mod tests {
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    /// The byte each source verdict travels as. These are the codes
+    /// `face::race_day_glance` / `face::plan_adaptive_glance` render, so a
+    /// renumber on either side has to change this test — and the maps are
+    /// exhaustive `match`es, so inserting a variant into any of the three
+    /// source enums is a compile error rather than a silently shifted verdict.
+    #[test]
+    fn the_view_code_bytes_are_an_explicit_total_map_from_their_source_enums() {
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::Behind),
+            0
+        );
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::FarBehind),
+            0,
+            "the fourth verdict folds onto BEHIND, it does not truncate onto AHEAD"
+        );
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::OnTrack),
+            1
+        );
+        assert_eq!(RaceDayView::feasible_code(GoalFeasibilityVerdict::Ahead), 2);
+
+        assert_eq!(PlanAdaptiveView::trend_code(AdaptiveReason::OnTrack), 0);
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::TrendUnderfitness),
+            1
+        );
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::TrendOvertraining),
+            2
+        );
+
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::Low),
+            0
+        );
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::Medium),
+            1
+        );
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::High),
+            2
+        );
+
+        // The clamps in the setters are a guard against a corrupt wire byte, not
+        // a truncation of the code space: every byte a map produces reaches the
+        // snapshot untouched.
+        let mut r = Recorder::new();
+        for verdict in [
+            GoalFeasibilityVerdict::Ahead,
+            GoalFeasibilityVerdict::OnTrack,
+            GoalFeasibilityVerdict::Behind,
+            GoalFeasibilityVerdict::FarBehind,
+        ] {
+            let code = RaceDayView::feasible_code(verdict);
+            r.set_race_day(Some(RaceDayView {
+                days_until: 3,
+                feasible: code,
+            }));
+            assert_eq!(
+                r.snapshot().race_day.unwrap().feasible,
+                code,
+                "{verdict:?} must survive the clamp"
+            );
+        }
+        for reason in [
+            AdaptiveReason::OnTrack,
+            AdaptiveReason::TrendUnderfitness,
+            AdaptiveReason::TrendOvertraining,
+        ] {
+            for confidence in [
+                AdaptiveConfidence::Low,
+                AdaptiveConfidence::Medium,
+                AdaptiveConfidence::High,
+            ] {
+                let trend = PlanAdaptiveView::trend_code(reason);
+                let conf = PlanAdaptiveView::confidence_code(confidence);
+                r.set_plan_adaptive(Some(PlanAdaptiveView {
+                    trend,
+                    confidence: conf,
+                    flagged_weeks: 2,
+                    window_weeks: 3,
+                    changes: 1,
+                    fitness_gated: false,
+                }));
+                let pa = r.snapshot().plan_adaptive.unwrap();
+                assert_eq!(
+                    (pa.trend, pa.confidence),
+                    (trend, conf),
+                    "{reason:?}/{confidence:?} must survive the clamps"
+                );
+            }
+        }
     }
 
     #[test]
