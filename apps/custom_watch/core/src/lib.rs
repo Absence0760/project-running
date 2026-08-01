@@ -116,6 +116,9 @@
 //!   fix → stored-track-point shaping, and the pushed-QNH plausibility guard
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
+//! - [`stale_budget`] — the shape the fix-cadence-scaled staleness budgets
+//!   share (the GAP hold, the TrackBack heading): a 1 Hz baseline widened by
+//!   one whole inter-fix gap, with each baseline left to its own module
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`input_flow`] — the rest of the button task's decisions: how a BTN3 hold
 //!   resolves tier by tier, the in-grid cursor step, the page a press lands on,
@@ -349,6 +352,7 @@ pub mod settings_frame;
 pub mod settings_menu;
 pub mod settings_queue;
 pub mod sleep_station;
+pub mod stale_budget;
 pub mod statusbar;
 pub mod storm;
 pub mod streaks;
