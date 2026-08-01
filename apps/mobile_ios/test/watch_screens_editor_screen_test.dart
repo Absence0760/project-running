@@ -37,6 +37,8 @@ class _FakeTransport implements WatchBleTransport {
   @override
   Future<void> writeCourse(List<int> chunk) async {}
   @override
+  Future<void> writeRoadbook(List<int> chunk) async {}
+  @override
   Future<void> writeScreens(List<int> frame) async {
     if (writeError != null) throw writeError!;
     screensWrites.add(frame);

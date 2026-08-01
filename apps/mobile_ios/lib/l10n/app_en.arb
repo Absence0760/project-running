@@ -3709,6 +3709,60 @@
     },
     "description": "Banner when the BLE course push to the watch fails"
   },
+  "routeDetailWatchCourseAndScheduleSent": "Course ({points} points) and race schedule ({checkpoints} checkpoints) sent to the watch",
+  "@routeDetailWatchCourseAndScheduleSent": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when both the course and its full race schedule reached the watch"
+  },
+  "routeDetailWatchScheduleThinned": "Course ({points} points) sent. Race schedule thinned from {source} to {checkpoints} checkpoints to fit the watch",
+  "@routeDetailWatchScheduleThinned": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "source": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the race schedule had to be reduced to the watch's checkpoint cap"
+  },
+  "routeDetailWatchScheduleClockCutoffs": "Race schedule sent ({checkpoints} checkpoints), but {unresolved} clock cut-offs need a race start time — set one on the crew sheet so the watch gets them",
+  "@routeDetailWatchScheduleClockCutoffs": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "unresolved": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when clock-only cutoffs could not be resolved without a race start time"
+  },
+  "routeDetailWatchScheduleTooManyCutoffs": "Course ({points} points) sent, but the race schedule has {cutoffs} cut-offs and the watch holds {max} — remove some to send it",
+  "@routeDetailWatchScheduleTooManyCutoffs": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the route has more cutoffs than the watch frame carries, so the schedule was refused"
+  },
   "routeDetailMadePublicForLink": "Made public so anyone with the link can view it",
   "@routeDetailMadePublicForLink": {
     "description": "Banner shown when tapping Share link auto-publishes a private route so its link resolves"
@@ -15056,6 +15110,31 @@
         "type": "String"
       }
     }
+  },
+  "simWatchPushRoadbookAction": "Push roadbook to watch",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "Roadbook pushed to the watch ({checkpoints} checkpoints, {cutoffs} cut-offs)",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "Roadbook push failed: {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
   },
   "simWatchPushCourseAction": "Push course to watch",
   "@simWatchPushCourseAction": {

@@ -17,7 +17,7 @@ import 'sim_watch_sync.dart';
 /// `apps/custom_watch/app/src/tasks/ble.rs`, which is the source of truth:
 /// `..e1` frame (read+notify), `..e2` run_manifest (read+notify), `..e3`
 /// run_chunk (write+notify), `..e4` settings, `..e5` course, `..e6`
-/// workout, `..e7` screens. A chunk request and its reply share ONE
+/// workout, `..e7` screens, `..e8` roadbook. A chunk request and its reply share ONE
 /// characteristic (`..e3`): the phone writes the request there and the
 /// watch notifies the slice back on the same handle (decisions §211d), so
 /// [chunkCharUuid] serves both directions.
@@ -44,6 +44,8 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
       Uuid.parse('d1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid screensCharUuid =
       Uuid.parse('d1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+  static final Uuid roadbookCharUuid =
+      Uuid.parse('d1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
 
   // Lazy: FlutterReactiveBle() opens a MethodChannel in its constructor,
   // which throws under flutter_test. Deferring construction keeps the
@@ -141,6 +143,10 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeScreens(List<int> frame) => _ble
       .writeCharacteristicWithResponse(_char(screensCharUuid), value: frame);
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) => _ble
+      .writeCharacteristicWithResponse(_char(roadbookCharUuid), value: chunk);
 
   @override
   Future<void> disconnect() async {

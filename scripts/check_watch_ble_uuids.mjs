@@ -51,6 +51,7 @@ export const PAIRS = [
 	{ firmware: 'course', dart: 'courseCharUuid' },
 	{ firmware: 'workout', dart: 'workoutCharUuid' },
 	{ firmware: 'screens', dart: 'screensCharUuid' },
+	{ firmware: 'roadbook', dart: 'roadbookCharUuid' },
 ];
 
 // Firmware rows the Dart client is allowed to leave unclaimed. Each still has

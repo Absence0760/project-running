@@ -758,6 +758,60 @@
   "routeDetailWatchCourseSimplified": "Percurso enviado para o relógio — reduzido de {source} para {points} pontos para caber",
   "routeDetailWatchCourseTooShort": "Esta rota tem pontos de menos para ser seguida no relógio",
   "routeDetailWatchCourseFailed": "Não foi possível enviar o percurso para o relógio: {error}",
+  "routeDetailWatchCourseAndScheduleSent": "Percurso ({points} pontos) e plano de corrida ({checkpoints} pontos de controle) enviados para o relógio",
+  "@routeDetailWatchCourseAndScheduleSent": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when both the course and its full race schedule reached the watch"
+  },
+  "routeDetailWatchScheduleThinned": "Percurso ({points} pontos) enviado. Plano de corrida reduzido de {source} para {checkpoints} pontos de controle para caber no relógio",
+  "@routeDetailWatchScheduleThinned": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "source": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the race schedule had to be reduced to the watch's checkpoint cap"
+  },
+  "routeDetailWatchScheduleClockCutoffs": "Plano de corrida enviado ({checkpoints} pontos de controle), mas {unresolved} cortes por horário precisam de um horário de largada — defina um na folha da equipe para chegarem ao relógio",
+  "@routeDetailWatchScheduleClockCutoffs": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "unresolved": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when clock-only cutoffs could not be resolved without a race start time"
+  },
+  "routeDetailWatchScheduleTooManyCutoffs": "Percurso ({points} pontos) enviado, mas o plano de corrida tem {cutoffs} cortes e o relógio suporta {max} — remova alguns para enviá-lo",
+  "@routeDetailWatchScheduleTooManyCutoffs": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the route has more cutoffs than the watch frame carries, so the schedule was refused"
+  },
   "routeDetailMadePublicForLink": "Tornada pública para que qualquer pessoa com o link possa vê-la",
   "routeDetailShareConfirmTitle": "Tornar esta rota pública?",
   "routeDetailShareConfirmBody": "Compartilhar um link torna esta rota pública — qualquer pessoa com o link pode abri-la, e ela pode aparecer em Explorar. Você pode torná-la privada novamente quando quiser.",
@@ -3287,6 +3341,31 @@
   "simWatchPushWorkoutAction": "Enviar treino para o relógio",
   "simWatchWorkoutPushed": "Treino enviado para o relógio ({steps} etapas)",
   "simWatchPushWorkoutFailed": "Falha ao enviar treino: {error}",
+  "simWatchPushRoadbookAction": "Enviar plano de corrida para o relógio",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "Plano de corrida enviado para o relógio ({checkpoints} pontos de controle, {cutoffs} cortes)",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "Falha ao enviar o plano de corrida: {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
+  },
   "simWatchPushCourseAction": "Enviar percurso para o relógio",
   "simWatchCoursePushed": "Percurso enviado para o relógio ({points} pontos)",
   "simWatchPushCourseFailed": "Falha ao enviar percurso: {error}",

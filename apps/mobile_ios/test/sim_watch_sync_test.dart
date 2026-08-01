@@ -8,6 +8,7 @@ import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKin
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_course.dart';
 import '../lib/watch_ingest_queue.dart';
+import '../lib/watch_roadbook.dart';
 import '../lib/watch_settings.dart';
 import '../lib/watch_workout.dart';
 
@@ -191,6 +192,7 @@ class FakeWatchTransport implements WatchBleTransport {
   final workoutWrites = <List<int>>[];
   final courseWrites = <List<int>>[];
   final screensWrites = <List<int>>[];
+  final roadbookWrites = <List<int>>[];
 
   FakeWatchTransport({required this.blob, required this.manifest});
 
@@ -234,6 +236,11 @@ class FakeWatchTransport implements WatchBleTransport {
   @override
   Future<void> writeScreens(List<int> frame) async {
     screensWrites.add(frame);
+  }
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) async {
+    roadbookWrites.add(chunk);
   }
 
   @override
@@ -941,6 +948,133 @@ void main() {
           reason: 'the finally must release the radio');
     });
   });
+
+  group('WatchSyncClient.pushRoadbook (fake transport)', () {
+    WatchRoadbookCheckpoint cp(int i) => WatchRoadbookCheckpoint(
+          cumDistanceM: i * 5000.0,
+          legDistanceM: 5000,
+          projectedElapsedSec: i * 1800,
+          cutoff: WatchCutoffStatus.safe,
+          isRefill: i.isEven,
+        );
+
+    /// The worst case at the caps: 16 checkpoints + 16 cut-offs = 364 B, which
+    /// is past the 242-byte chunk payload, so a full schedule takes exactly two
+    /// writes. This is the boundary the firmware's assembler exists for.
+    test('a full-cap schedule takes two writes at the real payload cap',
+        () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(transport: transport, onRun: (_) async {});
+
+      final frame = encodeRoadbook(
+        [for (var i = 1; i <= kMaxRoadbookCheckpoints; i++) cp(i)],
+        [
+          for (var i = 1; i <= kMaxRoadbookCutoffs; i++)
+            WatchCutoffLeg(cumDistanceM: i * 5000.0, limitElapsedSec: i * 2400),
+        ],
+      );
+      expect(frame.length, 364);
+      final chunks = chunkRoadbook(frame);
+      expect(chunks, hasLength(2));
+
+      await client.pushRoadbook(chunks);
+
+      expect(transport.scanCount, 1);
+      expect(transport.disconnectCount, 1);
+      expect(transport.courseWrites, isEmpty,
+          reason: 'a roadbook push must not touch the course characteristic');
+      expect(transport.roadbookWrites, hasLength(2));
+
+      final reassembled = <int>[];
+      var expectedOffset = 0;
+      for (final chunk in transport.roadbookWrites) {
+        final d = ByteData.sublistView(Uint8List.fromList(chunk));
+        expect(d.getUint16(0, Endian.little), expectedOffset);
+        reassembled.addAll(chunk.sublist(2));
+        expectedOffset = reassembled.length;
+      }
+      expect(reassembled, frame);
+    });
+
+    test('a short schedule rides one write', () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(transport: transport, onRun: (_) async {});
+
+      final frame = encodeRoadbook(
+        [cp(1), cp(2)],
+        const [WatchCutoffLeg(cumDistanceM: 10000, limitElapsedSec: 5400)],
+      );
+      expect(frame.length, lessThanOrEqualTo(kRoadbookChunkPayloadMax));
+      await client.pushRoadbook(chunkRoadbook(frame));
+
+      expect(transport.roadbookWrites, hasLength(1));
+      expect(transport.roadbookWrites.single.sublist(2), frame);
+    });
+
+    test('an empty schedule still pushes — it is how a runner clears one',
+        () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(transport: transport, onRun: (_) async {});
+
+      await client.pushRoadbook(chunkRoadbook(encodeRoadbook(const [], const [])));
+
+      expect(transport.roadbookWrites, hasLength(1));
+      expect(transport.disconnectCount, 1);
+    });
+
+    test('an over-cap series is refused before the radio is opened', () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(transport: transport, onRun: (_) async {});
+
+      // The encoder refuses rather than trimming (matching the firmware), so a
+      // caller that chunks-then-pushes throws before pushRoadbook is reached —
+      // no scan, no partial schedule left on the watch.
+      expect(
+        () => client.pushRoadbook(chunkRoadbook(encodeRoadbook(
+          [for (var i = 0; i <= kMaxRoadbookCheckpoints; i++) cp(i)],
+          const [],
+        ))),
+        throwsArgumentError,
+      );
+      expect(transport.roadbookWrites, isEmpty);
+      expect(transport.scanCount, 0,
+          reason: 'a refused schedule must not even open the radio');
+    });
+
+    test('a failed chunk write still disconnects', () async {
+      final transport = _RoadbookWriteFailsTransport();
+      final client = WatchSyncClient(transport: transport, onRun: (_) async {});
+      await expectLater(
+        client.pushRoadbook(
+          chunkRoadbook(encodeRoadbook([cp(1)], const [])),
+        ),
+        throwsStateError,
+      );
+      expect(transport.disconnectCount, 1,
+          reason: 'the finally must release the radio');
+    });
+  });
+}
+
+class _RoadbookWriteFailsTransport extends FakeWatchTransport {
+  _RoadbookWriteFailsTransport() : super(blob: const [], manifest: const []);
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) async {
+    throw StateError('radio dropped');
+  }
 }
 
 class _CourseWriteFailsTransport extends FakeWatchTransport {

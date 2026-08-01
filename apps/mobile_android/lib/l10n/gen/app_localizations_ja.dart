@@ -2610,6 +2610,34 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
+    return 'コース（$points ポイント）とレーススケジュール（$checkpoints チェックポイント）をウォッチに送信しました';
+  }
+
+  @override
+  String routeDetailWatchScheduleThinned(
+    int points,
+    int source,
+    int checkpoints,
+  ) {
+    return 'コース（$points ポイント）を送信しました。レーススケジュールはウォッチに収めるため $source から $checkpoints チェックポイントに削減されました';
+  }
+
+  @override
+  String routeDetailWatchScheduleClockCutoffs(int checkpoints, int unresolved) {
+    return 'レーススケジュールを送信しました（$checkpoints チェックポイント）。ただし $unresolved 件の時刻制限にはスタート時刻が必要です — クルーシートで設定するとウォッチに反映されます';
+  }
+
+  @override
+  String routeDetailWatchScheduleTooManyCutoffs(
+    int points,
+    int cutoffs,
+    int max,
+  ) {
+    return 'コース（$points ポイント）を送信しましたが、レーススケジュールの関門は $cutoffs 件でウォッチの上限は $max 件です — いくつか削除して送信してください';
+  }
+
+  @override
   String get routeDetailMadePublicForLink => 'リンクを知っている全員が閲覧できるように公開しました';
 
   @override
@@ -10978,6 +11006,19 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String simWatchPushWorkoutFailed(String error) {
     return 'ワークアウトの送信に失敗しました: $error';
+  }
+
+  @override
+  String get simWatchPushRoadbookAction => 'レーススケジュールをウォッチに送信';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'レーススケジュールをウォッチに送信しました（$checkpoints チェックポイント、$cutoffs 関門）';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'レーススケジュールの送信に失敗しました: $error';
   }
 
   @override

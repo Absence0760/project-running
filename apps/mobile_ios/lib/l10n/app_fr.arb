@@ -758,6 +758,60 @@
   "routeDetailWatchCourseSimplified": "Parcours envoyé à la montre — réduit de {source} à {points} points pour tenir",
   "routeDetailWatchCourseTooShort": "Cet itinéraire a trop peu de points pour être suivi sur la montre",
   "routeDetailWatchCourseFailed": "Impossible d'envoyer le parcours à la montre : {error}",
+  "routeDetailWatchCourseAndScheduleSent": "Parcours ({points} points) et plan de course ({checkpoints} points de contrôle) envoyés à la montre",
+  "@routeDetailWatchCourseAndScheduleSent": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when both the course and its full race schedule reached the watch"
+  },
+  "routeDetailWatchScheduleThinned": "Parcours ({points} points) envoyé. Plan de course réduit de {source} à {checkpoints} points de contrôle pour tenir dans la montre",
+  "@routeDetailWatchScheduleThinned": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "source": {
+        "type": "int"
+      },
+      "checkpoints": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the race schedule had to be reduced to the watch's checkpoint cap"
+  },
+  "routeDetailWatchScheduleClockCutoffs": "Plan de course envoyé ({checkpoints} points de contrôle), mais {unresolved} barrières horaires nécessitent une heure de départ — définissez-la sur la feuille d’équipe pour qu’elles atteignent la montre",
+  "@routeDetailWatchScheduleClockCutoffs": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "unresolved": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when clock-only cutoffs could not be resolved without a race start time"
+  },
+  "routeDetailWatchScheduleTooManyCutoffs": "Parcours ({points} points) envoyé, mais le plan de course compte {cutoffs} barrières et la montre en accepte {max} — supprimez-en pour l’envoyer",
+  "@routeDetailWatchScheduleTooManyCutoffs": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    },
+    "description": "Banner when the route has more cutoffs than the watch frame carries, so the schedule was refused"
+  },
   "routeDetailMadePublicForLink": "Rendu public pour que toute personne disposant du lien puisse le voir",
   "routeDetailShareConfirmTitle": "Rendre cet itinéraire public ?",
   "routeDetailShareConfirmBody": "Partager un lien rend cet itinéraire public : toute personne disposant du lien peut l'ouvrir, et il peut apparaître dans Explorer. Vous pouvez le repasser en privé à tout moment.",
@@ -3287,6 +3341,31 @@
   "simWatchPushWorkoutAction": "Envoyer la séance à la montre",
   "simWatchWorkoutPushed": "Séance envoyée à la montre ({steps} étapes)",
   "simWatchPushWorkoutFailed": "Échec de l'envoi de la séance : {error}",
+  "simWatchPushRoadbookAction": "Envoyer le plan de course à la montre",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "Plan de course envoyé à la montre ({checkpoints} points de contrôle, {cutoffs} barrières)",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "Échec de l’envoi du plan de course : {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
+  },
   "simWatchPushCourseAction": "Envoyer le parcours à la montre",
   "simWatchCoursePushed": "Parcours envoyé à la montre ({points} points)",
   "simWatchPushCourseFailed": "Échec de l'envoi du parcours : {error}",

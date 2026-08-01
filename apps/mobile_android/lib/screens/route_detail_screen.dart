@@ -25,11 +25,14 @@ import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../route_gpx.dart';
+import '../roadbook.dart'
+    show PacingModel, RoadbookMarker, RoadbookWaypoint, buildRoadbook;
 import '../sim_watch_link.dart' show maybeDevBackendUrl;
 import '../sim_watch_sync.dart' show WatchBleTransport, WatchSyncClient;
 import '../social_service.dart' show ClubView, SocialService;
 import '../tile_pack.dart' show TileBbox;
 import '../watch_course.dart';
+import '../watch_roadbook.dart';
 import 'roadbook_screen.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
@@ -1448,8 +1451,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool get _watchPushAvailable =>
       isLocalSupabaseUrl(widget.devBackendUrl ?? maybeDevBackendUrl());
 
-  /// Send this route to the paired custom watch as a `CRS1` breadcrumb course —
-  /// the last leg of "generate a loop on the phone, follow it on the wrist".
+  /// Send this route to the paired custom watch as a `CRS1` breadcrumb course
+  /// and, when the route has course markers, the `RBK1` race schedule those
+  /// markers imply — the last leg of "generate a loop on the phone, follow it
+  /// on the wrist".
+  ///
+  /// The two ride one action because a schedule without its course is close to
+  /// useless: every checkpoint is a distance *along the course*, and the
+  /// watch's Roadbook / CutoffEta / Fuel pages all read the along-route
+  /// position the loaded course provides. Pushing a schedule alone would arm
+  /// pages that can never resolve a position.
   ///
   /// Reads the same clipped polyline the map and the GPX exporter do, so a
   /// non-owner sending a public route to their own watch can't carry the
@@ -1458,7 +1469,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   /// A route too dense for the frame is thinned to fit and the runner is told
   /// by how much; a route that cannot be represented at all is refused with a
   /// reason. Neither path quietly sends a partial course — a breadcrumb that
-  /// ends early is a wrong answer the watch has no way to notice.
+  /// ends early is a wrong answer the watch has no way to notice. The schedule
+  /// half is held to the same bar: an over-cap one is reduced deliberately (see
+  /// [watchRoadbookFromRoadbook]) and the runner is told what was dropped, or
+  /// refused outright when it can't be reduced honestly.
   Future<void> _sendCourseToWatch() async {
     if (_watchPushBusy) return;
     final l10n = AppLocalizations.of(context);
@@ -1480,14 +1494,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       await client.pushCourse(
         chunkCourse(encodeCourse(points, elevationM: course.elevationM)),
       );
+
+      final schedule = await _watchRoadbook();
+      if (schedule?.checkpoints != null) {
+        await client.pushRoadbook(chunkRoadbook(
+          encodeRoadbook(schedule!.checkpoints!, schedule.cutoffs!),
+        ));
+      }
       if (!mounted) return;
       showTopBanner(
-        context,
-        course.simplified
-            ? l10n.routeDetailWatchCourseSimplified(
-                course.sourcePointCount, points.length)
-            : l10n.routeDetailWatchCourseSent(points.length),
-      );
+          context, _watchPushMessage(l10n, course, points.length, schedule));
     } catch (e) {
       if (!mounted) return;
       showTopBanner(
@@ -1495,6 +1511,80 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     } finally {
       if (mounted) setState(() => _watchPushBusy = false);
     }
+  }
+
+  /// Build the schedule to push alongside the course, or null when this route
+  /// has none to build.
+  ///
+  /// The goal time is the crew sheet's own opening default rather than
+  /// something invented here, so the arrivals on the wrist match the arrivals
+  /// on the sheet the runner reads. No start clock is available headlessly, so
+  /// clock-only cut-offs cannot resolve — [WatchRoadbookResult] counts those
+  /// and the banner says so rather than letting a cut-off vanish.
+  ///
+  /// Fetching markers is an auxiliary step: a failure degrades to a course-only
+  /// push (the course already landed) instead of sinking the whole action.
+  Future<WatchRoadbookResult?> _watchRoadbook() async {
+    final api = widget.apiClient;
+    if (api == null) return null;
+    List<cm.RouteMarkerRow> markers;
+    try {
+      markers = await api.fetchRouteMarkers(widget.route.id);
+    } catch (e) {
+      debugPrint('sendToWatch: fetchRouteMarkers failed: $e');
+      return null;
+    }
+    if (markers.isEmpty) return null;
+    final km = widget.route.distanceMetres / 1000;
+    return watchRoadbookFromRoadbook(buildRoadbook(
+      [
+        for (final w in _displayWaypoints)
+          RoadbookWaypoint(lat: w.lat, lng: w.lng, ele: w.elevationMetres),
+      ],
+      [
+        for (final m in markers)
+          RoadbookMarker(
+              positionM: m.positionM, kind: m.kind, label: m.label, meta: m.meta),
+      ],
+      goalSeconds: (km * kRoadbookDefaultSecPerKm).clamp(60, 1 << 30).toDouble(),
+      model: PacingModel.effort,
+    ));
+  }
+
+  /// The one thing worth telling the runner about a completed push. Ordered by
+  /// what would hurt most to miss: a schedule that could not be sent, then
+  /// cut-offs the watch will not know about, then a thinned schedule, then the
+  /// clean case.
+  String _watchPushMessage(
+    AppLocalizations l10n,
+    WatchCourseResult course,
+    int pointCount,
+    WatchRoadbookResult? schedule,
+  ) {
+    final checkpoints = schedule?.checkpoints;
+    if (schedule != null && checkpoints == null) {
+      // noSchedule is not worth a warning — it just means the markers carry no
+      // positions yet, and the course still landed.
+      if (schedule.refusal == WatchRoadbookRefusal.tooManyCutoffs) {
+        return l10n.routeDetailWatchScheduleTooManyCutoffs(
+            pointCount, schedule.sourceCutoffCount, kMaxRoadbookCutoffs);
+      }
+    } else if (checkpoints != null) {
+      if (schedule!.unresolvedCutoffCount > 0) {
+        return l10n.routeDetailWatchScheduleClockCutoffs(
+            checkpoints.length, schedule.unresolvedCutoffCount);
+      }
+      if (schedule.reduced) {
+        return l10n.routeDetailWatchScheduleThinned(pointCount,
+            schedule.sourceCheckpointCount, checkpoints.length);
+      }
+      return l10n.routeDetailWatchCourseAndScheduleSent(
+          pointCount, checkpoints.length);
+    }
+    return course.simplified
+        ? l10n.routeDetailWatchCourseSimplified(
+            course.sourcePointCount, pointCount)
+        : l10n.routeDetailWatchCourseSent(pointCount);
   }
 
   Future<void> _shareAs(BuildContext context, String format) async {
