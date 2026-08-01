@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -745,10 +745,22 @@ pub async fn screen_task(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
                         pending_runs_rx.changed(),
-                        // A registered waker, not a timer: at rest this arm
-                        // costs nothing — only the button task's sends while
-                        // the settings menu is open ever resolve it.
-                        select(menu_rx.changed(), Timer::after(tick)),
+                        // Registered wakers, not timers: at rest these two arms
+                        // cost nothing — only the button task's sends while the
+                        // settings menu is open, and a pushed responder card,
+                        // ever resolve them.
+                        //
+                        // ICE needs an arm of its own where TIMER / TIMER_MENU /
+                        // PROFILE / SCREENS get by on the top-of-loop
+                        // `try_changed()` alone: every path that changes those
+                        // also stamps state::INTERACTION or moves RECORD's
+                        // snapshot in the same tick, and both are in this tree.
+                        // A `SettingsEffect::Ice` off a phone push touches
+                        // neither, so without this the card would wait for an
+                        // unrelated wake — up to TICK_IDLE on an idle wrist, on
+                        // the one face whose whole purpose is a stranger
+                        // reading it in an emergency.
+                        select3(menu_rx.changed(), ice_rx.changed(), Timer::after(tick)),
                     ),
                 ),
             ),
@@ -774,10 +786,13 @@ pub async fn screen_task(
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::First(v))))) => {
-                menu = v
-            }
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::Second(
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either3::First(
+                v,
+            ))))) => menu = v,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either3::Second(
+                c,
+            ))))) => ice = c,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either3::Third(
                 (),
             ))))) => {}
         }
