@@ -484,13 +484,51 @@ mod imp {
         .services_128(ServiceList::Complete, &[LINK_SERVICE_UUID.to_le_bytes()])
         .build();
 
-    /// Build the manifest characteristic value from the store's current run list.
-    async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
+    /// Republish the `run_manifest` characteristic value if the store's manifest
+    /// generation has moved since `built_gen` — returning the value now
+    /// published, or `None` when the one already published still stands.
+    ///
+    /// The manifest changes when a run finishes, is evicted, or is fully pulled;
+    /// rebuilding it on every 1 Hz tick instead meant a `manifest_at` + encode +
+    /// SoftDevice value-set per second for the whole time a phone was connected,
+    /// whether or not it ever read the characteristic. `built_gen` starts at
+    /// `None` per connection, so a fresh link always publishes once before its
+    /// first read.
+    ///
+    /// The one thing this trades away is the header's uptime anchor: it is the
+    /// value at the last rebuild, not at the last tick, so within a connection
+    /// where nothing changed it can lag. A lagging anchor makes a run read as
+    /// YOUNGER than it is (`now - (uptime - start)`), which is the direction the
+    /// phone already handles — `SlotDir::manifest_at` documents the same
+    /// under-aging for a run recovered across a power cycle, and
+    /// `payloadFromBlob` falls back to the blob footer's elapsed time when the
+    /// offset is shorter than the run itself.
+    async fn refresh_manifest(
+        server: &Server,
+        store: &SharedStore,
+        built_gen: &mut Option<u32>,
+        uptime_s: u32,
+    ) -> Option<Vec<u8, MANIFEST_CAP>> {
         // Clamp each run's start to the current uptime so a run recovered from a
         // prior power cycle can't advertise a start ahead of `uptime_s` and date
         // in the future on the phone (run_flash::manifest_at).
-        let entries = store.lock().await.manifest_at(uptime_s);
-        ble_sync::encode_manifest(&entries, uptime_s)
+        let (gen, entries) = {
+            let guard = store.lock().await;
+            let gen = guard.manifest_gen();
+            if *built_gen == Some(gen) {
+                return None;
+            }
+            (gen, guard.manifest_at(uptime_s))
+        };
+        let manifest = ble_sync::encode_manifest(&entries, uptime_s);
+        if let Err(e) = server.link.run_manifest_set(&manifest) {
+            // Leave `built_gen` alone so the next tick retries: a failed set
+            // means the published value is still the OLD list.
+            debug!("ble: manifest set failed {:?}", e);
+            return None;
+        }
+        *built_gen = Some(gen);
+        Some(manifest)
     }
 
     /// Advertise → serve → re-advertise on disconnect, forever. While
@@ -697,6 +735,16 @@ mod imp {
 
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
+                // Per-connection, so the first tick after a reconnect always
+                // republishes: a run can finish while nothing is connected.
+                let mut built_gen: Option<u32> = None;
+                refresh_manifest(
+                    server,
+                    store,
+                    &mut built_gen,
+                    Instant::now().as_secs() as u32,
+                )
+                .await;
                 loop {
                     match select(ticker.next(), chunk_req.receive()).await {
                         Either::First(()) => {
@@ -708,15 +756,17 @@ mod imp {
                                 elev = Some(reading);
                             }
 
-                            // Refresh the manifest value so a read returns the
-                            // current list; notify it too if the phone subscribed.
-                            let manifest = build_manifest(store, now_s).await;
-                            if let Err(e) = server.link.run_manifest_set(&manifest) {
-                                debug!("ble: manifest set failed {:?}", e);
-                            }
-                            if manifest_notify.get() {
-                                if let Err(e) = server.link.run_manifest_notify(&conn, &manifest) {
-                                    debug!("ble: manifest notify failed {:?}", e);
+                            // Republish the manifest only when the run list moved,
+                            // and notify the change if the phone subscribed.
+                            if let Some(manifest) =
+                                refresh_manifest(server, store, &mut built_gen, now_s).await
+                            {
+                                if manifest_notify.get() {
+                                    if let Err(e) =
+                                        server.link.run_manifest_notify(&conn, &manifest)
+                                    {
+                                        debug!("ble: manifest notify failed {:?}", e);
+                                    }
                                 }
                             }
 
