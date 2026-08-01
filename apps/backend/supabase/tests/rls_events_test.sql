@@ -84,18 +84,23 @@ values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0002',
    '00000000-0000-0000-0000-000000ff0004', 'member', 'active');
 
+-- starts_at must stay in the FUTURE: search_public_events() only surfaces
+-- non-recurring events with starts_at >= now(), so a hardcoded date here is a
+-- calendar time bomb (test 17 went red the day the fixture date passed).
+-- now() is the transaction timestamp, so the attendee's instance_start below
+-- evaluates to the identical instant.
 insert into events (id, club_id, title, starts_at, author_id, is_public)
 values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0010',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0002', 'Open Parkrun',
-   '2026-08-01 09:00:00+00', '00000000-0000-0000-0000-000000ff0001', true),
+   now() + interval '7 days', '00000000-0000-0000-0000-000000ff0001', true),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0011',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0002', 'Members Committee Meeting',
-   '2026-08-02 18:00:00+00', '00000000-0000-0000-0000-000000ff0001', false);
+   now() + interval '8 days', '00000000-0000-0000-0000-000000ff0001', false);
 
 insert into event_attendees (event_id, instance_start, user_id, status)
 values
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0011', '2026-08-02 18:00:00+00',
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0011', now() + interval '8 days',
    '00000000-0000-0000-0000-000000ff0004', 'going');
 
 insert into club_posts (id, club_id, event_id, author_id, body)
