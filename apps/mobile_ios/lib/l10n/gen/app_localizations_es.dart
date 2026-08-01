@@ -2774,6 +2774,34 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
+    return 'Ruta ($points puntos) y plan de carrera ($checkpoints puntos de control) enviados al reloj';
+  }
+
+  @override
+  String routeDetailWatchScheduleThinned(
+    int points,
+    int source,
+    int checkpoints,
+  ) {
+    return 'Ruta ($points puntos) enviada. Plan de carrera reducido de $source a $checkpoints puntos de control para caber en el reloj';
+  }
+
+  @override
+  String routeDetailWatchScheduleClockCutoffs(int checkpoints, int unresolved) {
+    return 'Plan de carrera enviado ($checkpoints puntos de control), pero $unresolved cortes por hora necesitan una hora de salida — defínela en la hoja de equipo para que lleguen al reloj';
+  }
+
+  @override
+  String routeDetailWatchScheduleTooManyCutoffs(
+    int points,
+    int cutoffs,
+    int max,
+  ) {
+    return 'Ruta ($points puntos) enviada, pero el plan de carrera tiene $cutoffs cortes y el reloj admite $max — elimina algunos para enviarlo';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Se hizo pública para que cualquiera con el enlace pueda verla';
 
@@ -11519,6 +11547,19 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String simWatchPushWorkoutFailed(String error) {
     return 'Error al enviar el entrenamiento: $error';
+  }
+
+  @override
+  String get simWatchPushRoadbookAction => 'Enviar plan de carrera al reloj';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Plan de carrera enviado al reloj ($checkpoints puntos de control, $cutoffs cortes)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Fallo al enviar el plan de carrera: $error';
   }
 
   @override

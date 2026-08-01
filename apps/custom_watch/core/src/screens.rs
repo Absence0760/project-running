@@ -505,8 +505,14 @@ mod tests {
 
     #[test]
     fn every_slot_label_fits_the_cells_a_slot_can_spare() {
-        for b in 1..=37u8 {
-            let m = Metric::from_byte(b).unwrap();
+        // Derived from the catalogue, not a hard-coded ceiling: a `1..=37`
+        // bound silently exempted `storm_delta` (38) and `gap` (39) from this
+        // guard, which is how § 389's held-GAP mark reached the composed slots
+        // unchecked.
+        for b in 1..=u8::MAX {
+            let Some(m) = Metric::from_byte(b) else {
+                continue;
+            };
             let label = m.slot_label();
             assert!(
                 !label.is_empty() && label.len() <= SLOT_LABEL_CELLS,

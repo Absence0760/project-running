@@ -16,12 +16,27 @@
 //! Binary, not JSON — the watch is `no_std` with no allocator and no JSON
 //! parser, and the run-sync side already speaks fixed-layout little-endian
 //! frames (`run_store`), so this matches that discipline: a 4-byte magic, a
-//! version byte, a presence-bitfield (two of them from v2, three from v7),
-//! then only the present fields in bit order, then (from v3) a CRC32 trailer. Every field is
+//! version byte, two presence-bitfields (three from v7), then only the present
+//! fields in bit order, then a CRC32 trailer. Every field is
 //! optional so the phone can push a partial update (just a new max HR) without
 //! disturbing the rest. Decoding only *parses* — the plausibility guards stay
 //! in the setters it feeds, so a garbage value is rejected by the same rule
 //! whether it arrives over BLE or the sim link.
+//!
+//! **The checksum is mandatory, and v1 / v2 no longer decode.** The trailer
+//! arrived at v3, and for a while the two pre-CRC versions stayed decodable so
+//! an un-upgraded phone's push kept configuring the watch. That trade is now
+//! withdrawn, on the reasoning [`crate::course_store`] already records for its
+//! own format: an accepted un-checksummed version is a bypass, because any
+//! frame that fails the CRC can claim to be v2 instead and leave the check
+//! decorative. Post-bonding write access is the security boundary — an
+//! authorized writer gains nothing by choosing v1, since it could send a
+//! well-formed v8 frame anyway — so what the mandate really buys is detecting
+//! *accidental* corruption of a legacy push, which is otherwise applied as
+//! truth: one flipped bit in a `max_hr` or a pacer goal was indistinguishable
+//! from the value the phone sent. Nothing emits v1 or v2 (the phone encoder
+//! here has always stamped the current version) and no watch has ever shipped,
+//! so there is no compatibility debt to honour.
 
 use crate::ice::{IceCard, ICE_WIRE_LEN};
 use crate::page::mask_from_wire;
@@ -35,8 +50,8 @@ pub const SETTINGS_MAGIC: [u8; 4] = *b"SET1";
 /// the layout forced this bump — the **discipline** did: a set bit outside the
 /// mask for a frame's own version is how `decode` tells a corrupt push from a
 /// forward-compatible one, and that only works while a version names exactly
-/// one field set. `decode` accepts every earlier version alongside v8, so an
-/// old phone's push keeps working; the encoder always emits v8.
+/// one field set. `decode` accepts v3 through v8, so a phone a few releases
+/// behind keeps working; the encoder always emits v8.
 pub const SETTINGS_VERSION: u8 = 8;
 
 /// Version 7 (2026-07-30): the auto-lap trigger ([`crate::auto_lap`]) is the
@@ -65,18 +80,14 @@ const SETTINGS_VERSION_V5: u8 = 5;
 /// [`mask_from_wire`] to fail open past bit 31.
 const SETTINGS_VERSION_V4: u8 = 4;
 
-/// Version 2 (2026-07-22): v1's flag byte was saturated, so the ninth field
-/// (`tz_offset_min`) rode that version bump into a second presence byte
-/// (`flags2`) after the first.
-const SETTINGS_VERSION_V2: u8 = 2;
-
-/// Version 3 (2026-07-25): the frame gained a CRC32 trailer. Its only integrity
-/// check had been that the byte count accounts for the fields the presence
-/// bitfield claims, which catches any single-*bit* flip but not a single-*byte*
-/// corruption that flips two bits across equal-width fields — the length is
-/// unchanged, so it decodes as a fully valid but *different* update (one byte
-/// turns `flags` `0xB8` into `0xE8` and the four bytes the phone sent as the
-/// QNH sea-level pressure are applied as the run-view page mask).
+/// Version 3 (2026-07-25): the frame gained a CRC32 trailer, and is the OLDEST
+/// version [`WatchSettings::decode`] accepts. Its only integrity check had been
+/// that the byte count accounts for the fields the presence bitfield claims,
+/// which catches any single-*bit* flip but not a single-*byte* corruption that
+/// flips two bits across equal-width fields — the length is unchanged, so it
+/// decodes as a fully valid but *different* update (one byte turns `flags`
+/// `0xB8` into `0xE8` and the four bytes the phone sent as the QNH sea-level
+/// pressure are applied as the run-view page mask).
 const SETTINGS_VERSION_V3: u8 = 3;
 
 /// Presence bits, in the order the fields are laid out after the header.
@@ -116,9 +127,9 @@ pub const FLAG2_GUIDED_RUN: u8 = 1 << 5;
 pub const FLAG2_RESTING_HR: u8 = 1 << 6;
 pub const FLAG2_ICE: u8 = 1 << 7;
 
-/// Every presence bit `flags2` defines **at version 2 and 3** — a bit outside
-/// this mask is one those versions' own encoders could not have set.
-const KNOWN_FLAGS2_V2: u8 = FLAG2_TZ_OFFSET;
+/// Every presence bit `flags2` defines **at version 3** — a bit outside this
+/// mask is one that version's own encoder could not have set.
+const KNOWN_FLAGS2_V3: u8 = FLAG2_TZ_OFFSET;
 
 /// Every presence bit `flags2` defines at version 4.
 const KNOWN_FLAGS2_V4: u8 = FLAG2_TZ_OFFSET
@@ -150,17 +161,17 @@ const KNOWN_FLAGS3_V7: u8 = FLAG3_AUTO_LAP;
 /// Every presence bit `flags3` defines at the current version.
 const KNOWN_FLAGS3: u8 = KNOWN_FLAGS3_V7 | FLAG3_STORM_ALERT;
 
-/// v1 header: magic (4) + version (1) + flags (1). v2 appends `flags2`, v7
-/// `flags3`.
-const V1_HEADER_LEN: usize = 6;
-const HEADER_LEN: usize = V1_HEADER_LEN + 1;
+/// Header through v6: magic (4) + version (1) + flags (1) + `flags2` (1). v7
+/// appends `flags3`.
+const HEADER_LEN: usize = 7;
 const V7_HEADER_LEN: usize = HEADER_LEN + 1;
 
-/// The v3 CRC32 trailer, little-endian, over every byte before it.
+/// The CRC32 trailer, little-endian, over every byte before it. Mandatory —
+/// every version [`WatchSettings::decode`] accepts carries one.
 const CRC_LEN: usize = 4;
 
-/// Width of the run-view page mask on the wire, in bytes. 64-bit since v4;
-/// v1-v3 frames carry 4 and are widened by [`mask_from_wire`] on decode.
+/// Width of the run-view page mask on the wire, in bytes. 64-bit since v4; a v3
+/// frame carries 4 and is widened by [`mask_from_wire`] on decode.
 const PAGES_LEN: usize = 8;
 const PAGES_LEN_V3: usize = 4;
 
@@ -472,47 +483,43 @@ impl WatchSettings {
     /// Decode a settings frame. Returns `None` on a bad magic, an unknown
     /// version, a failed CRC, an unknown presence bit, a buffer too short for
     /// the fields the flags claim, or trailing bytes past the declared fields —
-    /// never a partial or off-frame struct. Accepts version 1 (no `flags2`, so
-    /// no tz offset) and version 2 (no CRC) alongside the current version 3, so
-    /// an old phone's push keeps working.
+    /// never a partial or off-frame struct. Accepts v3 through v8, so a phone a
+    /// few releases behind keeps working; a version NEWER than this reader
+    /// understands is refused with the same fail-closed rule as a corrupt one,
+    /// because its layout is unknowable. The pre-CRC v1 / v2 are refused too —
+    /// module docs carry that reasoning.
     pub fn decode(b: &[u8]) -> Option<Self> {
         // Bytes one and two are full; byte three is where a new field goes
         // until it saturates too, and then the drill repeats. These turn the
         // first over-saturating flag into a compile error rather than a
         // silently-accepted frame.
         const _: () = assert!(KNOWN_FLAGS2 == u8::MAX);
-        if b.len() < V1_HEADER_LEN || b[0..4] != SETTINGS_MAGIC {
+        if b.len() < HEADER_LEN || b[0..4] != SETTINGS_MAGIC {
             return None;
         }
         let flags = b[5];
-        // Version 1's flag byte is saturated (every bit is a known field), so
-        // the unknown-bit rejection only has `flags2` left to police. This
-        // assert turns the first over-saturating flag into a compile error
+        // The first flag byte is saturated (every bit is a known field), so the
+        // unknown-bit rejection only has `flags2` and `flags3` left to police.
+        // This assert turns the first over-saturating flag into a compile error
         // instead of a silently-accepted frame.
         const _: () = assert!(KNOWN_FLAGS == u8::MAX);
-        // Everything a version changes about the layout: whether `flags2` is
-        // there at all, how wide the page mask is, whether a CRC trailer
-        // follows, and which `flags2` bits that version's own encoder could
-        // have set.
-        let (header_len, pages_len, has_crc, known2, known3) = match b[4] {
-            1 => (V1_HEADER_LEN, PAGES_LEN_V3, false, 0, 0),
-            SETTINGS_VERSION_V2 => (HEADER_LEN, PAGES_LEN_V3, false, KNOWN_FLAGS2_V2, 0),
-            SETTINGS_VERSION_V3 => (HEADER_LEN, PAGES_LEN_V3, true, KNOWN_FLAGS2_V2, 0),
-            SETTINGS_VERSION_V4 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2_V4, 0),
-            SETTINGS_VERSION_V5 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2_V5, 0),
-            SETTINGS_VERSION_V6 => (HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2, 0),
-            SETTINGS_VERSION_V7 => (
-                V7_HEADER_LEN,
-                PAGES_LEN,
-                true,
-                KNOWN_FLAGS2,
-                KNOWN_FLAGS3_V7,
-            ),
-            SETTINGS_VERSION => (V7_HEADER_LEN, PAGES_LEN, true, KNOWN_FLAGS2, KNOWN_FLAGS3),
+        // Everything a version changes about the layout: whether `flags3` is
+        // there at all, how wide the page mask is, and which `flags2` / `flags3`
+        // bits that version's own encoder could have set.
+        let (header_len, pages_len, known2, known3) = match b[4] {
+            SETTINGS_VERSION_V3 => (HEADER_LEN, PAGES_LEN_V3, KNOWN_FLAGS2_V3, 0),
+            SETTINGS_VERSION_V4 => (HEADER_LEN, PAGES_LEN, KNOWN_FLAGS2_V4, 0),
+            SETTINGS_VERSION_V5 => (HEADER_LEN, PAGES_LEN, KNOWN_FLAGS2_V5, 0),
+            SETTINGS_VERSION_V6 => (HEADER_LEN, PAGES_LEN, KNOWN_FLAGS2, 0),
+            SETTINGS_VERSION_V7 => (V7_HEADER_LEN, PAGES_LEN, KNOWN_FLAGS2, KNOWN_FLAGS3_V7),
+            SETTINGS_VERSION => (V7_HEADER_LEN, PAGES_LEN, KNOWN_FLAGS2, KNOWN_FLAGS3),
             _ => return None,
         };
         let mut off = header_len;
-        let b = if has_crc {
+        // Every accepted version carries the trailer, so the checksum is not a
+        // per-version branch any more: a frame that fails it never reaches a
+        // field, and a sender cannot dodge it by claiming an older version.
+        let b = {
             let end = b.len().checked_sub(CRC_LEN)?;
             if end < off {
                 return None;
@@ -522,14 +529,8 @@ impl WatchSettings {
                 return None;
             }
             &b[..end]
-        } else {
-            b
         };
-        let flags2 = if header_len >= HEADER_LEN {
-            *b.get(6)?
-        } else {
-            0
-        };
+        let flags2 = *b.get(6)?;
         if flags2 & !known2 != 0 {
             return None;
         }
@@ -1339,16 +1340,27 @@ mod tests {
 
     #[test]
     fn unknown_flags2_bit_is_rejected() {
+        // Stamped v4, whose header is `HEADER_LEN` and whose `flags2` mask stops
+        // at bit 5 — so bit 7 is genuinely unknown to it and the rejection is
+        // the unknown bit rather than a length mismatch. The zero-flags2 control
+        // below is what keeps that honest: it must DECODE, so a frame this
+        // shape cannot be getting refused for its size.
         let mut header = [0u8; HEADER_LEN];
         header[0..4].copy_from_slice(&SETTINGS_MAGIC);
-        header[4] = SETTINGS_VERSION;
+        header[4] = SETTINGS_VERSION_V4;
         header[5] = 0;
-        header[6] = 0x80; // bit 7: no v5 field defines it
+        header[6] = 0x80;
+        assert_eq!(WatchSettings::decode(&sealed(&header)), None);
+        header[6] = 0;
+        assert_eq!(
+            WatchSettings::decode(&sealed(&header)),
+            Some(WatchSettings::default()),
+            "the control must decode, or the rejection above proves nothing"
+        );
+        // A header cut short of its flags2 byte is a short buffer, not a zero
+        // flags2.
         let frame = sealed(&header);
-        assert_eq!(WatchSettings::decode(&frame), None);
-        // A v3 header cut short of its flags2 byte is a short buffer, not a
-        // zero flags2.
-        assert_eq!(WatchSettings::decode(&frame[..V1_HEADER_LEN]), None);
+        assert_eq!(WatchSettings::decode(&frame[..HEADER_LEN - 1]), None);
     }
 
     #[test]
@@ -2202,12 +2214,15 @@ mod tests {
         );
     }
 
-    /// The frozen v2 golden vector (every field, version byte 0x02, no CRC)
-    /// must keep decoding into exactly what it decoded into before the v3
-    /// bump: a phone that hasn't shipped the checksummed encoder yet still
-    /// configures the watch.
+    /// The frozen v2 golden vector (every field, version byte 0x02, no CRC) is
+    /// now **refused**. It decoded for as long as the CRC was optional; keeping
+    /// it decodable made the checksum decorative, because any frame that fails
+    /// the CRC could re-stamp itself v2 and be applied unchecked. The vector is
+    /// kept rather than deleted so the rejection is pinned against the exact
+    /// bytes that used to be accepted — nothing about this frame is malformed
+    /// except its version.
     #[test]
-    fn v2_golden_vector_still_decodes() {
+    fn a_v2_golden_vector_is_refused_for_carrying_no_checksum() {
         let v2: [u8; 45] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
             0x02, // version 2
@@ -2226,52 +2241,22 @@ mod tests {
             0x01, // hide_empty_pages = true
             0x59, 0x01, // tz_offset_min = +345 (+5:45, i16 LE)
         ];
-        assert_eq!(
-            WatchSettings::decode(&v2),
-            Some(WatchSettings {
-                // A pre-v7 phone cannot name a trigger, and a pre-v8 one
-                // cannot arm the storm banner, so the watch keeps what it
-                // already holds rather than being reset to a default.
-                auto_lap: None,
-                storm_alert: None,
-                max_hr: Some(190),
-                pacer: Some(PacerGoalCfg {
-                    distance_m: 42_195,
-                    time_s: 14_400,
-                }),
-                gear: Some(GearCfg {
-                    baseline_m: 500_000.0,
-                    target_m: Some(800_000.0),
-                }),
-                zone_ceiling: Some(Some(3)),
-                sea_level_pa: Some(101_325.0),
-                fuel: Some(FuelCfg {
-                    drink_interval_s: 900,
-                    eat_interval_s: 1_500,
-                }),
-                pages: Some(mask_from_wire(0x0000_c0ff)),
-                hide_empty_pages: Some(true),
-                tz_offset_min: Some(345),
-                distance_interval_m: None,
-                time_interval_s: None,
-                pace_band: None,
-                race_phases: None,
-                guided_run: None,
-                resting_hr: None,
-                ice: None,
-            })
-        );
-        // A v2 frame carrying a v3-shaped trailer is trailing bytes, not a crc.
+        assert_eq!(WatchSettings::decode(&v2), None);
+        // Nor can a v2 frame buy its way back in by appending a correct
+        // trailer: the version byte, not the presence of four checksum-shaped
+        // bytes, is what selects the layout, so this is a v2 frame with
+        // trailing bytes and it stays refused.
         let mut with_trailer = v2.to_vec();
         with_trailer.extend_from_slice(&crc32(&v2).to_le_bytes());
         assert_eq!(WatchSettings::decode(&with_trailer), None);
     }
 
     /// The frozen v1 golden vector (every v1 field, version byte 0x01, no
-    /// flags2) must keep decoding: an old phone's push still applies, it just
-    /// carries no timezone offset — the clock stays UTC.
+    /// `flags2`) is refused for the same reason as v2 above — it predates the
+    /// checksum entirely. Kept as a vector so the rejection is pinned against
+    /// the bytes an un-upgraded phone would actually have sent.
     #[test]
-    fn v1_golden_vector_still_decodes_with_no_tz_offset() {
+    fn a_v1_golden_vector_is_refused_for_carrying_no_checksum() {
         let v1: [u8; 42] = [
             0x53, 0x45, 0x54, 0x31, // "SET1"
             0x01, // version 1
@@ -2288,59 +2273,97 @@ mod tests {
             0xff, 0xc0, 0x00, 0x00, // pages = 0x0000c0ff (u32 LE)
             0x01, // hide_empty_pages = true
         ];
-        let s = WatchSettings::decode(&v1).expect("v1 frame decodes");
-        assert_eq!(
-            s,
-            WatchSettings {
-                auto_lap: None,
-                storm_alert: None,
-                max_hr: Some(190),
-                pacer: Some(PacerGoalCfg {
-                    distance_m: 42_195,
-                    time_s: 14_400,
-                }),
-                gear: Some(GearCfg {
-                    baseline_m: 500_000.0,
-                    target_m: Some(800_000.0),
-                }),
-                zone_ceiling: Some(Some(3)),
-                sea_level_pa: Some(101_325.0),
-                fuel: Some(FuelCfg {
-                    drink_interval_s: 900,
-                    eat_interval_s: 1_500,
-                }),
-                pages: Some(mask_from_wire(0x0000_c0ff)),
-                hide_empty_pages: Some(true),
-                tz_offset_min: None,
-                distance_interval_m: None,
-                time_interval_s: None,
-                pace_band: None,
-                race_phases: None,
-                guided_run: None,
-                resting_hr: None,
-                ice: None,
-            }
-        );
-        // Chopped to its header, the flags still claim every field: reject.
+        assert_eq!(WatchSettings::decode(&v1), None);
+        // As sent, that frame is refused twice over — no trailer AND a withdrawn
+        // version. Sealing it isolates the version gate: the CRC now checks out,
+        // so the version byte is the only thing left wrong, and the rejection
+        // has to be the gate's.
+        assert_eq!(WatchSettings::decode(&sealed(&v1)), None);
+        // Chopped to its header it is refused too, but for the older reason —
+        // so the version gate is not the only thing standing here.
         assert_eq!(WatchSettings::decode(&v1[..6]), None);
     }
 
+    /// The version gate runs on the version byte alone, ahead of and
+    /// independent of the field walk: a withdrawn version whose framing is
+    /// otherwise impeccable is still refused.
+    ///
+    /// **Every frame here is sealed with a valid CRC**, which is the whole point
+    /// — an un-sealed v1 frame is refused by the mandatory checksum whether or
+    /// not the version gate exists, so testing the raw bytes would pass even
+    /// with v1 decoding restored and prove nothing. Sealing leaves the version
+    /// as the only defect. That also closes the bypass the withdrawal exists to
+    /// close: a frame that fails its CRC must not be able to re-stamp itself v1
+    /// or v2 and be waved through.
     #[test]
-    fn v1_framing_discipline_survives_the_version_bump() {
-        let header_only: [u8; 6] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x00];
+    fn no_pre_crc_framing_however_tidy_survives_the_version_gate() {
+        for body in [
+            [0x53, 0x45, 0x54, 0x31, 0x01, 0x00].as_slice(), // v1 header only
+            &[0x53, 0x45, 0x54, 0x31, 0x01, 0x01, 0xbe, 0x00], // v1, one clean field
+            &[0x53, 0x45, 0x54, 0x31, 0x02, 0x00, 0x00],     // v2 header only
+            &[0x53, 0x45, 0x54, 0x31, 0x02, 0x01, 0x00, 0xbe, 0x00], // v2, one clean field
+        ] {
+            assert_eq!(
+                WatchSettings::decode(&sealed(body)),
+                None,
+                "sealed legacy frame {body:?}"
+            );
+        }
+        // The control, so the sealing itself cannot be what rejects: the same
+        // one-field shape stamped v4 — a version that IS accepted, whose header
+        // is the same width — decodes.
+        let mut v4 = [0u8; HEADER_LEN + 2];
+        v4[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        v4[4] = SETTINGS_VERSION_V4;
+        v4[5] = FLAG_MAX_HR;
+        v4[HEADER_LEN..].copy_from_slice(&190u16.to_le_bytes());
         assert_eq!(
-            WatchSettings::decode(&header_only),
-            Some(WatchSettings::default())
+            WatchSettings::decode(&sealed(&v4)).and_then(|s| s.max_hr),
+            Some(190),
+            "the control must decode, or the rejections above prove nothing"
         );
-        let max_hr: [u8; 8] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x01, 0xbe, 0x00];
-        assert_eq!(
-            WatchSettings::decode(&max_hr).and_then(|s| s.max_hr),
-            Some(190)
-        );
-        // Truncated field and trailing byte both still reject on v1.
-        assert_eq!(WatchSettings::decode(&max_hr[..7]), None);
-        let trailing: [u8; 7] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x00, 0x00];
-        assert_eq!(WatchSettings::decode(&trailing), None);
+    }
+
+    /// The regression that matters most: the version the phone actually emits
+    /// still decodes end-to-end, fully populated, through the same `decode`
+    /// that now refuses v1 / v2. Breaking the live settings path would be far
+    /// worse than the integrity gap the refusal closes.
+    #[test]
+    fn the_current_v8_path_still_decodes_end_to_end() {
+        let s = WatchSettings {
+            max_hr: Some(190),
+            pacer: Some(PacerGoalCfg {
+                distance_m: 42_195,
+                time_s: 14_400,
+            }),
+            gear: Some(GearCfg {
+                baseline_m: 500_000.0,
+                target_m: Some(800_000.0),
+            }),
+            zone_ceiling: Some(Some(3)),
+            sea_level_pa: Some(101_325.0),
+            fuel: Some(FuelCfg {
+                drink_interval_s: 900,
+                eat_interval_s: 1_500,
+            }),
+            pages: Some(0x0000_c0ff),
+            hide_empty_pages: Some(true),
+            tz_offset_min: Some(345),
+            distance_interval_m: Some(Some(1_000)),
+            time_interval_s: Some(Some(1_800)),
+            pace_band: Some(Some(BAND)),
+            race_phases: Some(MARATHON_PLAN),
+            guided_run: Some(GuidedRunId::new("easy-30")),
+            resting_hr: Some(48),
+            ice: Some(ice_card()),
+            auto_lap: Some(AutoLap::Mi1.to_byte()),
+            storm_alert: Some(Some(4.0)),
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert_eq!(buf[4], SETTINGS_VERSION, "the encoder still stamps v8");
+        assert_eq!(n, MAX_SETTINGS_LEN, "a full push is the maximal frame");
+        assert_eq!(WatchSettings::decode(&buf[..n]), Some(s));
     }
 
     /// The frozen v3 golden vector (every field, version byte 0x03, 32-bit page
@@ -2389,12 +2412,19 @@ mod tests {
         // had no way to ask for would silently drop it from the cycle, so the
         // widening fails OPEN — `page::mask_from_wire`, the same rule the fan-out
         // used to apply, now applied here where the version says it is owed.
-        let mut body = [0u8; V1_HEADER_LEN + 4];
+        // Seated on v3, the oldest version still accepted and the last one
+        // carrying the 32-bit mask; it read v1 until the pre-CRC versions were
+        // withdrawn, and the narrow-mask property is the version-independent
+        // point.
+        let mut body = [0u8; HEADER_LEN + PAGES_LEN_V3];
         body[0..4].copy_from_slice(&SETTINGS_MAGIC);
-        body[4] = 1;
+        body[4] = SETTINGS_VERSION_V3;
         body[5] = FLAG_PAGES;
-        body[6..10].copy_from_slice(&0x0000_0003u32.to_le_bytes());
-        let pages = WatchSettings::decode(&body).unwrap().pages.unwrap();
+        body[HEADER_LEN..].copy_from_slice(&0x0000_0003u32.to_le_bytes());
+        let pages = WatchSettings::decode(&sealed(&body))
+            .unwrap()
+            .pages
+            .unwrap();
         assert_eq!(pages, mask_from_wire(0x0000_0003));
         assert_eq!(pages & 0xffff_ffff, 0x0000_0003, "the low half is verbatim");
         assert_eq!(

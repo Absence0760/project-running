@@ -500,56 +500,17 @@ impl<S: ByteSink> RunWriter<S> {
         })
     }
 
+    /// Append one point with NO footer reserve — it will happily fill the sink
+    /// to the last byte and leave [`finalize`](Self::finalize) no room for the
+    /// footer. The staging path must use
+    /// [`push_point_bounded`](Self::push_point_bounded) instead; this stays for
+    /// callers that size the sink themselves.
     pub fn push_point(&mut self, point: &TrackPoint) -> Result<(), S::Error> {
         let bytes = point.encode();
         self.sink.write(&bytes)?;
         self.crc.update(&bytes);
         self.points = self.points.saturating_add(1);
         Ok(())
-    }
-
-    /// Persist a closed lap in stream order. Laps past [`MAX_STORED_LAPS`]
-    /// are dropped from storage (never from the RAM display state) so a
-    /// lap-heavy ultra can't crowd the track out of the slot; returns whether
-    /// the lap was stored.
-    pub fn push_lap(&mut self, lap: &LapRecord) -> Result<bool, S::Error> {
-        if self.laps >= MAX_STORED_LAPS {
-            return Ok(false);
-        }
-        let bytes = lap.encode();
-        self.sink.write(&bytes)?;
-        self.crc.update(&bytes);
-        self.laps += 1;
-        Ok(true)
-    }
-
-    /// Persist a settled workout step's outcome in stream order, the lap
-    /// contract exactly: capped ([`MAX_STORED_STEP_RESULTS`] mirrors the
-    /// runner's own bound), never decimated, RAM display state unaffected;
-    /// returns whether the record was stored.
-    pub fn push_step(&mut self, step: &StepRecord) -> Result<bool, S::Error> {
-        if self.steps >= MAX_STORED_STEP_RESULTS {
-            return Ok(false);
-        }
-        let bytes = step.encode();
-        self.sink.write(&bytes)?;
-        self.crc.update(&bytes);
-        self.steps += 1;
-        Ok(true)
-    }
-
-    /// Persist the armed workout's summary. Once per run — the record is the
-    /// blob's "these step results are attributed and final" marker, so a
-    /// second push is refused rather than written as a contradicting sibling.
-    pub fn push_workout(&mut self, workout: &WorkoutRecord) -> Result<bool, S::Error> {
-        if self.workout_written {
-            return Ok(false);
-        }
-        let bytes = workout.encode();
-        self.sink.write(&bytes)?;
-        self.crc.update(&bytes);
-        self.workout_written = true;
-        Ok(true)
     }
 
     pub fn point_count(&self) -> u32 {
@@ -576,12 +537,124 @@ pub enum PushOutcome {
     /// `keep_every` factor first, then the point stored (or dropped if it
     /// fell out of the new phase). The whole run is still represented.
     Thinned(u32),
-    /// Dropped — either pre-filtered by the current decimation phase, or the
-    /// sink is full of undroppable records (laps) and cannot thin further.
-    Dropped,
+    /// Pre-filtered by the current decimation phase — the routine, expected
+    /// outcome for every point that isn't on the `keep_every` stride once
+    /// thinning has started. The whole run is still represented, so a caller
+    /// has nothing to report.
+    Decimated,
+    /// The sink has no room for the point and cannot thin further: it is full
+    /// of undroppable records (laps / step results / the summary). Unlike
+    /// [`Decimated`](Self::Decimated) this is terminal — the staged track
+    /// stops growing for the rest of the run — so a caller must say so rather
+    /// than treat it as a routine drop. Believed unreachable within the
+    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets, and pinned
+    /// there by `bounded_push_never_exhausts_within_the_record_budgets`.
+    Exhausted,
+}
+
+/// What an undroppable record push ([`RunWriter::push_lap`],
+/// [`RunWriter::push_step`], [`RunWriter::push_workout`]) did with the record.
+///
+/// The reason matters, which is why this is not a `bool`. Those three refuse for
+/// **two unrelated causes** — their own per-run budget, or the footer reserve —
+/// and while the answer was `Ok(false)` the app's warn text had to name one of
+/// them, so a reader chasing a reserve refusal went to check `MAX_STORED_LAPS`
+/// and found it perfectly fine. § 409 split [`PushOutcome::Dropped`] into
+/// `Decimated` and `Exhausted` for the same reason on the point path; this is
+/// the other half of that rule (one give-up, one log line) for the record path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecordPush {
+    /// Written to the staged blob.
+    Stored,
+    /// Refused by the record's own per-run budget: [`MAX_STORED_LAPS`],
+    /// [`MAX_STORED_STEP_RESULTS`], or the once-per-run workout summary. The
+    /// designed refusal — the RAM display state the runner reads is untouched,
+    /// and the budget exists so a lap-heavy ultra can't crowd the track out of
+    /// the slot.
+    Budget,
+    /// Refused by the footer reserve ([`RunWriter::has_record_room`]): the
+    /// record's own 16 bytes would fit, but they would leave `finalize` without
+    /// the 20 the footer needs, costing the WHOLE run's blob to save one record.
+    /// Says nothing about the budget, which is why it is its own variant.
+    Reserved,
 }
 
 impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
+    /// Whether one more 16-byte record would still leave room for the 20-byte
+    /// footer. **Every record push on the staging sink honours this**, which is
+    /// what keeps the staged length at or under `N - FOOTER_LEN` and therefore
+    /// makes [`finalize`](Self::finalize) and
+    /// [`checkpoint_blob`](Self::checkpoint_blob) fit by construction rather
+    /// than by luck. False is what the undroppable pushes refuse on and what
+    /// [`PushOutcome::Exhausted`] reports for a point.
+    pub fn has_record_room(&self) -> bool {
+        self.sink.len() + RECORD_LEN + FOOTER_LEN <= N
+    }
+
+    /// Persist a closed lap in stream order. Laps past [`MAX_STORED_LAPS`]
+    /// are dropped from storage (never from the RAM display state) so a
+    /// lap-heavy ultra can't crowd the track out of the slot; the returned
+    /// [`RecordPush`] says which of the two refusals happened.
+    ///
+    /// **Dropping a lap here is the mitigation, not the bug.** Unlike the
+    /// track, laps are never decimated, so without the footer reserve a lap
+    /// landing on a full staging buffer would fit its own 16 bytes and leave
+    /// `finalize` without the 20 it needs — costing the WHOLE run's blob to
+    /// save one lap record. One missing lap in storage is strictly better, and
+    /// the RAM display state the runner reads mid-run is untouched either way.
+    pub fn push_lap(&mut self, lap: &LapRecord) -> Result<RecordPush, SinkFull> {
+        if !self.has_record_room() {
+            return Ok(RecordPush::Reserved);
+        }
+        if self.laps >= MAX_STORED_LAPS {
+            return Ok(RecordPush::Budget);
+        }
+        let bytes = lap.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.laps += 1;
+        Ok(RecordPush::Stored)
+    }
+
+    /// Persist a settled workout step's outcome in stream order, the lap
+    /// contract exactly: capped ([`MAX_STORED_STEP_RESULTS`] mirrors the
+    /// runner's own bound), never decimated, RAM display state unaffected,
+    /// refused rather than stranding the footer, and the same two-cause
+    /// [`RecordPush`] answer.
+    pub fn push_step(&mut self, step: &StepRecord) -> Result<RecordPush, SinkFull> {
+        if !self.has_record_room() {
+            return Ok(RecordPush::Reserved);
+        }
+        if self.steps >= MAX_STORED_STEP_RESULTS {
+            return Ok(RecordPush::Budget);
+        }
+        let bytes = step.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.steps += 1;
+        Ok(RecordPush::Stored)
+    }
+
+    /// Persist the armed workout's summary. Once per run — the record is the
+    /// blob's "these step results are attributed and final" marker, so a
+    /// second push is refused rather than written as a contradicting sibling —
+    /// that once-per-run allowance IS this record's [`RecordPush::Budget`].
+    /// Refused too when it would strand the footer: a summary is worth less
+    /// than the run it summarises.
+    pub fn push_workout(&mut self, workout: &WorkoutRecord) -> Result<RecordPush, SinkFull> {
+        if !self.has_record_room() {
+            return Ok(RecordPush::Reserved);
+        }
+        if self.workout_written {
+            return Ok(RecordPush::Budget);
+        }
+        let bytes = workout.encode();
+        self.sink.write(&bytes)?;
+        self.crc.update(&bytes);
+        self.workout_written = true;
+        Ok(RecordPush::Stored)
+    }
+
     /// Stamp [`FLAG_FINISHED`] into the staged header, write the footer, and
     /// return the sink. `elapsed_s`/`moving_s`/`distance_m` are the finished
     /// run's totals (from `record::Snapshot`).
@@ -623,12 +696,12 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
         let ordinal = self.point_ordinal;
         self.point_ordinal = self.point_ordinal.saturating_add(1);
         if !ordinal.is_multiple_of(self.keep_every) {
-            return PushOutcome::Dropped;
+            return PushOutcome::Decimated;
         }
         let mut thinned = None;
-        while self.sink.len() + RECORD_LEN + FOOTER_LEN > N {
+        while !self.has_record_room() {
             if !self.thin_in_place() {
-                return PushOutcome::Dropped;
+                return PushOutcome::Exhausted;
             }
             thinned = Some(self.keep_every);
         }
@@ -640,7 +713,10 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
             }
         }
         if self.push_point(point).is_err() {
-            return PushOutcome::Dropped;
+            // The loop above reserved the room, so the sink cannot refuse the
+            // write; if it ever does it is the sink being out of space, not a
+            // decimation drop, and the caller should hear about it.
+            return PushOutcome::Exhausted;
         }
         match thinned {
             Some(k) => PushOutcome::Thinned(k),
@@ -652,8 +728,10 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
     /// results / the workout summary untouched), compact the staged buffer,
     /// rebuild the CRC, and double `keep_every`. `false` when there is
     /// nothing left to gain (fewer than two stored points — the slot is full
-    /// of undroppable records + header, which never happens within the
-    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets).
+    /// of undroppable records + header), which surfaces to the caller as
+    /// [`PushOutcome::Exhausted`] and is pinned as unreachable within the
+    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets by
+    /// `bounded_push_never_exhausts_within_the_record_budgets`.
     fn thin_in_place(&mut self) -> bool {
         if self.points < 2 {
             return false;
@@ -701,8 +779,10 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
     /// This lets the recorder persist a mid-run snapshot to flash while
     /// continuing to stream into the same writer, so a reset mid-run recovers a
     /// (slightly stale) partial run instead of nothing. `None` only if the blob
-    /// doesn't fit `N` (the sink is already `N`-bounded, so this can't happen
-    /// once a run staged into the same-sized sink).
+    /// doesn't fit `N`, which [`has_record_room`](Self::has_record_room) rules
+    /// out for anything staged through this impl's pushes: each leaves the
+    /// buffer at `N - FOOTER_LEN` or less, so the footer this appends always
+    /// fits. It needs no bound of its own.
     pub fn checkpoint_blob(
         &self,
         distance_m: u32,
@@ -1242,7 +1322,7 @@ mod tests {
             split_s: 300,
             moving_s: 290,
         };
-        assert!(w.push_lap(&lap).unwrap());
+        assert_eq!(w.push_lap(&lap), Ok(RecordPush::Stored));
         w.push_point(&pts[2]).unwrap();
         assert_eq!(w.point_count(), 3);
         assert_eq!(w.lap_count(), 1);
@@ -1276,24 +1356,28 @@ mod tests {
         let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w = RunWriter::start(sink, 3, 0).expect("start");
         for i in 0..MAX_STORED_LAPS {
-            assert!(w
-                .push_lap(&LapRecord {
+            assert_eq!(
+                w.push_lap(&LapRecord {
                     index: (i + 1) as u16,
                     lap_distance_dm: 10_000,
                     split_s: 300 * (i + 1),
                     moving_s: 290,
-                })
-                .unwrap());
+                }),
+                Ok(RecordPush::Stored)
+            );
         }
-        // The budget-crossing lap is dropped from storage, not an error.
-        assert!(!w
-            .push_lap(&LapRecord {
+        // The budget-crossing lap is dropped from storage, not an error — and
+        // it names the BUDGET, with the slot itself nowhere near full.
+        assert!(w.has_record_room(), "the reserve is not what refuses here");
+        assert_eq!(
+            w.push_lap(&LapRecord {
                 index: (MAX_STORED_LAPS + 1) as u16,
                 lap_distance_dm: 10_000,
                 split_s: 300,
                 moving_s: 290,
-            })
-            .unwrap());
+            }),
+            Ok(RecordPush::Budget)
+        );
         assert_eq!(w.lap_count(), MAX_STORED_LAPS);
     }
 
@@ -1361,34 +1445,39 @@ mod tests {
         let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
         let mut w = RunWriter::start(sink, 3, 0).expect("start");
         for i in 0..MAX_STORED_STEP_RESULTS {
-            assert!(w
-                .push_step(&StepRecord {
+            assert_eq!(
+                w.push_step(&StepRecord {
                     step_index: i as u8,
                     skipped: false,
                     distance_dm: 4_000,
                     duration_s: 120,
                     pace_s_per_km: Some(300),
-                })
-                .unwrap());
+                }),
+                Ok(RecordPush::Stored)
+            );
         }
-        // The budget-crossing step is dropped from storage, not an error.
-        assert!(!w
-            .push_step(&StepRecord {
+        // The budget-crossing step is dropped from storage, not an error, and
+        // says so — the slot has plenty of room.
+        assert!(w.has_record_room(), "the reserve is not what refuses here");
+        assert_eq!(
+            w.push_step(&StepRecord {
                 step_index: MAX_STORED_STEP_RESULTS as u8,
                 skipped: false,
                 distance_dm: 4_000,
                 duration_s: 120,
                 pace_s_per_km: None,
-            })
-            .unwrap());
+            }),
+            Ok(RecordPush::Budget)
+        );
         let summary = WorkoutRecord {
             step_total: 12,
             partial: true,
             frame_crc: 7,
         };
-        assert!(w.push_workout(&summary).unwrap());
-        assert!(
-            !w.push_workout(&summary).unwrap(),
+        assert_eq!(w.push_workout(&summary), Ok(RecordPush::Stored));
+        assert_eq!(
+            w.push_workout(&summary),
+            Ok(RecordPush::Budget),
             "a second summary would contradict the first — refused"
         );
     }
@@ -1412,13 +1501,13 @@ mod tests {
             ele_dm: None,
             bpm: None,
         });
-        assert!(w.push_step(&step).unwrap());
+        assert_eq!(w.push_step(&step), Ok(RecordPush::Stored));
         let summary = WorkoutRecord {
             step_total: 1,
             partial: false,
             frame_crc: 0x1234_5678,
         };
-        assert!(w.push_workout(&summary).unwrap());
+        assert_eq!(w.push_workout(&summary), Ok(RecordPush::Stored));
         for i in 1..200u32 {
             w.push_point_bounded(&TrackPoint {
                 lat_e7: i as i32,
@@ -1543,14 +1632,15 @@ mod tests {
             bpm: None,
         });
         for i in 1..=2u16 {
-            assert!(w
-                .push_lap(&LapRecord {
+            assert_eq!(
+                w.push_lap(&LapRecord {
                     index: i,
                     lap_distance_dm: 10_000,
                     split_s: 300 * i as u32,
                     moving_s: 290,
-                })
-                .unwrap());
+                }),
+                Ok(RecordPush::Stored)
+            );
         }
         for i in 1..300u32 {
             w.push_point_bounded(&TrackPoint {
@@ -1570,6 +1660,182 @@ mod tests {
             .filter(|i| record_tag(&blob[HEADER_LEN + i * RECORD_LEN..]) == Some(RECORD_TAG_LAP))
             .count();
         assert_eq!(laps, 2, "both lap records survive every thinning pass");
+    }
+
+    #[test]
+    fn an_undroppable_record_at_the_slot_cap_never_strands_the_footer() {
+        // The stop path's exact sequence: `flush_workout` pushes the remaining
+        // step records + the summary and `commit_run` calls `finalize`, with no
+        // accepted point in between to thin the buffer. Before the footer
+        // reserve, that record fitted its own 16 bytes and left the footer 16 of
+        // the 20 it needs — losing the WHOLE run's blob to store one record.
+        const N: usize = 4096; // flash_store::SLOT_LEN
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 12, 0).expect("start");
+        let mut i = 0u32;
+        while w.has_record_room() {
+            assert_eq!(
+                w.push_point_bounded(&TrackPoint {
+                    lat_e7: i as i32,
+                    lon_e7: 0,
+                    t_offset_s: i,
+                    ele_dm: None,
+                    bpm: None,
+                }),
+                PushOutcome::Stored
+            );
+            i += 1;
+        }
+        // The documented cap: 16 + 253*16 = 4064 staged, 32 free — room for one
+        // more record OR the footer, not both.
+        assert_eq!(w.point_count(), 253);
+
+        // All three undroppable pushes refuse, well inside their own budgets —
+        // and each names the RESERVE, not the budget. A reader sent to check
+        // MAX_STORED_LAPS here would find it fine and learn nothing.
+        assert_eq!(
+            w.push_step(&StepRecord {
+                step_index: 0,
+                skipped: false,
+                distance_dm: 4_000,
+                duration_s: 120,
+                pace_s_per_km: Some(300),
+            }),
+            Ok(RecordPush::Reserved),
+            "a step record that would strand the footer is dropped from storage"
+        );
+        assert_eq!(
+            w.push_lap(&LapRecord {
+                index: 1,
+                lap_distance_dm: 10_000,
+                split_s: 300,
+                moving_s: 290,
+            }),
+            Ok(RecordPush::Reserved)
+        );
+        assert_eq!(
+            w.push_workout(&WorkoutRecord {
+                step_total: 1,
+                partial: true,
+                frame_crc: 9,
+            }),
+            Ok(RecordPush::Reserved)
+        );
+        assert_eq!(w.lap_count(), 0);
+
+        // Which is the whole point: the run still commits, and a mid-run
+        // checkpoint at the same boundary still builds.
+        assert!(
+            w.checkpoint_blob(1_000, 900, 950).is_some(),
+            "checkpoint_blob needs no bound of its own — the reserve covers it"
+        );
+        let blob = w
+            .finalize(1_000, 900, 950)
+            .expect("the run still finalizes");
+        assert!(verify_blob(&blob));
+        assert_eq!(point_count(blob.len() as u32), Some(253));
+    }
+
+    #[test]
+    fn bounded_push_never_exhausts_within_the_record_budgets() {
+        // `PushOutcome::Exhausted` is terminal: the staged track stops growing
+        // for the rest of the run. The module claims the undroppable-record
+        // budgets cannot produce it — this drives a real slot-sized sink to the
+        // full MAX_STORED_LAPS + MAX_STORED_STEP_RESULTS + one summary load and
+        // floods it with far more points than the slot can ever hold, so a
+        // future budget bump that makes the case reachable fails here instead
+        // of silently truncating a shipped watch's track mid-race.
+        const N: usize = 4096; // flash_store::SLOT_LEN — what app/run_flash.rs stages into
+        let undroppable = (MAX_STORED_LAPS + MAX_STORED_STEP_RESULTS + 1) as usize;
+        // The structural reason, asserted independently of the flood below: with
+        // a single stored point left, the buffer plus the footer still fits, so
+        // the thinning loop's condition is always satisfied before
+        // `thin_in_place` can refuse for want of two points.
+        assert!(
+            HEADER_LEN + (undroppable + 1) * RECORD_LEN + FOOTER_LEN <= N,
+            "the record budgets no longer leave a thinnable point inside a slot"
+        );
+
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 9, 0).expect("start");
+        for i in 0..MAX_STORED_LAPS {
+            assert_eq!(
+                w.push_lap(&LapRecord {
+                    index: (i + 1) as u16,
+                    lap_distance_dm: 67_060,
+                    split_s: 3_600 * (i + 1),
+                    moving_s: 3_500,
+                }),
+                Ok(RecordPush::Stored)
+            );
+        }
+        for i in 0..MAX_STORED_STEP_RESULTS {
+            assert_eq!(
+                w.push_step(&StepRecord {
+                    step_index: i as u8,
+                    skipped: false,
+                    distance_dm: 4_000,
+                    duration_s: 120,
+                    pace_s_per_km: Some(300),
+                }),
+                Ok(RecordPush::Stored)
+            );
+        }
+        assert_eq!(
+            w.push_workout(&WorkoutRecord {
+                step_total: MAX_STORED_STEP_RESULTS as u8,
+                partial: true,
+                frame_crc: 0xFEED_F00D,
+            }),
+            Ok(RecordPush::Stored)
+        );
+
+        let mut stored = 0;
+        for i in 0..5_000u32 {
+            match w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            }) {
+                PushOutcome::Exhausted => {
+                    panic!("sink exhausted at point {i} — the track stopped growing")
+                }
+                PushOutcome::Stored | PushOutcome::Thinned(_) => stored += 1,
+                PushOutcome::Decimated => {}
+            }
+        }
+        assert!(w.thinning() > 1, "5000 points into one slot must thin");
+        assert!(stored > 0);
+        assert_eq!(w.lap_count(), MAX_STORED_LAPS, "laps never thin");
+
+        // The tail of the run is still arriving at the end of that flood, which
+        // is the property `Exhausted` would have destroyed.
+        let blob = w.finalize(335_300, 180_000, 190_000).expect("finalize");
+        assert!(verify_blob(&blob));
+        let n = point_count(blob.len() as u32).unwrap() as usize;
+        let mut last_point_t = None;
+        let mut laps = 0;
+        let mut steps = 0;
+        for i in 0..n {
+            let at = HEADER_LEN + i * RECORD_LEN;
+            match record_tag(&blob[at..]) {
+                Some(RECORD_TAG_POINT) => {
+                    last_point_t = TrackPoint::decode(&blob[at..]).map(|p| p.t_offset_s)
+                }
+                Some(RECORD_TAG_LAP) => laps += 1,
+                Some(RECORD_TAG_STEP) => steps += 1,
+                _ => {}
+            }
+        }
+        assert_eq!(laps, MAX_STORED_LAPS);
+        assert_eq!(steps, MAX_STORED_STEP_RESULTS);
+        assert!(
+            last_point_t.unwrap() > 4_000,
+            "the end of the run survives: t={:?}",
+            last_point_t
+        );
     }
 
     /// A run staged into a slot-sized sink, as the on-device recorder does

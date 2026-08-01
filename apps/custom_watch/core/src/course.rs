@@ -82,14 +82,62 @@ pub struct Projection {
     pub off_m: f64,
 }
 
-/// A compact in-RAM course: a fixed-capacity polyline, its cached length, and
-/// the optional per-point elevation the phone pushed alongside it.
+/// A course's bounding box plus the cos(mid-latitude) longitude correction the
+/// panel fit scales by — computed once per course, since neither depends on the
+/// runner's position.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CourseBounds {
+    pub min_lat: f64,
+    pub max_lat: f64,
+    pub min_lon: f64,
+    pub max_lon: f64,
+    pub cos_mid_lat: f64,
+}
+
+impl CourseBounds {
+    /// A box from its corners, deriving the cos(mid-latitude) correction.
+    pub fn of(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Self {
+        Self {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+            cos_mid_lat: libm::cos(to_rad((min_lat + max_lat) / 2.0)),
+        }
+    }
+}
+
+/// A compact in-RAM course: a fixed-capacity polyline, its cached length, the
+/// optional per-point elevation the phone pushed alongside it, and the
+/// course-invariant geometry every projection would otherwise re-derive.
+///
+/// `seg_len_m` + `seg_cos_lat` are the two per-segment terms that cost
+/// transcendental calls: one haversine (7 of them) and one cosine. Both depend
+/// only on the course's own fixed points, so [`Course::project_biased`] — which
+/// runs on every published fix while a course is loaded, over up to
+/// [`MAX_COURSE_POINTS`] - 1 segments — reads them instead of recomputing them
+/// 2,040 times per fix. The segment's local-frame `(bx, by)` deltas are *not*
+/// cached: deriving them from `seg_cos_lat` costs no transcendental at all, and
+/// two more f64 arrays would double this struct's growth against a RAM budget
+/// that already holds three live copies of a course (the `COURSE` watch plus the
+/// `nav` and `ui` tasks' own).
 #[derive(Clone)]
 pub struct Course {
     points: Vec<CoursePoint, MAX_COURSE_POINTS>,
     elev_m: Vec<i16, MAX_COURSE_POINTS>,
+    seg_len_m: Vec<f64, MAX_COURSE_POINTS>,
+    seg_cos_lat: Vec<f64, MAX_COURSE_POINTS>,
     total_m: f64,
+    bounds: CourseBounds,
 }
+
+/// A course is one of the largest structures the firmware holds, and it is held
+/// more than once at a time — the `COURSE` watch plus the `nav` and `ui` tasks'
+/// own copies — so every byte added here costs that multiple. This is the same
+/// 8,784 B on the host and on `thumbv7em-none-eabihf` (f64 alignment absorbs the
+/// length fields' padding on both). Adding a field is allowed; doing it without
+/// noticing the RAM it multiplies into is not, so the figure is pinned.
+const _: () = assert!(core::mem::size_of::<Course>() == 8784);
 
 impl Course {
     /// `None` when the polyline is too short to follow (< 2 points) or over
@@ -120,14 +168,32 @@ impl Course {
         if let Some(elev_m) = elev_m {
             e.extend_from_slice(elev_m).ok()?;
         }
+        let mut seg_len_m: Vec<f64, MAX_COURSE_POINTS> = Vec::new();
+        let mut seg_cos_lat: Vec<f64, MAX_COURSE_POINTS> = Vec::new();
         let mut total_m = 0.0;
         for w in points.windows(2) {
-            total_m += haversine_metres(w[0].lat_deg, w[0].lon_deg, w[1].lat_deg, w[1].lon_deg);
+            let len = haversine_metres(w[0].lat_deg, w[0].lon_deg, w[1].lat_deg, w[1].lon_deg);
+            seg_len_m.push(len).ok()?;
+            seg_cos_lat.push(libm::cos(to_rad(w[0].lat_deg))).ok()?;
+            total_m += len;
+        }
+        let mut min_lat = f64::INFINITY;
+        let mut max_lat = f64::NEG_INFINITY;
+        let mut min_lon = f64::INFINITY;
+        let mut max_lon = f64::NEG_INFINITY;
+        for p in points {
+            min_lat = min_lat.min(p.lat_deg);
+            max_lat = max_lat.max(p.lat_deg);
+            min_lon = min_lon.min(p.lon_deg);
+            max_lon = max_lon.max(p.lon_deg);
         }
         Some(Self {
             points: v,
             elev_m: e,
+            seg_len_m,
+            seg_cos_lat,
             total_m,
+            bounds: CourseBounds::of(min_lat, max_lat, min_lon, max_lon),
         })
     }
 
@@ -148,6 +214,13 @@ impl Course {
 
     pub fn total_m(&self) -> f64 {
         self.total_m
+    }
+
+    /// The course's bounding box + longitude correction, computed at build time
+    /// — what [`PanelFit`] fits, so a Nav-page render costs no rescan of the
+    /// polyline however often an unrelated wake redraws it.
+    pub fn bounds(&self) -> CourseBounds {
+        self.bounds
     }
 
     /// Project a position onto the course: the nearest on-line point, which
@@ -197,12 +270,12 @@ impl Course {
         for i in 0..self.points.len() - 1 {
             let a = self.points[i];
             let b = self.points[i + 1];
-            let seg_len = haversine_metres(a.lat_deg, a.lon_deg, b.lat_deg, b.lon_deg);
+            let seg_len = self.seg_len_m[i];
 
             // Local planar frame: metres east/north of segment start `a`, with
             // longitude scaled by cos(lat) so a degree of lon matches a degree
             // of lat in ground distance.
-            let cos_lat = libm::cos(to_rad(a.lat_deg));
+            let cos_lat = self.seg_cos_lat[i];
             let bx = to_rad(b.lon_deg - a.lon_deg) * R_M * cos_lat;
             let by = to_rad(b.lat_deg - a.lat_deg) * R_M;
             let px = to_rad(lon_deg - a.lon_deg) * R_M * cos_lat;
@@ -218,7 +291,13 @@ impl Course {
 
             let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
             let s_lon = a.lon_deg + (b.lon_deg - a.lon_deg) * t;
-            let off = haversine_metres(lat_deg, lon_deg, s_lat, s_lon);
+            // Perpendicular offset in the same planar frame: the fix minus the
+            // foot `t * (bx, by)`. A great-circle distance here would be no more
+            // accurate — the foot point was only ever located by this same
+            // planar projection — and would cost a second haversine per segment.
+            let fx = px - bx * t;
+            let fy = py - by * t;
+            let off = libm::sqrt(fx * fx + fy * fy);
             let along = cumulative + seg_len * t;
 
             // Unbiased (`prev_along_m` is `None`): pure nearest offset, the
@@ -331,18 +410,21 @@ pub struct PanelFit {
 
 impl PanelFit {
     pub fn fit(course: &Course, w_px: u32, h_px: u32) -> Self {
-        let mut min_lat = f64::INFINITY;
-        let mut max_lat = f64::NEG_INFINITY;
-        let mut min_lon = f64::INFINITY;
-        let mut max_lon = f64::NEG_INFINITY;
-        for p in course.points() {
-            min_lat = min_lat.min(p.lat_deg);
-            max_lat = max_lat.max(p.lat_deg);
-            min_lon = min_lon.min(p.lon_deg);
-            max_lon = max_lon.max(p.lon_deg);
-        }
+        Self::from_bounds(course.bounds(), w_px, h_px)
+    }
+
+    /// [`PanelFit::fit`] over any box — the auto-zoom window is a runner-centred
+    /// box rather than a course, so it fits one directly instead of wrapping two
+    /// corners in a throwaway [`Course`].
+    pub fn from_bounds(bounds: CourseBounds, w_px: u32, h_px: u32) -> Self {
+        let CourseBounds {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+            cos_mid_lat,
+        } = bounds;
         let lat_range = max_lat - min_lat;
-        let cos_mid_lat = libm::cos(to_rad((min_lat + max_lat) / 2.0));
         let x_range = (max_lon - min_lon) * cos_mid_lat;
 
         let usable_w = (w_px.saturating_sub(1 + 2 * PANEL_MARGIN_PX)) as f64;
@@ -951,5 +1033,204 @@ mod tests {
         let (x, y) = f.to_px(40.0, -105.0);
         assert!((x - 84).abs() <= 2, "x {}", x);
         assert!((y - 48).abs() <= 2, "y {}", y);
+    }
+
+    /// A full-capacity course climbing north while weaving either side of a
+    /// meridian: every segment carries its own cos(latitude) and its own
+    /// bearing, so a mis-indexed per-segment cache shows up as a wrong answer
+    /// rather than as a harmless one (an equatorial or straight-line course
+    /// would hide both — cos(0) is 1 and every segment shares a bearing).
+    fn max_capacity_serpentine() -> Course {
+        let pts: std::vec::Vec<CoursePoint> = (0..MAX_COURSE_POINTS)
+            .map(|i| {
+                let k = i as f64;
+                pt(40.0 + k * 0.0004, -105.0 + libm::sin(k * 0.15) * 0.002)
+            })
+            .collect();
+        Course::from_points(&pts).unwrap()
+    }
+
+    /// Metres the cached-geometry projection may differ from the one that
+    /// recomputed a haversine per segment. The segment / fraction / along-course
+    /// distance / snapped point are bit-identical — the cache holds exactly the
+    /// values the loop used to re-derive — so this covers only the perpendicular
+    /// offset, which is now measured in the projection's own planar frame
+    /// instead of by a second great-circle call to the same foot point. The
+    /// largest disagreement over the pinned fixes below is 5.3e-4 m, on a fix
+    /// 99.8 km off course.
+    const PINNED_OFF_TOLERANCE_M: f64 = 1e-3;
+
+    #[test]
+    fn a_max_capacity_projection_matches_its_pre_cache_values() {
+        // Captured from the implementation that recomputed each segment's
+        // haversine length, cos(latitude) and a great-circle offset on every
+        // call. Fields: fix lat/lon, forward-bias anchor, then the expected
+        // segment, t, along_m, off_m, snapped lat/lon. Where `t` is 0 or 1 the
+        // foot is a vertex and the segment index is the tie-break between the
+        // two segments meeting there.
+        let expected: &[(f64, f64, Option<f64>, usize, f64, f64, f64, f64, f64)] = &[
+            (40.0, -105.0, None, 0, 0.0, 0.0, 0.0, 40.0, -105.0),
+            (
+                40.0503,
+                -105.0009,
+                None,
+                124,
+                9.93930674606744669e-1,
+                5.98988127919088492e3,
+                6.83747340120398235e1,
+                4.00499975722698380e1,
+                -1.05000200574541552e2,
+            ),
+            (
+                40.0503,
+                -105.0009,
+                Some(5000.0),
+                124,
+                9.93930674606744669e-1,
+                5.98988127919088492e3,
+                6.83747340120398235e1,
+                4.00499975722698380e1,
+                -1.05000200574541552e2,
+            ),
+            (
+                40.0201,
+                -104.9985,
+                None,
+                50,
+                1.32927872605171443e-1,
+                2.41051774326015129e3,
+                3.33614906450876347e1,
+                4.00200531711490441e1,
+                -1.04998113028763157e2,
+            ),
+            (
+                40.0201,
+                -104.9985,
+                Some(2500.0),
+                51,
+                0.0,
+                2.44956186941022452e3,
+                5.13558597239446613e1,
+                4.00204000000000022e1,
+                -1.04998041464434621e2,
+            ),
+            (
+                40.0998,
+                -105.0021,
+                None,
+                248,
+                2.81626857160122313e-1,
+                1.18930219487811992e4,
+                1.17038930808320160e2,
+                4.00993126507428670e1,
+                -1.05000880361204835e2,
+            ),
+            (
+                40.1019,
+                -105.0,
+                None,
+                253,
+                9.53369090969234945e-1,
+                1.21816219687948942e4,
+                7.42546187556864936e1,
+                4.01015813476363832e1,
+                -1.04999232768080134e2,
+            ),
+            (
+                40.0755,
+                -104.9993,
+                Some(8000.0),
+                187,
+                1.0,
+                9.01068955132118754e3,
+                5.75716938489244470e1,
+                4.00752000000000024e1,
+                -1.04999851469108833e2,
+            ),
+            (
+                41.0,
+                -105.0,
+                None,
+                254,
+                1.0,
+                1.22338993969919502e4,
+                9.98530832992895303e4,
+                4.01019999999999968e1,
+                -1.04998953111603527e2,
+            ),
+        ];
+        let c = max_capacity_serpentine();
+        assert_eq!(c.points().len(), MAX_COURSE_POINTS);
+        for &(lat, lon, prev, segment, t, along_m, off_m, s_lat, s_lon) in expected {
+            let p = match prev {
+                Some(prev) => c.project_from(lat, lon, prev).unwrap(),
+                None => c.project(lat, lon).unwrap(),
+            };
+            assert_eq!(p.segment, segment, "segment for {} {}", lat, lon);
+            assert_eq!(p.t, t, "t for {} {}", lat, lon);
+            assert_eq!(p.along_m, along_m, "along for {} {}", lat, lon);
+            assert_eq!(p.lat_deg, s_lat, "snapped lat for {} {}", lat, lon);
+            assert_eq!(p.lon_deg, s_lon, "snapped lon for {} {}", lat, lon);
+            assert!(
+                (p.off_m - off_m).abs() < PINNED_OFF_TOLERANCE_M,
+                "off for {} {}: {} vs {}",
+                lat,
+                lon,
+                p.off_m,
+                off_m
+            );
+        }
+    }
+
+    #[test]
+    fn a_planar_offset_still_agrees_with_the_great_circle_distance_to_the_foot() {
+        // The claim the frame swap rests on: measuring the perpendicular offset
+        // inside the same planar frame that located the foot point gives the
+        // same metres a great-circle call to that foot point would, so the
+        // 40 m / 20 m off-course thresholds see an unchanged number.
+        let c = max_capacity_serpentine();
+        for k in 0..40 {
+            let lat = 40.0 + k as f64 * 0.0025;
+            let lon = -105.0 + libm::sin(k as f64 * 0.9) * 0.0006;
+            let p = c.project(lat, lon).unwrap();
+            let great_circle = haversine_metres(lat, lon, p.lat_deg, p.lon_deg);
+            assert!(
+                (p.off_m - great_circle).abs() < PINNED_OFF_TOLERANCE_M,
+                "off {} vs great-circle {} at {} {}",
+                p.off_m,
+                great_circle,
+                lat,
+                lon
+            );
+        }
+    }
+
+    #[test]
+    fn a_fix_whose_foot_is_a_shared_vertex_keeps_its_along_distance_either_way() {
+        // 42 km west of the course, so the foot clamps to a vertex that two
+        // segments share. Each of those segments measures the offset in its own
+        // frame, and that far out the two frames disagree by ~0.8 m — enough to
+        // decide which side of the vertex wins, where the great-circle offset
+        // used to tie exactly and the strict `<` always kept the earlier one.
+        // Nothing a caller reads moves: the along-course distance and the
+        // snapped point are the same either way, and the offset is four orders
+        // of magnitude past OFF_COURSE_THRESHOLD_M.
+        let c = max_capacity_serpentine();
+        let p = c.project(40.06, -105.5).unwrap();
+        assert!(
+            p.segment == 156 || p.segment == 157,
+            "segment {}",
+            p.segment
+        );
+        assert_eq!(p.t, if p.segment == 156 { 1.0 } else { 0.0 });
+        assert_eq!(p.along_m, 7.52663595148482727e3);
+        assert_eq!(p.lat_deg, 4.00628000000000029e1);
+        assert_eq!(p.lon_deg, -1.05001999857321010e2);
+        assert!(
+            (p.off_m - 4.23826993177377008e4).abs() < 1.0,
+            "off {}",
+            p.off_m
+        );
+        assert!(p.off_m > OFF_COURSE_THRESHOLD_M);
     }
 }

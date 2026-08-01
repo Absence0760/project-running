@@ -17,6 +17,7 @@ import '../sim_watch_link.dart';
 import '../sim_watch_sync.dart';
 import '../watch_course.dart';
 import '../watch_ingest_queue.dart';
+import '../watch_roadbook.dart';
 import '../watch_settings.dart';
 import '../watch_workout.dart';
 import 'watch_screens_editor_screen.dart';
@@ -79,6 +80,7 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   bool _pushingSettings = false;
   bool _pushingWorkout = false;
   bool _pushingCourse = false;
+  bool _pushingRoadbook = false;
   String? _syncMessage;
 
   @override
@@ -306,6 +308,61 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     }
   }
 
+  /// The canned sim roadbook + cut-off schedule — byte-for-byte the fixture the
+  /// firmware's own `SIM_ROADBOOK` and the `roadbook_store` golden vector pin
+  /// (start / aid at 90 m / 180 m finish, cut-offs at 90 m and 170 m), so a push
+  /// against the emulated watch loads exactly the schedule its `sim-course`
+  /// feature would. Canned like the settings and course pushes; the real route
+  /// picker is the route-detail Send-to-watch surface.
+  static const demoRoadbookCheckpoints = [
+    WatchRoadbookCheckpoint(
+      cumDistanceM: 0,
+      legDistanceM: 0,
+      projectedElapsedSec: 0,
+      isRefill: true,
+    ),
+    WatchRoadbookCheckpoint(
+      cumDistanceM: 90,
+      legDistanceM: 90,
+      projectedElapsedSec: 30,
+      cutoff: WatchCutoffStatus.safe,
+      isRefill: true,
+    ),
+    WatchRoadbookCheckpoint(
+      cumDistanceM: 180,
+      legDistanceM: 90,
+      projectedElapsedSec: 60,
+      cutoff: WatchCutoffStatus.tight,
+    ),
+  ];
+  static const demoRoadbookCutoffs = [
+    WatchCutoffLeg(cumDistanceM: 90, limitElapsedSec: 120),
+    WatchCutoffLeg(cumDistanceM: 170, limitElapsedSec: 240),
+  ];
+
+  Future<void> _pushRoadbook() async {
+    if (_pushingRoadbook) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _pushingRoadbook = true);
+    try {
+      final client = WatchSyncClient(
+        transport: widget.transportFactory(),
+        onRun: widget.runSink,
+      );
+      final frame =
+          encodeRoadbook(demoRoadbookCheckpoints, demoRoadbookCutoffs);
+      await client.pushRoadbook(chunkRoadbook(frame));
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchRoadbookPushed(
+          demoRoadbookCheckpoints.length, demoRoadbookCutoffs.length));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchPushRoadbookFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pushingRoadbook = false);
+    }
+  }
+
   Future<void> _pushWorkout() async {
     if (_pushingWorkout) return;
     final l10n = AppLocalizations.of(context);
@@ -380,6 +437,17 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
                   )
                 : const Icon(Icons.route),
             onPressed: _pushingCourse ? null : _pushCourse,
+          ),
+          IconButton(
+            tooltip: l10n.simWatchPushRoadbookAction,
+            icon: _pushingRoadbook
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.table_chart_outlined),
+            onPressed: _pushingRoadbook ? null : _pushRoadbook,
           ),
           IconButton(
             tooltip: l10n.watchScreensAction,

@@ -578,6 +578,14 @@ abstract class WatchBleTransport {
   /// the watch decodes is the complete answer to what screens it has.
   Future<void> writeScreens(List<int> frame);
 
+  /// Write one `offset(2 LE) | payload` chunk of an RBK1 roadbook frame
+  /// (`chunkRoadbook` in watch_roadbook.dart) to the watch's roadbook
+  /// characteristic — the same in-order, offset-0-first contract the
+  /// firmware's `RoadbookAssembler` enforces. Chunked rather than single-
+  /// write like [writeScreens] because a full 16+16 schedule is 364 bytes,
+  /// past one ATT write.
+  Future<void> writeRoadbook(List<int> chunk);
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
@@ -706,6 +714,26 @@ class WatchSyncClient {
     await transport.scan();
     try {
       await transport.writeScreens(frame);
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /// Push a chunked RBK1 roadbook frame (`chunkRoadbook` over
+  /// `encodeRoadbook`, watch_roadbook.dart) — [pushCourse]'s contract on the
+  /// roadbook characteristic: the firmware loads the schedule only once the
+  /// last chunk completes the frame and its CRC checks out, a broken-off push
+  /// leaves whatever was loaded before, and the next offset-0 write starts
+  /// clean.
+  ///
+  /// A frame carrying zero checkpoints and zero cut-offs is a legitimate push —
+  /// it is how a runner clears the schedule already on the watch.
+  Future<void> pushRoadbook(Iterable<List<int>> chunks) async {
+    await transport.scan();
+    try {
+      for (final chunk in chunks) {
+        await transport.writeRoadbook(chunk);
+      }
     } finally {
       await transport.disconnect();
     }

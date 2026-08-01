@@ -6,7 +6,7 @@
 //! whether the position marker is drawn at all, and the repaint key that lets
 //! an unchanged panel skip its redraw entirely.
 
-use crate::course::{Course, CoursePoint, PanelFit};
+use crate::course::{Course, CourseBounds, PanelFit};
 
 /// Long-course auto-zoom half-spans. Fitting a whole 50 km course into a
 /// ~168 px panel is ~300 m/px, so its forks collapse to sub-pixel and the map
@@ -72,49 +72,35 @@ pub fn nav_panel(course: &Course, runner: Option<(f64, f64)>, geom: NavPanelGeom
 ///
 /// Fitting a box whose centre is the runner lands the runner at the panel
 /// centre.
+///
+/// The course's own bounding box is read from [`Course::bounds`] (computed once
+/// at build time) rather than rescanned per call — this runs on every UI render
+/// the Nav page is up for, including wakes caused by unrelated state.
 pub fn nav_fit(
     course: &Course,
     runner: Option<(f64, f64)>,
     w_px: u32,
     h_px: u32,
 ) -> (PanelFit, bool) {
+    let whole = course.bounds();
     let Some((rlat, rlon)) = runner else {
-        return (PanelFit::fit(course, w_px, h_px), false);
+        return (PanelFit::from_bounds(whole, w_px, h_px), false);
     };
-    let mut min_lat = f64::INFINITY;
-    let mut max_lat = f64::NEG_INFINITY;
-    let mut min_lon = f64::INFINITY;
-    let mut max_lon = f64::NEG_INFINITY;
-    for p in course.points() {
-        min_lat = min_lat.min(p.lat_deg);
-        max_lat = max_lat.max(p.lat_deg);
-        min_lon = min_lon.min(p.lon_deg);
-        max_lon = max_lon.max(p.lon_deg);
-    }
-    if (max_lat - min_lat) <= 2.0 * WIN_HALF_LAT_DEG
-        && (max_lon - min_lon) <= 2.0 * WIN_HALF_LON_DEG
+    if (whole.max_lat - whole.min_lat) <= 2.0 * WIN_HALF_LAT_DEG
+        && (whole.max_lon - whole.min_lon) <= 2.0 * WIN_HALF_LON_DEG
     {
-        return (PanelFit::fit(course, w_px, h_px), false);
+        return (PanelFit::from_bounds(whole, w_px, h_px), false);
     }
-    // `PanelFit` fits the box's bounding corners, so the runner (the box
-    // centre) maps to the panel centre and the surrounding course renders at a
-    // readable scale; points outside the box clip when drawn. If the two
-    // corners somehow fail to form a course (they never coincide), fall back to
-    // the whole-course fit.
-    let corners = [
-        CoursePoint {
-            lat_deg: rlat - WIN_HALF_LAT_DEG,
-            lon_deg: rlon - WIN_HALF_LON_DEG,
-        },
-        CoursePoint {
-            lat_deg: rlat + WIN_HALF_LAT_DEG,
-            lon_deg: rlon + WIN_HALF_LON_DEG,
-        },
-    ];
-    match Course::from_points(&corners) {
-        Some(window) => (PanelFit::fit(&window, w_px, h_px), true),
-        None => (PanelFit::fit(course, w_px, h_px), false),
-    }
+    // Fitting the window's corners puts the runner (the box centre) at the panel
+    // centre and renders the surrounding course at a readable scale; points
+    // outside the box clip when drawn.
+    let window = CourseBounds::of(
+        rlat - WIN_HALF_LAT_DEG,
+        rlat + WIN_HALF_LAT_DEG,
+        rlon - WIN_HALF_LON_DEG,
+        rlon + WIN_HALF_LON_DEG,
+    );
+    (PanelFit::from_bounds(window, w_px, h_px), true)
 }
 
 /// Screen pixel of the position marker, drawn only when its whole cross sits
@@ -205,6 +191,7 @@ impl PanelCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::course::CoursePoint;
 
     const GEOM: NavPanelGeom = NavPanelGeom {
         w_px: 168,

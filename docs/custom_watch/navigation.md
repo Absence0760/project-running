@@ -246,7 +246,7 @@ selection and the backyard arm all persist in the CFG1 flash record and
 restore at boot (the profile restore re-applies its page preset) — whichever
 side wrote last, menu or phone push, wins the reboot. The erase is the one
 action row that **stays open**, because the menu is its own confirmation: the
-rows above it redraw at their factory values (`GNSS PERF EST 110H`,
+rows above it redraw at their factory values (`GNSS PERF 1 FIX/1S`,
 `PROFILE --`, `BACKYARD OFF`) on the screen the runner pressed from.
 
 **The §351 cost bound has now survived a sixth AND a seventh row, and both
@@ -341,8 +341,12 @@ worse than one that omits it.
 Every press inside is swallowed and the modal is idle-only, like the settings
 menu, and 30 s of inactivity closes it for the same reason — it covers the home
 clock. **Exiting does not stop the timer**: the modal is a view of the
-instrument, not its container, and the instrument survives run boundaries and
-reboots-into-the-same-power-cycle alike. Where it is *watched* is the `TIMR`
+instrument, not its container, and the instrument survives run boundaries and —
+since § 422 gave it a `TMR1` flash record — reboots too, with the honest caveat
+that a reboot whose gap cannot be measured off a wall-clock stamp comes back
+**stopped and marked** (`>` on the digits, `GAP UNKNOWN` for the state word)
+rather than resuming a countdown it can no longer justify. Where it is
+*watched* is the `TIMR`
 run page, which is data-presence gated on the timer being armed, so a watch
 whose owner never opens the modal walks exactly the cycle it walked before.
 

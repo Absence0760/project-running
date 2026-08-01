@@ -9,6 +9,7 @@ mod support;
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
+use watch_core::ice::ICE_WIRE_LEN;
 use watch_core::record_cadence::plausible_sea_level_pa;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
@@ -18,15 +19,33 @@ use watch_core::settings::{
 };
 use watch_core::settings_apply::{plan_apply, EffectKind};
 
-/// The legacy versions `decode` still accepts: v1 (no `flags2`), v2 (no CRC
-/// trailer), v3 (32-bit page mask) and v4 (no resting HR). None is emitted any
-/// more — the encoder is v5-only.
+/// Older versions named by the tests below. `decode` still accepts v3 (32-bit
+/// page mask) and v4 (no resting HR); v1 (no `flags2`) and v2 (no CRC trailer)
+/// are **refused** — the checksum is mandatory, so an un-checksummed version
+/// cannot be allowed to stand in for one that failed its CRC. None is emitted
+/// any more: the encoder is v8-only. V1 and V2 stay in the raw-frame generator
+/// on purpose, as frames that must never decode.
 const V1: u8 = 1;
 const V2: u8 = 2;
 const V3: u8 = 3;
 const V4: u8 = 4;
+const V5: u8 = 5;
+const V6: u8 = 6;
+/// The version `flags3` arrived with. Its header is the same width as v8's, so a
+/// current-version frame relabelled v7 differs from a legitimate v7 frame in
+/// nothing but the version byte itself — which is why the list below has to be
+/// complete for [`an_unknown_version_byte_is_rejected`] to mean anything.
+const V7: u8 = 7;
 
-/// Width of the CRC32 trailer, present from v3.
+/// **Every** version `decode` accepts, and therefore the only ones the
+/// success-side assertions can be reached through. Six, not three: v5, v6 and v7
+/// each added a field and each still decodes. Kept exhaustive because
+/// [`an_unknown_version_byte_is_rejected`] subtracts this set from `u8` to get
+/// the versions that must be refused, so a short list would assert that a
+/// version `decode` accepts does not decode.
+const DECODABLE: [u8; 6] = [V3, V4, V5, V6, V7, SETTINGS_VERSION];
+
+/// Width of the CRC32 trailer, carried by every decodable version.
 const CRC_WIDTH: usize = 4;
 
 /// The legal domain of a settings frame — every field the encoder can carry
@@ -231,15 +250,24 @@ fn a_frame_with_bytes_past_the_fields_the_flags_claim_is_rejected() {
 }
 
 #[test]
-fn an_unknown_version_byte_is_rejected() {
+fn an_unknown_version_byte_is_rejected_even_under_a_valid_checksum() {
+    // The checksum is re-sealed over the relabelled frame, so what rejects it is
+    // the version check rather than the CRC noticing byte 4 moved. That is the
+    // whole point: without the re-seal this passed for every version — including
+    // the ones `decode` accepts — and so said nothing about versioning at all.
+    // It is also what makes [`DECODABLE`] load-bearing, since a v8 frame
+    // relabelled v7 is byte-for-byte a valid v7 frame.
     check(512, (a_settings(), any::<u8>()), |(s, version)| {
-        prop_assume!(!matches!(version, V1 | V2 | V3 | V4 | SETTINGS_VERSION));
+        prop_assume!(!DECODABLE.contains(&version) && !matches!(version, V1 | V2));
         let mut frame = encoded(&s);
         frame[4] = version;
+        let body = frame.len() - CRC_WIDTH;
+        let crc = crc32(&frame[..body]);
+        frame[body..].copy_from_slice(&crc.to_le_bytes());
         prop_assert_eq!(
             WatchSettings::decode(&frame),
             None,
-            "version {} decoded",
+            "version {} decoded under a valid checksum",
             version
         );
         Ok(())
@@ -266,20 +294,40 @@ fn a_corrupt_magic_is_rejected() {
 }
 
 #[test]
-fn an_unknown_presence_bit_in_flags2_is_rejected() {
-    // A new field always rides a version bump, so a set bit `flags2` doesn't
-    // define can only be corruption — decoding past it would apply a frame
-    // shifted by however many bytes the sender meant to carry. v5 defines bits
-    // 0-6, so bit 7 is the unknown one (the v4-frame-claiming-bit-6 case is
-    // pinned in the unit suite).
-    check(512, a_settings(), |s| {
-        let mut frame = encoded(&s);
-        frame[6] |= 0x80;
+fn an_unknown_presence_bit_is_rejected_even_under_a_valid_checksum() {
+    // A new field always rides a version bump, so a set bit the frame's own
+    // version doesn't define can only be corruption — decoding past it would
+    // apply a frame shifted by however many bytes the sender meant to carry.
+    //
+    // Two things about the seat. It is `flags3`, not `flags2`: this test was
+    // written when the second byte's top bit was undefined, but v6 gave it to
+    // `ice` and v8 leaves BOTH earlier bytes saturated, so at the encoder's
+    // current version `flags2` has no unknown bit left to set. `flags3` defines
+    // bits 0-1 and has six free.
+    //
+    // And the checksum is **re-sealed** after the flip. Without that, the
+    // flipped byte fails the CRC and the frame is rejected for a reason this
+    // test is not about — it would pass while the unknown-bit check it is named
+    // for was never reached, which is how it read before.
+    let free_flags3_bits = 2u32..8;
+    check(512, (a_settings(), free_flags3_bits), |(s, bit)| {
+        let clean = encoded(&s);
+        prop_assert_eq!(
+            WatchSettings::decode(&clean),
+            Some(s),
+            "the control frame must decode, or the rejection below proves nothing"
+        );
+
+        let mut frame = clean;
+        frame[7] |= 1 << bit;
+        let body = frame.len() - CRC_WIDTH;
+        let crc = crc32(&frame[..body]);
+        frame[body..].copy_from_slice(&crc.to_le_bytes());
         prop_assert_eq!(
             WatchSettings::decode(&frame),
             None,
-            "flags2 {:#04x} decoded",
-            frame[6]
+            "flags3 {:#04x} decoded under a valid checksum",
+            frame[7]
         );
         Ok(())
     });
@@ -300,8 +348,33 @@ fn widths(version: u8) -> [usize; 8] {
 
 /// Widths of the `flags2` fields, in bit order: `tz_offset_min`,
 /// `distance_interval_m`, `time_interval_s`, `pace_band`, `race_phases`,
-/// `guided_run`, `resting_hr` (v5).
-const WIDTHS2: [usize; 7] = [2, 4, 4, 4, 9, GUIDED_RUN_ID_LEN, 2];
+/// `guided_run`, `resting_hr` (v5), `ice` (v6). One entry per bit the byte
+/// defines, so a saturated presence byte is covered end to end rather than
+/// seven eighths of the way.
+const WIDTHS2: [usize; 8] = [2, 4, 4, 4, 9, GUIDED_RUN_ID_LEN, 2, ICE_WIRE_LEN];
+
+/// Widths of the `flags3` fields, in bit order: `auto_lap`, `storm_alert`. The
+/// byte arrived with v7 and carries the two bits it defines; the other six are
+/// unknown at every version and `decode` refuses a frame that sets one.
+const WIDTHS3: [usize; 2] = [1, 2];
+
+/// Versions whose header carries a third presence byte (`flags3`). Getting this
+/// wrong in either the generator or the length oracle below is invisible in the
+/// common case and shows up as a ~1-in-a-billion "the declared fields account
+/// for 11 of 12 bytes" failure, which is how it survived unnoticed.
+fn has_flags3(version: u8) -> bool {
+    matches!(version, V7 | SETTINGS_VERSION)
+}
+
+/// Bytes of header the frame's version declares: magic + version + `flags`,
+/// plus `flags2` from v2 and `flags3` from v7.
+fn header_len(version: u8) -> usize {
+    match version {
+        V1 => 6,
+        v if has_flags3(v) => 8,
+        _ => 7,
+    }
+}
 
 /// A frame assembled from raw header bytes rather than from [`WatchSettings`],
 /// so the presence bytes and the payload length vary independently — the shape
@@ -319,10 +392,11 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
         ],
         any::<u8>(),
         prop_oneof![Just(0u8), Just(1u8), Just(0x3Fu8), any::<u8>()],
+        prop_oneof![Just(0u8), Just(1u8), Just(0x03u8), any::<u8>()],
         prop::collection::vec(any::<u8>(), 0..=90),
         any::<bool>(),
     )
-        .prop_map(|(version, flags, flags2, tail, exact)| {
+        .prop_map(|(version, flags, flags2, flags3, tail, exact)| {
             let two_presence_bytes = matches!(version, V2 | V3 | V4 | SETTINGS_VERSION);
             let checksummed = matches!(version, V3 | V4 | SETTINGS_VERSION);
             let mut frame = b"SET1".to_vec();
@@ -330,6 +404,9 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
             frame.push(flags);
             if two_presence_bytes {
                 frame.push(flags2);
+            }
+            if has_flags3(version) {
+                frame.push(flags3);
             }
             if exact {
                 // Bias toward the length the flags claim, so decode succeeds
@@ -340,6 +417,12 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
                     want += (0..WIDTHS2.len())
                         .filter(|i| flags2 & (1 << i) != 0)
                         .map(|i| WIDTHS2[i])
+                        .sum::<usize>();
+                }
+                if has_flags3(version) {
+                    want += (0..WIDTHS3.len())
+                        .filter(|i| flags3 & (1 << i) != 0)
+                        .map(|i| WIDTHS3[i])
                         .sum::<usize>();
                 }
                 let mut payload = tail.clone();
@@ -356,66 +439,114 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
         })
 }
 
+/// The offset walk is what makes a bitfield format dangerous: one field read at
+/// the wrong width shifts every field after it. A decoded frame must therefore
+/// populate exactly the flagged fields and consume exactly the bytes their
+/// widths account for — nothing unread, nothing invented. A frame that does not
+/// decode says nothing and passes.
+///
+/// Shared by the property below and the deterministic regression beside it, so
+/// the oracle a rare generated case would have caught can be handed the exact
+/// frame instead of waited for.
+fn fields_match_the_presence_bytes(frame: &[u8]) -> Result<(), TestCaseError> {
+    let Some(got) = WatchSettings::decode(frame) else {
+        return Ok(());
+    };
+    let version = frame[4];
+    // Tighter than "one of the versions that exist": v1 and v2 are in the
+    // generator precisely so that reaching this line through one of them
+    // would be a failure.
+    prop_assert!(
+        DECODABLE.contains(&version),
+        "version {} decoded but is not decodable",
+        version
+    );
+    let flags = frame[5];
+    let flags2 = if version == V1 { 0 } else { frame[6] };
+    let flags3 = if has_flags3(version) { frame[7] } else { 0 };
+
+    let present = [
+        got.max_hr.is_some(),
+        got.pacer.is_some(),
+        got.gear.is_some(),
+        got.zone_ceiling.is_some(),
+        got.sea_level_pa.is_some(),
+        got.fuel.is_some(),
+        got.pages.is_some(),
+        got.hide_empty_pages.is_some(),
+    ];
+    let w = widths(version);
+    let mut want = header_len(version);
+    for (i, p) in present.iter().enumerate() {
+        prop_assert_eq!(*p, flags & (1 << i) != 0, "field {} presence", i);
+        if *p {
+            want += w[i];
+        }
+    }
+    let present2 = [
+        got.tz_offset_min.is_some(),
+        got.distance_interval_m.is_some(),
+        got.time_interval_s.is_some(),
+        got.pace_band.is_some(),
+        got.race_phases.is_some(),
+        got.guided_run.is_some(),
+        got.resting_hr.is_some(),
+        got.ice.is_some(),
+    ];
+    for (i, p) in present2.iter().enumerate() {
+        prop_assert_eq!(*p, flags2 & (1 << i) != 0, "flags2 field {} presence", i);
+        if *p {
+            want += WIDTHS2[i];
+        }
+    }
+    let present3 = [got.auto_lap.is_some(), got.storm_alert.is_some()];
+    for (i, p) in present3.iter().enumerate() {
+        prop_assert_eq!(*p, flags3 & (1 << i) != 0, "flags3 field {} presence", i);
+        if *p {
+            want += WIDTHS3[i];
+        }
+    }
+    if matches!(version, V3 | V4 | SETTINGS_VERSION) {
+        want += CRC_WIDTH;
+    }
+    prop_assert_eq!(
+        frame.len(),
+        want,
+        "the declared fields account for {} of {} bytes",
+        want,
+        frame.len()
+    );
+    Ok(())
+}
+
 #[test]
 fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
-    // The offset walk is what makes a bitfield format dangerous: one field
-    // read at the wrong width shifts every field after it. A decoded frame
-    // must therefore populate exactly the flagged fields and consume exactly
-    // the bytes their widths account for — nothing unread, nothing invented.
     check(2048, a_raw_frame(), |frame| {
-        let Some(got) = WatchSettings::decode(&frame) else {
-            return Ok(());
-        };
-        let version = frame[4];
-        prop_assert!(matches!(version, V1 | V2 | V3 | V4 | SETTINGS_VERSION));
-        let flags = frame[5];
-        let (flags2, header_len) = if version == V1 { (0, 6) } else { (frame[6], 7) };
-
-        let present = [
-            got.max_hr.is_some(),
-            got.pacer.is_some(),
-            got.gear.is_some(),
-            got.zone_ceiling.is_some(),
-            got.sea_level_pa.is_some(),
-            got.fuel.is_some(),
-            got.pages.is_some(),
-            got.hide_empty_pages.is_some(),
-        ];
-        let w = widths(version);
-        let mut want = header_len;
-        for (i, p) in present.iter().enumerate() {
-            prop_assert_eq!(*p, flags & (1 << i) != 0, "field {} presence", i);
-            if *p {
-                want += w[i];
-            }
-        }
-        let present2 = [
-            got.tz_offset_min.is_some(),
-            got.distance_interval_m.is_some(),
-            got.time_interval_s.is_some(),
-            got.pace_band.is_some(),
-            got.race_phases.is_some(),
-            got.guided_run.is_some(),
-            got.resting_hr.is_some(),
-        ];
-        for (i, p) in present2.iter().enumerate() {
-            prop_assert_eq!(*p, flags2 & (1 << i) != 0, "flags2 field {} presence", i);
-            if *p {
-                want += WIDTHS2[i];
-            }
-        }
-        if matches!(version, V3 | V4 | SETTINGS_VERSION) {
-            want += CRC_WIDTH;
-        }
-        prop_assert_eq!(
-            frame.len(),
-            want,
-            "the declared fields account for {} of {} bytes",
-            want,
-            frame.len()
-        );
-        Ok(())
+        fields_match_the_presence_bytes(&frame)
     });
+}
+
+#[test]
+fn the_smallest_current_version_frame_is_measured_with_its_flags3_byte() {
+    // The generated case the oracle used to get wrong, constructed rather than
+    // waited for: an all-fields-absent v8 frame is header(8) + crc(4), and an
+    // oracle that assumes the pre-v7 seven-byte header measures it as 11 of 12.
+    // The generator reached this shape only when its tail byte happened to
+    // stand in for the flags3 it never emitted, at odds around 1e-9 a case, so
+    // the bug lived behind a property that ran thousands of times.
+    let mut frame = b"SET1".to_vec();
+    frame.push(SETTINGS_VERSION);
+    frame.push(0); // flags
+    frame.push(0); // flags2
+    frame.push(0); // flags3
+    frame.extend_from_slice(&crc32(&frame).to_le_bytes());
+    assert_eq!(frame.len(), 12);
+    assert_eq!(
+        WatchSettings::decode(&frame),
+        Some(WatchSettings::default()),
+        "the frame the oracle is measured against must decode"
+    );
+    fields_match_the_presence_bytes(&frame).expect("the oracle accounts for every byte");
 }
 
 #[test]

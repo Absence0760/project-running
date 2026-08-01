@@ -257,7 +257,14 @@ async fn main(spawner: Spawner) {
             Irqs,
             uarte::Config::default(),
         );
-        let (phone_tx, phone_rx) = phone_uart.split();
+        // The receive half is split with idle-line detection so a read of an
+        // unprefixed `SET1` frame ends at the sender's gap and still reports how
+        // many bytes it took — see `phone::settings_rx`.
+        let (phone_tx, phone_rx) = phone_uart.split_with_idle(
+            board.phone.idle_timer,
+            board.phone.idle_ppi.0,
+            board.phone.idle_ppi.1,
+        );
         spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
         spawner.spawn(unwrap!(tasks::phone::settings_rx(phone_rx)));
         spawner.spawn(unwrap!(tasks::ble::run()));

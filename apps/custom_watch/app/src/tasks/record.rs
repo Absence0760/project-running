@@ -54,9 +54,9 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::ice::IceCard;
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
+use watch_core::record_cadence::{run_active, tick_interval_s, track_point, CheckpointMark};
 use watch_core::run_store::{
-    verify_blob, LapRecord, PushOutcome, RunWriter, StepRecord, WorkoutRecord,
+    verify_blob, LapRecord, PushOutcome, RecordPush, RunWriter, StepRecord, WorkoutRecord,
 };
 use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
@@ -142,7 +142,17 @@ fn push_point(
             );
             Some(k)
         }
-        PushOutcome::Stored | PushOutcome::Dropped => None,
+        // Terminal, unlike the routine per-phase decimation drop below: the
+        // staged track stops growing for the rest of the run, so it warns like
+        // every other give-up on this flash path rather than passing silently.
+        PushOutcome::Exhausted => {
+            warn!(
+                "record: run {=u32} track point dropped from storage (slot full of undroppable records, cannot thin)",
+                open.run_seq
+            );
+            None
+        }
+        PushOutcome::Stored | PushOutcome::Decimated => None,
     }
 }
 
@@ -158,8 +168,14 @@ fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
         moving_s: lap.moving_s,
     };
     match open.writer.push_lap(&record) {
-        Ok(true) => {}
-        Ok(false) => warn!(
+        Ok(RecordPush::Stored) => {}
+        // Two causes, and each says which: naming the budget for both would
+        // send a reader to check MAX_STORED_LAPS and find it perfectly fine.
+        Ok(RecordPush::Reserved) => warn!(
+            "record: run {=u32} lap {=u16} dropped from storage (slot exhausted, footer reserved)",
+            open.run_seq, lap.index
+        ),
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} lap {=u16} dropped from storage (stored-lap budget)",
             open.run_seq, lap.index
         ),
@@ -182,8 +198,12 @@ fn push_step_result(open: &mut OpenRun, r: &watch_core::workout::StepResult) {
         pace_s_per_km: r.actual_pace_s_per_km,
     };
     match open.writer.push_step(&record) {
-        Ok(true) => {}
-        Ok(false) => warn!(
+        Ok(RecordPush::Stored) => {}
+        Ok(RecordPush::Reserved) => warn!(
+            "record: run {=u32} workout step {=u8} dropped from storage (slot exhausted, footer reserved)",
+            open.run_seq, r.step_index
+        ),
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} workout step {=u8} dropped from storage (stored-step budget)",
             open.run_seq, r.step_index
         ),
@@ -224,11 +244,15 @@ fn flush_workout(open: &mut OpenRun, recorder: &mut Recorder) {
         frame_crc,
     };
     match open.writer.push_workout(&record) {
-        Ok(true) => info!(
+        Ok(RecordPush::Stored) => info!(
             "record: run {=u32} workout results stored ({=u8} planned steps)",
             open.run_seq, summary.step_total
         ),
-        Ok(false) => warn!(
+        Ok(RecordPush::Reserved) => warn!(
+            "record: run {=u32} workout summary dropped (slot exhausted, footer reserved)",
+            open.run_seq
+        ),
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} workout summary already stored",
             open.run_seq
         ),
@@ -302,8 +326,8 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
 /// distances along its NW->SW->SE polyline). Two aid-station-style cut-offs the
 /// bench_jog fixture sweeps past each lap, so the CutoffEta page shows a live
-/// on / tight / behind verdict under the sim. Hardware carries none until a
-/// course-push path lands, so its CutoffEta page reads "no cutoffs".
+/// on / tight / behind verdict under the sim. Hardware gets its own from a
+/// phone's `RBK1` push and reads "no cutoffs" until one arrives.
 #[cfg(feature = "sim-course")]
 static SIM_CUTOFFS: [CutoffLeg; 2] = [
     CutoffLeg {
@@ -319,7 +343,8 @@ static SIM_CUTOFFS: [CutoffLeg; 2] = [
 /// Canned roadbook checkpoints for the sim course — start, an aid at 90 m, and
 /// the 180 m finish, with demo arrival times matching the ~3 m/s bench_jog
 /// fixture, so the Roadbook + Fuel pages show a live schedule + carry-to-aid
-/// under the sim. Hardware carries none until a course-push path lands.
+/// under the sim. Also the `roadbook_store` golden vector's fixture, so the sim
+/// pushes exactly the bytes the codec test and the Dart encoder pin.
 #[cfg(feature = "sim-course")]
 static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
     watch_core::record::RoadbookCheckpoint {
@@ -355,6 +380,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut timer_rx = unwrap!(state::TIMER.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let mut workout_rx = unwrap!(state::WORKOUT.receiver());
+    let mut roadbook_rx = unwrap!(state::ROADBOOK.receiver());
     let mut storm_rx = unwrap!(state::STORM.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
@@ -371,7 +397,12 @@ pub async fn run(store: &'static SharedStore) {
     // so an alert can never disturb the recording math (L4).
     let mut alerts = AlertEngine::new();
     let mut last_alert: Option<Alert> = None;
-    let mut ticker = Ticker::every(Duration::from_secs(1));
+    // The wall-clock tick, whose interval is a function of the record state
+    // (`tick_interval_s`) — a manually paused run at a sleep station has no use
+    // for a one-second clock. `Ticker` has no set-period, so a changed interval
+    // rebuilds it, which also re-phases it exactly as `reset()` does.
+    let mut tick_s = tick_interval_s(RecordState::Idle, false, false);
+    let mut ticker = Ticker::every(Duration::from_secs(u64::from(tick_s)));
     // Resume past any run recovered from flash so a new run can't reuse a
     // recovered run's id (which would confuse the phone's manifest + chunk pull).
     let mut next_seq: u32 = store.lock().await.next_run_seq();
@@ -454,7 +485,11 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_auto_lap(trigger);
         info!("record: restored auto-lap {}", trigger);
     }
-    if store.lock().await.read_backyard() {
+    // Mirrored in the task because the tick cadence turns on it: an armed
+    // backyard keeps the full-rate clock through a pause so a corral whistle
+    // can't arrive late (§ 372).
+    let mut backyard_armed = store.lock().await.read_backyard();
+    if backyard_armed {
         recorder.set_backyard_armed(true);
         info!("record: restored backyard mode armed");
     }
@@ -620,14 +655,23 @@ pub async fn run(store: &'static SharedStore) {
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
-    // The canned sim course carries cut-off legs so the CutoffEta page shows a
-    // live verdict; hardware has none until a course-push path lands.
+    // The canned sim schedule, published on the SAME channel a phone's `RBK1`
+    // push feeds rather than set straight into the recorder — so the sim
+    // exercises the whole publish → apply path the hardware build depends on,
+    // not a shortcut past it (the `sim-screens` rule).
     #[cfg(feature = "sim-course")]
     {
-        recorder.set_cutoff_legs(&SIM_CUTOFFS);
-        info!("record: sim cutoff legs loaded (90 m/2:00, 170 m/4:00)");
-        recorder.set_roadbook(&SIM_ROADBOOK);
-        info!("record: sim roadbook loaded (start / aid 90 m / finish 180 m)");
+        let mut rb = watch_core::roadbook_store::PushedRoadbook::new();
+        for cp in &SIM_ROADBOOK {
+            let _ = rb.checkpoints.push(*cp);
+        }
+        for leg in &SIM_CUTOFFS {
+            let _ = rb.cutoffs.push(*leg);
+        }
+        state::ROADBOOK.sender().send(Some(rb));
+        info!(
+            "record: sim roadbook queued (start / aid 90 m / finish 180 m, cutoffs 90 m/2:00 + 170 m/4:00)"
+        );
     }
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
@@ -682,11 +726,13 @@ pub async fn run(store: &'static SharedStore) {
         if let Some(armed) = backyard_rx.try_changed() {
             // The button task already persisted it; this is the apply side.
             recorder.set_backyard_armed(armed);
+            backyard_armed = armed;
             info!("record: backyard mode {}", armed);
         }
         if let Some(m) = mode_rx.try_changed() {
             mode = m;
             recorder.set_fix_interval_s(m.fix_interval_s());
+            trackback.set_fix_interval_s(m.fix_interval_s());
         }
 
         // Feed the nav task's course projection to the recorder for the cut-off
@@ -743,6 +789,32 @@ pub async fn run(store: &'static SharedStore) {
                 None => {
                     recorder.set_workout(&[]);
                     info!("record: workout cleared");
+                }
+            }
+        }
+
+        // A pushed roadbook + cut-off schedule (the ble task's RBK1 decode).
+        // One frame carries both series, so a re-push replaces the whole
+        // schedule and a `None` clears it — the Roadbook / CutoffEta / Fuel /
+        // SleepStation pages then read their unfed states rather than keeping a
+        // finished race's legs. Not persisted: unlike the ICE card or the
+        // composed screens, a schedule belongs to one course, and re-pushing it
+        // is the same action as pushing the course it describes.
+        if let Some(pushed) = roadbook_rx.try_changed() {
+            match pushed {
+                Some(rb) => {
+                    recorder.set_roadbook(&rb.checkpoints);
+                    recorder.set_cutoff_legs(&rb.cutoffs);
+                    info!(
+                        "record: roadbook armed ({=usize} checkpoints, {=usize} cutoffs)",
+                        rb.checkpoints.len(),
+                        rb.cutoffs.len()
+                    );
+                }
+                None => {
+                    recorder.set_roadbook(&[]);
+                    recorder.set_cutoff_legs(&[]);
+                    info!("record: roadbook cleared");
                 }
             }
         }
@@ -946,12 +1018,16 @@ pub async fn run(store: &'static SharedStore) {
                 // The breadcrumb is a decimated trail of where the runner has
                 // physically been. It survives a stop, so it has to be named.
                 trackback = Trackback::new();
+                trackback.set_fix_interval_s(mode.fix_interval_s());
                 crumb_len = 0;
                 trackback_sender.send(trackback.view());
                 alerts = AlertEngine::new();
                 last_alert = None;
                 alert_sender.send(None);
                 open = None;
+                // `Recorder::new()` disarmed the backyard, so the mirror the
+                // tick cadence reads has to follow it.
+                backyard_armed = false;
                 // The comparison copies this task holds against flash: flash is
                 // erased, so every one of them must read as "nothing stored" or
                 // the next push would skip its write believing it was already
@@ -1001,6 +1077,17 @@ pub async fn run(store: &'static SharedStore) {
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
         let snap = recorder.snapshot();
+
+        // Re-phase the wall-clock tick when the state it depends on moved. The
+        // race clock is unaffected: `Recorder::tick` reads the absolute
+        // `Instant::now()`, so elapsed is never accumulated tick by tick and a
+        // coarser cadence costs display latency, not time.
+        let owed_tick_s = tick_interval_s(snap.state, snap.manual_paused, backyard_armed);
+        if owed_tick_s != tick_s {
+            tick_s = owed_tick_s;
+            ticker = Ticker::every(Duration::from_secs(u64::from(tick_s)));
+            debug!("record: tick cadence {=u32}s", tick_s);
+        }
 
         // Best-effort mid-run flash checkpoint (L4): once a run has staged at
         // least one point, periodically persist a recoverable snapshot of the

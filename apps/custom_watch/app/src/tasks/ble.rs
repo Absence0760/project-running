@@ -32,6 +32,14 @@
 //!   `course_store::decode` turns it into a `Course`, and it is published to the
 //!   `nav` task via `state::COURSE`, which switches off `NO COURSE LOADED`.
 //!
+//! The roadbook push rides the same transport on one more write characteristic:
+//! - `roadbook` (write): the phone WRITES a chunked `roadbook_store` frame; the
+//!   watch reassembles + decodes it and publishes both series to the `record`
+//!   task via `state::ROADBOOK`, which loads the recorder's roadbook
+//!   checkpoints + cut-off legs. Until this landed the Roadbook / CutoffEta /
+//!   Fuel / SleepStation pages could only ever show the canned `sim-course`
+//!   schedule — the compute was built and host-tested, the wire was missing.
+//!
 //! Also UNVERIFIED on hardware, but flash access IS SoftDevice-coordinated:
 //! on this build `run_flash`'s backend is `nrf_softdevice::Flash`, so every
 //! erase/write is arbitrated by the S140 (see the `run_flash` module doc's
@@ -40,16 +48,33 @@
 //! Security (issue #598): the service is **fail-closed against unpaired
 //! peers**. Every characteristic requires an encrypted link
 //! (`security = "justworks"` — Security Mode 1 Level 2), advertising is
-//! pairable ([`peripheral::advertise_pairable`]) with a bonding
-//! [`SecurityHandler`], and the one bond persists to the flash config page
+//! pairable (`peripheral::advertise_pairable`) with a bonding
+//! `SecurityHandler`, and the one bond persists to the flash config page
 //! (`run_flash::persist_bond`) so a paired phone survives a power cycle. An
 //! unbonded central can connect and see the service structure, but every
 //! read / write / CCCD subscription on it is rejected by the SoftDevice until
 //! pairing completes — run tracks (location history), settings pushes, and
-//! course pushes never cross an unencrypted link. Just-works pairing carries
-//! no MITM protection: the watch has no keyboard and its display code has no
-//! passkey UI at tier 1, so an active in-range attacker during the one-time
-//! pairing itself is accepted as out of scope (documented, not hidden).
+//! course pushes never cross an unencrypted link.
+//!
+//! **Bond FORMATION is gated too, and that is the half the data plane cannot
+//! cover.** Encryption-on-every-characteristic answers "may this peer read?"
+//! with "only over an encrypted link", and a just-works pairing hands an
+//! encrypted link to whoever asks — with no interaction at either end, because
+//! `IoCapabilities::None` means there is nothing to confirm. So while bond
+//! formation was ungated, any central within radio range of a *worn, already
+//! set-up* watch could pair at any moment, read the whole run history
+//! (coordinates of home, of every route, of every routine), push
+//! settings / course / workout, and — `on_bonded` overwriting the peer
+//! unconditionally — leave the owner's own phone unable to reconnect. A
+//! bonded watch now refuses the pairing outright ([`Bonder`]'s `can_bond` +
+//! `request_mitm_protection`) and drops the central that asked for it.
+//!
+//! What remains out of scope is therefore the SETUP window, not the whole life
+//! of the device: an active in-range attacker present *before the owner pairs*
+//! — or after a `run_flash::RunStore::factory_erase`, which is the deliberate
+//! re-pair path for a lost phone — still wins a just-works MITM, because the
+//! tier-1 face has no passkey UI to raise the bar with. Accepted and
+//! documented, not hidden.
 
 #[cfg(not(feature = "ble"))]
 #[embassy_executor::task]
@@ -70,7 +95,7 @@ mod imp {
     use core::cell::{Cell, RefCell};
 
     use defmt::*;
-    use embassy_futures::select::{select, Either};
+    use embassy_futures::select::{select, select3, Either, Either3};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::channel::Channel;
     use embassy_sync::signal::Signal;
@@ -90,6 +115,7 @@ mod imp {
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
+    use watch_core::roadbook_store::{self, RoadbookAssembler, RoadbookPush, ROADBOOK_CHUNK_CAP};
     use watch_core::run_store::ChunkRequest;
     use watch_core::screens::{Screens, MAX_SCR1_LEN};
     use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
@@ -188,6 +214,26 @@ mod imp {
             security = "justworks"
         )]
         screens: Vec<u8, MAX_SCR1_LEN>,
+        /// Roadbook + cut-off schedule push (the `RBK1` path). The phone WRITES
+        /// chunked `roadbook_store` frame bytes (the same `offset | payload`
+        /// transport as `course` and `workout`); the watch reassembles, decodes
+        /// both series, and publishes them to the record task via
+        /// `state::ROADBOOK`, which is what makes the Roadbook / CutoffEta /
+        /// Fuel / SleepStation pages read live data on hardware instead of only
+        /// under `sim-course`.
+        ///
+        /// Chunked, unlike `screens`: a full schedule is 364 B, and one ATT
+        /// write at the 256-byte MTU carries `MTU - 3` = 253.
+        ///
+        /// **Take the next free suffix; never renumber a row above.** § 410 was
+        /// a whole broken run-sync path caused by inserting a characteristic
+        /// ahead of existing ones without the phone client following.
+        #[characteristic(
+            uuid = "d1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            write,
+            security = "justworks"
+        )]
+        roadbook: Vec<u8, ROADBOOK_CHUNK_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -244,10 +290,17 @@ mod imp {
     /// peer's GATT system attributes (CCCD state). `on_bonded` runs in the
     /// SoftDevice event context and cannot await, so it stages the keys and
     /// signals [`BOND_SAVED`]; the `run` loop persists them to the flash
-    /// config page. A NEW pairing replaces the old bond — losing a phone must
-    /// not brick the watch — which is the standard single-bond wearable
-    /// trade-off: possession of the watch (re-pair) beats possession of old
-    /// radio captures.
+    /// config page.
+    ///
+    /// **The bond is formed once.** A second pairing is refused rather than
+    /// allowed to replace the first: `on_bonded` overwrites `self.peer` and
+    /// `bond_persist` overwrites `BND1`, so "a new pairing replaces the old
+    /// bond" is not a fleet-of-one nicety, it is a takeover — proximity alone
+    /// would be enough to become the watch's phone and to lock the owner's out.
+    /// Losing a phone still must not brick the watch, and the path for that is
+    /// FACTORY ERASE (§378, `run_flash::RunStore::factory_erase` clears the
+    /// `BND1` record along with everything else), which costs possession of the
+    /// watch instead of mere radio range.
     pub struct Bonder {
         peer: Cell<Option<Peer>>,
         sys_attrs: RefCell<heapless::Vec<u8, 64>>,
@@ -264,6 +317,13 @@ mod imp {
 
     /// Signals [`bond_persist`] that `on_bonded` staged fresh keys to persist.
     static BOND_SAVED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
+    /// Signals [`run`] that a central asked to pair while the watch already has
+    /// a bond, so the connection can be dropped from task context — the
+    /// `SecurityHandler` callbacks run inside the SoftDevice's event handler
+    /// and are the wrong place to tear a link down, exactly as `on_bonded` is
+    /// the wrong place to erase a flash page (hence [`BOND_SAVED`]).
+    static PAIRING_REFUSED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
     /// Persist freshly-staged bond keys to the flash config page. A DEDICATED
     /// task, not a branch of the connection's serve loop: many centrals
@@ -293,8 +353,32 @@ mod imp {
             IoCapabilities::None
         }
 
+        /// Only ever bond ONCE. Signals the refusal so [`run`] can drop the
+        /// central that asked — see the type doc for why a second bond is a
+        /// takeover rather than a re-pair.
         fn can_bond(&self, _conn: &Connection) -> bool {
-            true
+            let bonded = self.peer.get().is_some();
+            if bonded {
+                PAIRING_REFUSED.signal(());
+            }
+            !bonded
+        }
+
+        /// Refuse the *pairing*, not merely the bond, once a bond exists.
+        ///
+        /// `can_bond` returning false only clears the bonding bit: the pairing
+        /// still completes, the link still reaches Mode 1 Level 2, and Level 2
+        /// is exactly what every characteristic's `justworks` gate accepts — so
+        /// the stranger would read the whole run history over a session key and
+        /// merely fail to persist. Requiring MITM protection while
+        /// [`Self::io_capabilities`] is `None` names a combination just-works
+        /// cannot satisfy, so the SoftDevice fails the pairing procedure on
+        /// authentication requirements instead of completing it.
+        ///
+        /// Asserted only once bonded: an unpaired watch must still pair with no
+        /// interaction, since there is no passkey face to interact with.
+        fn request_mitm_protection(&self, _conn: &Connection) -> bool {
+            self.peer.get().is_some()
         }
 
         fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
@@ -429,13 +513,51 @@ mod imp {
         .services_128(ServiceList::Complete, &[LINK_SERVICE_UUID.to_le_bytes()])
         .build();
 
-    /// Build the manifest characteristic value from the store's current run list.
-    async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
+    /// Republish the `run_manifest` characteristic value if the store's manifest
+    /// generation has moved since `built_gen` — returning the value now
+    /// published, or `None` when the one already published still stands.
+    ///
+    /// The manifest changes when a run finishes, is evicted, or is fully pulled;
+    /// rebuilding it on every 1 Hz tick instead meant a `manifest_at` + encode +
+    /// SoftDevice value-set per second for the whole time a phone was connected,
+    /// whether or not it ever read the characteristic. `built_gen` starts at
+    /// `None` per connection, so a fresh link always publishes once before its
+    /// first read.
+    ///
+    /// The one thing this trades away is the header's uptime anchor: it is the
+    /// value at the last rebuild, not at the last tick, so within a connection
+    /// where nothing changed it can lag. A lagging anchor makes a run read as
+    /// YOUNGER than it is (`now - (uptime - start)`), which is the direction the
+    /// phone already handles — `SlotDir::manifest_at` documents the same
+    /// under-aging for a run recovered across a power cycle, and
+    /// `payloadFromBlob` falls back to the blob footer's elapsed time when the
+    /// offset is shorter than the run itself.
+    async fn refresh_manifest(
+        server: &Server,
+        store: &SharedStore,
+        built_gen: &mut Option<u32>,
+        uptime_s: u32,
+    ) -> Option<Vec<u8, MANIFEST_CAP>> {
         // Clamp each run's start to the current uptime so a run recovered from a
         // prior power cycle can't advertise a start ahead of `uptime_s` and date
         // in the future on the phone (run_flash::manifest_at).
-        let entries = store.lock().await.manifest_at(uptime_s);
-        ble_sync::encode_manifest(&entries, uptime_s)
+        let (gen, entries) = {
+            let guard = store.lock().await;
+            let gen = guard.manifest_gen();
+            if *built_gen == Some(gen) {
+                return None;
+            }
+            (gen, guard.manifest_at(uptime_s))
+        };
+        let manifest = ble_sync::encode_manifest(&entries, uptime_s);
+        if let Err(e) = server.link.run_manifest_set(&manifest) {
+            // Leave `built_gen` alone so the next tick retries: a failed set
+            // means the published value is still the OLD list.
+            debug!("ble: manifest set failed {:?}", e);
+            return None;
+        }
+        *built_gen = Some(gen);
+        Some(manifest)
     }
 
     /// Advertise → serve → re-advertise on disconnect, forever. While
@@ -481,9 +603,18 @@ mod imp {
                 adv_data: &ADV_DATA,
                 scan_data: &SCAN_DATA,
             };
-            // Pairable: the connection carries the security handler, so a
-            // central's pairing request negotiates just-works LESC bonding
-            // instead of being rejected — and until it does, every
+            // Pairable on EVERY pass, bonded or not, and that is deliberate:
+            // `advertise_pairable` and `advertise_connectable` emit the same
+            // bytes through the same `advertise_inner` — "pairable" is not an
+            // on-air property here, it is only whether the resulting
+            // `Connection` carries the security handler. And the handler is
+            // what answers the SoftDevice's SEC_INFO_REQUEST with the stored
+            // LTK when the bonded phone reconnects, so dropping it once bonded
+            // would close the data plane against the one peer it exists for
+            // (the SoftDevice would get a null key and never encrypt).
+            // Refusing a SECOND pairing is the bonder's job instead
+            // (`can_bond` + `request_mitm_protection`), and until either
+            // pairing or a reconnect encrypts the link, every
             // characteristic's justworks gate keeps the data plane closed.
             let conn = match peripheral::advertise_pairable(
                 sd,
@@ -501,6 +632,10 @@ mod imp {
                 }
             };
             info!("ble: phone connected");
+            // A refusal staged against the PREVIOUS central must not kill this
+            // connection: the signal is a static, so it outlives the link that
+            // set it.
+            PAIRING_REFUSED.reset();
 
             // Request a long connection interval. The default is 7.5 ms (built
             // for HID); a watch that streams one status frame per second and
@@ -530,6 +665,7 @@ mod imp {
             // Cell/Signal above; the single-threaded executor makes it sound.
             let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
             let workout_asm: RefCell<WorkoutAssembler> = RefCell::new(WorkoutAssembler::new());
+            let roadbook_asm: RefCell<RoadbookAssembler> = RefCell::new(RoadbookAssembler::new());
             // Every way a course push can fail funnels through here, because
             // each leaves state::COURSE holding the OLD course while the
             // runner's phone just said "sent" — the warn! beside each site
@@ -640,11 +776,51 @@ mod imp {
                             warn!("ble: short workout chunk ({=usize} B)", bytes.len());
                         }
                     }
+                    LinkServiceEvent::RoadbookWrite(bytes) => {
+                        if let Some((offset, payload)) = ble_sync::parse_push_chunk(&bytes) {
+                            let mut asm = roadbook_asm.borrow_mut();
+                            match asm.push(offset, payload) {
+                                RoadbookPush::Complete => {
+                                    match roadbook_store::decode(asm.frame()) {
+                                        Some(rb) => {
+                                            info!(
+                                                "ble: roadbook push complete ({} checkpoints, {} cutoffs)",
+                                                rb.checkpoints.len(),
+                                                rb.cutoffs.len()
+                                            );
+                                            state::ROADBOOK.sender().send(Some(rb));
+                                            asm.reset();
+                                        }
+                                        None => {
+                                            warn!("ble: roadbook frame failed to decode");
+                                            asm.reset();
+                                        }
+                                    }
+                                }
+                                RoadbookPush::More => {}
+                                RoadbookPush::Rejected => {
+                                    warn!("ble: bad roadbook chunk @ {=usize}", offset)
+                                }
+                            }
+                        } else {
+                            warn!("ble: short roadbook chunk ({=usize} B)", bytes.len());
+                        }
+                    }
                 },
             });
 
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
+                // Per-connection, so the first tick after a reconnect always
+                // republishes: a run can finish while nothing is connected.
+                let mut built_gen: Option<u32> = None;
+                refresh_manifest(
+                    server,
+                    store,
+                    &mut built_gen,
+                    Instant::now().as_secs() as u32,
+                )
+                .await;
                 loop {
                     match select(ticker.next(), chunk_req.receive()).await {
                         Either::First(()) => {
@@ -656,15 +832,17 @@ mod imp {
                                 elev = Some(reading);
                             }
 
-                            // Refresh the manifest value so a read returns the
-                            // current list; notify it too if the phone subscribed.
-                            let manifest = build_manifest(store, now_s).await;
-                            if let Err(e) = server.link.run_manifest_set(&manifest) {
-                                debug!("ble: manifest set failed {:?}", e);
-                            }
-                            if manifest_notify.get() {
-                                if let Err(e) = server.link.run_manifest_notify(&conn, &manifest) {
-                                    debug!("ble: manifest notify failed {:?}", e);
+                            // Republish the manifest only when the run list moved,
+                            // and notify the change if the phone subscribed.
+                            if let Some(manifest) =
+                                refresh_manifest(server, store, &mut built_gen, now_s).await
+                            {
+                                if manifest_notify.get() {
+                                    if let Err(e) =
+                                        server.link.run_manifest_notify(&conn, &manifest)
+                                    {
+                                        debug!("ble: manifest notify failed {:?}", e);
+                                    }
                                 }
                             }
 
@@ -715,9 +893,13 @@ mod imp {
                 }
             };
 
-            match select(gatt, stream).await {
-                Either::First(e) => info!("ble: phone disconnected ({:?})", e),
-                Either::Second(()) => {}
+            match select3(gatt, stream, PAIRING_REFUSED.wait()).await {
+                Either3::First(e) => info!("ble: phone disconnected ({:?})", e),
+                Either3::Second(()) => {}
+                Either3::Third(()) => {
+                    warn!("ble: pairing refused — already bonded, dropping central");
+                    let _ = conn.disconnect();
+                }
             }
         }
     }

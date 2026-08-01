@@ -31,9 +31,12 @@
 //! also freezes the GNSS mode and the altitude reference for a run's
 //! duration.
 
+#[cfg(not(feature = "sim-buttons"))]
+use core::future::pending;
+
 use defmt::*;
 #[cfg(not(feature = "sim-buttons"))]
-use embassy_futures::select::{select, select4, Either, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
 #[cfg(feature = "sim-buttons")]
@@ -45,6 +48,7 @@ use watch_core::button::{
 };
 use watch_core::erase::{EraseGuard, ErasePress, ERASE_CONFIRM_WINDOW_S};
 use watch_core::face::IdleView;
+use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 #[cfg(feature = "sim-buttons")]
 use watch_core::input_flow::{edge, Edge};
@@ -118,8 +122,15 @@ struct NavState {
     /// the cursor and the arm alone wakes the composer not at all.
     menu_published: Option<MenuView>,
     /// The runner's timer (§375). Held whether or not its modal is open — the
-    /// instrument outlives the view, and outlives runs.
+    /// instrument outlives the view, and outlives runs and reboots.
     timer: timers::Timer,
+    /// The persisted record read at boot, still waiting to be resolved against a
+    /// wall-clock stamp. Held rather than resolved on the spot because at boot
+    /// there is usually no fix yet, and resolving without one marks the reboot
+    /// gap unknown — pessimistically, for a gap a fix arriving a minute later
+    /// could have measured exactly. Cleared once resolved against a real stamp,
+    /// or once the runner presses anything (they own the reading from then on).
+    timer_restore: Option<timers::TimerRecord>,
     timer_open: bool,
     timer_deadline: Option<Instant>,
     mode: GnssMode,
@@ -138,6 +149,7 @@ impl NavState {
             erase: EraseGuard::new(),
             menu_published: None,
             timer: timers::Timer::new(),
+            timer_restore: None,
             timer_open: false,
             timer_deadline: None,
             mode: initial_mode,
@@ -227,17 +239,80 @@ impl NavState {
 
     /// One press inside the modal. Every key is consumed here, so none of them
     /// reaches the recorder.
-    fn timer_press(&mut self, key: TimerKey, now_s: u32) {
+    ///
+    /// A press makes the runner the owner of the reading, so it also settles any
+    /// still-pending restore — re-resolving the stored record afterwards would
+    /// overwrite what they just did.
+    async fn timer_press(
+        &mut self,
+        key: TimerKey,
+        now_s: u32,
+        wall_now: Option<u32>,
+        store: &'static SharedStore,
+    ) {
+        self.timer_restore = None;
+        let before = self.timer.persist_key();
         match timers::press(&mut self.timer, key, now_s) {
             TimerPress::Exit => self.close_timer("btn4"),
             TimerPress::Changed => {
                 state::TIMER.sender().send(self.timer);
                 self.timer_deadline = Some(Instant::now() + TIMER_TIMEOUT);
+                // Only a state change is persisted, never the tick — see
+                // `persist_timer_state`.
+                if self.timer.persist_key() != before {
+                    self.persist_timer_state(now_s, wall_now, store).await;
+                }
             }
             // A clamped ladder end still defers the close: the runner is
             // present and pressing, they simply asked for a state they are in.
             TimerPress::Nothing => self.timer_deadline = Some(Instant::now() + TIMER_TIMEOUT),
         }
+    }
+
+    /// Write the instrument to the config page. Called only across a real state
+    /// change — armed, stopped, resumed, cleared — which is what
+    /// `timers::Timer::persist_key` names, and deliberately NOT for the reading:
+    /// an armed timer's elapsed moves every second, and rewriting for that would
+    /// spend over half the page's erase endurance in one 90-minute countdown.
+    /// Nothing is lost, because the record stores the anchor and an anchor does
+    /// not drift. Best-effort / L4, like every flash path here.
+    async fn persist_timer_state(
+        &mut self,
+        now_s: u32,
+        wall_now: Option<u32>,
+        store: &'static SharedStore,
+    ) {
+        let rec = self.timer.to_record(now_s, wall_now);
+        store.lock().await.persist_timer(rec).await;
+    }
+
+    /// Resolve the record read at boot against the freshest wall-clock stamp
+    /// there is, publishing whatever instrument it rebuilds.
+    ///
+    /// Called on every wake rather than once at boot, because the stamp arrives
+    /// with the first fix and a watch that just browned out mid-race has none
+    /// yet. With no stamp the record still resolves — to a marked floor, the
+    /// honest interim — and stays pending, so the first fix can replace it with
+    /// the measured reading. That replacement is only safe while the runner has
+    /// not touched the instrument, which is exactly while this stays `Some`.
+    fn resolve_timer_restore(&mut self, now_s: u32, wall_now: Option<u32>) {
+        let Some(rec) = self.timer_restore else {
+            return;
+        };
+        let restored = timers::Timer::from_record(&rec, now_s, wall_now);
+        if wall_now.is_some() {
+            self.timer_restore = None;
+        }
+        if self.timer == restored {
+            return;
+        }
+        self.timer = restored;
+        if restored.reading_is_a_floor() {
+            warn!("button: timer restored — reboot gap UNMEASURED, reading is a floor");
+        } else {
+            info!("button: timer restored — reboot gap measured off the wall clock");
+        }
+        state::TIMER.sender().send(self.timer);
     }
 
     /// The menu's deadline elapsed. While an erase is armed that deadline IS
@@ -282,6 +357,21 @@ impl NavState {
     }
 }
 
+/// The absolute UTC stamp for *now*, off the latest fix's date + time-of-day
+/// carried forward by the uptime elapsed since it (§375). `None` until the
+/// receiver has produced a plausible date.
+///
+/// Deliberately not freshness-gated, unlike every other consumer of a fix. A
+/// position goes stale because the runner moves; a wall clock does not, because
+/// the RTC that measures the gap since the fix keeps running. An hour-old fix
+/// therefore still yields an exact stamp — which is what lets a watch that
+/// browned out in a canyon measure its reboot gap off the last fix before it.
+fn wall_stamp_now(fix: Option<&Fix>, now_s: u32) -> Option<u32> {
+    let f = fix?;
+    let at_fix = timers::wall_stamp(f.date?, f.time_of_day?)?;
+    Some(at_fix.saturating_add(now_s.saturating_sub(f.uptime_s)))
+}
+
 /// Wipe the watch (§378) and drop every copy of what was wiped that this task
 /// can reach. The menu is idle-only, so nothing is recording and nothing is
 /// lost that the runner did not just ask to lose.
@@ -309,6 +399,9 @@ async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
     state::PROFILE.sender().send(nav.profile);
     state::BACKYARD.sender().send(false);
     nav.timer = timers::Timer::new();
+    // And drop the record still waiting to be resolved, or an unresolved restore
+    // would put the wiped runner's timer back on the screen after the erase.
+    nav.timer_restore = None;
     state::TIMER.sender().send(nav.timer);
     if state::FACTORY_ERASE.try_send(()).is_err() {
         warn!("button: factory erase — record task already has one pending");
@@ -556,6 +649,7 @@ pub async fn run(
     store: &'static SharedStore,
 ) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
+    let mut fix_rx = unwrap!(state::FIX.receiver());
     let interaction_tx = state::INTERACTION.sender();
     // Seed from the mode + profile main restored from flash at boot so the
     // BTN3 cycle and the menu's PROFILE row continue from the persisted
@@ -563,6 +657,15 @@ pub async fn run(
     let mut nav = NavState::new(initial.0, initial.1);
     let mut stop_guard = StopGuard::new();
     info!("{=str}", BOOT_LINE);
+    // Read here rather than handed down from `main` because this task is the
+    // instrument's only owner, and resolving the record needs a wall-clock stamp
+    // `main` does not have at boot either. Resolved immediately even though a fix
+    // is unlikely this early: the marked floor IS the honest answer until a stamp
+    // exists, and publishing it now is what puts the tell in front of a runner
+    // who never presses a button.
+    nav.timer_restore = store.lock().await.read_timer();
+    let boot_s = Instant::now().as_secs() as u32;
+    nav.resolve_timer_restore(boot_s, wall_stamp_now(fix_rx.try_get().as_ref(), boot_s));
     loop {
         // Wait for whichever button is pressed first (falling edge = press) —
         // or, while the grid is open, for its auto-select deadline: the
@@ -577,29 +680,53 @@ pub async fn run(
             ),
             btn5.wait_for_falling_edge(),
         );
-        let pressed = if let Some(deadline) = nav
-            .grid_deadline
-            .or(nav.menu_deadline)
-            .or(nav.timer_deadline)
-        {
-            // The three modal deadlines share the slot — the grid only exists
-            // in a run view and the two idle modals only on the idle face,
-            // where opening either closes the other, so at most one is armed.
-            match select(edges, Timer::at(deadline)).await {
-                Either::First(e) => e,
-                Either::Second(()) => {
-                    if nav.grid.is_some() {
-                        nav.grid_commit("auto-select");
-                    } else if nav.timer_open {
-                        nav.close_timer("timeout");
-                    } else {
-                        nav.menu_deadline_fired();
+        // The three modal deadlines share one arm — the grid only exists in a
+        // run view and the two idle modals only on the idle face, where opening
+        // either closes the other, so at most one is armed. The third arm is the
+        // fix a pending timer restore is waiting on (§399: the state this task
+        // publishes needs an arm, or it would only ever resolve on the next
+        // press); it is a wait, not a poll, and it disappears once resolved.
+        let woke = {
+            let deadline = nav
+                .grid_deadline
+                .or(nav.menu_deadline)
+                .or(nav.timer_deadline);
+            let restore_pending = nav.timer_restore.is_some();
+            select3(
+                edges,
+                async {
+                    match deadline {
+                        Some(d) => Timer::at(d).await,
+                        None => pending().await,
                     }
-                    continue;
+                },
+                async {
+                    if restore_pending {
+                        fix_rx.changed().await;
+                    } else {
+                        pending::<()>().await
+                    }
+                },
+            )
+            .await
+        };
+        let pressed = match woke {
+            Either3::First(e) => e,
+            Either3::Second(()) => {
+                if nav.grid.is_some() {
+                    nav.grid_commit("auto-select");
+                } else if nav.timer_open {
+                    nav.close_timer("timeout");
+                } else {
+                    nav.menu_deadline_fired();
                 }
+                continue;
             }
-        } else {
-            edges.await
+            Either3::Third(()) => {
+                let now_s = Instant::now().as_secs() as u32;
+                nav.resolve_timer_restore(now_s, wall_stamp_now(fix_rx.try_get().as_ref(), now_s));
+                continue;
+            }
         };
 
         // The idle modals only exist on the idle face: if a run started under
@@ -673,7 +800,8 @@ pub async fn run(
                 if nav.timer_open {
                     // Timer modal: BTN1 start/stop, BTN2 longer, BTN5 reset —
                     // every press swallowed, none reaches the recorder.
-                    nav.timer_press(timer_key(button), now_s);
+                    let wall = wall_stamp_now(fix_rx.try_get().as_ref(), now_s);
+                    nav.timer_press(timer_key(button), now_s, wall, store).await;
                     continue;
                 }
                 if button == Button::Lap && state == RecordState::Idle {
@@ -741,7 +869,10 @@ pub async fn run(
         if nav.timer_open {
             // Timer modal: BTN3 shortens the preset, BTN4 exits — the same
             // BACK slot the settings menu uses, and the same swallowed release.
-            nav.timer_press(timer_paging_key(key), Instant::now().as_secs() as u32);
+            let now_s = Instant::now().as_secs() as u32;
+            let wall = wall_stamp_now(fix_rx.try_get().as_ref(), now_s);
+            nav.timer_press(timer_paging_key(key), now_s, wall, store)
+                .await;
             if pin.is_low() {
                 pin.wait_for_rising_edge().await;
             }
@@ -868,6 +999,7 @@ pub async fn run(
     const POLL: Duration = Duration::from_millis(10);
 
     let mut record_rx = unwrap!(state::RECORD.receiver());
+    let mut fix_rx = unwrap!(state::FIX.receiver());
     let interaction_tx = state::INTERACTION.sender();
     let mut nav = NavState::new(initial.0, initial.1);
     let mut stop_guard = StopGuard::new();
@@ -893,9 +1025,18 @@ pub async fn run(
     let mut lap_down_at: Option<Instant> = None;
     let mut lap_handled = false;
     info!("{=str}", BOOT_LINE);
+    nav.timer_restore = store.lock().await.read_timer();
 
     loop {
         Timer::after(POLL).await;
+        // This variant already wakes on its poll, so the pending restore needs no
+        // arm of its own — it simply resolves on the next tick once a fix has
+        // landed. `resolve_timer_restore` returns immediately when nothing is
+        // pending, which is every tick of a watch with no stored timer.
+        {
+            let now_s = Instant::now().as_secs() as u32;
+            nav.resolve_timer_restore(now_s, wall_stamp_now(fix_rx.try_get().as_ref(), now_s));
+        }
         // The grid's auto-select deadline — the no-confirm-press close.
         if nav.grid.is_some() && nav.grid_deadline.is_some_and(|dl| Instant::now() >= dl) {
             nav.grid_commit("auto-select");
@@ -930,7 +1071,10 @@ pub async fn run(
                             nav.close_timer("run started");
                         } else {
                             interaction_tx.send(Instant::now().as_secs() as u32);
-                            nav.timer_press(timer_paging_key(key), Instant::now().as_secs() as u32);
+                            let now_s = Instant::now().as_secs() as u32;
+                            let wall = wall_stamp_now(fix_rx.try_get().as_ref(), now_s);
+                            nav.timer_press(timer_paging_key(key), now_s, wall, store)
+                                .await;
                             pg_down_at[k] = Some(Instant::now());
                             pg_handled[k] = true;
                             continue;
@@ -1109,7 +1253,8 @@ pub async fn run(
                 } else {
                     // Timer modal: BTN1 start/stop, BTN2 longer, BTN5 reset —
                     // every press swallowed, none reaches the recorder.
-                    nav.timer_press(timer_key(button), now_s);
+                    let wall = wall_stamp_now(fix_rx.try_get().as_ref(), now_s);
+                    nav.timer_press(timer_key(button), now_s, wall, store).await;
                     continue;
                 }
             }

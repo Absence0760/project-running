@@ -348,16 +348,18 @@ pub fn menu_rows(
         let _ = rows[row].push(' ');
         match item {
             MenuItem::GnssMode => {
-                // EST for the same reason the idle face carries it: the hour
-                // figure is a §314 derivation, not a measurement, and a menu
-                // row stating "220H" bare reads as a spec. MODE is the word
-                // that pays for it — the 21-cell row fits one or the other,
-                // and the qualifier is load-bearing where the noun is not.
+                // The cadence, not the battery hours, for the same reason the
+                // idle face dropped them: those hours are a projection for
+                // tier-2 hardware using a receiver power-down this firmware
+                // does not implement, so no qualifier short enough for the row
+                // is honest — `EST` reads as this watch's own estimate. The fix
+                // interval is a fact about the device in front of the wearer
+                // and carries the same battery/fidelity ordering.
                 let _ = write!(
                     rows[row],
-                    "GNSS {:<4} EST {}H",
+                    "GNSS {:<4} {}",
                     mode.label(),
-                    mode.battery_est_h()
+                    mode.cadence_label()
                 );
             }
             MenuItem::HideEmpty => {
@@ -643,9 +645,9 @@ mod tests {
     fn the_value_rows_read_the_current_state() {
         let rows = menu_rows(0, GnssMode::Performance, true, None);
         assert_eq!(rows[1].as_str(), "SETTINGS");
-        // EST beside the projection, as on the idle face — the figure is a
-        // derivation (§314), and this row was the one seat stating it bare.
-        assert_eq!(rows[2].as_str(), "> GNSS PERF EST 110H");
+        // The fix cadence, not the tier-2 battery projection — this row was the
+        // last seat still stating those hours as if they were this watch's.
+        assert_eq!(rows[2].as_str(), "> GNSS PERF 1 FIX/1S");
         assert_eq!(rows[3].as_str(), "  HIDE EMPTY ON");
         assert_eq!(rows[4].as_str(), "  PROFILE --");
         assert_eq!(rows[5].as_str(), "  BACKYARD OFF");
@@ -653,7 +655,8 @@ mod tests {
         assert_eq!(rows[7].as_str(), "  RE-ZERO ALTITUDE");
         assert_eq!(rows[8].as_str(), "  MEDICAL ID");
         let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
-        assert_eq!(rows[2].as_str(), "  GNSS EXP  EST 220H");
+        // 21 cells exactly — the widest this row gets, so it also pins the fit.
+        assert_eq!(rows[2].as_str(), "  GNSS EXP  1 FIX/60S");
         assert_eq!(rows[3].as_str(), "> HIDE EMPTY OFF");
         assert_eq!(rows[4].as_str(), "  PROFILE ULTRA");
     }
