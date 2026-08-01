@@ -1821,7 +1821,12 @@ pub fn metric_hero(
             row
         }
         // The course's length, not its climb: the gain / loss pair already has
-        // the page's one text row, and rows 3..8 are the drawn profile.
+        // the page's one text row, and rows 3..8 are the drawn profile. So this
+        // deliberately does NOT gate on `route_elev.len == 0` the way
+        // [`route_elev_glance`] does — that gate withholds the *profile* and the
+        // gain / loss pair, whose zeros would be indistinguishable from a
+        // genuinely flat course, while `total_m` is measured off the polyline and
+        // is equally known either way. Only an absent course withholds it.
         Metric::RouteElevTotal => {
             let mut row = Row::new();
             match snap.route_elev.as_ref() {
@@ -2176,6 +2181,13 @@ const UNFED_HINT_ROW: usize = 5;
 /// three statements of one absence into four rows. A per-ROW placeholder is a
 /// different thing and keeps its dashes: `HDG  --` says that one field is
 /// missing while the rest of the page is fed.
+///
+/// One page pairs an unfed body with a *fed* hero, and it is not a defect:
+/// [`route_elev_glance`] on a course pushed without elevation says
+/// `NO COURSE ELEV` while its hero shows the course's length, which the missing
+/// elevation series does not make unknown. The reason here always names what the
+/// page's body is missing; that it usually coincides with an absent hero is not a
+/// rule this function can enforce.
 fn write_unfed(rows: &mut [Row; ROWS], page: Page, label: &str, why: Unfed) {
     let _ = write!(rows[body_top_row(page)], "{label}");
     let _ = write!(rows[UNFED_REASON_ROW], "{}", why.reason());
@@ -7228,6 +7240,70 @@ mod tests {
         let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
         assert_eq!(slots[0].value.as_str(), "4:52");
         assert_eq!(slots[2].value.as_str(), "4:52");
+    }
+
+    #[test]
+    fn a_course_without_elevation_still_reports_the_length_it_knows() {
+        use crate::screens::{Layout, Screen};
+        // `len == 0` means the course arrived without an elevation series. It
+        // gates the PROFILE and the gain / loss pair — which would otherwise
+        // read D+0 D-0, indistinguishable from a genuinely flat course — but not
+        // this metric, whose value is `total_m`, the course's LENGTH. That is
+        // measured off the polyline and is exactly as known with or without
+        // elevation, so both paths render it: withholding it would be the app
+        // pretending not to know a number it holds. What the two paths must
+        // never do is diverge, so they are pinned side by side.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.route_elev = Some(crate::record::RouteElevView {
+            gain_m: 0,
+            loss_m: 0,
+            points: 48,
+            total_m: 42_195,
+            samples: [0; crate::record::COURSE_PROFILE_CAP],
+            len: 0,
+        });
+
+        let screen = Screen::new(Layout::Duo, &[Metric::RouteElevTotal, Metric::Distance]).unwrap();
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].value.as_str(), "42.1");
+        assert_eq!(slots[0].unit, Some("KM"));
+        assert!(
+            slots[0].unfed.is_none(),
+            "a synced course's length is fed, elevation or not"
+        );
+        // The page's hero is the same metric through the same arm, so a divergence
+        // between the two paths is impossible to introduce on one side alone.
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            slots[0].value.as_str()
+        );
+        // And the page body still says the profile is what is missing.
+        let rows = page_rows(
+            Page::RouteElev,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "NO COURSE ELEV");
+
+        // No course at all is the one absence that withholds the number, on both
+        // paths — there is no polyline to have measured.
+        rec.route_elev = None;
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].unfed, Some(Unfed::NotSynced));
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
     }
 
     #[test]
