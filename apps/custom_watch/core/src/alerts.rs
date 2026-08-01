@@ -997,8 +997,9 @@ impl FuelOverdueTracker {
     /// - `run_active` — false between runs (Idle / Finished). Clears the latch,
     ///   mirroring [`AlertEngine`]'s own reset so a new run starts clean, and so
     ///   a reminder that somehow fired outside a run can never latch.
-    /// - `acknowledged` — the runner is attending to fuel (the Fuel glance page
-    ///   is showing). Clears the latch; the next interval's reminder re-latches.
+    /// - `acknowledged` — the runner is attending to fuel. Clears the latch;
+    ///   the next interval's reminder re-latches. What earns the flag is the
+    ///   caller's ([`FuelAckDwell`] — a held Fuel page, never a fly-by).
     pub fn observe(
         &mut self,
         active: Option<Alert>,
@@ -1043,6 +1044,46 @@ impl FuelOverdueTracker {
             (false, true) => FuelOverdue::Eat,
             (false, false) => FuelOverdue::None,
         }
+    }
+}
+
+/// How long the Fuel glance must stay the current page before the standing
+/// overdue marker reads it as the runner attending to fuel. The marker exists
+/// precisely because a heads-down runner misses the 8 s banner — and a
+/// one-second fly-by over the Fuel page on the way to Nav is the same miss,
+/// so a bare `page == Fuel` test let ordinary ring-paging silently defeat the
+/// one backstop built for it.
+pub const FUEL_ACK_DWELL_S: u32 = 3;
+
+/// Turns "which page is showing" into the `acknowledged` input
+/// [`FuelOverdueTracker::observe`] wants: true only once the Fuel page has
+/// been held [`FUEL_ACK_DWELL_S`] continuously. Leaving the page resets the
+/// dwell — three separate fly-bys are three misses, not an acknowledgement.
+///
+/// Pure and display-side like the tracker it feeds; the ui task owns one and
+/// samples it per frame. Frames are event-driven rather than periodic, so the
+/// dwell is measured against the frame clock (`uptime_s`) and a late frame
+/// simply reads the threshold as already met.
+#[derive(Default)]
+pub struct FuelAckDwell {
+    on_page_since_s: Option<u32>,
+}
+
+impl FuelAckDwell {
+    pub const fn new() -> Self {
+        Self {
+            on_page_since_s: None,
+        }
+    }
+
+    /// Fold one frame in and report whether the dwell earns the ack.
+    pub fn observe(&mut self, on_fuel_page: bool, uptime_s: u32) -> bool {
+        if !on_fuel_page {
+            self.on_page_since_s = None;
+            return false;
+        }
+        let since = *self.on_page_since_s.get_or_insert(uptime_s);
+        uptime_s.saturating_sub(since) >= FUEL_ACK_DWELL_S
     }
 }
 
@@ -3034,5 +3075,35 @@ mod tests {
             Some(Alert::Drink),
             "the displaced reminder came back"
         );
+    }
+
+    #[test]
+    fn a_fly_by_over_the_fuel_page_is_not_an_acknowledgement() {
+        // Ring-paging crosses Fuel for a second on the way to Nav — the same
+        // miss the standing marker exists for, so it must not clear it.
+        let mut d = FuelAckDwell::new();
+        assert!(!d.observe(true, 100));
+        assert!(!d.observe(true, 101));
+        assert!(!d.observe(false, 102));
+        // Three separate fly-bys are three misses, not a dwell.
+        assert!(!d.observe(true, 110));
+        assert!(!d.observe(false, 111));
+        assert!(!d.observe(true, 120));
+        assert!(!d.observe(false, 121));
+    }
+
+    #[test]
+    fn holding_the_fuel_page_earns_the_ack_and_leaving_resets_it() {
+        let mut d = FuelAckDwell::new();
+        assert!(!d.observe(true, 100));
+        assert!(d.observe(true, 100 + FUEL_ACK_DWELL_S));
+        // Event-driven frames: a late frame reads the threshold as met.
+        let mut d = FuelAckDwell::new();
+        assert!(!d.observe(true, 200));
+        assert!(d.observe(true, 230));
+        // Leaving resets the dwell entirely.
+        assert!(!d.observe(false, 231));
+        assert!(!d.observe(true, 232));
+        assert!(!d.observe(true, 233));
     }
 }

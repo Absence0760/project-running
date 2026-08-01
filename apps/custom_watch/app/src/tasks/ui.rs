@@ -194,6 +194,7 @@ pub async fn screen_task(
     // (the DK has no haptics, so an 8 s banner alone is missable). Fed from the
     // same `alert` stream the face already receives — no extra cross-task wire.
     let mut fuel_overdue = alerts::FuelOverdueTracker::new();
+    let mut fuel_ack = alerts::FuelAckDwell::new();
     let mut nav = NavView::NoCourse;
     // A phone-pushed course (state::COURSE) drives the Nav map's drawn polyline;
     // a pushed course takes over from the boot/sim course, mirroring what the nav
@@ -389,12 +390,13 @@ pub async fn screen_task(
             .zip(unit)
             .and_then(|(h, u)| ui_frame::hero_unit_cell(band, h, u).map(|cell| (u, cell)));
         // Persist the fuel reminder past its transient banner: latch the standing
-        // overdue state off the same `alert` value. The Fuel glance page being
-        // open is the acknowledgement.
+        // overdue state off the same `alert` value. HOLDING the Fuel glance is
+        // the acknowledgement — a fly-by on the way to another page is the
+        // same miss the marker exists for (alerts::FUEL_ACK_DWELL_S).
         let overdue = fuel_overdue.observe(
             alert,
             ui_frame::alerts_run_active(rec.as_ref()),
-            page == Page::Fuel,
+            fuel_ack.observe(page == Page::Fuel, uptime_s),
         );
         let hero_cells = ui_frame::hero_row_cells(
             band,
