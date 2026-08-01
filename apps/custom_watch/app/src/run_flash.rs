@@ -559,7 +559,14 @@ impl RunStore {
     /// to leave a shadow copy elsewhere (this store addresses pages directly).
     /// It is not a claim against charge-remnant recovery on a decapped die, and
     /// it does nothing about a probe attached *before* the erase — that is
-    /// encryption at rest, which tier 1 does not have.
+    /// encryption at rest, which tier 1 does not have. And because the `BND1`
+    /// record on that page holds the BLE long-term key that every reconnection
+    /// derives its session key from, with no forward secrecy on the data
+    /// channel, a probe attached before the erase reads more than the stored
+    /// runs: it reads the LTK, and with it retroactively decrypts any earlier
+    /// encrypted traffic an attacker had passively captured — so a lost, stolen
+    /// or resold device exposes what was ever transmitted to it, not only what
+    /// is currently on it.
     ///
     /// Best-effort / L4 like every other flash path: a failure warns and the
     /// caller carries on clearing RAM, because a wipe that half-worked must
