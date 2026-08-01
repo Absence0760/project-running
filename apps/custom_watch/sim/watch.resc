@@ -76,6 +76,52 @@ twi1: I2C.NRF52840_TWIM @ sysbus 0x40004000
 bmp581: Sensors.BMP581 @ twi1 0x46
 """
 
+# TIMER0..4 with a working SHORTS register. embassy-nrf's BufferedUarte
+# derives its RX ring write position from a TIMER driven as a byte counter —
+# EVENTS_RXDRDY is wired to TASKS_COUNT over PPI — and the only thing bounding
+# that counter is a shortcut, `cc(1).short_compare_clear()`. The stock
+# NRF52840_Timer carries `Shortcuts = 0x200` in its register enum but never
+# defines the register, so the write is dropped and the read comes back 0
+# (which also defeats the read-modify-write the driver does to set the bit).
+# The counter then climbs monotonically past 2 * rx_len and BufferedUarte's own
+# guard (`rxdrdy > rx_buf.len() * 2` -> 0) pins the derived write position at
+# zero for the rest of the run — about a kilobyte of NMEA, ~1 s at 9600 baud,
+# in. sim/NRF52840_Timer_Shorts.cs is the upstream v1.16.1 model plus a real
+# SHORTS (COMPARE[n]_CLEAR + COMPARE[n]_STOP, honoured in the TASKS_COUNT path
+# as well as the clocked one — counter mode is the one the driver uses). All
+# five instances are replaced rather than whichever one the driver claims
+# today, so moving BufferedUarte to another TIMER cannot quietly reintroduce
+# the runaway counter. Addresses, IRQs and channel counts are the stock
+# platform's.
+include @NRF52840_Timer_Shorts.cs
+machine UnregisterFromParent sysbus.timer0
+machine UnregisterFromParent sysbus.timer1
+machine UnregisterFromParent sysbus.timer2
+machine UnregisterFromParent sysbus.timer3
+machine UnregisterFromParent sysbus.timer4
+machine LoadPlatformDescriptionFromString
+"""
+timer0: Timers.NRF52840_Timer_Shorts @ sysbus 0x40008000
+    numberOfEvents: 4
+    -> nvic@8
+
+timer1: Timers.NRF52840_Timer_Shorts @ sysbus 0x40009000
+    numberOfEvents: 4
+    -> nvic@9
+
+timer2: Timers.NRF52840_Timer_Shorts @ sysbus 0x4000A000
+    numberOfEvents: 4
+    -> nvic@10
+
+timer3: Timers.NRF52840_Timer_Shorts @ sysbus 0x4001A000
+    numberOfEvents: 6
+    -> nvic@26
+
+timer4: Timers.NRF52840_Timer_Shorts @ sysbus 0x4001B000
+    numberOfEvents: 6
+    -> nvic@27
+"""
+
 # Board LEDs. We declare these inline instead of loading
 # platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
 # four user buttons as Miscellaneous.Button peripherals that drive their pins
