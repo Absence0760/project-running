@@ -11550,6 +11550,19 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushRoadbookAction => 'Enviar plan de carrera al reloj';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Plan de carrera enviado al reloj ($checkpoints puntos de control, $cutoffs cortes)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Fallo al enviar el plan de carrera: $error';
+  }
+
+  @override
   String get simWatchPushCourseAction => 'Enviar recorrido al reloj';
 
   @override

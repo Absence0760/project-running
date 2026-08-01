@@ -11430,6 +11430,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushRoadbookAction => 'Push roadbook to watch';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Roadbook pushed to the watch ($checkpoints checkpoints, $cutoffs cut-offs)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Roadbook push failed: $error';
+  }
+
+  @override
   String get simWatchPushCourseAction => 'Push course to watch';
 
   @override

@@ -11575,6 +11575,20 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushRoadbookAction =>
+      'Envoyer le plan de course à la montre';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Plan de course envoyé à la montre ($checkpoints points de contrôle, $cutoffs barrières)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Échec de l’envoi du plan de course : $error';
+  }
+
+  @override
   String get simWatchPushCourseAction => 'Envoyer le parcours à la montre';
 
   @override

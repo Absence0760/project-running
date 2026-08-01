@@ -3341,6 +3341,31 @@
   "simWatchPushWorkoutAction": "Workout an Uhr senden",
   "simWatchWorkoutPushed": "Workout an die Uhr gesendet ({steps} Schritte)",
   "simWatchPushWorkoutFailed": "Senden des Workouts fehlgeschlagen: {error}",
+  "simWatchPushRoadbookAction": "Rennplan an die Uhr senden",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "Rennplan an die Uhr gesendet ({checkpoints} Kontrollpunkte, {cutoffs} Cutoffs)",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "Senden des Rennplans fehlgeschlagen: {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
+  },
   "simWatchPushCourseAction": "Strecke an Uhr senden",
   "simWatchCoursePushed": "Strecke an die Uhr gesendet ({points} Punkte)",
   "simWatchPushCourseFailed": "Senden der Strecke fehlgeschlagen: {error}",

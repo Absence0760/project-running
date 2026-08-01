@@ -11546,6 +11546,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushRoadbookAction =>
+      'Enviar plano de corrida para o relógio';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Plano de corrida enviado para o relógio ($checkpoints pontos de controlo, $cutoffs cortes)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Falha ao enviar o plano de corrida: $error';
+  }
+
+  @override
   String get simWatchPushCourseAction => 'Enviar percurso para o relógio';
 
   @override
@@ -23659,6 +23673,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String simWatchPushWorkoutFailed(String error) {
     return 'Falha ao enviar treino: $error';
+  }
+
+  @override
+  String get simWatchPushRoadbookAction =>
+      'Enviar plano de corrida para o relógio';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Plano de corrida enviado para o relógio ($checkpoints pontos de controle, $cutoffs cortes)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Falha ao enviar o plano de corrida: $error';
   }
 
   @override

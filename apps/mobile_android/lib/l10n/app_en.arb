@@ -15111,6 +15111,31 @@
       }
     }
   },
+  "simWatchPushRoadbookAction": "Push roadbook to watch",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "Roadbook pushed to the watch ({checkpoints} checkpoints, {cutoffs} cut-offs)",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "Roadbook push failed: {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
+  },
   "simWatchPushCourseAction": "Push course to watch",
   "@simWatchPushCourseAction": {
     "description": "Button that pushes a demo breadcrumb course to the custom watch over BLE"

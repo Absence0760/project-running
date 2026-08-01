@@ -11009,6 +11009,19 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushRoadbookAction => 'レーススケジュールをウォッチに送信';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'レーススケジュールをウォッチに送信しました（$checkpoints チェックポイント、$cutoffs 関門）';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'レーススケジュールの送信に失敗しました: $error';
+  }
+
+  @override
   String get simWatchPushCourseAction => 'コースを時計に送信';
 
   @override

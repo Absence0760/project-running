@@ -19310,6 +19310,24 @@ abstract class AppLocalizations {
   /// **'Workout push failed: {error}'**
   String simWatchPushWorkoutFailed(String error);
 
+  /// Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule
+  ///
+  /// In en, this message translates to:
+  /// **'Push roadbook to watch'**
+  String get simWatchPushRoadbookAction;
+
+  /// Status line after the dev sim-watch roadbook push succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook pushed to the watch ({checkpoints} checkpoints, {cutoffs} cut-offs)'**
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs);
+
+  /// Status line after the dev sim-watch roadbook push fails
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook push failed: {error}'**
+  String simWatchPushRoadbookFailed(String error);
+
   /// Button that pushes a demo breadcrumb course to the custom watch over BLE
   ///
   /// In en, this message translates to:

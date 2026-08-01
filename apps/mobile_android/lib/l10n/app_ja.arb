@@ -3341,6 +3341,31 @@
   "simWatchPushWorkoutAction": "ワークアウトを時計に送信",
   "simWatchWorkoutPushed": "ワークアウトを時計に送信しました（{steps}ステップ）",
   "simWatchPushWorkoutFailed": "ワークアウトの送信に失敗しました: {error}",
+  "simWatchPushRoadbookAction": "レーススケジュールをウォッチに送信",
+  "@simWatchPushRoadbookAction": {
+    "description": "Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule"
+  },
+  "simWatchRoadbookPushed": "レーススケジュールをウォッチに送信しました（{checkpoints} チェックポイント、{cutoffs} 関門）",
+  "@simWatchRoadbookPushed": {
+    "placeholders": {
+      "checkpoints": {
+        "type": "int"
+      },
+      "cutoffs": {
+        "type": "int"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push succeeds"
+  },
+  "simWatchPushRoadbookFailed": "レーススケジュールの送信に失敗しました: {error}",
+  "@simWatchPushRoadbookFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Status line after the dev sim-watch roadbook push fails"
+  },
   "simWatchPushCourseAction": "コースを時計に送信",
   "simWatchCoursePushed": "コースを時計に送信しました（{points}ポイント）",
   "simWatchPushCourseFailed": "コースの送信に失敗しました: {error}",
