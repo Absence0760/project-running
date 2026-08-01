@@ -123,11 +123,13 @@ enum WatchMetric {
   raceDayDays(34, 'race_day_days'),
   sleepBudget(35, 'sleep_budget'),
   timerRemaining(36, 'timer_remaining'),
-  backyardBell(37, 'backyard_bell');
+  backyardBell(37, 'backyard_bell'),
+  stormDelta(38, 'storm_delta'),
+  gap(39, 'gap');
 
   const WatchMetric(this.wire, this.wireName);
 
-  /// This metric's byte on the SCR1 wire, in `1..=37`.
+  /// This metric's byte on the SCR1 wire, in `1..=39`.
   final int wire;
 
   /// The stable cross-platform name for the byte, pinned test-for-test against

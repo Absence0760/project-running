@@ -11964,4 +11964,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'Bell countdown';
+
+  @override
+  String get watchMetricStormDelta => 'Storm trend';
+
+  @override
+  String get watchMetricGap => 'Grade-adjusted pace';
 }

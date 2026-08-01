@@ -700,6 +700,13 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => s.next_turn,
                 NavView::NoCourse | NavView::NoFix => None,
             });
+            // The latched off-course verdict, tri-state so a course swap or a
+            // lost projection reads as absence of knowledge — the alert
+            // engine's cross-page OFF CRS / ON COURSE banners edge-detect it.
+            recorder.set_nav_off_course(match nav {
+                NavView::Status(s) => Some(s.alerting),
+                NavView::NoCourse | NavView::NoFix => None,
+            });
         }
 
         // The active course's climb profile for the RouteElev page — shaped by
@@ -1101,7 +1108,12 @@ fn apply_settings(
             SettingsEffect::FuelIntervals {
                 drink_interval_s,
                 eat_interval_s,
-            } => alerts.set_fuel_intervals(drink_interval_s, eat_interval_s),
+            } => {
+                alerts.set_fuel_intervals(drink_interval_s, eat_interval_s);
+                // The Fuel page's carry-out math runs on the same cadences,
+                // so the reminders and the plan describe one runner.
+                recorder.set_fuel_intervals(drink_interval_s, eat_interval_s);
+            }
             SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
             SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
             SettingsEffect::TzOffsetMin(m) => {

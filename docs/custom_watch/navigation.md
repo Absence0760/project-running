@@ -177,7 +177,10 @@ moves over it with `±1` (taps) and `±4` (holds), BTN4 forward and BTN3
 backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
-name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
+name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells) with a
+right-aligned **position counter** (`1/45` — the cursor's seat in the enabled
+ring, §387); the two names too long to leave the counter its cells keep the
+whole row and the counter drops there, name over number. The body
 therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 41-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
 rather than truncating the tail (§333) — scroll depth `ceil(41/4) − 7` = 4 at
@@ -243,7 +246,7 @@ selection and the backyard arm all persist in the CFG1 flash record and
 restore at boot (the profile restore re-applies its page preset) — whichever
 side wrote last, menu or phone push, wins the reboot. The erase is the one
 action row that **stays open**, because the menu is its own confirmation: the
-rows above it redraw at their factory values (`GNSS MODE PERF 110H`,
+rows above it redraw at their factory values (`GNSS PERF EST 110H`,
 `PROFILE --`, `BACKYARD OFF`) on the screen the runner pressed from.
 
 **The §351 cost bound has now survived a sixth AND a seventh row, and both
@@ -565,7 +568,10 @@ removes.
   dead, so a hold cannot smuggle a mark into either.
 - **A waypoint mark never moves the view** (§357), and a refused mark (no
   position anchor) writes nothing to flash — a dead press costs no page
-  erase.
+  erase. Since §382 the hold answers on screen either way: `WPT SAVED`
+  (an affirmation, un-`!`-prefixed) or `! NO FIX` (the cause, not the
+  failure) rides the alert slot at the workout edges' rank, so the one
+  deliberate mid-run press with a durable result is no longer screen-silent.
 - **The settings menu swallows every button and exists only while idle**
   (§351). No press inside it can start, pause, or lap a run; a run starting
   under it (sim-autostart) closes it; edits are directional and idempotent
