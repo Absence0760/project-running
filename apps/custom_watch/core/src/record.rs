@@ -648,6 +648,15 @@ pub struct Snapshot {
     /// between runs, so the page must stay in the cycle while the store is
     /// non-empty even before this run has an anchor to measure from.
     pub waypoint_count: u8,
+    /// Wrapping count of successful [`Recorder::mark_waypoint`] calls — the
+    /// alert engine edge-detects it into the mark's on-screen confirmation.
+    /// A counter and not [`Snapshot::waypoint_count`], because the eight-slot
+    /// newest-wins store saturates: the ninth mark changes the count not at
+    /// all and must still be answered.
+    pub waypoint_mark_seq: u8,
+    /// Wrapping count of refused marks (no position anchor) — the same edge
+    /// detection, so a dead BTN5 hold says why instead of saying nothing.
+    pub waypoint_refuse_seq: u8,
     /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
     /// `None` while nothing is armed. Fed in from the task that owns the
     /// instrument rather than derived here — the timer outlives runs, so the
@@ -1004,6 +1013,8 @@ pub struct Recorder {
     /// by the newest-wins eviction in [`Waypoints::mark`]. The app restores it
     /// from flash at boot via [`set_waypoints`](Recorder::set_waypoints).
     waypoints: Waypoints,
+    waypoint_mark_seq: u8,
+    waypoint_refuse_seq: u8,
 }
 
 impl Default for Recorder {
@@ -1086,6 +1097,8 @@ impl Recorder {
             backyard: Backyard::new(),
             last_clock: None,
             waypoints: Waypoints::new(),
+            waypoint_mark_seq: 0,
+            waypoint_refuse_seq: 0,
         }
     }
 
@@ -1161,12 +1174,20 @@ impl Recorder {
     /// where the runner is standing.
     pub fn mark_waypoint(&mut self, uptime_s: u32) -> bool {
         if !matches!(self.state, RecordState::Recording | RecordState::Paused) {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
             return false;
         }
         let Some(last) = self.last else {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
             return false;
         };
-        self.waypoints.mark(last.lat_deg, last.lon_deg, uptime_s)
+        let marked = self.waypoints.mark(last.lat_deg, last.lon_deg, uptime_s);
+        if marked {
+            self.waypoint_mark_seq = self.waypoint_mark_seq.wrapping_add(1);
+        } else {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
+        }
+        marked
     }
 
     /// Restore the marks persisted in flash (the app's boot path). Whole-store
@@ -2178,6 +2199,8 @@ impl Recorder {
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
             waypoint_count: self.waypoints.len() as u8,
+            waypoint_mark_seq: self.waypoint_mark_seq,
+            waypoint_refuse_seq: self.waypoint_refuse_seq,
             timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,
@@ -4311,8 +4334,14 @@ mod tests {
         r.start(0);
         assert!(!r.mark_waypoint(2));
         assert!(r.waypoints().is_empty());
+        // Every outcome counts on its own wire: two refusals so far, no mark
+        // — the alert engine's edge detection answers the press either way.
+        assert_eq!(r.snapshot().waypoint_refuse_seq, 2);
+        assert_eq!(r.snapshot().waypoint_mark_seq, 0);
         r.on_fix(&fix(10.0, 20.0, 3.0, 1));
         assert!(r.mark_waypoint(3));
+        assert_eq!(r.snapshot().waypoint_mark_seq, 1);
+        assert_eq!(r.snapshot().waypoint_refuse_seq, 2);
         // A finished run's anchor is history — the run is already committed,
         // so a stray hold must not append to the store.
         r.stop(10);

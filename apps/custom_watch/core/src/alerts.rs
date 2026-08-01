@@ -240,6 +240,15 @@ pub enum Alert {
     /// banner opened, so a runner who corrected by feel knows it worked
     /// without paging to Nav.
     BackOnCourse,
+    /// BTN5's hold saved a waypoint ([`Snapshot::waypoint_mark_seq`], §357).
+    /// The mark itself was screen-silent — persist + a RAM slot — so the one
+    /// deliberate mid-run press with a durable result gave no answer. An
+    /// affirmation like [`Alert::BackOnCourse`]: no `!` prefix.
+    WaypointMarked,
+    /// BTN5's hold marked nothing — no position anchor yet
+    /// ([`Snapshot::waypoint_refuse_seq`]). The label names the cause, not
+    /// the failure: the fix is to wait for one.
+    WaypointNoFix,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -322,6 +331,8 @@ pub fn banner(alert: Alert) -> Banner {
         // The all-clear fits whole, and drops the `!` deliberately: on this
         // face `!` means act, and an affirmation asks for nothing.
         Alert::BackOnCourse => write!(b, "ON COURSE"),
+        Alert::WaypointMarked => write!(b, "WPT SAVED"),
+        Alert::WaypointNoFix => write!(b, "! NO FIX"),
     };
     b
 }
@@ -413,6 +424,13 @@ pub struct AlertEngine {
     /// A raised off-course warning waiting for the slot. Cleared by
     /// [`Self::reset`] with the same run-scoped reasoning as the cutoff pair.
     pending_off_course: bool,
+    /// The last waypoint mark / refuse counters seen
+    /// ([`Snapshot::waypoint_mark_seq`] / [`Snapshot::waypoint_refuse_seq`]).
+    /// `None` = not yet baselined: the first sample of a run adopts the
+    /// counters without firing, so marks banked before this run (or before a
+    /// reboot) can't replay as a banner at the start line.
+    last_waypoint_mark_seq: Option<u8>,
+    last_waypoint_refuse_seq: Option<u8>,
     in_run: bool,
 }
 
@@ -454,6 +472,8 @@ impl AlertEngine {
             pending_cutoff: false,
             was_off_course: false,
             pending_off_course: false,
+            last_waypoint_mark_seq: None,
+            last_waypoint_refuse_seq: None,
             in_run: false,
         }
     }
@@ -684,6 +704,43 @@ impl AlertEngine {
             }
         }
 
+        // Waypoint feedback (§357). BTN5's hold is the one deliberate mid-run
+        // press with a durable result, and until now its answer was a flash
+        // write and a defmt line — invisible on the wrist that asked. Both
+        // counters get the workout edges' precedence (blocked only by a zone
+        // banner or the corral whistle, displaced fuel re-queues) because the
+        // runner is looking at the screen at exactly this moment; a blocked
+        // one is dropped, not owed — a confirmation shown late confirms the
+        // wrong thing. The first sample after a reset baselines without
+        // firing, so marks banked before this run can't replay at the start
+        // line.
+        {
+            let outranked = matches!(
+                self.active,
+                Some((Alert::ZoneAbove(_) | Alert::BackyardBell(_), _))
+            );
+            match self.last_waypoint_mark_seq {
+                None => self.last_waypoint_mark_seq = Some(snap.waypoint_mark_seq),
+                Some(last) if snap.waypoint_mark_seq != last => {
+                    self.last_waypoint_mark_seq = Some(snap.waypoint_mark_seq);
+                    if !outranked {
+                        self.take_slot(Alert::WaypointMarked, uptime_s);
+                    }
+                }
+                Some(_) => {}
+            }
+            match self.last_waypoint_refuse_seq {
+                None => self.last_waypoint_refuse_seq = Some(snap.waypoint_refuse_seq),
+                Some(last) if snap.waypoint_refuse_seq != last => {
+                    self.last_waypoint_refuse_seq = Some(snap.waypoint_refuse_seq);
+                    if !outranked {
+                        self.take_slot(Alert::WaypointNoFix, uptime_s);
+                    }
+                }
+                Some(_) => {}
+            }
+        }
+
         // The timer edge is consumed whether or not it can be shown — the
         // milestone rule, and the reason it is safe here: the Timer page counts
         // the overrun up, so a dropped banner loses nothing the runner cannot
@@ -884,6 +941,8 @@ impl AlertEngine {
         self.pending_cutoff = false;
         self.was_off_course = false;
         self.pending_off_course = false;
+        self.last_waypoint_mark_seq = None;
+        self.last_waypoint_refuse_seq = None;
         self.in_run = false;
     }
 }
@@ -968,7 +1027,9 @@ impl FuelOverdueTracker {
                 | Alert::Storm
                 | Alert::CutoffBehind
                 | Alert::OffCourse
-                | Alert::BackOnCourse,
+                | Alert::BackOnCourse
+                | Alert::WaypointMarked
+                | Alert::WaypointNoFix,
             )
             | None => {}
         }
@@ -1046,6 +1107,8 @@ mod tests {
             climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
+            waypoint_mark_seq: 0,
+            waypoint_refuse_seq: 0,
             timer: None,
             storm: None,
             track_thinning: 1,
@@ -1919,8 +1982,11 @@ mod tests {
         assert_eq!(banner(Alert::PaceSlow).as_str(), "! TOO SLOW");
         assert_eq!(banner(Alert::CutoffBehind).as_str(), "! CUTOFF");
         assert_eq!(banner(Alert::OffCourse).as_str(), "! OFF CRS");
-        // The one affirmation: no bang, it asks for nothing.
+        // The affirmations: no bang, they ask for nothing.
         assert_eq!(banner(Alert::BackOnCourse).as_str(), "ON COURSE");
+        assert_eq!(banner(Alert::WaypointMarked).as_str(), "WPT SAVED");
+        // The refusal names the cause, not the failure.
+        assert_eq!(banner(Alert::WaypointNoFix).as_str(), "! NO FIX");
         // A corrupt zone / milestone clamps instead of overflowing the banner.
         assert_eq!(banner(Alert::ZoneAbove(200)).as_str(), "! ZONE 9");
         assert_eq!(banner(Alert::Distance(u32::MAX)).as_str(), "! 999.9 KM");
@@ -1937,6 +2003,8 @@ mod tests {
             Alert::CutoffBehind,
             Alert::OffCourse,
             Alert::BackOnCourse,
+            Alert::WaypointMarked,
+            Alert::WaypointNoFix,
         ] {
             assert!(banner(a).chars().count() * 2 <= crate::face::COLS);
         }
@@ -2882,5 +2950,89 @@ mod tests {
             None
         );
         assert_eq!(e.on_update(&rec(14), None, 30), None);
+    }
+
+    fn marked(mark_seq: u8, refuse_seq: u8, moving_s: u32) -> Snapshot {
+        Snapshot {
+            waypoint_mark_seq: mark_seq,
+            waypoint_refuse_seq: refuse_seq,
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_saved_mark_answers_on_screen_once() {
+        let mut e = AlertEngine::new();
+        // First sample baselines; the press lands on the next tick.
+        assert_eq!(e.on_update(&marked(0, 0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&marked(1, 0, 11), None, 11),
+            Some(Alert::WaypointMarked)
+        );
+        // A steady counter is not news.
+        let t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&marked(1, 0, t), None, t), None);
+    }
+
+    #[test]
+    fn marks_banked_before_the_run_do_not_replay_at_the_start_line() {
+        // The store survives runs and reboots; the counter arrives non-zero.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&marked(5, 2, 10), None, 10), None);
+        let t = 10 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&marked(5, 2, t), None, t), None);
+    }
+
+    #[test]
+    fn a_refused_mark_says_no_fix() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&marked(0, 0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&marked(0, 1, 11), None, 11),
+            Some(Alert::WaypointNoFix)
+        );
+    }
+
+    #[test]
+    fn a_zone_banner_blocks_waypoint_feedback_and_it_is_dropped_not_owed() {
+        // A confirmation shown late confirms the wrong thing.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&marked(0, 0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&marked(0, 0, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&marked(1, 0, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let t = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&marked(1, 0, t), Some(150), t),
+            None,
+            "a blocked confirmation is not owed"
+        );
+    }
+
+    #[test]
+    fn a_waypoint_confirmation_displaces_a_fuel_reminder_which_requeues() {
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(300, 0);
+        assert_eq!(e.on_update(&marked(0, 0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&marked(0, 0, 300), None, 300),
+            Some(Alert::Drink)
+        );
+        assert_eq!(
+            e.on_update(&marked(1, 0, 301), None, 301),
+            Some(Alert::WaypointMarked)
+        );
+        let t = 301 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&marked(1, 0, t), None, t),
+            Some(Alert::Drink),
+            "the displaced reminder came back"
+        );
     }
 }
