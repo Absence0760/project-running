@@ -39,14 +39,18 @@ use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::ice;
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
+use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
+use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
-use crate::record::{RacePhaseView, RecordState, Snapshot};
+use crate::readiness::ReadinessBand;
+use crate::record::{RacePhaseView, RecordState, Snapshot, TurnCueView};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::storm::StormTrend;
 use crate::trackback::{self, TrackbackView};
 use crate::training_load::LoadTrendView;
+use crate::turn_cues::TurnDirection;
 use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
 
@@ -3628,9 +3632,9 @@ fn plan_adaptive_glance(
         None => write_unfed(&mut rows, Page::PlanAdaptive, "ADAPT", Unfed::NotSynced),
         Some(v) => {
             let trend = match v.trend {
-                0 => "ON TRACK",
-                1 => "DO MORE",
-                _ => "EASE OFF",
+                AdaptiveReason::OnTrack => "ON TRACK",
+                AdaptiveReason::TrendUnderfitness => "DO MORE",
+                AdaptiveReason::TrendOvertraining => "EASE OFF",
             };
             let _ = write!(rows[2], "{:<8}{}", "ADAPT", trend);
             let _ = write!(
@@ -3642,9 +3646,9 @@ fn plan_adaptive_glance(
                 let _ = write!(rows[5], "HELD FATIGUE");
             } else {
                 let conf = match v.confidence {
-                    0 => "LOW",
-                    1 => "MEDIUM",
-                    _ => "HIGH",
+                    AdaptiveConfidence::Low => "LOW",
+                    AdaptiveConfidence::Medium => "MEDIUM",
+                    AdaptiveConfidence::High => "HIGH",
                 };
                 let _ = write!(rows[5], "{:<8}{}", "CONF", conf);
             }
@@ -3669,9 +3673,9 @@ fn readiness_glance(
         None => write_unfed(&mut rows, Page::Readiness, "READY", Unfed::NotSynced),
         Some(v) => {
             let band = match v.band {
-                0 => "LOW",
-                1 => "MODERATE",
-                _ => "HIGH",
+                ReadinessBand::Low => "LOW",
+                ReadinessBand::Moderate => "MODERATE",
+                ReadinessBand::High => "HIGH",
             };
             let _ = write!(rows[2], "READINESS");
             let _ = write!(rows[4], "{}", band);
@@ -3723,18 +3727,24 @@ fn turn_cue_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
-    match snap.turn_cue {
+    // Matched on the decoded direction, not on the byte: an exhaustive match
+    // means a new `TurnDirection` variant is a compile error here rather than a
+    // turn silently rendering as whatever a catch-all arm said. The setter
+    // already refuses an undecodable code, so the `None` arm is unreachable
+    // through it — and reads as the honest empty state if it ever is reached.
+    match snap
+        .turn_cue
+        .and_then(|v| TurnCueView::direction_from_byte(v.direction).map(|d| (v, d)))
+    {
         None => write_unfed(&mut rows, Page::TurnCue, "TURN", Unfed::NotSynced),
-        Some(v) => {
-            let dir = match v.direction {
-                0 => "STRAIGHT",
-                1 => "SLIGHT L",
-                2 => "LEFT",
-                3 => "SHARP L",
-                4 => "SLIGHT R",
-                5 => "RIGHT",
-                6 => "SHARP R",
-                _ => "U-TURN",
+        Some((v, direction)) => {
+            let dir = match direction {
+                TurnDirection::Straight => "STRAIGHT",
+                TurnDirection::SlightLeft => "SLIGHT L",
+                TurnDirection::Left => "LEFT",
+                TurnDirection::SlightRight => "SLIGHT R",
+                TurnDirection::Right => "RIGHT",
+                TurnDirection::Uturn => "U-TURN",
             };
             let _ = write!(rows[2], "{:<7}{}", "TURN", dir);
             let _ = write!(rows[4], "{:<7}{}", "REMAIN", v.remaining);
@@ -3848,10 +3858,13 @@ fn race_day_glance(
             } else {
                 let _ = write!(rows[4], "AGO");
             }
+            // Four verdicts, four words: the row is a bare value with all COLS
+            // to itself, so the longest ("FAR BEHIND", 10) fits with room over.
             let feas = match v.feasible {
-                0 => "BEHIND",
-                1 => "ON TRACK",
-                _ => "AHEAD",
+                GoalFeasibilityVerdict::FarBehind => "FAR BEHIND",
+                GoalFeasibilityVerdict::Behind => "BEHIND",
+                GoalFeasibilityVerdict::OnTrack => "ON TRACK",
+                GoalFeasibilityVerdict::Ahead => "AHEAD",
             };
             let _ = write!(rows[5], "{}", feas);
         }
@@ -5481,10 +5494,12 @@ mod tests {
             ease_offs: 255,
         });
         // Raw (setter-unclamped) extremes: the rows must fit even off a view
-        // the clamping setter never shaped.
+        // the clamping setter never shaped. The two verdicts are enums with no
+        // numeric extreme, so the widest render is their longest label —
+        // `EASE OFF` and `MEDIUM`.
         rec.plan_adaptive = Some(PlanAdaptiveView {
-            trend: 255,
-            confidence: 1,
+            trend: AdaptiveReason::TrendOvertraining,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 255,
             window_weeks: 255,
             changes: 255,
@@ -5499,7 +5514,9 @@ mod tests {
         });
         rec.readiness = Some(ReadinessView {
             score: 100,
-            band: 1,
+            // The longest of the three band labels, so the row the overflow
+            // guard measures is the widest one.
+            band: ReadinessBand::Moderate,
         });
         rec.goals = Some(GoalsView {
             percent: 100,
@@ -5528,7 +5545,9 @@ mod tests {
         });
         rec.race_day = Some(RaceDayView {
             days_until: -9999,
-            feasible: 1,
+            // The longest of the four verdict words, so the widest row is what
+            // the overflow guard actually measures.
+            feasible: GoalFeasibilityVerdict::FarBehind,
         });
         // The live-derived views (no phone push behind them) had been left out,
         // which quietly kept the Pacer / Workout / CutoffEta / Climb /
@@ -10221,7 +10240,7 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.race_day = Some(crate::record::RaceDayView {
             days_until: 3,
-            feasible: 1,
+            feasible: GoalFeasibilityVerdict::OnTrack,
         });
         let rows = page_rows(
             Page::RaceDay,
@@ -10246,6 +10265,41 @@ mod tests {
         );
         assert_eq!(rows[4].as_str(), "TO GO");
         assert_eq!(rows[5].as_str(), "ON TRACK");
+
+        // Each of the four verdicts gets its own word. `FAR BEHIND` is the
+        // reason the field carries the enum rather than a three-code byte: a
+        // runner near a cut-off acts differently on it than on `BEHIND`, and
+        // the byte space folded the two together.
+        for (verdict, word) in [
+            (GoalFeasibilityVerdict::Ahead, "AHEAD"),
+            (GoalFeasibilityVerdict::OnTrack, "ON TRACK"),
+            (GoalFeasibilityVerdict::Behind, "BEHIND"),
+            (GoalFeasibilityVerdict::FarBehind, "FAR BEHIND"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.race_day = Some(crate::record::RaceDayView {
+                days_until: -1,
+                feasible: verdict,
+            });
+            let rows = page_rows(
+                Page::RaceDay,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[5].as_str(), word, "{verdict:?}");
+            assert!(
+                word.len() <= COLS,
+                "{word} is {} of {COLS} cells",
+                word.len()
+            );
+            assert_eq!(rows[4].as_str(), "AGO", "a past race still reads AGO");
+        }
 
         // PR recency buckets whole days into a human unit.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
@@ -10368,6 +10422,95 @@ mod tests {
         }
     }
 
+    /// Every readiness band and every turn direction gets its own word, and each
+    /// fits the row it is written into. Neither ladder had a label assertion
+    /// before: the turn page's byte `match` carried `SHARP L` / `SHARP R` arms
+    /// for a class `turn_cues` has no variant for and no producer can emit, so
+    /// two of its eight labels were unreachable — matching on the decoded
+    /// direction deletes them and makes a new variant a compile error here.
+    #[test]
+    fn readiness_bands_and_turn_directions_each_render_their_own_word() {
+        for (band, word) in [
+            (ReadinessBand::Low, "LOW"),
+            (ReadinessBand::Moderate, "MODERATE"),
+            (ReadinessBand::High, "HIGH"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.readiness = Some(crate::record::ReadinessView { score: 55, band });
+            let rows = page_rows(
+                Page::Readiness,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[4].as_str(), word, "{band:?}");
+            // A bare value row, so the whole width is available.
+            assert!(word.len() <= COLS, "{word} is {} of {COLS}", word.len());
+        }
+
+        // `TURN` is padded to 7 cells, leaving COLS - 7 for the direction.
+        const TURN_LABEL_CELLS: usize = 7;
+        for (direction, word) in [
+            (TurnDirection::Straight, "STRAIGHT"),
+            (TurnDirection::SlightLeft, "SLIGHT L"),
+            (TurnDirection::Left, "LEFT"),
+            (TurnDirection::SlightRight, "SLIGHT R"),
+            (TurnDirection::Right, "RIGHT"),
+            (TurnDirection::Uturn, "U-TURN"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.turn_cue = Some(TurnCueView {
+                direction: crate::turn_cues::direction_code(direction),
+                distance_m: 420,
+                remaining: 3,
+            });
+            let rows = page_rows(
+                Page::TurnCue,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[2].as_str(), format!("TURN   {word}"), "{direction:?}");
+            assert!(
+                word.len() <= COLS - TURN_LABEL_CELLS,
+                "{word} is {} of {} cells",
+                word.len(),
+                COLS - TURN_LABEL_CELLS
+            );
+        }
+
+        // A code no producer emits reads as the empty state, never as a turn.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.turn_cue = Some(TurnCueView {
+            direction: 3,
+            distance_m: 420,
+            remaining: 3,
+        });
+        let rows = page_rows(
+            Page::TurnCue,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TURN");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+    }
+
     #[test]
     fn plan_adaptive_glance_renders_trend_weeks_changes_and_the_fatigue_hold() {
         // Empty state — nothing pushed yet.
@@ -10389,8 +10532,8 @@ mod tests {
         // A sustained under-trend with proposed changes.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 1,
-            confidence: 1,
+            trend: AdaptiveReason::TrendUnderfitness,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 2,
             window_weeks: 3,
             changes: 1,
@@ -10424,8 +10567,8 @@ mod tests {
         // confidence that pretends a verdict was issued.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 0,
-            confidence: 0,
+            trend: AdaptiveReason::OnTrack,
+            confidence: AdaptiveConfidence::Low,
             flagged_weeks: 3,
             window_weeks: 3,
             changes: 0,

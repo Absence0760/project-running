@@ -36,11 +36,14 @@ use crate::hr_zones::{
 use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
 use crate::page::Page;
+use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
+use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::{
     build_phase_plan, goal_pace_s_per_km, phase_at, phase_target_pace_s_per_km, PhasePlan,
     RacePhaseIntent, RacePhasePreset,
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
+use crate::readiness::ReadinessBand;
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::storm::StormView;
@@ -49,6 +52,7 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
+use crate::turn_cues::TurnDirection;
 use crate::waypoints::{WaypointView, Waypoints};
 use crate::workout::{StepResult, WorkoutAdherence, WorkoutRunner, WorkoutStep, WorkoutView};
 use crate::workout_store;
@@ -325,18 +329,68 @@ pub struct PlanReplanView {
 }
 
 /// The adaptive re-plan trend summary ([`crate::plan_adaptive_replan`]): the
-/// multi-week adherence trend verdict (`trend` 0 on-track / 1 under — do more /
-/// 2 over — ease off), its confidence (0 low / 1 medium / 2 high), the flagged
-/// weeks over the trailing window, the proposed future-change count, and
-/// whether a do-more suggestion was withheld for a fatigued runner.
+/// multi-week adherence trend verdict, its confidence, the flagged weeks over
+/// the trailing window, the proposed future-change count, and whether a do-more
+/// suggestion was withheld for a fatigued runner.
+///
+/// The two verdicts travel as their own enums, not as code bytes — the face
+/// matches on the variants, so there is no numbering for the two sides to
+/// disagree about. The `*_code` / `*_from_byte` pairs below exist only at the
+/// wire edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlanAdaptiveView {
-    pub trend: u8,
-    pub confidence: u8,
+    pub trend: AdaptiveReason,
+    pub confidence: AdaptiveConfidence,
     pub flagged_weeks: u8,
     pub window_weeks: u8,
     pub changes: u8,
     pub fitness_gated: bool,
+}
+
+impl PlanAdaptiveView {
+    /// Encode: the wire byte for `reason`. Deliberately **not**
+    /// [`AdaptiveReason`]'s declaration order, which puts `TrendUnderfitness`
+    /// first — a `reason as u8` would send a runner who needs to do more as
+    /// on-track, and an on-track runner as needing to ease off.
+    pub const fn trend_code(reason: AdaptiveReason) -> u8 {
+        match reason {
+            AdaptiveReason::OnTrack => 0,
+            AdaptiveReason::TrendUnderfitness => 1,
+            AdaptiveReason::TrendOvertraining => 2,
+        }
+    }
+
+    /// Decode: `None` for any byte outside the code space, so an unknown value
+    /// refuses the whole push rather than resolving to a verdict nobody sent.
+    pub const fn trend_from_byte(b: u8) -> Option<AdaptiveReason> {
+        match b {
+            0 => Some(AdaptiveReason::OnTrack),
+            1 => Some(AdaptiveReason::TrendUnderfitness),
+            2 => Some(AdaptiveReason::TrendOvertraining),
+            _ => None,
+        }
+    }
+
+    /// Encode: the wire byte for `confidence`. The ladder runs low → high while
+    /// [`AdaptiveConfidence`] declares `High` first, so a cast would send every
+    /// verdict at exactly the opposite strength.
+    pub const fn confidence_code(confidence: AdaptiveConfidence) -> u8 {
+        match confidence {
+            AdaptiveConfidence::Low => 0,
+            AdaptiveConfidence::Medium => 1,
+            AdaptiveConfidence::High => 2,
+        }
+    }
+
+    /// Decode, fail-closed like [`Self::trend_from_byte`].
+    pub const fn confidence_from_byte(b: u8) -> Option<AdaptiveConfidence> {
+        match b {
+            0 => Some(AdaptiveConfidence::Low),
+            1 => Some(AdaptiveConfidence::Medium),
+            2 => Some(AdaptiveConfidence::High),
+            _ => None,
+        }
+    }
 }
 
 /// Where the run has got to in the armed guided run ([`crate::guided_runs`]):
@@ -354,12 +408,39 @@ pub struct GuidedRunView {
     pub remaining_s: u32,
 }
 
-/// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
-/// `band` is 0 low / 1 moderate / 2 high.
+/// The training-readiness score (0..=100) and its band ([`crate::readiness`]).
+///
+/// `score` is a genuine percentage and is range-clamped; `band` carries the
+/// enum, so the face matches on the variants and no code space stands between
+/// the two sides.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReadinessView {
     pub score: u8,
-    pub band: u8,
+    pub band: ReadinessBand,
+}
+
+impl ReadinessView {
+    /// Encode: the wire byte for `band`, low → high.
+    pub const fn band_code(band: ReadinessBand) -> u8 {
+        match band {
+            ReadinessBand::Low => 0,
+            ReadinessBand::Moderate => 1,
+            ReadinessBand::High => 2,
+        }
+    }
+
+    /// Decode: `None` for any byte outside the code space. The clamp this
+    /// replaced saturated to 2 — telling a runner whose push was corrupt that
+    /// their readiness is **HIGH**, which is the one direction that gets a
+    /// fatigued athlete to go hard.
+    pub const fn band_from_byte(b: u8) -> Option<ReadinessBand> {
+        match b {
+            0 => Some(ReadinessBand::Low),
+            1 => Some(ReadinessBand::Moderate),
+            2 => Some(ReadinessBand::High),
+            _ => None,
+        }
+    }
 }
 
 /// The primary goal's ring progress ([`crate::goals`]): percent 0..=100 and
@@ -370,14 +451,44 @@ pub struct GoalsView {
     pub complete: bool,
 }
 
-/// The next turn on the loaded course ([`crate::turn_cues`]): a direction code
-/// (0 straight / 1 slight-left / 2 left / 3 sharp-left / 4 slight-right /
-/// 5 right / 6 sharp-right / 7 u-turn), metres to it, and how many cues remain.
+/// The next turn on the loaded course ([`crate::turn_cues`]): the direction code
+/// [`turn_cues::direction_code`](crate::turn_cues::direction_code) emits, metres
+/// to it, and how many cues remain.
+///
+/// This one field stays a byte rather than carrying [`TurnDirection`], because
+/// its producer — `nav_project::project_nav`, the sole writer — already encodes
+/// through that exhaustive map, and the wire code space is a symmetric
+/// eight-rung ladder that reserves 3 (sharp-left) and 6 (sharp-right) for a
+/// class the model does not yet classify. [`Self::direction_from_byte`] is the
+/// total inverse, and it refuses the two reserved rungs along with everything
+/// past the ladder: a code no producer can emit must not render as a turn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TurnCueView {
     pub direction: u8,
     pub distance_m: u16,
     pub remaining: u8,
+}
+
+impl TurnCueView {
+    /// Decode: the direction the wire byte names, or `None` for a code
+    /// [`turn_cues::direction_code`](crate::turn_cues::direction_code) cannot
+    /// produce (the reserved 3 / 6 sharp rungs, and anything past 7).
+    ///
+    /// The clamp this replaced saturated to 7 — turning any corrupt byte into
+    /// `U-TURN`, the one instruction that sends a runner back down the trail
+    /// they just climbed. On a navigation page a refused cue reads as "not
+    /// synced", which is the honest answer.
+    pub const fn direction_from_byte(b: u8) -> Option<TurnDirection> {
+        match b {
+            0 => Some(TurnDirection::Straight),
+            1 => Some(TurnDirection::SlightLeft),
+            2 => Some(TurnDirection::Left),
+            4 => Some(TurnDirection::SlightRight),
+            5 => Some(TurnDirection::Right),
+            7 => Some(TurnDirection::Uturn),
+            _ => None,
+        }
+    }
 }
 
 /// A simplified-course summary ([`crate::route_simplify`]): point count after
@@ -412,12 +523,45 @@ pub struct RouteElevView {
 }
 
 /// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]):
-/// signed days until the race (negative once past) and `feasible` 0 behind /
-/// 1 on-track / 2 ahead.
+/// signed days until the race (negative once past) and the verdict itself.
+///
+/// `feasible` carries [`GoalFeasibilityVerdict`] rather than a code byte, so the
+/// face matches on the variants and the two sides cannot number them
+/// differently. All four variants reach the panel — the byte space this replaced
+/// had room for three, and folding `FarBehind` onto `Behind` cost a runner near
+/// a cut-off the distinction that decides whether they keep going.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RaceDayView {
     pub days_until: i16,
-    pub feasible: u8,
+    pub feasible: GoalFeasibilityVerdict,
+}
+
+impl RaceDayView {
+    /// Encode: the wire byte for `verdict`. Deliberately **not**
+    /// [`GoalFeasibilityVerdict`]'s declaration order, which puts `Ahead`
+    /// first — a `verdict as u8` would send an ahead-of-goal runner as behind
+    /// and a behind one as ahead.
+    pub const fn feasible_code(verdict: GoalFeasibilityVerdict) -> u8 {
+        match verdict {
+            GoalFeasibilityVerdict::Behind => 0,
+            GoalFeasibilityVerdict::OnTrack => 1,
+            GoalFeasibilityVerdict::Ahead => 2,
+            GoalFeasibilityVerdict::FarBehind => 3,
+        }
+    }
+
+    /// Decode: `None` for any byte outside the code space, so an unknown value
+    /// refuses the whole push rather than resolving to a verdict nobody sent —
+    /// which for this field is the difference between `FAR BEHIND` and `AHEAD`.
+    pub const fn feasible_from_byte(b: u8) -> Option<GoalFeasibilityVerdict> {
+        match b {
+            0 => Some(GoalFeasibilityVerdict::Behind),
+            1 => Some(GoalFeasibilityVerdict::OnTrack),
+            2 => Some(GoalFeasibilityVerdict::Ahead),
+            3 => Some(GoalFeasibilityVerdict::FarBehind),
+            _ => None,
+        }
+    }
 }
 
 /// The pacing-strategy phase the run is currently in ([`crate::race_phases`]),
@@ -666,9 +810,24 @@ pub struct Snapshot {
     /// A counter and not [`Snapshot::waypoint_count`], because the eight-slot
     /// newest-wins store saturates: the ninth mark changes the count not at
     /// all and must still be answered.
+    ///
+    /// `u8` is safe against the wrap swallowing a confirmation, and the reason
+    /// is a density argument rather than a size one. The alert engine's edge is
+    /// `seq != last_seq`, so a swallow needs the counter to advance by a
+    /// multiple of 256 between two observations. Each
+    /// [`Recorder::mark_waypoint`] call advances **exactly one** of the two
+    /// counters by **exactly one** — pinned by
+    /// `waypoint_seqs_advance_by_exactly_one_per_press_so_the_wrap_cannot_alias`
+    /// — and the app's record task runs `AlertEngine::on_update` over a fresh
+    /// snapshot after *every* event branch, the `MarkWaypoint` command included.
+    /// The observer therefore samples at least once per increment, and one
+    /// increment is never congruent to zero. Widening the field would not add
+    /// safety; breaking the exactly-one advance would remove it, which is why
+    /// the test guards that and not the width.
     pub waypoint_mark_seq: u8,
     /// Wrapping count of refused marks (no position anchor) — the same edge
-    /// detection, so a dead BTN5 hold says why instead of saying nothing.
+    /// detection, so a dead BTN5 hold says why instead of saying nothing. Wraps
+    /// safely for the same reason as [`Snapshot::waypoint_mark_seq`].
     pub waypoint_refuse_seq: u8,
     /// Wrapping count of finished-but-unsynced runs destroyed by a flash
     /// eviction ([`Recorder::note_run_lost`]) — the alert engine edge-detects
@@ -1503,21 +1662,21 @@ impl Recorder {
         self.plan_replan = view;
     }
 
-    /// The trend + confidence are clamped to their 0..=2 code spaces and the
-    /// week counts to the trend window, so a corrupt push can't render an
-    /// unknown verdict or an impossible "9/3 weeks".
+    /// The week counts are clamped to the trend window so a corrupt push can't
+    /// render an impossible "9/3 weeks". The two verdicts need no clamp: they
+    /// are enums, so an out-of-range value cannot be constructed — a bad wire
+    /// byte is refused at [`PlanAdaptiveView::trend_from_byte`] /
+    /// [`PlanAdaptiveView::confidence_from_byte`] instead, before it ever
+    /// becomes a view.
     pub fn set_plan_adaptive(&mut self, view: Option<PlanAdaptiveView>) {
         self.plan_adaptive = view.map(|v| {
             let window = v
                 .window_weeks
                 .min(crate::plan_adaptive_replan::ADAPTIVE_TREND_WINDOW as u8);
             PlanAdaptiveView {
-                trend: v.trend.min(2),
-                confidence: v.confidence.min(2),
                 flagged_weeks: v.flagged_weeks.min(window),
                 window_weeks: window,
-                changes: v.changes,
-                fitness_gated: v.fitness_gated,
+                ..v
             }
         });
     }
@@ -1606,10 +1765,14 @@ impl Recorder {
 
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
     /// corrupt push can't render an out-of-range ring or an unknown band label.
+    /// The score is a percentage and clamps to its range — 100 is a real value
+    /// and saturating onto it is correct. The band needs no clamp: it is an
+    /// enum, and a bad wire byte is refused at
+    /// [`ReadinessView::band_from_byte`] before it becomes a view.
     pub fn set_readiness(&mut self, view: Option<ReadinessView>) {
         self.readiness = view.map(|v| ReadinessView {
             score: v.score.min(100),
-            band: v.band.min(2),
+            ..v
         });
     }
 
@@ -1622,13 +1785,14 @@ impl Recorder {
         });
     }
 
-    /// The turn direction is clamped to the 0..=7 code space so an unknown code
-    /// can't index past the face's direction glyphs.
+    /// A cue whose direction byte is not one
+    /// [`turn_cues::direction_code`](crate::turn_cues::direction_code) emits is
+    /// **refused whole**, not clamped: the page then reads its empty state
+    /// rather than naming a turn nobody sent. Dropping the distance and
+    /// remaining count with it is deliberate — a distance to an unknown turn is
+    /// not a navigable instruction.
     pub fn set_turn_cue(&mut self, view: Option<TurnCueView>) {
-        self.turn_cue = view.map(|v| TurnCueView {
-            direction: v.direction.min(7),
-            ..v
-        });
+        self.turn_cue = view.filter(|v| TurnCueView::direction_from_byte(v.direction).is_some());
     }
 
     /// The nav task's latched off-course verdict, fed per fix beside
@@ -1667,8 +1831,6 @@ impl Recorder {
         self.route_elev = view;
     }
 
-    /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't render
-    /// an unknown verdict label.
     /// Feed the countdown / stopwatch reading (§375). The same external-input
     /// shape as [`set_hr`](Recorder::set_hr) and
     /// [`set_route_position`](Recorder::set_route_position), and for the §215
@@ -1679,11 +1841,11 @@ impl Recorder {
         self.timer = view;
     }
 
+    /// No clamp: the verdict is an enum, so there is no out-of-range state to
+    /// clamp to. A bad wire byte is refused at
+    /// [`RaceDayView::feasible_from_byte`] before it can become a view.
     pub fn set_race_day(&mut self, view: Option<RaceDayView>) {
-        self.race_day = view.map(|v| RaceDayView {
-            days_until: v.days_until,
-            feasible: v.feasible.min(2),
-        });
+        self.race_day = view;
     }
 
     /// Load the runner's race pacing strategy: the race distance, the goal time
@@ -2244,6 +2406,8 @@ impl Recorder {
             gap_s_per_km: self.gap.gap_s_per_km(self.current_speed_mps as f64),
             // After the sampling line above — struct literals evaluate in
             // source order, and the hold flag describes that call's answer.
+            // `gap_held_is_read_after_this_snapshots_own_sample_not_before`
+            // fails if these two swap.
             gap_held: self.gap.held(),
             lap: self.lap_index,
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
@@ -3737,6 +3901,46 @@ mod tests {
         assert!(!s.gap_held);
     }
 
+    /// The hold flag's correctness is an evaluation-order one, and a silent one.
+    /// [`GapEstimator::held`] reports the answer the *last* sampling call left
+    /// behind — the bookkeeping advances inside `gap_s_per_km`, through a `Cell`
+    /// because [`Recorder::snapshot`] takes `&self` — so the flag has to be read
+    /// after this snapshot's own sample. It is, because Rust evaluates struct
+    /// literal fields in source order, which is a real guarantee and an
+    /// invisible one: swapping the two lines compiles, keeps every type, and
+    /// makes the flag describe the previous tick.
+    ///
+    /// The first sub-gate tick is the only one where the two orders disagree, so
+    /// it is the whole test.
+    #[test]
+    fn gap_held_is_read_after_this_snapshots_own_sample_not_before() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=2u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let live = r.snapshot();
+        assert_eq!(live.gap_s_per_km, Some(200));
+        assert!(!live.gap_held, "a live sample is not a hold");
+
+        // A crawl inside the hold band (0.15 < 0.3 < 0.4 m/s). Entering it, the
+        // estimator's dip counter is still 0 — so a read taken above the
+        // sampling line reports this tick's held value as live.
+        r.on_fix(&fix(40.00024, -105.0, 0.3, 3));
+        let first_dip = r.snapshot();
+        assert_eq!(
+            first_dip.gap_s_per_km,
+            Some(200),
+            "the held value is what shows"
+        );
+        assert!(
+            first_dip.gap_held,
+            "gap_held must be read AFTER this snapshot's gap_s_per_km call — \
+             read before it, the flag describes the previous tick and a held \
+             estimate passes as a live sample on the tick it appears"
+        );
+    }
+
     #[test]
     fn gap_gates_out_walking_and_stopped() {
         let mut r = Recorder::new();
@@ -4621,6 +4825,72 @@ mod tests {
         );
     }
 
+    /// The wrap-safety proof for the two `u8` waypoint sequences (see
+    /// [`Snapshot::waypoint_mark_seq`]). The half that lives in this crate is
+    /// the density of the sequence: one press moves one counter by one, so the
+    /// only value an observer can mistake for "no edge" is 256 presses away,
+    /// and the observer runs once per press. A future edit that bumps a counter
+    /// twice, or bumps both on one press, breaks the argument here rather than
+    /// on a wrist.
+    #[test]
+    fn waypoint_seqs_advance_by_exactly_one_per_press_so_the_wrap_cannot_alias() {
+        let mut r = Recorder::new();
+        r.start(0);
+
+        // Refused: recording, but no accepted fix yet, so no position anchor.
+        for i in 1..=3u32 {
+            let before = r.snapshot();
+            assert!(!r.mark_waypoint(i));
+            let after = r.snapshot();
+            assert_eq!(
+                after.waypoint_refuse_seq,
+                before.waypoint_refuse_seq.wrapping_add(1)
+            );
+            assert_eq!(
+                after.waypoint_mark_seq, before.waypoint_mark_seq,
+                "a refusal must not also move the mark counter"
+            );
+        }
+
+        r.on_fix(&fix(10.0, 20.0, 3.0, 10));
+        for i in 11..=13u32 {
+            let before = r.snapshot();
+            assert!(r.mark_waypoint(i));
+            let after = r.snapshot();
+            assert_eq!(
+                after.waypoint_mark_seq,
+                before.waypoint_mark_seq.wrapping_add(1)
+            );
+            assert_eq!(
+                after.waypoint_refuse_seq, before.waypoint_refuse_seq,
+                "an accepted mark must not also move the refuse counter"
+            );
+        }
+
+        // Flood a full period. Every code is visited exactly once before the
+        // sequence returns to where it started, so no observer sampling at
+        // least once per press can ever read an unchanged value across an edge.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        let origin = r.snapshot().waypoint_mark_seq;
+        let mut seen = [false; 256];
+        for i in 0..256u32 {
+            assert!(r.mark_waypoint(100 + i));
+            let seq = r.snapshot().waypoint_mark_seq;
+            assert!(!seen[seq as usize], "code {seq} repeated inside one period");
+            seen[seq as usize] = true;
+        }
+        assert!(seen.iter().all(|&s| s), "the period is shorter than 256");
+        assert_eq!(origin, r.snapshot().waypoint_mark_seq, "256 presses wrap");
+        assert!(r.mark_waypoint(400));
+        assert_eq!(
+            r.snapshot().waypoint_mark_seq,
+            origin.wrapping_add(1),
+            "the 257th press is still an edge"
+        );
+    }
+
     #[test]
     fn pages_mask_hides_empty_pages_by_default() {
         let mut r = Recorder::new();
@@ -4885,14 +5155,16 @@ mod tests {
         }));
         assert_eq!(r.snapshot().recap.unwrap().runs, 120);
 
-        // A corrupt push can't render an out-of-range ring or an unknown band /
-        // verdict / turn glyph — the setters clamp to the code space.
+        // The two genuine numeric ranges: a score and a ring percent both
+        // saturate at 100, which is a real value for each. The code-space
+        // fields no longer clamp at all — see
+        // `the_code_space_view_fields_refuse_an_unknown_byte_instead_of_saturating`.
         r.set_readiness(Some(ReadinessView {
             score: 200,
-            band: 9,
+            band: ReadinessBand::High,
         }));
         let rd = r.snapshot().readiness.unwrap();
-        assert_eq!((rd.score, rd.band), (100, 2));
+        assert_eq!((rd.score, rd.band), (100, ReadinessBand::High));
 
         r.set_goals(Some(GoalsView {
             percent: 250,
@@ -4900,36 +5172,47 @@ mod tests {
         }));
         assert_eq!(r.snapshot().goals.unwrap().percent, 100);
 
+        // Refused, not clamped. The old clamp made this read `U-TURN`.
         r.set_turn_cue(Some(TurnCueView {
             direction: 42,
             distance_m: 100,
             remaining: 3,
         }));
-        assert_eq!(r.snapshot().turn_cue.unwrap().direction, 7);
+        assert!(r.snapshot().turn_cue.is_none());
 
+        // The two verdict fields have no clamp to exercise — they are enums, so
+        // the out-of-range push this test used to feed them cannot be built. The
+        // wire bytes they came from are guarded in
+        // `the_view_verdicts_survive_the_wire_round_trip_and_refuse_unknown_bytes`.
         r.set_race_day(Some(RaceDayView {
             days_until: -5,
-            feasible: 9,
+            feasible: GoalFeasibilityVerdict::FarBehind,
         }));
-        assert_eq!(r.snapshot().race_day.unwrap().feasible, 2);
+        assert_eq!(
+            r.snapshot().race_day.unwrap().feasible,
+            GoalFeasibilityVerdict::FarBehind
+        );
 
         r.set_plan_adaptive(Some(PlanAdaptiveView {
-            trend: 9,
-            confidence: 9,
+            trend: AdaptiveReason::TrendOvertraining,
+            confidence: AdaptiveConfidence::High,
             flagged_weeks: 9,
             window_weeks: 9,
             changes: 4,
             fitness_gated: true,
         }));
         let pa = r.snapshot().plan_adaptive.unwrap();
-        assert_eq!((pa.trend, pa.confidence), (2, 2));
+        assert_eq!(
+            (pa.trend, pa.confidence),
+            (AdaptiveReason::TrendOvertraining, AdaptiveConfidence::High)
+        );
         assert_eq!((pa.flagged_weeks, pa.window_weeks), (3, 3));
         assert_eq!(pa.changes, 4);
         assert!(pa.fitness_gated);
 
         r.set_plan_adaptive(Some(PlanAdaptiveView {
-            trend: 1,
-            confidence: 1,
+            trend: AdaptiveReason::TrendUnderfitness,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 2,
             window_weeks: 3,
             changes: 1,
@@ -4941,6 +5224,185 @@ mod tests {
         // Clearing works.
         r.set_recap(None);
         assert!(r.snapshot().recap.is_none());
+    }
+
+    /// The views carry the verdict enums, so the face cannot disagree with the
+    /// core about a numbering — there is none to disagree about. What is left to
+    /// guard is the **wire edge**: the encode/decode pair each verdict crosses if
+    /// a push ever feeds these views a byte. Both directions are total and the
+    /// decode is fail-closed, because the byte spaces are deliberately not the
+    /// enums' declaration order and an unknown byte resolving to a variant would
+    /// put the wrong verdict on the wrist.
+    #[test]
+    fn the_view_verdicts_survive_the_wire_round_trip_and_refuse_unknown_bytes() {
+        for verdict in [
+            GoalFeasibilityVerdict::Ahead,
+            GoalFeasibilityVerdict::OnTrack,
+            GoalFeasibilityVerdict::Behind,
+            GoalFeasibilityVerdict::FarBehind,
+        ] {
+            let byte = RaceDayView::feasible_code(verdict);
+            assert_eq!(
+                RaceDayView::feasible_from_byte(byte),
+                Some(verdict),
+                "{verdict:?} does not survive its own byte {byte}"
+            );
+        }
+        // All four are representable: the byte space this replaced held three,
+        // and `FarBehind` was the one it dropped.
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::FarBehind),
+            3
+        );
+        for b in 4..=u8::MAX {
+            assert_eq!(
+                RaceDayView::feasible_from_byte(b),
+                None,
+                "byte {b} must refuse, not resolve to a verdict"
+            );
+        }
+
+        for reason in [
+            AdaptiveReason::OnTrack,
+            AdaptiveReason::TrendUnderfitness,
+            AdaptiveReason::TrendOvertraining,
+        ] {
+            let byte = PlanAdaptiveView::trend_code(reason);
+            assert_eq!(PlanAdaptiveView::trend_from_byte(byte), Some(reason));
+        }
+        for confidence in [
+            AdaptiveConfidence::Low,
+            AdaptiveConfidence::Medium,
+            AdaptiveConfidence::High,
+        ] {
+            let byte = PlanAdaptiveView::confidence_code(confidence);
+            assert_eq!(
+                PlanAdaptiveView::confidence_from_byte(byte),
+                Some(confidence)
+            );
+        }
+        for b in 3..=u8::MAX {
+            assert_eq!(PlanAdaptiveView::trend_from_byte(b), None, "trend {b}");
+            assert_eq!(
+                PlanAdaptiveView::confidence_from_byte(b),
+                None,
+                "confidence {b}"
+            );
+        }
+
+        // The bytes are pinned individually too, so a renumber cannot pass by
+        // moving encode and decode together.
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::Behind),
+            0
+        );
+        assert_eq!(
+            RaceDayView::feasible_code(GoalFeasibilityVerdict::OnTrack),
+            1
+        );
+        assert_eq!(RaceDayView::feasible_code(GoalFeasibilityVerdict::Ahead), 2);
+        assert_eq!(PlanAdaptiveView::trend_code(AdaptiveReason::OnTrack), 0);
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::TrendUnderfitness),
+            1
+        );
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::TrendOvertraining),
+            2
+        );
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::Low),
+            0
+        );
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::Medium),
+            1
+        );
+        assert_eq!(
+            PlanAdaptiveView::confidence_code(AdaptiveConfidence::High),
+            2
+        );
+    }
+
+    /// The remaining code-space fields, and the distinction that decides which
+    /// ones get this treatment. `band` and `direction` are byte encodings of an
+    /// enum, so saturating a corrupt value lands on a REAL verdict nobody sent —
+    /// `HIGH` readiness for a fatigued runner, `U-TURN` for a navigating one.
+    /// `score` and `percent` are percentages, where 100 is a genuine value and
+    /// saturating onto it is the correct answer; those keep their clamps.
+    #[test]
+    fn the_code_space_view_fields_refuse_an_unknown_byte_instead_of_saturating() {
+        for band in [
+            ReadinessBand::Low,
+            ReadinessBand::Moderate,
+            ReadinessBand::High,
+        ] {
+            let byte = ReadinessView::band_code(band);
+            assert_eq!(ReadinessView::band_from_byte(byte), Some(band));
+        }
+        assert_eq!(ReadinessView::band_code(ReadinessBand::Low), 0);
+        assert_eq!(ReadinessView::band_code(ReadinessBand::Moderate), 1);
+        assert_eq!(ReadinessView::band_code(ReadinessBand::High), 2);
+        for b in 3..=u8::MAX {
+            assert_eq!(
+                ReadinessView::band_from_byte(b),
+                None,
+                "band {b} must refuse, not read as HIGH"
+            );
+        }
+
+        // The turn ladder is the encode `turn_cues::direction_code` emits, and
+        // the decode is its exact inverse — including the two rungs it reserves
+        // and never produces.
+        for direction in [
+            TurnDirection::Straight,
+            TurnDirection::SlightLeft,
+            TurnDirection::Left,
+            TurnDirection::SlightRight,
+            TurnDirection::Right,
+            TurnDirection::Uturn,
+        ] {
+            let byte = crate::turn_cues::direction_code(direction);
+            assert_eq!(
+                TurnCueView::direction_from_byte(byte),
+                Some(direction),
+                "{direction:?} does not survive its own byte {byte}"
+            );
+        }
+        for b in [3u8, 6] {
+            assert_eq!(
+                TurnCueView::direction_from_byte(b),
+                None,
+                "the reserved sharp rung {b} has no direction to name"
+            );
+        }
+        for b in 8..=u8::MAX {
+            assert_eq!(
+                TurnCueView::direction_from_byte(b),
+                None,
+                "direction {b} must refuse, not read as U-TURN"
+            );
+        }
+
+        // Refusal at the setter, for every byte no producer can emit.
+        let mut r = Recorder::new();
+        for b in [3u8, 6, 8, 42, 255] {
+            r.set_turn_cue(Some(TurnCueView {
+                direction: crate::turn_cues::direction_code(TurnDirection::Left),
+                distance_m: 100,
+                remaining: 2,
+            }));
+            assert!(r.snapshot().turn_cue.is_some(), "the control cue is kept");
+            r.set_turn_cue(Some(TurnCueView {
+                direction: b,
+                distance_m: 100,
+                remaining: 2,
+            }));
+            assert!(
+                r.snapshot().turn_cue.is_none(),
+                "direction {b} must refuse the whole cue"
+            );
+        }
     }
 
     #[test]
