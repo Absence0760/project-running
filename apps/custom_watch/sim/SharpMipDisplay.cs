@@ -9,12 +9,16 @@
 // over logical byte values, so bit 0 is the leftmost pixel of its group and
 // 1 = white, matching the driver's composition exactly.
 //
-// The rendered canvas is wider than the panel: bezel strips flanking the
-// LCD draw five clickable BTN1..BTN5 buttons at the decisions.md §81
-// Garmin-Fenix positions their §350 functions occupy — BTN1 (start/pause)
-// upper-right, BTN4 (page right) lower-right, BTN2 (stop) mid-left in the
-// UP slot, BTN3 (page left) lower-left in the DOWN slot, BTN5 (lap)
-// upper-left in the LIGHT slot. The class implements
+// The rendered canvas is a device, not a strip: the panel draws at 3x into
+// a recessed glass opening inside a shaded, rounded watch case, and the five
+// BTN1..BTN5 keys are clickable capsules protruding from the case sides at
+// the decisions.md §81 Garmin-Fenix positions their §350 functions occupy —
+// BTN1 (start/pause) upper-right, BTN4 (page right) lower-right, BTN2 (stop)
+// mid-left in the UP slot, BTN3 (page left) lower-left in the DOWN slot,
+// BTN5 (lap) upper-left in the LIGHT slot, each with its function etched on
+// the case shoulder beside it. The shell (case, ring, glass, labels, resting
+// keys) is composed once into a cached backdrop; a repaint block-copies it,
+// blits the panel, and repaints at most one pressed key. The class implements
 // IAbsolutePositionPointerInput, which Renode's video analyzer auto-attaches
 // (VideoAnalyzer.FindPointers picks any IPointerInput in the machine), so a
 // mouse press/release on a bezel button in the --gui window drives the same
@@ -192,11 +196,15 @@ namespace Antmicro.Renode.Peripherals.Video
 
         protected override void Repaint()
         {
+            if(shellCache == null)
+            {
+                BuildShellCache();
+            }
+            Array.Copy(shellCache, buffer, shellCache.Length);
             lock(pixelsWhite)
             {
                 for(var y = 0; y < PanelHeight; y++)
                 {
-                    var i = (y * CanvasWidth + PanelLeft) * 3;
                     for(var x = 0; x < PanelWidth; x++)
                     {
                         // PanelPaper/PanelInk, not the White/Black DumpFrame
@@ -206,13 +214,30 @@ namespace Antmicro.Renode.Peripherals.Video
                         // pair so its bytes — and every assertion over them —
                         // stay exactly what they were.
                         var rgb = pixelsWhite[y, x] ? PanelPaper : PanelInk;
-                        buffer[i++] = rgb[0];
-                        buffer[i++] = rgb[1];
-                        buffer[i++] = rgb[2];
+                        var left = PanelLeft + x * Scale;
+                        for(var dy = 0; dy < Scale; dy++)
+                        {
+                            var i = ((PanelTop + y * Scale + dy) * CanvasWidth + left) * 3;
+                            for(var dx = 0; dx < Scale; dx++)
+                            {
+                                // The last row/column of each Scale-wide cell
+                                // is nudged dark: the inter-pixel gap a real
+                                // MIP shows, and what keeps the 3x blow-up
+                                // reading as glass rather than a flat fill.
+                                var gap = dy == Scale - 1 || dx == Scale - 1;
+                                buffer[i++] = gap ? (byte)(rgb[0] - (rgb[0] >> 4)) : rgb[0];
+                                buffer[i++] = gap ? (byte)(rgb[1] - (rgb[1] >> 4)) : rgb[1];
+                                buffer[i++] = gap ? (byte)(rgb[2] - (rgb[2] >> 4)) : rgb[2];
+                            }
+                        }
                     }
                 }
             }
-            DrawBezel();
+            var pressed = pressedIndex;
+            if(pressed >= 0)
+            {
+                DrawKey(pressed, true);
+            }
         }
 
         private void ReleasePressedButton()
@@ -239,105 +264,133 @@ namespace Antmicro.Renode.Peripherals.Video
             return -1;
         }
 
-        // The case, the five keys, and a rim around the glass. Geometry is
-        // deliberately unchanged from the flat first version — CanvasWidth,
-        // ButtonX and ButtonY all still hold, so the click mapping and
-        // HitButton boxes are the same pixels they always were and this is
-        // purely how those pixels are coloured.
-        private void DrawBezel()
+        // The shell: shaded case, bezel ring, glass recess, and the five keys
+        // at rest, composed once into a cached backdrop. Every hit box reads
+        // the same ButtonX/ButtonY/ButtonWidth/ButtonHeight the key painter
+        // does, so the click map cannot drift from the pixels.
+        private void BuildShellCache()
         {
-            FillRect(0, 0, BezelWidth, CanvasHeight, CaseBody);
-            FillRect(PanelLeft + PanelWidth, 0, BezelWidth, CanvasHeight, CaseBody);
-            // A lit top edge and a shadowed bottom one: one pixel each, and the
-            // only thing separating a flat grey strip from something that reads
-            // as a moulded case.
-            for(var x = 0; x < CanvasWidth; x++)
-            {
-                if(x < BezelWidth || x >= PanelLeft + PanelWidth)
-                {
-                    SetPixel(x, 0, CaseLit);
-                    SetPixel(x, CanvasHeight - 1, CaseShadow);
-                }
-            }
-            // The glass sits in a recess, so its edge carries a rim: shadowed on
-            // the side the light comes from, lit on the far one.
-            for(var y = 0; y < PanelHeight; y++)
-            {
-                SetPixel(PanelLeft - 1, y, CaseShadow);
-                SetPixel(PanelLeft + PanelWidth, y, CaseLit);
-            }
-            RoundCorners();
+            shellCache = new byte[CanvasWidth * CanvasHeight * 3];
+            Fill(shellCache, Outside);
 
-            var pressed = pressedIndex;
+            FillRoundedRect(shellCache, CaseX, CaseY, CaseW, CaseH, CaseRadius, CaseTop, CaseBottom);
+            EdgeLine(shellCache, CaseX + CaseRadius, CaseX + CaseW - CaseRadius, CaseY + 1, CaseLit);
+
+            var ringX = PanelLeft - GlassMargin - BezelRing;
+            var ringY = PanelTop - GlassMargin - BezelRing;
+            var ringW = PanelWidth * Scale + 2 * (GlassMargin + BezelRing);
+            var ringH = PanelHeight * Scale + 2 * (GlassMargin + BezelRing);
+            FillRoundedRect(shellCache, ringX, ringY, ringW, ringH, RingRadius, RingTop, RingBottom);
+            EdgeLine(shellCache, ringX + RingRadius, ringX + ringW - RingRadius, ringY + 1, RingLit);
+
+            FillRoundedRect(shellCache, PanelLeft - GlassMargin, PanelTop - GlassMargin,
+                PanelWidth * Scale + 2 * GlassMargin, PanelHeight * Scale + 2 * GlassMargin,
+                GlassRadius, Glass, Glass);
+
             for(var i = 0; i < ButtonPins.Length; i++)
             {
-                var down = i == pressed;
-                var fill = down ? KeyDown : KeyFill;
-                var ink = down ? KeyDownText : KeyText;
-                FillRect(ButtonX[i], ButtonY[i], ButtonWidth, ButtonHeight, fill);
-                DrawRectOutline(ButtonX[i], ButtonY[i], ButtonWidth, ButtonHeight, down ? KeyEdgeDown : KeyEdge);
-                // Two lines: which key, and what § 350 makes it do. The number
-                // alone made the window a wiring diagram — you had to already
-                // know the grammar to drive it.
-                CenteredText(i, ButtonY[i] + 2, "B" + (i + 1), ink);
-                CenteredText(i, ButtonY[i] + ButtonHeight - GlyphHeight - 2, ButtonLabels[i], ink);
+                DrawKeyInto(shellCache, i, false);
             }
         }
 
-        private void CenteredText(int index, int y, string text, byte[] rgb)
+        private void DrawKey(int index, bool down)
         {
-            var textWidth = text.Length * (GlyphWidth + 1) - 1;
-            DrawText(ButtonX[index] + (ButtonWidth - textWidth) / 2, y, text, rgb);
+            DrawKeyInto(buffer, index, down);
         }
 
-        // Knock the four canvas corners back to the window background so the
-        // case reads as a rounded body rather than a rectangle.
-        private void RoundCorners()
+        // A key is a rounded tab riding the case edge, carrying its § 350
+        // function word with its BTN number beneath — the function prominent,
+        // because the number alone made the window a wiring diagram.
+        private void DrawKeyInto(byte[] dst, int index, bool down)
         {
-            for(var y = 0; y < CornerRadius; y++)
+            var x = ButtonX[index];
+            var y = ButtonY[index];
+            if(down)
             {
-                for(var x = 0; x < CornerRadius; x++)
+                // Pressed keys light in the panel's own paper green — the
+                // loudest confirmation the palette has.
+                FillRoundedRect(dst, x, y, ButtonWidth, ButtonHeight, KeyRadius, KeyDown, KeyDown);
+            }
+            else
+            {
+                FillRoundedRect(dst, x, y, ButtonWidth, ButtonHeight, KeyRadius, KeyTop, KeyBottom);
+                EdgeLine(dst, x + KeyRadius, x + ButtonWidth - KeyRadius, y + 1, KeyLit);
+            }
+            var ink = down ? KeyDownText : KeyText;
+            var tag = down ? KeyDownText : KeyTagText;
+            var word = ButtonLabels[index];
+            DrawText(dst, x + (ButtonWidth - TextWidth(word, 2)) / 2, y + 9, word, 2, ink);
+            var num = "B" + (index + 1);
+            DrawText(dst, x + (ButtonWidth - TextWidth(num, 1)) / 2, y + ButtonHeight - GlyphHeight - 8, num, 1, tag);
+        }
+
+        private static void Fill(byte[] dst, byte[] rgb)
+        {
+            for(var i = 0; i < dst.Length; i += 3)
+            {
+                dst[i] = rgb[0];
+                dst[i + 1] = rgb[1];
+                dst[i + 2] = rgb[2];
+            }
+        }
+
+        // Rounded rectangle with a vertical top->bottom gradient, edges
+        // anti-aliased by signed-distance coverage against whatever the
+        // destination already holds.
+        private void FillRoundedRect(byte[] dst, int x0, int y0, int w, int h, int r, byte[] top, byte[] bottom)
+        {
+            var hw = w / 2.0;
+            var hh = h / 2.0;
+            var cx = x0 + hw;
+            var cy = y0 + hh;
+            for(var y = y0; y < y0 + h; y++)
+            {
+                if(y < 0 || y >= CanvasHeight)
                 {
-                    var dx = CornerRadius - 1 - x;
-                    var dy = CornerRadius - 1 - y;
-                    if(dx * dx + dy * dy <= CornerRadius * CornerRadius)
+                    continue;
+                }
+                var t = (y - y0) / (double)(h - 1);
+                var rr = (byte)(top[0] + (bottom[0] - top[0]) * t);
+                var gg = (byte)(top[1] + (bottom[1] - top[1]) * t);
+                var bb = (byte)(top[2] + (bottom[2] - top[2]) * t);
+                for(var x = x0; x < x0 + w; x++)
+                {
+                    if(x < 0 || x >= CanvasWidth)
                     {
                         continue;
                     }
-                    SetPixel(x, y, Outside);
-                    SetPixel(CanvasWidth - 1 - x, y, Outside);
-                    SetPixel(x, CanvasHeight - 1 - y, Outside);
-                    SetPixel(CanvasWidth - 1 - x, CanvasHeight - 1 - y, Outside);
+                    var dx = Math.Max(Math.Abs(x + 0.5 - cx) - (hw - r), 0.0);
+                    var dy = Math.Max(Math.Abs(y + 0.5 - cy) - (hh - r), 0.0);
+                    var dist = Math.Sqrt(dx * dx + dy * dy) - r;
+                    var cover = Math.Min(Math.Max(0.5 - dist, 0.0), 1.0);
+                    if(cover <= 0.0)
+                    {
+                        continue;
+                    }
+                    var i = (y * CanvasWidth + x) * 3;
+                    dst[i] = (byte)(dst[i] + (rr - dst[i]) * cover);
+                    dst[i + 1] = (byte)(dst[i + 1] + (gg - dst[i + 1]) * cover);
+                    dst[i + 2] = (byte)(dst[i + 2] + (bb - dst[i + 2]) * cover);
                 }
             }
         }
 
-        private void FillRect(int x0, int y0, int w, int h, byte[] rgb)
+        // One-pixel specular line along a shape's flat top span — the light
+        // that separates a moulded surface from a flat fill.
+        private void EdgeLine(byte[] dst, int xFrom, int xTo, int y, byte[] rgb)
         {
-            for(var y = y0; y < y0 + h; y++)
+            for(var x = xFrom; x < xTo; x++)
             {
-                for(var x = x0; x < x0 + w; x++)
-                {
-                    SetPixel(x, y, rgb);
-                }
+                SetPixel(dst, x, y, rgb);
             }
         }
 
-        private void DrawRectOutline(int x0, int y0, int w, int h, byte[] rgb)
+        private static int TextWidth(string text, int scale)
         {
-            for(var x = x0; x < x0 + w; x++)
-            {
-                SetPixel(x, y0, rgb);
-                SetPixel(x, y0 + h - 1, rgb);
-            }
-            for(var y = y0; y < y0 + h; y++)
-            {
-                SetPixel(x0, y, rgb);
-                SetPixel(x0 + w - 1, y, rgb);
-            }
+            return text.Length * (GlyphWidth + 1) * scale - scale;
         }
 
-        private void DrawText(int x0, int y0, string text, byte[] rgb)
+        private void DrawText(byte[] dst, int x0, int y0, string text, int scale, byte[] rgb)
         {
             var x = x0;
             foreach(var c in text)
@@ -349,23 +402,34 @@ namespace Antmicro.Renode.Peripherals.Video
                     {
                         for(var col = 0; col < GlyphWidth; col++)
                         {
-                            if(((glyph[row] >> (GlyphWidth - 1 - col)) & 1) == 1)
+                            if(((glyph[row] >> (GlyphWidth - 1 - col)) & 1) != 1)
                             {
-                                SetPixel(x + col, y0 + row, rgb);
+                                continue;
+                            }
+                            for(var dy = 0; dy < scale; dy++)
+                            {
+                                for(var dx = 0; dx < scale; dx++)
+                                {
+                                    SetPixel(dst, x + col * scale + dx, y0 + row * scale + dy, rgb);
+                                }
                             }
                         }
                     }
                 }
-                x += GlyphWidth + 1;
+                x += (GlyphWidth + 1) * scale;
             }
         }
 
-        private void SetPixel(int x, int y, byte[] rgb)
+        private void SetPixel(byte[] dst, int x, int y, byte[] rgb)
         {
+            if(x < 0 || x >= CanvasWidth || y < 0 || y >= CanvasHeight)
+            {
+                return;
+            }
             var i = (y * CanvasWidth + x) * 3;
-            buffer[i] = rgb[0];
-            buffer[i + 1] = rgb[1];
-            buffer[i + 2] = rgb[2];
+            dst[i] = rgb[0];
+            dst[i + 1] = rgb[1];
+            dst[i + 2] = rgb[2];
         }
 
         private void DecodeFrame()
@@ -426,15 +490,29 @@ namespace Antmicro.Renode.Peripherals.Video
         // mode + 144 * (addr + data + trailer) + final trailer, with slack
         private const int MaxFrameBytes = 2 + PanelHeight * (LineBytes + 2) + 64;
 
-        // Bezel geometry: a strip either side of the LCD, one box per button
-        // at the §81 Fenix slot its function maps to (see the file header).
-        private const int BezelWidth = 31;
-        private const int PanelLeft = BezelWidth;
-        private const int CanvasWidth = BezelWidth + PanelWidth + BezelWidth;
-        private const int CanvasHeight = PanelHeight;
-        private const int ButtonHeight = 18;
-        private const int ButtonWidth = 27;
-        private const int ButtonInset = 2;
+        // Shell geometry. The panel draws at Scale into a glass recess inside
+        // a bezel ring inside the case; the keys are tabs riding the case's
+        // side edges at the §81 Fenix slots (see the file header). Everything
+        // derives from these so the layout stays one set of knobs.
+        private const int Scale = 3;
+        private const int GlassMargin = 14;
+        private const int BezelRing = 12;
+        private const int CaseSide = 62;
+        private const int CaseTopBand = 26;
+        private const int CaseX = 22;
+        private const int CaseY = 6;
+        private const int CaseRadius = 52;
+        private const int RingRadius = 18;
+        private const int GlassRadius = 8;
+        private const int PanelLeft = CaseX + CaseSide + BezelRing + GlassMargin;
+        private const int PanelTop = CaseY + CaseTopBand + BezelRing + GlassMargin;
+        private const int CanvasWidth = 2 * PanelLeft + PanelWidth * Scale;
+        private const int CanvasHeight = 2 * PanelTop + PanelHeight * Scale;
+        private const int CaseW = CanvasWidth - 2 * CaseX;
+        private const int CaseH = CanvasHeight - 2 * CaseY;
+        private const int ButtonWidth = 66;
+        private const int ButtonHeight = 48;
+        private const int KeyRadius = 14;
         private const int GlyphWidth = 5;
         private const int GlyphHeight = 7;
 
@@ -444,10 +522,16 @@ namespace Antmicro.Renode.Peripherals.Video
         // (start/pause), BTN2 mid-left (stop), BTN3 lower-left (page left),
         // BTN4 lower-right (page right), BTN5 upper-left (lap).
         private static readonly int[] ButtonPins = { 11, 12, 24, 25, 2 };
-        private const int LeftColX = ButtonInset;
-        private const int RightColX = CanvasWidth - ButtonWidth - ButtonInset;
+        private const int LeftColX = 8;
+        private const int RightColX = CanvasWidth - ButtonWidth - 8;
         private static readonly int[] ButtonX = { RightColX, LeftColX, LeftColX, RightColX, LeftColX };
-        private static readonly int[] ButtonY = { 14, 63, 112, 112, 14 };
+        private static readonly int[] ButtonY = {
+            (int)(CanvasHeight * 0.28) - ButtonHeight / 2,
+            CanvasHeight / 2 - ButtonHeight / 2,
+            (int)(CanvasHeight * 0.80) - ButtonHeight / 2,
+            (int)(CanvasHeight * 0.72) - ButtonHeight / 2,
+            (int)(CanvasHeight * 0.20) - ButtonHeight / 2,
+        };
 
         // DumpFrame's pair. Flat by design and NOT the canvas colours: every
         // assertion over a dump reads these bytes, so they do not move.
@@ -456,24 +540,28 @@ namespace Antmicro.Renode.Peripherals.Video
 
         // The canvas palette. A reflective Sharp MIP has no backlight — the
         // paper is a silvery green and the ink a warm dark grey, which is what
-        // the panel reads as in daylight.
+        // the panel reads as in daylight. The case and keys are a cool dark
+        // titanium, shaded top-to-bottom under an implied high light.
         private static readonly byte[] PanelPaper = { 0xC7, 0xD1, 0xC2 };
         private static readonly byte[] PanelInk = { 0x1E, 0x22, 0x1B };
-        private static readonly byte[] CaseBody = { 0x24, 0x26, 0x29 };
-        private static readonly byte[] CaseLit = { 0x3C, 0x3F, 0x44 };
-        private static readonly byte[] CaseShadow = { 0x12, 0x13, 0x15 };
         private static readonly byte[] Outside = { 0x0A, 0x0B, 0x0C };
-        private static readonly byte[] KeyFill = { 0x33, 0x36, 0x3B };
-        private static readonly byte[] KeyEdge = { 0x60, 0x65, 0x6C };
+        private static readonly byte[] CaseTop = { 0x43, 0x47, 0x4F };
+        private static readonly byte[] CaseBottom = { 0x20, 0x23, 0x28 };
+        private static readonly byte[] CaseLit = { 0x6E, 0x74, 0x7E };
+        private static readonly byte[] RingTop = { 0x2E, 0x32, 0x39 };
+        private static readonly byte[] RingBottom = { 0x14, 0x16, 0x1A };
+        private static readonly byte[] RingLit = { 0x77, 0x7E, 0x8A };
+        private static readonly byte[] Glass = { 0x0B, 0x0D, 0x0F };
+        private static readonly byte[] KeyTop = { 0x3A, 0x3F, 0x47 };
+        private static readonly byte[] KeyBottom = { 0x1B, 0x1E, 0x23 };
+        private static readonly byte[] KeyLit = { 0x6E, 0x75, 0x81 };
         private static readonly byte[] KeyText = { 0xD6, 0xDA, 0xE0 };
+        private static readonly byte[] KeyTagText = { 0x8A, 0x92, 0x9E };
         private static readonly byte[] KeyDown = { 0xC7, 0xD1, 0xC2 };
-        private static readonly byte[] KeyEdgeDown = { 0xE8, 0xF0, 0xE4 };
         private static readonly byte[] KeyDownText = { 0x14, 0x18, 0x12 };
 
-        private const int CornerRadius = 7;
-
         // What § 350 makes each key do, indexed like ButtonPins/ButtonX/ButtonY.
-        private static readonly string[] ButtonLabels = { "STRT", "STOP", "PREV", "NEXT", "LAP" };
+        private static readonly string[] ButtonLabels = { "START", "STOP", "PREV", "NEXT", "LAP" };
 
         // 5x7 glyphs, bit 4 = leftmost column; only the bezel labels' chars.
         private static readonly Dictionary<char, byte[]> Font = new Dictionary<char, byte[]>
@@ -500,6 +588,7 @@ namespace Antmicro.Renode.Peripherals.Video
         private readonly IGPIOReceiver buttonPort;
         private readonly bool[,] pixelsWhite;
         private readonly byte[] frameBytes;
+        private byte[] shellCache;
         private int frameLength;
         private bool csAsserted;
         private volatile int pointerX;
