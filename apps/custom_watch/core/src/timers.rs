@@ -247,15 +247,25 @@ pub struct TimerView {
     /// the same shape the workout runner's `transition_seq` uses. 0 while the
     /// countdown has not expired (and always, for a stopwatch).
     pub expiry_seq: u16,
+    /// The reading is a **floor** — see [`Timer::gap_unknown`]. Carried on the
+    /// view, not just on the instrument, so the run-view page and the modal make
+    /// the same claim about the same number.
+    pub gap_unknown: bool,
 }
 
 impl TimerView {
-    /// The reading, signed on an overrun: `+2:14` is two minutes past zero.
-    /// Both surfaces call this, so the modal and the page cannot show the same
-    /// instrument two ways.
+    /// The reading, signed on an overrun: `+2:14` is two minutes past zero, and
+    /// `>` in place of the sign when the number is only a floor. Both surfaces
+    /// call this, so the modal and the page cannot show the same instrument two
+    /// ways.
+    ///
+    /// `>` outranks `+` because it qualifies the digits themselves: an overrun of
+    /// *at least* 2:14 is `>2:14`, and a `+` there would read as a measured one.
     pub fn display(&self) -> Clock {
         let mut out = Clock::new();
-        if self.expired {
+        if self.gap_unknown {
+            let _ = out.push('>');
+        } else if self.expired {
             let _ = out.push('+');
         }
         let _ = out.push_str(&format_clock(self.display_s));
@@ -264,10 +274,14 @@ impl TimerView {
 
     /// The word under the reading. `TIME UP` outranks the run state: a runner
     /// who has overrun needs that before they need to know the clock is still
-    /// moving.
+    /// moving. And it outranks the unmeasured gap too — a lapse the floor already
+    /// proves is a fact about the countdown, where `GAP UNKNOWN` is a fact about
+    /// the digits, which the `>` on them is already carrying.
     pub fn state_word(&self) -> &'static str {
         if self.expired {
             "TIME UP"
+        } else if self.gap_unknown {
+            "GAP UNKNOWN"
         } else if self.running {
             "RUNNING"
         } else if self.elapsed_s > 0 {
@@ -289,6 +303,16 @@ impl TimerView {
     }
 }
 
+/// Whether the instrument holds anything, and whether its clock is moving — the
+/// only two facts a persisted record cannot reconstruct for itself. See
+/// [`Timer::persist_key`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TimerPersistKey {
+    armed: bool,
+    running: bool,
+}
+
 /// The instrument. Small and `Copy` so the owning task can publish it whole and
 /// each consumer derive its own view at its own cadence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -307,9 +331,9 @@ pub struct Timer {
     /// surface must report elapsed rather than remaining while this is set, and
     /// it clears only on [`Self::reset`].
     ///
-    /// The modal ([`timer_rows`]) says so outright. The run-view `TIMR` page
-    /// does **not** yet, because [`TimerView`] does not carry the flag — until
-    /// it does, that page shows the floor as an ordinary stopped reading.
+    /// Both surfaces say so: the modal ([`timer_rows`]) names the limit on a row
+    /// of its own, and the run-view `TIMR` page reads it off
+    /// [`TimerView::gap_unknown`] for the `>` prefix and the state word.
     gap_unknown: bool,
 }
 
@@ -333,6 +357,23 @@ impl Timer {
     /// See [`Self::gap_unknown`] — the reading is a floor, not a measurement.
     pub fn reading_is_a_floor(&self) -> bool {
         self.gap_unknown
+    }
+
+    /// The state a flash write is owed for. The caller persists exactly when
+    /// this moves across a press, and never otherwise.
+    ///
+    /// It deliberately excludes the reading. An armed instrument's elapsed grows
+    /// every second, so a caller that compared the *record* would erase the
+    /// config page once per tick — 5,400 erases in one 90-minute countdown,
+    /// against a page rated ~10,000. Nothing is lost by leaving it: the record
+    /// stores the anchor, and an anchor does not drift. The ladder is reachable
+    /// only while nothing is armed, so walking every rung moves this not at all
+    /// and costs no erase.
+    pub fn persist_key(&self) -> TimerPersistKey {
+        TimerPersistKey {
+            armed: self.is_armed(),
+            running: self.running(),
+        }
     }
 
     pub fn preset_s(&self) -> u32 {
@@ -437,9 +478,8 @@ impl Timer {
                 elapsed_s - preset_s
             } else if self.gap_unknown {
                 // A floor reports ELAPSED, because the remaining is exactly the
-                // number the unmeasured gap destroyed. This is the one place
-                // `display_s` changes meaning without a field of its own saying
-                // so — see [`Self::gap_unknown`] for what the surfaces still owe.
+                // number the unmeasured gap destroyed. `gap_unknown` rides along
+                // on the view so a consumer can never read this as a remaining.
                 elapsed_s
             } else {
                 preset_s - elapsed_s
@@ -447,6 +487,7 @@ impl Timer {
             running: self.running(),
             expired,
             expiry_seq: if expired { self.arm_seq } else { 0 },
+            gap_unknown: self.gap_unknown,
         }
     }
 
@@ -1082,10 +1123,14 @@ mod tests {
             v.display_s, 723,
             "the remaining is exactly what the unmeasured gap destroyed"
         );
-        assert_eq!(v.display().as_str(), "12:03");
-        // The modal names the limit on the surface that carries the number.
+        // `>` qualifies the digits, on BOTH surfaces — the view carries the flag
+        // so the run-view page cannot show 12:03 as a measured stopped reading.
+        assert_eq!(v.display().as_str(), ">12:03");
+        assert_eq!(v.state_word(), "GAP UNKNOWN");
+        // And the modal additionally names the limit in words.
         let rows = timer_rows(&back, 0);
-        assert_eq!(rows[TIMER_TOP_ROW].as_str(), "12:03");
+        assert_eq!(rows[TIMER_TOP_ROW].as_str(), ">12:03");
+        assert_eq!(rows[TIMER_TOP_ROW + 1].as_str(), "GAP UNKNOWN");
         assert_eq!(rows[TIMER_TOP_ROW + 2].as_str(), "SET 45:00");
         assert_eq!(rows[TIMER_TOP_ROW + 4].as_str(), "REBOOT GAP UNKNOWN");
     }
@@ -1094,7 +1139,8 @@ mod tests {
     fn a_floor_above_the_target_still_proves_the_countdown_lapsed() {
         // Certainty runs one way: the gap is unknown, so elapsed is a floor, and
         // a floor past the target means it lapsed for sure. The overrun is then
-        // itself a floor, which is what `+` is reporting.
+        // itself a floor, so it reads `>` and NOT `+` — a `+` would claim the
+        // overrun had been measured — while the word stays the lapse itself.
         let mut t = armed(1);
         assert_eq!(t.preset_s(), 60);
         t.start_stop(200);
@@ -1103,7 +1149,7 @@ mod tests {
         running.gap_unknown = true;
         let v = running.view(0);
         assert!(v.expired, "200 s banked against a 60 s target");
-        assert_eq!(v.display().as_str(), "+2:20");
+        assert_eq!(v.display().as_str(), ">2:20");
         assert_eq!(v.state_word(), "TIME UP");
         assert_ne!(v.expiry_seq, 0, "a restored lapse is still owed its banner");
     }
@@ -1190,6 +1236,81 @@ mod tests {
         for r in readings.iter() {
             assert_eq!(*r, 4_000, "every tick's record rebuilds one reading");
         }
+    }
+
+    /// The button task's rule, reproduced exactly: walk a press sequence and
+    /// count how many of them the `persist_key` gate lets through to flash.
+    fn erases_for(presses: &[(TimerKey, u32)]) -> usize {
+        let mut t = Timer::new();
+        let mut erases = 0;
+        for (key, now_s) in presses {
+            let before = t.persist_key();
+            if press(&mut t, *key, *now_s) == TimerPress::Changed && t.persist_key() != before {
+                // The task would call `persist_timer(t.to_record(..))` here.
+                erases += 1;
+            }
+        }
+        erases
+    }
+
+    #[test]
+    fn the_write_gate_fires_on_a_state_change_and_never_on_a_tick() {
+        use TimerKey::*;
+        // One nap: dial 45 min, start, stop, clear. Only the last three move the
+        // state, so the eight ladder presses cost the config page nothing.
+        let mut presses: heapless::Vec<(TimerKey, u32), 32> = heapless::Vec::new();
+        for _ in 0..8 {
+            presses.push((Longer, 0)).unwrap();
+        }
+        assert_eq!(erases_for(&presses), 0, "walking the ladder is free");
+        presses.push((StartStop, 0)).unwrap();
+        presses.push((StartStop, 2_700)).unwrap();
+        presses.push((Reset, 2_700)).unwrap();
+        assert_eq!(erases_for(&presses), 3, "arm, stop, clear");
+        // A pause and resume mid-timing is two more, and nothing else is.
+        let mut with_pause = presses.clone();
+        with_pause.clear();
+        for p in presses.iter().take(9) {
+            with_pause.push(*p).unwrap();
+        }
+        with_pause.push((StartStop, 600)).unwrap();
+        with_pause.push((StartStop, 900)).unwrap();
+        with_pause.push((StartStop, 2_700)).unwrap();
+        with_pause.push((Reset, 2_700)).unwrap();
+        assert_eq!(
+            erases_for(&with_pause),
+            5,
+            "arm, pause, resume, stop, clear"
+        );
+        // And the tick itself is not a press, so it cannot reach the gate at all:
+        // an armed instrument's key is identical at every second of its run.
+        let armed = armed(8);
+        let key = armed.persist_key();
+        for now_s in [0u32, 1, 60, 1_349, 2_699, 2_700, 100_000] {
+            assert_eq!(armed.persist_key(), key);
+            // ...while the record it WOULD write moves every one of those
+            // seconds, which is exactly why the gate cannot read the record.
+            assert_eq!(armed.to_record(now_s, None).unwrap().elapsed_s, now_s);
+        }
+    }
+
+    #[test]
+    fn a_realistic_race_stays_far_inside_the_pages_erase_endurance() {
+        // ~16 crew-access aid stations plus ~6 sleep-station naps on a 240-mile
+        // race, three erases each (arm, stop, clear). The point of the number is
+        // that it is two orders of magnitude under the ~10,000 erase-cycle page
+        // rating `record_cadence` quotes — per-tick writing would be 5,400 for a
+        // single 90-minute countdown.
+        let per_timing = erases_for(&[
+            (TimerKey::StartStop, 0),
+            (TimerKey::StartStop, 300),
+            (TimerKey::Reset, 300),
+        ]);
+        assert_eq!(per_timing, 3);
+        assert!(
+            (16 + 6) * per_timing < 100,
+            "a race's timers should cost well under 100 erases"
+        );
     }
 
     #[test]

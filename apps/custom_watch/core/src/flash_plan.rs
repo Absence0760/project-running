@@ -1226,6 +1226,11 @@ mod tests {
                 flash_store::SCREENS_RECORD_OFFSET,
                 crate::screens::MAX_SCR1_LEN,
             ),
+            (
+                "timer",
+                flash_store::TIMER_RECORD_OFFSET,
+                crate::timers::TIMER_RECORD_LEN,
+            ),
         ] {
             let start = config + at as u32;
             assert!(
