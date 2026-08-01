@@ -7,7 +7,9 @@
 //! `watch_core::nav_project`. This task only feeds fixes in and publishes what
 //! came out, logging the alert's rising edge and the recovery so an off-course
 //! excursion is visible in the defmt stream regardless of which display page is
-//! up.
+//! up. Fixes pass `nav_project::FixGate` first: the recorder never lets an
+//! impossible-speed fix move the track, and the off-course latch deserves the
+//! same protection from a multipath teleport.
 //!
 //! Because it owns the active course it also shapes that course's climb profile
 //! (`course_profile::course_elev_view`) on every course change and publishes it
@@ -29,7 +31,7 @@ use embassy_futures::select::{select, Either};
 use watch_core::course::{Course, OffCourseAlert};
 use watch_core::course_profile::course_elev_view;
 use watch_core::face::NavView;
-use watch_core::nav_project::{course_cues, project_fix};
+use watch_core::nav_project::{course_cues, project_fix, FixGate};
 use watch_core::turn_cues::{TurnCue, MAX_TURN_CUES};
 
 use crate::state;
@@ -94,6 +96,10 @@ pub async fn run(boot_course: Option<&'static Course>) {
     let mut course_rx = unwrap!(state::COURSE.receiver());
     let mut pushed: Option<Course> = None;
     let mut alert = OffCourseAlert::new();
+    // Rejects the finite-but-impossible fix (canyon multipath) before it can
+    // fire or clear the off-course latch; the recorder gates its own feed the
+    // same way. Deliberately NOT reset on a course swap — see FixGate's docs.
+    let mut gate = FixGate::new();
     // Forward-progress bias anchor (course::project_from); reset whenever the
     // active course changes so along-distance restarts on a new route.
     let mut prev_along: Option<f64> = None;
@@ -127,6 +133,10 @@ pub async fn run(boot_course: Option<&'static Course>) {
                 let Some(course) = pushed.as_ref().or(boot_course) else {
                     continue;
                 };
+                if !gate.accept(fix.lat_deg, fix.lon_deg, fix.uptime_s) {
+                    warn!("nav: implausible fix rejected before projection");
+                    continue;
+                }
                 // Forward-progress-biased projection keeps along-distance
                 // monotonic on a retracing course (course::project_from).
                 let Some(out) = project_fix(
