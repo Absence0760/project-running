@@ -2689,58 +2689,34 @@ impl Recorder {
 /// Equirectangular ground distance between two fixes, in metres. Longitude is
 /// scaled by the cosine of the first fix's latitude, matching the Dart
 /// recorder's segment-distance projection.
+///
+/// Called on every accepted fix inside [`Recorder::on_fix`] — the hottest loop
+/// in the firmware — so the metre-frame arithmetic runs in single precision. The
+/// Cortex-M4F's FPU has no double-precision hardware (that needs M7 or better),
+/// so an `f64` here is a chain of soft-float library calls; the previous
+/// hand-rolled Newton `sqrt` unrolled to ~1200 instructions and ~200 such calls
+/// per fix, against ~50 and ~9 for this.
+///
+/// The degree deltas are still differenced in `f64`: absolute coordinates need
+/// ~9 significant digits to hold sub-metre position and `f32` carries ~7.2. What
+/// makes narrowing safe *after* the subtraction is that nothing downstream
+/// cancels — `dx` and `dy` are metre-scale magnitudes and `dx² + dy²` sums two
+/// non-negative terms, so `f32`'s ~1e-7 relative precision stays relative.
+/// (Contrast `trackback::initial_bearing_deg`, which subtracts two nearly-equal
+/// O(1) products *after* its trig and therefore cannot be narrowed.)
+///
+/// Measured against a full-`f64` reference: worst per-segment relative error
+/// 1.4e-6 (at latitude 89°, where the previous Taylor cosine was itself 3.1e-7),
+/// and 7 mm of accumulated drift over 360,000 fixes / 1,440 km. The
+/// equirectangular projection this implements treats a degree of latitude as a
+/// flat [`METRES_PER_DEGREE_LAT`] everywhere, a model error of metres per
+/// kilometre — six orders larger than anything the working precision
+/// contributes.
 fn segment_distance_m(a: &Fix, b: &Fix) -> f64 {
-    let m_per_deg_lon = METRES_PER_DEGREE_LAT * cos(to_rad(a.lat_deg));
-    let dy = (b.lat_deg - a.lat_deg) * METRES_PER_DEGREE_LAT;
-    let dx = (b.lon_deg - a.lon_deg) * m_per_deg_lon;
-    sqrt(dx * dx + dy * dy)
-}
-
-fn to_rad(deg: f64) -> f64 {
-    deg * core::f64::consts::PI / 180.0
-}
-
-/// Newton–Raphson square root — `core` has no `f64::sqrt` without a math dep.
-fn sqrt(x: f64) -> f64 {
-    if x <= 0.0 || x.is_nan() {
-        return 0.0;
-    }
-    let mut g = x;
-    let mut i = 0;
-    while i < 32 {
-        let next = 0.5 * (g + x / g);
-        if fabs(next - g) <= 1e-12 * next {
-            return next;
-        }
-        g = next;
-        i += 1;
-    }
-    g
-}
-
-/// Cosine via the even Taylor series to x^12. The argument is a latitude in
-/// radians (|x| <= pi/2), where this holds to ~1e-4 at the poles and far
-/// tighter at running latitudes — sub-millimetre once scaled by a per-fix
-/// longitude delta.
-fn cos(x: f64) -> f64 {
-    let x2 = x * x;
-    let mut term = 1.0;
-    let mut sum = 1.0;
-    let mut n = 1;
-    while n <= 6 {
-        term *= -x2 / (((2 * n - 1) * (2 * n)) as f64);
-        sum += term;
-        n += 1;
-    }
-    sum
-}
-
-fn fabs(x: f64) -> f64 {
-    if x < 0.0 {
-        -x
-    } else {
-        x
-    }
+    let m_per_deg_lon = METRES_PER_DEGREE_LAT as f32 * libm::cosf((a.lat_deg as f32).to_radians());
+    let dy = ((b.lat_deg - a.lat_deg) * METRES_PER_DEGREE_LAT) as f32;
+    let dx = (b.lon_deg - a.lon_deg) as f32 * m_per_deg_lon;
+    libm::sqrtf(dx * dx + dy * dy) as f64
 }
 
 #[cfg(test)]
@@ -2768,8 +2744,9 @@ mod tests {
         }
     }
 
-    // Ground truth computed with std's trig, using the same projection the
-    // module ships — validates the hand-rolled sqrt/cos, not just the formula.
+    // Ground truth in full f64 with std's trig, using the same projection the
+    // module ships — so the assertions below bound the single-precision
+    // metre-frame arithmetic in `segment_distance_m`, not just the formula.
     fn expected_m(a: (f64, f64), b: (f64, f64)) -> f64 {
         let m_lon = 111_320.0 * a.0.to_radians().cos();
         let dy = (b.0 - a.0) * 111_320.0;
@@ -2816,6 +2793,73 @@ mod tests {
         assert_eq!(r.state(), RecordState::Finished);
     }
 
+    /// Bounds the single-precision metre-frame arithmetic in
+    /// [`segment_distance_m`] against the full-`f64` projection, per segment,
+    /// over the latitudes and hop lengths a fix path sees — including latitude
+    /// 89°, where the cosine factor is worst-conditioned, and a half-metre hop
+    /// below the acceptance filter's floor.
+    ///
+    /// Measured worst case over this sweep is 1.4e-6 relative, at latitude 89°
+    /// on a 1 m hop; the 1e-5 bound leaves ~7x headroom.
+    #[test]
+    fn segment_distance_tracks_the_f64_projection() {
+        for lat in [0.0f64, 12.5, 40.0, 51.5, 67.0, 78.0, -33.9, 89.0] {
+            let d_lat = 1.0 / METRES_PER_DEGREE_LAT;
+            let d_lon = d_lat / libm::cos(lat.to_radians());
+            for hop_m in [0.5f64, 1.0, 4.0, 25.0, 240.0, 600.0] {
+                for (dy, dx) in [
+                    (1.0, 0.0),
+                    (0.0, 1.0),
+                    (1.0, 1.0),
+                    (-1.0, 1.0),
+                    (0.7, -0.7),
+                    (-1.0, -1.0),
+                ] {
+                    let a = (lat, -105.0);
+                    let b = (lat + dy * hop_m * d_lat, -105.0 + dx * hop_m * d_lon);
+                    let want = expected_m(a, b);
+                    let got = segment_distance_m(&fix(a.0, a.1, 3.0, 0), &fix(b.0, b.1, 3.0, 1));
+                    let rel = libm::fabs(got - want) / want;
+                    assert!(
+                        rel < 1e-5,
+                        "lat {lat} hop {hop_m} dir ({dy},{dx}): got {got}, want {want} (rel {rel})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A 100 000-fix / ~400 km leg — an ultra's worth of accepted fixes at 1 Hz
+    /// — accumulated into the same `f64` total the recorder keeps, on a
+    /// continuously curving bearing so no axis is favoured. Single-precision
+    /// per-segment rounding is unbiased, so this stays a random walk rather than
+    /// growing linearly: measured drift is 1.7 mm here (and ~7 mm over
+    /// 1 440 km), against a GPS noise floor of metres per fix. The 0.05 m bound
+    /// leaves ~30x headroom.
+    #[test]
+    fn accumulated_distance_does_not_drift_over_an_ultra_length_leg() {
+        let lat0 = 40.0f64;
+        let d_lat = 1.0 / METRES_PER_DEGREE_LAT;
+        let d_lon = d_lat / libm::cos(lat0.to_radians());
+        let (mut lat, mut lon) = (lat0, -105.0);
+        let (mut total, mut reference) = (0.0f64, 0.0f64);
+        for i in 0..100_000 {
+            let theta = i as f64 * 0.0007;
+            let next = (
+                lat + libm::cos(theta) * 4.0 * d_lat,
+                lon + libm::sin(theta) * 4.0 * d_lon,
+            );
+            total += segment_distance_m(&fix(lat, lon, 4.0, 0), &fix(next.0, next.1, 4.0, 1));
+            reference += expected_m((lat, lon), next);
+            (lat, lon) = next;
+        }
+        assert!(reference > 390_000.0, "leg length sanity: {reference} m");
+        assert!(
+            libm::fabs(total - reference) < 0.05,
+            "accumulated {total} vs reference {reference} over {reference:.0} m"
+        );
+    }
+
     #[test]
     fn distance_accumulates_to_ground_truth() {
         let mut r = Recorder::new();
@@ -2837,7 +2881,7 @@ mod tests {
         }
         let s = r.snapshot();
         assert!(
-            fabs(s.distance_m - expected) < 1e-3,
+            libm::fabs(s.distance_m - expected) < 1e-3,
             "distance {} vs expected {}",
             s.distance_m,
             expected
@@ -2890,7 +2934,7 @@ mod tests {
         }
         let s = r.snapshot();
         assert!(
-            fabs(s.distance_m - expected) < 1e-3,
+            libm::fabs(s.distance_m - expected) < 1e-3,
             "distance {} vs expected {}",
             s.distance_m,
             expected

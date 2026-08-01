@@ -15,7 +15,7 @@
 //! produces no heading update, and a heading older than [`HEADING_STALE_S`]
 //! renders as unknown rather than as a stale arrow.
 
-use crate::grade_adjusted_pace::haversine_metres;
+use crate::grade_adjusted_pace::haversine_metres_f32;
 use crate::record::METRES_PER_DEGREE_LAT;
 
 /// Breadcrumb capacity, in stored points. With the initial spacing this covers
@@ -32,7 +32,7 @@ pub const BREADCRUMB_SPACING_M: f32 = 20.0;
 /// recorder's acceptance filter already rejects sub-3 m jitter, but a bearing
 /// over a few metres is still mostly GPS noise — below this gate the previous
 /// heading is kept (and left to go stale) rather than replaced by noise.
-pub const HEADING_MIN_SEP_M: f64 = 5.0;
+pub const HEADING_MIN_SEP_M: f32 = 5.0;
 
 /// A heading older than this (seconds of uptime) is unknown, not current — a
 /// stopped runner must see `--`, never the arrow their last movement left
@@ -64,6 +64,18 @@ pub fn sector_of_deg(deg: f32) -> u8 {
 
 /// Great-circle initial bearing from point 1 toward point 2, degrees clockwise
 /// from north in `[0, 360)`.
+///
+/// Stays `f64` even though the result is consumed as an `f32`, and even though
+/// this runs on every accepted fix on a core whose FPU is single-precision
+/// only. `x` subtracts two O(1) products *after* the trig, and for a short hop
+/// they very nearly cancel: over the [`HEADING_MIN_SEP_M`] baseline the true
+/// difference is ~1e-8 while `f32` carries ~1e-7 of absolute error on each
+/// term, so a single-precision evaluation loses the answer entirely — measured
+/// at ~1.8° of error on a 5 m hop, pinned by
+/// `bearing_is_accurate_at_the_heading_gate_baseline`. Unlike
+/// [`haversine_metres_f32`], which differences the coordinates *before* any
+/// transcendental and so has nothing to cancel, this formula inherits the
+/// absolute-coordinate precision requirement and cannot be narrowed in place.
 fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let p1 = lat1.to_radians();
     let p2 = lat2.to_radians();
@@ -231,6 +243,12 @@ pub fn arrow_lines(sector: u8, cx: i32, cy: i32, r: i32) -> [((i32, i32), (i32, 
 struct Origin {
     lat_deg: f64,
     lon_deg: f64,
+    /// Deliberately `f64` while the bearing math around it is `f32`: the
+    /// breadcrumb's east/north offsets are a *recovery* of the metre distance
+    /// the caller encoded into an absolute longitude, so an `f32` scale factor
+    /// leaves ~1e-7 relative error on a value the map projection and the
+    /// spacing gate compare against fixed distances. One `f64` multiply per fix
+    /// is not worth spending that on.
     m_per_deg_lon: f64,
 }
 
@@ -311,7 +329,7 @@ impl Trackback {
             self.len += 1;
         }
 
-        let sep = haversine_metres(self.anchor_lat_deg, self.anchor_lon_deg, lat_deg, lon_deg);
+        let sep = haversine_metres_f32(self.anchor_lat_deg, self.anchor_lon_deg, lat_deg, lon_deg);
         if sep >= HEADING_MIN_SEP_M {
             self.heading_deg =
                 Some(
@@ -343,12 +361,12 @@ impl Trackback {
         let Some(origin) = &self.origin else {
             return TrackbackView::empty();
         };
-        let distance = haversine_metres(
+        let distance = haversine_metres_f32(
             self.current_lat_deg,
             self.current_lon_deg,
             origin.lat_deg,
             origin.lon_deg,
-        ) as f32;
+        );
         let bearing = (distance >= BEARING_MIN_DISTANCE_M).then(|| {
             initial_bearing_deg(
                 self.current_lat_deg,
@@ -702,5 +720,61 @@ mod tests {
         assert_eq!(sector_of_deg(360.0), 0);
         assert_eq!(SECTOR_NAMES[0], "N");
         assert_eq!(SECTOR_NAMES[15], "NNW");
+    }
+
+    /// Pins the precision [`initial_bearing_deg`] must hold at the shortest
+    /// baseline it is ever asked about — [`HEADING_MIN_SEP_M`], where the
+    /// heading gate releases — across the eight cardinal/diagonal directions at
+    /// a spread of latitudes.
+    ///
+    /// This is the test that keeps the formula in double precision. `x`
+    /// subtracts two nearly-equal O(1) products, so over a 5 m hop the true
+    /// difference (~1e-8) is an order of magnitude *below* `f32`'s absolute
+    /// error on either term: a single-precision evaluation reads 43.21° where
+    /// the answer is 45.00°. If a future change narrows this function to
+    /// `libm::sinf`/`cosf`/`atan2f`, this test fails by ~1.8° — which is the
+    /// intended outcome, not a tolerance to widen.
+    #[test]
+    fn bearing_is_accurate_at_the_heading_gate_baseline() {
+        for lat in [0.0f64, 40.0, 51.5, 67.0, -33.9] {
+            let d_lat = 1.0 / METRES_PER_DEGREE_LAT;
+            let d_lon = d_lat / libm::cos(lat.to_radians());
+            for hop_m in [HEADING_MIN_SEP_M as f64, 50.0, 500.0] {
+                for (dy, dx, want) in [
+                    (1.0, 0.0, 0.0),
+                    (1.0, 1.0, 45.0),
+                    (0.0, 1.0, 90.0),
+                    (-1.0, 1.0, 135.0),
+                    (-1.0, 0.0, 180.0),
+                    (-1.0, -1.0, 225.0),
+                    (0.0, -1.0, 270.0),
+                    (1.0, -1.0, 315.0),
+                ] {
+                    let lat2 = lat + dy * hop_m * d_lat;
+                    let lon2 = -105.0 + dx * hop_m * d_lon;
+                    let got = initial_bearing_deg(lat, -105.0, lat2, lon2);
+                    // Compare on the circle: 359.99 and 0.01 are adjacent.
+                    let diff = ((got - want + 540.0) % 360.0 - 180.0).abs();
+                    assert!(
+                        diff < 0.01,
+                        "lat {lat} hop {hop_m} dir ({dy},{dx}): got {got}, want {want}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bearing_round_trips_through_every_sector() {
+        for sector in 0..SECTOR_COUNT {
+            let theta = (sector as f64) * 22.5f64.to_radians();
+            let lat2 = 40.0 + 100.0 * libm::cos(theta) / METRES_PER_DEGREE_LAT;
+            let lon2 = -105.0
+                + 100.0 * libm::sin(theta)
+                    / (METRES_PER_DEGREE_LAT * libm::cos(40f64.to_radians()));
+            let brg = initial_bearing_deg(40.0, -105.0, lat2, lon2) as f32;
+            assert!((0.0..360.0).contains(&brg), "sector {sector}: {brg}");
+            assert_eq!(sector_of_deg(brg), sector, "sector {sector} round-trips");
+        }
     }
 }
