@@ -25,7 +25,7 @@ use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
 use crate::fuel_plan::{
     build_fuel_plan, FuelLegInput, FuelPlanOptions, DEFAULT_CARBS_PER_HOUR_G,
-    DEFAULT_FLUID_PER_HOUR_ML,
+    DEFAULT_FLUID_PER_HOUR_ML, GEL_CARBS_G, SIP_FLUID_ML,
 };
 use crate::gear_wear::{gear_wear, GearWear};
 use crate::grade_adjusted_pace::GapEstimator;
@@ -1015,6 +1015,12 @@ pub struct Recorder {
     waypoints: Waypoints,
     waypoint_mark_seq: u8,
     waypoint_refuse_seq: u8,
+    /// The runner's pushed fuel cadences (`SET1`), seconds of moving time per
+    /// sip / gel — the same values the alert engine runs on, mirrored here so
+    /// the Fuel page's carry-out math describes THIS runner's plan rather
+    /// than the temperate default. `None` = unpushed, defaults apply.
+    fuel_drink_interval_s: Option<u32>,
+    fuel_eat_interval_s: Option<u32>,
 }
 
 impl Default for Recorder {
@@ -1099,6 +1105,8 @@ impl Recorder {
             waypoints: Waypoints::new(),
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
+            fuel_drink_interval_s: None,
+            fuel_eat_interval_s: None,
         }
     }
 
@@ -1545,6 +1553,18 @@ impl Recorder {
     /// [`Snapshot::nav_off_course`] for the tri-state contract.
     pub fn set_nav_off_course(&mut self, off_course: Option<bool>) {
         self.nav_off_course = off_course;
+    }
+
+    /// Mirror the `SET1` fuel cadences into the Fuel page's carry-out math —
+    /// the same guard shape as [`crate::alerts::AlertEngine::set_fuel_intervals`]:
+    /// a zero interval is nonsense and leaves that arm on its current value.
+    pub fn set_fuel_intervals(&mut self, drink_moving_s: u32, eat_moving_s: u32) {
+        if drink_moving_s > 0 {
+            self.fuel_drink_interval_s = Some(drink_moving_s);
+        }
+        if eat_moving_s > 0 {
+            self.fuel_eat_interval_s = Some(eat_moving_s);
+        }
     }
 
     pub fn set_route_simplify(&mut self, view: Option<RouteSimplifyView>) {
@@ -2483,11 +2503,24 @@ impl Recorder {
                 services: if leg.is_refill { REFILL } else { DRY },
             });
         }
+        // The pushed cadences invert through the same units the alert engine's
+        // forward reduction used (one gel, one sip), so the page and the
+        // reminders describe one plan. A desert runner who tightened their
+        // drink cadence over SET1 sees the carry-out grow to match; unpushed,
+        // the temperate defaults stand.
+        let carbs_per_hour_g = self
+            .fuel_eat_interval_s
+            .map(|s| GEL_CARBS_G * 3600.0 / f64::from(s))
+            .unwrap_or(DEFAULT_CARBS_PER_HOUR_G);
+        let fluid_per_hour_ml = self
+            .fuel_drink_interval_s
+            .map(|s| SIP_FLUID_ML * 3600.0 / f64::from(s))
+            .unwrap_or(DEFAULT_FLUID_PER_HOUR_ML);
         let plan = build_fuel_plan(
             &inputs,
             FuelPlanOptions {
-                carbs_per_hour_g: DEFAULT_CARBS_PER_HOUR_G,
-                fluid_per_hour_ml: DEFAULT_FLUID_PER_HOUR_ML,
+                carbs_per_hour_g,
+                fluid_per_hour_ml,
                 heat_factor: None,
                 gel_carbs_g: None,
                 weight_kg: None,
@@ -4153,6 +4186,19 @@ mod tests {
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
         assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
         assert!(f.carry.is_some());
+
+        // A pushed cadence re-rates the plan through the same units the alert
+        // engine reduced through: halving the drink interval (900 → 450 s)
+        // doubles the fluid budget, and the untouched eat arm keeps its rate.
+        r.set_fuel_intervals(450, 0);
+        let f2 = r.snapshot().fuel.unwrap();
+        assert!(
+            (f2.total_fluid_ml - 2.0 * f.total_fluid_ml).abs() < 1.0,
+            "{} vs {}",
+            f2.total_fluid_ml,
+            f.total_fluid_ml
+        );
+        assert!((f2.total_carbs_g - f.total_carbs_g).abs() < f32::EPSILON);
     }
 
     #[test]
