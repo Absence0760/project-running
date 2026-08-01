@@ -621,6 +621,22 @@ pub fn draw_nav_panel(
         }
     }
     if let Some(&(mx, my)) = panel.marker.as_ref() {
+        // A cleared halo first: at a fork the course segments converge on
+        // exactly the runner's position, and a cross drawn with the same
+        // 1-bit ink as the polyline melts into it. One blank ring is the
+        // only contrast a 1-bit panel has to spend — clipped to the panel
+        // band so the halo can't blank the title or GPS rows beside it.
+        let halo = MARKER_ARM_PX + 1;
+        for y in (my - halo)..=(my + halo) {
+            if y < PANEL_TOP_PX || y > PANEL_Y_MAX {
+                continue;
+            }
+            for x in (mx - halo)..=(mx + halo) {
+                if (0..=PANEL_X_MAX).contains(&x) {
+                    fb.set_pixel(x as usize, y as usize, false);
+                }
+            }
+        }
         fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
         fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
     }
@@ -2077,6 +2093,41 @@ mod tests {
             cp(40.002, -105.000),
         ])
         .unwrap()
+    }
+
+    #[test]
+    fn the_marker_halo_separates_the_cross_from_a_course_leg_under_it() {
+        // A runner ON the line (the normal case, and exactly where forks
+        // converge): the halo ring around the cross is blank even though the
+        // polyline runs straight through it, and the cross itself is inked.
+        let course = short_course();
+        let runner = (40.001, -105.001);
+        let panel = nav_map::nav_panel(&course, Some(runner), NAV_PANEL_GEOM);
+        let (mx, my) = panel.marker.expect("runner projects onto the panel");
+        let mut fb = Framebuffer::new();
+        draw_nav_panel(&mut fb, &course, &panel, None);
+        assert!(
+            fb.pixel(mx as usize, my as usize),
+            "the cross centre is ink"
+        );
+        // The ring one past the arms: every cell blank, course or not.
+        let halo = MARKER_ARM_PX + 1;
+        for x in (mx - halo)..=(mx + halo) {
+            for y in [my - halo, my + halo] {
+                assert!(
+                    !fb.pixel(x as usize, y as usize),
+                    "halo cell ({x},{y}) still inked"
+                );
+            }
+        }
+        for y in (my - halo)..=(my + halo) {
+            for x in [mx - halo, mx + halo] {
+                assert!(
+                    !fb.pixel(x as usize, y as usize),
+                    "halo cell ({x},{y}) still inked"
+                );
+            }
+        }
     }
 
     #[test]
