@@ -243,13 +243,17 @@ SCENARIO_LAUNCHER_ARGS = {
     # The same reason `bin/watch-shots.sh` boots that way.
     "screens": ("--screens", "--no-alerts"),
     # The whole point of this one: no `sim-autostart`, so the watch stays on the
-    # idle faces instead of paging a run view.
-    "idle": ("--no-autostart",),
+    # idle faces instead of paging a run view. `--no-workout` keeps the boot
+    # exactly what it was when the demo workout rode `sim-autostart` (before
+    # `sim-workout` split out): nothing here records, so an armed workout could
+    # only ever be noise.
+    "idle": ("--no-autostart", "--no-workout"),
     # `--no-alerts` drops the sim's shortened fuel / distance / time / pace
     # arms, leaving the hardware defaults (900 s drink, 1500 s eat of MOVING
     # time) — an order of magnitude past this scenario's ~180 s of run. The
-    # workout's own edges are unconditional (they ride `sim-autostart`, not
-    # `sim-alerts`), so what is left in the alert slot is exactly and only the
+    # workout's own edges are unconditional (they ride `sim-workout`, which the
+    # launcher keeps on by default, not `sim-alerts`), so what is left in the
+    # alert slot is exactly and only the
     # workout rail. That is what makes the COUNTING assertion possible: "one
     # end-of-step warning across the plan, and one only" is a claim about the
     # `ENDING_MIN_STEP_*` gate solely while nothing else can take the slot.
@@ -272,7 +276,15 @@ SCENARIO_LAUNCHER_ARGS = {
     # `--no-course` for the same §380/§381 reason as `workout` — this is the
     # scenario that caught it: the OffCourse / workout-edge handoff chain
     # never let the slot clear before the Storm page dump.
-    "storm": ("--storm", "--no-alerts", "--no-course"),
+    # `--no-workout` closed the remaining leak (CI run 30709260463): the demo
+    # workout's step banners are alerts too, each one displaces the storm
+    # banner, and a displaced storm RE-QUEUES (§376 — no later reminder
+    # exists), so the slot went banner-to-banner — Storm at 79 s,
+    # WorkoutEnding at 86 s, Storm again at 94 s, WorkoutStep at 96 s, Storm
+    # again at 104 s — and neither the once-per-front COUNT below nor
+    # `wait_for_no_alert` could hold. With every non-storm arm unarmed, one
+    # front is one banner and the TTL clear is deterministic.
+    "storm": ("--storm", "--no-alerts", "--no-course", "--no-workout"),
     # `--no-course` for the same §380/§381 reason — the off-course arm rides
     # data presence, so it fires within the opening quiet window and the
     # baseline dump never lands on a bannerless frame. This scenario keeps
@@ -3051,6 +3063,28 @@ def scenario_storm(sim):
     passed("the tracker withholds a tendency until its window is deep enough")
 
     require_recording(sim)
+
+    # The precondition every slot assertion below rests on, checked as early as
+    # it can be checked reliably so a regression fails HERE with a name instead
+    # of downstream as a timing lottery: this session boots with every
+    # non-storm alert arm unarmed (`--no-alerts --no-course --no-workout`). The
+    # demo workout is the one that leaked before (CI run 30709260463) — its
+    # step banners displaced the storm banner, each displacement re-queued it
+    # (§376, no later reminder exists), and the slot went banner-to-banner, so
+    # "one front, one banner" and the TTL clear both depended on phase
+    # alignment. The queued line logs at boot, well before the first accepted
+    # fix the wait above decoded past, so by now it is either present or never
+    # coming.
+    if sim.tail.search(re.compile(r"record: sim demo workout queued")):
+        raise SmokeFailure(
+            "the demo workout is armed in the storm session — its step banners "
+            "share the single alert slot with the storm banner, which re-queues "
+            "on every displacement, so the once-per-front count and the "
+            "TTL-clear wait below stop meaning anything. The storm session "
+            "boots with --no-workout (`sim-workout` off); if the workout is "
+            "back, the feature gate in app/src/tasks/record.rs regressed"
+        )
+    passed("the storm session booted with the demo workout unarmed")
 
     # (2) The quiet atmosphere. Wait for the first MEASURED line, then check it
     # is a calm one — the scripted pressure carries no noise and the fixture's

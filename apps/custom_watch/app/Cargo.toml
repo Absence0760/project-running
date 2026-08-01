@@ -67,6 +67,18 @@ sim-buttons = []
 # bin/watch-sim.sh builds with it.
 sim-course = []
 
+# Canned 5-step demo workout for the Workout page + step banners, armed over the
+# same `state::WORKOUT` channel a phone's WKT1 push lands on. OFF by default:
+# hardware carries no workout until a real push. Its own feature rather than
+# riding `sim-autostart` because its step banners are unconditional alerts —
+# they took the single banner slot in the `storm` scenario's session, and every
+# displacement re-queued the storm banner, so the slot went banner-to-banner and
+# `record: alert cleared` never fired inside the harness's window (CI run
+# 30709260463). Same reasoning as `sim-course`: a scenario that counts what
+# reaches the slot must be able to boot without the noise. bin/watch-sim.sh
+# builds with it; `--no-workout` drops it.
+sim-workout = []
+
 # Canned composed data screens (§364) for the sim: one of each layout, so the
 # Duo's two 32x48 values and the Trio's hero-over-two-medium land on the
 # emulated panel and `bin/watch-shots.sh` can photograph them. Seeded through

@@ -41,6 +41,11 @@
 #                                         # presence, not a setter, so this is
 #                                         # the only way a scenario gets a
 #                                         # quiet alert slot with a run going
+#   bin/watch-sim.sh --no-workout         # drop the canned 5-step demo workout.
+#                                         # Its step banners (§354) are alerts
+#                                         # a setter cannot silence, so the
+#                                         # quiet-slot scenarios drop it the
+#                                         # same way they drop the course
 #
 # The default GPS fixture is sim/nmea/bench_jog.nmea. Select another named
 # fixture from sim/nmea/ with --fixture <name> (or the NMEA_FIXTURE env var);
@@ -70,6 +75,7 @@ PHONE_PORT=7788
 AUTOSTART=1
 ALERTS=1
 COURSE=1
+WORKOUT=1
 SCREENS=0
 STORM=0
 
@@ -83,9 +89,10 @@ while [[ $# -gt 0 ]]; do
 		--no-autostart) AUTOSTART=0; shift ;;
 		--no-alerts)    ALERTS=0; shift ;;
 		--no-course)    COURSE=0; shift ;;
+		--no-workout)   WORKOUT=0; shift ;;
 		--screens)      SCREENS=1; shift ;;
 		--storm)        STORM=1; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --no-course, --screens, --storm)" ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --no-course, --no-workout, --screens, --storm)" ;;
 	esac
 done
 
@@ -106,7 +113,10 @@ command -v defmt-print >/dev/null || \
 # work (Renode's GPIO models the IN register but not the SENSE/DETECT edge
 # path the hardware button task waits on). sim-course: the canned breadcrumb
 # course the Nav page follows (the bench_jog fixture leaves it on two legs,
-# so the off-course alert fires each lap). sim-alerts: the shortened fuel /
+# so the off-course alert fires each lap). sim-workout: the canned 5-step demo
+# workout whose step banners drive the Workout page (dropped by --no-workout —
+# the banners are unconditional alerts, so a quiet-slot scenario sheds them the
+# way --no-course sheds the course arms). sim-alerts: the shortened fuel /
 # distance / time / pace cadences the `alerts` scenario observes (dropped by
 # --no-alerts, which is how a screenshot walk gets a watch with nothing
 # covering the hero rows). sim-screens: three canned composed data screens
@@ -123,6 +133,7 @@ command -v defmt-print >/dev/null || \
 # wearing anything. A bench build keeps it off; see docs/custom_watch/privacy.md.
 FEATURES=sim-buttons,dev-blink,log-personal-data
 [[ "$COURSE" == 1 ]] && FEATURES="sim-course,$FEATURES"
+[[ "$WORKOUT" == 1 ]] && FEATURES="sim-workout,$FEATURES"
 [[ "$STORM" == 1 ]] && FEATURES="sim-storm,$FEATURES"
 [[ "$SCREENS" == 1 ]] && FEATURES="sim-screens,$FEATURES"
 [[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"

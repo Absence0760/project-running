@@ -607,41 +607,45 @@ pub async fn run(store: &'static SharedStore) {
         info!(
             "record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km, phases 1km/5:00 ten-ten-ten, guided first-timer-15, tz UTC-6)"
         );
-        // A demo structured workout, armed over the SAME channel a phone's
-        // WKT1 push lands on, with steps short enough that the ~3 m/s
-        // bench_jog fixture walks the whole thing in ~2 minutes: warmup,
-        // 2 x (50 m rep / 30 s timed recovery), cooldown — so the Workout
-        // page advances, the step banners fire, and DONE is reachable.
-        // Hardware stays unset until a real push over the characteristic.
-        {
-            use watch_core::workout::{WorkoutStep, WorkoutStepKind};
-            let dist = |kind, rep_index, rep_total, target_distance_m, pace| WorkoutStep {
-                kind,
-                rep_index,
-                rep_total,
-                target_distance_m,
-                target_duration_s: 0,
-                target_pace_s_per_km: pace,
-                tolerance_s_per_km: 10,
-            };
-            let mut steps: heapless::Vec<WorkoutStep, { watch_core::workout::MAX_WORKOUT_STEPS }> =
-                heapless::Vec::new();
-            let _ = steps.push(dist(WorkoutStepKind::Warmup, 0, 0, 60, 360));
-            let _ = steps.push(dist(WorkoutStepKind::Rep, 1, 2, 50, 300));
-            let _ = steps.push(WorkoutStep {
-                kind: WorkoutStepKind::Recovery,
-                rep_index: 1,
-                rep_total: 1,
-                target_distance_m: 0,
-                target_duration_s: 30,
-                target_pace_s_per_km: 420,
-                tolerance_s_per_km: 15,
-            });
-            let _ = steps.push(dist(WorkoutStepKind::Rep, 2, 2, 50, 300));
-            let _ = steps.push(dist(WorkoutStepKind::Cooldown, 0, 0, 60, 360));
-            state::WORKOUT.sender().send(Some(steps));
-            info!("record: sim demo workout queued (5 steps)");
-        }
+    }
+    // A demo structured workout, armed over the SAME channel a phone's
+    // WKT1 push lands on, with steps short enough that the ~3 m/s
+    // bench_jog fixture walks the whole thing in ~2 minutes: warmup,
+    // 2 x (50 m rep / 30 s timed recovery), cooldown — so the Workout
+    // page advances, the step banners fire, and DONE is reachable.
+    // Hardware stays unset until a real push over the characteristic.
+    // Its own feature (not `sim-autostart`): the step banners are
+    // unconditional alerts, and a scenario that needs a quiet slot has to be
+    // able to boot without them — see `sim-workout` in Cargo.toml.
+    #[cfg(feature = "sim-workout")]
+    {
+        use watch_core::workout::{WorkoutStep, WorkoutStepKind};
+        let dist = |kind, rep_index, rep_total, target_distance_m, pace| WorkoutStep {
+            kind,
+            rep_index,
+            rep_total,
+            target_distance_m,
+            target_duration_s: 0,
+            target_pace_s_per_km: pace,
+            tolerance_s_per_km: 10,
+        };
+        let mut steps: heapless::Vec<WorkoutStep, { watch_core::workout::MAX_WORKOUT_STEPS }> =
+            heapless::Vec::new();
+        let _ = steps.push(dist(WorkoutStepKind::Warmup, 0, 0, 60, 360));
+        let _ = steps.push(dist(WorkoutStepKind::Rep, 1, 2, 50, 300));
+        let _ = steps.push(WorkoutStep {
+            kind: WorkoutStepKind::Recovery,
+            rep_index: 1,
+            rep_total: 1,
+            target_distance_m: 0,
+            target_duration_s: 30,
+            target_pace_s_per_km: 420,
+            tolerance_s_per_km: 15,
+        });
+        let _ = steps.push(dist(WorkoutStepKind::Rep, 2, 2, 50, 300));
+        let _ = steps.push(dist(WorkoutStepKind::Cooldown, 0, 0, 60, 360));
+        state::WORKOUT.sender().send(Some(steps));
+        info!("record: sim demo workout queued (5 steps)");
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
