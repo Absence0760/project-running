@@ -1150,6 +1150,7 @@ mod tests {
             avg_pace_s_per_km: None,
             current_pace_s_per_km: None,
             gap_s_per_km: None,
+            gap_held: false,
             lap: 1,
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,

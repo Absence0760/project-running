@@ -496,6 +496,10 @@ pub struct Snapshot {
     /// pace while no altitude signal has arrived (grade 0), matching the
     /// Connect IQ field's no-altimeter behaviour.
     pub gap_s_per_km: Option<u32>,
+    /// Whether [`Snapshot::gap_s_per_km`] is the estimator's hold-window
+    /// value (a power-hike dip) rather than a live sample — the face marks a
+    /// held value with `~` so it cannot pass as current.
+    pub gap_held: bool,
     /// 1-based number of the lap in progress; 0 before a run starts.
     pub lap: u16,
     /// Ground covered within the current lap so far.
@@ -2159,6 +2163,9 @@ impl Recorder {
             avg_pace_s_per_km: self.avg_pace(),
             current_pace_s_per_km: self.current_pace(),
             gap_s_per_km: self.gap.gap_s_per_km(self.current_speed_mps as f64),
+            // After the sampling line above — struct literals evaluate in
+            // source order, and the hold flag describes that call's answer.
+            gap_held: self.gap.held(),
             lap: self.lap_index,
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
