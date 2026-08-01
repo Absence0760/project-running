@@ -12,8 +12,11 @@
 //! accepted fixes at least [`HEADING_MIN_SEP_M`] apart. There is no
 //! magnetometer at tier 1 (the roadmap's compass row is separate hardware), so
 //! the arrow is only meaningful while moving — a stationary or jittering runner
-//! produces no heading update, and a heading older than [`HEADING_STALE_S`]
-//! renders as unknown rather than as a stale arrow.
+//! produces no heading update, and a heading older than
+//! [`heading_stale_after_s`] renders as unknown rather than as a stale arrow.
+//! That budget is sized against the active GNSS cadence
+//! ([`Trackback::set_fix_interval_s`]), because a heading cannot refresh faster
+//! than fixes arrive.
 
 use crate::grade_adjusted_pace::haversine_metres_f32;
 use crate::record::METRES_PER_DEGREE_LAT;
@@ -34,10 +37,36 @@ pub const BREADCRUMB_SPACING_M: f32 = 20.0;
 /// heading is kept (and left to go stale) rather than replaced by noise.
 pub const HEADING_MIN_SEP_M: f32 = 5.0;
 
-/// A heading older than this (seconds of uptime) is unknown, not current — a
-/// stopped runner must see `--`, never the arrow their last movement left
-/// behind.
+/// Grace, in seconds, a heading stays current for *beyond* the inter-fix gap it
+/// could have been refreshed in. A stopped runner must see `--`, never the arrow
+/// their last movement left behind. This is the whole budget at the 1 Hz
+/// Performance cadence; [`heading_stale_after_s`] scales it for the throttled
+/// modes.
 pub const HEADING_STALE_S: u32 = 10;
+
+/// The heading freshness budget for a GNSS mode's fix cadence:
+/// [`HEADING_STALE_S`] plus the seconds one full inter-fix gap occupies beyond
+/// the 1 Hz baseline.
+///
+/// A fixed budget silently makes the arrow *absent* in exactly the mode a
+/// multi-day runner selects and the get-un-lost mode they need it in: a heading
+/// is derived from accepted fixes, so in Expedition (60 s) it cannot refresh
+/// more than once a minute, and a flat 10 s window expires it 10 s into every
+/// 60 s gap — no arrow for five sixths of the run. Charging one whole gap plus
+/// the same grace means a heading always survives to the fix that could refresh
+/// or retire it, while a receiver that genuinely stops producing fixes still
+/// blanks it: at Performance this is unchanged at 10 s (so a 1 Hz mode never
+/// tolerates a minute-old bearing), Balanced 24 s, Expedition 69 s. A heading
+/// several gaps old is refused in every mode.
+///
+/// One gap, not a multiple: at ultra pace every Expedition fix clears
+/// [`HEADING_MIN_SEP_M`] many times over, so one gap is the entire span during
+/// which no update *can* arrive. A second gap of slack would keep an arrow from
+/// before a switchback pointing down the old leg — and a stale bearing walks a
+/// runner the wrong way, where a stale pace only misreads effort.
+pub const fn heading_stale_after_s(fix_interval_s: u32) -> u32 {
+    HEADING_STALE_S.saturating_add(fix_interval_s.saturating_sub(1))
+}
 
 /// Within this distance of the start the bearing is unstable and meaningless
 /// ("you have arrived"), so it reads as unknown.
@@ -104,6 +133,10 @@ pub struct TrackbackView {
     pub heading_deg: Option<f32>,
     /// Uptime second the heading was last derived.
     pub heading_uptime_s: u32,
+    /// Seconds the heading stays current for, resolved from the active GNSS
+    /// cadence by [`heading_stale_after_s`]. Carried on the view so a render
+    /// surface judges freshness without also having to be told the mode.
+    pub heading_stale_after_s: u32,
 }
 
 impl TrackbackView {
@@ -117,6 +150,7 @@ impl TrackbackView {
             bearing_to_start_deg: None,
             heading_deg: None,
             heading_uptime_s: 0,
+            heading_stale_after_s: HEADING_STALE_S,
         }
     }
 
@@ -127,7 +161,7 @@ impl TrackbackView {
 
     pub fn heading_fresh(&self, uptime_s: u32) -> bool {
         self.heading_deg.is_some()
-            && uptime_s.saturating_sub(self.heading_uptime_s) <= HEADING_STALE_S
+            && uptime_s.saturating_sub(self.heading_uptime_s) <= self.heading_stale_after_s
     }
 
     /// The heading's 16-wind sector, or `None` when absent or stale.
@@ -263,6 +297,7 @@ pub struct Trackback {
     anchor_lon_deg: f64,
     heading_deg: Option<f32>,
     heading_uptime_s: u32,
+    fix_interval_s: u32,
 }
 
 impl Default for Trackback {
@@ -284,13 +319,28 @@ impl Trackback {
             anchor_lon_deg: 0.0,
             heading_deg: None,
             heading_uptime_s: 0,
+            fix_interval_s: 1,
         }
     }
 
-    /// Clear everything for a new run; the first accepted fix becomes the new
-    /// start anchor.
+    /// Clear the run state (start anchor, breadcrumb, heading) for a new run,
+    /// but keep the fix cadence: like the recorder's own interval, the GNSS mode
+    /// is device configuration rather than run state, and it is applied while
+    /// idle — before the start that triggers this reset could re-apply it.
     pub fn reset(&mut self) {
+        let fix_interval_s = self.fix_interval_s;
         *self = Self::new();
+        self.fix_interval_s = fix_interval_s;
+    }
+
+    /// Expected seconds between incoming fixes, from the selected GNSS mode
+    /// (clamped to at least 1, mirroring
+    /// [`Recorder::set_fix_interval_s`](crate::record::Recorder::set_fix_interval_s)).
+    /// Sizes the heading freshness budget via [`heading_stale_after_s`] so the
+    /// arrow survives a full inter-fix gap of the active mode instead of
+    /// expiring against a heading that cannot yet have refreshed.
+    pub fn set_fix_interval_s(&mut self, interval_s: u32) {
+        self.fix_interval_s = interval_s.max(1);
     }
 
     /// Consume one accepted fix (a fix the recorder adopted as a new anchor —
@@ -359,7 +409,13 @@ impl Trackback {
 
     pub fn view(&self) -> TrackbackView {
         let Some(origin) = &self.origin else {
-            return TrackbackView::empty();
+            // No fix yet, so nothing is fresh either way — but the cadence is
+            // device config, not run state, so report the budget it resolves to
+            // rather than the full-rate default.
+            return TrackbackView {
+                heading_stale_after_s: heading_stale_after_s(self.fix_interval_s),
+                ..TrackbackView::empty()
+            };
         };
         let distance = haversine_metres_f32(
             self.current_lat_deg,
@@ -384,6 +440,7 @@ impl Trackback {
             bearing_to_start_deg: bearing,
             heading_deg: self.heading_deg,
             heading_uptime_s: self.heading_uptime_s,
+            heading_stale_after_s: heading_stale_after_s(self.fix_interval_s),
         }
     }
 }
@@ -391,6 +448,7 @@ impl Trackback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gnss_mode::GnssMode;
 
     const LAT0: f64 = 40.0;
     const LON0: f64 = -105.0;
@@ -503,16 +561,121 @@ mod tests {
 
     #[test]
     fn a_stale_heading_yields_no_arrow() {
+        // The default 1 Hz Performance cadence: the budget is exactly
+        // HEADING_STALE_S, so this pins the unchanged full-rate behaviour.
         let mut tb = Trackback::new();
         east_walk(&mut tb, 20, 6.0);
         let v = tb.view();
         assert_eq!(v.heading_uptime_s, 20);
-        assert!(v.heading_fresh(20 + HEADING_STALE_S));
-        assert!(v.arrow_sector(20 + HEADING_STALE_S).is_some());
+        assert_eq!(v.heading_stale_after_s, HEADING_STALE_S);
+        let budget = v.heading_stale_after_s;
+        assert!(v.heading_fresh(20 + budget));
+        assert!(v.arrow_sector(20 + budget).is_some());
         // One second past the window: the runner stopped — blank, not stale.
-        assert!(!v.heading_fresh(21 + HEADING_STALE_S));
-        assert!(v.heading_sector(21 + HEADING_STALE_S).is_none());
-        assert!(v.arrow_sector(21 + HEADING_STALE_S).is_none());
+        assert!(!v.heading_fresh(21 + budget));
+        assert!(v.heading_sector(21 + budget).is_none());
+        assert!(v.arrow_sector(21 + budget).is_none());
+    }
+
+    #[test]
+    fn expedition_cadence_keeps_the_arrow_between_fixes() {
+        // One accepted fix per 60 s, ~180 m apart at ultra pace — the mode a
+        // multi-day runner selects for battery, and the mode back-to-start most
+        // has to work in. A flat 10 s budget blanked the arrow for five sixths
+        // of every gap; the cadence-scaled one keeps it to the next fix.
+        let mut tb = Trackback::new();
+        tb.set_fix_interval_s(GnssMode::Expedition.fix_interval_s());
+        for i in 0..=3u32 {
+            tb.on_point(LAT0, LON0 + i as f64 * 180.0 * lon_per_m(), i * 60);
+        }
+        let v = tb.view();
+        assert_eq!(v.heading_uptime_s, 180);
+        assert_eq!(v.heading_stale_after_s, 69);
+        for age in [0, 1, 30, 59, 60, 69] {
+            assert!(
+                v.arrow_sector(180 + age).is_some(),
+                "{age} s into a 60 s leg: the arrow is the point of this page"
+            );
+            assert!(v.heading_sector(180 + age).is_some(), "HDG at {age} s");
+        }
+        // Past a whole gap plus the grace the receiver has stopped producing
+        // fixes: blank, not a bearing from a leg that may have ended.
+        assert!(!v.heading_fresh(180 + 70));
+        assert!(v.arrow_sector(180 + 70).is_none());
+    }
+
+    #[test]
+    fn an_ancient_heading_is_refused_in_every_mode() {
+        // Three minutes and a switchback later, a held bearing walks a runner
+        // the wrong way. No cadence buys a heading that old.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            let mut tb = Trackback::new();
+            tb.set_fix_interval_s(mode.fix_interval_s());
+            east_walk(&mut tb, 20, 6.0);
+            let v = tb.view();
+            assert!(v.heading_deg.is_some(), "{mode:?}: a heading was derived");
+            assert!(
+                !v.heading_fresh(20 + 180),
+                "{mode:?}: a 3-minute-old heading is not current"
+            );
+            assert!(v.heading_sector(20 + 180).is_none(), "{mode:?}");
+            assert!(v.arrow_sector(20 + 180).is_none(), "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn heading_budget_scales_with_the_fix_interval() {
+        // Performance keeps the tight window — a 1 Hz mode must never tolerate a
+        // minute-old bearing just because Expedition needs to.
+        assert_eq!(heading_stale_after_s(1), HEADING_STALE_S);
+        assert_eq!(
+            heading_stale_after_s(GnssMode::Performance.fix_interval_s()),
+            10
+        );
+        assert_eq!(
+            heading_stale_after_s(GnssMode::Balanced.fix_interval_s()),
+            24
+        );
+        assert_eq!(
+            heading_stale_after_s(GnssMode::Expedition.fix_interval_s()),
+            69
+        );
+        // Monotonic in the interval, and every mode's budget spans its own gap
+        // so a heading always survives to the fix that could refresh it.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            let interval = mode.fix_interval_s();
+            assert!(heading_stale_after_s(interval) >= interval, "{mode:?}");
+        }
+        // Saturating, not wrapping: a zero or absurd interval can't underflow
+        // into a huge budget or overflow into a tiny one.
+        assert_eq!(heading_stale_after_s(0), HEADING_STALE_S);
+        assert_eq!(heading_stale_after_s(u32::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn the_cadence_is_device_config_and_survives_a_reset() {
+        let mut tb = Trackback::new();
+        tb.set_fix_interval_s(60);
+        east_walk(&mut tb, 20, 6.0);
+        tb.reset();
+        assert!(!tb.view().active(), "run state cleared");
+        assert_eq!(
+            tb.view().heading_stale_after_s,
+            69,
+            "the GNSS mode is not run state"
+        );
+        // Clamped to at least 1: a zero would size the budget off a cadence no
+        // receiver runs at.
+        tb.set_fix_interval_s(0);
+        assert_eq!(tb.view().heading_stale_after_s, HEADING_STALE_S);
     }
 
     #[test]
