@@ -565,7 +565,10 @@ removes.
   dead, so a hold cannot smuggle a mark into either.
 - **A waypoint mark never moves the view** (§357), and a refused mark (no
   position anchor) writes nothing to flash — a dead press costs no page
-  erase.
+  erase. Since §382 the hold answers on screen either way: `WPT SAVED`
+  (an affirmation, un-`!`-prefixed) or `! NO FIX` (the cause, not the
+  failure) rides the alert slot at the workout edges' rank, so the one
+  deliberate mid-run press with a durable result is no longer screen-silent.
 - **The settings menu swallows every button and exists only while idle**
   (§351). No press inside it can start, pause, or lap a run; a run starting
   under it (sim-autostart) closes it; edits are directional and idempotent
