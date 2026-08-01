@@ -54,7 +54,7 @@ use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::ice::IceCard;
 use watch_core::record::{RecordState, Recorder, Snapshot};
-use watch_core::record_cadence::{run_active, track_point, CheckpointMark};
+use watch_core::record_cadence::{run_active, tick_interval_s, track_point, CheckpointMark};
 use watch_core::run_store::{
     verify_blob, LapRecord, PushOutcome, RunWriter, StepRecord, WorkoutRecord,
 };
@@ -398,7 +398,12 @@ pub async fn run(store: &'static SharedStore) {
     // so an alert can never disturb the recording math (L4).
     let mut alerts = AlertEngine::new();
     let mut last_alert: Option<Alert> = None;
-    let mut ticker = Ticker::every(Duration::from_secs(1));
+    // The wall-clock tick, whose interval is a function of the record state
+    // (`tick_interval_s`) — a manually paused run at a sleep station has no use
+    // for a one-second clock. `Ticker` has no set-period, so a changed interval
+    // rebuilds it, which also re-phases it exactly as `reset()` does.
+    let mut tick_s = tick_interval_s(RecordState::Idle, false, false);
+    let mut ticker = Ticker::every(Duration::from_secs(u64::from(tick_s)));
     // Resume past any run recovered from flash so a new run can't reuse a
     // recovered run's id (which would confuse the phone's manifest + chunk pull).
     let mut next_seq: u32 = store.lock().await.next_run_seq();
@@ -481,7 +486,11 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_auto_lap(trigger);
         info!("record: restored auto-lap {}", trigger);
     }
-    if store.lock().await.read_backyard() {
+    // Mirrored in the task because the tick cadence turns on it: an armed
+    // backyard keeps the full-rate clock through a pause so a corral whistle
+    // can't arrive late (§ 372).
+    let mut backyard_armed = store.lock().await.read_backyard();
+    if backyard_armed {
         recorder.set_backyard_armed(true);
         info!("record: restored backyard mode armed");
     }
@@ -718,6 +727,7 @@ pub async fn run(store: &'static SharedStore) {
         if let Some(armed) = backyard_rx.try_changed() {
             // The button task already persisted it; this is the apply side.
             recorder.set_backyard_armed(armed);
+            backyard_armed = armed;
             info!("record: backyard mode {}", armed);
         }
         if let Some(m) = mode_rx.try_changed() {
@@ -1016,6 +1026,9 @@ pub async fn run(store: &'static SharedStore) {
                 last_alert = None;
                 alert_sender.send(None);
                 open = None;
+                // `Recorder::new()` disarmed the backyard, so the mirror the
+                // tick cadence reads has to follow it.
+                backyard_armed = false;
                 // The comparison copies this task holds against flash: flash is
                 // erased, so every one of them must read as "nothing stored" or
                 // the next push would skip its write believing it was already
@@ -1065,6 +1078,17 @@ pub async fn run(store: &'static SharedStore) {
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
         let snap = recorder.snapshot();
+
+        // Re-phase the wall-clock tick when the state it depends on moved. The
+        // race clock is unaffected: `Recorder::tick` reads the absolute
+        // `Instant::now()`, so elapsed is never accumulated tick by tick and a
+        // coarser cadence costs display latency, not time.
+        let owed_tick_s = tick_interval_s(snap.state, snap.manual_paused, backyard_armed);
+        if owed_tick_s != tick_s {
+            tick_s = owed_tick_s;
+            ticker = Ticker::every(Duration::from_secs(u64::from(tick_s)));
+            debug!("record: tick cadence {=u32}s", tick_s);
+        }
 
         // Best-effort mid-run flash checkpoint (L4): once a run has staged at
         // least one point, periodically persist a recoverable snapshot of the

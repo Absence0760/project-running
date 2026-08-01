@@ -4,7 +4,8 @@
 //!
 //! [`crate::record`] owns the run maths (distance, moving time, pace, the
 //! point-acceptance filter, auto-pause). This module owns the decisions the
-//! task makes *around* it: when the 1 Hz wall-clock tick means anything, when
+//! task makes *around* it: when the wall-clock tick means anything and how fast
+//! it is owed in the state the run is in, when
 //! the in-progress run is due another best-effort flash checkpoint, how a held
 //! HR / barometric altitude narrows into a [`crate::run_store::TrackPoint`]'s
 //! frozen field widths, and whether a pushed QNH reference is plausible enough
@@ -22,6 +23,53 @@ use crate::run_store::TrackPoint;
 /// auto-pause resumes off the next moving fix, so it must keep seeing them.
 pub const fn run_active(state: RecordState) -> bool {
     matches!(state, RecordState::Recording | RecordState::Paused)
+}
+
+/// The wall-clock tick the `record` task owes a live run, seconds. Distance,
+/// pace and the race clock all move at this resolution and the panel shows them.
+pub const TICK_INTERVAL_S: u32 = 1;
+
+/// The tick a **manually** paused run owes instead. A 200-mile racer naps 20-90
+/// minutes at a sleep station with the recorder paused, and every one of those
+/// seconds woke this task — ~5,400 wakes per nap — for a clock whose only
+/// consumers are a second-resolution elapsed row and a nap budget shown in
+/// minutes.
+///
+/// Five seconds, not thirty, because the tick cadence *is* the displayed clock's
+/// cadence: `Recorder::tick` advances elapsed through a pause and the `ui` task
+/// re-renders off the snapshot, so a 30 s tick would show a runner standing at
+/// an aid station a clock that freezes and then jumps half a minute. At 5 s the
+/// row is never more than five seconds behind, which still reads as a clock, and
+/// the § 373 nap budget — `cut-off margin` less a reserve, rendered in minutes —
+/// is at worst 1/12 of its smallest displayed unit stale, so the backoff cannot
+/// make it useless. The saving is most of the waste either way: a 90-minute nap
+/// goes 5,400 → 1,080 wakes, a 20-minute one 1,200 → 240.
+pub const PAUSED_TICK_INTERVAL_S: u32 = 5;
+
+/// Which tick interval the task owes right now.
+///
+/// Backed off only on a **manual** pause, and that distinction is load-bearing
+/// rather than tidy. An auto-pause means the fixes dried up, and the workout
+/// runner's clock deliberately runs through one (`Recorder::workout_clock_s`
+/// halts on a manual pause only), so a timed recovery step would settle up to
+/// five seconds late in exactly the state the runner did not choose. A manual
+/// pause is the deliberate "I am stopping here" the sleep station is made of.
+///
+/// An armed backyard keeps the full-rate clock even manually paused: § 372's
+/// corral whistles at 3 / 2 / 1 minutes are folded in on the tick, the format
+/// eliminates a runner for being seconds late to the corral, and a warning that
+/// can arrive five seconds after its minute is a different instrument.
+///
+/// Idle and Finished are unreachable here while the task honours
+/// [`run_active`], and answering [`TICK_INTERVAL_S`] for them is the fail-safe:
+/// a caller that forgets the gate gets today's cadence, never a silently slow
+/// clock.
+pub const fn tick_interval_s(state: RecordState, manual_paused: bool, backyard_armed: bool) -> u32 {
+    if matches!(state, RecordState::Paused) && manual_paused && !backyard_armed {
+        PAUSED_TICK_INTERVAL_S
+    } else {
+        TICK_INTERVAL_S
+    }
 }
 
 /// Mid-run flash-checkpoint cadence. The in-progress run is staged in RAM and
@@ -146,6 +194,68 @@ mod tests {
         RecordState::Paused,
         RecordState::Finished,
     ];
+
+    #[test]
+    fn a_recording_run_keeps_the_one_second_clock() {
+        for manual in [false, true] {
+            for backyard in [false, true] {
+                assert_eq!(
+                    tick_interval_s(RecordState::Recording, manual, backyard),
+                    TICK_INTERVAL_S,
+                    "manual {manual} backyard {backyard}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_manual_pause_backs_the_clock_off() {
+        assert_eq!(
+            tick_interval_s(RecordState::Paused, true, false),
+            PAUSED_TICK_INTERVAL_S
+        );
+    }
+
+    /// An auto-pause is the fixes drying up, not a decision — and the workout
+    /// runner's clock runs through one, so a timed step must not settle late.
+    #[test]
+    fn an_auto_pause_keeps_the_one_second_clock() {
+        assert_eq!(
+            tick_interval_s(RecordState::Paused, false, false),
+            TICK_INTERVAL_S
+        );
+    }
+
+    /// A corral whistle that can arrive five seconds after its minute is a
+    /// different instrument, so an armed backyard is never backed off.
+    #[test]
+    fn an_armed_backyard_keeps_the_one_second_clock_through_a_pause() {
+        assert_eq!(
+            tick_interval_s(RecordState::Paused, true, true),
+            TICK_INTERVAL_S
+        );
+    }
+
+    /// The gate is `run_active`'s job; answering the base rate for the inert
+    /// states means forgetting it costs no clock resolution.
+    #[test]
+    fn the_inert_states_answer_the_base_rate() {
+        for state in [RecordState::Idle, RecordState::Finished] {
+            assert_eq!(tick_interval_s(state, true, false), TICK_INTERVAL_S);
+        }
+    }
+
+    /// The backoff is a real one and stays inside the second-resolution row it
+    /// feeds — a 30 s tick would show a jumping clock, a 1 s tick saves nothing.
+    #[test]
+    fn the_paused_interval_is_a_saving_the_display_can_absorb() {
+        assert!(PAUSED_TICK_INTERVAL_S > TICK_INTERVAL_S);
+        assert!(PAUSED_TICK_INTERVAL_S <= 5, "a jumping elapsed row");
+        // A 90-minute nap: the wakes the backoff actually removes.
+        let nap_s = 90 * 60;
+        assert_eq!(nap_s / TICK_INTERVAL_S, 5_400);
+        assert_eq!(nap_s / PAUSED_TICK_INTERVAL_S, 1_080);
+    }
 
     #[test]
     fn only_a_live_run_advances_a_clock() {
