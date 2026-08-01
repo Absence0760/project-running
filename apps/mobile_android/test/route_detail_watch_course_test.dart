@@ -22,6 +22,7 @@ const _prodBackend = 'https://abcdefgh.supabase.co';
 /// Course-only transport: the push writes chunks, nothing else is exercised.
 class _FakeCourseTransport implements WatchBleTransport {
   final courseWrites = <List<int>>[];
+  final roadbookWrites = <List<int>>[];
   final bool failWrite;
   int scans = 0;
   int disconnects = 0;
@@ -49,6 +50,12 @@ class _FakeCourseTransport implements WatchBleTransport {
   Future<void> writeCourse(List<int> chunk) async {
     if (failWrite) throw StateError('radio gone');
     courseWrites.add(chunk);
+  }
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) async {
+    if (failWrite) throw StateError('radio gone');
+    roadbookWrites.add(chunk);
   }
 
   /// Rebuild the CRS1 frame from the offset-tagged chunks the screen wrote.

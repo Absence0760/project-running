@@ -32,6 +32,7 @@ class _FakeSyncTransport implements WatchBleTransport {
   final workoutWrites = <List<int>>[];
   final courseWrites = <List<int>>[];
   final screensWrites = <List<int>>[];
+  final roadbookWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -72,6 +73,11 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> writeScreens(List<int> frame) async {
     screensWrites.add(frame);
+  }
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) async {
+    roadbookWrites.add(chunk);
   }
 }
 

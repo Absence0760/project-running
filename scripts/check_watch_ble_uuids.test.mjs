@@ -57,6 +57,7 @@ const ALIGNED_ROWS = [
 	['course', U(5)],
 	['workout', U(6)],
 	['screens', U(7)],
+	['roadbook', U(8)],
 ];
 const ALIGNED_CONSTS = [
 	['manifestCharUuid', U(2)],
@@ -65,6 +66,7 @@ const ALIGNED_CONSTS = [
 	['courseCharUuid', U(5)],
 	['workoutCharUuid', U(6)],
 	['screensCharUuid', U(7)],
+	['roadbookCharUuid', U(8)],
 ];
 
 const verdict = (rows, consts) =>
