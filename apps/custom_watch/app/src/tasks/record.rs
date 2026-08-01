@@ -142,7 +142,17 @@ fn push_point(
             );
             Some(k)
         }
-        PushOutcome::Stored | PushOutcome::Dropped => None,
+        // Terminal, unlike the routine per-phase decimation drop below: the
+        // staged track stops growing for the rest of the run, so it warns like
+        // every other give-up on this flash path rather than passing silently.
+        PushOutcome::Exhausted => {
+            warn!(
+                "record: run {=u32} track point dropped from storage (slot full of undroppable records, cannot thin)",
+                open.run_seq
+            );
+            None
+        }
+        PushOutcome::Stored | PushOutcome::Decimated => None,
     }
 }
 

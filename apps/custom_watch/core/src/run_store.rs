@@ -576,9 +576,19 @@ pub enum PushOutcome {
     /// `keep_every` factor first, then the point stored (or dropped if it
     /// fell out of the new phase). The whole run is still represented.
     Thinned(u32),
-    /// Dropped — either pre-filtered by the current decimation phase, or the
-    /// sink is full of undroppable records (laps) and cannot thin further.
-    Dropped,
+    /// Pre-filtered by the current decimation phase — the routine, expected
+    /// outcome for every point that isn't on the `keep_every` stride once
+    /// thinning has started. The whole run is still represented, so a caller
+    /// has nothing to report.
+    Decimated,
+    /// The sink has no room for the point and cannot thin further: it is full
+    /// of undroppable records (laps / step results / the summary). Unlike
+    /// [`Decimated`](Self::Decimated) this is terminal — the staged track
+    /// stops growing for the rest of the run — so a caller must say so rather
+    /// than treat it as a routine drop. Believed unreachable within the
+    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets, and pinned
+    /// there by `bounded_push_never_exhausts_within_the_record_budgets`.
+    Exhausted,
 }
 
 impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
@@ -623,12 +633,12 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
         let ordinal = self.point_ordinal;
         self.point_ordinal = self.point_ordinal.saturating_add(1);
         if !ordinal.is_multiple_of(self.keep_every) {
-            return PushOutcome::Dropped;
+            return PushOutcome::Decimated;
         }
         let mut thinned = None;
         while self.sink.len() + RECORD_LEN + FOOTER_LEN > N {
             if !self.thin_in_place() {
-                return PushOutcome::Dropped;
+                return PushOutcome::Exhausted;
             }
             thinned = Some(self.keep_every);
         }
@@ -640,7 +650,10 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
             }
         }
         if self.push_point(point).is_err() {
-            return PushOutcome::Dropped;
+            // The loop above reserved the room, so the sink cannot refuse the
+            // write; if it ever does it is the sink being out of space, not a
+            // decimation drop, and the caller should hear about it.
+            return PushOutcome::Exhausted;
         }
         match thinned {
             Some(k) => PushOutcome::Thinned(k),
@@ -652,8 +665,10 @@ impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
     /// results / the workout summary untouched), compact the staged buffer,
     /// rebuild the CRC, and double `keep_every`. `false` when there is
     /// nothing left to gain (fewer than two stored points — the slot is full
-    /// of undroppable records + header, which never happens within the
-    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets).
+    /// of undroppable records + header), which surfaces to the caller as
+    /// [`PushOutcome::Exhausted`] and is pinned as unreachable within the
+    /// [`MAX_STORED_LAPS`] + [`MAX_STORED_STEP_RESULTS`] budgets by
+    /// `bounded_push_never_exhausts_within_the_record_budgets`.
     fn thin_in_place(&mut self) -> bool {
         if self.points < 2 {
             return false;
@@ -1570,6 +1585,105 @@ mod tests {
             .filter(|i| record_tag(&blob[HEADER_LEN + i * RECORD_LEN..]) == Some(RECORD_TAG_LAP))
             .count();
         assert_eq!(laps, 2, "both lap records survive every thinning pass");
+    }
+
+    #[test]
+    fn bounded_push_never_exhausts_within_the_record_budgets() {
+        // `PushOutcome::Exhausted` is terminal: the staged track stops growing
+        // for the rest of the run. The module claims the undroppable-record
+        // budgets cannot produce it — this drives a real slot-sized sink to the
+        // full MAX_STORED_LAPS + MAX_STORED_STEP_RESULTS + one summary load and
+        // floods it with far more points than the slot can ever hold, so a
+        // future budget bump that makes the case reachable fails here instead
+        // of silently truncating a shipped watch's track mid-race.
+        const N: usize = 4096; // flash_store::SLOT_LEN — what app/run_flash.rs stages into
+        let undroppable = (MAX_STORED_LAPS + MAX_STORED_STEP_RESULTS + 1) as usize;
+        // The structural reason, asserted independently of the flood below: with
+        // a single stored point left, the buffer plus the footer still fits, so
+        // the thinning loop's condition is always satisfied before
+        // `thin_in_place` can refuse for want of two points.
+        assert!(
+            HEADER_LEN + (undroppable + 1) * RECORD_LEN + FOOTER_LEN <= N,
+            "the record budgets no longer leave a thinnable point inside a slot"
+        );
+
+        let sink: heapless::Vec<u8, N> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 9, 0).expect("start");
+        for i in 0..MAX_STORED_LAPS {
+            assert!(w
+                .push_lap(&LapRecord {
+                    index: (i + 1) as u16,
+                    lap_distance_dm: 67_060,
+                    split_s: 3_600 * (i + 1),
+                    moving_s: 3_500,
+                })
+                .unwrap());
+        }
+        for i in 0..MAX_STORED_STEP_RESULTS {
+            assert!(w
+                .push_step(&StepRecord {
+                    step_index: i as u8,
+                    skipped: false,
+                    distance_dm: 4_000,
+                    duration_s: 120,
+                    pace_s_per_km: Some(300),
+                })
+                .unwrap());
+        }
+        assert!(w
+            .push_workout(&WorkoutRecord {
+                step_total: MAX_STORED_STEP_RESULTS as u8,
+                partial: true,
+                frame_crc: 0xFEED_F00D,
+            })
+            .unwrap());
+
+        let mut stored = 0;
+        for i in 0..5_000u32 {
+            match w.push_point_bounded(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            }) {
+                PushOutcome::Exhausted => {
+                    panic!("sink exhausted at point {i} — the track stopped growing")
+                }
+                PushOutcome::Stored | PushOutcome::Thinned(_) => stored += 1,
+                PushOutcome::Decimated => {}
+            }
+        }
+        assert!(w.thinning() > 1, "5000 points into one slot must thin");
+        assert!(stored > 0);
+        assert_eq!(w.lap_count(), MAX_STORED_LAPS, "laps never thin");
+
+        // The tail of the run is still arriving at the end of that flood, which
+        // is the property `Exhausted` would have destroyed.
+        let blob = w.finalize(335_300, 180_000, 190_000).expect("finalize");
+        assert!(verify_blob(&blob));
+        let n = point_count(blob.len() as u32).unwrap() as usize;
+        let mut last_point_t = None;
+        let mut laps = 0;
+        let mut steps = 0;
+        for i in 0..n {
+            let at = HEADER_LEN + i * RECORD_LEN;
+            match record_tag(&blob[at..]) {
+                Some(RECORD_TAG_POINT) => {
+                    last_point_t = TrackPoint::decode(&blob[at..]).map(|p| p.t_offset_s)
+                }
+                Some(RECORD_TAG_LAP) => laps += 1,
+                Some(RECORD_TAG_STEP) => steps += 1,
+                _ => {}
+            }
+        }
+        assert_eq!(laps, MAX_STORED_LAPS);
+        assert_eq!(steps, MAX_STORED_STEP_RESULTS);
+        assert!(
+            last_point_t.unwrap() > 4_000,
+            "the end of the run survives: t={:?}",
+            last_point_t
+        );
     }
 
     /// A run staged into a slot-sized sink, as the on-device recorder does
