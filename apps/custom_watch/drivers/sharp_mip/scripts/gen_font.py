@@ -17,9 +17,8 @@ weights. A hand-designed bitmap has none of those failure modes, and the
 generator becomes a pure bit transcription with NO rasteriser in the loop:
 regeneration is reproducible by construction, not by pinning ImageMagick.
 
-The numeral hero faces (`gen_bignum.py`) stay rasterised from Source Code
-Pro Bold — at 32x48 and 16x32 the outline has whole pixels to land in and
-the failure mode above does not exist.
+The numeral hero faces followed in § 431: `gen_bignum.py` transcribes them
+from Spleen's 32x64 and 16x32, so no table on the panel is rasterised.
 
 Regenerate with:
 

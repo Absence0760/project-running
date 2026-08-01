@@ -1,16 +1,17 @@
 # Pinned source faces for the generated glyph tables
 
-`src/font.rs` (8x16 body text) and `src/font_small.rs` (6x12 — the chrome
-size the hero-label and status rows render at, § 429) are transcribed from
-the Spleen BDFs in this directory by `scripts/gen_font.py`; `src/bignum.rs`
-(32x48 + 16x32 numerals) is rasterised from the two Source Code Pro OTFs by
-`scripts/gen_bignum.py`.
-The split is deliberate: at 8x16 a thresholded vector outline leaves 1-px
-stems and ragged diagonals (the '+'=='-' collision and the invisible '|'
-were casualties — `tests/font.rs`), so the text face is a bitmap font drawn
-pixel-by-pixel FOR that cell size, while at 32x48/16x32 the outline has
-whole pixels to land in and native rasterisation of a real bold face wins
-(`docs/architecture/decisions.md` § 292/§ 339/§ 428).
+Every glyph table is transcribed from the Spleen BDFs in this directory:
+`src/font.rs` (8x16 body text) and `src/font_small.rs` (6x12 chrome, § 429)
+by `scripts/gen_font.py`, and `src/bignum.rs` (32x48 + 16x32 numerals, from
+the 32x64 — cropped to the digit band — and 16x32 faces with a documented
+synthetic bold, § 431) by `scripts/gen_bignum.py`. The Source Code Pro OTFs
+are retained only as the historical sources of the pre-§ 428/§ 431 tables;
+no generator reads them. The reason every face is a designed bitmap: a
+thresholded vector outline carries staircase edges at any size — at 8x16 it
+also dropped whole strokes (the '+'=='-' collision and the invisible '|'
+were casualties, `tests/font.rs`), and at 32x48 it made the clock's curves
+ragged — where a face drawn pixel-by-pixel has none of either
+(`docs/architecture/decisions.md` § 428/§ 431).
 
 The faces are vendored rather than looked up by fontconfig family name
 because a family name resolves to whatever build the machine happens to have
@@ -28,6 +29,8 @@ table.
 |---|---|
 | `spleen-8x16.bdf` | `4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae` |
 | `spleen-6x12.bdf` | `fc0743d164690f99b7e2e1b9d503180e4c719a9831ae03fd8f6da18c857dee27` |
+| `spleen-16x32.bdf` | `f6db2549d46c5699ceca7ccc26e747c8bdad3af76239f86aae6ed995bd2f3d37` |
+| `spleen-32x64.bdf` | `46897e4c11aec89547805c329b1e8fb572f7580ccb2f7217f5b82aff3b035a71` |
 | `LICENSE.spleen.txt` | `f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af` |
 | `SourceCodePro-Regular.otf` | `9f9664e2edf6f045c11e774f9bd0be6993971f2544a39061a5ce478b96b051f8` |
 | `SourceCodePro-Bold.otf` | `6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c` |
@@ -36,17 +39,19 @@ table.
 ### Spleen
 
 - Upstream: <https://github.com/fcambus/spleen>
-- Release tag: `2.2.0` (`spleen-8x16.bdf`, `spleen-6x12.bdf` and `LICENSE` at that tag)
-- `SourceCodePro-Regular.otf` is retained only as the historical source of
-  the pre-§ 428 text table; `gen_font.py` no longer reads it.
+- Release tag: `2.2.0` (all four BDFs and `LICENSE` at that tag)
 
 ```sh
 curl -fsSL -o spleen-8x16.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-8x16.bdf
 curl -fsSL -o spleen-6x12.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-6x12.bdf
+curl -fsSL -o spleen-16x32.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-16x32.bdf
+curl -fsSL -o spleen-32x64.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-32x64.bdf
 curl -fsSL -o LICENSE.spleen.txt https://raw.githubusercontent.com/fcambus/spleen/2.2.0/LICENSE
 shasum -a 256 -c <<'EOF'
 4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae  spleen-8x16.bdf
 fc0743d164690f99b7e2e1b9d503180e4c719a9831ae03fd8f6da18c857dee27  spleen-6x12.bdf
+f6db2549d46c5699ceca7ccc26e747c8bdad3af76239f86aae6ed995bd2f3d37  spleen-16x32.bdf
+46897e4c11aec89547805c329b1e8fb572f7580ccb2f7217f5b82aff3b035a71  spleen-32x64.bdf
 f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af  LICENSE.spleen.txt
 EOF
 ```
@@ -89,21 +94,17 @@ license". `LICENSE.md` in this directory is that notice plus the full licence
 text, taken from the upstream repository at the pinned tag; each vendored OTF
 also carries the licence and its Adobe copyright in its own `name` table.
 
-Neither face is modified here — the generators only rasterise them — and the
-generated Rust tables are bitmaps embedded in firmware, which the same clause
-covers under "use, study, copy, merge, embed". No reserved font name (`Source`)
-is applied to anything in this repository.
+No vendored file is modified here (the numeral tables' documented crop,
+synthetic bold, and zero-slot substitution are transformations applied by
+the generator to its output, not edits to the faces), and the generated
+Rust tables are bitmaps embedded in firmware, which both licences cover.
+No reserved font name (`Source`) is applied to anything in this repository.
 
 ## Rasteriser versions
 
-The pin covers the *inputs*, not the rasteriser. `gen_font.py` has no
-rasteriser at all since § 428 — the text table is a pure bit transcription of
-the BDF, reproducible by construction on any machine. The rest applies to
-`gen_bignum.py` only. The committed numeral tables were last confirmed to
-regenerate byte-for-byte with:
-
-- ImageMagick 7.1.2-26 Q16-HDRI (aarch64, macOS)
-- Python 3.14
+Neither font generator has a rasteriser any more — `gen_font.py` since
+§ 428 and `gen_bignum.py` since § 431 are pure bit transcriptions of the
+BDFs, reproducible by construction on any machine with Python.
 
 `src/icons.rs` has no font dependency — its inputs are the SVGs vendored under
 `icons/` — but `scripts/gen_icons.py` additionally needs Inkscape on `PATH`, and
