@@ -112,6 +112,9 @@ pub struct RunStore {
     /// the count alone (the common case — every chunk served, every checkpoint
     /// that evicts nothing) wakes the ui task not at all.
     pending_published: u8,
+    /// Last value published to [`state::UNSYNCED_RUNS`], change-gated for the
+    /// same reason.
+    unsynced_published: u8,
 }
 
 /// Every record the shared config page holds. One erase covers the whole
@@ -159,25 +162,32 @@ impl RunStore {
             dir,
             available,
             pending_published: 0,
+            unsynced_published: 0,
         };
         store.publish_pending();
         store
     }
 
     /// Publish the count of interrupted-and-unpulled runs for the ui task's
-    /// home-face marker, on change only.
+    /// home-face marker, and the count of unpulled runs overall for the §378
+    /// erase prompt's stake line, each on change only.
     ///
-    /// The store owns this fact and every path that can move it lives in this
-    /// file — the boot scan, an eviction taken by a commit or a checkpoint, a
-    /// failed commit, and a completed phone pull — so publishing here is what
+    /// The store owns both facts and every path that can move either lives in
+    /// this file — the boot scan, an eviction taken by a commit or a checkpoint,
+    /// a failed commit, and a completed phone pull — so publishing here is what
     /// keeps the wrist from drifting out of step with flash. Best-effort / L4 like
     /// the rest of the store: a `Watch` send cannot fail, and nothing about
-    /// recording depends on the marker.
+    /// recording depends on either marker.
     fn publish_pending(&mut self) {
         let pending = self.dir.pending_partial_count();
         if pending != self.pending_published {
             self.pending_published = pending;
             state::PENDING_RUNS.sender().send(pending);
+        }
+        let unsynced = self.dir.unsynced_count();
+        if unsynced != self.unsynced_published {
+            self.unsynced_published = unsynced;
+            state::UNSYNCED_RUNS.sender().send(unsynced);
         }
     }
 

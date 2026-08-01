@@ -55,7 +55,7 @@ stateDiagram-v2
     Menu --> Idle: BTN4 — exit (the BACK slot)
     Menu --> Idle: BTN1 on RE-ZERO — fire + close
     Menu --> Ice: BTN1 on MEDICAL ID — show + close
-    Menu --> Menu: BTN1 on FACTORY ERASE — arm ("ERASE ALL? B1", 4 s)
+    Menu --> Menu: BTN1 on FACTORY ERASE — arm ("ERASE ALL? B1", 4 s; title names "N RUNS NOT SYNCED" if any)
     Menu --> Menu: BTN1 x2 — wipe (§378); the menu stays open on factory values
     Menu --> Menu: any other press, or 4 s — cancel the arm
     Menu --> Idle: 30 s inactivity — auto-close
@@ -594,6 +594,17 @@ removes.
   §337 makes the legend row a *replacement* — `B1 ERASE    B4 CANCEL` — not an
   append: one changed row of nine can be walked past, a changed chrome row
   cannot.
+- **An armed erase names the run-data stake when there is one.** A factory
+  erase is two acts under one prompt: a settings reset the phone re-pushes in
+  one action, and the destruction of finished runs the phone has never pulled —
+  which exist nowhere else. While the flash store holds any such run, the arm
+  replaces the menu *title* row with `N RUNS NOT SYNCED`
+  (`erase::erase_stake_row`, fed by `SlotDir::unsynced_count` over the
+  `UNSYNCED_RUNS` watch); with everything synced the armed prompt is
+  byte-identical to the count-free one, so the line never cries wolf. It rides
+  the same trigger as the legend replacement and costs zero presses: the armed
+  row's cells behind the cursor cannot carry both the count and the key that
+  commits, and §337 says the key is the part that may not be dropped.
 - **No hold tier exists inside an idle modal** (§378, resting on §375). The
   other guarded-destructive idiom on this device is hold-to-open, and the
   erase may not use it: *idle gestures are duration-stable* is the invariant

@@ -738,6 +738,22 @@ impl SlotDir {
             .count() as u8
     }
 
+    /// How many finished runs the phone has not pulled yet — the runs a factory
+    /// erase would destroy with no copy existing anywhere else, which is why the
+    /// §378 confirm prompt names this count while it is non-zero. A superset of
+    /// [`pending_partial_count`](Self::pending_partial_count) (that one
+    /// additionally requires `partial`), and like it the count falls as the
+    /// phone pulls each run, so any surface built on it quiets itself. A live
+    /// run's checkpoints are never counted: they are not finished, and the
+    /// surfaces this feeds are idle-only.
+    pub fn unsynced_count(&self) -> u8 {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|m| m.finished && !m.synced)
+            .count() as u8
+    }
+
     /// Manifest entries for every committed run, in slot order.
     pub fn manifest(&self) -> Vec<ManifestEntry, SLOT_COUNT> {
         self.manifest_at(u32::MAX)
@@ -1938,6 +1954,27 @@ mod tests {
             "the unsynced oldest run survives"
         );
         assert_eq!(dir.find(4), Some((2, 100)));
+    }
+
+    #[test]
+    fn unsynced_count_is_the_stored_runs_the_phone_has_not_pulled() {
+        // The count the §378 erase prompt names, so it must mean exactly
+        // "stored and unsynced": an empty slot, a live run's checkpoint, and a
+        // run the phone already pulled each contribute nothing.
+        let mut dir = SlotDir::new();
+        assert_eq!(dir.unsynced_count(), 0);
+        dir.reserve_commit(0, 100, 10);
+        dir.reserve_commit(1, 100, 11);
+        assert_eq!(dir.unsynced_count(), 2);
+        // A mid-run checkpoint is not a stored run — the run may still commit.
+        dir.reserve_checkpoint(2, 100, 12);
+        assert_eq!(dir.unsynced_count(), 2);
+        // A pulled run is recoverable from the phone; only the never-pulled
+        // ones are a stake the erase prompt should name.
+        dir.mark_synced(0);
+        assert_eq!(dir.unsynced_count(), 1);
+        dir.mark_synced(1);
+        assert_eq!(dir.unsynced_count(), 0);
     }
 
     #[test]

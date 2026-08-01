@@ -308,6 +308,14 @@ pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::ne
 /// published means none. One receiver (the `ui` task).
 pub static PENDING_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
+/// How many finished runs on flash the phone has not pulled at all — the runs
+/// a §378 factory erase would destroy with no copy existing anywhere else. The
+/// `run_flash` store publishes it from the same seam as [`PENDING_RUNS`] (it is
+/// the superset count: pending additionally requires an interrupted recording);
+/// the `ui` task folds it into the armed erase prompt so the confirm names the
+/// stake, and stays silent at zero. One receiver (the `ui` task).
+pub static UNSYNCED_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
 /// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
 /// was decided: the `baro` task publishes it (honest refusals included — no
 /// fresh GPS, no barometer); the `ui` task shows it as a transient idle-face

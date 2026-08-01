@@ -145,6 +145,7 @@ pub async fn screen_task(
     let mut signal_rx = unwrap!(state::SIGNAL.receiver());
     let mut battery_rx = unwrap!(state::BATTERY.receiver());
     let mut pending_runs_rx = unwrap!(state::PENDING_RUNS.receiver());
+    let mut unsynced_runs_rx = unwrap!(state::UNSYNCED_RUNS.receiver());
     let mut rezero_rx = unwrap!(state::QNH_REZERO.receiver());
     let mut stop_armed_rx = unwrap!(state::STOP_ARMED.receiver());
     let mut menu_rx = unwrap!(state::SETTINGS_MENU.receiver());
@@ -162,6 +163,7 @@ pub async fn screen_task(
     let mut signal: Option<SignalSample> = None;
     let mut battery: Option<u8> = None;
     let mut pending_runs: u8 = 0;
+    let mut unsynced_runs: u8 = 0;
     let mut page = Page::default();
     let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
@@ -267,6 +269,9 @@ pub async fn screen_task(
         }
         if let Some(n) = pending_runs_rx.try_changed() {
             pending_runs = n;
+        }
+        if let Some(n) = unsynced_runs_rx.try_changed() {
+            unsynced_runs = n;
         }
         if let Some(r) = rezero_rx.try_changed() {
             rezero = Some(r);
@@ -632,9 +637,10 @@ pub async fn screen_task(
         if let Some(view) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
             let yard = rec.as_ref().is_some_and(|s| s.backyard.is_some());
-            for (row, text) in settings_menu::menu_rows(view, mode, hide, profile, yard)
-                .iter()
-                .enumerate()
+            for (row, text) in
+                settings_menu::menu_rows(view, mode, hide, profile, yard, unsynced_runs)
+                    .iter()
+                    .enumerate()
             {
                 fb.draw_text_row(row, text);
             }
