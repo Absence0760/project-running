@@ -520,6 +520,15 @@ pub struct Snapshot {
     /// the live BPM in a zone without owning a second copy of the max-HR
     /// configuration.
     pub zone_cutoffs: ZoneCutoffs,
+    /// The alert engine's armed zone ceiling (`Some(z)` = alert above zone
+    /// `z`), mirrored via [`Recorder::set_alert_arms`]. Carried so the Zones
+    /// page can render `CEIL Z4` / `CEIL --` — the arm is phone-pushed only,
+    /// and a runner who cannot see that it never armed trusts an alert that
+    /// will not fire.
+    pub zone_ceiling: Option<u8>,
+    /// The armed pace band `(fast, slow)` in s/km, mirrored the same way for
+    /// the Pace page's `BAND` row.
+    pub pace_band: Option<(u32, u32)>,
     /// Seconds of moving time spent in each zone (Z1..Z5). Accrues exactly
     /// where [`Snapshot::moving_s`] does — a paused / auto-paused stretch adds
     /// nothing — and only while an HR reading is live, so a sensorless run
@@ -864,6 +873,13 @@ pub struct Recorder {
     /// Zone upper bounds derived from the configured max HR — see
     /// [`set_max_hr`](Recorder::set_max_hr).
     zone_cutoffs: ZoneCutoffs,
+    /// The alert engine's armed zone ceiling + pace band, mirrored in by the
+    /// record task via [`set_alert_arms`](Recorder::set_alert_arms) so the
+    /// Zones and Pace pages can say whether their over-effort alert is armed.
+    /// Only the engine's validated state is ever mirrored — the recorder never
+    /// interprets the values, it just carries them to the face.
+    zone_ceiling: Option<u8>,
+    pace_band: Option<(u32, u32)>,
     /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
     zone_time_s: [u32; ZONE_COUNT],
     /// Time-weighted BPM sum + its seconds, banked exactly where zone time
@@ -1058,6 +1074,8 @@ impl Recorder {
             baro_alt_m: None,
             hr_bpm: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             hr_dt_bpm: 0,
             hr_dt_s: 0,
@@ -1278,6 +1296,18 @@ impl Recorder {
             self.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(max_hr_bpm);
             self.max_hr_bpm = Some(max_hr_bpm);
         }
+    }
+
+    /// Mirror the alert engine's armed zone ceiling + pace band into the
+    /// snapshot, so the Zones and Pace pages can say whether their over-effort
+    /// alert is armed at all — a phone-less runner otherwise carries a
+    /// disarmed race-critical alert with nothing on any surface saying so.
+    /// Callers pass the engine's own getters, never raw wire values: the
+    /// engine validates on set, and this mirror must not become a second
+    /// place the values are interpreted.
+    pub fn set_alert_arms(&mut self, zone_ceiling: Option<u8>, pace_band: Option<(u32, u32)>) {
+        self.zone_ceiling = zone_ceiling;
+        self.pace_band = pace_band;
     }
 
     /// Resting HR — the lower half of the TRIMP calibration pair. With both
@@ -2185,6 +2215,8 @@ impl Recorder {
                 self.pacer.status(self.distance_m, self.elapsed_s())
             },
             zone_cutoffs: self.zone_cutoffs,
+            zone_ceiling: self.zone_ceiling,
+            pace_band: self.pace_band,
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
             sleep: self.sleep_snapshot(),

@@ -523,6 +523,21 @@ impl AlertEngine {
         }
     }
 
+    /// The armed zone ceiling, if any — read back by the record task to
+    /// mirror the arm into [`crate::record::Snapshot`], so the Zones page can
+    /// say whether the over-effort alert is armed at all. The engine stays
+    /// the single owner: only a value [`Self::set_zone_ceiling`] accepted can
+    /// ever be mirrored, so the page and the alert cannot drift.
+    pub const fn zone_ceiling(&self) -> Option<u8> {
+        self.zone_ceiling
+    }
+
+    /// The armed pace band, if any — the Pace page's mirror, same contract as
+    /// [`Self::zone_ceiling`].
+    pub const fn pace_band(&self) -> Option<(u32, u32)> {
+        self.pace_band
+    }
+
     /// Configure the distance-alert cadence: fire every `interval_m` metres of
     /// accumulated distance — the classic every-kilometre (or every-mile, at
     /// 1609) notify. `None` turns it off, the default. An interval outside
@@ -1157,6 +1172,8 @@ mod tests {
             last_lap: None,
             auto_lap: crate::auto_lap::AUTO_LAP_DEFAULT,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             pacer: None,
             cutoff: None,

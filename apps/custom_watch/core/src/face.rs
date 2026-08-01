@@ -2163,6 +2163,19 @@ fn glance(
         GlanceMetric::Pace => "AVG PACE",
     };
     let _ = write!(rows[3], "{}", label);
+    // The pace-band alert arms only from a phone push, so the label row's
+    // slack says whether it ever did — `BAND --` at the start line is the
+    // difference between a quiet corridor and an alert that will not fire.
+    // Armed shows `ON`, not the corridor itself: the row has nine free cells
+    // before the state tag's seat, and a bare range with no word naming it
+    // reads as a second pace. Ends at column 15, clear of the tag.
+    if matches!(metric, GlanceMetric::Pace) {
+        let _ = write!(
+            rows[3],
+            " BAND {}",
+            if snap.pace_band.is_some() { "ON" } else { "--" }
+        );
+    }
     if tag_shown(tag, uptime_s, animate) {
         write_tag(&mut rows[3], tag);
     }
@@ -2311,14 +2324,27 @@ fn zones_glance(
     }
 
     // The hero's own `BPM` unit (§ 361) is directly above this row, so the
-    // label names the metric and nothing else.
+    // label names the metric — and the slack cells beside it carry the
+    // zone-ceiling arm. The over-effort alert arms only from a phone push,
+    // so `CEIL --` is the one place a runner at the start line can see it
+    // never armed; a runner who cannot see that trusts an alert that will
+    // not fire.
+    let mut left = Row::new();
+    match snap.zone_ceiling {
+        Some(z) => {
+            let _ = write!(left, "{:<5}CEIL Z{}", "HR", z);
+        }
+        None => {
+            let _ = write!(left, "{:<5}CEIL --", "HR");
+        }
+    }
     match hr_bpm {
         Some(bpm) => {
             let zone = hr_zones::zone_for_bpm(bpm, &snap.zone_cutoffs);
-            let _ = write!(rows[2], "{:<14}ZONE {}", "HR", zone);
+            let _ = write!(rows[2], "{:<14}ZONE {}", left.as_str(), zone);
         }
         None => {
-            let _ = write!(rows[2], "{:<14}ZONE --", "HR");
+            let _ = write!(rows[2], "{:<14}ZONE --", left.as_str());
         }
     }
 
@@ -4845,6 +4871,8 @@ mod tests {
             auto_lap: crate::auto_lap::AUTO_LAP_DEFAULT,
             pacer: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
             sleep: None,
@@ -6918,7 +6946,7 @@ mod tests {
                 .as_str(),
             "5:12"
         );
-        assert_eq!(rows[3].as_str(), "AVG PACE          REC");
+        assert_eq!(rows[3].as_str(), "AVG PACE BAND --  REC");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(rows[7].as_str(), "GAP  4:52 /KM");
@@ -7315,7 +7343,7 @@ mod tests {
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
         // 152 bpm on the default 190 ladder is the Z3 cutoff itself.
-        assert_eq!(rows[2].as_str(), "HR            ZONE 3");
+        assert_eq!(rows[2].as_str(), "HR   CEIL --  ZONE 3");
         // The `{:<9}` pad keeps the (app-drawn) pixel bar's start column fixed;
         // the row text itself is now just the label + banked time.
         assert_eq!(rows[3].as_str(), "Z1 10:00    ");
@@ -7325,6 +7353,62 @@ mod tests {
         assert_eq!(rows[7].as_str(), "Z5 0:00     ");
         assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         only_the_gps_icon(Page::Zones, &rec, 42);
+    }
+
+    #[test]
+    fn an_armed_zone_ceiling_names_its_zone_where_the_unarmed_row_says_dashes() {
+        // The over-effort alert arms only from a phone push; `CEIL --` at the
+        // start line is the one place a runner can see it never did. Armed,
+        // the cell names the ceiling so the alert's threshold is readable
+        // where its subject lives.
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.zone_ceiling = Some(4);
+        let rows = page_rows(
+            Page::Zones,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "HR   CEIL Z4  ZONE 3");
+    }
+
+    #[test]
+    fn an_armed_pace_band_flips_the_pace_label_row_from_dashes_to_on() {
+        // Same honesty for the pace corridor: the label row's slack answers
+        // "will the out-of-band alert fire at all" — and the tag keeps its
+        // right-edge seat beside it.
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        let unarmed = page_rows(
+            Page::Pace,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(unarmed[3].as_str(), "AVG PACE BAND --  REC");
+        rec.pace_band = Some((300, 320));
+        let armed = page_rows(
+            Page::Pace,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(armed[3].as_str(), "AVG PACE BAND ON  REC");
     }
 
     #[test]
@@ -7347,7 +7431,7 @@ mod tests {
                 .as_str(),
             "--"
         );
-        assert_eq!(rows[2].as_str(), "HR            ZONE --");
+        assert_eq!(rows[2].as_str(), "HR   CEIL --  ZONE --");
         // Nothing banked: times at zero, no bars drawn.
         for row in &rows[3..8] {
             assert!(row.as_str().ends_with("0:00     "), "row: {:?}", row);

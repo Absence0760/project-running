@@ -514,6 +514,7 @@ pub async fn run(store: &'static SharedStore) {
         alerts.set_distance_interval(Some(watch_core::alerts::DISTANCE_INTERVAL_MIN_M));
         alerts.set_time_interval(Some(watch_core::alerts::TIME_INTERVAL_MIN_S));
         alerts.set_pace_band(Some((300, 320)));
+        recorder.set_alert_arms(alerts.zone_ceiling(), alerts.pace_band());
         info!("record: sim alerts 100m / 60s / pace band 5:00-5:20 per km");
     }
     // Sim-only demo settings, applied through the SAME path a phone push takes
@@ -1103,7 +1104,12 @@ fn apply_settings(
                 baseline_m,
                 target_m,
             } => recorder.set_gear(Some(baseline_m), target_m),
-            SettingsEffect::ZoneCeiling(zone) => alerts.set_zone_ceiling(zone),
+            SettingsEffect::ZoneCeiling(zone) => {
+                alerts.set_zone_ceiling(zone);
+                // Mirror the engine's VALIDATED arm, never the wire value —
+                // the Zones page's CEIL cell must agree with what will fire.
+                recorder.set_alert_arms(alerts.zone_ceiling(), alerts.pace_band());
+            }
             SettingsEffect::SeaLevelPa(pa) => sea_level_tx.send(pa),
             SettingsEffect::FuelIntervals {
                 drink_interval_s,
@@ -1122,7 +1128,10 @@ fn apply_settings(
             }
             SettingsEffect::DistanceInterval(m) => alerts.set_distance_interval(m),
             SettingsEffect::TimeInterval(s) => alerts.set_time_interval(s),
-            SettingsEffect::PaceBand(band) => alerts.set_pace_band(band),
+            SettingsEffect::PaceBand(band) => {
+                alerts.set_pace_band(band);
+                recorder.set_alert_arms(alerts.zone_ceiling(), alerts.pace_band());
+            }
             SettingsEffect::RacePhases {
                 distance_m,
                 goal_time_s,

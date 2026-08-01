@@ -893,6 +893,8 @@ mod tests {
             last_lap: None,
             pacer: None,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
             sleep: None,

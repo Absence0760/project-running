@@ -61,6 +61,8 @@ fn base_snapshot() -> Snapshot {
         last_lap: None,
         pacer: None,
         zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+        zone_ceiling: None,
+        pace_band: None,
         zone_time_s: [0; 5],
         cutoff: None,
         sleep: None,
