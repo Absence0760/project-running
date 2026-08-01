@@ -15,7 +15,8 @@
 
 use embassy_nrf::gpio::AnyPin;
 use embassy_nrf::peripherals::{
-    NVMC, P0_14, P0_15, P0_16, PWM0, SAADC, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1,
+    NVMC, P0_14, P0_15, P0_16, PPI_CH0, PPI_CH1, PWM0, SAADC, SPI3, TIMER1, TWISPI0, TWISPI1,
+    UARTE0, UARTE1,
 };
 use embassy_nrf::{Peri, Peripherals};
 
@@ -53,6 +54,16 @@ pub struct PhonePort {
     pub uarte: Peri<'static, UARTE1>,
     pub tx: Peri<'static, AnyPin>,
     pub rx: Peri<'static, AnyPin>,
+    /// Hardware idle-line detection for the receive half
+    /// (`Uarte::split_with_idle`): RXDRDY restarts the timer through the first
+    /// PPI channel and its compare drives STOPRX through the second, so a read
+    /// of an unprefixed settings frame ends at the gap *and reports its byte
+    /// count* instead of only completing on a full buffer. TIMER1 and PPI
+    /// channels 0/1 are otherwise unclaimed on this board — the Embassy time
+    /// driver is on RTC1 — and both sit outside the S140 SoftDevice's
+    /// reservations (TIMER0, PPI 17-31).
+    pub idle_timer: Peri<'static, TIMER1>,
+    pub idle_ppi: (Peri<'static, PPI_CH0>, Peri<'static, PPI_CH1>),
 }
 
 /// MAX86177 optical-HR breakout on the TWISPI0 I²C bus. Pins are the DK's
@@ -162,6 +173,8 @@ impl Board {
                 uarte: p.UARTE1,
                 tx: p.P1_03.into(),
                 rx: p.P1_04.into(),
+                idle_timer: p.TIMER1,
+                idle_ppi: (p.PPI_CH0, p.PPI_CH1),
             },
             hr: HrPort {
                 twim: p.TWISPI0,
