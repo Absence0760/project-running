@@ -87,7 +87,7 @@ pub const STALE_AFTER_S: u32 = 5;
 /// outside the shape deliberately: it selects a *surface*, not a cadence.
 pub fn stale_after_s(mode: GnssMode, run_active: bool) -> u32 {
     if run_active {
-        STALE_AFTER_S.saturating_add(mode.fix_interval_s().saturating_sub(1))
+        crate::stale_budget::for_cadence(STALE_AFTER_S, mode.fix_interval_s())
     } else {
         STALE_AFTER_S
     }
