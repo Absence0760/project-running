@@ -4591,18 +4591,24 @@ fn home_face(
     rows
 }
 
-/// The mode picker's read-out — BTN3 cycles the GNSS mode while idle —
-/// pairing the mode tag with its battery figure. "EST" marks the figure as an
-/// unmeasured estimate, not a guaranteed runtime — the tier-1 bench can't
-/// measure power at all, so the number is a tier-2 projection derived in
-/// `gnss_mode`. Reading it as a spec ("~220H") would over-promise; "EST 220H"
-/// is honest at a glance.
+/// The mode picker's read-out — BTN3 cycles the GNSS mode while idle — pairing
+/// the mode tag with the fix cadence it runs at.
+///
+/// The cadence, not the hours: [`GnssMode::battery_est_h`] is a projection for
+/// tier-2 hardware that assumes a receiver power-down this build has never run,
+/// so on a DK bench prototype it is a different watch's number. The old row
+/// tagged it `EST`, which reads as *this* watch's estimate — and the honest
+/// phrase ("projection for unbuilt hardware") does not fit: the row has 3 cells
+/// spare and its sibling in [`crate::settings_menu`] has 1, so every qualifier
+/// that fits is one that misleads. Withholding it costs the picker nothing the
+/// runner needs, because the cadence is the trade — 1 s of fidelity against
+/// 60 s of battery — stated as a fact about the firmware in front of them.
 fn write_mode_row(row: &mut Row, mode: GnssMode) {
-    let _ = write!(row, "MODE {:<5}EST {}H", mode.label(), mode.battery_est_h());
+    let _ = write!(row, "MODE {:<5}{}", mode.label(), mode.cadence_label());
 }
 
 /// The diagnostics layout — the bench acquisition view the idle face was
-/// before §291: the selected GNSS mode with its projected hours, GPS status,
+/// before §291: the selected GNSS mode with its fix cadence, GPS status,
 /// last-known position, speed, altitude, HR, and the seconds clock (falling
 /// back to cumulative vert with no fix). Kept verbatim behind BTN4: bench
 /// bring-up still needs raw LAT/LON and a per-fix clock, they just no longer
@@ -6366,7 +6372,7 @@ mod tests {
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
-        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF 1 FIX/1S");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
@@ -6503,7 +6509,7 @@ mod tests {
         // Baro-preferred altitude, same preference as the diagnostics ALT row.
         assert_eq!(rows[6].as_str(), "HR 72 BPM  ALT 1600 M");
         assert_eq!(rows[7].as_str(), "GPS 8 SATS        UTC");
-        assert_eq!(rows[8].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[8].as_str(), "MODE PERF 1 FIX/1S");
         for row in &rows {
             assert!(row.chars().count() <= COLS);
         }
@@ -8251,18 +8257,34 @@ mod tests {
             None,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
-        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF 1 FIX/1S");
     }
 
     #[test]
-    fn idle_mode_row_pairs_each_mode_with_its_projected_hours() {
-        // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
-        // battery figure, one per mode — row 1 on the diagnostics view, the
-        // bottom row on the home view.
+    fn idle_mode_row_pairs_each_mode_with_its_fix_cadence() {
+        // The BTN3 mode picker's read-out: the tag plus the cadence this build
+        // actually runs at, one per mode — row 1 on the diagnostics view, the
+        // bottom row on the home view. Deliberately NOT the tier-2 battery
+        // projection: no qualifier short enough for the row says "another
+        // watch's number", so the row states a fact about this one instead.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            let mut row = Row::new();
+            super::write_mode_row(&mut row, mode);
+            let mut projection: heapless::String<8> = heapless::String::new();
+            let _ = write!(projection, "{}", mode.battery_est_h());
+            assert!(
+                !row.contains(projection.as_str()),
+                "tier-2 battery projection back on a wearer-facing row: {row:?}"
+            );
+        }
         for (mode, expected) in [
-            (GnssMode::Performance, "MODE PERF EST 110H"),
-            (GnssMode::Balanced, "MODE BAL  EST 180H"),
-            (GnssMode::Expedition, "MODE EXP  EST 220H"),
+            (GnssMode::Performance, "MODE PERF 1 FIX/1S"),
+            (GnssMode::Balanced, "MODE BAL  1 FIX/15S"),
+            (GnssMode::Expedition, "MODE EXP  1 FIX/60S"),
         ] {
             let rows = super::face_rows(
                 Some(&fix()),
