@@ -274,20 +274,40 @@ fn a_corrupt_magic_is_rejected() {
 }
 
 #[test]
-fn an_unknown_presence_bit_in_flags2_is_rejected() {
-    // A new field always rides a version bump, so a set bit `flags2` doesn't
-    // define can only be corruption — decoding past it would apply a frame
-    // shifted by however many bytes the sender meant to carry. v5 defines bits
-    // 0-6, so bit 7 is the unknown one (the v4-frame-claiming-bit-6 case is
-    // pinned in the unit suite).
-    check(512, a_settings(), |s| {
-        let mut frame = encoded(&s);
-        frame[6] |= 0x80;
+fn an_unknown_presence_bit_is_rejected_even_under_a_valid_checksum() {
+    // A new field always rides a version bump, so a set bit the frame's own
+    // version doesn't define can only be corruption — decoding past it would
+    // apply a frame shifted by however many bytes the sender meant to carry.
+    //
+    // Two things about the seat. It is `flags3`, not `flags2`: this test was
+    // written when the second byte's top bit was undefined, but v6 gave it to
+    // `ice` and v8 leaves BOTH earlier bytes saturated, so at the encoder's
+    // current version `flags2` has no unknown bit left to set. `flags3` defines
+    // bits 0-1 and has six free.
+    //
+    // And the checksum is **re-sealed** after the flip. Without that, the
+    // flipped byte fails the CRC and the frame is rejected for a reason this
+    // test is not about — it would pass while the unknown-bit check it is named
+    // for was never reached, which is how it read before.
+    let free_flags3_bits = 2u32..8;
+    check(512, (a_settings(), free_flags3_bits), |(s, bit)| {
+        let clean = encoded(&s);
+        prop_assert_eq!(
+            WatchSettings::decode(&clean),
+            Some(s),
+            "the control frame must decode, or the rejection below proves nothing"
+        );
+
+        let mut frame = clean;
+        frame[7] |= 1 << bit;
+        let body = frame.len() - CRC_WIDTH;
+        let crc = crc32(&frame[..body]);
+        frame[body..].copy_from_slice(&crc.to_le_bytes());
         prop_assert_eq!(
             WatchSettings::decode(&frame),
             None,
-            "flags2 {:#04x} decoded",
-            frame[6]
+            "flags3 {:#04x} decoded under a valid checksum",
+            frame[7]
         );
         Ok(())
     });
