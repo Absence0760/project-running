@@ -694,6 +694,34 @@ fn preview_page_grid() {
 }
 
 #[test]
+fn preview_climb_page() {
+    // Mid-climb with a named crest: the crest block, the banked block, and
+    // the § 430 crest thermometer filled to the banked share of the height.
+    use watch_core::climb::{ActiveClimb, ClimbView, CrestAhead};
+    let mut snap = base_snapshot();
+    snap.climb = ClimbView {
+        active: Some(ActiveClimb {
+            gain_m: 220.0,
+            distance_m: 1_400.0,
+            avg_grade_pct: 15.7,
+        }),
+        ahead: Some(CrestAhead {
+            distance_m: 600.0,
+            gain_m: 110.0,
+            avg_grade_pct: 18.3,
+        }),
+    };
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Climb, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Climb, u64::MAX),
+    );
+    widgets::draw_climb_overlay(&mut fb, &snap);
+    show("climb: crest ahead + banked-height thermometer", &fb);
+}
+
+#[test]
 fn preview_elevation_profile_page() {
     // The recorder's banked altitude series over its own glance page, so the
     // sparkline is shown against the vert-totals context row it sits under.
