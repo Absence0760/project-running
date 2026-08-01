@@ -14,6 +14,14 @@
 //! spawns these tasks under `not(feature = "ble")`, so under `ble` every item
 //! here is unreachable and the dead-code lint fires on the first one it can
 //! see.
+//!
+//! **Transmit is change-gated, with a slow liveness beacon underneath it.** The
+//! task used to write a full frame on every one of its 1 Hz ticks whether or not
+//! anything in the frame had moved — 3,600 UART transfers an hour, and on an
+//! Expedition-mode run (one fix a minute) 59 of every 60 carrying the fix the
+//! client already had. See [`HEARTBEAT_S`] for why the beacon underneath the gate
+//! is load-bearing rather than a leftover tick, and [`SAMPLE`] for why the tick
+//! model survives the gate at all.
 
 #![cfg(not(feature = "ble"))]
 
@@ -25,30 +33,70 @@ use watch_core::settings_frame::{SettingsFramer, SettingsPush, FRAME_GAP_MS};
 
 use crate::state;
 
+/// Longest an attached client may see nothing at all.
+///
+/// A client cannot tell a link with nothing to report from a link that died, so
+/// one frame goes out this often regardless of whether the data moved — it is
+/// the only thing an idle link says about itself. `sim/ci_smoke.py` reads a
+/// batch of frames off the bridged socket and asserts they are schema-valid and
+/// that their `uptime_s` advances; with the gate above it, this beacon is what
+/// keeps that true of a watch whose sensors have gone quiet. Not a redundant
+/// tick: deleting it makes a silent link and a dead link identical.
+const HEARTBEAT_S: u32 = 30;
+
+/// Sampling clock for the gate.
+///
+/// The gate is polled on a tick rather than awaited on the two watches directly
+/// because the frame's clock is `Instant::as_secs()`: an event-driven wait would
+/// let a fix and an elevation reading arriving in the same second emit two
+/// frames stamped with the same `uptime_s`, and a client (and
+/// `sim/ci_smoke.py`) reads that sequence as strictly increasing. Ticking at the
+/// clock's own resolution makes one-frame-per-second structural.
+const SAMPLE: Duration = Duration::from_secs(1);
+
 #[embassy_executor::task]
 pub async fn run(mut tx: UarteTx<'static>) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut latest = None;
     let mut elev = None;
-    let mut ticker = Ticker::every(Duration::from_secs(1));
-    info!("phone: status frames on UARTE1");
+    // Latches until a frame actually carries the change, so a send deferred for
+    // any reason is deferred and not dropped.
+    let mut dirty = false;
+    let mut sent_at_s: Option<u32> = None;
+    let mut ticker = Ticker::every(SAMPLE);
+    info!(
+        "phone: status frames on UARTE1 (change-gated, {}s beacon)",
+        HEARTBEAT_S
+    );
     loop {
         ticker.next().await;
         if let Some(fix) = fix_rx.try_changed() {
             latest = Some(fix);
+            dirty = true;
         }
         if let Some(reading) = elev_rx.try_changed() {
             elev = Some(reading);
+            dirty = true;
         }
-        let frame = link::status_frame(
-            latest.as_ref(),
-            elev.as_ref(),
-            Instant::now().as_secs() as u32,
-        );
+        let uptime_s = Instant::now().as_secs() as u32;
+        let beacon_due = sent_at_s.is_none_or(|s| uptime_s.saturating_sub(s) >= HEARTBEAT_S);
+        if !dirty && !beacon_due {
+            continue;
+        }
+        // A late tick can land in the second the last frame was stamped with;
+        // `dirty` is still set, so the update goes out on the next one rather
+        // than as a second frame wearing the same `uptime_s`.
+        if sent_at_s == Some(uptime_s) {
+            continue;
+        }
+        let frame = link::status_frame(latest.as_ref(), elev.as_ref(), uptime_s);
         if let Err(e) = tx.write(frame.as_bytes()).await {
             warn!("phone: uart write error {:?}", e);
+            continue;
         }
+        dirty = false;
+        sent_at_s = Some(uptime_s);
     }
 }
 
