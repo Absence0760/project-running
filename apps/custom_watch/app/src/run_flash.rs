@@ -649,10 +649,17 @@ impl RunStore {
 
     /// Persist a finished run's staged blob. Best-effort: any failure warns,
     /// drops the slot so the manifest can't advertise a half-written run, and
-    /// returns — the caller ignores the outcome (L4).
-    pub async fn commit(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+    /// returns — the caller ignores the write outcome (L4).
+    ///
+    /// Returns whether the slot this commit took destroyed a finished run the
+    /// phone had never pulled ([`flash_plan::SlotWrite::evicted_unsynced`]) —
+    /// the record task turns that into `Recorder::note_run_lost` and the
+    /// `! RUN LOST` banner. Reported on every post-reservation path, success
+    /// or not: the reservation is what takes the victim's directory entry, so
+    /// by the time an erase or write fails the loss has already happened.
+    pub async fn commit(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) -> bool {
         if !self.available {
-            return;
+            return false;
         }
         // The plan takes the slot NOT holding this run's freshest checkpoint, so
         // a torn commit leaves that checkpoint recoverable — and the directory
@@ -669,19 +676,25 @@ impl RunStore {
                 blob.len(),
                 SLOT_LEN
             );
-            return;
+            return false;
         };
+        if plan.evicted_unsynced {
+            warn!(
+                "run_flash: commit of run {=u32} evicted an unsynced run from slot {=usize}",
+                run_seq, plan.slot
+            );
+        }
         if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!("run_flash: erase slot {=usize} failed {:?}", plan.slot, e);
             self.dir.commit_failed(plan.slot);
             self.publish_pending();
-            return;
+            return plan.evicted_unsynced;
         }
         if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!("run_flash: write run {=u32} failed {:?}", run_seq, e);
             self.dir.commit_failed(plan.slot);
             self.publish_pending();
-            return;
+            return plan.evicted_unsynced;
         }
         self.dir.commit_written(plan.slot);
         self.publish_pending();
@@ -691,6 +704,7 @@ impl RunStore {
             blob.len(),
             plan.slot
         );
+        plan.evicted_unsynced
     }
 
     /// Best-effort mid-run checkpoint: persist a *recoverable* snapshot of the
@@ -708,9 +722,16 @@ impl RunStore {
     /// never blocked (same contract as `commit`). The caller bounds the cadence
     /// to keep flash erase cycles within endurance — with two slots in rotation
     /// each takes half the erases it used to.
-    pub async fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+    ///
+    /// Returns whether the slot this checkpoint took destroyed an unsynced
+    /// run, on `commit`'s exact contract. The checkpoint path is where a new
+    /// run in a full store usually takes its victims — the first two
+    /// checkpoints claim the ping-pong pair — so this is the report that
+    /// reaches the runner while the run whose start caused the loss is still
+    /// on the wrist.
+    pub async fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) -> bool {
         if !self.available {
-            return;
+            return false;
         }
         let Some(plan) = flash_plan::plan_checkpoint_write(
             &mut self.dir,
@@ -724,8 +745,14 @@ impl RunStore {
                 blob.len(),
                 SLOT_LEN
             );
-            return;
+            return false;
         };
+        if plan.evicted_unsynced {
+            warn!(
+                "run_flash: checkpoint of run {=u32} evicted an unsynced run from slot {=usize}",
+                run_seq, plan.slot
+            );
+        }
         if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!(
                 "run_flash: checkpoint erase slot {=usize} failed {:?}",
@@ -733,7 +760,7 @@ impl RunStore {
             );
             self.dir.forget(plan.slot);
             self.publish_pending();
-            return;
+            return plan.evicted_unsynced;
         }
         if let Err(e) = self.flash_write(plan.erase_from, blob).await {
             warn!(
@@ -742,7 +769,7 @@ impl RunStore {
             );
             self.dir.forget(plan.slot);
             self.publish_pending();
-            return;
+            return plan.evicted_unsynced;
         }
         self.publish_pending();
         debug!(
@@ -751,6 +778,7 @@ impl RunStore {
             blob.len(),
             plan.slot
         );
+        plan.evicted_unsynced
     }
 
     /// Manifest entries for every FINISHED run — a mid-run checkpoint of the run

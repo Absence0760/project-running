@@ -17,6 +17,7 @@ use heapless::Vec;
 use crate::course::{Course, NavStatus, OffCourseAlert};
 use crate::grade_adjusted_pace::haversine_metres;
 use crate::record::{TurnCueView, MAX_SPEED_MPS};
+use crate::trackback::{initial_bearing_deg, BEARING_MIN_DISTANCE_M};
 use crate::turn_cues::{
     direction_code, generate_turn_cues, next_turn_ahead, TurnCue, TurnCueOptions, TurnCueWaypoint,
     MAX_TURN_CUES, MAX_TURN_CUE_WAYPOINTS,
@@ -131,12 +132,19 @@ pub fn project_fix(
         distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
         remaining,
     });
+    // The snapped point is the nearest place back on the line, so the bearing
+    // toward it is the escape direction the Nav page shows while alerting.
+    // Gated on the same stability floor the trackback BRG uses: under it the
+    // projection foot wobbles with GPS jitter and the bearing means nothing.
+    let back_to_course_deg = (p.off_m >= BEARING_MIN_DISTANCE_M as f64)
+        .then(|| initial_bearing_deg(lat_deg, lon_deg, p.lat_deg, p.lon_deg) as f32);
     Some(NavOutcome {
         status: NavStatus {
             off_m: p.off_m,
             along_m: p.along_m,
             alerting: alert.active(),
             next_turn,
+            back_to_course_deg,
         },
         went_off_course,
         back_on_course: was_alerting && !alert.active(),
@@ -373,6 +381,68 @@ mod tests {
         .unwrap();
         assert!(biased.status.along_m > unbiased.status.along_m);
         assert!((biased.status.off_m - unbiased.status.off_m).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_off_course_fix_carries_the_bearing_back_toward_the_course() {
+        // A fix due EAST of the course's north-south leg (near its top, so
+        // that leg — not the east-west one below — is nearest): the way back
+        // is west, so the published bearing must read ~270 — pointing the
+        // runner TOWARD the line, never along their own displacement away
+        // from it. This is the path the Nav page's escape line renders from.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        let far = -105.2705 + lon_offset_deg(60.0);
+        let out = project_fix(&course, &mut alert, None, &cues, 40.0157, far).unwrap();
+        assert!(out.status.alerting);
+        let deg = out.status.back_to_course_deg.unwrap();
+        assert!((deg - 270.0).abs() < 2.0, "bearing {}", deg);
+        assert_eq!(crate::trackback::sector_of_deg(deg), 12, "expected W");
+    }
+
+    #[test]
+    fn a_fix_on_the_line_carries_no_back_bearing() {
+        // Under the trackback stability floor the projection foot wobbles
+        // with GPS jitter, so the bearing would be noise — and there is
+        // nothing to escape from.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        let out = project_fix(&course, &mut alert, None, &cues, 40.0155, -105.2705).unwrap();
+        assert!(out.status.off_m < 1.0);
+        assert_eq!(out.status.back_to_course_deg, None);
+    }
+
+    #[test]
+    fn the_back_bearing_survives_the_hysteresis_band_while_still_latched() {
+        // The latch holds between 20 and 40 m out; the escape line renders on
+        // `alerting`, so the bearing must still be published there, not only
+        // past the 40 m trigger.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        project_fix(
+            &course,
+            &mut alert,
+            None,
+            &cues,
+            40.0157,
+            -105.2705 + lon_offset_deg(60.0),
+        )
+        .unwrap();
+        let drifting = project_fix(
+            &course,
+            &mut alert,
+            None,
+            &cues,
+            40.0157,
+            -105.2705 + lon_offset_deg(30.0),
+        )
+        .unwrap();
+        assert!(drifting.status.alerting);
+        let deg = drifting.status.back_to_course_deg.unwrap();
+        assert!((deg - 270.0).abs() < 2.0, "bearing {}", deg);
     }
 
     #[test]

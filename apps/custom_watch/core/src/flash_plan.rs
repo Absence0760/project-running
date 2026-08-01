@@ -35,6 +35,11 @@ pub struct SlotWrite {
     pub erase_from: u32,
     /// Erase end, exclusive.
     pub erase_to: u32,
+    /// Whether taking this slot destroyed a finished run the phone had never
+    /// pulled ([`SlotDir::next_write_evicts_unsynced`]). The driver turns it
+    /// into the `! RUN LOST` banner — the loss used to reach only a `warn!`
+    /// down a debug cable no runner carries.
+    pub evicted_unsynced: bool,
 }
 
 /// Reserve the slot a FINISHED run's blob is committed into, and return the
@@ -64,9 +69,11 @@ pub fn plan_slot_write(
     if blob_len > SLOT_LEN {
         return None;
     }
+    let evicted_unsynced = dir.next_write_evicts_unsynced(run_seq);
     Some(slot_write(
         region_offset,
         dir.reserve_commit(run_seq, blob_len as u32, start_uptime_s),
+        evicted_unsynced,
     ))
 }
 
@@ -92,18 +99,21 @@ pub fn plan_checkpoint_write(
     if blob_len > SLOT_LEN {
         return None;
     }
+    let evicted_unsynced = dir.next_write_evicts_unsynced(run_seq);
     Some(slot_write(
         region_offset,
         dir.reserve_checkpoint(run_seq, blob_len as u32, start_uptime_s),
+        evicted_unsynced,
     ))
 }
 
-fn slot_write(region_offset: u32, slot: usize) -> SlotWrite {
+fn slot_write(region_offset: u32, slot: usize, evicted_unsynced: bool) -> SlotWrite {
     let erase_from = flash_store::slot_offset(region_offset, slot);
     SlotWrite {
         slot,
         erase_from,
         erase_to: erase_from + SLOT_LEN as u32,
+        evicted_unsynced,
     }
 }
 
@@ -640,6 +650,7 @@ mod tests {
             slot: 2,
             erase_from: flash_store::slot_offset(BASE, 2),
             erase_to: flash_store::slot_offset(BASE, 3),
+            evicted_unsynced: false,
         };
         flash.apply(plan, &blob);
 
@@ -753,6 +764,7 @@ mod tests {
             slot: 0,
             erase_from: BASE,
             erase_to: BASE + SLOT_LEN as u32,
+            evicted_unsynced: false,
         };
         flash.apply(reuse, &short);
         let mut slot0 = [0u8; SLOT_LEN];
@@ -802,6 +814,71 @@ mod tests {
         // Once synced it becomes the eviction victim, so the next run reuses it.
         let plan = plan_slot_write(&mut dir, BASE, 22, 10, 100).expect("fits");
         assert_eq!(plan.slot, 1, "a free slot still comes first");
+    }
+
+    #[test]
+    fn a_commit_that_takes_an_unsynced_run_says_so() {
+        // Four finished runs, none pulled: the fifth run's commit must evict
+        // one that exists nowhere else — the plan reports the loss so the
+        // driver can raise `! RUN LOST` instead of only warning down a cable.
+        let mut dir = SlotDir::new();
+        for seq in 0..SLOT_COUNT as u32 {
+            let plan = plan_slot_write(&mut dir, BASE, seq, seq, 100).expect("fits");
+            assert!(
+                !plan.evicted_unsynced,
+                "run {seq} took a free slot, nothing was lost"
+            );
+        }
+        let plan = plan_slot_write(&mut dir, BASE, 4, 10, 100).expect("fits");
+        assert!(
+            plan.evicted_unsynced,
+            "the oldest unsynced run was destroyed"
+        );
+    }
+
+    #[test]
+    fn a_commit_over_a_synced_victim_reports_no_loss() {
+        // The phone holds a copy of a synced run, so its eviction costs
+        // nothing irreplaceable — the flag must stay quiet or it cries wolf.
+        let mut dir = SlotDir::new();
+        for seq in 0..SLOT_COUNT as u32 {
+            plan_slot_write(&mut dir, BASE, seq, seq, 100).expect("fits");
+            dir.mark_synced(seq);
+        }
+        let plan = plan_slot_write(&mut dir, BASE, 4, 10, 100).expect("fits");
+        assert!(!plan.evicted_unsynced);
+    }
+
+    #[test]
+    fn a_runs_own_ping_pong_slots_never_read_as_a_loss() {
+        // Once a run holds both checkpoint slots, later checkpoints and the
+        // final commit land on its own staler copy — superseding yourself is
+        // not an eviction.
+        let mut dir = SlotDir::new();
+        plan_checkpoint_write(&mut dir, BASE, 7, 41, 100).expect("fits");
+        plan_checkpoint_write(&mut dir, BASE, 7, 41, 120).expect("fits");
+        let third = plan_checkpoint_write(&mut dir, BASE, 7, 41, 140).expect("fits");
+        assert!(!third.evicted_unsynced);
+        let commit = plan_slot_write(&mut dir, BASE, 7, 41, 160).expect("fits");
+        assert!(!commit.evicted_unsynced);
+    }
+
+    #[test]
+    fn three_unsynced_runs_are_one_start_from_a_loss() {
+        // The idle face's pressure threshold, pinned where it comes from: at
+        // three unsynced runs the next start's FIRST checkpoint takes the free
+        // slot, and its SECOND has no free and no synced slot left — an
+        // unsynced run goes. This is why the home face speaks at three, not
+        // only at four.
+        let mut dir = SlotDir::new();
+        for seq in 0..3u32 {
+            plan_slot_write(&mut dir, BASE, seq, seq, 100).expect("fits");
+        }
+        assert_eq!(dir.unsynced_count(), 3);
+        let first = plan_checkpoint_write(&mut dir, BASE, 3, 10, 100).expect("fits");
+        assert!(!first.evicted_unsynced, "the free slot absorbs the first");
+        let second = plan_checkpoint_write(&mut dir, BASE, 3, 10, 120).expect("fits");
+        assert!(second.evicted_unsynced, "the second must take a run");
     }
 
     #[test]

@@ -530,6 +530,46 @@ pub fn apply_pending_run_marker(rows: &mut [Row; ROWS], view: IdleView, pending:
     let _ = write!(row, "{:>width$}", tag, width = COLS);
 }
 
+/// How many unsynced runs put the next start one checkpoint away from
+/// destroying one — the threshold the home face starts naming the backlog at.
+///
+/// The arithmetic is the flash plan's: a starting run's checkpoints ping-pong
+/// across two of the [`crate::flash_store::SLOT_COUNT`] slots, so with
+/// `SLOT_COUNT - 1` unsynced runs the first checkpoint takes the last free
+/// slot and the second has no free and no synced slot left — an unsynced run
+/// goes (pinned in `flash_plan`'s
+/// `three_unsynced_runs_are_one_start_from_a_loss`). Below the threshold a
+/// full run's ping-pong still fits without touching history, so the face
+/// stays quiet and the row's appearance always means something.
+pub const UNSYNCED_PRESSURE_MIN: u8 = (crate::flash_store::SLOT_COUNT - 1) as u8;
+
+/// Overlay the home face's unsynced-backlog row — the standing pressure state
+/// BEFORE the loss the `! RUN LOST` banner reports after the fact. From
+/// [`UNSYNCED_PRESSURE_MIN`] unsynced runs up, the next start can silently
+/// evict a finished run the phone has never pulled, so the idle face says
+/// `N RUNS NOT SYNCED` — the §378 erase prompt's exact stake vocabulary
+/// ([`crate::erase::erase_stake_row`] renders both), because it is the same
+/// stake priced by a different actor.
+///
+/// The [`apply_pending_run_marker`] contract, unchanged: a standing 1x tag on
+/// the same breathing row, never a modal, so it cannot stand between the
+/// runner and the next start, and it retires itself as the phone pulls runs.
+/// When both markers want the row the recovered one wins (it is the sharper
+/// fact — an interrupted run — and both end the same way: sync the phone).
+pub fn apply_unsynced_run_marker(rows: &mut [Row; ROWS], view: IdleView, unsynced: u8) {
+    if view != IdleView::Home || unsynced < UNSYNCED_PRESSURE_MIN {
+        return;
+    }
+    let row = &mut rows[PENDING_RUN_ROW];
+    if !row.is_empty() {
+        return;
+    }
+    let Some(tag) = crate::erase::erase_stake_row(unsynced) else {
+        return;
+    };
+    let _ = write!(row, "{:>width$}", tag, width = COLS);
+}
+
 /// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
 /// rather than the idle status face. The app keys page-specific drawing (the
 /// Nav page's map panel) off the same predicate the layout selection uses.
@@ -3829,6 +3869,15 @@ fn timer_glance(
 /// the perpendicular offset on the info row and the GPS glance at the bottom.
 /// Without a course (or before the first projected fix) the info row says why,
 /// so the page never reads as a silently-empty map.
+///
+/// While the off-course latch is alerting the info row becomes the numeric
+/// escape line — `BACK TO CRS <16-wind> <m>M` — because the alert threshold
+/// (40 m) is far outside the panel fit's 2 px margin: at the exact moment the
+/// runner most needs the map, the position marker has usually left the panel
+/// (`nav_map::marker_px` honestly draws nothing), so direction + distance back
+/// must be stated in text. The direction is the absolute 16-wind bearing
+/// toward the snapped on-course point, the same convention the Waypoint and
+/// Back-to-start BRG rows read in.
 #[allow(clippy::too_many_arguments)]
 fn nav_page(
     nav: NavView,
@@ -3855,13 +3904,27 @@ fn nav_page(
         NavView::NoFix => {
             let _ = write!(info, "{}", Unfed::AwaitingFix.reason());
         }
-        NavView::Status(s) => {
-            // Clamps keep the row inside COLS at any input: 999.99 km along +
-            // a 9999 m offset is exactly 21 cells.
-            let km = (s.along_m / 1000.0).min(999.99);
-            let off = (s.off_m as u32).min(9999);
-            let _ = write!(info, "{:.2} KM  OFF {} M", km, off);
-        }
+        NavView::Status(s) => match s.back_to_course_deg.filter(|_| s.alerting) {
+            Some(deg) => {
+                // Worst case `BACK TO CRS NNW 9999M` is exactly 21 cells, so
+                // the metres keep no space before their unit here.
+                let sector = trackback::sector_of_deg(deg);
+                let off = (s.off_m as u32).min(9999);
+                let _ = write!(
+                    info,
+                    "BACK TO CRS {} {}M",
+                    trackback::SECTOR_NAMES[sector as usize],
+                    off
+                );
+            }
+            None => {
+                // Clamps keep the row inside COLS at any input: 999.99 km
+                // along + a 9999 m offset is exactly 21 cells.
+                let km = (s.along_m / 1000.0).min(999.99);
+                let off = (s.off_m as u32).min(9999);
+                let _ = write!(info, "{:.2} KM  OFF {} M", km, off);
+            }
+        },
     }
 
     write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
@@ -4911,6 +4974,8 @@ mod tests {
             waypoint_count: 0,
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
+            run_lost_seq: 0,
+            course_reject_seq: 0,
             timer: None,
             storm: None,
             track_thinning: 1,
@@ -5197,6 +5262,61 @@ mod tests {
             assert!(
                 rows[PENDING_RUN_ROW].as_str().ends_with("RUNS RECOVERED"),
                 "count {pending} rendered as {:?}",
+                rows[PENDING_RUN_ROW].as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn the_home_face_names_the_unsynced_backlog_before_a_start_can_take_it() {
+        // At three of the four slots the next start's second checkpoint must
+        // evict an unsynced run — the row appears exactly there, in the erase
+        // prompt's stake vocabulary, and not one run earlier.
+        let base = face_rows(Some(&fix()), Some(150), None, None, 10);
+
+        let mut rows = base.clone();
+        apply_unsynced_run_marker(&mut rows, IdleView::Home, UNSYNCED_PRESSURE_MIN - 1);
+        assert_eq!(rows, base, "two unsynced runs still fit a full ping-pong");
+
+        let mut rows = base.clone();
+        apply_unsynced_run_marker(&mut rows, IdleView::Home, UNSYNCED_PRESSURE_MIN);
+        assert_eq!(rows[PENDING_RUN_ROW].as_str().trim(), "3 RUNS NOT SYNCED");
+        assert!(rows[PENDING_RUN_ROW].as_str().starts_with(' '));
+        assert!(rows[PENDING_RUN_ROW].len() <= COLS);
+        for r in 0..ROWS {
+            if r != PENDING_RUN_ROW {
+                assert_eq!(rows[r], base[r], "row {r} changed");
+            }
+        }
+
+        let mut rows = base.clone();
+        apply_unsynced_run_marker(&mut rows, IdleView::Home, 4);
+        assert_eq!(rows[PENDING_RUN_ROW].as_str().trim(), "4 RUNS NOT SYNCED");
+    }
+
+    #[test]
+    fn the_unsynced_marker_keeps_the_add_a_glance_only_contract() {
+        // Off the home view it does nothing, and when the recovered-run
+        // marker holds the shared row that sharper fact wins — one footnote
+        // row, never two, and never a modal in front of the next start.
+        let diag = diag_rows(Some(&fix()), Some(150), None, 10);
+        let mut rows = diag.clone();
+        apply_unsynced_run_marker(&mut rows, IdleView::Diagnostics, 4);
+        assert_eq!(rows, diag);
+
+        let mut rows: [Row; ROWS] = Default::default();
+        apply_pending_run_marker(&mut rows, IdleView::Home, 1);
+        let with_recovered = rows.clone();
+        apply_unsynced_run_marker(&mut rows, IdleView::Home, 4);
+        assert_eq!(rows, with_recovered, "the recovered marker keeps the row");
+
+        for unsynced in [UNSYNCED_PRESSURE_MIN, 4, 99, u8::MAX] {
+            let mut rows: [Row; ROWS] = Default::default();
+            apply_unsynced_run_marker(&mut rows, IdleView::Home, unsynced);
+            assert!(rows[PENDING_RUN_ROW].len() <= COLS, "count {unsynced}");
+            assert!(
+                rows[PENDING_RUN_ROW].as_str().ends_with("RUNS NOT SYNCED"),
+                "count {unsynced} rendered as {:?}",
                 rows[PENDING_RUN_ROW].as_str()
             );
         }
@@ -8267,6 +8387,17 @@ mod tests {
             off_m,
             alerting,
             next_turn: None,
+            back_to_course_deg: None,
+        })
+    }
+
+    fn nav_status_with_bearing(off_m: f64, alerting: bool, back_deg: f32) -> NavView {
+        NavView::Status(NavStatus {
+            along_m: 5_000.0,
+            off_m,
+            alerting,
+            next_turn: None,
+            back_to_course_deg: Some(back_deg),
         })
     }
 
@@ -8346,6 +8477,84 @@ mod tests {
         );
         assert_eq!(rows[7].as_str(), "AWAITING FIX");
         assert_eq!(rows[8].as_str(), "     ACQUIRING PERF");
+    }
+
+    #[test]
+    fn nav_page_swaps_the_info_row_for_the_escape_line_while_alerting() {
+        // Alerting means the marker has usually left the fitted panel (2 px
+        // margin vs the 40 m latch), so the row must state the way back in
+        // text: absolute 16-wind direction toward the course + metres to it.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            nav_status_with_bearing(120.4, true, 270.0),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "BACK TO CRS W 120M");
+    }
+
+    #[test]
+    fn nav_page_keeps_the_along_and_off_row_when_not_alerting() {
+        // On course the map is the story — the escape line must not appear
+        // just because a bearing to the line exists.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            nav_status_with_bearing(23.4, false, 270.0),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "5.00 KM  OFF 23 M");
+    }
+
+    #[test]
+    fn nav_page_falls_back_to_the_off_row_when_alerting_without_a_bearing() {
+        // Defensive: alerting implies the offset is past the stability floor,
+        // so the bearing should always exist — but a missing one must degrade
+        // to the plain offset row, never to a blank info row.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            nav_status(1_000.0, 55.0, true),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "1.00 KM  OFF 55 M");
+    }
+
+    #[test]
+    fn nav_escape_line_worst_case_fits_the_row() {
+        // The widest 16-wind name plus the offset clamp: exactly COLS cells.
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            nav_status_with_bearing(123_456.0, true, 338.0),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "BACK TO CRS NNW 9999M");
+        assert!(rows[7].len() <= COLS);
     }
 
     #[test]

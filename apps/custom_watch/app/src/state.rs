@@ -168,6 +168,16 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
 
+/// Wrapping count of course pushes the watch REJECTED — a short or
+/// out-of-order chunk, a failed CRC, an undecodable frame — after which
+/// [`COURSE`] keeps whatever it already held. The `ble` task bumps and
+/// publishes it; the `record` task mirrors it into the recorder snapshot so
+/// the alert engine can edge-detect the rejection into the `! CRS FAIL`
+/// banner. Without it a phone re-pushing a corrected course mid-race that
+/// failed CRC left only a defmt warn, and the runner navigated the stale
+/// course believing it updated. One receiver (`record`).
+pub static COURSE_REJECTS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
 /// Pushed structured workout (the `WKT1` path): the `ble` task decodes a
 /// chunked phone write into a `workout_store` frame's step list and publishes
 /// it here; the `record` task arms the recorder's workout runner with it.

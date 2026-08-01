@@ -68,8 +68,11 @@ pub fn sector_of_deg(deg: f32) -> u8 {
 }
 
 /// Great-circle initial bearing from point 1 toward point 2, degrees clockwise
-/// from north in `[0, 360)`.
-fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+/// from north in `[0, 360)`. Public because every "which way" surface on the
+/// watch must share one compass: the Nav page's back-to-course bearing
+/// ([`crate::nav_project::project_fix`]) reuses this rather than deriving its
+/// own, so it cannot disagree with the BRG rows here and on the Waypoint page.
+pub fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let p1 = lat1.to_radians();
     let p2 = lat2.to_radians();
     let dl = (lon2 - lon1).to_radians();

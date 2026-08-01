@@ -242,8 +242,10 @@ fn flush_workout(open: &mut OpenRun, recorder: &mut Recorder) {
 /// Persist a recoverable snapshot of the run-so-far to its flash slot WITHOUT
 /// consuming the staging writer (best-effort / L4). Mirrors [`commit_run`] but
 /// builds the blob via `checkpoint_blob`, so recording keeps streaming into the
-/// same writer afterwards.
-async fn checkpoint_run(store: &'static SharedStore, open: &OpenRun, snap: &Snapshot) {
+/// same writer afterwards. Returns whether the slot taken destroyed an
+/// unsynced run — the caller answers with `Recorder::note_run_lost` so the
+/// loss reaches the wrist as `! RUN LOST` instead of only a cable.
+async fn checkpoint_run(store: &'static SharedStore, open: &OpenRun, snap: &Snapshot) -> bool {
     let distance_m = snap.distance_m.max(0.0) as u32;
     let Some(blob) = open
         .writer
@@ -253,24 +255,25 @@ async fn checkpoint_run(store: &'static SharedStore, open: &OpenRun, snap: &Snap
             "record: checkpoint blob build failed for run {=u32}",
             open.run_seq
         );
-        return;
+        return false;
     };
     if !verify_blob(&blob) {
         warn!(
             "record: checkpoint blob for run {=u32} failed self-verify, not storing",
             open.run_seq
         );
-        return;
+        return false;
     }
     store
         .lock()
         .await
         .checkpoint(open.run_seq, open.start_uptime_s, &blob)
-        .await;
+        .await
 }
 
 /// Finalise the staged blob with the snapshot totals and commit it to flash.
-async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot) {
+/// Returns the same evicted-an-unsynced-run report as [`checkpoint_run`].
+async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot) -> bool {
     let distance_m = snap.distance_m.max(0.0) as u32;
     let blob = match open
         .writer
@@ -279,7 +282,7 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
         Ok(blob) => blob,
         Err(_) => {
             warn!("record: finalize failed for run {=u32}", open.run_seq);
-            return;
+            return false;
         }
     };
     if !verify_blob(&blob) {
@@ -287,13 +290,13 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
             "record: staged blob for run {=u32} failed self-verify, not storing",
             open.run_seq
         );
-        return;
+        return false;
     }
     store
         .lock()
         .await
         .commit(open.run_seq, open.start_uptime_s, &blob)
-        .await;
+        .await
 }
 
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
@@ -383,6 +386,10 @@ pub async fn run(store: &'static SharedStore) {
     let mut persisted_auto_lap = store.lock().await.read_auto_lap();
     // §372: a backyard armed before a brown-out is still a backyard after it.
     let mut backyard_rx = unwrap!(state::BACKYARD.receiver());
+    // The ble task's rejected-course-push counter, mirrored into the snapshot
+    // so the alert engine can raise `! CRS FAIL` — the recorder carries it,
+    // the engine interprets it.
+    let mut course_reject_rx = unwrap!(state::COURSE_REJECTS.receiver());
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -716,6 +723,14 @@ pub async fn run(store: &'static SharedStore) {
             recorder.set_route_elev(profile);
         }
 
+        // A rejected course push (the ble task's counter). Mirrored, not
+        // interpreted: the alert engine edge-detects the seq off the snapshot
+        // with the waypoint pair's run-start baselining, so a push that
+        // failed while the watch sat idle never replays mid-race.
+        if let Some(seq) = course_reject_rx.try_changed() {
+            recorder.set_course_reject_seq(seq);
+        }
+
         // A pushed structured workout (the ble task's WKT1 decode) arms the
         // recorder's runner; a re-push replaces it, anchoring at the current
         // totals if a run is under way.
@@ -895,7 +910,13 @@ pub async fn run(store: &'static SharedStore) {
                         flush_workout(o, &mut recorder);
                     }
                     if let Some(o) = open.take() {
-                        commit_run(store, o, &recorder.snapshot()).await;
+                        // The counter still moves for a stop-time eviction even
+                        // though the engine has already reset: the next start
+                        // adopts it silently and the idle face's pressure row
+                        // carries the standing story between runs.
+                        if commit_run(store, o, &recorder.snapshot()).await {
+                            recorder.note_run_lost();
+                        }
                     }
                 }
                 info!("record: command {} -> {}", cmd, state_str(now));
@@ -993,7 +1014,12 @@ pub async fn run(store: &'static SharedStore) {
             if let Some(o) = open.as_mut() {
                 let points = o.writer.point_count();
                 if o.last_ckpt.due(points, snap.elapsed_s) {
-                    checkpoint_run(store, o, &snap).await;
+                    // A checkpoint that took an unsynced run's slot destroyed
+                    // hours of someone's race; the bumped counter reaches the
+                    // next snapshot and the alert engine raises `! RUN LOST`.
+                    if checkpoint_run(store, o, &snap).await {
+                        recorder.note_run_lost();
+                    }
                     o.last_ckpt = CheckpointMark {
                         points,
                         elapsed_s: snap.elapsed_s,

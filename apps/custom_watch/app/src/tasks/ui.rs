@@ -422,6 +422,12 @@ pub async fn screen_task(
             // pullable, but nothing else on the idle face distinguishes that boot
             // from any other — so say so, standing, until the phone has it.
             face::apply_pending_run_marker(&mut rows, idle_view, pending_runs);
+            // The unsynced-backlog pressure row: from three of the four slots
+            // up, the next start can silently destroy a run the phone never
+            // pulled, so the face names the stake BEFORE the `! RUN LOST`
+            // banner has anything to report. After the recovered marker — it
+            // yields the shared row to that sharper fact.
+            face::apply_unsynced_run_marker(&mut rows, idle_view, unsynced_runs);
         }
         // Last word on the hero band's text, after every overlay that writes
         // into it: a hero wide enough to reach the state tag takes the tag's
@@ -750,7 +756,11 @@ pub async fn screen_task(
                     select4(
                         tz_offset_rx.changed(),
                         battery_rx.changed(),
-                        pending_runs_rx.changed(),
+                        // Both flash-store counts wake the face: a phone pull
+                        // that only clears the unsynced backlog must retire
+                        // the pressure row now, not at the next fix (a minute
+                        // away in Expedition mode).
+                        select(pending_runs_rx.changed(), unsynced_runs_rx.changed()),
                         // A registered waker, not a timer: at rest this arm
                         // costs nothing — only the button task's sends while
                         // the settings menu is open ever resolve it.
@@ -779,7 +789,12 @@ pub async fn screen_task(
                 tz_offset_min = Some(m)
             }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Second(b)))) => battery = b,
-            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(n)))) => pending_runs = n,
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(Either::First(n))))) => {
+                pending_runs = n
+            }
+            Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Third(Either::Second(n))))) => {
+                unsynced_runs = n
+            }
             Either3::Third(Either4::Fourth(Either4::Fourth(Either4::Fourth(Either::First(v))))) => {
                 menu = v
             }

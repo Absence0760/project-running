@@ -665,6 +665,25 @@ impl SlotDir {
         (slot, latest.saturating_add(1))
     }
 
+    /// Whether the next reservation for `run_seq` would overwrite a finished
+    /// run the phone has never pulled — a run that exists nowhere else on
+    /// earth, gone the moment [`reserve_commit`](Self::reserve_commit) or
+    /// [`reserve_checkpoint`](Self::reserve_checkpoint) replaces its entry.
+    ///
+    /// Read BEFORE reserving, because the reservation itself destroys the
+    /// evidence: it writes the new run's meta over the victim's, and a commit
+    /// reservation is itself finished-and-unsynced, so no count taken after
+    /// the fact can tell the two apart. Re-running [`next_write`]
+    /// (`&self`, deterministic) is what keeps this a question about the same
+    /// slot the reservation will take rather than a second copy of the
+    /// victim-selection rules.
+    ///
+    /// [`next_write`]: Self::next_write
+    pub fn next_write_evicts_unsynced(&self, run_seq: u32) -> bool {
+        let (slot, _) = self.next_write(run_seq);
+        self.slots[slot].is_some_and(|m| m.run_seq != run_seq && m.finished && !m.synced)
+    }
+
     /// Choose the slot a new reservation takes: the first free slot, else an
     /// eviction victim. Never a slot holding `keep_run` — that is the run being
     /// written, and its other copy is the fallback a torn write relies on.
