@@ -1,8 +1,10 @@
 # Pinned source faces for the generated glyph tables
 
-`src/font.rs` (8x16 text) is transcribed from the Spleen BDF in this
-directory by `scripts/gen_font.py`; `src/bignum.rs` (32x48 + 16x32 numerals)
-is rasterised from the two Source Code Pro OTFs by `scripts/gen_bignum.py`.
+`src/font.rs` (8x16 body text) and `src/font_small.rs` (6x12 — the chrome
+size the hero-label and status rows render at, § 429) are transcribed from
+the Spleen BDFs in this directory by `scripts/gen_font.py`; `src/bignum.rs`
+(32x48 + 16x32 numerals) is rasterised from the two Source Code Pro OTFs by
+`scripts/gen_bignum.py`.
 The split is deliberate: at 8x16 a thresholded vector outline leaves 1-px
 stems and ragged diagonals (the '+'=='-' collision and the invisible '|'
 were casualties — `tests/font.rs`), so the text face is a bitmap font drawn
@@ -25,6 +27,7 @@ table.
 | File | SHA256 |
 |---|---|
 | `spleen-8x16.bdf` | `4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae` |
+| `spleen-6x12.bdf` | `fc0743d164690f99b7e2e1b9d503180e4c719a9831ae03fd8f6da18c857dee27` |
 | `LICENSE.spleen.txt` | `f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af` |
 | `SourceCodePro-Regular.otf` | `9f9664e2edf6f045c11e774f9bd0be6993971f2544a39061a5ce478b96b051f8` |
 | `SourceCodePro-Bold.otf` | `6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c` |
@@ -33,15 +36,17 @@ table.
 ### Spleen
 
 - Upstream: <https://github.com/fcambus/spleen>
-- Release tag: `2.2.0` (`spleen-8x16.bdf` and `LICENSE` at that tag)
+- Release tag: `2.2.0` (`spleen-8x16.bdf`, `spleen-6x12.bdf` and `LICENSE` at that tag)
 - `SourceCodePro-Regular.otf` is retained only as the historical source of
   the pre-§ 428 text table; `gen_font.py` no longer reads it.
 
 ```sh
 curl -fsSL -o spleen-8x16.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-8x16.bdf
+curl -fsSL -o spleen-6x12.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-6x12.bdf
 curl -fsSL -o LICENSE.spleen.txt https://raw.githubusercontent.com/fcambus/spleen/2.2.0/LICENSE
 shasum -a 256 -c <<'EOF'
 4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae  spleen-8x16.bdf
+fc0743d164690f99b7e2e1b9d503180e4c719a9831ae03fd8f6da18c857dee27  spleen-6x12.bdf
 f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af  LICENSE.spleen.txt
 EOF
 ```
