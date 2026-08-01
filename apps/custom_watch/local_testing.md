@@ -157,7 +157,7 @@ You **cannot**:
 
 **The `sim-buttons` feature — driving BTN1–BTN5 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Two ways to press a button:
 
-1. **Click it in the `--gui` window** (or `bin/watch-view.sh` — see below — where `--gui` can't work: the macOS arm64 Renode build cannot start its own UI, renode/renode#886, and `watch-sim.sh` says so rather than dying cryptically). The watch-screen window renders a device — the panel at 3x inside a shaded case — with BTN1–BTN5 as clickable keys riding the case sides, each at the physical position its §350 function occupies on the §81 Garmin-Fenix layout — BTN1 upper-right (start/pause), BTN4 lower-right (page right), BTN2 mid-left (stop; the timer modal while idle, § 375), BTN3 lower-left (page left), BTN5 upper-left (lap; the settings menu while idle). The display model implements Renode's `IAbsolutePositionPointerInput`, so the analyzer forwards mouse presses on those boxes to the same gpio0 pins the macros drive (mouse down = press, mouse up = release; the box inverts while held).
+1. **Click it in the `--gui` window.** On a Renode build that cannot start its own UI (the macOS arm64 build: renode/renode#886), `--gui` detects the failed launch and delivers the same thing another way — it relaunches headless and opens the `bin/watch-view.sh` live window automatically (see below). The watch-screen window renders a device — the panel at 3x inside a shaded case — with BTN1–BTN5 as clickable keys riding the case sides, each at the physical position its §350 function occupies on the §81 Garmin-Fenix layout — BTN1 upper-right (start/pause), BTN4 lower-right (page right), BTN2 mid-left (stop; the timer modal while idle, § 375), BTN3 lower-left (page left), BTN5 upper-left (lap; the settings menu while idle). The display model implements Renode's `IAbsolutePositionPointerInput`, so the analyzer forwards mouse presses on those boxes to the same gpio0 pins the macros drive (mouse down = press, mouse up = release; the box inverts while held).
 2. **From the monitor** — run `bin/watch-monitor.sh` in a second terminal (it finds the running sim's monitor port itself; the raw route is `ncat localhost <port>` with the port from the "Renode up" line). Note the monitor is a telnet socket, not a window: even under `--gui` there's no typeable window, and the defmt-log terminal is output-only — typing there does nothing:
 
 ```
@@ -381,8 +381,8 @@ bin/watch-shots.sh --out-dir /path/shots  # somewhere durable
 `--gui` needs a Renode build that can start its own window layer, and the
 macOS arm64 .NET build cannot (renode/renode#886 — "Couldn't start UI",
 console fallback, and a backgrounded console reads its closed stdin as
-`quit`). The route that works everywhere: start the sim headless, then
-attach the viewer —
+`quit`). On such a build `--gui` falls back to this route by itself —
+headless relaunch plus the viewer. To drive it by hand instead:
 
 ```
 bin/watch-sim.sh                # terminal 1 (or pnpm watch:sim)

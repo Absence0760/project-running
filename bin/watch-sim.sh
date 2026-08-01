@@ -71,6 +71,7 @@ NMEA_FILE="$WORKSPACE/sim/nmea/bench_jog.nmea"
 # bench_jog). --fixture overrides it; --nmea overrides both with a full path.
 [[ -n "${NMEA_FIXTURE:-}" ]] && NMEA_FILE="$WORKSPACE/sim/nmea/${NMEA_FIXTURE}.nmea"
 GUI=0
+GUI_VIEWER=0
 PHONE_PORT=7788
 AUTOSTART=1
 ALERTS=1
@@ -216,15 +217,25 @@ RENODE_PID=$!
 
 # The pty symlink appearing means the emulation script ran to completion.
 # Generous timeout: the first run in a Renode process also compiles the C#
-# display model, which adds several seconds.
-for _ in $(seq 1 150); do
+# display model, which adds several seconds — and the --gui UI-less fallback
+# spends one boot discovering the build before its headless relaunch, so the
+# budget covers two.
+for _ in $(seq 1 300); do
 	[[ -e "$GPS_PTY" ]] && break
 	if ! kill -0 "$RENODE_PID" 2>/dev/null; then
-		if grep -q "Couldn't start UI" "$RENODE_LOG" 2>/dev/null; then
+		if [[ "$GUI" == 1 && "$GUI_VIEWER" == 0 ]] && grep -q "Couldn't start UI" "$RENODE_LOG" 2>/dev/null; then
 			# This Renode build has no working UI (the macOS arm64 .NET build:
-			# renode/renode#886), so it fell back to a stdin console monitor,
+			# renode/renode#886) — it fell back to a stdin console monitor,
 			# which read the backgrounded process's closed stdin as `quit`.
-			fatal "this Renode build cannot start its UI (renode/renode#886), so --gui cannot work here — run the sim headless (bin/watch-sim.sh) and attach the live window with bin/watch-view.sh instead"
+			# Deliver what --gui promised anyway: relaunch headless and put
+			# the live window up via bin/watch-view.sh once the monitor is up.
+			step "This Renode build cannot start its UI (renode/renode#886) — relaunching headless with the bin/watch-view.sh live window"
+			GUI_VIEWER=1
+			RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
+			RENODE_CMDS="${RENODE_CMDS%"; showAnalyzer sysbus.spi3.display"}"
+			renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
+			RENODE_PID=$!
+			continue
 		fi
 		tail -n 30 "$RENODE_LOG" >&2
 		fatal "Renode exited during startup — full log: $RENODE_LOG"
@@ -235,6 +246,12 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
+if [[ "$GUI_VIEWER" == 1 ]]; then
+	# The --gui fallback: the live window rides the monitor port. Backgrounded
+	# and non-fatal — a missing tkinter python prints watch-view's own hint,
+	# and the headless sim is still fully usable underneath.
+	"$(dirname "${BASH_SOURCE[0]}")/watch-view.sh" "$MONITOR_PORT" &
+fi
 dim "buttons: click BTN1-5 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause/dismiss; grid: GO; menu: edit right), \$btn2 (stop x2; grid: cancel; menu: cursor up), \$btn3 (page left / idle GNSS mode; menu: cursor down), \$btn4 (page right / idle diag toggle; menu: exit), \$btn3h or \$btn4h (page grid; idle \$btn3h: QNH re-zero), \$btn5 (lap / idle: settings menu; menu: edit left)"
 
 # Feed the fixture into the emulated GPS UART. Sentences come in GGA+RMC pairs
