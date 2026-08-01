@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Generate src/font.rs — the 8x16 text font for the Sharp MIP driver.
 
-Transcribes printable ASCII (32..=126) from the pinned Spleen 8x16 BDF
-vendored at `fonts/spleen-8x16.bdf` (BSD 2-Clause — see `fonts/README.md`
-for the exact upstream release, its SHA256, and how to fetch it again).
+Transcribes printable ASCII (32..=126) from the pinned Spleen BDFs
+vendored under `fonts/` (BSD 2-Clause — see `fonts/README.md` for the exact
+upstream release, the SHA256s, and how to fetch them again): the 8x16 body
+face into `src/font.rs`, and the 6x12 label face — the chrome size the
+hero-label and status rows render at (decisions.md § 429) — into
+`src/font_small.rs`.
 Spleen is drawn pixel-by-pixel FOR 8x16 monochrome cells, which is why it
 replaced the table this script used to rasterise from Source Code Pro:
 thresholding a vector outline at this size leaves 1-px stems and ragged
@@ -34,20 +37,25 @@ import re
 from pinned_face import pinned_face
 
 GLYPHS = "".join(chr(c) for c in range(32, 127))
-CELL_W, CELL_H = 8, 16
-BDF = pinned_face("spleen-8x16.bdf")
 
 HERE = pathlib.Path(__file__).resolve().parent
-OUT = HERE.parent / "src" / "font.rs"
+
+# (bdf, cell_w, cell_h, bbx y-offset, output file). Spleen's full-cell BBX is
+# `w h 0 -descent`; the descent is asserted per glyph below.
+TABLES = [
+    ("spleen-8x16.bdf", 8, 16, -4, "font.rs"),
+    ("spleen-6x12.bdf", 6, 12, -3, "font_small.rs"),
+]
 
 
-def parse_bdf(path: pathlib.Path) -> dict[str, list[int]]:
+def parse_bdf(path: pathlib.Path, cell_w: int, cell_h: int, y_off: int) -> dict[str, list[int]]:
     """Printable-ASCII glyph rows, bit 0 = leftmost, straight off the BDF.
 
-    Every Spleen glyph is a full-cell `BBX 8 16 0 -4` bitmap, so transcription
-    is row-for-row with no baseline arithmetic; that uniformity is asserted
-    rather than assumed, because a glyph with a tighter bounding box would
-    otherwise land shifted and the table would be wrong everywhere it is used.
+    Every Spleen glyph is a full-cell `BBX w h 0 -descent` bitmap, so
+    transcription is row-for-row with no baseline arithmetic; that uniformity
+    is asserted rather than assumed, because a glyph with a tighter bounding
+    box would otherwise land shifted and the table would be wrong everywhere
+    it is used.
     """
     glyphs: dict[str, list[int]] = {}
     encoding = None
@@ -64,15 +72,15 @@ def parse_bdf(path: pathlib.Path) -> dict[str, list[int]]:
             rows = []
         elif line.startswith("ENDCHAR"):
             if encoding is not None and 32 <= encoding <= 126:
-                if bbx != (CELL_W, CELL_H, 0, -4):
+                if bbx != (cell_w, cell_h, 0, y_off):
                     raise SystemExit(
                         f"glyph {encoding} has BBX {bbx}, not the full "
-                        f"{CELL_W}x{CELL_H} cell — transcription would misplace it"
+                        f"{cell_w}x{cell_h} cell — transcription would misplace it"
                     )
-                if len(rows) != CELL_H:
+                if len(rows) != cell_h:
                     raise SystemExit(
                         f"glyph {encoding} carries {len(rows)} bitmap rows, "
-                        f"expected {CELL_H}"
+                        f"expected {cell_h}"
                     )
                 glyphs[chr(encoding)] = [reverse_bits(r) for r in rows]
             in_bitmap = False
@@ -90,40 +98,41 @@ def reverse_bits(b: int) -> int:
 
 
 def main() -> None:
-    table = parse_bdf(BDF)
-    missing = [ch for ch in GLYPHS if ch not in table]
-    if missing:
-        raise SystemExit(f"BDF lacks printable glyphs: {missing!r}")
-    glyphs = [table[ch] for ch in GLYPHS]
+    for bdf, cell_w, cell_h, y_off, out_name in TABLES:
+        table = parse_bdf(pinned_face(bdf), cell_w, cell_h, y_off)
+        missing = [ch for ch in GLYPHS if ch not in table]
+        if missing:
+            raise SystemExit(f"{bdf} lacks printable glyphs: {missing!r}")
+        glyphs = [table[ch] for ch in GLYPHS]
 
-    # No rasteriser means no collision-repair pass, but the invariant it
-    # guarded still holds the gate: two distinct printable characters that
-    # pack to the same pixels are indistinguishable on the panel. Space is
-    # included so an all-blank glyph trips it too.
-    seen: dict[tuple[int, ...], str] = {}
-    for ch, rows in zip(GLYPHS, glyphs):
-        key = tuple(rows)
-        if key in seen:
-            raise SystemExit(
-                f"glyphs {seen[key]!r} and {ch!r} are byte-identical — "
-                "they would be indistinguishable on the panel"
-            )
-        seen[key] = ch
+        # No rasteriser means no collision-repair pass, but the invariant it
+        # guarded still holds the gate: two distinct printable characters that
+        # pack to the same pixels are indistinguishable on the panel. Space is
+        # included so an all-blank glyph trips it too.
+        seen: dict[tuple[int, ...], str] = {}
+        for ch, rows in zip(GLYPHS, glyphs):
+            key = tuple(rows)
+            if key in seen:
+                raise SystemExit(
+                    f"{bdf}: glyphs {seen[key]!r} and {ch!r} are byte-identical "
+                    "— they would be indistinguishable on the panel"
+                )
+            seen[key] = ch
 
-    emit(glyphs)
+        emit(glyphs, cell_w, cell_h, bdf, HERE.parent / "src" / out_name)
 
 
-def emit(glyphs: list[list[int]]) -> None:
+def emit(glyphs: list[list[int]], cell_w: int, cell_h: int, bdf: str, out: pathlib.Path) -> None:
     lines = [
         "// Generated by scripts/gen_font.py - do not hand-edit; regenerate instead.",
-        "// Glyphs transcribed from Spleen 8x16 (BSD 2-Clause).",
+        f"// Glyphs transcribed from Spleen {cell_w}x{cell_h} (BSD 2-Clause).",
         "// Bit 0 of each row byte is the LEFTMOST pixel, 1 = ink.",
         "",
-        "pub const GLYPH_WIDTH: usize = 8;",
-        "pub const GLYPH_HEIGHT: usize = 16;",
+        f"pub const GLYPH_WIDTH: usize = {cell_w};",
+        f"pub const GLYPH_HEIGHT: usize = {cell_h};",
         "pub const FIRST_CHAR: u8 = b' ';",
         "",
-        "/// One entry per printable ASCII char (32..=126), 16 row bytes each.",
+        f"/// One entry per printable ASCII char (32..=126), {cell_h} row bytes each.",
         f"pub const FONT: [[u8; GLYPH_HEIGHT]; {len(GLYPHS)}] = [",
     ]
     for ch, rows in zip(GLYPHS, glyphs):
@@ -131,8 +140,8 @@ def emit(glyphs: list[list[int]]) -> None:
         name = "space" if ch == " " else ch
         lines.append(f"    [{packed}], // {name}")
     lines.append("];")
-    OUT.write_text("\n".join(lines) + "\n", encoding="ascii")
-    print(f"wrote {OUT} ({len(GLYPHS)} glyphs)")
+    out.write_text("\n".join(lines) + "\n", encoding="ascii")
+    print(f"wrote {out} ({len(GLYPHS)} glyphs)")
 
 
 if __name__ == "__main__":

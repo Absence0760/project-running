@@ -22,6 +22,7 @@
 pub mod bignum;
 pub mod display;
 pub mod font;
+pub mod font_small;
 pub mod framebuffer;
 pub mod icons;
 

@@ -479,6 +479,7 @@ pub async fn screen_task(
             match ui_frame::row_paint(row, layout) {
                 RowPaint::Skip => continue,
                 RowPaint::Ruled => widgets::ruled_dashboard_row(&mut fb, row, text),
+                RowPaint::Chrome => fb.draw_text_row_small(row, text),
                 RowPaint::Text => fb.draw_text_row(row, text),
             }
             if let Some(icon) = icons[row] {

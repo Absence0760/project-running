@@ -150,12 +150,19 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         None,
         None,
     );
-    let field_grid = page == Page::Dashboard && snap.is_some();
+    let layout = ui_frame::FrameLayout {
+        page,
+        run_view: snap.is_some(),
+        idle_view: IdleView::Home,
+        panel_active: false,
+        panel_repaint: false,
+    };
     for (r, row) in rows.iter().enumerate() {
-        if field_grid {
-            widgets::ruled_dashboard_row(fb, r, row);
-        } else {
-            fb.draw_text_row(r, row);
+        match ui_frame::row_paint(r, layout) {
+            ui_frame::RowPaint::Skip => {}
+            ui_frame::RowPaint::Ruled => widgets::ruled_dashboard_row(fb, r, row),
+            ui_frame::RowPaint::Chrome => fb.draw_text_row_small(r, row),
+            ui_frame::RowPaint::Text => fb.draw_text_row(r, row),
         }
     }
     draw_hero(

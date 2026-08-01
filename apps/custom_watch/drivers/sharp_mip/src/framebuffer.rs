@@ -9,6 +9,7 @@
 
 use crate::bignum;
 use crate::font;
+use crate::font_small;
 use crate::icons::{Icon, ICON_SIZE};
 
 // An icon is exactly one text row tall and `ICON_BYTES_PER_ROW` cells wide, so
@@ -485,6 +486,55 @@ impl Framebuffer {
         }
     }
 
+    /// Draw a full text row in the 6x12 label face — the chrome size the
+    /// hero-label and status rows render at, so labels stop competing with
+    /// values for visual weight. The band is still the 16-px text row (glyphs
+    /// vertically centred, 2 px of air above and below), so the row grid and
+    /// every layout budget hold; only the ink inside the band shrinks.
+    ///
+    /// The string was composed for the 21-cell 8-px grid, where trailing
+    /// content is right-anchored by padding. At 6 px that padding no longer
+    /// reaches the right edge, so the anchor is re-derived from the string's
+    /// own shape rather than its spaces:
+    /// - a last run of >= 2 spaces splits it — left part left-anchored, right
+    ///   part right-anchored (`AVG PACE        REC` keeps REC at the edge);
+    /// - otherwise leading whitespace centres the trimmed text (the footer's
+    ///   pre-centred `     8 SATS PERF`);
+    /// - otherwise it draws left-anchored.
+    ///
+    /// Composed into whole band lines and compare-written like every other
+    /// row painter, so an unchanged chrome row still flushes zero lines.
+    pub fn draw_text_row_small(&mut self, row: usize, text: &str) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let (left, right) = split_last_gap(text);
+        let left_x = if right.is_none() && text.starts_with("  ") && !left.is_empty() {
+            (WIDTH - small_width(left)) / 2
+        } else {
+            0
+        };
+        let y0 = row * font::GLYPH_HEIGHT;
+        let pad = (font::GLYPH_HEIGHT - font_small::GLYPH_HEIGHT) / 2;
+        for dy in 0..font::GLYPH_HEIGHT {
+            let mut line = [0u8; LINE_BYTES];
+            if (pad..pad + font_small::GLYPH_HEIGHT).contains(&dy) {
+                let gy = dy - pad;
+                blit_small(&mut line, left_x, left, gy);
+                if let Some(r) = right {
+                    blit_small(&mut line, WIDTH - small_width(r), r, gy);
+                }
+            }
+            let y = y0 + dy;
+            for (bx, &b) in line.iter().enumerate() {
+                if self.lines[y][bx] != b {
+                    self.lines[y][bx] = b;
+                    self.dirty[y] = true;
+                }
+            }
+        }
+    }
+
     /// Draw a string at 2x scale — each 8x16 glyph pixel-doubled into a 16x32
     /// block, so a character spans two grid cells wide and two text rows tall.
     /// Cell-aligned at `(col, row)`; the hero band a glanceable primary metric
@@ -821,4 +871,68 @@ fn glyph_for(ch: char) -> &'static [u8; font::GLYPH_HEIGHT] {
         .filter(|&i| i < font::FONT.len())
         .unwrap_or((b'?' - font::FIRST_CHAR) as usize);
     &font::FONT[index]
+}
+
+fn glyph_small_for(ch: char) -> &'static [u8; font_small::GLYPH_HEIGHT] {
+    let index = (ch as usize)
+        .checked_sub(font_small::FIRST_CHAR as usize)
+        .filter(|&i| i < font_small::FONT.len())
+        .unwrap_or((b'?' - font_small::FIRST_CHAR) as usize);
+    &font_small::FONT[index]
+}
+
+/// Pixel width of `text` in the 6x12 face, capped at the panel.
+fn small_width(text: &str) -> usize {
+    (text.chars().count() * font_small::GLYPH_WIDTH).min(WIDTH)
+}
+
+/// Split a composed row at its LAST run of two-or-more spaces into a
+/// left-anchored and a right-anchored part, or `(trimmed, None)` when the
+/// row has no such gap. Single spaces are word spacing and never split.
+fn split_last_gap(text: &str) -> (&str, Option<&str>) {
+    let t = text.trim_end();
+    let bytes = t.as_bytes();
+    let mut gap_end = None;
+    let mut run = 0;
+    let mut seen_ink = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b' ' {
+            run += 1;
+        } else {
+            // Leading whitespace is 8-px-grid centring, not an anchor gap —
+            // only a gap that separates two inked spans splits the row.
+            if run >= 2 && seen_ink {
+                gap_end = Some(i);
+            }
+            run = 0;
+            seen_ink = true;
+        }
+    }
+    match gap_end {
+        Some(end) => {
+            let right = &t[end..];
+            let left = t[..end].trim_end().trim_start();
+            (left, Some(right))
+        }
+        None => (t.trim_start(), None),
+    }
+}
+
+/// OR one 6-px glyph row's ink into a composed band line at pixel `x0`,
+/// glyph row `gy` — the 6-px cell is not byte-aligned, so this is the
+/// bit-level half of [`Framebuffer::draw_text_row_small`].
+fn blit_small(line: &mut [u8; LINE_BYTES], x0: usize, text: &str, gy: usize) {
+    for (i, ch) in text.chars().enumerate() {
+        let bits = glyph_small_for(ch)[gy];
+        let gx0 = x0 + i * font_small::GLYPH_WIDTH;
+        for bit in 0..font_small::GLYPH_WIDTH {
+            let x = gx0 + bit;
+            if x >= WIDTH {
+                return;
+            }
+            if bits >> bit & 1 != 0 {
+                line[x / 8] |= 1 << (x % 8);
+            }
+        }
+    }
 }

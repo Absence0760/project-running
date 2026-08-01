@@ -1058,3 +1058,88 @@ fn plus_glyph_has_a_vertical_stem() {
         "no ink below the crossbar — this renders as a minus"
     );
 }
+
+// Ink bounding box over an x-range of one 16-px text-row band.
+fn band_ink_span(fb: &Framebuffer, row: usize) -> Option<(usize, usize)> {
+    let y0 = row * 16;
+    let xs: Vec<usize> = (0..sharp_mip::WIDTH)
+        .filter(|&x| (y0..y0 + 16).any(|y| fb.pixel(x, y)))
+        .collect();
+    Some((*xs.first()?, *xs.last()?))
+}
+
+#[test]
+fn small_row_reanchors_a_trailing_tag_to_the_right_edge() {
+    // Composed rows right-anchor by 8-px-grid padding; at 6 px that padding
+    // stops short, so the painter re-derives the anchor from the last >= 2
+    // space gap. "REC" must end at the panel edge, not at 21 * 6 px.
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_small(3, "AVG PACE          REC");
+    let (first, last) = band_ink_span(&fb, 3).expect("row drew nothing");
+    assert_eq!(first, 0, "label must stay left-anchored");
+    assert!(
+        last >= sharp_mip::WIDTH - 2,
+        "trailing tag ends at {last}, not the right edge"
+    );
+}
+
+#[test]
+fn small_row_centres_a_precentred_footer_and_leaves_single_spaces_alone() {
+    // The footer is pre-centred with leading spaces for the 8-px grid; at
+    // 6 px the painter centres the trimmed text instead. A row of single
+    // spaces has no anchor gap and stays left-anchored.
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_small(8, "     8 SATS PERF");
+    let (first, last) = band_ink_span(&fb, 8).expect("footer drew nothing");
+    let slack_left = first;
+    let slack_right = sharp_mip::WIDTH - 1 - last;
+    assert!(
+        slack_left.abs_diff(slack_right) <= 6,
+        "footer not centred: {slack_left} px left vs {slack_right} px right"
+    );
+
+    let mut plain = Framebuffer::new();
+    plain.draw_text_row_small(2, "TO CREST");
+    let (first, _) = band_ink_span(&plain, 2).expect("label drew nothing");
+    assert_eq!(first, 0);
+}
+
+#[test]
+fn small_row_stays_inside_its_band_with_air_above_and_below() {
+    // 12-px glyphs centred in the 16-px band: the top and bottom two pixel
+    // rows stay blank, which is the air that separates chrome from data.
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_small(4, "ELEV PROFILE");
+    let y0 = 4 * 16;
+    for y in [y0, y0 + 1, y0 + 14, y0 + 15] {
+        assert!(
+            (0..sharp_mip::WIDTH).all(|x| !fb.pixel(x, y)),
+            "chrome ink reached band pixel row {}",
+            y - y0
+        );
+    }
+    assert!(
+        (y0 + 2..y0 + 14).any(|y| (0..sharp_mip::WIDTH).any(|x| fb.pixel(x, y))),
+        "no ink inside the band"
+    );
+}
+
+#[test]
+fn small_row_redraw_is_stable_and_clears_leftovers() {
+    let mut fb = Framebuffer::new();
+    fb.draw_text_row_small(5, "GEAR  WORN       REC");
+    fb.clear_dirty();
+    fb.draw_text_row_small(5, "GEAR  WORN       REC");
+    assert_eq!(fb.dirty_count(), 0, "an unchanged chrome row flushed");
+    fb.draw_text_row_small(5, "GEAR");
+    assert_eq!(
+        band_ink_span(&fb, 5).map(|(f, _)| f),
+        Some(0),
+        "shorter redraw lost its anchor"
+    );
+    let (_, last) = band_ink_span(&fb, 5).unwrap();
+    assert!(
+        last < 5 * 6,
+        "stale tag ink survived right of the shorter text (ends {last})"
+    );
+}

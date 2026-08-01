@@ -374,6 +374,9 @@ pub enum RowPaint {
     /// The run dashboard's field grid: the row and its hairline dividers in one
     /// compare-write, so a separate rule pass can't re-dirty the rules.
     Ruled,
+    /// The 6x12 label face (§ 429): metric-label and status rows, per
+    /// [`face::chrome_rows`] — labels shrink so values read as values.
+    Chrome,
     Text,
 }
 
@@ -400,10 +403,18 @@ pub fn row_paint(row: usize, layout: FrameLayout) -> RowPaint {
         return RowPaint::Skip;
     }
     if layout.page == Page::Dashboard && layout.run_view {
-        RowPaint::Ruled
-    } else {
-        RowPaint::Text
+        return RowPaint::Ruled;
     }
+    if face::chrome_rows(layout.page, layout.run_view) >> row & 1 != 0 {
+        return RowPaint::Chrome;
+    }
+    // The idle title row is chrome too: the Home face's button hint and the
+    // ICE card's heading are labels, and the icons they share the row with
+    // are drawn at pixel coordinates clear of the shrunk text.
+    if !layout.run_view && row == 0 && matches!(layout.idle_view, IdleView::Home | IdleView::Ice) {
+        return RowPaint::Chrome;
+    }
+    RowPaint::Text
 }
 
 /// Whether the screen still owes a refresh with no state change behind it: an
@@ -870,6 +881,8 @@ mod tests {
             ),
             RowPaint::Text
         );
+        // Idle Home row 0 is the button-hint label — chrome since § 429; the
+        // diagnostics face is the bench view and stays raw.
         assert_eq!(
             row_paint(
                 0,
@@ -878,8 +891,54 @@ mod tests {
                     ..layout
                 }
             ),
+            RowPaint::Chrome
+        );
+        assert_eq!(
+            row_paint(
+                0,
+                FrameLayout {
+                    run_view: false,
+                    idle_view: IdleView::Diagnostics,
+                    ..layout
+                }
+            ),
             RowPaint::Text
         );
+    }
+
+    #[test]
+    fn chrome_rows_are_the_label_and_the_footer_and_values_stay_big() {
+        let layout = FrameLayout {
+            page: Page::Pace,
+            run_view: true,
+            idle_view: IdleView::Home,
+            panel_active: false,
+            panel_repaint: false,
+        };
+        // Pace is a tall-hero page: label on row 3, footer on the GPS row,
+        // every data row between them at full size.
+        assert_eq!(row_paint(3, layout), RowPaint::Chrome);
+        assert_eq!(row_paint(face::GPS_ROW, layout), RowPaint::Chrome);
+        assert_eq!(row_paint(4, layout), RowPaint::Text);
+        // A two-row-hero page labels row 2 instead.
+        let zones = FrameLayout {
+            page: Page::Zones,
+            ..layout
+        };
+        assert_eq!(row_paint(2, zones), RowPaint::Chrome);
+        assert_eq!(row_paint(3, zones), RowPaint::Text);
+        // The dashboard is the ruled grid everywhere — no chrome demotion.
+        let dash = FrameLayout {
+            page: Page::Dashboard,
+            ..layout
+        };
+        assert_eq!(row_paint(face::GPS_ROW, dash), RowPaint::Ruled);
+        // A composed screen owns every row.
+        let sc = FrameLayout {
+            page: Page::Screen1,
+            ..layout
+        };
+        assert_eq!(row_paint(face::GPS_ROW, sc), RowPaint::Text);
     }
 
     #[test]
