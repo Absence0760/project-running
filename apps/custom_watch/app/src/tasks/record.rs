@@ -56,7 +56,7 @@ use watch_core::ice::IceCard;
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, tick_interval_s, track_point, CheckpointMark};
 use watch_core::run_store::{
-    verify_blob, LapRecord, PushOutcome, RunWriter, StepRecord, WorkoutRecord,
+    verify_blob, LapRecord, PushOutcome, RecordPush, RunWriter, StepRecord, WorkoutRecord,
 };
 use watch_core::settings::{GuidedRunId, WatchSettings};
 use watch_core::settings_apply::{plan_apply, SettingsEffect};
@@ -168,15 +168,14 @@ fn push_lap(open: &mut OpenRun, lap: &watch_core::record::Lap) {
         moving_s: lap.moving_s,
     };
     match open.writer.push_lap(&record) {
-        Ok(true) => {}
-        // Two causes, and naming the budget for both would send a reader to
-        // check MAX_STORED_LAPS and find it fine: the slot's footer reserve
-        // refuses the record so the whole run can still finalize.
-        Ok(false) if !open.writer.has_record_room() => warn!(
+        Ok(RecordPush::Stored) => {}
+        // Two causes, and each says which: naming the budget for both would
+        // send a reader to check MAX_STORED_LAPS and find it perfectly fine.
+        Ok(RecordPush::Reserved) => warn!(
             "record: run {=u32} lap {=u16} dropped from storage (slot exhausted, footer reserved)",
             open.run_seq, lap.index
         ),
-        Ok(false) => warn!(
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} lap {=u16} dropped from storage (stored-lap budget)",
             open.run_seq, lap.index
         ),
@@ -199,12 +198,12 @@ fn push_step_result(open: &mut OpenRun, r: &watch_core::workout::StepResult) {
         pace_s_per_km: r.actual_pace_s_per_km,
     };
     match open.writer.push_step(&record) {
-        Ok(true) => {}
-        Ok(false) if !open.writer.has_record_room() => warn!(
+        Ok(RecordPush::Stored) => {}
+        Ok(RecordPush::Reserved) => warn!(
             "record: run {=u32} workout step {=u8} dropped from storage (slot exhausted, footer reserved)",
             open.run_seq, r.step_index
         ),
-        Ok(false) => warn!(
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} workout step {=u8} dropped from storage (stored-step budget)",
             open.run_seq, r.step_index
         ),
@@ -245,15 +244,15 @@ fn flush_workout(open: &mut OpenRun, recorder: &mut Recorder) {
         frame_crc,
     };
     match open.writer.push_workout(&record) {
-        Ok(true) => info!(
+        Ok(RecordPush::Stored) => info!(
             "record: run {=u32} workout results stored ({=u8} planned steps)",
             open.run_seq, summary.step_total
         ),
-        Ok(false) if !open.writer.has_record_room() => warn!(
+        Ok(RecordPush::Reserved) => warn!(
             "record: run {=u32} workout summary dropped (slot exhausted, footer reserved)",
             open.run_seq
         ),
-        Ok(false) => warn!(
+        Ok(RecordPush::Budget) => warn!(
             "record: run {=u32} workout summary already stored",
             open.run_seq
         ),

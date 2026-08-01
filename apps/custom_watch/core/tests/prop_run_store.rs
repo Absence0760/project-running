@@ -13,9 +13,10 @@ use proptest::sample::Index;
 use support::check;
 use watch_core::run_store::{
     blob_len, crc32, point_count, record_tag, verify_blob, ChunkRequest, LapRecord, ManifestEntry,
-    ManifestHeader, RunFooter, RunHeader, RunWriter, StepRecord, TrackPoint, WorkoutRecord,
-    ELE_NONE, FOOTER_CRC_OFFSET, FOOTER_LEN, HEADER_LEN, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
-    RECORD_LEN, RECORD_TAG_LAP, RECORD_TAG_POINT, RECORD_TAG_STEP, RECORD_TAG_WORKOUT,
+    ManifestHeader, RecordPush, RunFooter, RunHeader, RunWriter, StepRecord, TrackPoint,
+    WorkoutRecord, ELE_NONE, FOOTER_CRC_OFFSET, FOOTER_LEN, HEADER_LEN, MANIFEST_ENTRY_LEN,
+    MANIFEST_HEADER_LEN, RECORD_LEN, RECORD_TAG_LAP, RECORD_TAG_POINT, RECORD_TAG_STEP,
+    RECORD_TAG_WORKOUT,
 };
 
 /// Big enough for every blob these suites build, and the real slot size.
@@ -130,16 +131,28 @@ fn a_blob(max_records: usize) -> impl Strategy<Value = Blob> {
                     match r {
                         Record::Point(p) => w.push_point(p).expect("push point"),
                         Record::Lap(l) => {
-                            assert!(w.push_lap(l).expect("push lap"), "under the lap cap");
+                            assert_eq!(
+                                w.push_lap(l).expect("push lap"),
+                                RecordPush::Stored,
+                                "under the lap cap"
+                            );
                         }
                         Record::Step(s) => {
-                            assert!(w.push_step(s).expect("push step"), "under the step cap");
+                            assert_eq!(
+                                w.push_step(s).expect("push step"),
+                                RecordPush::Stored,
+                                "under the step cap"
+                            );
                         }
                         Record::Workout(_) => unreachable!("a_record never emits a summary"),
                     }
                 }
                 if let Some(s) = summary {
-                    assert!(w.push_workout(&s).expect("push summary"), "first summary");
+                    assert_eq!(
+                        w.push_workout(&s).expect("push summary"),
+                        RecordPush::Stored,
+                        "first summary"
+                    );
                     records.push(Record::Workout(s));
                 }
                 let bytes = w
