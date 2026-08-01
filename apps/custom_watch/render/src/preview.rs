@@ -230,8 +230,36 @@ fn the_numeral_cell_widths_match_the_generated_faces() {
     assert_eq!(watch_core::face::COLS, sharp_mip::TEXT_COLS);
 }
 
+// With `WATCH_PREVIEW_DIR` set, each preview also lands as a 1:1 P6 PPM named
+// after its caption — the same format the sim's DumpFrame writes, so the host
+// compositions are viewable (and diffable) without Renode. See
+// `bin/watch-preview.sh` for the wrapper that converts + contact-sheets them.
+fn dump_ppm(name: &str, fb: &Framebuffer) {
+    let Ok(dir) = std::env::var("WATCH_PREVIEW_DIR") else {
+        return;
+    };
+    let slug: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let mut bytes = format!("P6\n{WIDTH} {HEIGHT}\n255\n").into_bytes();
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            let v = if fb.pixel(x, y) { 0u8 } else { 255u8 };
+            bytes.extend_from_slice(&[v, v, v]);
+        }
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(std::path::Path::new(&dir).join(format!("{slug}.ppm")), bytes).unwrap();
+}
+
 fn show(name: &str, fb: &Framebuffer) {
     println!("\n== {name} ==\n{}", ascii_dump(fb));
+    dump_ppm(name, fb);
     assert!(
         (0..HEIGHT).any(|y| (0..WIDTH).any(|x| fb.pixel(x, y))),
         "{name} rendered a blank panel"
