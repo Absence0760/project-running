@@ -33,6 +33,12 @@ pub const DEFAULT_FLUID_PER_HOUR_ML: f64 = 500.0;
 pub const HEAT_FLUID_FACTOR: f64 = 1.5;
 /// Carbs per gel, for the carry-out gel count.
 pub const GEL_CARBS_G: f64 = 25.0;
+/// One soft-flask sip, millilitres — the unit [`crate::alerts`] reduced
+/// [`DEFAULT_FLUID_PER_HOUR_ML`] through to get its drink cadence (500 ml/hr
+/// = four sips an hour = one every 900 s). Named so the inverse mapping — a
+/// runner's pushed cadence back into an hourly rate for the carry-out math —
+/// divides by the same unit the forward reduction multiplied by.
+pub const SIP_FLUID_ML: f64 = 125.0;
 
 /// Minimal per-leg input. Map each roadbook `RoadbookLeg` through
 /// [`FuelLegInput::from_leg`].

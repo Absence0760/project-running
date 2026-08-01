@@ -855,10 +855,15 @@ pub enum Metric {
     /// The barometric pressure tendency over the trend window, hPa signed
     /// ([`crate::storm`]).
     StormDelta,
+    /// Live grade-adjusted pace ([`crate::grade_adjusted_pace`]) — the effort
+    /// pace the vert personas run on. No built-in page leads with it (the
+    /// Pace page's hero is the whole-run average), so the composed screens
+    /// are how a runner puts GAP in the 32x48 face.
+    Gap,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=38`.
+    /// This metric's byte on the `SCR1` wire, in `1..=39`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -909,6 +914,7 @@ impl Metric {
             Metric::TimerRemaining => 36,
             Metric::BackyardBell => 37,
             Metric::StormDelta => 38,
+            Metric::Gap => 39,
         }
     }
 
@@ -959,6 +965,7 @@ impl Metric {
             36 => Metric::TimerRemaining,
             37 => Metric::BackyardBell,
             38 => Metric::StormDelta,
+            39 => Metric::Gap,
             _ => return None,
         })
     }
@@ -1009,6 +1016,7 @@ impl Metric {
             Metric::TimerRemaining => "timer_remaining",
             Metric::BackyardBell => "backyard_bell",
             Metric::StormDelta => "storm_delta",
+            Metric::Gap => "gap",
         }
     }
 
@@ -1059,6 +1067,7 @@ impl Metric {
             Metric::TimerRemaining => "TIMR",
             Metric::BackyardBell => "BELL",
             Metric::StormDelta => "STORM",
+            Metric::Gap => "GAP",
         }
     }
 }
@@ -1256,6 +1265,9 @@ pub fn metric_unfed(
                 | StormTrend::Rising => None,
             },
         },
+        // GAP holds through short signal wobbles ([`crate::grade_adjusted_pace`])
+        // but starts, like pace, only once the run banks movement.
+        Metric::Gap => snap.gap_s_per_km.is_none().then_some(Unfed::NeedDistance),
         Metric::RecapDistance => snap.recap.is_none().then_some(Unfed::NotSynced),
         Metric::CurrentStreak => snap.streaks.is_none().then_some(Unfed::NotSynced),
         Metric::SyncedMovingTime => snap.run_stats.is_none().then_some(Unfed::NotSynced),
@@ -1595,6 +1607,18 @@ pub fn metric_hero(
             }
             row
         }
+        Metric::Gap => {
+            let mut row = Row::new();
+            match snap.gap_s_per_km {
+                Some(p) => {
+                    let _ = write!(row, "{}:{:02}", (p / 60).min(99), p % 60);
+                }
+                None => {
+                    let _ = write!(row, "--:--");
+                }
+            }
+            row
+        }
         // The phone-pushed synced-summary pages headline their number too
         // (§ 361). They had been rows-only, which meant every one of them
         // reserved the two-row hero band ([`body_top_row`]) and then left it
@@ -1894,6 +1918,7 @@ pub fn metric_unit(
         // latest banked sample.
         Metric::ClimbGain | Metric::Altitude => Some("M"),
         Metric::StormDelta => Some("HPA"),
+        Metric::Gap => Some("/KM"),
         Metric::FuelCarbs => Some("G"),
         Metric::GearWear => Some("%"),
         Metric::DistanceToStart => trackback_distance(tb).map(distance_unit),
@@ -2169,7 +2194,7 @@ fn glance(
     // The pace glance pairs the average-pace hero with the live grade-adjusted
     // pace, so raw and effort-equivalent read side by side on a hill.
     if matches!(metric, GlanceMetric::Pace) {
-        write_pace(&mut rows[7], "GAP", snap.gap_s_per_km);
+        write_gap(&mut rows[7], snap.gap_s_per_km, snap.gap_held);
     }
 
     write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
@@ -4302,6 +4327,9 @@ fn dashboard(
     }
     let _ = write!(rows[DASH_SPLIT_ROW], "GAP ");
     write_pace_value(&mut rows[DASH_SPLIT_ROW], snap.gap_s_per_km);
+    if snap.gap_held && snap.gap_s_per_km.is_some() {
+        let _ = rows[DASH_SPLIT_ROW].push('~');
+    }
 
     write_hr(&mut rows[5], "", hr_bpm, &snap.zone_cutoffs);
 
@@ -4550,6 +4578,24 @@ fn diagnostics_face(
 /// five-cell value gutter), or a `--` placeholder when pace is not yet
 /// meaningful. The pace rows are text-labelled rather than iconned: an icon
 /// can't distinguish average from current pace, but the words can.
+/// The GAP rows' variant of [`write_pace`]: a held value (the estimator's
+/// power-hike hold window) carries a trailing `~` — the race predictor's own
+/// approximate glyph — so a headwall crawl reads "recent effort", never a
+/// held number passing as a live sample. The mark stays off the hero band:
+/// the numeral face has no `~` and silently drops glyphs it lacks (§364).
+fn write_gap(row: &mut Row, pace_s_per_km: Option<u32>, held: bool) {
+    match pace_s_per_km {
+        Some(p) => {
+            let (pm, ps) = ((p / 60).min(99), p % 60);
+            let mark = if held { "~" } else { "" };
+            let _ = write!(row, "{:<5}{}:{:02}{} /KM", "GAP", pm, ps, mark);
+        }
+        None => {
+            let _ = write!(row, "{:<5}--", "GAP");
+        }
+    }
+}
+
 fn write_pace(row: &mut Row, label: &str, pace_s_per_km: Option<u32>) {
     match pace_s_per_km {
         Some(p) => {
@@ -4791,6 +4837,7 @@ mod tests {
             avg_pace_s_per_km: None,
             current_pace_s_per_km: None,
             gap_s_per_km: None,
+            gap_held: false,
             lap: 1,
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,
@@ -4824,6 +4871,7 @@ mod tests {
             readiness: None,
             goals: None,
             turn_cue: None,
+            nav_off_course: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
@@ -4833,6 +4881,8 @@ mod tests {
             climb: Default::default(),
             waypoint: None,
             waypoint_count: 0,
+            waypoint_mark_seq: 0,
+            waypoint_refuse_seq: 0,
             timer: None,
             storm: None,
             track_thinning: 1,
@@ -6880,6 +6930,42 @@ mod tests {
                 .as_str(),
             "--:--"
         );
+    }
+
+    #[test]
+    fn a_held_gap_carries_the_approximate_mark_on_both_rows() {
+        // The estimator's power-hike hold shows the last effort-pace; the
+        // rows mark it `~` so it cannot pass as a live sample. The Pace
+        // hero (avg pace) is untouched — the numeral face has no `~`.
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        rec.current_pace_s_per_km = Some(4 * 60 + 58);
+        rec.gap_s_per_km = Some(4 * 60 + 52);
+        rec.gap_held = true;
+        let rows = page_rows(
+            Page::Pace,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "GAP  4:52~ /KM");
+        let rows = page_rows(
+            Page::Dashboard,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[4].as_str(), "NOW  4:58  GAP 4:52~");
     }
 
     #[test]

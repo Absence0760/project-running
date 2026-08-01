@@ -334,9 +334,14 @@ pub fn menu_rows(
         let _ = rows[row].push(' ');
         match item {
             MenuItem::GnssMode => {
+                // EST for the same reason the idle face carries it: the hour
+                // figure is a §314 derivation, not a measurement, and a menu
+                // row stating "220H" bare reads as a spec. MODE is the word
+                // that pays for it — the 21-cell row fits one or the other,
+                // and the qualifier is load-bearing where the noun is not.
                 let _ = write!(
                     rows[row],
-                    "GNSS MODE {:<4} {}H",
+                    "GNSS {:<4} EST {}H",
                     mode.label(),
                     mode.battery_est_h()
                 );
@@ -624,7 +629,9 @@ mod tests {
     fn the_value_rows_read_the_current_state() {
         let rows = menu_rows(0, GnssMode::Performance, true, None);
         assert_eq!(rows[1].as_str(), "SETTINGS");
-        assert_eq!(rows[2].as_str(), "> GNSS MODE PERF 110H");
+        // EST beside the projection, as on the idle face — the figure is a
+        // derivation (§314), and this row was the one seat stating it bare.
+        assert_eq!(rows[2].as_str(), "> GNSS PERF EST 110H");
         assert_eq!(rows[3].as_str(), "  HIDE EMPTY ON");
         assert_eq!(rows[4].as_str(), "  PROFILE --");
         assert_eq!(rows[5].as_str(), "  BACKYARD OFF");
@@ -632,7 +639,7 @@ mod tests {
         assert_eq!(rows[7].as_str(), "  RE-ZERO ALTITUDE");
         assert_eq!(rows[8].as_str(), "  MEDICAL ID");
         let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
-        assert_eq!(rows[2].as_str(), "  GNSS MODE EXP  220H");
+        assert_eq!(rows[2].as_str(), "  GNSS EXP  EST 220H");
         assert_eq!(rows[3].as_str(), "> HIDE EMPTY OFF");
         assert_eq!(rows[4].as_str(), "  PROFILE ULTRA");
     }

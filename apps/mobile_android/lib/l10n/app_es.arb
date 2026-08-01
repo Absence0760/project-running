@@ -3464,5 +3464,7 @@
   "watchMetricRaceDayDays": "Días para la carrera",
   "watchMetricSleepBudget": "Margen de sueño",
   "watchMetricTimerRemaining": "Temporizador",
-  "watchMetricBackyardBell": "Cuenta atrás de la campana"
+  "watchMetricBackyardBell": "Cuenta atrás de la campana",
+  "watchMetricStormDelta": "Tendencia de tormenta",
+  "watchMetricGap": "Ritmo ajustado por pendiente"
 }

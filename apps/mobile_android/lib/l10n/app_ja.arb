@@ -3464,5 +3464,7 @@
   "watchMetricRaceDayDays": "レースまでの日数",
   "watchMetricSleepBudget": "睡眠可能時間",
   "watchMetricTimerRemaining": "タイマー",
-  "watchMetricBackyardBell": "ベルまでの残り時間"
+  "watchMetricBackyardBell": "ベルまでの残り時間",
+  "watchMetricStormDelta": "気圧低下傾向",
+  "watchMetricGap": "勾配調整ペース"
 }

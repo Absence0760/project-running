@@ -12086,6 +12086,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'Contagem decrescente do sino';
+
+  @override
+  String get watchMetricStormDelta => 'Tendência de tempestade';
+
+  @override
+  String get watchMetricGap => 'Ritmo ajustado à inclinação';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24166,4 +24172,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get watchMetricBackyardBell => 'Contagem regressiva do sino';
+
+  @override
+  String get watchMetricStormDelta => 'Tendência de tempestade';
+
+  @override
+  String get watchMetricGap => 'Ritmo ajustado à inclinação';
 }

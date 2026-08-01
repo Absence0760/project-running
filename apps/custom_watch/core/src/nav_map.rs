@@ -42,6 +42,12 @@ pub struct NavPanel {
     pub marker: Option<(i32, i32)>,
     /// The repaint tracking key's runner component (see [`track_key`]).
     pub track: (i32, i32),
+    /// Whether the panel auto-zoomed to the runner-centred window rather than
+    /// fitting the whole course — the render layer labels the zoomed state
+    /// (`ZOOM`), because the two transforms differ by an order of magnitude
+    /// in metres-per-pixel and nothing else on the panel says which one a
+    /// visible fork is being read through.
+    pub windowed: bool,
 }
 
 pub fn nav_panel(course: &Course, runner: Option<(f64, f64)>, geom: NavPanelGeom) -> NavPanel {
@@ -50,7 +56,12 @@ pub fn nav_panel(course: &Course, runner: Option<(f64, f64)>, geom: NavPanelGeom
     let track = runner.map_or((0, 0), |(lat, lon)| {
         track_key(&fit, windowed, geom.h_px, lat, lon)
     });
-    NavPanel { fit, marker, track }
+    NavPanel {
+        fit,
+        marker,
+        track,
+        windowed,
+    }
 }
 
 /// Pick the lat/lon -> panel-pixel transform to draw the breadcrumb with, and
