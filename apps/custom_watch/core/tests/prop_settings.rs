@@ -19,20 +19,31 @@ use watch_core::settings::{
 };
 use watch_core::settings_apply::{plan_apply, EffectKind};
 
-/// Older versions in the raw-frame generator below. `decode` still accepts v3
-/// (32-bit page mask) and v4 (no resting HR); v1 (no `flags2`) and v2 (no CRC
-/// trailer) are **refused** — the checksum is mandatory, so an un-checksummed
-/// version cannot be allowed to stand in for one that failed its CRC. None of
-/// the four is emitted any more: the encoder is v8-only. V1 and V2 stay in the
-/// generator on purpose, as raw frames that must never decode.
+/// Older versions named by the tests below. `decode` still accepts v3 (32-bit
+/// page mask) and v4 (no resting HR); v1 (no `flags2`) and v2 (no CRC trailer)
+/// are **refused** — the checksum is mandatory, so an un-checksummed version
+/// cannot be allowed to stand in for one that failed its CRC. None is emitted
+/// any more: the encoder is v8-only. V1 and V2 stay in the raw-frame generator
+/// on purpose, as frames that must never decode.
 const V1: u8 = 1;
 const V2: u8 = 2;
 const V3: u8 = 3;
 const V4: u8 = 4;
+const V5: u8 = 5;
+const V6: u8 = 6;
+/// The version `flags3` arrived with. Its header is the same width as v8's, so a
+/// current-version frame relabelled v7 differs from a legitimate v7 frame in
+/// nothing but the version byte itself — which is why the list below has to be
+/// complete for [`an_unknown_version_byte_is_rejected`] to mean anything.
+const V7: u8 = 7;
 
-/// The versions `decode` accepts, and therefore the only ones the success-side
-/// assertions can be reached through.
-const DECODABLE: [u8; 3] = [V3, V4, SETTINGS_VERSION];
+/// **Every** version `decode` accepts, and therefore the only ones the
+/// success-side assertions can be reached through. Six, not three: v5, v6 and v7
+/// each added a field and each still decodes. Kept exhaustive because
+/// [`an_unknown_version_byte_is_rejected`] subtracts this set from `u8` to get
+/// the versions that must be refused, so a short list would assert that a
+/// version `decode` accepts does not decode.
+const DECODABLE: [u8; 6] = [V3, V4, V5, V6, V7, SETTINGS_VERSION];
 
 /// Width of the CRC32 trailer, carried by every decodable version.
 const CRC_WIDTH: usize = 4;
@@ -239,15 +250,24 @@ fn a_frame_with_bytes_past_the_fields_the_flags_claim_is_rejected() {
 }
 
 #[test]
-fn an_unknown_version_byte_is_rejected() {
+fn an_unknown_version_byte_is_rejected_even_under_a_valid_checksum() {
+    // The checksum is re-sealed over the relabelled frame, so what rejects it is
+    // the version check rather than the CRC noticing byte 4 moved. That is the
+    // whole point: without the re-seal this passed for every version — including
+    // the ones `decode` accepts — and so said nothing about versioning at all.
+    // It is also what makes [`DECODABLE`] load-bearing, since a v8 frame
+    // relabelled v7 is byte-for-byte a valid v7 frame.
     check(512, (a_settings(), any::<u8>()), |(s, version)| {
         prop_assume!(!DECODABLE.contains(&version) && !matches!(version, V1 | V2));
         let mut frame = encoded(&s);
         frame[4] = version;
+        let body = frame.len() - CRC_WIDTH;
+        let crc = crc32(&frame[..body]);
+        frame[body..].copy_from_slice(&crc.to_le_bytes());
         prop_assert_eq!(
             WatchSettings::decode(&frame),
             None,
-            "version {} decoded",
+            "version {} decoded under a valid checksum",
             version
         );
         Ok(())
@@ -343,7 +363,7 @@ const WIDTHS3: [usize; 2] = [1, 2];
 /// common case and shows up as a ~1-in-a-billion "the declared fields account
 /// for 11 of 12 bytes" failure, which is how it survived unnoticed.
 fn has_flags3(version: u8) -> bool {
-    version == SETTINGS_VERSION
+    matches!(version, V7 | SETTINGS_VERSION)
 }
 
 /// Bytes of header the frame's version declares: magic + version + `flags`,
