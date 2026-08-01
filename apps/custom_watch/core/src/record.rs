@@ -725,9 +725,24 @@ pub struct Snapshot {
     /// A counter and not [`Snapshot::waypoint_count`], because the eight-slot
     /// newest-wins store saturates: the ninth mark changes the count not at
     /// all and must still be answered.
+    ///
+    /// `u8` is safe against the wrap swallowing a confirmation, and the reason
+    /// is a density argument rather than a size one. The alert engine's edge is
+    /// `seq != last_seq`, so a swallow needs the counter to advance by a
+    /// multiple of 256 between two observations. Each
+    /// [`Recorder::mark_waypoint`] call advances **exactly one** of the two
+    /// counters by **exactly one** — pinned by
+    /// `waypoint_seqs_advance_by_exactly_one_per_press_so_the_wrap_cannot_alias`
+    /// — and the app's record task runs `AlertEngine::on_update` over a fresh
+    /// snapshot after *every* event branch, the `MarkWaypoint` command included.
+    /// The observer therefore samples at least once per increment, and one
+    /// increment is never congruent to zero. Widening the field would not add
+    /// safety; breaking the exactly-one advance would remove it, which is why
+    /// the test guards that and not the width.
     pub waypoint_mark_seq: u8,
     /// Wrapping count of refused marks (no position anchor) — the same edge
-    /// detection, so a dead BTN5 hold says why instead of saying nothing.
+    /// detection, so a dead BTN5 hold says why instead of saying nothing. Wraps
+    /// safely for the same reason as [`Snapshot::waypoint_mark_seq`].
     pub waypoint_refuse_seq: u8,
     /// Wrapping count of finished-but-unsynced runs destroyed by a flash
     /// eviction ([`Recorder::note_run_lost`]) — the alert engine edge-detects
@@ -4682,6 +4697,72 @@ mod tests {
             r.snapshot().pages_mask & Page::Waypoint.bit(),
             0,
             "a stored mark keeps the page reachable before the new run's first fix"
+        );
+    }
+
+    /// The wrap-safety proof for the two `u8` waypoint sequences (see
+    /// [`Snapshot::waypoint_mark_seq`]). The half that lives in this crate is
+    /// the density of the sequence: one press moves one counter by one, so the
+    /// only value an observer can mistake for "no edge" is 256 presses away,
+    /// and the observer runs once per press. A future edit that bumps a counter
+    /// twice, or bumps both on one press, breaks the argument here rather than
+    /// on a wrist.
+    #[test]
+    fn waypoint_seqs_advance_by_exactly_one_per_press_so_the_wrap_cannot_alias() {
+        let mut r = Recorder::new();
+        r.start(0);
+
+        // Refused: recording, but no accepted fix yet, so no position anchor.
+        for i in 1..=3u32 {
+            let before = r.snapshot();
+            assert!(!r.mark_waypoint(i));
+            let after = r.snapshot();
+            assert_eq!(
+                after.waypoint_refuse_seq,
+                before.waypoint_refuse_seq.wrapping_add(1)
+            );
+            assert_eq!(
+                after.waypoint_mark_seq, before.waypoint_mark_seq,
+                "a refusal must not also move the mark counter"
+            );
+        }
+
+        r.on_fix(&fix(10.0, 20.0, 3.0, 10));
+        for i in 11..=13u32 {
+            let before = r.snapshot();
+            assert!(r.mark_waypoint(i));
+            let after = r.snapshot();
+            assert_eq!(
+                after.waypoint_mark_seq,
+                before.waypoint_mark_seq.wrapping_add(1)
+            );
+            assert_eq!(
+                after.waypoint_refuse_seq, before.waypoint_refuse_seq,
+                "an accepted mark must not also move the refuse counter"
+            );
+        }
+
+        // Flood a full period. Every code is visited exactly once before the
+        // sequence returns to where it started, so no observer sampling at
+        // least once per press can ever read an unchanged value across an edge.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(10.0, 20.0, 3.0, 1));
+        let origin = r.snapshot().waypoint_mark_seq;
+        let mut seen = [false; 256];
+        for i in 0..256u32 {
+            assert!(r.mark_waypoint(100 + i));
+            let seq = r.snapshot().waypoint_mark_seq;
+            assert!(!seen[seq as usize], "code {seq} repeated inside one period");
+            seen[seq as usize] = true;
+        }
+        assert!(seen.iter().all(|&s| s), "the period is shorter than 256");
+        assert_eq!(origin, r.snapshot().waypoint_mark_seq, "256 presses wrap");
+        assert!(r.mark_waypoint(400));
+        assert_eq!(
+            r.snapshot().waypoint_mark_seq,
+            origin.wrapping_add(1),
+            "the 257th press is still an edge"
         );
     }
 
