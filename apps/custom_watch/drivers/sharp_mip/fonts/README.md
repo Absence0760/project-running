@@ -1,24 +1,52 @@
 # Pinned source faces for the generated glyph tables
 
-`src/font.rs` (8x16 text) and `src/bignum.rs` (32x48 + 16x32 numerals) are
-rasterised from the two OTFs in this directory by `scripts/gen_font.py` and
-`scripts/gen_bignum.py`. The faces are vendored rather than looked up by
-fontconfig family name because a family name resolves to whatever build the
-machine happens to have installed: Homebrew ships only the *variable* Source
-Code Pro, whose default instance is ExtraLight, and rasterising the numerals
-from it reshapes every committed glyph into hairlines — a change that would
-read in review as one new glyph and be twenty-six reshaped ones
-(`docs/architecture/decisions.md` § 339). `scripts/pinned_face.py` verifies
-each file's SHA256 before either generator draws a pixel, so a substituted or
-truncated face fails loudly instead of silently reshaping a table.
+`src/font.rs` (8x16 text) is transcribed from the Spleen BDF in this
+directory by `scripts/gen_font.py`; `src/bignum.rs` (32x48 + 16x32 numerals)
+is rasterised from the two Source Code Pro OTFs by `scripts/gen_bignum.py`.
+The split is deliberate: at 8x16 a thresholded vector outline leaves 1-px
+stems and ragged diagonals (the '+'=='-' collision and the invisible '|'
+were casualties — `tests/font.rs`), so the text face is a bitmap font drawn
+pixel-by-pixel FOR that cell size, while at 32x48/16x32 the outline has
+whole pixels to land in and native rasterisation of a real bold face wins
+(`docs/architecture/decisions.md` § 292/§ 339/§ 406).
+
+The faces are vendored rather than looked up by fontconfig family name
+because a family name resolves to whatever build the machine happens to have
+installed: Homebrew ships only the *variable* Source Code Pro, whose default
+instance is ExtraLight, and rasterising the numerals from it reshapes every
+committed glyph into hairlines — a change that would read in review as one
+new glyph and be twenty-six reshaped ones (§ 339). `scripts/pinned_face.py`
+verifies each file's SHA256 before either generator reads a glyph, so a
+substituted or truncated face fails loudly instead of silently reshaping a
+table.
 
 ## Provenance
 
 | File | SHA256 |
 |---|---|
+| `spleen-8x16.bdf` | `4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae` |
+| `LICENSE.spleen.txt` | `f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af` |
 | `SourceCodePro-Regular.otf` | `9f9664e2edf6f045c11e774f9bd0be6993971f2544a39061a5ce478b96b051f8` |
 | `SourceCodePro-Bold.otf` | `6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c` |
 | `LICENSE.md` | `7c940e28a5388e9bba866cf0e408edda45fe0899ba98665b8f6ab31dc5e4b8ff` |
+
+### Spleen
+
+- Upstream: <https://github.com/fcambus/spleen>
+- Release tag: `2.2.0` (`spleen-8x16.bdf` and `LICENSE` at that tag)
+- `SourceCodePro-Regular.otf` is retained only as the historical source of
+  the pre-§ 406 text table; `gen_font.py` no longer reads it.
+
+```sh
+curl -fsSL -o spleen-8x16.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-8x16.bdf
+curl -fsSL -o LICENSE.spleen.txt https://raw.githubusercontent.com/fcambus/spleen/2.2.0/LICENSE
+shasum -a 256 -c <<'EOF'
+4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae  spleen-8x16.bdf
+f33fe8679d5b2abecc4f1313ce6c6bfa58262964de5f7bca146596a7318047af  LICENSE.spleen.txt
+EOF
+```
+
+### Source Code Pro
 
 - Upstream: <https://github.com/adobe-fonts/source-code-pro>
 - Release tag: `2.042R-u/1.062R-i/1.026R-vf` (published 2023-04-12)
@@ -27,8 +55,6 @@ truncated face fails loudly instead of silently reshaping a table.
   members `OTF/SourceCodePro-Regular.otf` and `OTF/SourceCodePro-Bold.otf`
 - `LICENSE.md` is the repository's licence file at that same tag (the release
   zips carry no licence of their own)
-
-## Obtaining them again
 
 ```sh
 curl -fsSL -o /tmp/scp-otf.zip \
@@ -45,6 +71,12 @@ here is the same failure the generators raise.
 
 ## Licence
 
+Spleen is licensed under the BSD 2-Clause license — `LICENSE.spleen.txt` is
+the upstream `LICENSE` at the pinned tag, retained as its clause 1 requires,
+and the BDF additionally embeds the copyright in its own `COMMENT` header.
+The transcribed Rust table is a redistribution in binary form, which clause 2
+covers with the same retain-the-notice condition; this directory satisfies it.
+
 Source Code Pro is licensed under the SIL Open Font License 1.1, whose clause 2
 permits bundling and redistributing original or modified versions with any
 software "provided that each copy contains the above copyright notice and this
@@ -59,8 +91,11 @@ is applied to anything in this repository.
 
 ## Rasteriser versions
 
-The pin covers the *inputs*, not the rasteriser. The committed tables were last
-confirmed to regenerate byte-for-byte with:
+The pin covers the *inputs*, not the rasteriser. `gen_font.py` has no
+rasteriser at all since § 406 — the text table is a pure bit transcription of
+the BDF, reproducible by construction on any machine. The rest applies to
+`gen_bignum.py` only. The committed numeral tables were last confirmed to
+regenerate byte-for-byte with:
 
 - ImageMagick 7.1.2-26 Q16-HDRI (aarch64, macOS)
 - Python 3.14
