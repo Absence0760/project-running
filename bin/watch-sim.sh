@@ -35,6 +35,12 @@
 #                                         # cadences (fuel / distance / time /
 #                                         # pace), so no banner covers the hero
 #                                         # rows — what watch-shots.sh wants
+#   bin/watch-sim.sh --no-course          # drop the canned breadcrumb course.
+#                                         # The course-driven alerts (§381 off-
+#                                         # course, §380 cutoff) arm on data
+#                                         # presence, not a setter, so this is
+#                                         # the only way a scenario gets a
+#                                         # quiet alert slot with a run going
 #
 # The default GPS fixture is sim/nmea/bench_jog.nmea. Select another named
 # fixture from sim/nmea/ with --fixture <name> (or the NMEA_FIXTURE env var);
@@ -63,6 +69,7 @@ GUI=0
 PHONE_PORT=7788
 AUTOSTART=1
 ALERTS=1
+COURSE=1
 SCREENS=0
 STORM=0
 
@@ -75,9 +82,10 @@ while [[ $# -gt 0 ]]; do
 		--phone-port)   PHONE_PORT="${2:?--phone-port needs a value}"; shift 2 ;;
 		--no-autostart) AUTOSTART=0; shift ;;
 		--no-alerts)    ALERTS=0; shift ;;
+		--no-course)    COURSE=0; shift ;;
 		--screens)      SCREENS=1; shift ;;
 		--storm)        STORM=1; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --screens, --storm)" ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart, --no-alerts, --no-course, --screens, --storm)" ;;
 	esac
 done
 
@@ -113,7 +121,8 @@ command -v defmt-print >/dev/null || \
 # sim/ci_smoke.py asserts on. Safe to enable HERE and nowhere else — the sim's
 # fixture coordinates are the synthetic bench_jog rectangle and no one is
 # wearing anything. A bench build keeps it off; see docs/custom_watch/privacy.md.
-FEATURES=sim-buttons,sim-course,dev-blink,log-personal-data
+FEATURES=sim-buttons,dev-blink,log-personal-data
+[[ "$COURSE" == 1 ]] && FEATURES="sim-course,$FEATURES"
 [[ "$STORM" == 1 ]] && FEATURES="sim-storm,$FEATURES"
 [[ "$SCREENS" == 1 ]] && FEATURES="sim-screens,$FEATURES"
 [[ "$ALERTS" == 1 ]] && FEATURES="sim-alerts,$FEATURES"

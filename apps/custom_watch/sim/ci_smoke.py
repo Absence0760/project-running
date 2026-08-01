@@ -253,14 +253,23 @@ SCENARIO_LAUNCHER_ARGS = {
     # It also keeps a fuel banner off the two Workout page dumps, which a
     # banner would otherwise own (it covers the hero band). Arbitration between
     # a workout banner and a fuel one is `alerts`' surface, not this one's.
-    "workout": ("--no-alerts",),
+    # `--no-course` beside it since the §380/§381 cutoff + off-course arms:
+    # those alert on DATA PRESENCE (the canned course's legs and cutoff
+    # schedule), not on a sim setter, so `--no-alerts` cannot silence them —
+    # and bench_jog leaves the course each lap, so an OffCourse banner
+    # ping-pongs with the workout edges (each displacement re-queues it) and
+    # the slot never reads `cleared` inside `wait_for_no_alert`'s window.
+    "workout": ("--no-alerts", "--no-course"),
     # `--storm` compresses the § 376 trend window from three hours to 60 s, so a
     # front is readable inside a scenario's budget, and arms the banner through
     # the same setter a phone push feeds. `--no-alerts` for the same reason
     # `workout` takes it: the COUNT assertion below is a claim about the storm
     # arm's once-per-front hysteresis, and it only means that while nothing else
     # can take the single banner slot.
-    "storm": ("--storm", "--no-alerts"),
+    # `--no-course` for the same §380/§381 reason as `workout` — this is the
+    # scenario that caught it: the OffCourse / workout-edge handoff chain
+    # never let the slot clear before the Storm page dump.
+    "storm": ("--storm", "--no-alerts", "--no-course"),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
