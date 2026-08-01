@@ -624,10 +624,24 @@ pub fn draw_nav_panel(
         fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
         fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
     }
+    // The auto-zoom label, bottom-right of the panel, drawn after the lines
+    // so the word stays legible over a dense breadcrumb. Only the zoomed
+    // state is labelled: whole-course is the default a runner has read since
+    // the panel existed, and a label on both states is a label on neither.
+    if panel.windowed {
+        fb.draw_text(
+            face::COLS - ZOOM_LABEL.len(),
+            face::NAV_PANEL_TOP_ROW + face::NAV_PANEL_ROWS - 1,
+            ZOOM_LABEL,
+        );
+    }
     if let Some(text) = alert {
         fb.draw_banner_2x(face::NAV_ALERT_ROW, text);
     }
 }
+
+/// The nav panel's auto-zoom state label (see [`NavPanel::windowed`]).
+const ZOOM_LABEL: &str = "ZOOM";
 
 // ---------------------------------------------------------------------------
 // Back-to-start overlay (breadcrumb map + relative direction arrow)
@@ -2180,6 +2194,12 @@ mod tests {
         let mut marker_only = Framebuffer::new();
         marker_only.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
         marker_only.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+        // The wild fix auto-zoomed, so the panel also carries its ZOOM label.
+        marker_only.draw_text(
+            face::COLS - ZOOM_LABEL.len(),
+            face::NAV_PANEL_TOP_ROW + face::NAV_PANEL_ROWS - 1,
+            ZOOM_LABEL,
+        );
         assert!(fb_eq(&fb, &marker_only), "a course leg came back into view");
     }
 
