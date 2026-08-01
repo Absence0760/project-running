@@ -100,8 +100,8 @@
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 8. **Back-on-course**, then **Timer**, then **Distance**, then **Time** —
-//!    milestones, and the only
+//! 8. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
+//!    **Distance**, then **Time** — milestones, and the only
 //!    arms that are *dropped* rather than queued when the slot is busy. A
 //!    milestone banner is meaningful only at the moment it is reached; showing
 //!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
@@ -112,8 +112,11 @@
 //!    fuel deliberately: a missed timer banner costs nothing recoverable (the
 //!    Timer page counts the overrun up), whereas §214 says a missed gel is the
 //!    one reminder that must never be silently dropped — and below the corral
-//!    whistle for the same asymmetry, one rung sharper. The `ON COURSE`
-//!    affirmation leads the group: for a runner who just corrected a wrong
+//!    whistle for the same asymmetry, one rung sharper. The signal-void pair
+//!    (§367) heads the group — distance not accruing while the runner moves
+//!    is the costliest thing in it, and the AUTO tag carries the persistent
+//!    truth so a swallowed banner loses only the announcement — with the
+//!    `ON COURSE` affirmation next: for a runner who just corrected a wrong
 //!    turn by feel it is the answer to a live question, where the milestones
 //!    are wallpaper — but it is still in the dropped class, because a stale
 //!    all-clear shown after the runner drifted off again is a lie the Nav
@@ -249,6 +252,15 @@ pub enum Alert {
     /// ([`Snapshot::waypoint_refuse_seq`]). The label names the cause, not
     /// the failure: the fix is to wait for one.
     WaypointNoFix,
+    /// The recorder auto-paused because the fixes dried up
+    /// ([`Snapshot::signal_lost`], §367) — until now only the corner tag
+    /// flipped to `AUTO`, a change a heads-down runner reads minutes later.
+    /// Distance is not accruing; the runner may still be moving.
+    SignalLost,
+    /// Fixes returned and the recorder resumed. An affirmation like
+    /// [`Alert::BackOnCourse`]: no `!` prefix, it closes the loop GPS LOST
+    /// opened.
+    SignalBack,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -333,6 +345,8 @@ pub fn banner(alert: Alert) -> Banner {
         Alert::BackOnCourse => write!(b, "ON COURSE"),
         Alert::WaypointMarked => write!(b, "WPT SAVED"),
         Alert::WaypointNoFix => write!(b, "! NO FIX"),
+        Alert::SignalLost => write!(b, "! GPS LOST"),
+        Alert::SignalBack => write!(b, "GPS BACK"),
     };
     b
 }
@@ -431,6 +445,11 @@ pub struct AlertEngine {
     /// reboot) can't replay as a banner at the start line.
     last_waypoint_mark_seq: Option<u8>,
     last_waypoint_refuse_seq: Option<u8>,
+    /// Whether the last sample said the fixes had dried up — the edge
+    /// detector for the GPS LOST / GPS BACK pair. Plain, not tri-state:
+    /// unlike the nav projection, `signal_lost` is always meaningful during
+    /// a run, and it is false at the start line.
+    was_signal_lost: bool,
     in_run: bool,
 }
 
@@ -474,6 +493,7 @@ impl AlertEngine {
             pending_off_course: false,
             last_waypoint_mark_seq: None,
             last_waypoint_refuse_seq: None,
+            was_signal_lost: false,
             in_run: false,
         }
     }
@@ -778,6 +798,24 @@ impl AlertEngine {
             self.last_backyard_warning_seq = 0;
         }
 
+        // The signal-void pair (§367). The recorder's own auto-pause verdict:
+        // the face's corner tag flips to AUTO, but a tag is a state, not an
+        // event — a heads-down runner learns about it minutes later, with a
+        // kilometre unrecorded. Both edges land in the dropped class at its
+        // head: the tag carries the truth persistently, so a banner the slot
+        // swallows loses only the announcement — and a stale GPS LOST shown
+        // after the fixes returned would be the banner lying about the tag.
+        let mut signal_lost_due = false;
+        let mut signal_back_due = false;
+        if snap.signal_lost != self.was_signal_lost {
+            self.was_signal_lost = snap.signal_lost;
+            if snap.signal_lost {
+                signal_lost_due = true;
+            } else {
+                signal_back_due = true;
+            }
+        }
+
         // The off-course arm. The nav task's hysteresis
         // ([`crate::course::OffCourseAlert`], 40 m latch / 20 m release)
         // already de-flaps the signal, so the engine only edge-detects it:
@@ -891,6 +929,10 @@ impl AlertEngine {
             } else if self.pending_drink {
                 self.pending_drink = false;
                 self.active = Some((Alert::Drink, uptime_s));
+            } else if signal_lost_due {
+                self.active = Some((Alert::SignalLost, uptime_s));
+            } else if signal_back_due {
+                self.active = Some((Alert::SignalBack, uptime_s));
             } else if back_on_course_due {
                 self.active = Some((Alert::BackOnCourse, uptime_s));
             } else if timer_due {
@@ -943,6 +985,7 @@ impl AlertEngine {
         self.pending_off_course = false;
         self.last_waypoint_mark_seq = None;
         self.last_waypoint_refuse_seq = None;
+        self.was_signal_lost = false;
         self.in_run = false;
     }
 }
@@ -1030,7 +1073,9 @@ impl FuelOverdueTracker {
                 | Alert::OffCourse
                 | Alert::BackOnCourse
                 | Alert::WaypointMarked
-                | Alert::WaypointNoFix,
+                | Alert::WaypointNoFix
+                | Alert::SignalLost
+                | Alert::SignalBack,
             )
             | None => {}
         }
@@ -3105,5 +3150,78 @@ mod tests {
         assert!(!d.observe(false, 231));
         assert!(!d.observe(true, 232));
         assert!(!d.observe(true, 233));
+    }
+
+    fn voided(signal_lost: bool, moving_s: u32) -> Snapshot {
+        Snapshot {
+            state: if signal_lost {
+                RecordState::Paused
+            } else {
+                RecordState::Recording
+            },
+            signal_lost,
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_signal_void_announces_itself_once_and_so_does_the_recovery() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&voided(false, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&voided(true, 11), None, 11),
+            Some(Alert::SignalLost)
+        );
+        assert_eq!(banner(Alert::SignalLost).as_str(), "! GPS LOST");
+        // A void that persists is a state, not a second event.
+        let mut t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&voided(true, t), None, t), None);
+        t += 1;
+        assert_eq!(
+            e.on_update(&voided(false, t), None, t),
+            Some(Alert::SignalBack)
+        );
+        assert_eq!(banner(Alert::SignalBack).as_str(), "GPS BACK");
+        let t = t + ALERT_TTL_S;
+        assert_eq!(e.on_update(&voided(false, t), None, t), None);
+    }
+
+    #[test]
+    fn a_busy_slot_drops_the_signal_banners_and_the_tag_carries_the_truth() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&voided(false, 10), None, 10), None);
+        // The void lands while a zone banner owns the slot. Zone alerts only
+        // fire while Recording, so drive the excursion first, then the void.
+        assert_eq!(
+            e.on_update(&voided(false, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&voided(true, 12), None, 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let t = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&voided(true, t), None, t),
+            None,
+            "a dropped announcement is not owed — the AUTO tag persists"
+        );
+    }
+
+    #[test]
+    fn a_run_boundary_resets_the_signal_edge() {
+        // A run ended mid-void must not announce GPS BACK at the next start.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&voided(false, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&voided(true, 11), None, 11),
+            Some(Alert::SignalLost)
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 12), None, 12),
+            None
+        );
+        assert_eq!(e.on_update(&voided(false, 20), None, 30), None);
     }
 }
