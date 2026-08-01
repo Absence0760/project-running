@@ -3464,5 +3464,7 @@
   "watchMetricRaceDayDays": "Dias até à prova",
   "watchMetricSleepBudget": "Margem de sono",
   "watchMetricTimerRemaining": "Temporizador",
-  "watchMetricBackyardBell": "Contagem decrescente do sino"
+  "watchMetricBackyardBell": "Contagem decrescente do sino",
+  "watchMetricStormDelta": "Tendência de tempestade",
+  "watchMetricGap": "Ritmo ajustado à inclinação"
 }

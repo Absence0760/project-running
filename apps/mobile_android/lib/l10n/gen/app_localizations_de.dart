@@ -12102,4 +12102,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'Countdown bis zur Glocke';
+
+  @override
+  String get watchMetricStormDelta => 'Sturmtrend';
+
+  @override
+  String get watchMetricGap => 'Höhenkorrigierte Pace';
 }

@@ -11528,4 +11528,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'ベルまでの残り時間';
+
+  @override
+  String get watchMetricStormDelta => '気圧低下傾向';
+
+  @override
+  String get watchMetricGap => '勾配調整ペース';
 }

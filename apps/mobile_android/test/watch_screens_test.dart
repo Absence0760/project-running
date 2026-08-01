@@ -116,15 +116,15 @@ void main() {
 
     /// The guard that makes a reorder of either enum a red test instead of a
     /// silent re-point of every screen already pushed to a watch.
-    test('metric bytes are unique, stable, and cover 1..=37', () {
+    test('metric bytes are unique, stable, and cover 1..=39', () {
       final seen = <int>{};
       for (final m in WatchMetric.values) {
         expect(m.wire, greaterThanOrEqualTo(1));
-        expect(m.wire, lessThanOrEqualTo(37));
+        expect(m.wire, lessThanOrEqualTo(39));
         expect(seen.add(m.wire), isTrue, reason: 'byte ${m.wire} claimed twice');
         expect(m.wireName, isNotEmpty);
       }
-      expect(WatchMetric.values.length, 37,
+      expect(WatchMetric.values.length, 39,
           reason: 'the catalogue and its byte map have drifted from the watch');
       // Pinned by name, so a reorder cannot quietly renumber them.
       expect(WatchMetric.elapsed.wire, 1);
@@ -140,6 +140,12 @@ void main() {
       expect(WatchMetric.timerRemaining.wireName, 'timer_remaining');
       expect(WatchMetric.backyardBell.wire, 37);
       expect(WatchMetric.backyardBell.wireName, 'backyard_bell');
+      // 38 landed firmware-side with the 2026-07-31 storm batch; the phone
+      // catalogue caught up with 39 (the composed-screen GAP hero).
+      expect(WatchMetric.stormDelta.wire, 38);
+      expect(WatchMetric.stormDelta.wireName, 'storm_delta');
+      expect(WatchMetric.gap.wire, 39);
+      expect(WatchMetric.gap.wireName, 'gap');
     });
 
     test('layout bytes round-trip and reserve the Quad seat', () {
