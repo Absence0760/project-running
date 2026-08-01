@@ -599,6 +599,13 @@ pub struct Snapshot {
     pub goals: Option<GoalsView>,
     /// The next turn on the loaded course, or `None` until pushed.
     pub turn_cue: Option<TurnCueView>,
+    /// The nav task's latched off-course verdict, fed per fix beside the
+    /// route position: `Some(true)` while the [`crate::course::OffCourseAlert`]
+    /// hysteresis is latched, `Some(false)` while a live projection says on
+    /// course, `None` when nothing is projecting (no course, no fix yet).
+    /// Tri-state so a course swap or a lost projection reads as *absence of
+    /// knowledge*, never as a recovery.
+    pub nav_off_course: Option<bool>,
     /// The simplified-course summary, or `None` until pushed.
     pub route_simplify: Option<RouteSimplifyView>,
     /// The auto-segment-effort match counts, or `None` until pushed.
@@ -932,6 +939,7 @@ pub struct Recorder {
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
+    nav_off_course: Option<bool>,
     route_simplify: Option<RouteSimplifyView>,
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
@@ -1060,6 +1068,7 @@ impl Recorder {
             readiness: None,
             goals: None,
             turn_cue: None,
+            nav_off_course: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
@@ -1508,6 +1517,13 @@ impl Recorder {
             direction: v.direction.min(7),
             ..v
         });
+    }
+
+    /// The nav task's latched off-course verdict, fed per fix beside
+    /// [`set_route_position`](Recorder::set_route_position) — see
+    /// [`Snapshot::nav_off_course`] for the tri-state contract.
+    pub fn set_nav_off_course(&mut self, off_course: Option<bool>) {
+        self.nav_off_course = off_course;
     }
 
     pub fn set_route_simplify(&mut self, view: Option<RouteSimplifyView>) {
@@ -2145,6 +2161,7 @@ impl Recorder {
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
+            nav_off_course: self.nav_off_course,
             route_simplify: self.route_simplify,
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
